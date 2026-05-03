@@ -1,0 +1,24 @@
+{
+    "name": "reqsys-enterprise-frontend",
+    "version": "2.3.0",
+    "scripts": {
+        "dev": "vite --host 0.0.0.0",
+        "build": "vite build",
+        "preview": "vite preview --host 0.0.0.0",
+        "test:e2e": "playwright test"
+    },
+    "dependencies": {
+        "@mdi/font": "latest",
+        "@vitejs/plugin-vue": "latest",
+        "axios": "latest",
+        "mermaid": "latest",
+        "pinia": "latest",
+        "vite": "latest",
+        "vue": "latest",
+        "vue-router": "latest",
+        "vuetify": "latest"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.59.1"
+    }
+}
