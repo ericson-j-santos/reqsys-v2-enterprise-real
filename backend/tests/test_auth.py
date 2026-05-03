@@ -63,13 +63,13 @@ class TestLoginSucesso:
         assert "dashboard:read" in permissoes
 
     def test_login_analista_papel_correto(self):
-        resp = _login("ericsonjosedossantos@tieri659.onmicrosoft.com")
+        resp = _login("analista@tieri659.onmicrosoft.com")
         usuario = resp.json()["data"]["usuario"]
         assert usuario["papel"] == "analista"
 
     def test_login_analista_permissoes_diferentes_do_admin(self):
         admin_resp = _login("ericsonjosedossantos@tieri659.onmicrosoft.com")
-        analista_resp = _login("ericsonjosedossantos@tieri659.onmicrosoft.com")
+        analista_resp = _login("analista@tieri659.onmicrosoft.com")
         admin_perms = set(admin_resp.json()["data"]["usuario"]["permissoes"])
         analista_perms = set(analista_resp.json()["data"]["usuario"]["permissoes"])
         # admin deve ter mais permissões que analista
@@ -109,7 +109,7 @@ class TestTokenJWT:
 
     def test_token_diferente_para_usuarios_diferentes(self):
         token_admin = _login("ericsonjosedossantos@tieri659.onmicrosoft.com").json()["data"]["access_token"]
-        token_analista = _login("ericsonjosedossantos@tieri659.onmicrosoft.com").json()["data"]["access_token"]
+        token_analista = _login("analista@tieri659.onmicrosoft.com").json()["data"]["access_token"]
         assert token_admin != token_analista
 
     def test_dois_logins_consecutivos_geram_tokens_diferentes(self):

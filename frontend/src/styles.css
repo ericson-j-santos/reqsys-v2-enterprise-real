@@ -1,0 +1,110 @@
+:root {
+  --bg: #080c18;
+  --card: #111827;
+  --border: #1a2640;
+  --accent: #f59e0b;
+  --text: #e2e8f0;
+  --muted: #8899aa;
+}
+.v-application {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+}
+.req-drawer,
+.v-card {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+}
+.brand {
+  font-weight: 800;
+  color: var(--accent);
+  font-size: 20px;
+}
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+.main {
+  min-height: 100vh;
+}
+.page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.metric {
+  padding: 18px;
+}
+.metric-value {
+  font-size: 32px;
+  color: var(--accent);
+  font-weight: 800;
+}
+.table-card {
+  background: var(--card) !important;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+h1 {
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+
+.page-title {
+  margin: 0;
+  line-height: 1.2;
+}
+
+.v-data-table {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.v-list-item-title,
+.v-list-item-subtitle {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 960px) {
+  .page {
+    padding: 16px;
+  }
+  .page-header {
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  h1 {
+    font-size: 22px;
+    margin-bottom: 12px;
+  }
+
+  .metric {
+    min-height: 118px;
+  }
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 12px;
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+
+  .page-header {
+    margin-bottom: 12px;
+  }
+
+  .v-btn {
+    min-height: 38px;
+  }
+}
