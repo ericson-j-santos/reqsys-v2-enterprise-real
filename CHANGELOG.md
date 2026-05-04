@@ -6,6 +6,47 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [2.4.0] - 2026-05-04
+
+### Adicionado
+
+- **Módulo de Monitoramento de Qualidade de IA** no backend com endpoints:
+  - `GET /v1/qualidade-ia/resumo` (score geral, métricas, contexto e recomendações)
+  - `POST /v1/qualidade-ia/snapshot` (persistência de snapshot)
+  - `GET /v1/qualidade-ia/tendencia` (histórico de evolução)
+  - `GET /v1/qualidade-ia/tendencia.csv` (exportação da tendência em CSV)
+  - `GET /v1/qualidade-ia/tendencia.pdf` (exportação da tendência em PDF)
+- **Persistência de snapshots de qualidade IA** com modelo `qualidade_ia_snapshots` para análise histórica.
+- **Nova tela frontend "Qualidade IA"** com:
+  - score geral,
+  - barras por dimensão (acurácia, relevância, consistência, segurança, cobertura),
+  - tendência com sparkline,
+  - recomendações acionáveis,
+  - botão para geração de snapshot.
+- **Novo item de navegação** no menu lateral para acesso direto ao monitoramento de IA.
+- **KPI de Qualidade IA no Dashboard** principal para visibilidade executiva imediata.
+- **Testes backend** em `backend/tests/test_qualidade_ia.py` cobrindo resumo, snapshot e tendência.
+- **Scripts de automação** para snapshot diário:
+  - `scripts/executar-snapshot-qualidade-ia.ps1`
+  - `scripts/agendar-snapshot-qualidade-ia.ps1`
+  - `backend/scripts_audit/gerar_snapshot_qualidade_ia.py`
+
+### Alterado
+
+- Versão da API FastAPI atualizada para `2.4.0`.
+- Versão do frontend (`frontend/package.json`) atualizada para `2.4.0`.
+- `GET /v1/sistema/info` e documentação interna agora incluem os endpoints de qualidade de IA.
+
+---
+
+## [2.3.1] - 2026-05-04
+
+### Corrigido
+
+- **CORS**: adicionadas origens `http://localhost:5174` e `http://127.0.0.1:5174` na lista de origens permitidas para compatibilidade com Vite dev server quando a porta 5173 já está em uso.
+
+---
+
 ## [2.3.0] - 2026-05-03
 
 ### Adicionado
