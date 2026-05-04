@@ -11,6 +11,34 @@ Solução SaaS interna para engenharia de requisitos: cadastro, backlog, histór
 - Banco: SQLite para demo; SQL Server configurável via `DATABASE_URL`
 - Infra: Docker Compose + Nginx
 
+## Integração opcional com o cofre local
+
+O backend do ReqSys agora pode ler segredos do mesmo cofre local usado no MVP Intelligence.
+
+- Prioridade de leitura: variável de ambiente primeiro, cofre local como fallback.
+- Nome padrão do serviço no Credential Manager: `mvp-intelligence-vault`
+- Para alterar o serviço do cofre: defina `REQSYS_VAULT_SERVICE_NAME`
+
+Segredos suportados por fallback via cofre:
+
+- `JWT_SECRET`
+- `DATABASE_URL`
+- `GITHUB_TOKEN`
+- `REDMINE_BASE_URL`
+- `REDMINE_API_KEY`
+- `REDMINE_PROJECT_ID`
+- `SSRS_BASE_URL`
+- `SSRS_REPORTS_PATH`
+- `SSRS_REPORT_NAMES`
+- `SSRS_REQUIRE_HTTPS`
+
+Instale as dependências do backend antes de usar o cofre:
+
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
 ## Execução rápida
 
 ### Backend

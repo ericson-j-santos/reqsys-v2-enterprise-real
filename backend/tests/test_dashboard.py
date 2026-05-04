@@ -1,8 +1,13 @@
 """
 Testes do Dashboard e endpoints de sistema
 """
+from base64 import b64encode
+
 import pytest
 from fastapi.testclient import TestClient
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+from app.core import secrets as secrets_module
 from app.main import app
 
 client = TestClient(app)
@@ -123,6 +128,73 @@ class TestHealthCheck:
     def test_health_check_sem_auth(self):
         resp = client.get("/v1/sistema/health-check")
         assert resp.status_code == 200
+
+
+class _FakeKeyring:
+    def __init__(self):
+        self._store = {}
+
+    def get_password(self, service, username):
+        return self._store.get((service, username))
+
+    def set_password(self, service, username, password):
+        self._store[(service, username)] = password
+
+
+def _put_vault_secret(fake_keyring, service, key, value):
+    raw_master_key = fake_keyring.get_password(service, secrets_module._MASTER_KEY_SLOT)
+    if raw_master_key:
+        from base64 import b64decode
+        master_key = b64decode(raw_master_key)
+    else:
+        master_key = AESGCM.generate_key(bit_length=256)
+        fake_keyring.set_password(service, secrets_module._MASTER_KEY_SLOT, b64encode(master_key).decode())
+    nonce = b'0' * secrets_module._NONCE_BYTES
+    blob = AESGCM(master_key).encrypt(nonce, value.encode(), None)
+    fake_keyring.set_password(service, key, b64encode(nonce + blob).decode())
+
+
+class TestSistemaSegredosStatus:
+    def test_segredos_status_retorna_200(self):
+        resp = client.get('/v1/sistema/segredos-status')
+        assert resp.status_code == 200
+
+    def test_segredos_status_envelope_sucesso(self):
+        resp = client.get('/v1/sistema/segredos-status')
+        assert resp.json()['success'] is True
+
+    def test_segredos_status_nao_expoe_valores(self):
+        resp = client.get('/v1/sistema/segredos-status')
+        segredo = resp.json()['data']['segredos'][0]
+        assert 'value' not in segredo
+        assert segredo['value_exposed'] is False
+
+    def test_segredo_mostra_fonte_env(self, monkeypatch):
+        monkeypatch.setenv('JWT_SECRET', 'jwt-from-env')
+        resp = client.get('/v1/sistema/segredos-status')
+        segredos = resp.json()['data']['segredos']
+        jwt = next(item for item in segredos if item['name'] == 'JWT_SECRET')
+        assert jwt['source'] == 'env'
+
+    def test_segredo_mostra_fonte_vault(self, monkeypatch):
+        fake_keyring = _FakeKeyring()
+        monkeypatch.setattr(secrets_module, 'keyring', fake_keyring)
+        monkeypatch.setattr(secrets_module, '_KEYRING_OK', True)
+        monkeypatch.setattr(secrets_module, '_CRYPTO_OK', True)
+        monkeypatch.delenv('GITHUB_TOKEN', raising=False)
+        _put_vault_secret(fake_keyring, 'mvp-intelligence-vault', 'GITHUB_TOKEN', 'gh-vault-token')
+
+        resp = client.get('/v1/sistema/segredos-status')
+        segredos = resp.json()['data']['segredos']
+        token = next(item for item in segredos if item['name'] == 'GITHUB_TOKEN')
+        assert token['source'] == 'vault'
+
+    def test_segredo_mostra_fonte_default(self, monkeypatch):
+        monkeypatch.delenv('SSRS_REQUIRE_HTTPS', raising=False)
+        resp = client.get('/v1/sistema/segredos-status')
+        segredos = resp.json()['data']['segredos']
+        item = next(entry for entry in segredos if entry['name'] == 'SSRS_REQUIRE_HTTPS')
+        assert item['source'] == 'default'
 
 
 # ---------------------------------------------------------------------------

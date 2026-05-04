@@ -1,10 +1,13 @@
 const { test, expect } = require('@playwright/test')
 
+const EMAIL = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
+const SENHA = 'admin123'
+
 async function login(page) {
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
 
-    await page.getByLabel('E-mail').fill('ericsonjosedossantos@tieri659.onmicrosoft.com')
-    await page.getByLabel('Senha').fill('admin123')
+    await page.getByLabel('E-mail').fill(EMAIL)
+    await page.getByLabel('Senha').fill(SENHA)
     await page.getByRole('button', { name: 'Entrar' }).click()
 
     await expect(page).toHaveURL(/\/$/)
@@ -14,16 +17,64 @@ async function login(page) {
 test('dashboard exibe cards, informações e tooltips', async ({ page }) => {
     await login(page)
 
-    const main = page.getByRole('main')
-    await expect(main.getByText('Requisitos', { exact: true })).toBeVisible()
-    await expect(main.getByText('Em análise', { exact: true })).toBeVisible()
-    await expect(main.getByText('Informações do sistema', { exact: true })).toBeVisible()
-    await expect(main.getByText('Pipeline operacional', { exact: true })).toBeVisible()
+    // Cards de métricas por classe específica, evitando ambiguidade com o menu
+    await expect(page.locator('.metric-title').filter({ hasText: 'Requisitos' }).first()).toBeVisible()
+    await expect(page.locator('.metric-title').filter({ hasText: 'Em análise' }).first()).toBeVisible()
+    await expect(page.getByText('Informações do sistema', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Pipeline operacional', { exact: true }).first()).toBeVisible()
 
     await page.getByLabel('Informação da métrica').first().hover()
     await expect(page.getByText('Quantidade total de requisitos cadastrados.')).toBeVisible()
 
     await page.setViewportSize({ width: 390, height: 844 })
-    await expect(main.getByText('Requisitos', { exact: true })).toBeVisible()
-    await expect(main.getByText('Informações do sistema', { exact: true })).toBeVisible()
+    await expect(page.locator('.metric-title').filter({ hasText: 'Requisitos' }).first()).toBeVisible()
+    await expect(page.getByText('Informações do sistema', { exact: true }).first()).toBeVisible()
+})
+
+test('hover no card exibe mini-preview com link de navegação', async ({ page }) => {
+    await login(page)
+
+    // Passa mouse sobre o primeiro card de métrica
+    const card = page.locator('.metric-interactive').first()
+    await card.hover()
+
+    // Mini-preview deve aparecer com botão "Ver detalhes"
+    await expect(page.getByRole('button', { name: 'Ver detalhes' }).first()).toBeVisible({ timeout: 3000 })
+})
+
+test('clique em "Ver detalhes" no card navega para a rota correta', async ({ page }) => {
+    await login(page)
+
+    const card = page.locator('.metric-interactive').first()
+    await card.hover()
+
+    await page.getByRole('button', { name: 'Ver detalhes' }).first().click()
+
+    // Deve navegar para uma rota diferente de /
+    await expect(page).not.toHaveURL(/^\/$/)
+})
+
+test('botão de ícone no card navega diretamente', async ({ page }) => {
+    await login(page)
+
+    const iconBtn = page.locator('.metric-value-row button').first()
+    await iconBtn.click()
+
+    await expect(page).not.toHaveURL(/^\/$/)
+})
+
+test('dashboard responsivo em 600px mantém layout funcional', async ({ page }) => {
+    await page.setViewportSize({ width: 600, height: 900 })
+    await login(page)
+
+    await expect(page.locator('.metric-title').filter({ hasText: 'Requisitos' }).first()).toBeVisible()
+    await expect(page.getByText('Pipeline operacional', { exact: true }).first()).toBeVisible()
+})
+
+test('menu lateral de navegação está presente', async ({ page }) => {
+    await login(page)
+
+    await expect(page.getByRole('link', { name: 'Relatórios SSRS' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Rastreabilidade' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Auditoria' })).toBeVisible()
 })

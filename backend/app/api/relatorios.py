@@ -5,6 +5,7 @@ from urllib.error import URLError
 from fastapi import APIRouter
 
 from app.core.envelope import ok
+from app.core.secrets import get_secret
 
 router = APIRouter(prefix='/v1/relatorios', tags=['Relatorios'])
 
@@ -18,14 +19,14 @@ DEFAULT_REPORTS = [
 
 
 def _list_reports() -> list[str]:
-    raw = os.getenv('SSRS_REPORT_NAMES', '')
+    raw = get_secret('SSRS_REPORT_NAMES', '') or ''
     if not raw.strip():
         return DEFAULT_REPORTS
     return [item.strip() for item in raw.split(',') if item.strip()]
 
 
 def _ssrs_require_https() -> bool:
-    value = os.getenv('SSRS_REQUIRE_HTTPS', 'false').strip().lower()
+    value = (get_secret('SSRS_REQUIRE_HTTPS', 'false') or 'false').strip().lower()
     return value in {'1', 'true', 'yes', 'on'}
 
 
@@ -44,10 +45,10 @@ def _build_ssrs_render_url(base_url: str, folder: str, report_name: str) -> str:
 
 @router.get('/ssrs')
 def ssrs_links():
-    raw_base_url = os.getenv('SSRS_BASE_URL', '').strip().rstrip('/')
+    raw_base_url = (get_secret('SSRS_BASE_URL', '') or '').strip().rstrip('/')
     require_https = _ssrs_require_https()
     base_url = _normalize_ssrs_base_url(raw_base_url, require_https)
-    folder = os.getenv('SSRS_REPORTS_PATH', 'ReqSys').strip()
+    folder = (get_secret('SSRS_REPORTS_PATH', 'ReqSys') or 'ReqSys').strip()
     reports = _list_reports()
 
     if not base_url:
@@ -78,7 +79,7 @@ def ssrs_links():
 
 @router.get('/ssrs/health')
 def ssrs_health():
-    raw_base_url = os.getenv('SSRS_BASE_URL', '').strip().rstrip('/')
+    raw_base_url = (get_secret('SSRS_BASE_URL', '') or '').strip().rstrip('/')
     require_https = _ssrs_require_https()
     base_url = _normalize_ssrs_base_url(raw_base_url, require_https)
     if not base_url:

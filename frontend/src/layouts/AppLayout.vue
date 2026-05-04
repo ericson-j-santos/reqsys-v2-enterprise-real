@@ -27,15 +27,23 @@
 
       <!-- Nav items -->
       <v-list density="compact" nav class="pt-2">
-        <v-list-item
+        <v-tooltip
           v-for="item in navItems"
           :key="item.to"
-          :to="item.to"
-          :prepend-icon="item.icon"
-          :title="item.title"
-          class="nav-item"
-          @click="mobile && (drawer = false)"
-        />
+          :text="item.tip"
+          location="right"
+        >
+          <template #activator="{ props }">
+            <v-list-item
+              v-bind="props"
+              :to="item.to"
+              :prepend-icon="item.icon"
+              :title="item.title"
+              class="nav-item"
+              @click="mobile && (drawer = false)"
+            />
+          </template>
+        </v-tooltip>
       </v-list>
 
       <!-- User + logout -->
@@ -82,12 +90,13 @@ const router = useRouter()
 const drawer = ref(true)
 
 const navItems = [
-  { to: '/',                icon: 'mdi-view-dashboard',     title: 'Dashboard'         },
-  { to: '/requisitos',      icon: 'mdi-file-document-edit', title: 'Requisitos'        },
-  { to: '/pipeline',        icon: 'mdi-pipe',               title: 'Pipeline'          },
-  { to: '/relatorios',      icon: 'mdi-file-chart-outline', title: 'Relatórios SSRS'   },
-  { to: '/rastreabilidade', icon: 'mdi-vector-link',        title: 'Rastreabilidade'   },
-  { to: '/auditoria',       icon: 'mdi-shield-search',      title: 'Auditoria'         },
+  { to: '/',                icon: 'mdi-view-dashboard',     title: 'Dashboard',       tip: 'Visão consolidada das métricas e acessos rápidos.' },
+  { to: '/requisitos',      icon: 'mdi-file-document-edit', title: 'Requisitos',      tip: 'Cadastro, listagem e acompanhamento dos requisitos.' },
+  { to: '/pipeline',        icon: 'mdi-pipe',               title: 'Pipeline',        tip: 'Fluxo operacional detalhado do requisito até a publicação.' },
+  { to: '/relatorios',      icon: 'mdi-file-chart-outline', title: 'Relatórios SSRS', tip: 'Catálogo e status dos relatórios SSRS publicados.' },
+  { to: '/segredos-status', icon: 'mdi-key-chain-variant',  title: 'Segredos',        tip: 'Diagnóstico da origem dos segredos do backend.' },
+  { to: '/rastreabilidade', icon: 'mdi-vector-link',        title: 'Rastreabilidade', tip: 'Matriz de vínculo entre requisito, história e entrega.' },
+  { to: '/auditoria',       icon: 'mdi-shield-search',      title: 'Auditoria',       tip: 'Linha do tempo de eventos e governança operacional.' },
 ]
 
 function initials(u) {

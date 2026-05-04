@@ -4,6 +4,8 @@ from typing import Any
 from urllib import parse, request
 from urllib.error import HTTPError, URLError
 
+from app.core.secrets import get_secret
+
 
 class IntegracaoError(RuntimeError):
     pass
@@ -52,7 +54,7 @@ def fetch_github_issues(repo: str, state: str = "open", limit: int = 20, labels:
     if labels:
         query["labels"] = ",".join([s.strip() for s in labels if s and s.strip()])
 
-    token = os.getenv("GITHUB_TOKEN", "").strip()
+    token = (get_secret('GITHUB_TOKEN', '') or '').strip()
     headers: dict[str, str] = {}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -77,9 +79,9 @@ def fetch_github_issues(repo: str, state: str = "open", limit: int = 20, labels:
 
 
 def publish_issues_to_redmine(repo: str, issues: list[dict[str, Any]], project_id: int | None = None, tracker_id: int | None = None, priority_id: int | None = None) -> dict[str, Any]:
-    base_url = os.getenv("REDMINE_BASE_URL", "").strip().rstrip("/")
-    api_key = os.getenv("REDMINE_API_KEY", "").strip()
-    env_project_id = os.getenv("REDMINE_PROJECT_ID", "").strip()
+    base_url = (get_secret('REDMINE_BASE_URL', '') or '').strip().rstrip("/")
+    api_key = (get_secret('REDMINE_API_KEY', '') or '').strip()
+    env_project_id = (get_secret('REDMINE_PROJECT_ID', '') or '').strip()
 
     effective_project_id = project_id or (int(env_project_id) if env_project_id.isdigit() else None)
     if not base_url or not api_key or not effective_project_id:

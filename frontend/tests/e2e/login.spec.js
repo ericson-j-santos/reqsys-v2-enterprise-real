@@ -1,10 +1,13 @@
 const { test, expect } = require('@playwright/test')
 
+const EMAIL = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
+const SENHA = 'admin123'
+
 test('realiza login e redireciona para dashboard', async ({ page }) => {
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
 
-    await page.getByLabel('E-mail').fill('ericsonjosedossantos@tieri659.onmicrosoft.com')
-    await page.getByLabel('Senha').fill('admin123')
+    await page.getByLabel('E-mail').fill(EMAIL)
+    await page.getByLabel('Senha').fill(SENHA)
     await page.getByRole('button', { name: 'Entrar' }).click()
 
     await expect(page).toHaveURL(/\/$/)
@@ -12,4 +15,45 @@ test('realiza login e redireciona para dashboard', async ({ page }) => {
 
     const token = await page.evaluate(() => localStorage.getItem('reqsys_token'))
     expect(token).toBeTruthy()
+})
+
+test('nome do usuário não exibe caracteres mojibake', async ({ page }) => {
+    await page.goto('/login', { waitUntil: 'domcontentloaded' })
+    await page.getByLabel('E-mail').fill(EMAIL)
+    await page.getByLabel('Senha').fill(SENHA)
+    await page.getByRole('button', { name: 'Entrar' }).click()
+    await expect(page).toHaveURL(/\/$/)
+
+    // Nome não deve conter sequências mojibake de latin1→utf8
+    const bodyText = await page.locator('body').innerText()
+    expect(bodyText).not.toMatch(/Usu[ÃÂ]/)
+    // Deve exibir o nome correto sem caracteres corrompidos
+    expect(bodyText).toMatch(/Usuário Demo/)
+})
+
+test('credenciais inválidas exibem mensagem de erro', async ({ page }) => {
+    await page.goto('/login', { waitUntil: 'domcontentloaded' })
+    await page.getByLabel('E-mail').fill(EMAIL)
+    await page.getByLabel('Senha').fill('senha-errada-123')
+    await page.getByRole('button', { name: 'Entrar' }).click()
+
+    // Deve permanecer na página de login
+    await expect(page).toHaveURL(/\/login/)
+    // Não deve haver token no localStorage
+    const token = await page.evaluate(() => localStorage.getItem('reqsys_token'))
+    expect(token).toBeFalsy()
+})
+
+test('logout limpa sessão e redireciona para login', async ({ page }) => {
+    await page.goto('/login', { waitUntil: 'domcontentloaded' })
+    await page.getByLabel('E-mail').fill(EMAIL)
+    await page.getByLabel('Senha').fill(SENHA)
+    await page.getByRole('button', { name: 'Entrar' }).click()
+    await expect(page).toHaveURL(/\/$/)
+
+    await page.getByRole('listitem').filter({ hasText: 'Sair' }).click()
+    await expect(page).toHaveURL(/\/login/)
+
+    const token = await page.evaluate(() => localStorage.getItem('reqsys_token'))
+    expect(token).toBeFalsy()
 })

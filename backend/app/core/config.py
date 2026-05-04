@@ -1,11 +1,14 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings
+
+from app.core.secrets import get_secret
 
 class Settings(BaseSettings):
     app_name: str = 'ReqSys API'
-    jwt_secret: str = 'trocar-em-producao'
+    jwt_secret: str = Field(default_factory=lambda: get_secret('JWT_SECRET', 'trocar-em-producao') or 'trocar-em-producao')
     jwt_algorithm: str = 'HS256'
-    database_url: str = 'sqlite:///./reqsys.db'
-    cors_origins: str = 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:8082,http://reqsys.localtest.me:8082'
+    database_url: str = Field(default_factory=lambda: get_secret('DATABASE_URL', 'sqlite:///./reqsys.db') or 'sqlite:///./reqsys.db')
+    cors_origins: str = Field(default_factory=lambda: get_secret('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:8082,http://reqsys.localtest.me:8082') or 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:8082,http://reqsys.localtest.me:8082')
 
     @property
     def cors_origins_list(self) -> list[str]:

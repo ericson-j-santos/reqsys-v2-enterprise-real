@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.core.envelope import ok
+from app.core.secrets import describe_secret_resolution
 from app.db import get_db
 from app.models.requisito import Requisito
 
@@ -81,6 +82,12 @@ ENDPOINTS_INFO = {
             'reports': [{'name': 'AtvIndividual', 'render_url': '...'}]
         }
     },
+    'segredos_status': {
+        'metodo': 'GET',
+        'url': '/v1/sistema/segredos-status',
+        'descricao': 'Diagnóstico da origem dos segredos (env, cofre ou default), sem expor valores',
+        'autenticacao': False,
+    },
 }
 
 CREDENCIAIS_DEMO = {
@@ -88,6 +95,20 @@ CREDENCIAIS_DEMO = {
     'senha': 'admin123',
     'descricao': 'Credenciais de teste para desenvolvimento local'
 }
+
+SECRET_DIAGNOSTICS = [
+    {'name': 'JWT_SECRET', 'default': 'trocar-em-producao'},
+    {'name': 'DATABASE_URL', 'default': 'sqlite:///./reqsys.db'},
+    {'name': 'CORS_ORIGINS', 'default': 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:8082,http://reqsys.localtest.me:8082'},
+    {'name': 'GITHUB_TOKEN'},
+    {'name': 'REDMINE_BASE_URL'},
+    {'name': 'REDMINE_API_KEY'},
+    {'name': 'REDMINE_PROJECT_ID'},
+    {'name': 'SSRS_BASE_URL'},
+    {'name': 'SSRS_REPORTS_PATH', 'default': 'ReqSys'},
+    {'name': 'SSRS_REPORT_NAMES', 'default': 'AtvIndividual,Cracha,CracháAula2,RelatorioDetalhado,RelatorioDetalhadoAula2'},
+    {'name': 'SSRS_REQUIRE_HTTPS', 'default': 'false'},
+]
 
 @router.get('/info')
 def info_endpoints():
@@ -115,6 +136,25 @@ def info_endpoints():
                 'notas': 'Requer DNS e HTTPS/TLS configurados'
             }
         }
+    })
+
+
+@router.get('/segredos-status')
+def segredos_status():
+    secrets = [
+        describe_secret_resolution(
+            item['name'],
+            item.get('default'),
+            env_name=item.get('env_name'),
+            vault_key=item.get('vault_key'),
+            prefer_vault=bool(item.get('prefer_vault', False)),
+        )
+        for item in SECRET_DIAGNOSTICS
+    ]
+
+    return ok({
+        'total': len(secrets),
+        'segredos': secrets,
     })
 
 @router.get('/health-check')
@@ -149,7 +189,8 @@ def health_check(db: Session = Depends(get_db)):
         'auditoria': '/v1/auditoria/eventos (GET)',
         'relatorios': '/v1/relatorios/ssrs (GET)',
         'sistema_info': '/v1/sistema/info (GET)',
-        'sistema_health': '/v1/sistema/health-check (GET)'
+        'sistema_health': '/v1/sistema/health-check (GET)',
+        'sistema_segredos_status': '/v1/sistema/segredos-status (GET)',
     }
     
     all_ok = all(check.get('status') == 'ok' for check in checks.values())
