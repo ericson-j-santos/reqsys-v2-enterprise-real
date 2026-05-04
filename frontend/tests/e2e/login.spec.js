@@ -1,16 +1,8 @@
 const { test, expect } = require('@playwright/test')
-
-const EMAIL = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
-const SENHA = 'admin123'
+const { login, preencherFormularioLogin, EMAIL_PADRAO } = require('./helpers/auth')
 
 test('realiza login e redireciona para dashboard', async ({ page }) => {
-    await page.goto('/login', { waitUntil: 'domcontentloaded' })
-
-    await page.getByLabel('E-mail').fill(EMAIL)
-    await page.getByRole('textbox', { name: /^Senha$/ }).fill(SENHA)
-    await page.getByRole('button', { name: 'Entrar' }).click()
-
-    await expect(page).toHaveURL(/\/$/)
+    await login(page)
     await expect(page.getByRole('heading', { name: 'Dashboard de Requisitos' })).toBeVisible()
 
     const token = await page.evaluate(() => localStorage.getItem('reqsys_token'))
@@ -18,11 +10,7 @@ test('realiza login e redireciona para dashboard', async ({ page }) => {
 })
 
 test('nome do usuário não exibe caracteres mojibake', async ({ page }) => {
-    await page.goto('/login', { waitUntil: 'domcontentloaded' })
-    await page.getByLabel('E-mail').fill(EMAIL)
-    await page.getByRole('textbox', { name: /^Senha$/ }).fill(SENHA)
-    await page.getByRole('button', { name: 'Entrar' }).click()
-    await expect(page).toHaveURL(/\/$/)
+    await login(page)
 
     // Nome não deve conter sequências mojibake de latin1→utf8
     const bodyText = await page.locator('body').innerText()
@@ -33,9 +21,7 @@ test('nome do usuário não exibe caracteres mojibake', async ({ page }) => {
 
 test('credenciais inválidas exibem mensagem de erro', async ({ page }) => {
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
-    await page.getByLabel('E-mail').fill(EMAIL)
-    await page.getByRole('textbox', { name: /^Senha$/ }).fill('senha-errada-123')
-    await page.getByRole('button', { name: 'Entrar' }).click()
+    await preencherFormularioLogin(page, EMAIL_PADRAO, 'senha-errada-123')
 
     // Deve permanecer na página de login
     await expect(page).toHaveURL(/\/login/)
@@ -45,11 +31,7 @@ test('credenciais inválidas exibem mensagem de erro', async ({ page }) => {
 })
 
 test('logout limpa sessão e redireciona para login', async ({ page }) => {
-    await page.goto('/login', { waitUntil: 'domcontentloaded' })
-    await page.getByLabel('E-mail').fill(EMAIL)
-    await page.getByRole('textbox', { name: /^Senha$/ }).fill(SENHA)
-    await page.getByRole('button', { name: 'Entrar' }).click()
-    await expect(page).toHaveURL(/\/$/)
+    await login(page)
 
     await page.getByRole('listitem').filter({ hasText: 'Sair' }).click()
     await expect(page).toHaveURL(/\/login/)

@@ -1,18 +1,5 @@
 const { test, expect } = require('@playwright/test')
-
-const EMAIL = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
-const SENHA = 'admin123'
-
-async function login(page) {
-    await page.goto('/login', { waitUntil: 'domcontentloaded' })
-
-    await page.getByLabel('E-mail').fill(EMAIL)
-    await page.getByRole('textbox', { name: /^Senha$/ }).fill(SENHA)
-    await page.getByRole('button', { name: 'Entrar' }).click()
-
-    await expect(page).toHaveURL(/\/$/)
-    await expect(page.getByRole('heading', { name: 'Dashboard de Requisitos' })).toBeVisible()
-}
+const { login } = require('./helpers/auth')
 
 test('dashboard exibe cards, informações e tooltips', async ({ page }) => {
     await login(page)

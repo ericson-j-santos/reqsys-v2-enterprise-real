@@ -1,6 +1,6 @@
 const { defineConfig } = require('@playwright/test')
 
-const baseURL = process.env.E2E_BASE_URL || 'http://reqsys.localtest.me:8082'
+const baseURL = process.env.E2E_BASE_URL || process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173'
 
 module.exports = defineConfig({
     testDir: './tests/e2e',

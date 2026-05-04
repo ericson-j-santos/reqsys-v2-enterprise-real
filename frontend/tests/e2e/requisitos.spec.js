@@ -1,17 +1,7 @@
 const { test, expect } = require('@playwright/test')
+const { login } = require('./helpers/auth')
 
 test.describe.configure({ retries: 1 })
-
-const EMAIL = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
-const SENHA = 'admin123'
-
-async function login(page) {
-    await page.goto('/login', { waitUntil: 'domcontentloaded' })
-    await page.getByLabel('E-mail').fill(EMAIL)
-    await page.getByRole('textbox', { name: /^Senha$/ }).fill(SENHA)
-    await page.getByRole('button', { name: 'Entrar' }).click()
-    await expect(page).toHaveURL(/\/$/);
-}
 
 async function irParaRequisitos(page) {
     await login(page)
