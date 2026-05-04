@@ -117,7 +117,7 @@ def info_endpoints():
     Útil para onboarding de desenvolvedores e clientes.
     """
     return ok({
-        'api_version': '2.2.0',
+        'api_version': '2.3.0',
         'titulo': 'ReqSys Enterprise API',
         'descricao': 'Solução SaaS para engenharia de requisitos com rastreabilidade e auditoria',
         'endpoints': ENDPOINTS_INFO,

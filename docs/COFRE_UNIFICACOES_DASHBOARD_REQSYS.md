@@ -6,8 +6,8 @@ Data: 2026-05-03
 
 A implementação de cofre está no projeto MVP Intelligence (fora do frontend do ReqSys), nos arquivos:
 
-- `codigoszipados/mvp intelligence/mvp_intelligence/backend/services/vault.py`
-- `codigoszipados/mvp intelligence/mvp_intelligence/backend/routers/vault_router.py`
+- `codigoszipados_OLD/mvp intelligence/mvp_intelligence/backend/services/vault.py`
+- `codigoszipados_OLD/mvp intelligence/mvp_intelligence/backend/routers/vault_router.py`
 
 ### O que existe hoje no cofre
 
@@ -19,7 +19,7 @@ A implementação de cofre está no projeto MVP Intelligence (fora do frontend d
 
 Consolidação operacional entre ReqSys e MVP Intelligence já documentada em:
 
-- `codigoszipados/mvp intelligence/mvp_intelligence/docs/STATUS_INTEGRADO_APLICACOES_2026-05-03.md`
+- `codigoszipados_OLD/mvp intelligence/mvp_intelligence/docs/STATUS_INTEGRADO_APLICACOES_2026-05-03.md`
 
 Pontos consolidados:
 

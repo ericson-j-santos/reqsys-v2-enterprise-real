@@ -1,3 +1,9 @@
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Carrega .env da raiz do projeto (um nível acima de backend/)
+load_dotenv(Path(__file__).resolve().parents[2] / '.env', override=False)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth, requisitos, dashboard, pipeline, relatorios, auditoria, sistema
