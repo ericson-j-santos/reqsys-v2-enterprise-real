@@ -7,7 +7,7 @@ test('realiza login e redireciona para dashboard', async ({ page }) => {
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
 
     await page.getByLabel('E-mail').fill(EMAIL)
-    await page.getByLabel('Senha').fill(SENHA)
+    await page.getByRole('textbox', { name: /^Senha$/ }).fill(SENHA)
     await page.getByRole('button', { name: 'Entrar' }).click()
 
     await expect(page).toHaveURL(/\/$/)
@@ -20,7 +20,7 @@ test('realiza login e redireciona para dashboard', async ({ page }) => {
 test('nome do usuário não exibe caracteres mojibake', async ({ page }) => {
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
     await page.getByLabel('E-mail').fill(EMAIL)
-    await page.getByLabel('Senha').fill(SENHA)
+    await page.getByRole('textbox', { name: /^Senha$/ }).fill(SENHA)
     await page.getByRole('button', { name: 'Entrar' }).click()
     await expect(page).toHaveURL(/\/$/)
 
@@ -34,7 +34,7 @@ test('nome do usuário não exibe caracteres mojibake', async ({ page }) => {
 test('credenciais inválidas exibem mensagem de erro', async ({ page }) => {
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
     await page.getByLabel('E-mail').fill(EMAIL)
-    await page.getByLabel('Senha').fill('senha-errada-123')
+    await page.getByRole('textbox', { name: /^Senha$/ }).fill('senha-errada-123')
     await page.getByRole('button', { name: 'Entrar' }).click()
 
     // Deve permanecer na página de login
@@ -47,7 +47,7 @@ test('credenciais inválidas exibem mensagem de erro', async ({ page }) => {
 test('logout limpa sessão e redireciona para login', async ({ page }) => {
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
     await page.getByLabel('E-mail').fill(EMAIL)
-    await page.getByLabel('Senha').fill(SENHA)
+    await page.getByRole('textbox', { name: /^Senha$/ }).fill(SENHA)
     await page.getByRole('button', { name: 'Entrar' }).click()
     await expect(page).toHaveURL(/\/$/)
 

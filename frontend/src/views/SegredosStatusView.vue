@@ -1,92 +1,151 @@
-<template>
+﻿<template>
   <section class="page">
-    <div class="page-header">
-      <div>
-        <h1>Status de Segredos</h1>
-        <p class="muted secrets-subtitle">
-          Diagnóstico da origem dos segredos do backend, sem exposição de valores.
-        </p>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <v-btn
-          size="small"
-          variant="outlined"
-          prepend-icon="mdi-refresh"
-          :loading="carregando"
-          @click="carregar"
-        >
-          Atualizar
-        </v-btn>
-        <v-chip size="small" :color="statusChipColor" variant="tonal">
-          {{ statusChipText }}
-        </v-chip>
-      </div>
-    </div>
+    <PageHeader
+      title="Status de Segredos"
+      subtitle="Diagnóstico da origem dos segredos do backend, sem exposição de valores."
+      :chip="statusChipText"
+      :chip-color="statusChipColor"
+      chip-tooltip="Indica a origem predominante dos segredos configurados"
+    >
+      <template #actions>
+        <v-tooltip text="Recarrega o diagnóstico de segredos do backend" location="top">
+          <template #activator="{ props }">
+            <v-btn
+              v-bind="props"
+              size="small"
+              variant="outlined"
+              prepend-icon="mdi-refresh"
+              :loading="carregando"
+              data-testid="btn-atualizar"
+              @click="carregar"
+            >
+              Atualizar
+            </v-btn>
+          </template>
+        </v-tooltip>
+        <v-tooltip text="Abre o cofre para gerenciar segredos diretamente" location="top">
+          <template #activator="{ props }">
+            <v-btn
+              v-bind="props"
+              size="small"
+              color="amber"
+              variant="tonal"
+              prepend-icon="mdi-safe"
+              href="/cofre.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="btn-abrir-cofre"
+            >
+              Abrir cofre
+            </v-btn>
+          </template>
+        </v-tooltip>
+      </template>
+    </PageHeader>
+
+    <v-alert v-if="erro" type="error" variant="tonal" class="mb-4" data-testid="alerta-erro">
+      {{ erro }}
+    </v-alert>
 
     <v-row>
+      <!-- Resumo / KPIs -->
       <v-col cols="12" md="4">
-        <v-card class="table-card metric-card">
+        <v-card class="table-card h-100">
           <v-card-title class="py-3 px-4">Resumo</v-card-title>
           <v-divider />
           <v-card-text>
-            <div class="summary-grid">
+            <v-skeleton-loader v-if="carregando" type="list-item-three-line" />
+            <div v-else class="summary-grid">
               <div class="summary-item">
                 <div class="muted">Total monitorado</div>
-                <strong>{{ total }}</strong>
+                <strong class="summary-value" data-testid="total">{{ total }}</strong>
               </div>
               <div class="summary-item">
                 <div class="muted">Via ambiente</div>
-                <strong>{{ countBySource.env }}</strong>
+                <strong class="summary-value">{{ countBySource.env }}</strong>
               </div>
               <div class="summary-item">
                 <div class="muted">Via cofre</div>
-                <strong>{{ countBySource.vault }}</strong>
+                <strong class="summary-value">{{ countBySource.vault }}</strong>
               </div>
               <div class="summary-item">
                 <div class="muted">Usando default</div>
-                <strong>{{ countBySource.default }}</strong>
+                <strong class="summary-value" :class="{ 'text-amber': countBySource.default > 0 }">
+                  {{ countBySource.default }}
+                </strong>
               </div>
             </div>
 
-            <v-alert v-if="erro" type="error" variant="tonal" class="mt-4">
-              {{ erro }}
+            <v-alert type="info" variant="tonal" class="mt-4" density="compact">
+              Os valores dos segredos <strong>nunca</strong> são retornados pela API —
+              apenas a origem da configuração.
             </v-alert>
 
-            <v-alert type="info" variant="tonal" class="mt-4">
-              Este painel informa apenas a origem da configuração. Os valores não são retornados pela API.
+            <v-alert
+              v-if="!carregando && countBySource.default > 0"
+              type="warning"
+              variant="tonal"
+              class="mt-3"
+              density="compact"
+              data-testid="alerta-default"
+            >
+              {{ countBySource.default }} segredo(s) usando valor padrão. Considere configurar via ambiente ou cofre.
             </v-alert>
           </v-card-text>
         </v-card>
       </v-col>
 
+      <!-- Tabela de segredos -->
       <v-col cols="12" md="8">
         <v-card class="table-card">
           <v-card-title class="py-3 px-4">Segredos monitorados</v-card-title>
           <v-divider />
-          <v-table>
+
+          <v-skeleton-loader v-if="carregando" type="table-row-divider@5" />
+          <v-table v-else data-testid="tabela-segredos">
             <thead>
               <tr>
                 <th>Nome</th>
                 <th>Origem</th>
-                <th>Chave do cofre</th>
-                <th>Serviço</th>
+                <th>Resolvido</th>
+                <th>Cofre / Serviço</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="segredo in segredos" :key="segredo.name">
+              <tr v-for="segredo in segredos" :key="segredo.name" :data-testid="`row-${segredo.name}`">
                 <td>
                   <div class="secret-name">{{ segredo.name }}</div>
-                  <div class="muted text-caption">env: {{ segredo.env_name }}</div>
+                  <div class="muted text-caption">env: {{ segredo.env_name || segredo.name }}</div>
                 </td>
                 <td>
-                  <v-chip size="small" :color="sourceColor(segredo.source)" variant="tonal">
-                    {{ sourceLabel(segredo.source) }}
-                  </v-chip>
+                  <StatusChip
+                    :value="segredo.source"
+                    :tooltip="sourceTooltip(segredo.source)"
+                    data-testid="chip-origem"
+                  />
                 </td>
-                <td>{{ segredo.vault_key || '—' }}</td>
-                <td>{{ segredo.vault_service_name || '—' }}</td>
+                <td>
+                  <v-tooltip :text="segredo.resolved ? 'Valor disponível' : 'Não configurado'" location="top">
+                    <template #activator="{ props }">
+                      <v-icon
+                        v-bind="props"
+                        :icon="segredo.resolved ? 'mdi-check-circle' : 'mdi-alert-circle'"
+                        :color="segredo.resolved ? 'green' : 'grey'"
+                        size="20"
+                        :data-testid="`resolved-${segredo.name}`"
+                      />
+                    </template>
+                  </v-tooltip>
+                </td>
+                <td>
+                  <span v-if="segredo.vault_key" class="text-caption">
+                    <strong>{{ segredo.vault_key }}</strong>
+                    <span v-if="segredo.vault_service_name" class="muted"> · {{ segredo.vault_service_name }}</span>
+                  </span>
+                  <span v-else class="muted">—</span>
+                </td>
               </tr>
-              <tr v-if="!segredos.length && !carregando">
+              <tr v-if="!segredos.length">
                 <td colspan="4" class="empty-cell">Nenhum diagnóstico retornado.</td>
               </tr>
             </tbody>
@@ -100,16 +159,19 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { api } from '../services/api'
+import PageHeader from '../components/PageHeader.vue'
+import StatusChip from '../components/StatusChip.vue'
+import { useAsyncLoader } from '../composables/useAsyncLoader.js'
 
-const carregando = ref(false)
-const erro = ref('')
+const { carregando, erro, run } = useAsyncLoader()
+
 const segredos = ref([])
 const total = ref(0)
 
 const countBySource = computed(() => {
   const counts = { env: 0, vault: 0, default: 0, absent: 0 }
-  for (const segredo of segredos.value) {
-    const source = segredo?.source || 'absent'
+  for (const s of segredos.value) {
+    const source = s?.source || 'absent'
     if (source in counts) counts[source] += 1
   }
   return counts
@@ -129,49 +191,28 @@ const statusChipColor = computed(() => {
   return 'grey'
 })
 
-function sourceLabel(source) {
+function sourceTooltip(source) {
   return {
-    env: 'Ambiente',
-    vault: 'Cofre',
-    default: 'Default',
-    absent: 'Ausente',
+    env:     'Lido de variável de ambiente',
+    vault:   'Lido do cofre de segredos encriptado',
+    default: 'Usando valor padrão — configure via ambiente ou cofre',
+    absent:  'Não configurado em nenhuma origem',
   }[source] || source
 }
 
-function sourceColor(source) {
-  return {
-    env: 'amber',
-    vault: 'green',
-    default: 'blue',
-    absent: 'grey',
-  }[source] || 'grey'
-}
-
 async function carregar() {
-  carregando.value = true
-  erro.value = ''
-  try {
+  await run(async () => {
     const { data } = await api.get('/v1/sistema/segredos-status')
     const payload = data?.data || {}
     segredos.value = payload.segredos || []
     total.value = payload.total || segredos.value.length
-  } catch (e) {
-    erro.value = e?.response?.data?.errors?.[0]?.message || e?.message || 'Falha ao carregar status de segredos.'
-    segredos.value = []
-    total.value = 0
-  } finally {
-    carregando.value = false
-  }
+  })
 }
 
 onMounted(carregar)
 </script>
 
 <style scoped>
-.secrets-subtitle {
-  max-width: 60ch;
-}
-
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -185,8 +226,13 @@ onMounted(carregar)
   background: rgba(255, 255, 255, 0.03);
 }
 
-.metric-card {
-  height: 100%;
+.summary-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.text-amber {
+  color: rgb(var(--v-theme-amber));
 }
 
 .secret-name {

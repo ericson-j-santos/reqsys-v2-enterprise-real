@@ -51,7 +51,7 @@
 
     <v-skeleton-loader v-if="store.carregando" type="table" />
     <v-data-table v-else :headers="headers" :items="store.itens" item-value="id" class="table-card">
-      <template #item.status="{ item }">
+      <template v-slot:[`item.status`]="{ item }">
         <v-tooltip text="Situação atual do requisito no fluxo operacional" location="top">
           <template #activator="{ props }">
             <v-chip v-bind="props" size="small" :color="corStatus(item.status)">{{ item.status }}</v-chip>

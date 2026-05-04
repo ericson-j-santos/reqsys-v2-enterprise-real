@@ -5,7 +5,8 @@
         "dev": "vite --host 0.0.0.0",
         "build": "vite build",
         "preview": "vite preview --host 0.0.0.0",
-        "test:e2e": "playwright test"
+        "test:e2e": "playwright test",
+        "test:e2e:stable": "node scripts/run-e2e-safe.js --reporter=line"
     },
     "dependencies": {
         "@mdi/font": "latest",
