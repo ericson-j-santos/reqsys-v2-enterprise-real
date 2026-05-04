@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(default_factory=lambda: get_secret('JWT_SECRET', 'trocar-em-producao') or 'trocar-em-producao')
     jwt_algorithm: str = 'HS256'
     database_url: str = Field(default_factory=lambda: get_secret('DATABASE_URL', 'sqlite:///./reqsys.db') or 'sqlite:///./reqsys.db')
-    cors_origins: str = Field(default_factory=lambda: get_secret('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:8082,http://reqsys.localtest.me:8082') or 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:8082,http://reqsys.localtest.me:8082')
+    cors_origins: str = Field(default_factory=lambda: get_secret('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:8082,http://reqsys.localtest.me:8082') or 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:8082,http://reqsys.localtest.me:8082')
 
     @property
     def cors_origins_list(self) -> list[str]:
