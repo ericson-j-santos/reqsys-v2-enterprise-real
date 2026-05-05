@@ -43,7 +43,8 @@ def test_settings_uses_vault_as_fallback(monkeypatch):
     _put_vault_secret(fake_keyring, 'mvp-intelligence-vault', 'JWT_SECRET', 'jwt-from-vault')
     _put_vault_secret(fake_keyring, 'mvp-intelligence-vault', 'DATABASE_URL', 'sqlite:///./vault.db')
 
-    settings = Settings()
+    # Ignore project .env to ensure this test validates vault fallback behavior.
+    settings = Settings(_env_file=None)
 
     assert settings.jwt_secret == 'jwt-from-vault'
     assert settings.database_url == 'sqlite:///./vault.db'
@@ -92,6 +93,7 @@ def test_relatorios_reads_ssrs_base_from_vault(monkeypatch):
     monkeypatch.setattr(secrets_module, '_KEYRING_OK', True)
     monkeypatch.setattr(secrets_module, '_CRYPTO_OK', True)
     monkeypatch.delenv('SSRS_BASE_URL', raising=False)
+    monkeypatch.delenv('SSRS_REQUIRE_HTTPS', raising=False)
     _put_vault_secret(fake_keyring, 'mvp-intelligence-vault', 'SSRS_BASE_URL', 'http://ssrs.local/ReportServer')
 
     response = relatorios.ssrs_links()

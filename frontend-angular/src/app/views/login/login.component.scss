@@ -1,0 +1,99 @@
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0d1117;
+  padding: 16px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 8px 0;
+
+  .login-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 4px;
+
+    mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #e6edf3;
+
+      span {
+        color: #fbbf24;
+      }
+    }
+  }
+
+  .login-subtitle {
+    width: 100%;
+    text-align: center;
+    color: #8b949e;
+    margin: 0 0 16px;
+    font-size: 13px;
+  }
+}
+
+.full-width {
+  width: 100%;
+}
+
+.error-msg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #f97316;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.submit-btn {
+  margin-top: 4px;
+  height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.spinner {
+  display: inline-block;
+}
+
+.demo-label {
+  text-align: center;
+  color: #8b949e;
+  font-size: 12px;
+  margin: 12px 0 8px;
+}
+
+.demo-chips {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.demo-chip {
+  font-size: 12px;
+  padding: 4px 12px;
+}

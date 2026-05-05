@@ -6,6 +6,7 @@ export const useRequisitosStore = defineStore('requisitos', {
     itens: [],
     metricas: {},
     dashboardInfo: {},
+    qualidadeIAResumo: {},
     carregando: false,
     erro: null,
   }),
@@ -37,6 +38,17 @@ export const useRequisitosStore = defineStore('requisitos', {
       this.erro = null
       try {
         this.dashboardInfo = (await api.get('/v1/dashboard/info')).data.data
+      } catch (e) {
+        this.erro = e.message
+      } finally {
+        this.carregando = false
+      }
+    },
+    async carregarQualidadeIA() {
+      this.carregando = true
+      this.erro = null
+      try {
+        this.qualidadeIAResumo = (await api.get('/v1/qualidade-ia/resumo')).data.data
       } catch (e) {
         this.erro = e.message
       } finally {

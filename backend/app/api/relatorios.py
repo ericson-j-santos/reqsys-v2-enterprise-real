@@ -6,7 +6,13 @@ from urllib.error import URLError
 import urllib3
 import requests as _requests
 from requests_ntlm import HttpNtlmAuth
-from requests_negotiate_sspi import HttpNegotiateAuth
+
+try:
+    from requests_negotiate_sspi import HttpNegotiateAuth as _HttpNegotiateAuth
+    _SSPI_AVAILABLE = True
+except ImportError:  # não disponível em Linux/Docker
+    _HttpNegotiateAuth = None
+    _SSPI_AVAILABLE = False
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -48,7 +54,11 @@ def _get_ssrs_auth():
     if user and password:
         return HttpNtlmAuth(user, password)
     # Autenticação Windows SSO via SSPI (sem necessidade de senha no .env)
-    return HttpNegotiateAuth()
+    if _SSPI_AVAILABLE:
+        return _HttpNegotiateAuth()
+    raise RuntimeError(
+        'SSRS_USER/SSRS_PASSWORD não configurados e SSPI não disponível neste ambiente.'
+    )
 
 
 def _normalize_ssrs_base_url(base_url: str, require_https: bool) -> str:

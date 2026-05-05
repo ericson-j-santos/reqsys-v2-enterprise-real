@@ -117,6 +117,34 @@ CORS_ORIGINS=https://app.seudominio.com
 - `POST /v1/requisitos`
 - `GET /v1/dashboard/requisitos`
 
+## Monitoramento de qualidade de IA
+
+Endpoints do modulo de qualidade de IA:
+
+- `GET /v1/qualidade-ia/resumo`
+- `POST /v1/qualidade-ia/snapshot`
+- `GET /v1/qualidade-ia/tendencia`
+- `GET /v1/qualidade-ia/tendencia.csv`
+- `GET /v1/qualidade-ia/tendencia.pdf`
+
+### Snapshot diario (Windows Task Scheduler)
+
+1. Gere snapshot manual quando quiser:
+
+```powershell
+cd scripts
+powershell -ExecutionPolicy Bypass -File .\executar-snapshot-qualidade-ia.ps1
+```
+
+2. Agende execucao diaria automatica:
+
+```powershell
+cd scripts
+powershell -ExecutionPolicy Bypass -File .\agendar-snapshot-qualidade-ia.ps1 -Hora 8 -Minuto 0
+```
+
+Os logs ficam em `backend/scripts_audit/logs/`.
+
 ## Testes automatizados
 
 ### Backend (Pytest)

@@ -149,7 +149,7 @@ const store = useRequisitosStore()
 const router = useRouter()
 
 onMounted(async () => {
-  await Promise.all([store.carregarMetricas(), store.carregarDashboardInfo()])
+  await Promise.all([store.carregarMetricas(), store.carregarDashboardInfo(), store.carregarQualidadeIA()])
 })
 
 const cards = computed(() => [
@@ -179,6 +179,15 @@ const cards = computed(() => [
     tooltip: 'Requisitos aprovados para execução.',
     resumo: 'Demandas prontas para execução e acompanhamento no fluxo operacional.',
     rota: '/rastreabilidade',
+  },
+  {
+    id: 'qualidade-ia',
+    titulo: 'Qualidade IA',
+    valor: `${Math.round((store.qualidadeIAResumo.score_geral ?? 0))}%`,
+    icone: 'mdi-brain',
+    tooltip: 'Score geral de qualidade do módulo de IA monitorado no backend.',
+    resumo: 'Monitore acurácia, consistência, segurança e tendência de qualidade dos resultados de IA.',
+    rota: '/qualidade-ia',
   },
   {
     id: 'pendencias',

@@ -1,0 +1,59 @@
+<div class="dashboard">
+  <div
+    class="grid"
+    [style.grid-template-columns]="'repeat(' + cols() + ', 1fr)'"
+  >
+    <mat-card class="metric-card" *ngFor="let m of metricas()">
+      <mat-card-content>
+        <div class="metric-icon" [style.color]="m.cor">
+          <mat-icon>{{ m.icone }}</mat-icon>
+        </div>
+        <div class="metric-body">
+          <div class="metric-valor">{{ m.valor }}</div>
+          <div class="metric-titulo">{{ m.titulo }}</div>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <div class="row-cards">
+    <mat-card class="panel-card">
+      <mat-card-header>
+        <mat-card-title>
+          <mat-icon>account_tree</mat-icon> Pipeline CI/CD
+        </mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="pipeline-list">
+          <div class="pipeline-item" *ngFor="let p of pipeline()">
+            <span class="stage">{{ p.nome }}</span>
+            <mat-chip [color]="p.cor" selected>{{ p.status }}</mat-chip>
+          </div>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="panel-card">
+      <mat-card-header>
+        <mat-card-title>
+          <mat-icon>psychology</mat-icon> Qualidade IA
+        </mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="qa-list">
+          <div class="qa-item" *ngFor="let q of qualidade()">
+            <div class="qa-label">
+              <span>{{ q.label }}</span>
+              <span>{{ q.valor }}%</span>
+            </div>
+            <mat-progress-bar
+              [color]="q.cor"
+              mode="determinate"
+              [value]="q.valor"
+            ></mat-progress-bar>
+          </div>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>

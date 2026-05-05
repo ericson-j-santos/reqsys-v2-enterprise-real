@@ -93,6 +93,7 @@ const navItems = [
   { to: '/',                icon: 'mdi-view-dashboard',     title: 'Dashboard',       tip: 'Visão consolidada das métricas e acessos rápidos.' },
   { to: '/requisitos',      icon: 'mdi-file-document-edit', title: 'Requisitos',      tip: 'Cadastro, listagem e acompanhamento dos requisitos.' },
   { to: '/pipeline',        icon: 'mdi-pipe',               title: 'Pipeline',        tip: 'Fluxo operacional detalhado do requisito até a publicação.' },
+  { to: '/qualidade-ia',    icon: 'mdi-brain',              title: 'Qualidade IA',    tip: 'Monitoramento contínuo de score e tendência de qualidade de IA.' },
   { to: '/relatorios',      icon: 'mdi-file-chart-outline', title: 'Relatórios SSRS', tip: 'Catálogo e status dos relatórios SSRS publicados.' },
   { to: '/segredos-status', icon: 'mdi-key-chain-variant',  title: 'Segredos',        tip: 'Diagnóstico da origem dos segredos do backend.' },
   { to: '/rastreabilidade', icon: 'mdi-vector-link',        title: 'Rastreabilidade', tip: 'Matriz de vínculo entre requisito, história e entrega.' },

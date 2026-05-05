@@ -4,6 +4,7 @@ from datetime import datetime
 from app.core.envelope import ok
 from app.db import get_db
 from app.models.requisito import Requisito
+from app.services.ai_quality import calcular_resumo_qualidade_ia
 
 router = APIRouter(prefix='/v1/dashboard', tags=['Dashboard'])
 
@@ -11,6 +12,7 @@ ENDPOINTS_PRINCIPAIS = [
     {'titulo': 'Status da API', 'url': '/health', 'metodo': 'GET'},
     {'titulo': 'Autenticação', 'url': '/v1/auth/login', 'metodo': 'POST'},
     {'titulo': 'Requisitos', 'url': '/v1/requisitos', 'metodo': 'GET/POST'},
+    {'titulo': 'Qualidade IA', 'url': '/v1/qualidade-ia/resumo', 'metodo': 'GET'},
     {'titulo': 'Auditoria', 'url': '/v1/auditoria/eventos', 'metodo': 'GET'},
     {'titulo': 'Relatórios', 'url': '/v1/relatorios/ssrs', 'metodo': 'GET'},
     {'titulo': 'Informações do Sistema', 'url': '/v1/sistema/info', 'metodo': 'GET'},
@@ -43,6 +45,8 @@ def dashboard_info(db: Session = Depends(get_db)):
     """
     total_requisitos = db.query(Requisito).count()
     
+    qualidade_ia = calcular_resumo_qualidade_ia(db)
+
     return ok({
         'timestamp': datetime.utcnow().isoformat(),
         'resumo': {
@@ -50,12 +54,17 @@ def dashboard_info(db: Session = Depends(get_db)):
             'sistema_status': 'operacional',
             'ambiente': 'desenvolvimento'
         },
+        'qualidade_ia': {
+            'score_geral': qualidade_ia['score_geral'],
+            'status': qualidade_ia['status'],
+        },
         'endpoints_criticos': ENDPOINTS_PRINCIPAIS,
         'documentacao': {
             'info_completa': '/v1/sistema/info',
             'health_check': '/v1/sistema/health-check',
             'auditoria_config': '/v1/auditoria/eventos/config-infra',
-            'relatorios': '/v1/relatorios/ssrs'
+            'relatorios': '/v1/relatorios/ssrs',
+            'qualidade_ia': '/v1/qualidade-ia/resumo',
         },
         'credenciais_teste': {
             'email': 'ericsonjosedossantos@tieri659.onmicrosoft.com',

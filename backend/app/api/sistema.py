@@ -88,6 +88,12 @@ ENDPOINTS_INFO = {
         'descricao': 'Diagnóstico da origem dos segredos (env, cofre ou default), sem expor valores',
         'autenticacao': False,
     },
+    'qualidade_ia_resumo': {
+        'metodo': 'GET',
+        'url': '/v1/qualidade-ia/resumo',
+        'descricao': 'Resumo de qualidade de IA com score, métricas, tendência e recomendações',
+        'autenticacao': False,
+    },
 }
 
 CREDENCIAIS_DEMO = {
@@ -117,7 +123,7 @@ def info_endpoints():
     Útil para onboarding de desenvolvedores e clientes.
     """
     return ok({
-        'api_version': '2.3.0',
+        'api_version': '2.4.1',
         'titulo': 'ReqSys Enterprise API',
         'descricao': 'Solução SaaS para engenharia de requisitos com rastreabilidade e auditoria',
         'endpoints': ENDPOINTS_INFO,
@@ -186,6 +192,7 @@ def health_check(db: Session = Depends(get_db)):
         'login': '/v1/auth/login (POST)',
         'requisitos': '/v1/requisitos (GET/POST)',
         'dashboard': '/v1/dashboard/requisitos (GET)',
+        'qualidade_ia': '/v1/qualidade-ia/resumo (GET)',
         'auditoria': '/v1/auditoria/eventos (GET)',
         'relatorios': '/v1/relatorios/ssrs (GET)',
         'sistema_info': '/v1/sistema/info (GET)',

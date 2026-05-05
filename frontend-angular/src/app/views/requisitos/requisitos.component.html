@@ -1,0 +1,105 @@
+<div class="requisitos">
+  <div class="filters">
+    <mat-form-field appearance="outline" class="filter-field">
+      <mat-label>Buscar</mat-label>
+      <input
+        matInput
+        [ngModel]="busca()"
+        (ngModelChange)="busca.set($event)"
+        placeholder="código ou título"
+      />
+      <mat-icon matSuffix>search</mat-icon>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-select">
+      <mat-label>Status</mat-label>
+      <mat-select
+        [ngModel]="filtroStatus()"
+        (ngModelChange)="filtroStatus.set($event)"
+      >
+        <mat-option value="">Todos</mat-option>
+        <mat-option *ngFor="let s of statusOpcoes" [value]="s">{{
+          s
+        }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-select">
+      <mat-label>Urgência</mat-label>
+      <mat-select
+        [ngModel]="filtroUrgencia()"
+        (ngModelChange)="filtroUrgencia.set($event)"
+      >
+        <mat-option value="">Todas</mat-option>
+        <mat-option *ngFor="let u of urgenciaOpcoes" [value]="u">{{
+          u
+        }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <span class="spacer"></span>
+    <span class="count">{{ filtrados().length }} registros</span>
+  </div>
+
+  <mat-card class="table-card">
+    <table mat-table [dataSource]="filtrados()">
+      <ng-container matColumnDef="codigo">
+        <th mat-header-cell *matHeaderCellDef>Código</th>
+        <td mat-cell *matCellDef="let r" class="mono">{{ r.codigo }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="titulo">
+        <th mat-header-cell *matHeaderCellDef>Título</th>
+        <td mat-cell *matCellDef="let r">{{ r.titulo }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="status">
+        <th mat-header-cell *matHeaderCellDef>Status</th>
+        <td mat-cell *matCellDef="let r">
+          <mat-chip [color]="corStatus(r.status)" selected>{{
+            r.status
+          }}</mat-chip>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="urgencia">
+        <th mat-header-cell *matHeaderCellDef>Urgência</th>
+        <td mat-cell *matCellDef="let r">
+          <mat-chip [color]="corUrgencia(r.urgencia)" selected>{{
+            r.urgencia
+          }}</mat-chip>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="score_ia">
+        <th mat-header-cell *matHeaderCellDef>Score IA</th>
+        <td mat-cell *matCellDef="let r">{{ r.score_ia }}%</td>
+      </ng-container>
+
+      <ng-container matColumnDef="responsavel">
+        <th mat-header-cell *matHeaderCellDef>Responsável</th>
+        <td mat-cell *matCellDef="let r">{{ r.responsavel }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="acoes">
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let r">
+          <button mat-icon-button matTooltip="Editar">
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button mat-icon-button matTooltip="Ver">
+            <mat-icon>visibility</mat-icon>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <div class="empty" *ngIf="filtrados().length === 0">
+      <mat-icon>inbox</mat-icon>
+      <p>Nenhum requisito encontrado</p>
+    </div>
+  </mat-card>
+</div>

@@ -1,10 +1,8 @@
-# PROD - build estático do frontend, backend com múltiplos workers
-# Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 services:
   api:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
     environment:
-      - DATABASE_URL=${DATABASE_URL:-sqlite:///./reqsys.db}
+      - DATABASE_URL=sqlite:////data/reqsys.db
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET obrigatório em prod}
     volumes:
       - reqsys-db:/data
@@ -15,9 +13,12 @@ services:
       dockerfile: Dockerfile.prod
       args:
         VITE_API_URL: /api
+
+  nginx:
     ports:
-      - "${FRONTEND_PORT:-5182}:80"
+      - "${GATEWAY_PORT:-8081}:80"
+    volumes:
+      - ./infra/nginx/default.prod.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   reqsys-db:
-  kb-data:

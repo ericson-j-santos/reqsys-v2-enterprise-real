@@ -6,6 +6,38 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [2.5.0] - 2026-05-05
+
+### Adicionado
+
+- **Frontend Vue 3 / Vuetify 3** (`frontend-vuetify/`) — scaffold completo com:
+  - Tema escuro personalizado `reqsysDark` (bg `#0d1117`, primary amber `#fbbf24`).
+  - Autenticação JWT, Pinia store, Vue Router 4 com lazy loading e guards.
+  - Interceptor Axios com `X-Correlation-Id` automático e fallback para contextos HTTP.
+  - 8 views: Login, Dashboard, Requisitos, Pipeline, Qualidade IA, Relatórios, Segredos Status, Rastreabilidade, Auditoria.
+  - Proxy Vite (`/api` → `localhost:8081`), porta 5174.
+- **Frontend Angular 17 / Angular Material** (`frontend-angular/`) — scaffold completo com:
+  - Tema escuro Angular Material: amber primary, indigo accent.
+  - Standalone components, lazy loading por rota, `CanActivateFn` guard.
+  - Interceptor HTTP funcional com `X-Correlation-Id` e fallback de `crypto.randomUUID()`.
+  - Sidenav responsivo com rail mode (desktop) e overlay (mobile) via `BreakpointObserver`.
+  - 8 views: Login, Dashboard, Requisitos (tabela reativa com filtros), + 6 stubs.
+  - Proxy `proxy.conf.json` (`/api` → `localhost:8081`), porta 4200.
+- Credenciais de demonstração documentadas no README de cada frontend.
+
+---
+
+## [2.4.1] - 2026-05-05
+
+### Adicionado
+
+- Filtro de período (7d / 30d / 90d / Todos) nos endpoints de exportação CSV e PDF de qualidade IA via query param `?dias=`.
+- `dias` query param (opcional, 1–365) nos endpoints `GET /v1/qualidade-ia/tendencia`, `/tendencia.csv` e `/tendencia.pdf`.
+- Seletor de período (`v-btn-toggle`) na view Qualidade IA com atualização automática da tendência.
+- 3 novos testes unitários cobrindo filtro de período nas exportações e no payload de tendência.
+
+---
+
 ## [2.4.0] - 2026-05-04
 
 ### Adicionado

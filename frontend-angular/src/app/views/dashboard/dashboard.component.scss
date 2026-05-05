@@ -1,0 +1,94 @@
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.metric-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+
+  mat-card-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 16px;
+  }
+
+  .metric-icon mat-icon {
+    font-size: 36px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .metric-valor {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .metric-titulo {
+    color: #8b949e;
+    font-size: 13px;
+    margin-top: 4px;
+  }
+}
+
+.row-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+
+  mat-card-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+  }
+}
+
+.pipeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.pipeline-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  .stage {
+    font-size: 14px;
+  }
+}
+
+.qa-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+.qa-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.qa-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #8b949e;
+}

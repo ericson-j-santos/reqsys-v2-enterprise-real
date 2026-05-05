@@ -1,0 +1,60 @@
+@use "@angular/material" as mat;
+
+// Define paletas customizadas
+$primary-palette: mat.define-palette(mat.$amber-palette, 500, 300, 700);
+$accent-palette: mat.define-palette(mat.$indigo-palette, 400, 200, 600);
+$warn-palette: mat.define-palette(mat.$red-palette);
+
+// Tema escuro
+$reqsys-theme: mat.define-dark-theme(
+  (
+    color: (
+      primary: $primary-palette,
+      accent: $accent-palette,
+      warn: $warn-palette,
+    ),
+    typography: mat.define-typography-config(),
+    density: 0,
+  )
+);
+
+@include mat.all-component-themes($reqsys-theme);
+
+// Override background para GitHub-like dark
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+  background-color: #0d1117;
+  color: #e6edf3;
+}
+
+.mat-drawer-container {
+  background-color: #0d1117 !important;
+}
+
+.mat-sidenav {
+  background-color: #161b22 !important;
+  border-right: 1px solid #30363d !important;
+}
+
+.mat-toolbar {
+  background-color: #161b22 !important;
+  border-bottom: 1px solid #30363d !important;
+}
+
+// Scrollbar estilizado
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
