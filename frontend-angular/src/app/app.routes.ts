@@ -28,7 +28,7 @@ export const routes: Routes = [
       },
       {
         path: 'qualidade-ia',
-        loadComponent: () => import('./views/qualidade-ia/qualidade-ia.component').then(m => m.QualidadeIAComponent),
+        loadComponent: () => import('./views/qualidade-ia/qualidade-ia.component').then(m => m.QualidadeIaComponent),
         data: { title: 'Qualidade IA', permissao: 'dashboard:read' }
       },
       {

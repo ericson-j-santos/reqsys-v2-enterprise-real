@@ -1,7 +1,6 @@
 services:
   api:
     build: ./backend
-    container_name: reqsys-api
     restart: unless-stopped
     environment:
       - DATABASE_URL=sqlite:///./reqsys.db
@@ -19,7 +18,6 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: reqsys-frontend
     restart: unless-stopped
     environment:
       - VITE_API_URL=/api
@@ -29,7 +27,6 @@ services:
 
   kb:
     build: ../../kb
-    container_name: reqsys-kb
     restart: unless-stopped
     expose: ["8080"]
     command: uvicorn main:app --host 0.0.0.0 --port 8080 --root-path /kb
@@ -42,7 +39,6 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: reqsys-nginx
     restart: unless-stopped
     ports: ["${GATEWAY_PORT:-8081}:80"]
     volumes:

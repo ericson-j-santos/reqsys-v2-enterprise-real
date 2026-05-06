@@ -56,9 +56,14 @@ def _get_ssrs_auth():
     # Autenticação Windows SSO via SSPI (sem necessidade de senha no .env)
     if _SSPI_AVAILABLE:
         return _HttpNegotiateAuth()
-    raise RuntimeError(
-        'SSRS_USER/SSRS_PASSWORD não configurados e SSPI não disponível neste ambiente.'
+
+    # Em ambientes sem SSPI (ex: Linux CI), o backend deve falhar de forma
+    # controlada (testes/contratos) e não explodir com RuntimeError.
+    raise HTTPException(
+        status_code=503,
+        detail='SSRS auth indisponível neste ambiente (configure SSRS_USER/SSRS_PASSWORD ou habilite SSPI).',
     )
+
 
 
 def _normalize_ssrs_base_url(base_url: str, require_https: bool) -> str:
