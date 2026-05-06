@@ -168,27 +168,40 @@ def ssrs_status():
             'reports': [],
         })
 
-    auth = _get_ssrs_auth()
+    auth_error = None
+    try:
+        auth = _get_ssrs_auth()
+    except HTTPException as exc:
+        # Em ambientes sem SSPI/credenciais (ex.: CI Linux), mantemos o contrato
+        # de resposta 200 para /ssrs/status e marcamos cada relatório como offline.
+        auth = None
+        auth_error = exc.detail
+
     items = []
     for name in reports:
         render_url = _build_ssrs_render_url(base_url, folder, name)
         pdf_url = _build_ssrs_pdf_url(base_url, folder, name)
-        try:
-            resp = _requests.head(
-                render_url,
-                auth=auth,
-                timeout=5,
-                verify=False,
-                allow_redirects=True,
-                headers={'User-Agent': 'reqsys-ssrs-status/1.0'},
-            )
-            accessible = resp.status_code < 400
-            status_code = resp.status_code
-            detail = None
-        except _requests.exceptions.RequestException as exc:
+        if auth_error:
             accessible = False
             status_code = None
-            detail = str(exc)
+            detail = auth_error
+        else:
+            try:
+                resp = _requests.head(
+                    render_url,
+                    auth=auth,
+                    timeout=5,
+                    verify=False,
+                    allow_redirects=True,
+                    headers={'User-Agent': 'reqsys-ssrs-status/1.0'},
+                )
+                accessible = resp.status_code < 400
+                status_code = resp.status_code
+                detail = None
+            except _requests.exceptions.RequestException as exc:
+                accessible = False
+                status_code = None
+                detail = str(exc)
 
         items.append({
             'name': name,
