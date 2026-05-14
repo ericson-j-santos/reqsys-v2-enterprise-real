@@ -20,8 +20,8 @@ docker compose version
 cp .env.example .env
 cp frontend/.env.example frontend/.env
 # ajustar:
-# frontend/.env -> VITE_API_URL=http://api.reqsys.local:8210
-# .env -> CORS_ORIGINS=http://reqsys.local:5182,http://reqsys.local:8082
+# frontend/.env -> VITE_API_URL=http://localhost:8081/api
+# .env -> CORS_ORIGINS=http://reqsys.local:5182,http://localhost:8081
 ```
 3. Subir stack:
 ```bash
@@ -33,9 +33,9 @@ cp frontend/.env.example frontend/.env
 ```
 
 **URLs DEV**
-- Frontend: http://reqsys.local:8082
-- API: http://api.reqsys.local:8210
-- Health: http://api.reqsys.local:8210/health
+- Frontend: http://localhost:8081
+- API: http://localhost:8081/api
+- Health: http://localhost:8081/api/health
 
 ---
 
@@ -61,7 +61,7 @@ CORS_ORIGINS=https://hml-app.seudominio.com
 **URLs HOMOLOGAÇÃO**
 - Frontend: https://hml-app.seudominio.com
 - API: https://hml-api.seudominio.com
-- Health: https://hml-api.seudominio.com/health
+- Health: https://hml-api.seudominio.com/api/health
 
 ---
 
@@ -87,7 +87,7 @@ CORS_ORIGINS=https://app.seudominio.com
 **URLs PRODUÇÃO**
 - Frontend: https://app.seudominio.com
 - API: https://api.seudominio.com
-- Health: https://api.seudominio.com/health
+- Health: https://api.seudominio.com/api/health
 
 ---
 
@@ -113,3 +113,7 @@ Cobertura do gate:
 git checkout <tag_ou_commit_estavel>
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ```
+
+
+## Observação importante sobre stack local
+- O `docker-compose.yml` atual possui serviço `kb` com build em `../../kb`; garanta esse diretório antes do `up --build`, ou ajuste/override para ambiente local.

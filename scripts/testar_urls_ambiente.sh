@@ -5,19 +5,20 @@ ENV_TARGET=${1:-dev}
 
 case "$ENV_TARGET" in
   dev)
-    FRONT="http://reqsys.local:8082"
-    API="http://api.reqsys.local:8210"
-    HEALTH="http://api.reqsys.local:8210/health"
+    BASE="http://localhost:${GATEWAY_PORT:-8081}"
+    FRONT="$BASE"
+    API="$BASE/api"
+    HEALTH="$BASE/api/health"
     ;;
   hml)
     FRONT="https://hml-app.seudominio.com"
-    API="https://hml-api.seudominio.com"
-    HEALTH="https://hml-api.seudominio.com/health"
+    API="https://hml-api.seudominio.com/api"
+    HEALTH="https://hml-api.seudominio.com/api/health"
     ;;
   prod)
     FRONT="https://app.seudominio.com"
-    API="https://api.seudominio.com"
-    HEALTH="https://api.seudominio.com/health"
+    API="https://api.seudominio.com/api"
+    HEALTH="https://api.seudominio.com/api/health"
     ;;
   *)
     echo "Uso: $0 {dev|hml|prod}"
