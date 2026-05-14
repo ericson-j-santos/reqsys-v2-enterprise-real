@@ -26,6 +26,7 @@ cp frontend/.env.example frontend/.env
 3. Subir stack:
 ```bash
 ./scripts/publicar_ambiente.sh dev
+# usa override sem kb para dev local
 ```
 4. Validar saúde e acesso:
 ```bash
@@ -116,4 +117,4 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 
 
 ## Observação importante sobre stack local
-- O `docker-compose.yml` atual possui serviço `kb` com build em `../../kb`; garanta esse diretório antes do `up --build`, ou ajuste/override para ambiente local.
+- Para desenvolvimento local sem o repositório `../../kb`, use o override `docker-compose.override.dev-no-kb.yml` (já integrado no script `publicar_ambiente.sh dev`).

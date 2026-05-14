@@ -6,7 +6,7 @@ ENV_TARGET=${1:-dev}
 case "$ENV_TARGET" in
   dev)
     echo "[DEV] Subindo stack local..."
-    docker compose up --build -d
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.override.dev-no-kb.yml up --build -d api frontend nginx
     echo "URLs DEV:"
     echo "- Frontend: http://localhost:${GATEWAY_PORT:-8081}"
     echo "- API: http://localhost:${GATEWAY_PORT:-8081}/api"
