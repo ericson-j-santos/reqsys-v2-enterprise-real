@@ -1,6 +1,7 @@
 """
 Testes do Dashboard e endpoints de sistema
 """
+from datetime import datetime
 from base64 import b64encode
 
 import pytest
@@ -88,6 +89,13 @@ class TestDashboardInfo:
         assert "resumo" in data
         assert "total_requisitos" in data["resumo"]
 
+    def test_info_timestamp_timezone_utc(self, auth_headers):
+        resp = client.get("/v1/dashboard/info", headers=auth_headers)
+        data = resp.json()["data"]
+        parsed = datetime.fromisoformat(data["timestamp"])
+        assert parsed.tzinfo is not None
+        assert parsed.utcoffset().total_seconds() == 0
+
     def test_info_sistema_status_operacional(self, auth_headers):
         resp = client.get("/v1/dashboard/info", headers=auth_headers)
         data = resp.json()["data"]
@@ -124,6 +132,13 @@ class TestHealthCheck:
     def test_health_check_success_true(self):
         resp = client.get("/v1/sistema/health-check")
         assert resp.json()["success"] is True
+
+    def test_health_check_timestamp_timezone_utc(self):
+        resp = client.get("/v1/sistema/health-check")
+        data = resp.json()["data"]
+        parsed = datetime.fromisoformat(data["timestamp"])
+        assert parsed.tzinfo is not None
+        assert parsed.utcoffset().total_seconds() == 0
 
     def test_health_check_sem_auth(self):
         resp = client.get("/v1/sistema/health-check")
