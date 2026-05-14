@@ -2,13 +2,20 @@
 set -euo pipefail
 
 ENV_TARGET=${1:-dev}
+MODE=${2:-docker}
 
 case "$ENV_TARGET" in
   dev)
-    BASE="http://localhost:${GATEWAY_PORT:-8081}"
-    FRONT="$BASE"
-    API="$BASE/api"
-    HEALTH="$BASE/api/health"
+    if [[ "$MODE" == "fallback" ]]; then
+      FRONT="http://localhost:5173"
+      API="http://localhost:8210/docs"
+      HEALTH="http://localhost:8210/health"
+    else
+      BASE="http://localhost:${GATEWAY_PORT:-8081}"
+      FRONT="$BASE"
+      API="$BASE/api"
+      HEALTH="$BASE/api/health"
+    fi
     ;;
   hml)
     FRONT="https://hml-app.seudominio.com"
@@ -21,7 +28,7 @@ case "$ENV_TARGET" in
     HEALTH="https://api.seudominio.com/api/health"
     ;;
   *)
-    echo "Uso: $0 {dev|hml|prod}"
+    echo "Uso: $0 {dev|hml|prod} [docker|fallback]"
     exit 1
     ;;
 esac

@@ -26,11 +26,12 @@ cp frontend/.env.example frontend/.env
 3. Subir stack:
 ```bash
 ./scripts/publicar_ambiente.sh dev
-# usa override sem kb para dev local
+# usa Docker quando disponível; sem Docker, cai no modo fallback (uvicorn + vite)
 ```
 4. Validar saúde e acesso:
 ```bash
 ./scripts/testar_urls_ambiente.sh dev
+# para fallback sem Docker: ./scripts/testar_urls_ambiente.sh dev fallback
 ```
 
 **URLs DEV**
@@ -118,3 +119,9 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 
 ## Observação importante sobre stack local
 - Para desenvolvimento local sem o repositório `../../kb`, use o override `docker-compose.override.dev-no-kb.yml` (já integrado no script `publicar_ambiente.sh dev`).
+
+
+## 7) Parar modo fallback sem Docker
+```bash
+kill "$(cat .run/backend.pid)" "$(cat .run/frontend.pid)"
+```
