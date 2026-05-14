@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import UTC, datetime
 from app.core.envelope import ok
 from app.core.secrets import describe_secret_resolution
 from app.db import get_db
@@ -203,7 +203,7 @@ def health_check(db: Session = Depends(get_db)):
     all_ok = all(check.get('status') == 'ok' for check in checks.values())
     
     return ok({
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(UTC).isoformat(),
         'saude_geral': 'ok' if all_ok else 'aviso',
         'componentes': checks,
         'credenciais_teste': CREDENCIAIS_DEMO
