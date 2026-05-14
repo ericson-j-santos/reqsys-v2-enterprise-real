@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import UTC, datetime
 from app.core.envelope import ok
 from app.db import get_db
 from app.models.requisito import Requisito
@@ -48,7 +48,7 @@ def dashboard_info(db: Session = Depends(get_db)):
     qualidade_ia = calcular_resumo_qualidade_ia(db)
 
     return ok({
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(UTC).isoformat(),
         'resumo': {
             'total_requisitos': total_requisitos,
             'sistema_status': 'operacional',
