@@ -1,0 +1,217 @@
+:root {
+  --brand-primary: #005ca9;
+  --brand-secondary: #f39200;
+  --brand-tertiary: #00b3ad;
+  --bg-page: #ffffff;
+  --bg-section: #e8f1fa;
+  --text-primary: #333333;
+  --text-secondary: #6b6b6b;
+  --border-default: #d0d0d0;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: Arial, 'Helvetica Neue', sans-serif;
+  background: var(--bg-page);
+  color: var(--text-primary);
+}
+
+.v-application {
+  background: var(--bg-page) !important;
+  color: var(--text-primary) !important;
+}
+
+.v-navigation-drawer,
+.v-app-bar,
+.v-card,
+.v-sheet {
+  border-color: var(--border-default) !important;
+}
+
+.text-medium-emphasis {
+  color: var(--text-secondary) !important;
+}
+
+/* ============================================================
+   Responsive layout utilities — shared across all views
+   ============================================================ */
+
+/* Page header: title + actions side-by-side on md+, stacked on xs/sm */
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.page-header h1,
+.page-header h2 {
+  margin: 0 0 4px;
+}
+
+/* Action button group in page header */
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Filter select full-width on mobile */
+.filter-select {
+  min-width: 160px;
+  max-width: 100%;
+}
+
+/* Scrollable table wrapper — prevents horizontal overflow on mobile */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ============================================================
+   xs breakpoint (<600px) — Vuetify $xs
+   ============================================================ */
+@media (max-width: 599px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  /* Make every button in the action bar expand on xs */
+  .page-actions > .v-btn,
+  .page-actions > button {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .filter-select {
+    width: 100%;
+  }
+
+  /* v-btn-toggle: wrap items on xs */
+  .v-btn-toggle {
+    flex-wrap: wrap !important;
+  }
+
+  /* Compact card padding on xs */
+  .panel-card .v-card-text {
+    padding: 12px !important;
+  }
+}
+
+/* ============================================================
+   sm breakpoint (600-959px)
+   ============================================================ */
+@media (max-width: 959px) {
+  .page-header {
+    gap: 10px;
+  }
+}
+
+/* ============================================================
+   Shared component base styles
+   ============================================================ */
+
+/* Panel card used across all views */
+.panel-card {
+  border-radius: 20px !important;
+}
+
+/* Summary stat cards */
+.summary-card {
+  border-radius: 20px !important;
+}
+
+.summary-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.summary-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.summary-value-small {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Table empty state */
+.empty-cell {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 24px 16px !important;
+}
+
+/* Scrollable table wrapper — prevents horizontal overflow on mobile */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Inline result items inside cards */
+.result-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.result-item:last-child {
+  border-bottom: none;
+}
+
+.result-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+.result-value {
+  font-weight: 600;
+  font-size: 1rem;
+  word-break: break-word;
+}
+
+/* Empty state block inside cards */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 16px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* ============================================================
+   Print — hide navigation chrome
+   ============================================================ */
+@media print {
+  .v-navigation-drawer,
+  .v-app-bar,
+  .page-actions {
+    display: none !important;
+  }
+
+  .page-header {
+    margin-bottom: 8px;
+  }
+}

@@ -17,6 +17,7 @@
               size="small"
               variant="outlined"
               prepend-icon="mdi-radar"
+              color="primary"
               :loading="verificando"
               @click="verificarStatus"
             >Verificar</v-btn>
@@ -74,6 +75,7 @@
         <v-card class="metric" variant="tonal">
           <div class="metric-head">
             <v-icon size="16" color="amber">mdi-file-chart-outline</v-icon>
+            <v-icon size="16" color="primary">mdi-file-chart-outline</v-icon>
             <span>Total Relatórios</span>
           </div>
           <div class="metric-value-row">
@@ -107,7 +109,7 @@
     </v-row>
 
     <!-- ─── Tabs principais ───────────────────────────────────────────── -->
-    <v-tabs v-model="tab" color="amber" class="mb-3">
+    <v-tabs v-model="tab" color="primary" class="mb-3">
       <v-tab value="monitor" prepend-icon="mdi-monitor-dashboard">Monitor</v-tab>
       <v-tab value="visualizador" prepend-icon="mdi-eye-outline">Visualizador</v-tab>
       <v-tab value="downloads" prepend-icon="mdi-download-outline">Downloads PDF</v-tab>
@@ -139,7 +141,7 @@
                   :key="row.name"
                 >
                   <td>
-                    <v-icon color="amber" size="18">mdi-file-chart-outline</v-icon>
+                    <v-icon color="primary" size="18">mdi-file-chart-outline</v-icon>
                   </td>
                   <td>
                     <span style="font-weight:500">{{ row.name }}</span>
@@ -169,7 +171,7 @@
                             size="x-small"
                             variant="tonal"
                             icon="mdi-eye-outline"
-                            color="amber"
+                            color="primary"
                             @click="abrirVisualizador(row)"
                           />
                         </template>
@@ -256,13 +258,13 @@
                     size="small"
                     variant="outlined"
                     prepend-icon="mdi-file-pdf-box"
-                    color="red"
+                      color="secondary"
                     :loading="downloadingPdf === (selecionado && selecionado.name)"
                     @click="baixarPdf(selecionado)"
                   >Download PDF</v-btn>
                   <v-btn
                     size="small"
-                    color="amber"
+                      color="primary"
                     variant="flat"
                     prepend-icon="mdi-open-in-new"
                     @click="abrirNovaGuia(selecionado)"
@@ -305,7 +307,7 @@
       <v-window-item value="downloads">
         <v-card class="table-card">
           <v-card-title class="py-3 px-4" style="font-size:15px">
-            <v-icon class="mr-2" color="red">mdi-file-pdf-box</v-icon>
+            <v-icon class="mr-2" color="secondary">mdi-file-pdf-box</v-icon>
             Download de Relatórios em PDF
           </v-card-title>
           <v-card-subtitle class="px-4 pb-2" style="font-size:12px">
@@ -328,7 +330,7 @@
                   style="border-radius:12px;gap:12px;min-height:130px"
                 >
                   <div style="display:flex;align-items:center;gap:10px">
-                    <v-icon color="red" size="28">mdi-file-pdf-box</v-icon>
+                    <v-icon color="secondary" size="28">mdi-file-pdf-box</v-icon>
                     <div>
                       <div style="font-weight:600;font-size:13px">{{ r.name }}</div>
                       <div v-if="statusChecked" style="font-size:11px;margin-top:2px">
@@ -343,7 +345,7 @@
                   <div style="display:flex;gap:8px;margin-top:auto">
                     <v-btn
                       size="small"
-                      color="red"
+                      color="secondary"
                       variant="flat"
                       prepend-icon="mdi-download"
                       :loading="downloadingPdf === r.name"
@@ -510,7 +512,7 @@ onMounted(() => {
 .metric {
   padding: 14px 16px 12px;
   border-radius: 12px;
-  background: var(--surface-2, #1e1e2a);
+  background: var(--card-alt, #e8f1fa);
   min-height: 76px;
 }
 
@@ -519,7 +521,7 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--muted, #888);
+  color: var(--muted, #6b6b6b);
   margin-bottom: 6px;
 }
 
@@ -534,16 +536,18 @@ onMounted(() => {
   line-height: 1;
 }
 
-.text-green { color: #4caf50; }
-.text-orange { color: #ff9800; }
+.text-green { color: #2e7d32; }
+.text-orange { color: #f57c00; }
 
 .table-card {
   border-radius: 12px;
   overflow: hidden;
+  border: 1px solid var(--border, #d0d0d0);
 }
 
 .pdf-card-offline {
-  opacity: 0.65;
+  opacity: 0.72;
+  background: #f8fbff;
 }
 
 @media (max-width: 600px) {

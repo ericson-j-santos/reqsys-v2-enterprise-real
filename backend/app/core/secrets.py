@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-from base64 import b64decode
+import secrets as _secrets
+from base64 import b64decode, b64encode
 
 try:
     import keyring  # type: ignore
@@ -26,6 +27,19 @@ def _vault_service_name() -> str:
     return os.getenv('REQSYS_VAULT_SERVICE_NAME', _DEFAULT_VAULT_SERVICE).strip() or _DEFAULT_VAULT_SERVICE
 
 
+def init_vault(service_name: str | None = None, overwrite: bool = False) -> bool:
+    """Cria master key no keyring. Retorna True se criada, False se já existia."""
+    if not (_KEYRING_OK and _CRYPTO_OK):
+        return False
+    service = service_name or _vault_service_name()
+    existing = keyring.get_password(service, _MASTER_KEY_SLOT)
+    if existing and not overwrite:
+        return False
+    master_key = _secrets.token_bytes(32)
+    keyring.set_password(service, _MASTER_KEY_SLOT, b64encode(master_key).decode())
+    return True
+
+
 def read_secret_from_vault(key: str, service_name: str | None = None) -> str | None:
     if not key or not (_KEYRING_OK and _CRYPTO_OK):
         return None
@@ -46,6 +60,46 @@ def read_secret_from_vault(key: str, service_name: str | None = None) -> str | N
         return AESGCM(master_key).decrypt(nonce, ciphertext, None).decode()
     except Exception:
         return None
+
+
+def write_secret_to_vault(key: str, value: str, service_name: str | None = None) -> None:
+    """Criptografa e grava segredo no keyring."""
+    if not (_KEYRING_OK and _CRYPTO_OK):
+        raise RuntimeError('Vault não disponível: keyring ou cryptography não instalados')
+    service = service_name or _vault_service_name()
+    raw_master_key = keyring.get_password(service, _MASTER_KEY_SLOT)
+    if not raw_master_key:
+        raise RuntimeError('Vault não inicializado. Chame init_vault() ou POST /v1/cofre/init primeiro')
+    master_key = b64decode(raw_master_key)
+    nonce = _secrets.token_bytes(_NONCE_BYTES)
+    ciphertext = AESGCM(master_key).encrypt(nonce, value.encode(), None)
+    blob = b64encode(nonce + ciphertext).decode()
+    keyring.set_password(service, key, blob)
+
+
+def delete_secret_from_vault(key: str, service_name: str | None = None) -> bool:
+    """Remove segredo do keyring. Retorna True se existia."""
+    if not _KEYRING_OK:
+        return False
+    service = service_name or _vault_service_name()
+    try:
+        existing = keyring.get_password(service, key)
+        if existing is None:
+            return False
+        keyring.delete_password(service, key)
+        return True
+    except Exception:
+        return False
+
+
+def vault_initialized(service_name: str | None = None) -> bool:
+    if not _KEYRING_OK:
+        return False
+    service = service_name or _vault_service_name()
+    try:
+        return bool(keyring.get_password(service, _MASTER_KEY_SLOT))
+    except Exception:
+        return False
 
 
 def get_secret(

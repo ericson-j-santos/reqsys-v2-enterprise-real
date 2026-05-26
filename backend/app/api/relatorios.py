@@ -1,7 +1,5 @@
-import os
 from datetime import datetime, timezone
 from urllib import parse
-from urllib.error import URLError
 
 import urllib3
 import requests as _requests
@@ -130,7 +128,7 @@ def ssrs_health():
             base_url,
             auth=auth,
             timeout=5,
-            verify=False,  # aceita cert auto-assinado (CN=NOTERI)
+            verify=False,  # aceita certificado interno auto-assinado
             headers={'User-Agent': 'reqsys-ssrs-health/1.0'},
         )
         return ok({
@@ -149,6 +147,37 @@ def _build_ssrs_pdf_url(base_url: str, folder: str, report_name: str) -> str:
     report_path = f'/{clean_folder}/{report_name}' if clean_folder else f'/{report_name}'
     encoded = parse.quote(report_path, safe='/')
     return f"{base_url}?{encoded}&rs:Format=PDF&rs:Command=Render"
+
+
+def _check_report_accessibility(render_url: str, auth):
+    """Valida acessibilidade de relatório com fallback de HEAD para GET.
+
+    Alguns ambientes SSRS bloqueiam HEAD e retornam 405/501 apesar de o relatório
+    estar acessível via GET.
+    """
+    resp = _requests.head(
+        render_url,
+        auth=auth,
+        timeout=5,
+        verify=False,
+        allow_redirects=True,
+        headers={'User-Agent': 'reqsys-ssrs-status/1.0'},
+    )
+
+    if resp.status_code in {405, 501}:
+        get_resp = _requests.get(
+            render_url,
+            auth=auth,
+            timeout=5,
+            verify=False,
+            allow_redirects=True,
+            stream=True,
+            headers={'User-Agent': 'reqsys-ssrs-status/1.0'},
+        )
+        get_resp.close()
+        return get_resp.status_code
+
+    return resp.status_code
 
 
 @router.get('/ssrs/status')
@@ -187,6 +216,7 @@ def ssrs_status():
             detail = auth_error
         else:
             try:
+<<<<<<< Updated upstream
                 resp = _requests.head(
                     render_url,
                     auth=auth,
@@ -197,6 +227,10 @@ def ssrs_status():
                 )
                 accessible = resp.status_code < 400
                 status_code = resp.status_code
+=======
+                status_code = _check_report_accessibility(render_url, auth)
+                accessible = status_code < 400
+>>>>>>> Stashed changes
                 detail = None
             except _requests.exceptions.RequestException as exc:
                 accessible = False
@@ -240,7 +274,12 @@ def ssrs_pdf_download(nome: str):
         raise HTTPException(status_code=404, detail=f'Relatório "{nome}" não encontrado no catálogo')
 
     pdf_url = _build_ssrs_pdf_url(base_url, folder, nome)
-    auth = _get_ssrs_auth()
+    
+    try:
+        auth = _get_ssrs_auth()
+    except HTTPException as exc:
+        # Em ambientes sem SSPI/credenciais, retorna o erro apropriado
+        raise exc
 
     try:
         resp = _requests.get(

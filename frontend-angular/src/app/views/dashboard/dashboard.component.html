@@ -1,9 +1,29 @@
 <div class="dashboard">
+  <app-institucional-status-banner
+    *ngIf="loading()"
+    type="loading"
+    message="Carregando dados do dashboard..."
+  ></app-institucional-status-banner>
+
+  <app-institucional-status-banner
+    *ngIf="!loading() && errorMessage()"
+    type="warning"
+    [message]="errorMessage()"
+  ></app-institucional-status-banner>
+
   <div
     class="grid"
     [style.grid-template-columns]="'repeat(' + cols() + ', 1fr)'"
   >
-    <mat-card class="metric-card" *ngFor="let m of metricas()">
+    <mat-card
+      class="metric-card"
+      *ngFor="let m of metricas()"
+      [routerLink]="m.rota"
+      [class.clickable]="!!m.rota"
+      role="button"
+      tabindex="0"
+      [attr.aria-label]="m.titulo + ': ' + m.valor"
+    >
       <mat-card-content>
         <div class="metric-icon" [style.color]="m.cor">
           <mat-icon>{{ m.icone }}</mat-icon>
@@ -12,6 +32,7 @@
           <div class="metric-valor">{{ m.valor }}</div>
           <div class="metric-titulo">{{ m.titulo }}</div>
         </div>
+        <mat-icon class="metric-nav" *ngIf="m.rota" aria-hidden="true">chevron_right</mat-icon>
       </mat-card-content>
     </mat-card>
   </div>
@@ -31,6 +52,9 @@
           </div>
         </div>
       </mat-card-content>
+      <mat-card-actions>
+        <a mat-button color="primary" routerLink="/pipeline">Ver pipeline completo</a>
+      </mat-card-actions>
     </mat-card>
 
     <mat-card class="panel-card">
@@ -54,6 +78,9 @@
           </div>
         </div>
       </mat-card-content>
+      <mat-card-actions>
+        <a mat-button color="primary" routerLink="/qualidade-ia">Ver qualidade completa</a>
+      </mat-card-actions>
     </mat-card>
   </div>
 </div>

@@ -45,6 +45,10 @@ def test_ssrs_status_desabilitado_sem_base(client, monkeypatch):
 
 
 def test_ssrs_status_com_base_retorna_lista(client, monkeypatch):
+    """Testa /ssrs/status com base configurada.
+    Em ambiente sem SSPI (Linux CI), retorna 200 com relatórios marcados como offline."""
+    monkeypatch.delenv('SSRS_USER', raising=False)
+    monkeypatch.delenv('SSRS_PASSWORD', raising=False)
     monkeypatch.setenv('SSRS_BASE_URL', 'http://ssrs.local/ReportServer')
     monkeypatch.setenv('SSRS_REPORTS_PATH', 'ReqSys')
     monkeypatch.setenv('SSRS_REPORT_NAMES', 'AtvIndividual,RelatorioDetalhado')
@@ -54,13 +58,16 @@ def test_ssrs_status_com_base_retorna_lista(client, monkeypatch):
     assert data['enabled'] is True
     assert isinstance(data['reports'], list)
     assert len(data['reports']) == 2
-    # cada item deve ter os campos esperados
+    # Em ambiente sem SSPI/credenciais, todos os relatórios marcados como offline
     for r in data['reports']:
         assert 'name' in r
         assert 'accessible' in r
+        # Sem autenticação, todos devem estar inacessíveis
+        assert r['accessible'] is False
     summary = data['summary']
     assert summary['total'] == 2
-    assert summary['online'] + summary['offline'] == 2
+    assert summary['online'] == 0
+    assert summary['offline'] == 2
 
 
 # ─── /ssrs/{nome}/pdf ─────────────────────────────────────────────────────────
@@ -80,9 +87,12 @@ def test_ssrs_pdf_nome_invalido_retorna_404(client, monkeypatch):
 
 def test_ssrs_pdf_nome_valido_tenta_proxy(client, monkeypatch):
     """Com base configurada e nome válido, o backend tenta acessar o SSRS.
-    Em ambiente de teste sem SSRS real, esperamos 503 ou 502 (conexão recusada)
-    — mas nunca 404 nem 200 com conteúdo errado."""
+    Em ambiente de teste sem credenciais SSRS configuradas, esperamos 503.
+    Quando não há SSPI disponível e SSRS_USER/SSRS_PASSWORD não estão configurados."""
+    monkeypatch.delenv('SSRS_USER', raising=False)
+    monkeypatch.delenv('SSRS_PASSWORD', raising=False)
     monkeypatch.setenv('SSRS_BASE_URL', 'http://ssrs.invalid/ReportServer')
     monkeypatch.setenv('SSRS_REPORT_NAMES', 'AtvIndividual')
     resp = client.get('/v1/relatorios/ssrs/AtvIndividual/pdf')
-    assert resp.status_code in (200, 502, 503, 504)
+    # Sem credenciais e sem SSPI disponível no ambiente Linux, deve retornar 503
+    assert resp.status_code == 503

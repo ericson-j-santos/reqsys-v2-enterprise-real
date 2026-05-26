@@ -81,6 +81,7 @@
           </v-chip>
         </template>
         <template #item.actions="{ item }">
+          <v-btn icon="mdi-eye-outline" variant="text" size="small" color="primary" :to="`/requisitos/${item.id}`" />
           <v-btn icon="mdi-pencil-outline" variant="text" size="small" @click="abrirDialog(item)" />
         </template>
         <template #no-data>
@@ -160,7 +161,7 @@ const headers = [
   { title: 'Solicitante', key: 'solicitante', sortable: true },
   { title: 'Urgência', key: 'urgencia', sortable: true, width: 120 },
   { title: 'Status', key: 'status', sortable: true, width: 150 },
-  { title: '', key: 'actions', sortable: false, width: 60 },
+  { title: '', key: 'actions', sortable: false, width: 110 },
 ]
 
 const requisitorsFiltrados = computed(() => {

@@ -29,7 +29,7 @@
   .logo-text {
     font-size: 1.2rem;
     font-weight: 700;
-    color: #fbbf24;
+    color: #005ca9;
     white-space: nowrap;
   }
 }
@@ -48,8 +48,8 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: #fbbf24;
-    color: #0d1117;
+    background: #005ca9;
+    color: #ffffff;
     font-weight: 700;
     font-size: 14px;
     display: flex;
@@ -72,17 +72,17 @@
 
     .user-role {
       font-size: 11px;
-      color: #8b949e;
+      color: #6b6b6b;
     }
   }
 }
 
 .active-link {
-  background: rgba(251, 191, 36, 0.12) !important;
-  color: #fbbf24 !important;
+  background: rgba(0, 92, 169, 0.1) !important;
+  color: #005ca9 !important;
 
   mat-icon {
-    color: #fbbf24 !important;
+    color: #005ca9 !important;
   }
 }
 
@@ -102,11 +102,12 @@
 
   .user-chip {
     font-size: 13px;
-    color: #8b949e;
+    color: rgba(255, 255, 255, 0.88);
   }
 }
 
 .main-content {
   padding: 24px;
   min-height: calc(100vh - 64px);
+  background: #f8fbff;
 }

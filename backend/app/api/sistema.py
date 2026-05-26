@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import UTC, datetime
 from app.core.envelope import ok
 from app.core.secrets import describe_secret_resolution
+from app.core.security import get_current_user
 from app.db import get_db
 from app.models.requisito import Requisito
 
@@ -86,7 +87,7 @@ ENDPOINTS_INFO = {
         'metodo': 'GET',
         'url': '/v1/sistema/segredos-status',
         'descricao': 'Diagnóstico da origem dos segredos (env, cofre ou default), sem expor valores',
-        'autenticacao': False,
+        'autenticacao': True,
     },
     'qualidade_ia_resumo': {
         'metodo': 'GET',
@@ -145,7 +146,7 @@ def info_endpoints():
     })
 
 
-@router.get('/segredos-status')
+@router.get('/segredos-status', dependencies=[Depends(get_current_user)])
 def segredos_status():
     secrets = [
         describe_secret_resolution(

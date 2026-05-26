@@ -2,17 +2,29 @@ services:
   api:
     build: ./backend
     restart: unless-stopped
+    # JWT_SECRET padrao fraco — substitua via env var ou .env antes de prod
     environment:
       - DATABASE_URL=sqlite:///./reqsys.db
-      - JWT_SECRET=trocar-em-producao
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:${GATEWAY_PORT:-8081}}
+      - JWT_SECRET=${JWT_SECRET:-trocar-em-producao}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:${GATEWAY_PORT:-8081},https://tieridev.duckdns.org,https://tierin.duckdns.org,https://tieriprod.duckdns.org}
       - SSRS_BASE_URL=${SSRS_BASE_URL:-}
       - SSRS_REPORTS_PATH=${SSRS_REPORTS_PATH:-ReqSys}
-      - SSRS_REPORT_NAMES=${SSRS_REPORT_NAMES:-AtvIndividual,Cracha,CracháAula2,RelatorioDetalhado,RelatorioDetalhadoAula2}
+      - SSRS_REPORT_NAMES=${SSRS_REPORT_NAMES:-AtvIndividual,Cracha,CrachAula2,RelatorioDetalhado,RelatorioDetalhadoAula2}
       - REDMINE_URL=${REDMINE_URL:-}
       - REDMINE_API_KEY=${REDMINE_API_KEY:-}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - ENABLE_GITHUB_REDMINE_IMPORT=${ENABLE_GITHUB_REDMINE_IMPORT:-true}
+      - WIKI_SYNC_BASE_URL=${WIKI_SYNC_BASE_URL:-}
+      - WIKI_SYNC_TOKEN=${WIKI_SYNC_TOKEN:-}
+      - SDD_SPECS_PATH=${SDD_SPECS_PATH:-/sdd}
+    volumes:
+      - ${SDD_SPECS_HOST_PATH:-../../my-first-spec-project/.sdd}:/sdd:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - reqsys-net
 
@@ -43,7 +55,13 @@ services:
     ports: ["${GATEWAY_PORT:-8081}:80"]
     volumes:
       - ./infra/nginx/default.prod.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on: [frontend, api, kb]
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+      kb:
+        condition: service_started
     networks:
       - reqsys-net
 

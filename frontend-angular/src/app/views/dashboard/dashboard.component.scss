@@ -12,6 +12,23 @@
 .metric-card {
   background: #161b22;
   border: 1px solid #30363d;
+  transition: box-shadow 0.2s, transform 0.15s;
+
+  &.clickable {
+    cursor: pointer;
+
+    &:hover {
+      box-shadow: 0 4px 16px rgba(0, 92, 169, 0.18);
+      transform: translateY(-2px);
+      border-color: #005ca9;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #005ca9;
+      outline-offset: 2px;
+      border-radius: 8px;
+    }
+  }
 
   mat-card-content {
     display: flex;
@@ -35,6 +52,11 @@
     color: #8b949e;
     font-size: 13px;
     margin-top: 4px;
+  }
+  .metric-nav {
+    margin-left: auto;
+    color: #8b949e;
+    font-size: 20px;
   }
 }
 

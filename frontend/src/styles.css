@@ -1,10 +1,14 @@
 :root {
-  --bg: #080c18;
-  --card: #111827;
-  --border: #1a2640;
-  --accent: #f59e0b;
-  --text: #e2e8f0;
-  --muted: #8899aa;
+  --bg: #ffffff;
+  --card: #ffffff;
+  --card-alt: #e8f1fa;
+  --border: #d0d0d0;
+  --accent: #005ca9;
+  --accent-strong: #002f6c;
+  --accent-secondary: #f39200;
+  --accent-tertiary: #00b3ad;
+  --text: #333333;
+  --muted: #6b6b6b;
 }
 .v-application {
   background: var(--bg) !important;
@@ -14,6 +18,7 @@
 .v-card {
   background: var(--card) !important;
   border: 1px solid var(--border) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 .brand {
   font-weight: 800;
@@ -40,6 +45,7 @@
 }
 .metric {
   padding: 18px;
+  background: var(--card-alt);
 }
 .metric-value {
   font-size: 32px;
@@ -54,6 +60,7 @@
 h1 {
   font-size: 24px;
   margin-bottom: 16px;
+  color: var(--accent-strong);
 }
 
 .page-title {
@@ -69,6 +76,17 @@ h1 {
 .v-list-item-title,
 .v-list-item-subtitle {
   overflow-wrap: anywhere;
+}
+
+.v-toolbar,
+.v-navigation-drawer {
+  background: var(--card) !important;
+  color: var(--text) !important;
+}
+
+.v-btn.text-primary,
+.text-primary {
+  color: var(--accent) !important;
 }
 
 @media (max-width: 960px) {

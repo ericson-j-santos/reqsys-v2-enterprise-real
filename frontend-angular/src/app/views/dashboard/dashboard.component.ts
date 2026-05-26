@@ -1,18 +1,22 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
 import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
+import { InstitucionalStatusBannerComponent } from '../../shared/institucional-status-banner/institucional-status-banner.component';
 
 interface Metrica {
   titulo: string;
   valor: string | number;
   icone: string;
   cor: string;
+  rota?: string;
 }
 
 interface PipelineItem {
@@ -31,20 +35,23 @@ interface QualidadeItem {
   selector: 'app-dashboard',
   standalone: true,
   imports: [
-    CommonModule, MatCardModule, MatIconModule,
-    MatProgressBarModule, MatChipsModule, MatDividerModule
+    CommonModule, RouterLink, MatButtonModule, MatCardModule, MatIconModule,
+    MatProgressBarModule, MatChipsModule, MatDividerModule,
+    InstitucionalStatusBannerComponent
   ],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss']
 })
 export class DashboardComponent implements OnInit {
   cols = signal(4);
+  loading = signal(true);
+  errorMessage = signal('');
 
   metricas = signal<Metrica[]>([
-    { titulo: 'Total Requisitos', valor: '—', icone: 'assignment', cor: '#fbbf24' },
-    { titulo: 'Em Aprovação',     valor: '—', icone: 'pending_actions', cor: '#f97316' },
-    { titulo: 'Aprovados',        valor: '—', icone: 'check_circle', cor: '#22c55e' },
-    { titulo: 'Score IA Médio',   valor: '—', icone: 'psychology', cor: '#6366f1' }
+    { titulo: 'Total Requisitos', valor: '—', icone: 'assignment',      cor: '#fbbf24', rota: '/rastreabilidade' },
+    { titulo: 'Em Aprovação',     valor: '—', icone: 'pending_actions', cor: '#f97316', rota: '/pipeline' },
+    { titulo: 'Aprovados',        valor: '—', icone: 'check_circle',    cor: '#22c55e', rota: '/rastreabilidade' },
+    { titulo: 'Score IA Médio',   valor: '—', icone: 'psychology',      cor: '#6366f1', rota: '/qualidade-ia' }
   ]);
 
   pipeline = signal<PipelineItem[]>([
@@ -55,8 +62,8 @@ export class DashboardComponent implements OnInit {
   ]);
 
   qualidade = signal<QualidadeItem[]>([
-    { label: 'Completude', valor: 0, cor: 'primary' },
-    { label: 'Clareza',    valor: 0, cor: 'accent' },
+    { label: 'Completude',  valor: 0, cor: 'primary' },
+    { label: 'Clareza',     valor: 0, cor: 'accent' },
     { label: 'Testabilid.', valor: 0, cor: 'warn' }
   ]);
 
@@ -77,6 +84,7 @@ export class DashboardComponent implements OnInit {
 
     this.http.get<any>('/api/v1/dashboard/resumo').subscribe({
       next: d => {
+        this.loading.set(false);
         this.metricas.update(m => [
           { ...m[0], valor: d.total_requisitos ?? d.totalRequisitos ?? '—' },
           { ...m[1], valor: d.em_aprovacao ?? d.emAprovacao ?? '—' },
@@ -90,6 +98,8 @@ export class DashboardComponent implements OnInit {
         }));
       },
       error: () => {
+        this.loading.set(false);
+        this.errorMessage.set('Não foi possível carregar dados do dashboard. Exibindo valores de referência.');
         this.metricas.update(m => [
           { ...m[0], valor: 28 }, { ...m[1], valor: 5 },
           { ...m[2], valor: 18 }, { ...m[3], valor: '76%' }

@@ -153,6 +153,7 @@ const navItems = [
   { label: 'Segredos',        icon: 'mdi-shield-key-outline',        rota: '/segredos-status' },
   { label: 'Rastreabilidade', icon: 'mdi-map-marker-path',           rota: '/rastreabilidade' },
   { label: 'Auditoria',       icon: 'mdi-history',                   rota: '/auditoria' },
+  { label: 'Notificações',    icon: 'mdi-bell-outline',              rota: '/notificacoes' },
 ]
 
 const iniciais = computed(() => {

@@ -1,0 +1,27 @@
+services:
+  api:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "${BACKEND_PORT:-8212}:8000"
+    environment:
+      - DATABASE_URL=sqlite:////data/reqsys-test.db
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:${GATEWAY_PORT:-8084},http://reqsys-test.localtest.me:${GATEWAY_PORT:-8084}}
+    volumes:
+      - reqsys-test-db:/data
+
+  frontend:
+    expose:
+      - "5173"
+    volumes:
+      - ./frontend:/app
+      - reqsys-test-frontend-node-modules:/app/node_modules
+
+  nginx:
+    ports:
+      - "${GATEWAY_PORT:-8084}:80"
+    volumes:
+      - ./infra/nginx/default.dev.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  reqsys-test-db:
+  reqsys-test-frontend-node-modules:

@@ -46,9 +46,10 @@ test-results/
 .DS_Store
 Thumbs.db
 
-# Docker / Infra
-*.env
+# Docker / Infra / Secrets
+.env
 .env.*
+*.env
 !.env.example
 
 # Logs

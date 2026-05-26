@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8"/>
+  <title id="page-title">Diagramas de Arquitetura ReqSys</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #1a1a2e; }
+    .topbar {
+      background: #1a237e; color: #fff;
+      padding: 0.75rem 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 10;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .topbar h1 { font-size: 1.1rem; font-weight: 600; margin: 0; }
+    .topbar a {
+      background: rgba(255,255,255,0.15); color: #fff;
+      padding: 0.4rem 1rem; border-radius: 6px;
+      text-decoration: none; font-size: 0.875rem;
+      transition: background 0.15s;
+    }
+    .topbar a:hover { background: rgba(255,255,255,0.28); }
+    .main { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+    h2 { color: #1a237e; margin: 2rem 0 0.75rem; }
+    .mermaid-wrap {
+      background: #fff; border: 1px solid #ddd;
+      border-radius: 10px; padding: 1.25rem;
+      margin-bottom: 0.5rem;
+      min-height: 60px;
+      overflow-x: auto;
+    }
+    .section-meta { font-size: 0.78rem; color: #888; margin-bottom: 1.5rem; }
+    footer { text-align: center; color: #aaa; font-size: 0.85rem; padding: 2rem 0 3rem; }
+    .error-box {
+      background: #fce4ec; border: 1px solid #f48fb1;
+      border-radius: 8px; padding: 1.2rem; color: #880e4f;
+      margin: 2rem 0;
+    }
+    .loading { color: #888; font-size: 0.9rem; padding: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1 id="main-title">Diagramas de Arquitetura ReqSys</h1>
+    <a href="editor.html">&#9998; Editar configuração</a>
+  </div>
+
+  <div class="main">
+    <div id="error-area"></div>
+
+    <h2>1. Arquitetura Geral</h2>
+    <div class="mermaid-wrap" id="diagram-1"><div class="loading">Carregando…</div></div>
+    <div class="section-meta" id="meta-1"></div>
+
+    <h2>2. Modelo de Dados Simplificado</h2>
+    <div class="mermaid-wrap" id="diagram-2"><div class="loading">Carregando…</div></div>
+    <div class="section-meta" id="meta-2"></div>
+
+    <h2>3. Fluxo de Deploy / Validação</h2>
+    <div class="mermaid-wrap" id="diagram-3"><div class="loading">Carregando…</div></div>
+    <div class="section-meta" id="meta-3"></div>
+
+    <h2>4. Ambientes, URLs e Credenciais</h2>
+    <div class="mermaid-wrap" id="diagram-4"><div class="loading">Carregando…</div></div>
+    <div class="section-meta" id="meta-4"></div>
+
+    <footer><span id="footer-text"></span></footer>
+  </div>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: false, theme: 'default' });
+
+    // ─── Load config ────────────────────────────────────────────────────────────
+    async function loadConfig() {
+      const r = await fetch('./config.json');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+
+    // ─── Diagram builders ───────────────────────────────────────────────────────
+    function buildArquiteturaGeral(cfg) {
+      const { stack, integracoes } = cfg;
+      const letters = 'HIJKLMNOPQRSTUVWXYZ';
+      const intNodes = integracoes
+        .map((integ, i) => `        ${letters[i]}["${integ.nome}"]`)
+        .join('\n');
+      const intEdges = integracoes
+        .map((integ, i) => `    C -->|Integração| ${letters[i]}`)
+        .join('\n');
+      return `flowchart TD
+    subgraph Usuario["Usuário"]
+        A[Browser/Cliente]
+    end
+    subgraph Frontend
+        B["${stack.frontend}"]
+    end
+    subgraph Backend
+        C["${stack.backend}"]
+        D["${stack.cache}"]
+        E["${stack.banco_dev} / ${stack.banco_prod}"]
+    end
+    subgraph Infraestrutura
+        F["${stack.infra}"]
+        G["${stack.proxy}"]
+    end
+    subgraph Integracoes["Integrações"]
+${intNodes}
+    end
+    A -->|HTTP/HTTPS| G
+    G -->|Proxy| B
+    B -->|API REST| C
+    C -->|Async Jobs| D
+    C -->|DB| E
+${intEdges}
+    G -.->|Ambientes| F
+    F -.->|Orquestra| B
+    F -.->|Orquestra| C
+    F -.->|Orquestra| D
+    F -.->|Orquestra| E`;
+    }
+
+    function buildModeloDados(cfg) {
+      const { entidades, relacionamentos } = cfg.modelo_dados;
+      const lines = ['erDiagram'];
+      for (const rel of relacionamentos) {
+        lines.push(`    ${rel.de} ${rel.tipo} ${rel.para} : ${rel.label}`);
+      }
+      for (const [nome, campos] of Object.entries(entidades)) {
+        lines.push(`    ${nome} {`);
+        for (const campo of campos) lines.push(`        ${campo}`);
+        lines.push('    }');
+      }
+      return lines.join('\n');
+    }
+
+    function buildDeployFlow(cfg) {
+      const lines = ['stateDiagram-v2'];
+      for (const e of cfg.deploy_flow.estados) {
+        lines.push(e.label
+          ? `    ${e.de} --> ${e.para} : ${e.label}`
+          : `    ${e.de} --> ${e.para}`);
+      }
+      return lines.join('\n');
+    }
+
+    function buildAmbientes(cfg) {
+      const { dev, prod, test } = cfg.ambientes;
+      const devPub  = dev.url_publica  || dev.url_frontend;
+      const prodPub = prod.url_publica || prod.url_frontend;
+      const testPub = test.url_publica || test.url_frontend;
+      return `flowchart TD
+    subgraph Internet["🌐 Acesso Externo (DuckDNS + SSL)"]
+        PUB_DEV["${devPub}"]
+        PUB_PROD["${prodPub}"]
+        PUB_TEST["${testPub}"]
+    end
+    subgraph Ambientes["🖥️ Local (Docker)"]
+        DEV["Dev — ${dev.url_frontend}\\n${dev.usuario} / ${dev.senha}"]
+        PROD["Prod — ${prod.url_frontend}\\n${prod.usuario} / ${prod.senha}"]
+        TEST["Teste — ${test.url_frontend}\\n${test.usuario} / ${test.senha}"]
+    end
+    subgraph BackendAPI["Backend API"]
+        API_DEV["API Dev — ${dev.url_backend}"]
+        API_PROD["API Prod — ${prod.url_backend}"]
+        API_TEST["API Test — ${test.url_backend}"]
+    end
+    subgraph Bancos
+        DB_DEV[(${dev.db})]
+        DB_PROD[(${prod.db})]
+        DB_TEST[(${test.db})]
+        REDIS_DEV[(Redis Dev)]
+        REDIS_PROD[(Redis Prod)]
+        REDIS_TEST[(Redis Test)]
+    end
+    PUB_DEV  -->|"HTTPS → Nginx WSL → :8083"| DEV
+    PUB_PROD -->|"HTTPS → Nginx WSL → :8081"| PROD
+    PUB_TEST -->|"HTTPS → Nginx WSL → :8084"| TEST
+    DEV  -->|Nginx Proxy| API_DEV
+    PROD -->|Nginx Proxy| API_PROD
+    TEST -->|Nginx Proxy| API_TEST
+    API_DEV  -->|DB| DB_DEV
+    API_PROD -->|DB| DB_PROD
+    API_TEST -->|DB| DB_TEST
+    API_DEV  -->|Redis| REDIS_DEV
+    API_PROD -->|Redis| REDIS_PROD
+    API_TEST -->|Redis| REDIS_TEST`;
+    }
+
+    // ─── Render ─────────────────────────────────────────────────────────────────
+    async function renderDiagram(id, code) {
+      const el = document.getElementById(id);
+      el.className = 'mermaid-wrap mermaid';
+      el.textContent = code;
+      try {
+        await mermaid.run({ nodes: [el] });
+      } catch (err) {
+        el.innerHTML = `<pre style="color:#c62828;font-size:0.8rem">${err.message}</pre>`;
+      }
+    }
+
+    async function main() {
+      let cfg;
+      try {
+        cfg = await loadConfig();
+      } catch (e) {
+        document.getElementById('error-area').innerHTML = `
+          <div class="error-box">
+            <strong>Erro ao carregar config.json</strong><br>
+            Este arquivo precisa ser servido via Live Server (não abra como file:///).<br>
+            <small>Detalhe: ${e.message}</small>
+          </div>`;
+        return;
+      }
+
+      // Update page meta
+      document.title = cfg.title;
+      document.getElementById('page-title').textContent = cfg.title;
+      document.getElementById('main-title').textContent = cfg.title;
+      document.getElementById('footer-text').textContent = cfg.footer;
+
+      document.getElementById('meta-1').textContent =
+        `Stack: ${cfg.stack.frontend} · ${cfg.stack.backend} · ${cfg.stack.cache} · ${cfg.stack.proxy}`;
+      document.getElementById('meta-2').textContent =
+        `Entidades: ${Object.keys(cfg.modelo_dados.entidades).join(', ')}`;
+      document.getElementById('meta-3').textContent =
+        `Compose: ${[cfg.ambientes.dev, cfg.ambientes.prod, cfg.ambientes.test].map(a => a.compose).join(' · ')}`;
+      document.getElementById('meta-4').textContent =
+        `Dev ${cfg.ambientes.dev.url_frontend} · Prod ${cfg.ambientes.prod.url_frontend} · Test ${cfg.ambientes.test.url_frontend}`;
+
+      // Render diagrams in sequence (mermaid needs sequential IDs)
+      const diagrams = [
+        { id: 'diagram-1', code: buildArquiteturaGeral(cfg) },
+        { id: 'diagram-2', code: buildModeloDados(cfg)      },
+        { id: 'diagram-3', code: buildDeployFlow(cfg)       },
+        { id: 'diagram-4', code: buildAmbientes(cfg)        },
+      ];
+
+      for (const { id, code } of diagrams) {
+        await renderDiagram(id, code);
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>

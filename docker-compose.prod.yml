@@ -1,24 +1,64 @@
 services:
   api:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    user: "1000:1000"
+    # Sem ports: — backend nunca exposto diretamente em prod; acesso somente via nginx
     environment:
       - DATABASE_URL=sqlite:////data/reqsys.db
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET obrigatório em prod}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET obrigatorio em prod}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://tieridev.duckdns.org,https://tierin.duckdns.org,https://tieriprod.duckdns.org}
+      - WIKI_SYNC_BASE_URL=${WIKI_SYNC_BASE_URL:-}
+      - WIKI_SYNC_TOKEN=${WIKI_SYNC_TOKEN:-}
+      - SDD_SPECS_PATH=/sdd
     volumes:
       - reqsys-db:/data
+      - ${SDD_SPECS_HOST_PATH:?SDD_SPECS_HOST_PATH obrigatorio em prod}:/sdd:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
 
   frontend:
+    user: "101:101"
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
         VITE_API_URL: /api
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   nginx:
     ports:
       - "${GATEWAY_PORT:-8081}:80"
     volumes:
       - ./infra/nginx/default.prod.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 64M
 
 volumes:
   reqsys-db:

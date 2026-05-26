@@ -2,24 +2,6 @@ import { test, expect } from '@playwright/test'
 
 test.describe('Login Vuetify', () => {
   test('login com credenciais válidas', async ({ page }) => {
-    await page.route('**/api/v1/auth/login', async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          access_token: 'e2e-token-admin',
-          token_type: 'bearer',
-          usuario: {
-            id: 1,
-            nome: 'Usuário Demo',
-            email: 'admin@reqsys.local',
-            papel: 'admin',
-            permissoes: ['dashboard:read', 'relatorios:read', 'auditoria:read'],
-          },
-        }),
-      })
-    })
-
     await page.goto('/login')
     expect(page.url()).toContain('login')
 

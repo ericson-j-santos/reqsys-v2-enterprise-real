@@ -5,12 +5,14 @@ const routes = [
   { path: '/login', component: () => import('../views/LoginView.vue'), meta: { public: true } },
   { path: '/', component: () => import('../views/DashboardView.vue'), meta: { permissao: 'dashboard:read' } },
   { path: '/requisitos', component: () => import('../views/RequisitosView.vue'), meta: { permissao: 'requisitos:write' } },
+  { path: '/requisitos/:id', component: () => import('../views/RequisitosDetalheView.vue'), meta: { permissao: 'requisitos:write' } },
   { path: '/pipeline', component: () => import('../views/PipelineView.vue'), meta: { permissao: 'requisitos:write' } },
   { path: '/qualidade-ia', component: () => import('../views/QualidadeIAView.vue'), meta: { permissao: 'dashboard:read' } },
   { path: '/relatorios', component: () => import('../views/RelatoriosView.vue'), meta: { permissao: 'relatorios:read' } },
   { path: '/segredos-status', component: () => import('../views/SegredosStatusView.vue'), meta: { permissao: 'dashboard:read' } },
   { path: '/rastreabilidade', component: () => import('../views/RastreabilidadeView.vue'), meta: { permissao: 'rastreabilidade:read' } },
   { path: '/auditoria', component: () => import('../views/AuditoriaView.vue'), meta: { permissao: 'auditoria:read' } },
+  { path: '/notificacoes', component: () => import('../views/NotificacoesView.vue'), meta: { permissao: 'dashboard:read' } },
 ]
 
 const router = createRouter({

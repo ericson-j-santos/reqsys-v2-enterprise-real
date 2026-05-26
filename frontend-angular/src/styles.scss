@@ -1,60 +1,61 @@
 @use "@angular/material" as mat;
 
-// Define paletas customizadas
-$primary-palette: mat.define-palette(mat.$amber-palette, 500, 300, 700);
-$accent-palette: mat.define-palette(mat.$indigo-palette, 400, 200, 600);
+// Define paletas institucionais
+$primary-palette: mat.define-palette(mat.$blue-palette, 700, 500, 900);
+$accent-palette: mat.define-palette(mat.$orange-palette, 500, 300, 700);
 $warn-palette: mat.define-palette(mat.$red-palette);
 
-// Tema escuro
-$reqsys-theme: mat.define-dark-theme(
+// Tema institucional claro
+$reqsys-theme: mat.define-light-theme(
   (
     color: (
       primary: $primary-palette,
       accent: $accent-palette,
       warn: $warn-palette,
     ),
-    typography: mat.define-typography-config(),
+    typography: mat.define-typography-config(
+      $font-family: 'Arial, "Helvetica Neue", sans-serif',
+    ),
     density: 0,
   )
 );
 
 @include mat.all-component-themes($reqsys-theme);
 
-// Override background para GitHub-like dark
 html,
 body {
   height: 100%;
   margin: 0;
-  font-family: Roboto, "Helvetica Neue", sans-serif;
-  background-color: #0d1117;
-  color: #e6edf3;
+  font-family: Arial, "Helvetica Neue", sans-serif;
+  background-color: #ffffff;
+  color: #333333;
 }
 
 .mat-drawer-container {
-  background-color: #0d1117 !important;
+  background-color: #ffffff !important;
 }
 
 .mat-sidenav {
-  background-color: #161b22 !important;
-  border-right: 1px solid #30363d !important;
+  background-color: #ffffff !important;
+  border-right: 1px solid #d0d0d0 !important;
 }
 
 .mat-toolbar {
-  background-color: #161b22 !important;
-  border-bottom: 1px solid #30363d !important;
+  background-color: #005ca9 !important;
+  border-bottom: 1px solid #d0d0d0 !important;
+  color: #ffffff !important;
 }
 
-// Scrollbar estilizado
 ::-webkit-scrollbar {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0d1117;
+  background: #e8f1fa;
 }
 ::-webkit-scrollbar-thumb {
-  background: #30363d;
+  background: #9e9e9e;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  background: #6b6b6b;
 }
