@@ -125,8 +125,50 @@
               </v-tooltip>
             </v-col>
           </v-row>
+
+          <!-- Feedback do assistente IA -->
+          <v-expand-transition>
+            <v-alert
+              v-if="ia.erro"
+              type="warning"
+              variant="tonal"
+              class="mt-2"
+              closable
+              @click:close="ia.erro = ''"
+            >
+              {{ ia.erro }}
+            </v-alert>
+          </v-expand-transition>
+          <v-expand-transition>
+            <v-alert
+              v-if="ia.justificativa"
+              type="success"
+              variant="tonal"
+              class="mt-2"
+              icon="mdi-robot"
+            >
+              <strong>Urgência sugerida:</strong> {{ ia.urgenciaSugerida }}
+              <br />{{ ia.justificativa }}
+            </v-alert>
+          </v-expand-transition>
         </v-card-text>
+
         <v-card-actions>
+          <v-tooltip text="Usa Gemini para sugerir descrição, resumo e urgência com base no título, área e sistema" location="top">
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                color="purple"
+                variant="tonal"
+                prepend-icon="mdi-robot"
+                :loading="ia.carregando"
+                :disabled="!form.titulo"
+                @click="assistenteIA"
+              >
+                Assistente IA
+              </v-btn>
+            </template>
+          </v-tooltip>
           <v-spacer />
           <v-btn variant="text" @click="dialog = false">Cancelar</v-btn>
           <v-btn color="amber" :loading="salvando" @click="salvar">Salvar</v-btn>
@@ -139,6 +181,7 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
 import { useRequisitosStore } from '../stores/requisitos'
+import axios from 'axios'
 
 const store = useRequisitosStore()
 const dialog = ref(false)
@@ -151,6 +194,13 @@ const form = reactive({
   area: 'Crédito',
   sistema: 'Portal Rural',
   solicitante: 'gerencia_credito',
+})
+
+const ia = reactive({
+  carregando: false,
+  erro: '',
+  justificativa: '',
+  urgenciaSugerida: '',
 })
 
 const headers = [
@@ -178,6 +228,50 @@ async function salvar() {
     dialog.value = false
   } finally {
     salvando.value = false
+  }
+}
+
+async function assistenteIA() {
+  ia.carregando = true
+  ia.erro = ''
+  ia.justificativa = ''
+  ia.urgenciaSugerida = ''
+
+  try {
+    const base = import.meta.env.VITE_API_URL || '/api'
+
+    const [resDescricao, resUrgencia] = await Promise.allSettled([
+      axios.post(`${base}/v1/ia/sugerir-descricao`, {
+        titulo: form.titulo,
+        area: form.area,
+        sistema: form.sistema,
+      }),
+      axios.post(`${base}/v1/ia/classificar-urgencia`, {
+        titulo: form.titulo,
+        descricao: form.descricao || form.titulo,
+      }),
+    ])
+
+    if (resDescricao.status === 'fulfilled') {
+      const sugestao = resDescricao.value.data?.data?.descricao_sugerida
+      if (sugestao) form.descricao = sugestao
+    } else {
+      const detail = resDescricao.reason?.response?.data?.detail
+      ia.erro = detail || 'Assistente IA indisponível. Verifique se GEMINI_API_KEY está configurada.'
+    }
+
+    if (resUrgencia.status === 'fulfilled') {
+      const dados = resUrgencia.value.data?.data
+      if (dados?.urgencia) {
+        form.urgencia = dados.urgencia
+        ia.urgenciaSugerida = dados.urgencia
+        ia.justificativa = dados.justificativa || ''
+      }
+    }
+  } catch (err) {
+    ia.erro = err?.response?.data?.detail || 'Erro ao contatar o Assistente IA.'
+  } finally {
+    ia.carregando = false
   }
 }
 </script>

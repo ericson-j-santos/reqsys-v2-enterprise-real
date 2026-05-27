@@ -8,7 +8,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / '.env', override=False)
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.api import auth, requisitos, dashboard, pipeline, relatorios, auditoria, sistema, qualidade_ia, processos, wiki, specs, cofre
+from app.api import auth, requisitos, dashboard, pipeline, relatorios, auditoria, sistema, qualidade_ia, processos, wiki, specs, cofre, ia
 from app.core.config import settings
 from app.core.envelope import ok
 from app.db import Base, engine
@@ -50,6 +50,7 @@ app.include_router(processos.router)
 app.include_router(wiki.router)
 app.include_router(specs.router)
 app.include_router(cofre.router)
+app.include_router(ia.router)
 
 
 @app.middleware('http')

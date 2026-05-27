@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Caminho para o .sdd do my-first-spec-project (absoluto ou relativo ao reqsys root)
     sdd_specs_path: str = Field(default_factory=lambda: get_secret('SDD_SPECS_PATH', '') or '')
 
+    # Gemini IA — free tier (gemini-1.5-flash: 15 req/min, 1500 req/dia)
+    gemini_api_key: str = Field(default_factory=lambda: get_secret('GEMINI_API_KEY', '') or '')
+    gemini_model: str = Field(default_factory=lambda: get_secret('GEMINI_MODEL', 'gemini-1.5-flash') or 'gemini-1.5-flash')
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(',') if origin.strip()]
