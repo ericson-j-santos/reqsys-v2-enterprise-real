@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     model_config = {'env_file': str(_env_file), 'env_file_encoding': 'utf-8', 'extra': 'ignore'}
 
     app_name: str = 'ReqSys API'
-    app_version: str = '2.8.0'
+    app_version: str = '3.1.0'
     jwt_secret: str = Field(default_factory=lambda: get_secret('JWT_SECRET', 'trocar-em-producao') or 'trocar-em-producao')
     jwt_algorithm: str = 'HS256'
     database_url: str = Field(default_factory=lambda: get_secret('DATABASE_URL', 'sqlite:///./reqsys.db') or 'sqlite:///./reqsys.db')

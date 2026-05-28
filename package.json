@@ -1,6 +1,6 @@
 {
     "name": "reqsys-v2-enterprise-e2e",
-    "version": "2.5.0",
+    "version": "3.1.0",
     "description": "E2E tests for ReqSys v2 Enterprise (Vuetify + Angular frontends)",
     "type": "module",
     "scripts": {

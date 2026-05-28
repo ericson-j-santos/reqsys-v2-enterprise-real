@@ -11,7 +11,8 @@ router = APIRouter(prefix='/v1/auth', tags=['Auth'])
 
 
 class LoginInput(BaseModel):
-    email: EmailStr
+    email: EmailStr = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
+    senha: str | None = None
 
 
 @router.post('/login')

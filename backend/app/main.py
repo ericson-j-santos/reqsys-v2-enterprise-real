@@ -27,7 +27,7 @@ if settings.jwt_secret in _WEAK_SECRETS or len(settings.jwt_secret) < 32:
     logger.warning('JWT_SECRET fraco ou padrao detectado — substitua antes de ir para producao')
 
 Base.metadata.create_all(bind=engine)
-app = FastAPI(title='ReqSys Enterprise API', version='2.8.0')
+app = FastAPI(title='ReqSys Enterprise API', version='3.1.0')
 
 app.add_middleware(
     CORSMiddleware,
