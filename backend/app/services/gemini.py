@@ -121,15 +121,35 @@ def _gerar(api_key: str, model: str, prompt: str) -> str:
         return resposta.text.strip()
     except GeminiIndisponivel:
         raise
+    except GeminiIndisponivel:
+        raise
     except Exception as exc:
         msg = str(exc)
-        if '429' in msg or 'quota' in msg.lower() or 'rate' in msg.lower():
+        msg_lower = msg.lower()
+        # 429 = rate limit / quota — busca pelo código HTTP ou palavras-chave específicas
+        # Evita falso positivo com 'rate' dentro de "generateContent"
+        is_quota = (
+            '429' in msg
+            or 'resource_exhausted' in msg_lower
+            or 'quota exceeded' in msg_lower
+            or 'rate limit' in msg_lower
+            or 'too many requests' in msg_lower
+        )
+        if is_quota:
             raise GeminiIndisponivel(
                 f'Limite de requisições Gemini atingido (free tier: {_LIMITE_POR_MINUTO} req/min, '
                 f'{_LIMITE_POR_DIA} req/dia). Tente novamente em alguns segundos.'
             )
-        if '400' in msg or 'api_key' in msg.lower() or 'invalid' in msg.lower():
+        # 404 = modelo não encontrado / 400 = chave inválida
+        is_bad_key = '400' in msg or 'api_key' in msg_lower or 'invalid' in msg_lower
+        is_not_found = '404' in msg or 'not found' in msg_lower or 'not supported' in msg_lower
+        if is_bad_key:
             raise GeminiIndisponivel('GEMINI_API_KEY inválida. Verifique a chave em aistudio.google.com.')
+        if is_not_found:
+            raise GeminiIndisponivel(
+                f'Modelo "{model}" não disponível para esta chave. '
+                'Verifique GEMINI_MODEL no .env. Modelos disponíveis: gemini-2.0-flash, gemini-2.5-flash.'
+            )
         logger.exception('Erro inesperado ao chamar Gemini')
         raise GeminiIndisponivel(f'Gemini indisponível: {msg}')
 

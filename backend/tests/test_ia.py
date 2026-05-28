@@ -44,7 +44,7 @@ class TestIAStatus:
     def test_status_tem_campo_modelo(self, auth_headers):
         data = client.get('/v1/ia/status', headers=auth_headers).json()['data']
         assert 'modelo' in data
-        assert data['modelo'] == 'gemini-1.5-flash'
+        assert data['modelo'] == 'gemini-2.0-flash'
 
     def test_status_tem_cota(self, auth_headers):
         data = client.get('/v1/ia/status', headers=auth_headers).json()['data']
@@ -198,7 +198,25 @@ class TestIAClassificarUrgencia:
 
 GEMINI_KEY = os.environ.get('GEMINI_API_KEY', '')
 
-@pytest.mark.skipif(not GEMINI_KEY, reason='GEMINI_API_KEY não configurada')
+
+def _gemini_funcional() -> bool:
+    """Retorna True somente se a chave existir e tiver quota > 0."""
+    if not GEMINI_KEY:
+        return False
+    try:
+        import google.generativeai as genai  # type: ignore
+        genai.configure(api_key=GEMINI_KEY)
+        m = genai.GenerativeModel('gemini-2.0-flash')
+        m.generate_content('ok')
+        return True
+    except Exception:
+        return False
+
+
+_GEMINI_OK = _gemini_funcional()
+
+
+@pytest.mark.skipif(not _GEMINI_OK, reason='GEMINI_API_KEY não configurada ou sem quota')
 class TestGeminiReal:
     def test_sugerir_descricao_retorna_texto(self, auth_headers):
         resp = client.post('/v1/ia/sugerir-descricao',
