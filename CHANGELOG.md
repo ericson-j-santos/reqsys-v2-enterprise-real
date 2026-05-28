@@ -6,6 +6,33 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [3.1.0] - 2026-05-28
+
+### Adicionado
+
+- Versionamento canônico em `VERSION` antes do desenvolvimento da nova aplicação.
+- Documentação GitFlow em `docs/GITFLOW.md`, com branches, checklist de release, convenção de commits e fluxo de tag.
+- Aplicação inicial completa em .NET 8/C# em `backend-dotnet/`, com solution, projeto ASP.NET Core Minimal API, Dockerfile, README e testes xUnit.
+- Módulos .NET entregues: autenticação, saúde, sistema, dashboard, requisitos CRUD, pipeline, relatórios, auditoria e qualidade IA.
+
+### Alterado
+
+- README atualizado para declarar a versão `3.1.0` e a nova stack .NET/C# em evolução.
+- API FastAPI existente alinhada para versão `3.1.0` e compatibilidade dos testes de autenticação/diagnóstico de segredos.
+- Metadados de versão dos assemblies .NET centralizados em `backend-dotnet/Directory.Build.props`.
+- `.gitignore` atualizado para ignorar banco local de testes na raiz e permitir rastrear a solution .NET em `backend-dotnet/`.
+
+### Testado
+
+- Conferência estática dos artefatos C# criados e dos arquivos de versionamento.
+- Teste automatizado .NET documentado em `backend-dotnet/tests/ReqSys.Api.Tests`; execução local bloqueada no ambiente atual porque o SDK `dotnet` não está instalado.
+
+### Rollback
+
+- Remover o diretório `backend-dotnet/`, reverter `VERSION`, `README.md`, `CHANGELOG.md` e `docs/GITFLOW.md` para retornar ao backend FastAPI como única implementação ativa.
+
+---
+
 ## [2.8.0] - 2026-05-15
 
 ### Adicionado

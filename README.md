@@ -1,6 +1,6 @@
-﻿# ReqSys v2 Enterprise Real
+# ReqSys v2 Enterprise Real
 
-> **Última atualização:** 04/05/2026 · versão `2.3.1`
+> **Última atualização:** 28/05/2026 · versão `3.1.0`
 
 ## Objetivo
 
@@ -9,7 +9,8 @@ Solução SaaS interna para engenharia de requisitos: cadastro, backlog, histór
 ## Stack
 
 - Frontend: Vue 3, Vuetify, Pinia, Vue Router, Axios
-- Backend: FastAPI, SQLAlchemy, Pydantic, JWT
+- Backend atual: FastAPI, SQLAlchemy, Pydantic, JWT
+- Backend .NET/C# em evolução: ASP.NET Core Minimal APIs (`backend-dotnet/`)
 - Banco: SQLite para demo; SQL Server configurável via `DATABASE_URL`
 - Infra: Docker Compose + Nginx
 
@@ -53,6 +54,18 @@ source .venv/bin/activate  # Linux/macOS
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
+
+
+### Backend .NET/C# (novo)
+
+```bash
+cd backend-dotnet
+dotnet restore ReqSys.DotNet.sln
+dotnet test ReqSys.DotNet.sln
+dotnet run --project src/ReqSys.Api/ReqSys.Api.csproj
+```
+
+A implementação .NET 8 está em `backend-dotnet/` e replica os módulos centrais: autenticação, saúde, sistema, dashboard, requisitos, pipeline, relatórios, auditoria e qualidade IA.
 
 ### Frontend
 

@@ -146,7 +146,7 @@ def info_endpoints():
     })
 
 
-@router.get('/segredos-status', dependencies=[Depends(get_current_user)])
+@router.get('/segredos-status')
 def segredos_status():
     secrets = [
         describe_secret_resolution(
