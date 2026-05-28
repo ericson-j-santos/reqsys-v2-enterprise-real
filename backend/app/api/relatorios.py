@@ -216,21 +216,8 @@ def ssrs_status():
             detail = auth_error
         else:
             try:
-<<<<<<< Updated upstream
-                resp = _requests.head(
-                    render_url,
-                    auth=auth,
-                    timeout=5,
-                    verify=False,
-                    allow_redirects=True,
-                    headers={'User-Agent': 'reqsys-ssrs-status/1.0'},
-                )
-                accessible = resp.status_code < 400
-                status_code = resp.status_code
-=======
                 status_code = _check_report_accessibility(render_url, auth)
                 accessible = status_code < 400
->>>>>>> Stashed changes
                 detail = None
             except _requests.exceptions.RequestException as exc:
                 accessible = False
