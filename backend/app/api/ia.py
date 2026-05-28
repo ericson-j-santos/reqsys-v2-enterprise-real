@@ -6,6 +6,7 @@ from app.core.envelope import ok
 from app.services.gemini import (
     GeminiIndisponivel,
     classificar_urgencia,
+    get_uso,
     resumir_requisito,
     sugerir_descricao,
 )
@@ -81,10 +82,12 @@ def classificar(body: ClassificacaoRequest):
 
 @router.get('/status')
 def ia_status():
-    """Verifica se a integração Gemini está configurada."""
+    """Verifica configuração Gemini e mostra cota restante do free tier."""
     configurada = bool(settings.gemini_api_key)
+    uso = get_uso()
     return ok({
         'configurada': configurada,
         'modelo': settings.gemini_model,
         'aviso': None if configurada else 'GEMINI_API_KEY não configurada no .env',
+        'cota': uso,
     })
