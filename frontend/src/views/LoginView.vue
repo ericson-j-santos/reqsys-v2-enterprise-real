@@ -1,6 +1,6 @@
 ﻿<template>
   <main class="login-page">
-    <v-card class="login-card" width="440">
+    <v-card class="login-card" :width="cardWidth">
       <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
         <span>ReqSys Enterprise</span>
         <v-tooltip text="Ambiente de acesso corporativo com perfil e permissões" location="top">
@@ -13,50 +13,44 @@
       <form @submit.prevent="entrar">
         <v-card-text>
           <v-alert type="info" variant="tonal" class="mb-4">
-            Use as credenciais demo já preenchidas para acessar o ambiente local.
+            Use as credenciais demo já preenchidas para acessar o ambiente cloud.
           </v-alert>
 
-          <v-tooltip text="Identidade corporativa usada para autenticação" location="top">
-            <template #activator="{ props }">
-              <div v-bind="props">
-                <v-text-field v-model="email" label="E-mail" variant="outlined" prepend-inner-icon="mdi-email-outline" />
-              </div>
-            </template>
-          </v-tooltip>
+          <v-text-field
+            v-model="email"
+            label="E-mail"
+            variant="outlined"
+            prepend-inner-icon="mdi-email-outline"
+            class="mb-2"
+          />
 
-          <v-tooltip text="Senha do ambiente de demonstração" location="top">
-            <template #activator="{ props }">
-              <div v-bind="props">
-                <v-text-field
-                  v-model="senha"
-                  label="Senha"
-                  :type="mostrarSenha ? 'text' : 'password'"
-                  variant="outlined"
-                  prepend-inner-icon="mdi-lock-outline"
-                  :append-inner-icon="mostrarSenha ? 'mdi-eye-off' : 'mdi-eye'"
-                  @click:append-inner="mostrarSenha = !mostrarSenha"
-                />
-              </div>
-            </template>
-          </v-tooltip>
+          <v-text-field
+            v-model="senha"
+            label="Senha"
+            :type="mostrarSenha ? 'text' : 'password'"
+            variant="outlined"
+            prepend-inner-icon="mdi-lock-outline"
+            :append-inner-icon="mostrarSenha ? 'mdi-eye-off' : 'mdi-eye'"
+            @click:append-inner="mostrarSenha = !mostrarSenha"
+          />
 
-          <v-alert v-if="erro" type="error" density="compact">{{ erro }}</v-alert>
+          <v-alert v-if="erro" type="error" density="compact" class="mt-1">{{ erro }}</v-alert>
         </v-card-text>
-        <v-card-actions>
-          <v-tooltip text="Envia as credenciais e inicia a sessão do usuário" location="top">
-            <template #activator="{ props }">
-              <v-btn v-bind="props" type="submit" block color="amber" :loading="carregando">Entrar</v-btn>
-            </template>
-          </v-tooltip>
+        <v-card-actions class="px-4 pb-4">
+          <v-btn type="submit" block color="amber" :loading="carregando" size="large">Entrar</v-btn>
         </v-card-actions>
       </form>
     </v-card>
   </main>
 </template>
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
+
+const { width } = useDisplay()
+const cardWidth = computed(() => Math.min(440, width.value - 32))
 
 const email = ref('ericsonjosedossantos@tieri659.onmicrosoft.com')
 const senha = ref('admin123')
@@ -79,4 +73,18 @@ async function entrar() {
   }
 }
 </script>
+
+<style scoped>
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--bg);
+}
+.login-card {
+  width: 100%;
+}
+</style>
 

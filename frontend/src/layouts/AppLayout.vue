@@ -111,3 +111,43 @@ function sair() {
 }
 </script>
 
+<style scoped>
+.req-layout {
+  height: 100vh;
+  overflow: hidden;
+}
+.req-main {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.req-drawer {
+  height: 100vh;
+}
+.req-appbar {
+  background: var(--accent) !important;
+}
+.brand-sm {
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
+}
+.nav-item {
+  border-radius: 8px;
+  margin-bottom: 2px;
+}
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+}
+.user-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>
+
