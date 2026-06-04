@@ -27,6 +27,6 @@ const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach((to) => {
   const auth = useAuthStore()
   if (!to.meta.public && !auth.autenticado) return '/login'
-  if (to.meta.recurso && !auth.pode(to.meta.recurso)) return '/'
+  if (to.meta.recurso && auth.usuario && !auth.pode(to.meta.recurso)) return '/'
 })
 export default router

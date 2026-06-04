@@ -21,8 +21,15 @@ function sanitizeUsuario(usuario) {
   }
 }
 
+function loadUsuario() {
+  try {
+    const raw = localStorage.getItem('reqsys_usuario')
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
 export const useAuthStore = defineStore('auth', {
-  state: () => ({ usuario: null, token: localStorage.getItem('reqsys_token') || null }),
+  state: () => ({ usuario: loadUsuario(), token: localStorage.getItem('reqsys_token') || null }),
   getters: {
     autenticado: (s) => Boolean(s.token),
     permissoes: (s) => s.usuario?.permissoes || [],
@@ -33,11 +40,13 @@ export const useAuthStore = defineStore('auth', {
       this.token = data.data.access_token
       this.usuario = sanitizeUsuario(data.data.usuario)
       localStorage.setItem('reqsys_token', this.token)
+      localStorage.setItem('reqsys_usuario', JSON.stringify(this.usuario))
     },
     sair() {
       this.token = null
       this.usuario = null
       localStorage.removeItem('reqsys_token')
+      localStorage.removeItem('reqsys_usuario')
     },
     pode(recurso) { return this.permissoes.includes(recurso) }
   }
