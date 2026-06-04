@@ -112,18 +112,6 @@ function sair() {
 </script>
 
 <style scoped>
-.req-layout {
-  height: 100vh;
-  overflow: hidden;
-}
-.req-main {
-  height: 100vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-.req-drawer {
-  height: 100vh;
-}
 .req-appbar {
   background: var(--accent) !important;
 }
