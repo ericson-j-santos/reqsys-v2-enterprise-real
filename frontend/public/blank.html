@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Autenticando...</title>
+  <style>
+    body { font-family: sans-serif; display: flex; align-items: center;
+           justify-content: center; height: 100vh; margin: 0; background: #f0f4fa; }
+    p { color: #005ca9; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <p>Autenticando com Microsoft...</p>
+  <script type="module">
+    import { PublicClientApplication } from 'https://esm.sh/@azure/msal-browser@5'
+
+    try {
+      const raw = localStorage.getItem('reqsys_msal_config')
+      if (!raw) throw new Error('config não encontrada')
+
+      const authConfig = JSON.parse(raw)
+      const msal = new PublicClientApplication({
+        auth: {
+          ...authConfig,
+          redirectUri: window.location.origin + '/blank.html',
+        },
+        cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true },
+        system: { allowNativeBroker: false },
+      })
+
+      await msal.initialize()
+      await msal.handleRedirectPromise()
+      // MSAL fecha o popup automaticamente após processar o código
+    } catch (e) {
+      console.warn('blank.html MSAL error:', e)
+    }
+  </script>
+</body>
+</html>

@@ -2,6 +2,7 @@ import { PublicClientApplication } from '@azure/msal-browser'
 import { api } from '../services/api'
 
 let _instance = null
+let _authConfig = null
 
 async function fetchAuthConfig() {
   try {
@@ -15,18 +16,27 @@ async function fetchAuthConfig() {
 export async function getMsalInstance() {
   if (_instance) return _instance
 
-  const config = await fetchAuthConfig()
-  if (!config.azure_enabled) return null
+  const serverConfig = await fetchAuthConfig()
+  if (!serverConfig.azure_enabled) return null
+
+  _authConfig = {
+    clientId: serverConfig.azure_client_id,
+    authority: `https://login.microsoftonline.com/${serverConfig.azure_tenant_id}`,
+  }
+
+  // Salva config no localStorage para que blank.html possa inicializar MSAL
+  // sem precisar chamar o backend (janelas do mesmo origin compartilham localStorage)
+  localStorage.setItem('reqsys_msal_config', JSON.stringify(_authConfig))
 
   const msalConfig = {
     auth: {
-      clientId: config.azure_client_id,
-      authority: `https://login.microsoftonline.com/${config.azure_tenant_id}`,
-      redirectUri: window.location.origin,
+      ..._authConfig,
+      redirectUri: `${window.location.origin}/blank.html`,
+      postLogoutRedirectUri: `${window.location.origin}/login`,
     },
     cache: {
       cacheLocation: 'localStorage',
-      storeAuthStateInCookie: true, // compatibilidade Safari/iOS
+      storeAuthStateInCookie: true,
     },
     system: {
       allowNativeBroker: false,
@@ -45,22 +55,24 @@ export async function loginMicrosoft() {
   if (!msal) throw new Error('Azure AD não configurado no servidor')
 
   try {
-    const response = await msal.loginPopup({ scopes: SCOPES, prompt: 'select_account' })
+    const response = await msal.loginPopup({
+      scopes: SCOPES,
+      prompt: 'select_account',
+    })
     return response.idToken
   } catch (err) {
-    // Popup bloqueado pelo browser
-    if (
-      err.errorCode === 'popup_window_error' ||
-      err.errorCode === 'empty_window_error' ||
-      err.errorCode === 'user_cancelled'
-    ) {
-      throw err
+    const code = err.errorCode ?? ''
+    if (code === 'user_cancelled') throw err
+    if (code === 'popup_window_error' || code === 'empty_window_error') {
+      // Popup bloqueado — usa redirect como fallback
+      await msal.loginRedirect({ scopes: SCOPES, prompt: 'select_account' })
+      return null
     }
-    throw new Error(`Falha no login Microsoft: ${err.message ?? err.errorCode ?? err}`)
+    throw new Error(`Falha no login Microsoft (${code || (err.message ?? String(err))})`)
   }
 }
 
-// Chamado no onMounted para processar qualquer redirect pendente silenciosamente
+// Processa retorno de redirect (fallback quando popup está bloqueado)
 export async function handleRedirectResult() {
   const msal = await getMsalInstance()
   if (!msal) return null
@@ -68,14 +80,13 @@ export async function handleRedirectResult() {
     const response = await msal.handleRedirectPromise()
     return response?.idToken ?? null
   } catch (err) {
-    // no_token_request_cache_error = não havia redirect pendente, ignorar
-    if (
-      err.errorCode === 'no_token_request_cache_error' ||
-      err.errorCode === 'state_not_found' ||
-      err.errorCode === 'no_cached_authority_error'
-    ) {
-      return null
-    }
+    const ignorable = [
+      'no_token_request_cache_error',
+      'state_not_found',
+      'no_cached_authority_error',
+      'interaction_in_progress',
+    ]
+    if (ignorable.includes(err.errorCode)) return null
     throw err
   }
 }
@@ -83,12 +94,11 @@ export async function handleRedirectResult() {
 export async function logoutMicrosoft() {
   const msal = await getMsalInstance()
   if (!msal) return
+  localStorage.removeItem('reqsys_msal_config')
   const account = msal.getAllAccounts()[0]
   if (account) {
-    try {
-      await msal.logoutPopup({ account })
-    } catch {
-      // silencioso — sessão local já foi limpa pelo auth store
+    try { await msal.logoutPopup({ account }) } catch {
+      try { await msal.logoutRedirect({ account }) } catch { /* silencioso */ }
     }
   }
 }

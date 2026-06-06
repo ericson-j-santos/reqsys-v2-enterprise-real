@@ -26,6 +26,8 @@ const routes = [
 const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach((to) => {
   const auth = useAuthStore()
+  // Não interferir quando URL tem parâmetros OAuth (retorno de redirect MSAL)
+  if (to.query.code || to.query.state || to.query.error) return undefined
   if (!to.meta.public && !auth.autenticado) return '/login'
   if (to.meta.recurso && auth.usuario && !auth.pode(to.meta.recurso)) return '/'
 })
