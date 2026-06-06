@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     groq_api_key: str = Field(default_factory=lambda: get_secret('GROQ_API_KEY', '') or '')
     groq_model: str = Field(default_factory=lambda: get_secret('GROQ_MODEL', 'llama-3.3-70b-versatile') or 'llama-3.3-70b-versatile')
 
+    # Azure AD (Microsoft Entra ID) — tenant Tieri659
+    azure_tenant_id: str = Field(default_factory=lambda: get_secret('AZURE_TENANT_ID', '') or '')
+    azure_client_id: str = Field(default_factory=lambda: get_secret('AZURE_CLIENT_ID', '') or '')
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(',') if origin.strip()]

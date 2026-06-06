@@ -9,6 +9,7 @@
         "test:e2e:stable": "node scripts/run-e2e-safe.js --reporter=line"
     },
     "dependencies": {
+        "@azure/msal-browser": "^5.12.0",
         "@mdi/font": "latest",
         "@vitejs/plugin-vue": "latest",
         "axios": "latest",

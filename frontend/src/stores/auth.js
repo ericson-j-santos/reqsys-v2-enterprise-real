@@ -35,12 +35,15 @@ export const useAuthStore = defineStore('auth', {
     permissoes: (s) => s.usuario?.permissoes || [],
   },
   actions: {
-    async login(credenciais) {
-      const { data } = await api.post('/v1/auth/login', credenciais)
-      this.token = data.data.access_token
-      this.usuario = sanitizeUsuario(data.data.usuario)
+    salvarSessao(dados) {
+      this.token = dados.access_token
+      this.usuario = sanitizeUsuario(dados.usuario)
       localStorage.setItem('reqsys_token', this.token)
       localStorage.setItem('reqsys_usuario', JSON.stringify(this.usuario))
+    },
+    async login(credenciais) {
+      const { data } = await api.post('/v1/auth/login', credenciais)
+      this.salvarSessao(data.data)
     },
     sair() {
       this.token = null

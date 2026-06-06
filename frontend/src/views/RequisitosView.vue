@@ -188,12 +188,12 @@ const dialog = ref(false)
 const salvando = ref(false)
 
 const form = reactive({
-  titulo: 'Consulta prévia antes do cadastro rural',
-  descricao: 'Ao informar CPF ou CNPJ, verificar se cliente já existe antes de criar novo cadastro.',
-  urgencia: 'alta',
-  area: 'Crédito',
-  sistema: 'Portal Rural',
-  solicitante: 'gerencia_credito',
+  titulo: '',
+  descricao: '',
+  urgencia: 'media',
+  area: '',
+  sistema: '',
+  solicitante: '',
 })
 
 const ia = reactive({
