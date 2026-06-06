@@ -80,7 +80,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
-import { getMsalInstance, loginMicrosoft, handleRedirectResult } from '../auth/msal'
+import { loginMicrosoft } from '../auth/msal'
 import { api } from '../services/api'
 
 const { width } = useDisplay()
@@ -97,47 +97,28 @@ const auth = useAuthStore()
 const router = useRouter()
 
 onMounted(async () => {
-  // Verificar se Azure está configurado
+  // Verificar se Azure está configurado (só para mostrar/ocultar o botão)
   try {
     const { data } = await api.get('/v1/auth/config')
     azureDisponivel.value = data.data.azure_enabled
   } catch {
     azureDisponivel.value = false
   }
-
-  // Processar redirect de volta do Microsoft
-  try {
-    const idToken = await handleRedirectResult()
-    if (idToken) await _autenticarComToken(idToken)
-  } catch (e) {
-    erro.value = `Erro no retorno Microsoft: ${e.message}`
-  }
+  // O retorno do redirect do Microsoft é tratado em main.js, antes desta view montar.
+  // Quando chegar aqui, o usuário já está autenticado (ou não chegou via redirect).
 })
 
 async function entrarMicrosoft() {
   carregandoAzure.value = true
   erro.value = ''
   try {
-    const idToken = await loginMicrosoft()
-    if (idToken) await _autenticarComToken(idToken)
+    await loginMicrosoft()
+    // loginMicrosoft() redireciona a página para o Microsoft.
+    // O retorno é tratado em main.js — esta função não retorna.
   } catch (e) {
-    const code = e.errorCode ?? ''
-    if (code === 'user_cancelled' || e.message?.includes('user_cancelled')) {
-      erro.value = ''  // cancelamento não é erro
-    } else if (code === 'popup_window_error' || code === 'empty_window_error') {
-      erro.value = 'Popup bloqueado pelo navegador. Permita popups para este site e tente novamente.'
-    } else {
-      erro.value = `Erro Microsoft: ${e.message ?? code ?? e}`
-    }
-  } finally {
     carregandoAzure.value = false
+    erro.value = `Erro ao redirecionar para Microsoft: ${e.message ?? e}`
   }
-}
-
-async function _autenticarComToken(idToken) {
-  const { data } = await api.post('/v1/auth/azure', { id_token: idToken })
-  auth.salvarSessao(data.data)
-  router.push('/')
 }
 
 async function entrarDemo() {
