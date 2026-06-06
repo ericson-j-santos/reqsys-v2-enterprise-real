@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = Field(default_factory=lambda: get_secret('GEMINI_API_KEY', '') or '')
     gemini_model: str = Field(default_factory=lambda: get_secret('GEMINI_MODEL', 'gemini-2.0-flash') or 'gemini-2.0-flash')
 
+    # Groq IA — fallback gratuito (llama-3.3-70b: 30 req/min, 14.400 req/dia)
+    groq_api_key: str = Field(default_factory=lambda: get_secret('GROQ_API_KEY', '') or '')
+    groq_model: str = Field(default_factory=lambda: get_secret('GROQ_MODEL', 'llama-3.3-70b-versatile') or 'llama-3.3-70b-versatile')
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(',') if origin.strip()]

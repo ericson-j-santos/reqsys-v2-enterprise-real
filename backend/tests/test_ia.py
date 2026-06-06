@@ -1,8 +1,7 @@
 """
-Testes do módulo IA Assistente (Gemini free tier).
-Cobertura: endpoints /status, /resumir, /sugerir-descricao, /classificar-urgencia.
-Os testes que chamam a API real do Gemini são marcados como skip quando
-GEMINI_API_KEY não está configurada ou o pacote não está instalado.
+Testes do módulo IA Assistente (Gemini + Groq fallback).
+Cobertura: endpoints /status, /resumir, /sugerir-descricao, /classificar-urgencia,
+           tracker de cota, fallback Gemini → Groq.
 """
 import os
 import pytest
@@ -10,7 +9,7 @@ from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.gemini import _UsageTracker, get_uso
+from app.services.gemini import _UsageTracker, get_uso, get_uso_groq
 
 client = TestClient(app)
 
@@ -36,8 +35,7 @@ class TestIAStatus:
         assert resp.status_code == 200
 
     def test_status_tem_campo_configurada(self, auth_headers):
-        resp = client.get('/v1/ia/status', headers=auth_headers)
-        data = resp.json()['data']
+        data = client.get('/v1/ia/status', headers=auth_headers).json()['data']
         assert 'configurada' in data
         assert isinstance(data['configurada'], bool)
 
@@ -68,14 +66,30 @@ class TestIAStatus:
         cota = client.get('/v1/ia/status', headers=auth_headers).json()['data']['cota']
         assert 0.0 <= cota['pct_dia_usado'] <= 100.0
 
+    def test_status_tem_provedores(self, auth_headers):
+        data = client.get('/v1/ia/status', headers=auth_headers).json()['data']
+        assert 'provedores' in data
+        assert 'gemini' in data['provedores']
+        assert 'groq' in data['provedores']
+
+    def test_status_tem_fallback_ativo(self, auth_headers):
+        data = client.get('/v1/ia/status', headers=auth_headers).json()['data']
+        assert 'fallback_ativo' in data
+        assert isinstance(data['fallback_ativo'], bool)
+
+    def test_groq_cota_limites_free_tier(self, auth_headers):
+        cota = client.get('/v1/ia/status', headers=auth_headers).json()['data']['provedores']['groq']['cota']
+        assert cota['limite_por_minuto'] == 30
+        assert cota['limite_por_dia'] == 14400
+
 
 # ---------------------------------------------------------------------------
-# Tracker de cota (testa a lógica isolada sem chamar Gemini)
+# Tracker de cota (testa a lógica isolada sem chamar nenhuma IA)
 # ---------------------------------------------------------------------------
 
 class TestUsageTracker:
     def test_tracker_inicia_zerado(self):
-        tracker = _UsageTracker()
+        tracker = _UsageTracker(limite_por_minuto=15, limite_por_dia=1500)
         snap = tracker.snapshot()
         assert snap['req_hoje'] == 0
         assert snap['req_ultimo_minuto'] == 0
@@ -83,7 +97,7 @@ class TestUsageTracker:
         assert snap['restante_minuto'] == 15
 
     def test_registrar_incrementa_contadores(self):
-        tracker = _UsageTracker()
+        tracker = _UsageTracker(limite_por_minuto=15, limite_por_dia=1500)
         tracker.registrar()
         tracker.registrar()
         snap = tracker.snapshot()
@@ -93,16 +107,30 @@ class TestUsageTracker:
         assert snap['restante_minuto'] == 13
 
     def test_pct_calculado_corretamente(self):
-        tracker = _UsageTracker()
+        tracker = _UsageTracker(limite_por_minuto=15, limite_por_dia=1500)
         for _ in range(150):
             tracker.registrar()
         snap = tracker.snapshot()
         assert snap['pct_dia_usado'] == 10.0
 
+    def test_tracker_groq_limites_proprios(self):
+        tracker = _UsageTracker(limite_por_minuto=30, limite_por_dia=14400)
+        snap = tracker.snapshot()
+        assert snap['limite_por_minuto'] == 30
+        assert snap['limite_por_dia'] == 14400
+        assert snap['restante_minuto'] == 30
+        assert snap['restante_dia'] == 14400
+
     def test_get_uso_e_acessivel(self):
         snap = get_uso()
         assert isinstance(snap, dict)
         assert 'req_hoje' in snap
+
+    def test_get_uso_groq_e_acessivel(self):
+        snap = get_uso_groq()
+        assert isinstance(snap, dict)
+        assert 'limite_por_dia' in snap
+        assert snap['limite_por_dia'] == 14400
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +141,9 @@ class TestIAResumir:
     def test_resumir_sem_chave_retorna_503(self, auth_headers):
         with patch('app.api.ia.settings') as mock_settings:
             mock_settings.gemini_api_key = ''
-            mock_settings.gemini_model = 'gemini-1.5-flash'
+            mock_settings.gemini_model = 'gemini-2.0-flash'
+            mock_settings.groq_api_key = ''
+            mock_settings.groq_model = 'llama-3.3-70b-versatile'
             resp = client.post('/v1/ia/resumir',
                                json={'titulo': 'Teste', 'descricao': 'Descricao de teste'},
                                headers=auth_headers)
@@ -126,8 +156,8 @@ class TestIAResumir:
                                headers=auth_headers)
         assert resp.status_code == 200
         data = resp.json()['data']
-        assert 'resumo' in data
         assert data['resumo'] == 'Resumo gerado pelo mock.'
+        assert data['provedor'] == 'gemini'
 
     def test_resumir_payload_invalido_retorna_422(self, auth_headers):
         resp = client.post('/v1/ia/resumir', json={'descricao': 'sem titulo'}, headers=auth_headers)
@@ -147,6 +177,7 @@ class TestIASugerirDescricao:
         assert resp.status_code == 200
         data = resp.json()['data']
         assert 'descricao_sugerida' in data
+        assert data['provedor'] == 'gemini'
 
     def test_sugerir_area_sistema_opcionais(self, auth_headers):
         with patch('app.services.gemini._gerar', return_value='Descricao.'):
@@ -175,6 +206,7 @@ class TestIAClassificarUrgencia:
         data = resp.json()['data']
         assert data['urgencia'] == 'alta'
         assert 'justificativa' in data
+        assert data['provedor'] == 'gemini'
 
     def test_classificar_com_mock_baixa(self, auth_headers):
         resposta_gemini = 'URGENCIA: baixa\nJUSTIFICATIVA: Melhoria estetica sem impacto operacional.'
@@ -193,14 +225,77 @@ class TestIAClassificarUrgencia:
 
 
 # ---------------------------------------------------------------------------
-# Teste real Gemini (skip se chave não configurada)
+# Fallback Gemini → Groq (mock de ambos os providers)
+# ---------------------------------------------------------------------------
+
+class TestFallbackGroq:
+    def test_fallback_ativado_quando_gemini_falha(self, auth_headers):
+        """Quando Gemini lança GeminiIndisponivel e Groq está configurado, usa Groq."""
+        from app.services.gemini import GeminiIndisponivel
+
+        def gemini_falha(*args, **kwargs):
+            raise GeminiIndisponivel('Quota esgotada')
+
+        with patch('app.services.gemini._gerar', side_effect=gemini_falha), \
+             patch('app.services.gemini._gerar_groq', return_value='Resposta via Groq.') as mock_groq, \
+             patch('app.api.ia.settings') as mock_cfg:
+            mock_cfg.gemini_api_key = 'fake-gemini'
+            mock_cfg.gemini_model = 'gemini-2.0-flash'
+            mock_cfg.groq_api_key = 'fake-groq'
+            mock_cfg.groq_model = 'llama-3.3-70b-versatile'
+            resp = client.post('/v1/ia/resumir',
+                               json={'titulo': 'Teste fallback', 'descricao': 'Desc.'},
+                               headers=auth_headers)
+
+        assert resp.status_code == 200
+        data = resp.json()['data']
+        assert data['resumo'] == 'Resposta via Groq.'
+        assert data['provedor'] == 'groq'
+        mock_groq.assert_called_once()
+
+    def test_sem_fallback_retorna_503_quando_ambos_falham(self, auth_headers):
+        """Se Gemini falha e Groq não está configurado, retorna 503."""
+        from app.services.gemini import GeminiIndisponivel
+
+        with patch('app.api.ia.settings') as mock_cfg:
+            mock_cfg.gemini_api_key = ''
+            mock_cfg.gemini_model = 'gemini-2.0-flash'
+            mock_cfg.groq_api_key = ''
+            mock_cfg.groq_model = 'llama-3.3-70b-versatile'
+            resp = client.post('/v1/ia/resumir',
+                               json={'titulo': 'Teste', 'descricao': 'Desc.'},
+                               headers=auth_headers)
+
+        assert resp.status_code == 503
+
+    def test_groq_mock_sugerir_descricao(self, auth_headers):
+        """Groq como fallback também funciona para sugerir-descricao."""
+        from app.services.gemini import GeminiIndisponivel
+
+        with patch('app.services.gemini._gerar', side_effect=GeminiIndisponivel('quota')), \
+             patch('app.services.gemini._gerar_groq', return_value='Descricao via Groq.'), \
+             patch('app.api.ia.settings') as mock_cfg:
+            mock_cfg.gemini_api_key = 'fake-gemini'
+            mock_cfg.gemini_model = 'gemini-2.0-flash'
+            mock_cfg.groq_api_key = 'fake-groq'
+            mock_cfg.groq_model = 'llama-3.3-70b-versatile'
+            resp = client.post('/v1/ia/sugerir-descricao',
+                               json={'titulo': 'Titulo', 'area': 'TI', 'sistema': 'API'},
+                               headers=auth_headers)
+
+        assert resp.status_code == 200
+        assert resp.json()['data']['provedor'] == 'groq'
+
+
+# ---------------------------------------------------------------------------
+# Teste real Gemini/Groq (skip se chave não configurada ou sem quota)
 # ---------------------------------------------------------------------------
 
 GEMINI_KEY = os.environ.get('GEMINI_API_KEY', '')
+GROQ_KEY = os.environ.get('GROQ_API_KEY', '')
 
 
 def _gemini_funcional() -> bool:
-    """Retorna True somente se a chave existir e tiver quota > 0."""
     if not GEMINI_KEY:
         return False
     try:
@@ -213,7 +308,20 @@ def _gemini_funcional() -> bool:
         return False
 
 
+def _groq_funcional() -> bool:
+    if not GROQ_KEY:
+        return False
+    try:
+        from groq import Groq  # type: ignore
+        c = Groq(api_key=GROQ_KEY)
+        c.chat.completions.create(model='llama-3.3-70b-versatile', messages=[{'role': 'user', 'content': 'ok'}])
+        return True
+    except Exception:
+        return False
+
+
 _GEMINI_OK = _gemini_funcional()
+_GROQ_OK = _groq_funcional()
 
 
 @pytest.mark.skipif(not _GEMINI_OK, reason='GEMINI_API_KEY não configurada ou sem quota')
@@ -223,8 +331,9 @@ class TestGeminiReal:
                            json={'titulo': 'Validacao de CPF no cadastro', 'area': 'Credito', 'sistema': 'Portal Rural'},
                            headers=auth_headers)
         assert resp.status_code == 200
-        descricao = resp.json()['data']['descricao_sugerida']
-        assert len(descricao) > 20
+        data = resp.json()['data']
+        assert len(data['descricao_sugerida']) > 20
+        assert data['provedor'] == 'gemini'
 
     def test_classificar_urgencia_retorna_valor_valido(self, auth_headers):
         resp = client.post('/v1/ia/classificar-urgencia',
@@ -241,4 +350,31 @@ class TestGeminiReal:
                     json={'titulo': 'Teste cota', 'area': 'TI', 'sistema': 'API'},
                     headers=auth_headers)
         depois = client.get('/v1/ia/status', headers=auth_headers).json()['data']['cota']['req_hoje']
+        assert depois > antes
+
+
+@pytest.mark.skipif(not _GROQ_OK, reason='GROQ_API_KEY não configurada ou sem quota')
+class TestGroqReal:
+    def test_groq_sugerir_descricao(self, auth_headers):
+        """Chama Groq diretamente via fallback (Gemini configurado mas sem quota real)."""
+        from app.services.gemini import GeminiIndisponivel
+
+        with patch('app.services.gemini._gerar', side_effect=GeminiIndisponivel('sem quota')):
+            resp = client.post('/v1/ia/sugerir-descricao',
+                               json={'titulo': 'Autenticacao via SSO', 'area': 'Seguranca', 'sistema': 'Portal'},
+                               headers=auth_headers)
+        assert resp.status_code == 200
+        data = resp.json()['data']
+        assert len(data['descricao_sugerida']) > 20
+        assert data['provedor'] == 'groq'
+
+    def test_groq_cota_incrementa(self, auth_headers):
+        from app.services.gemini import GeminiIndisponivel
+
+        antes = client.get('/v1/ia/status', headers=auth_headers).json()['data']['provedores']['groq']['cota']['req_hoje']
+        with patch('app.services.gemini._gerar', side_effect=GeminiIndisponivel('sem quota')):
+            client.post('/v1/ia/resumir',
+                        json={'titulo': 'Teste cota Groq', 'descricao': 'Descricao teste.'},
+                        headers=auth_headers)
+        depois = client.get('/v1/ia/status', headers=auth_headers).json()['data']['provedores']['groq']['cota']['req_hoje']
         assert depois > antes
