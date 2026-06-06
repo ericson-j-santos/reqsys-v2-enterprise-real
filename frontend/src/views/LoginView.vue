@@ -121,9 +121,14 @@ async function entrarMicrosoft() {
     const idToken = await loginMicrosoft()
     if (idToken) await _autenticarComToken(idToken)
   } catch (e) {
-    erro.value = e.message?.includes('user_cancelled')
-      ? 'Login cancelado.'
-      : `Erro Microsoft: ${e.message ?? e}`
+    const code = e.errorCode ?? ''
+    if (code === 'user_cancelled' || e.message?.includes('user_cancelled')) {
+      erro.value = ''  // cancelamento não é erro
+    } else if (code === 'popup_window_error' || code === 'empty_window_error') {
+      erro.value = 'Popup bloqueado pelo navegador. Permita popups para este site e tente novamente.'
+    } else {
+      erro.value = `Erro Microsoft: ${e.message ?? code ?? e}`
+    }
   } finally {
     carregandoAzure.value = false
   }
