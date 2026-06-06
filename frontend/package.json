@@ -21,6 +21,9 @@
         "vuetify": "latest"
     },
     "devDependencies": {
-        "@playwright/test": "^1.59.1"
+        "@playwright/test": "^1.59.1",
+        "@vitest/coverage-v8": "^4.1.8",
+        "jsdom": "^29.1.1",
+        "vitest": "^4.1.8"
     }
 }

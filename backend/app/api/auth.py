@@ -14,6 +14,11 @@ router = APIRouter(prefix='/v1/auth', tags=['Auth'])
 # Mapeamento de admins conhecidos pelo prefixo do e-mail
 _ADMINS = {'ericsonjosedossantos', 'admin'}
 
+_NOMES: dict[str, str] = {
+    'ericsonjosedossantos': 'Ericson Santos',
+    'admin': 'Administrador',
+}
+
 
 def _papel_from_email(email: str) -> str:
     return 'admin' if email.split('@')[0] in _ADMINS else 'analista'
@@ -21,6 +26,8 @@ def _papel_from_email(email: str) -> str:
 
 def _nome_from_email(email: str) -> str:
     prefix = email.split('@')[0]
+    if prefix in _NOMES:
+        return _NOMES[prefix]
     parts = prefix.replace('.', ' ').replace('_', ' ').replace('-', ' ').split()
     return ' '.join(p.capitalize() for p in parts) if len(parts) > 1 else prefix.capitalize()
 

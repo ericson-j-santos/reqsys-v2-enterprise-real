@@ -38,11 +38,31 @@ export async function getMsalInstance() {
 
 export const SCOPES = ['openid', 'profile', 'email']
 
+// Remove estado de interação travado que causa interaction_in_progress
+function clearInteractionState(clientId) {
+  const prefix = `msal.${clientId}`
+  ;[localStorage, sessionStorage].forEach(store => {
+    Object.keys(store)
+      .filter(k => k.startsWith(prefix) && (k.includes('interaction') || k.includes('request')))
+      .forEach(k => store.removeItem(k))
+  })
+}
+
 // Redireciona a página inteira para o Microsoft — sem popup, sem race condition
 export async function loginMicrosoft() {
   const msal = await getMsalInstance()
   if (!msal) throw new Error('Azure AD não configurado no servidor')
-  await msal.loginRedirect({ scopes: SCOPES, prompt: 'select_account' })
+  try {
+    await msal.loginRedirect({ scopes: SCOPES, prompt: 'select_account' })
+  } catch (err) {
+    if (err.errorCode === 'interaction_in_progress') {
+      // Limpar estado travado e tentar uma vez mais
+      clearInteractionState(msal.getConfiguration().auth.clientId)
+      await msal.loginRedirect({ scopes: SCOPES, prompt: 'select_account' })
+      return
+    }
+    throw err
+  }
 }
 
 // Chamado em main.js ANTES do Vue montar — processa o retorno do redirect
@@ -60,8 +80,7 @@ export async function handleRedirectResult() {
       'interaction_in_progress',
     ]
     if (ignorable.includes(err.errorCode)) return null
-    console.warn('[MSAL]', err.errorCode, err.message)
-    return null
+    throw err
   }
 }
 
