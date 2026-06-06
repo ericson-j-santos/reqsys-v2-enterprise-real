@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # Token estático para acesso service-to-service ao cofre (POST /v1/cofre/resolver)
     vault_api_token: str = Field(default_factory=lambda: get_secret('VAULT_API_TOKEN', '') or '')
 
+    # Git webhooks — rastreabilidade
+    github_webhook_secret: str = Field(default_factory=lambda: get_secret('GITHUB_WEBHOOK_SECRET', '') or '')
+    gitlab_webhook_token: str = Field(default_factory=lambda: get_secret('GITLAB_WEBHOOK_TOKEN', '') or '')
+
     # Caminho para o .sdd do my-first-spec-project (absoluto ou relativo ao reqsys root)
     sdd_specs_path: str = Field(default_factory=lambda: get_secret('SDD_SPECS_PATH', '') or '')
 

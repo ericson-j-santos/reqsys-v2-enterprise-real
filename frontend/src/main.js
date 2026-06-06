@@ -42,26 +42,24 @@ async function boot() {
   const pinia = createPinia()
   setActivePinia(pinia) // permite usar stores antes do app montar
 
-  // ── Processar retorno do Azure AD ANTES do Vue Router correr ──────────
-  // Microsoft redireciona de volta com ?code=... na URL principal.
-  // Se processar depois, o router guard pode redirecionar e perder o código.
-  const search = window.location.search
-  if (search.includes('code=') || search.includes('error=')) {
-    try {
-      const { getMsalInstance, handleRedirectResult } = await import('./auth/msal.js')
-      const msal = await getMsalInstance()
-      if (msal) {
-        const idToken = await handleRedirectResult()
-        if (idToken) {
-          const { data } = await api.post('/v1/auth/azure', { id_token: idToken })
-          useAuthStore().salvarSessao(data.data)
-        }
+  // ── Inicializar MSAL SEMPRE ao startup ────────────────────────────────
+  // handleRedirectPromise() DEVE ser chamado em todo carregamento de página,
+  // não só quando ?code= está na URL. Isso garante que:
+  //  1. Qualquer retorno de redirect do Microsoft é processado
+  //  2. Estado de interação travado (interaction_in_progress) é limpo
+  try {
+    const { getMsalInstance, handleRedirectResult } = await import('./auth/msal.js')
+    const msal = await getMsalInstance()
+    if (msal) {
+      const idToken = await handleRedirectResult()
+      if (idToken) {
+        const { data } = await api.post('/v1/auth/azure', { id_token: idToken })
+        useAuthStore().salvarSessao(data.data)
+        window.history.replaceState({}, document.title, window.location.pathname)
       }
-    } catch (e) {
-      console.warn('[MSAL boot]', e.message)
     }
-    // Limpar params do OAuth da URL sem recarregar a página
-    window.history.replaceState({}, document.title, window.location.pathname)
+  } catch (e) {
+    console.warn('[MSAL boot]', e.message)
   }
   // ─────────────────────────────────────────────────────────────────────
 
