@@ -101,6 +101,20 @@ def ia_status():
     if not groq_ok:
         avisos.append('GROQ_API_KEY não configurada — fallback desativado. Obtenha em console.groq.com (grátis)')
 
+    passos_pendentes = []
+    if not gemini_ok:
+        passos_pendentes.append({
+            'passo': 'Configurar GEMINI_API_KEY no .env',
+            'detalhe': 'Obtenha gratuitamente em aistudio.google.com/apikey',
+            'prioridade': 'alta',
+        })
+    if not groq_ok:
+        passos_pendentes.append({
+            'passo': 'Configurar GROQ_API_KEY no .env para ativar fallback automático',
+            'detalhe': 'Grátis em console.groq.com — 14.400 req/dia, sem cartão de crédito',
+            'prioridade': 'media',
+        })
+
     return ok({
         # campos de compatibilidade (Gemini é o primary)
         'configurada': gemini_ok,
@@ -122,4 +136,5 @@ def ia_status():
         },
         'fallback_ativo': fallback_ativo,
         'avisos': avisos,
+        'passos_pendentes': passos_pendentes,
     })

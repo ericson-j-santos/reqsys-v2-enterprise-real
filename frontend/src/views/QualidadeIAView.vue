@@ -89,6 +89,126 @@
       {{ erro }}
     </v-alert>
 
+    <!-- Providers IA -->
+    <v-row class="mb-1">
+      <v-col cols="12">
+        <v-card class="table-card">
+          <v-card-title class="d-flex align-center justify-space-between">
+            <span>Providers IA</span>
+            <v-chip
+              :color="statusIA.fallback_ativo ? 'green' : 'amber'"
+              size="small"
+              variant="tonal"
+            >
+              <v-icon start size="14">{{ statusIA.fallback_ativo ? 'mdi-shield-check' : 'mdi-shield-alert' }}</v-icon>
+              {{ statusIA.fallback_ativo ? 'Fallback ativo' : 'Fallback inativo' }}
+            </v-chip>
+          </v-card-title>
+          <v-divider />
+          <v-card-text>
+            <v-row>
+              <!-- Gemini -->
+              <v-col cols="12" md="6">
+                <div class="provider-header">
+                  <v-icon :color="statusIA.provedores?.gemini?.configurado ? 'green' : 'red'" size="20">
+                    {{ statusIA.provedores?.gemini?.configurado ? 'mdi-check-circle' : 'mdi-close-circle' }}
+                  </v-icon>
+                  <strong class="ml-2">Gemini</strong>
+                  <v-chip size="x-small" color="blue" variant="tonal" class="ml-2">Primário</v-chip>
+                  <span class="muted ml-auto" style="font-size:0.8rem">{{ statusIA.provedores?.gemini?.modelo }}</span>
+                </div>
+                <div v-if="statusIA.provedores?.gemini?.configurado" class="mt-2">
+                  <div class="cota-row">
+                    <span class="muted">Hoje</span>
+                    <span>{{ statusIA.provedores.gemini.cota.req_hoje }} / {{ statusIA.provedores.gemini.cota.limite_por_dia }}</span>
+                  </div>
+                  <v-progress-linear
+                    :model-value="statusIA.provedores.gemini.cota.pct_dia_usado"
+                    color="blue"
+                    bg-color="blue-lighten-4"
+                    rounded
+                    height="8"
+                    class="my-1"
+                  />
+                  <div class="cota-row muted" style="font-size:0.78rem">
+                    <span>Restante hoje: {{ statusIA.provedores.gemini.cota.restante_dia }} req</span>
+                    <span>{{ statusIA.provedores.gemini.cota.restante_minuto }}/min disponíveis</span>
+                  </div>
+                </div>
+                <v-alert v-else type="warning" variant="tonal" density="compact" class="mt-2" style="font-size:0.82rem">
+                  GEMINI_API_KEY não configurada
+                </v-alert>
+              </v-col>
+
+              <!-- Groq -->
+              <v-col cols="12" md="6">
+                <div class="provider-header">
+                  <v-icon :color="statusIA.provedores?.groq?.configurado ? 'green' : 'grey'" size="20">
+                    {{ statusIA.provedores?.groq?.configurado ? 'mdi-check-circle' : 'mdi-circle-outline' }}
+                  </v-icon>
+                  <strong class="ml-2">Groq / Llama</strong>
+                  <v-chip size="x-small" color="purple" variant="tonal" class="ml-2">Fallback</v-chip>
+                  <span class="muted ml-auto" style="font-size:0.8rem">{{ statusIA.provedores?.groq?.modelo }}</span>
+                </div>
+                <div v-if="statusIA.provedores?.groq?.configurado" class="mt-2">
+                  <div class="cota-row">
+                    <span class="muted">Hoje</span>
+                    <span>{{ statusIA.provedores.groq.cota.req_hoje }} / {{ statusIA.provedores.groq.cota.limite_por_dia }}</span>
+                  </div>
+                  <v-progress-linear
+                    :model-value="statusIA.provedores.groq.cota.pct_dia_usado"
+                    color="purple"
+                    bg-color="purple-lighten-4"
+                    rounded
+                    height="8"
+                    class="my-1"
+                  />
+                  <div class="cota-row muted" style="font-size:0.78rem">
+                    <span>Restante hoje: {{ statusIA.provedores.groq.cota.restante_dia }} req</span>
+                    <span>{{ statusIA.provedores.groq.cota.restante_minuto }}/min disponíveis</span>
+                  </div>
+                </div>
+                <v-alert v-else type="info" variant="tonal" density="compact" class="mt-2" style="font-size:0.82rem">
+                  GROQ_API_KEY não configurada — fallback desativado.
+                  <a href="https://console.groq.com" target="_blank" class="ml-1">Obter grátis</a>
+                </v-alert>
+              </v-col>
+            </v-row>
+
+            <!-- Passos pendentes -->
+            <div v-if="statusIA.passos_pendentes?.length" class="mt-3">
+              <v-divider class="mb-3" />
+              <div class="d-flex align-center mb-2">
+                <v-icon color="amber" size="18" class="mr-1">mdi-clipboard-list-outline</v-icon>
+                <strong style="font-size:0.9rem">Passos pendentes para o desenvolvedor</strong>
+              </div>
+              <v-list density="compact" class="pa-0">
+                <v-list-item
+                  v-for="(item, i) in statusIA.passos_pendentes"
+                  :key="i"
+                  class="pa-0"
+                >
+                  <template #prepend>
+                    <v-icon
+                      :color="item.prioridade === 'alta' ? 'red' : 'amber'"
+                      size="16"
+                      class="mr-2"
+                    >
+                      {{ item.prioridade === 'alta' ? 'mdi-alert-circle' : 'mdi-information' }}
+                    </v-icon>
+                  </template>
+                  <v-list-item-title style="font-size:0.88rem; white-space:normal">
+                    {{ item.passo }}
+                  </v-list-item-title>
+                  <v-list-item-subtitle style="font-size:0.78rem">{{ item.detalhe }}</v-list-item-subtitle>
+                </v-list-item>
+              </v-list>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
     <v-row>
       <v-col cols="12" md="4">
         <v-card class="table-card h-100">
@@ -214,6 +334,7 @@ import { useAsyncLoader } from '../composables/useAsyncLoader'
 const { carregando, erro, run } = useAsyncLoader()
 
 const resumo = ref({})
+const statusIA = ref({ provedores: {}, fallback_ativo: false, passos_pendentes: [] })
 const salvandoSnapshot = ref(false)
 const exportandoCsv = ref(false)
 const exportandoPdf = ref(false)
@@ -260,8 +381,12 @@ function formatDate(raw) {
 async function carregar() {
   await run(async () => {
     const params = periodoFiltro.value != null ? `?dias=${periodoFiltro.value}` : ''
-    const { data } = await api.get(`/v1/qualidade-ia/resumo${params}`)
-    resumo.value = data?.data || {}
+    const [{ data: dataQualidade }, { data: dataIA }] = await Promise.all([
+      api.get(`/v1/qualidade-ia/resumo${params}`),
+      api.get('/v1/ia/status'),
+    ])
+    resumo.value = dataQualidade?.data || {}
+    statusIA.value = dataIA?.data || { provedores: {}, fallback_ativo: false, passos_pendentes: [] }
   })
 }
 
@@ -319,5 +444,17 @@ onMounted(carregar)
   text-align: center;
   color: var(--muted);
   padding: 18px;
+}
+
+.provider-header {
+  display: flex;
+  align-items: center;
+  font-size: 0.95rem;
+}
+
+.cota-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.83rem;
 }
 </style>
