@@ -17,8 +17,11 @@ def _get_jwks_client(tenant_id: str) -> PyJWKClient:
 
 def validar_token_azure(id_token: str, tenant_id: str, client_id: str) -> dict:
     """Valida ID token emitido pelo Azure AD e retorna os claims."""
-    client = _get_jwks_client(tenant_id)
-    signing_key = client.get_signing_key_from_jwt(id_token)
+    try:
+        client = _get_jwks_client(tenant_id)
+        signing_key = client.get_signing_key_from_jwt(id_token)
+    except Exception as e:
+        raise ValueError(f'Token inválido ou não reconhecido pelo Azure AD: {e}') from e
 
     issuers = [
         _V1_ISSUER.format(tenant_id=tenant_id),
@@ -44,7 +47,7 @@ def validar_token_azure(id_token: str, tenant_id: str, client_id: str) -> dict:
         except Exception as e:
             raise ValueError(f'Token Azure AD inválido: {e}') from e
 
-    raise ValueError(f'Token Azure AD: issuer não reconhecido. Detalhes: {last_err}')
+    raise ValueError(f'Token Azure AD: issuer não reconhecido ({last_err})')
 
 
 def extrair_usuario(claims: dict) -> dict:

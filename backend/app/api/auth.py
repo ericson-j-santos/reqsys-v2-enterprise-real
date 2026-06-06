@@ -39,9 +39,9 @@ def login_azure(body: AzureLoginInput, request: Request):
 
     try:
         claims = validar_token_azure(body.id_token, settings.azure_tenant_id, settings.azure_client_id)
-    except ValueError as exc:
+    except Exception as exc:
         logger.warning('azure_login_falhou ip=%s erro=%s', request.client.host if request.client else '?', exc)
-        raise HTTPException(401, str(exc))
+        raise HTTPException(401, f'Token Azure AD inválido: {exc}')
 
     info = extrair_usuario(claims)
     email = info['email']
