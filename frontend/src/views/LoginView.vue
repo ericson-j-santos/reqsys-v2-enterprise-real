@@ -3,31 +3,26 @@
     <v-card class="login-card" :width="cardWidth">
       <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
         <span>ReqSys Enterprise</span>
-        <v-tooltip text="Ambiente de acesso corporativo com perfil e permissões" location="top">
-          <template #activator="{ props }">
-            <v-chip v-bind="props" size="small" color="amber" variant="tonal">RBAC</v-chip>
-          </template>
-        </v-tooltip>
+        <v-chip size="small" color="amber" variant="tonal">RBAC</v-chip>
       </v-card-title>
-      <v-card-subtitle>Login corporativo com RBAC</v-card-subtitle>
+      <v-card-subtitle>Login corporativo · Tieri659</v-card-subtitle>
 
       <v-card-text>
         <!-- Botão Microsoft (principal) -->
         <v-btn
-          v-if="azureDisponivel !== false"
+          v-if="azureDisponivel"
           block
           size="large"
           variant="outlined"
           class="mb-4 btn-microsoft"
           :loading="carregandoAzure"
-          :disabled="carregandoDemo"
           prepend-icon="mdi-microsoft"
           @click="entrarMicrosoft"
         >
           Entrar com conta Microsoft
         </v-btn>
 
-        <v-divider v-if="azureDisponivel !== false" class="mb-4">
+        <v-divider v-if="azureDisponivel" class="mb-4">
           <span class="text-caption text-medium-emphasis px-2">ou</span>
         </v-divider>
 
@@ -44,7 +39,6 @@
           class="mb-2"
           :disabled="carregandoDemo || carregandoAzure"
         />
-
         <v-text-field
           v-model="senha"
           label="Senha"
@@ -59,7 +53,7 @@
         <v-alert v-if="erro" type="error" density="compact" class="mt-1">{{ erro }}</v-alert>
       </v-card-text>
 
-      <v-card-actions class="px-4 pb-4 flex-column ga-2">
+      <v-card-actions class="px-4 pb-4">
         <v-btn
           block
           color="amber"
@@ -80,44 +74,55 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
-import { loginMicrosoft } from '../auth/msal'
+import { initiateAzureLogin } from '../auth/azure'
 import { api } from '../services/api'
 
 const { width } = useDisplay()
 const cardWidth = computed(() => Math.min(440, width.value - 32))
 
-const email = ref('ericsonjosedossantos@tieri659.onmicrosoft.com')
-const senha = ref('admin123')
-const erro = ref('')
+const email          = ref('ericsonjosedossantos@tieri659.onmicrosoft.com')
+const senha          = ref('admin123')
+const erro           = ref('')
 const carregandoDemo = ref(false)
 const carregandoAzure = ref(false)
-const mostrarSenha = ref(false)
-const azureDisponivel = ref(null)
-const auth = useAuthStore()
+const mostrarSenha   = ref(false)
+const azureDisponivel = ref(false)
+const azureConfig    = ref(null)
+
+const auth   = useAuthStore()
 const router = useRouter()
 
 onMounted(async () => {
-  // Verificar se Azure está configurado (só para mostrar/ocultar o botão)
+  // Exibir erro do retorno Azure (gravado em main.js antes de montar)
+  const azureErr = sessionStorage.getItem('azure_login_error')
+  if (azureErr) {
+    erro.value = azureErr
+    sessionStorage.removeItem('azure_login_error')
+  }
+
+  // Verificar se Azure está configurado
   try {
     const { data } = await api.get('/v1/auth/config')
-    azureDisponivel.value = data.data.azure_enabled
-  } catch {
-    azureDisponivel.value = false
-  }
-  // O retorno do redirect do Microsoft é tratado em main.js, antes desta view montar.
-  // Quando chegar aqui, o usuário já está autenticado (ou não chegou via redirect).
+    if (data.data.azure_enabled) {
+      azureConfig.value = data.data
+      azureDisponivel.value = true
+    }
+  } catch { /* silencioso */ }
 })
 
 async function entrarMicrosoft() {
+  if (!azureConfig.value) return
   carregandoAzure.value = true
   erro.value = ''
   try {
-    await loginMicrosoft()
-    // loginMicrosoft() redireciona a página para o Microsoft.
-    // O retorno é tratado em main.js — esta função não retorna.
+    await initiateAzureLogin(
+      azureConfig.value.azure_tenant_id,
+      azureConfig.value.azure_client_id,
+    )
+    // initiateAzureLogin() redireciona — esta linha não é alcançada
   } catch (e) {
+    erro.value = `Erro ao abrir login Microsoft: ${e.message}`
     carregandoAzure.value = false
-    erro.value = `Erro ao redirecionar para Microsoft: ${e.message ?? e}`
   }
 }
 
@@ -144,9 +149,7 @@ async function entrarDemo() {
   padding: 16px;
   background: var(--bg);
 }
-.login-card {
-  width: 100%;
-}
+.login-card { width: 100%; }
 .btn-microsoft {
   border-color: #0078d4 !important;
   color: #0078d4 !important;

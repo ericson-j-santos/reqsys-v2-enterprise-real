@@ -1,4 +1,5 @@
 import logging
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 from app.core.config import settings
@@ -58,6 +59,65 @@ def login_azure(body: AzureLoginInput, request: Request):
     logger.info('azure_login ip=%s email=%s papel=%s', request.client.host if request.client else '?', email, papel)
     usuario = {'email': email, 'nome': nome, 'papel': papel, 'permissoes': permissoes(papel)}
     token = criar_token({'sub': email, 'papel': papel})
+    return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})
+
+
+# ─── OAuth2 PKCE code exchange (fluxo principal) ─────────────────────────────
+
+class AzureCodeInput(BaseModel):
+    code: str
+    verifier: str
+    redirectUri: str
+
+
+_TOKEN_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token'
+
+
+@router.post('/azure-code')
+def login_azure_code(body: AzureCodeInput, request: Request):
+    """Recebe o authorization code do PKCE flow e faz o exchange com Azure AD."""
+    if not settings.azure_tenant_id or not settings.azure_client_id:
+        raise HTTPException(503, 'Azure AD não configurado')
+
+    url = _TOKEN_URL.format(tenant=settings.azure_tenant_id)
+    try:
+        resp = httpx.post(url, data={
+            'client_id':     settings.azure_client_id,
+            'code':          body.code,
+            'code_verifier': body.verifier,
+            'redirect_uri':  body.redirectUri,
+            'grant_type':    'authorization_code',
+            'scope':         'openid profile email',
+        }, timeout=15)
+    except httpx.RequestError as exc:
+        logger.error('azure_code_exchange_network_error: %s', exc)
+        raise HTTPException(502, 'Falha de rede ao contactar Azure AD')
+
+    if not resp.is_success:
+        err = resp.json().get('error_description') or resp.text
+        logger.warning('azure_code_exchange_failed ip=%s err=%s',
+                       request.client.host if request.client else '?', err)
+        raise HTTPException(401, f'Token exchange falhou: {err}')
+
+    tokens = resp.json()
+    id_token_raw = tokens.get('id_token')
+    if not id_token_raw:
+        raise HTTPException(401, 'id_token ausente na resposta do Azure AD')
+
+    try:
+        claims = validar_token_azure(id_token_raw, settings.azure_tenant_id, settings.azure_client_id)
+    except Exception as exc:
+        raise HTTPException(401, f'ID token inválido: {exc}')
+
+    info  = extrair_usuario(claims)
+    email = info['email']
+    nome  = info['nome']
+    papel = _papel_from_email(email)
+
+    logger.info('azure_pkce_login ip=%s email=%s papel=%s',
+                request.client.host if request.client else '?', email, papel)
+    usuario = {'email': email, 'nome': nome, 'papel': papel, 'permissoes': permissoes(papel)}
+    token   = criar_token({'sub': email, 'papel': papel})
     return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})
 
 

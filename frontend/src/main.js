@@ -10,6 +10,7 @@ import router from './router'
 import './styles.css'
 import { useAuthStore } from './stores/auth'
 import { api } from './services/api'
+import { extractOAuthCallback } from './auth/azure'
 
 const vuetify = createVuetify({
   components,
@@ -40,28 +41,26 @@ const vuetify = createVuetify({
 
 async function boot() {
   const pinia = createPinia()
-  setActivePinia(pinia) // permite usar stores antes do app montar
+  setActivePinia(pinia)
 
-  // ── Inicializar MSAL SEMPRE ao startup ────────────────────────────────
-  // handleRedirectPromise() DEVE ser chamado em todo carregamento de página,
-  // não só quando ?code= está na URL. Isso garante que:
-  //  1. Qualquer retorno de redirect do Microsoft é processado
-  //  2. Estado de interação travado (interaction_in_progress) é limpo
-  try {
-    const { getMsalInstance, handleRedirectResult } = await import('./auth/msal.js')
-    const msal = await getMsalInstance()
-    if (msal) {
-      const idToken = await handleRedirectResult()
-      if (idToken) {
-        const { data } = await api.post('/v1/auth/azure', { id_token: idToken })
+  // ── Processar retorno do Azure AD antes do Vue Router correr ─────────
+  const callback = extractOAuthCallback()
+  if (callback) {
+    if (callback.error) {
+      sessionStorage.setItem('azure_login_error', callback.error)
+    } else {
+      try {
+        const { data } = await api.post('/v1/auth/azure-code', callback)
         useAuthStore().salvarSessao(data.data)
-        window.history.replaceState({}, document.title, window.location.pathname)
+      } catch (e) {
+        const msg = e.response?.data?.detail || e.message || 'Falha no login Microsoft'
+        sessionStorage.setItem('azure_login_error', msg)
       }
     }
-  } catch (e) {
-    console.warn('[MSAL boot]', e.message)
+    // Limpar parâmetros OAuth da URL sem recarregar
+    window.history.replaceState({}, document.title, '/')
   }
-  // ─────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────
 
   createApp(App).use(pinia).use(router).use(vuetify).mount('#app')
 }
