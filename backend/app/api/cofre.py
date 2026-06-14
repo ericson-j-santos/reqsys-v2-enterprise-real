@@ -38,6 +38,13 @@ class GravarSegredoPayload(BaseModel):
             raise ValueError('Chave não pode ser vazia')
         return v.strip()
 
+    @field_validator('value')
+    @classmethod
+    def value_nao_vazio(cls, v: str) -> str:
+        if not v:
+            raise ValueError('Valor não pode ser vazio')
+        return v
+
 
 class ResolverSegredoPayload(BaseModel):
     key: str
@@ -93,10 +100,25 @@ def remover_segredo(key: str):
 # Lookup service-to-service — requer X-Vault-Token header
 # ---------------------------------------------------------------------------
 
+@router.get('/segredos/{key}', dependencies=[Depends(_check_vault_token)])
+def obter_segredo(key: str):
+    """
+    Retorna o valor de um segredo via GET.
+    Ideal para scripts e aplicações: GET /v1/cofre/segredos/MINHA_CHAVE
+    Autenticação via header: X-Vault-Token: <VAULT_API_TOKEN>
+    """
+    if key in _BLOCKED_KEYS:
+        raise HTTPException(status_code=400, detail='Chave reservada')
+    value = read_secret_from_vault(key)
+    if value is None:
+        raise HTTPException(status_code=404, detail=f'Segredo "{key}" não encontrado no cofre')
+    return ok({'key': key, 'value': value})
+
+
 @router.post('/resolver', dependencies=[Depends(_check_vault_token)])
 def resolver_segredo(payload: ResolverSegredoPayload):
     """
-    Retorna o valor de um segredo para autenticação service-to-service.
+    Retorna o valor de um segredo via POST (alias de GET /segredos/{key}).
     Autenticação via header: X-Vault-Token: <VAULT_API_TOKEN>
     """
     if payload.key in _BLOCKED_KEYS:

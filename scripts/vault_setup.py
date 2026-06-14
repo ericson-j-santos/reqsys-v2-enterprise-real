@@ -6,10 +6,15 @@ Uso:
   python scripts/vault_setup.py init              # cria master key
   python scripts/vault_setup.py init --force      # recria (invalida segredos existentes)
   python scripts/vault_setup.py set KEY VALUE     # grava um segredo
+  python scripts/vault_setup.py get KEY           # lê e imprime um segredo (stdout limpo)
   python scripts/vault_setup.py delete KEY        # remove um segredo
   python scripts/vault_setup.py status            # exibe estado do vault
   python scripts/vault_setup.py import-env        # importa segredos do .env para o vault
   python scripts/vault_setup.py gen-token         # gera um VAULT_API_TOKEN aleatório
+
+Exemplo de uso em shell scripts:
+  DB_PASS=$(python scripts/vault_setup.py get DATABASE_PASSWORD)
+  export GITHUB_TOKEN=$(python scripts/vault_setup.py get GITHUB_TOKEN)
 """
 
 import sys
@@ -54,6 +59,15 @@ def cmd_set(key: str, value: str):
     except RuntimeError as exc:
         print(f'[ERRO] {exc}')
         sys.exit(1)
+
+
+def cmd_get(key: str):
+    """Imprime o valor do segredo para stdout (limpo, capturável por scripts)."""
+    value = read_secret_from_vault(key)
+    if value is None:
+        print(f'[ERRO] Segredo "{key}" não encontrado no vault ou vault não inicializado.', file=sys.stderr)
+        sys.exit(1)
+    print(value)
 
 
 def cmd_delete(key: str):
@@ -121,6 +135,11 @@ def main():
             print('Uso: vault_setup.py set KEY VALUE')
             sys.exit(1)
         cmd_set(args[1], args[2])
+    elif cmd == 'get':
+        if len(args) < 2:
+            print('Uso: vault_setup.py get KEY')
+            sys.exit(1)
+        cmd_get(args[1])
     elif cmd == 'delete':
         if len(args) < 2:
             print('Uso: vault_setup.py delete KEY')

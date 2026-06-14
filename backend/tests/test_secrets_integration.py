@@ -20,6 +20,9 @@ class _FakeKeyring:
     def set_password(self, service: str, username: str, password: str) -> None:
         self._store[(service, username)] = password
 
+    def delete_password(self, service: str, username: str) -> None:
+        self._store.pop((service, username), None)
+
 
 def _put_vault_secret(fake_keyring: _FakeKeyring, service: str, key: str, value: str) -> None:
     raw_master_key = fake_keyring.get_password(service, secrets_module._MASTER_KEY_SLOT)

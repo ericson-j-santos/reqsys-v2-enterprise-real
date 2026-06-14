@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 import os
 import secrets as _secrets
 from base64 import b64decode, b64encode
+
+_logger = logging.getLogger(__name__)
 
 try:
     import keyring  # type: ignore
@@ -59,11 +62,14 @@ def read_secret_from_vault(key: str, service_name: str | None = None) -> str | N
         nonce, ciphertext = raw[:_NONCE_BYTES], raw[_NONCE_BYTES:]
         return AESGCM(master_key).decrypt(nonce, ciphertext, None).decode()
     except Exception:
+        _logger.warning('Falha ao descriptografar segredo "%s" no vault "%s"', key, service)
         return None
 
 
 def write_secret_to_vault(key: str, value: str, service_name: str | None = None) -> None:
     """Criptografa e grava segredo no keyring."""
+    if not key or not key.strip():
+        raise ValueError('Chave não pode ser vazia')
     if not (_KEYRING_OK and _CRYPTO_OK):
         raise RuntimeError('Vault não disponível: keyring ou cryptography não instalados')
     service = service_name or _vault_service_name()
@@ -145,21 +151,21 @@ def describe_secret_resolution(
     env_value = os.getenv(env_key)
     vault_value = read_secret_from_vault(secret_key)
 
-    if prefer_vault and vault_value not in (None, ''):
+    has_vault = vault_value not in (None, '')
+    has_env = env_value not in (None, '')
+
+    if prefer_vault and has_vault:
         source = 'vault'
-        configured = True
-    elif env_value not in (None, ''):
+    elif has_env:
         source = 'env'
-        configured = True
-    elif vault_value not in (None, ''):
+    elif has_vault:
         source = 'vault'
-        configured = True
     elif default is not None:
         source = 'default'
-        configured = True
     else:
         source = 'absent'
-        configured = False
+
+    configured = source != 'absent'
 
     return {
         'name': name,
