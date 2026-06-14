@@ -16,8 +16,7 @@ router = APIRouter(prefix="/v1/wiki", tags=["Wiki"])
 
 @router.post(
     "/requisitos/{requisito_id}/publicar",
-    response_model=PublicarWikiResult,
-    summary="Publica um requisito na Wiki do Redmine via Redmine Wiki Sync",
+    summary="Publica um requisito na Wiki do Redmine",
 )
 def publicar_requisito(
     requisito_id: int,
@@ -53,8 +52,7 @@ def publicar_requisito(
 
 @router.get(
     "/requisitos/{requisito_id}/status",
-    response_model=WikiStatusResult,
-    summary="Consulta o status de sincronização de um requisito com GitHub e Wiki",
+    summary="Consulta o status de sincronizacao de um requisito com GitHub e Wiki",
 )
 def status_requisito(
     requisito_id: int,

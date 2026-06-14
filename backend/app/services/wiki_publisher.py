@@ -66,22 +66,78 @@ def _checar_github(codigo: str, hash_reqsys: str) -> dict | None:
 # Chamada ao Redmine Wiki Sync service
 # ---------------------------------------------------------------------------
 
-def _chamar_wiki_sync(wiki_page_title: str, conteudo: str, correlation_id: str) -> dict:
-    base_url = (get_secret("WIKI_SYNC_BASE_URL", "") or "").strip().rstrip("/")
-    token = (get_secret("WIKI_SYNC_TOKEN", "") or "").strip()
+def _publicar_redmine_wiki(wiki_page_title: str, conteudo: str, correlation_id: str) -> dict:
+    """Publica direto na API wiki do Redmine (sem servico intermediario)."""
+    base_url = (get_secret("REDMINE_BASE_URL", "") or "").strip().rstrip("/")
+    api_key = (get_secret("REDMINE_API_KEY", "") or "").strip()
+    project_id = (get_secret("REDMINE_PROJECT_ID", "") or "").strip()
 
-    if not base_url:
+    if not base_url or not api_key or not project_id:
         return {
             "publicado": False,
             "correlation_id": correlation_id,
             "wiki_page_title": wiki_page_title,
             "status_publicacao": "erro",
-            "mensagem": (
-                "WIKI_SYNC_BASE_URL não configurado. "
-                "Defina a URL do serviço Redmine Wiki Sync no .env."
-            ),
+            "mensagem": "REDMINE_BASE_URL, REDMINE_API_KEY ou REDMINE_PROJECT_ID nao configurados.",
         }
 
+    # Redmine wiki usa Textile; converte cabecalhos Markdown para Textile
+    conteudo_textile = (
+        conteudo
+        .replace("## ", "h2. ")
+        .replace("# ", "h1. ")
+        .replace("---", "---")
+        .replace("**", "*")
+    )
+
+    # Titulo da pagina wiki: usa apenas a parte apos a ultima "/"
+    page_slug = wiki_page_title.split("/")[-1]
+    url = f"{base_url}/projects/{project_id}/wiki/{page_slug}.json"
+    payload = json.dumps({"wiki_page": {"text": conteudo_textile}}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "X-Redmine-API-Key": api_key,
+        "User-Agent": f"reqsys-wiki-publisher/{_REQSYS_VERSION}",
+    }
+
+    try:
+        req = request.Request(url=url, data=payload, headers=headers, method="PUT")
+        with request.urlopen(req, timeout=15) as resp:
+            wiki_url = f"{base_url}/projects/{project_id}/wiki/{page_slug}"
+            return {
+                "publicado": True,
+                "correlation_id": correlation_id,
+                "wiki_page_title": wiki_page_title,
+                "wiki_url": wiki_url,
+                "status_publicacao": "publicado",
+                "mensagem": f"Pagina wiki criada/atualizada: {wiki_url}",
+            }
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")[:400]
+        return {
+            "publicado": False,
+            "correlation_id": correlation_id,
+            "wiki_page_title": wiki_page_title,
+            "status_publicacao": "erro",
+            "mensagem": f"Erro HTTP {exc.code} ao publicar wiki: {detail}",
+        }
+    except (URLError, Exception) as exc:
+        return {
+            "publicado": False,
+            "correlation_id": correlation_id,
+            "wiki_page_title": wiki_page_title,
+            "status_publicacao": "erro",
+            "mensagem": f"Falha de conexao ao Redmine wiki: {exc}",
+        }
+
+
+def _chamar_wiki_sync(wiki_page_title: str, conteudo: str, correlation_id: str) -> dict:
+    """Tenta Wiki Sync service; cai direto no Redmine se nao configurado."""
+    base_url = (get_secret("WIKI_SYNC_BASE_URL", "") or "").strip().rstrip("/")
+    if not base_url:
+        return _publicar_redmine_wiki(wiki_page_title, conteudo, correlation_id)
+
+    token = (get_secret("WIKI_SYNC_TOKEN", "") or "").strip()
     payload = json.dumps({
         "wikiPageTitle": wiki_page_title,
         "content": conteudo,
@@ -130,7 +186,7 @@ def _chamar_wiki_sync(wiki_page_title: str, conteudo: str, correlation_id: str) 
             "correlation_id": correlation_id,
             "wiki_page_title": wiki_page_title,
             "status_publicacao": "erro",
-            "mensagem": f"Falha de conexão ao Wiki Sync: {exc}",
+            "mensagem": f"Falha de conexao ao Wiki Sync: {exc}",
         }
 
 

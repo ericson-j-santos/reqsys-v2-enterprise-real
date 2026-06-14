@@ -1,13 +1,17 @@
 from time import time
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
+from app.db import get_db
+from app.models.requisito import Requisito
 from app.services.github_redmine import (
     IntegracaoError,
     fetch_github_issues,
     github_redmine_import_enabled,
     publish_issues_to_redmine,
+    publish_requisito_to_redmine,
 )
 
 router = APIRouter(tags=['Pipeline'])
@@ -67,32 +71,61 @@ def criar_solicitacao(payload: SolicitacaoIn, x_correlation_id: str | None = Hea
     return ok({'id': 1, 'codigo': codigo, 'status': 'recebido'}, x_correlation_id)
 
 @router.post('/v1/requisitos/validar')
-def validar_requisito(payload: ValidacaoIn, x_correlation_id: str | None = Header(default=None)):
+def validar_requisito(
+    payload: ValidacaoIn,
+    requisito_id: int | None = None,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
     texto = f"{payload.titulo or ''} {payload.descricao or ''}".lower()
-    ambiguos = [t for t in ['rápido', 'melhor', 'simples', 'fácil', 'intuitivo', 'otimizado'] if t in texto]
+    ambiguos = [t for t in ['rapido', 'melhor', 'simples', 'facil', 'intuitivo', 'otimizado'] if t in texto]
     alertas: list[str] = []
     if not payload.requisitos_funcionais:
         alertas.append('Nenhum requisito funcional identificado.')
     if not payload.criterios_aceite:
-        alertas.append('Nenhum critério de aceite informado.')
+        alertas.append('Nenhum criterio de aceite informado.')
     for termo in ambiguos:
-        alertas.append(f"Termo ambíguo detectado: '{termo}'")
-    return ok({'aprovado_para_triagem': len(alertas) == 0, 'alertas': alertas}, x_correlation_id)
+        alertas.append(f"Termo ambiguo detectado: '{termo}'")
+    aprovado = len(alertas) == 0
+
+    if requisito_id:
+        req = db.get(Requisito, requisito_id)
+        if req and req.status == 'recebido':
+            req.status = 'validado'
+            db.commit()
+
+    return ok({'aprovado_para_triagem': aprovado, 'alertas': alertas, 'requisito_id': requisito_id}, x_correlation_id)
+
 
 @router.post('/v1/requisitos/estruturar/{requisito_id}')
-def estruturar_requisito(requisito_id: int, payload: SolicitacaoIn, x_correlation_id: str | None = Header(default=None)):
-    codigo = f"REQ-{str(int(time()))[-8:]}"
+def estruturar_requisito(
+    requisito_id: int,
+    payload: SolicitacaoIn,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    req = db.get(Requisito, requisito_id)
+    if req and req.status in ('recebido', 'validado'):
+        req.status = 'estruturado'
+        db.commit()
+
+    codigo = req.codigo if req else f"REQ-{str(int(time()))[-8:]}"
     return ok({
         'requisito_id': requisito_id,
         'codigo_requisito': codigo,
+        'status': req.status if req else 'estruturado',
         'tipo': 'funcional',
         'prioridade': payload.urgencia or 'media',
         'requisitos_funcionais': inferir_rfs(payload.descricao),
-        'requisitos_nao_funcionais': ['Registrar correlation_id.', 'Acesso respeita perfil do usuário.', 'Resposta ≤ 2s (p95).'],
-        'regras_negocio': [{'codigo': 'RN-001', 'descricao': 'Não permitir cadastro ativo duplicado.'}],
+        'requisitos_nao_funcionais': [
+            'Registrar correlation_id.',
+            'Acesso respeita perfil do usuario.',
+            'Resposta <= 2s (p95).',
+        ],
+        'regras_negocio': [{'codigo': 'RN-001', 'descricao': 'Nao permitir cadastro ativo duplicado.'}],
         'criterios_aceite': [
-            {'ordem': 1, 'descricao': 'Identificador existente → dados exibidos.'},
-            {'ordem': 2, 'descricao': 'Identificador inexistente → permitir novo cadastro.'},
+            {'ordem': 1, 'descricao': 'Identificador existente: dados exibidos.'},
+            {'ordem': 2, 'descricao': 'Identificador inexistente: permitir novo cadastro.'},
         ],
         'alertas_validacao': [],
     }, x_correlation_id)
@@ -128,12 +161,17 @@ def listar_issues_github(payload: GitHubIssuesIn, x_correlation_id: str | None =
 def publicar_redmine(
     requisito_id: int,
     payload: PublicarRedmineIn | None = None,
+    db: Session = Depends(get_db),
     x_correlation_id: str | None = Header(default=None),
 ):
     payload = payload or PublicarRedmineIn()
 
+    requisito = db.get(Requisito, requisito_id)
+    if not requisito:
+        raise HTTPException(status_code=404, detail=f'Requisito {requisito_id} nao encontrado.')
+
     github_issues: list[dict] = []
-    redmine_publish_result = {'published_count': 0, 'published_issues': [], 'warnings': []}
+    github_publish_result = {'published_count': 0, 'published_issues': [], 'warnings': []}
 
     if payload.use_github_import:
         if not github_redmine_import_enabled():
@@ -153,9 +191,9 @@ def publicar_redmine(
 
         if payload.issue_numbers:
             selected_numbers = set(payload.issue_numbers)
-            github_issues = [item for item in github_issues if item.get('number') in selected_numbers]
+            github_issues = [i for i in github_issues if i.get('number') in selected_numbers]
 
-        redmine_publish_result = publish_issues_to_redmine(
+        github_publish_result = publish_issues_to_redmine(
             repo=payload.github_repo,
             issues=github_issues,
             project_id=payload.redmine_project_id,
@@ -163,31 +201,29 @@ def publicar_redmine(
             priority_id=payload.priority_id,
         )
 
-    base_id = 420
-    subtarefas = [
-        {'id': base_id + 1, 'subject': 'Frontend'},
-        {'id': base_id + 2, 'subject': 'Backend'},
-        {'id': base_id + 3, 'subject': 'Dados'},
-        {'id': base_id + 4, 'subject': 'QA'},
-    ]
-    if github_issues:
-        subtarefas = [
-            {
-                'id': base_id + idx + 1,
-                'subject': f"GitHub #{item.get('number')} - {(item.get('title') or 'Issue sem título')[:60]}",
-            }
-            for idx, item in enumerate(github_issues[:4])
-        ]
+    result = publish_requisito_to_redmine(
+        requisito=requisito,
+        project_id=payload.redmine_project_id,
+        tracker_id=payload.tracker_id,
+        priority_id=payload.priority_id,
+    )
+
+    if result['issue_principal_id'] and requisito.status not in ('backlog', 'concluido', 'cancelado'):
+        requisito.status = 'backlog'
+        db.commit()
+
+    warnings = result['warnings'] + github_publish_result['warnings']
 
     return ok({
         'requisito_id': requisito_id,
-        'issue_principal_id': str(base_id),
-        'subtarefas': subtarefas,
+        'codigo': requisito.codigo,
+        'issue_principal_id': result['issue_principal_id'],
+        'subtarefas': result['subtarefas'],
         'github_repo': payload.github_repo,
         'github_imported_count': len(github_issues),
         'github_issues': github_issues,
-        'redmine_published_count': redmine_publish_result['published_count'],
-        'redmine_published_issues': redmine_publish_result['published_issues'],
-        'warnings': redmine_publish_result['warnings'],
+        'redmine_published_count': github_publish_result['published_count'],
+        'redmine_published_issues': github_publish_result['published_issues'],
+        'warnings': warnings,
         'feature_enabled': github_redmine_import_enabled(),
     }, x_correlation_id)

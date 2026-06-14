@@ -78,6 +78,81 @@ def fetch_github_issues(repo: str, state: str = "open", limit: int = 20, labels:
     return issues
 
 
+def publish_requisito_to_redmine(
+    requisito: Any,
+    project_id: int | None = None,
+    tracker_id: int | None = None,
+    priority_id: int | None = None,
+) -> dict[str, Any]:
+    base_url = (get_secret('REDMINE_BASE_URL', '') or '').strip().rstrip('/')
+    api_key = (get_secret('REDMINE_API_KEY', '') or '').strip()
+    env_project_id = (get_secret('REDMINE_PROJECT_ID', '') or '').strip()
+
+    effective_project_id = project_id or (int(env_project_id) if env_project_id.isdigit() else None)
+    if not base_url or not api_key or not effective_project_id:
+        return {
+            'issue_principal_id': None,
+            'subtarefas': [],
+            'warnings': ['Redmine nao configurado. Defina REDMINE_BASE_URL, REDMINE_API_KEY e REDMINE_PROJECT_ID.'],
+        }
+
+    headers = {'X-Redmine-API-Key': api_key}
+    urgencia_label = {'alta': 'Alta', 'media': 'Normal', 'baixa': 'Baixa'}.get(
+        (requisito.urgencia or 'media').lower(), 'Normal'
+    )
+
+    descricao_formatada = (
+        f"h2. {requisito.codigo} — {requisito.titulo}\n\n"
+        f"*Sistema:* {requisito.sistema}\n"
+        f"*Área:* {requisito.area}\n"
+        f"*Solicitante:* {requisito.solicitante}\n"
+        f"*Urgência:* {urgencia_label}\n"
+        f"*Impacto Regulatório:* {'Sim' if requisito.impacto_regulatorio else 'Não'}\n\n"
+        f"---\n\n"
+        f"{requisito.descricao}"
+    )
+
+    issue_payload: dict[str, Any] = {
+        'issue': {
+            'project_id': effective_project_id,
+            'subject': f"[{requisito.codigo}] {requisito.titulo}",
+            'description': descricao_formatada,
+        }
+    }
+    if tracker_id:
+        issue_payload['issue']['tracker_id'] = tracker_id
+    if priority_id:
+        issue_payload['issue']['priority_id'] = priority_id
+
+    try:
+        created = _request_json('POST', f'{base_url}/issues.json', headers=headers, payload=issue_payload)
+    except IntegracaoError as exc:
+        return {'issue_principal_id': None, 'subtarefas': [], 'warnings': [str(exc)]}
+
+    principal_id = (created.get('issue') or {}).get('id')
+    subtarefas: list[dict[str, Any]] = []
+    warnings: list[str] = []
+
+    for componente in ('Frontend', 'Backend', 'Dados', 'QA'):
+        sub_payload: dict[str, Any] = {
+            'issue': {
+                'project_id': effective_project_id,
+                'subject': f"[{requisito.codigo}] {componente}",
+                'parent_issue_id': principal_id,
+            }
+        }
+        if tracker_id:
+            sub_payload['issue']['tracker_id'] = tracker_id
+        try:
+            sub = _request_json('POST', f'{base_url}/issues.json', headers=headers, payload=sub_payload)
+            sub_id = (sub.get('issue') or {}).get('id')
+            subtarefas.append({'id': sub_id, 'subject': componente})
+        except IntegracaoError as exc:
+            warnings.append(f'Subtarefa {componente}: {exc}')
+
+    return {'issue_principal_id': principal_id, 'subtarefas': subtarefas, 'warnings': warnings}
+
+
 def publish_issues_to_redmine(repo: str, issues: list[dict[str, Any]], project_id: int | None = None, tracker_id: int | None = None, priority_id: int | None = None) -> dict[str, Any]:
     base_url = (get_secret('REDMINE_BASE_URL', '') or '').strip().rstrip("/")
     api_key = (get_secret('REDMINE_API_KEY', '') or '').strip()
