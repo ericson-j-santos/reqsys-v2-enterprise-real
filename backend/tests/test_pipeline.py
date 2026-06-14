@@ -138,8 +138,22 @@ class TestEstruturarRequisito:
         assert any("correlation_id" in rnf.lower() for rnf in rnfs)
 
 
+_FAKE_REDMINE_RESULT = {
+    'issue_principal_id': '420',
+    'subtarefas': [
+        {'id': 421, 'subject': 'Frontend'},
+        {'id': 422, 'subject': 'Backend'},
+        {'id': 423, 'subject': 'Dados'},
+        {'id': 424, 'subject': 'QA'},
+    ],
+    'warnings': [],
+}
+
+
 class TestPublicarRedmine:
-    def test_issue_criado(self, client):
+    def test_issue_criado(self, client, monkeypatch):
+        import app.api.pipeline as _pipeline
+        monkeypatch.setattr(_pipeline, 'publish_requisito_to_redmine', lambda **_kw: _FAKE_REDMINE_RESULT)
         resp = client.post("/v1/backlog/publicar-redmine/1")
         assert resp.status_code == 200
         data = resp.json()["data"]
@@ -147,23 +161,81 @@ class TestPublicarRedmine:
         assert isinstance(data["subtarefas"], list)
         assert len(data["subtarefas"]) == 4
 
-    def test_subtarefas_tem_frontend_backend_dados_qa(self, client):
+    def test_subtarefas_tem_frontend_backend_dados_qa(self, client, monkeypatch):
+        import app.api.pipeline as _pipeline
+        monkeypatch.setattr(_pipeline, 'publish_requisito_to_redmine', lambda **_kw: _FAKE_REDMINE_RESULT)
         resp = client.post("/v1/backlog/publicar-redmine/1")
         subjects = [s["subject"] for s in resp.json()["data"]["subtarefas"]]
         for esperado in ("Frontend", "Backend", "Dados", "QA"):
             assert esperado in subjects
 
-    def test_requisito_id_propagado(self, client):
-        for req_id in (1, 99, 1000):
-            resp = client.post(f"/v1/backlog/publicar-redmine/{req_id}")
-            assert resp.json()["data"]["requisito_id"] == req_id
+    def test_requisito_id_propagado(self, client, monkeypatch):
+        import app.api.pipeline as _pipeline
+        monkeypatch.setattr(_pipeline, 'publish_requisito_to_redmine', lambda **_kw: _FAKE_REDMINE_RESULT)
+        resp = client.post("/v1/backlog/publicar-redmine/1")
+        assert resp.json()["data"]["requisito_id"] == 1
 
-    def test_correlation_propagado(self, client, correlation_id):
+    def test_requisito_inexistente_retorna_404(self, client):
+        for req_id in (99999, 100000):
+            resp = client.post(f"/v1/backlog/publicar-redmine/{req_id}")
+            assert resp.status_code == 404
+
+    def test_correlation_propagado(self, client, monkeypatch, correlation_id):
+        import app.api.pipeline as _pipeline
+        monkeypatch.setattr(_pipeline, 'publish_requisito_to_redmine', lambda **_kw: _FAKE_REDMINE_RESULT)
         resp = client.post(
             "/v1/backlog/publicar-redmine/1",
             headers={"X-Correlation-ID": correlation_id},
         )
         assert resp.json().get("meta", {}).get("correlation_id") == correlation_id
+
+
+class TestEncodingRegressao:
+    """Regressão de encoding: garante que strings em português chegam sem mojibake ao cliente."""
+
+    _FLAG_OFF = "app.api.pipeline.github_redmine_import_enabled"
+    _DETAIL_ESPERADO = "Integração GitHub→Redmine desabilitada por feature flag."
+
+    def test_github_issues_flag_off_detail_utf8(self, client, monkeypatch):
+        monkeypatch.setattr(self._FLAG_OFF, lambda: False)
+        resp = client.post("/v1/integracoes/github/issues", json={"repo": "acme/repo"})
+        assert resp.status_code == 409
+        detail = resp.json().get("detail", "")
+        assert "Integra" in detail and "o" in detail, (
+            f"Mojibake detectado no detail: {detail!r}\nEsperado contendo: {self._DETAIL_ESPERADO!r}"
+        )
+        assert "Ã" not in detail, f"Sequência de mojibake 'Ã' encontrada em: {detail!r}"
+
+    def test_publicar_redmine_flag_off_detail_utf8(self, client, monkeypatch):
+        monkeypatch.setattr(self._FLAG_OFF, lambda: False)
+        resp = client.post(
+            "/v1/backlog/publicar-redmine/1",
+            json={"use_github_import": True, "github_repo": "acme/repo"},
+        )
+        assert resp.status_code == 409
+        detail = resp.json().get("detail", "")
+        assert "Ã" not in detail, f"Sequência de mojibake 'Ã' encontrada em: {detail!r}"
+
+    def test_response_decodifica_utf8_sem_erro(self, client, monkeypatch):
+        monkeypatch.setattr(self._FLAG_OFF, lambda: False)
+        resp = client.post("/v1/integracoes/github/issues", json={"repo": "acme/repo"})
+        try:
+            parsed = resp.json()
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise AssertionError(f"Falha ao decodificar resposta como UTF-8/JSON: {exc}") from exc
+        assert isinstance(parsed, dict)
+
+    def test_content_type_inclui_utf8(self, client):
+        resp = client.post("/v1/solicitacoes", json={
+            "origem": "teste",
+            "titulo": "Título de teste para encoding",
+            "descricao": "Descrição longa o suficiente para passar na validação mínima.",
+            "solicitante": "tester",
+            "area": "QA",
+            "sistema": "ReqSys",
+        })
+        ct = resp.headers.get("content-type", "")
+        assert "application/json" in ct, f"Content-Type inesperado: {ct!r}"
 
 
 class TestIntegracaoGithub:
@@ -263,3 +335,42 @@ class TestIntegracaoGithub:
             json={"use_github_import": True, "github_repo": "acme/repo"},
         )
         assert resp.status_code == 409
+
+
+class TestEncodingRegressao:
+    """Regressão de encoding UTF-8 — Req 3 e 2.3 (spec pipeline-encoding-fix)."""
+
+    def test_github_issues_flag_off_detail_utf8(self, client, monkeypatch):
+        monkeypatch.setattr("app.api.pipeline.github_redmine_import_enabled", lambda: False)
+        resp = client.post("/v1/integracoes/github/issues", json={"repo": "acme/repo"})
+        assert resp.status_code == 409
+        detail = resp.json()["detail"]
+        assert "Integração" in detail, f"Mojibake ou ausência do termo: {detail!r}"
+        assert "Ã" not in detail, f"Sequência de mojibake detectada: {detail!r}"
+
+    def test_publicar_redmine_flag_off_detail_utf8(self, client, monkeypatch):
+        monkeypatch.setattr("app.api.pipeline.github_redmine_import_enabled", lambda: False)
+        resp = client.post(
+            "/v1/backlog/publicar-redmine/1",
+            json={"use_github_import": True, "github_repo": "acme/repo"},
+        )
+        assert resp.status_code == 409
+        detail = resp.json()["detail"]
+        assert "Integração" in detail, f"Mojibake ou ausência do termo: {detail!r}"
+        assert "Ã" not in detail, f"Sequência de mojibake detectada: {detail!r}"
+
+    def test_response_decodifica_utf8_sem_erro(self, client, monkeypatch):
+        monkeypatch.setattr("app.api.pipeline.github_redmine_import_enabled", lambda: False)
+        resp = client.post("/v1/integracoes/github/issues", json={"repo": "acme/repo"})
+        import json as _json
+        payload = _json.loads(resp.text)
+        detail = payload.get("detail", "")
+        assert detail.encode("utf-8").decode("utf-8") == detail, (
+            f"Round-trip UTF-8 alterou a string: {detail!r}"
+        )
+
+    def test_content_type_charset_utf8(self, client, monkeypatch):
+        monkeypatch.setattr("app.api.pipeline.github_redmine_import_enabled", lambda: False)
+        resp = client.post("/v1/integracoes/github/issues", json={"repo": "acme/repo"})
+        content_type = resp.headers.get("content-type", "")
+        assert "application/json" in content_type, f"Content-Type inesperado: {content_type!r}"

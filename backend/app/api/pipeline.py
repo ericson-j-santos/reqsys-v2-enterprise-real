@@ -78,14 +78,14 @@ def validar_requisito(
     x_correlation_id: str | None = Header(default=None),
 ):
     texto = f"{payload.titulo or ''} {payload.descricao or ''}".lower()
-    ambiguos = [t for t in ['rapido', 'melhor', 'simples', 'facil', 'intuitivo', 'otimizado'] if t in texto]
+    ambiguos = [t for t in ['rápido', 'melhor', 'simples', 'fácil', 'intuitivo', 'otimizado'] if t in texto]
     alertas: list[str] = []
     if not payload.requisitos_funcionais:
         alertas.append('Nenhum requisito funcional identificado.')
     if not payload.criterios_aceite:
-        alertas.append('Nenhum criterio de aceite informado.')
+        alertas.append('Nenhum critério de aceite informado.')
     for termo in ambiguos:
-        alertas.append(f"Termo ambiguo detectado: '{termo}'")
+        alertas.append(f"Termo ambíguo detectado: '{termo}'")
     aprovado = len(alertas) == 0
 
     if requisito_id:
