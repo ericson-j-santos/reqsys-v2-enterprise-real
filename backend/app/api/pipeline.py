@@ -66,10 +66,28 @@ def inferir_rfs(descricao: str | None) -> list[str]:
         rfs.append('Permitir continuidade do fluxo com edição controlada.')
     return rfs
 
-@router.post('/v1/solicitacoes')
-def criar_solicitacao(payload: SolicitacaoIn, x_correlation_id: str | None = Header(default=None)):
-    codigo = f"SOL-{str(int(time()))[-8:]}"
-    return ok({'id': 1, 'codigo': codigo, 'status': 'recebido'}, x_correlation_id)
+@router.post('/v1/solicitacoes', status_code=201)
+def criar_solicitacao(
+    payload: SolicitacaoIn,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    codigo = f"REQ-{str(int(time()))[-9:]}"
+    req = Requisito(
+        codigo=codigo,
+        titulo=payload.titulo,
+        descricao=payload.descricao,
+        urgencia=payload.urgencia or 'media',
+        area=payload.area,
+        sistema=payload.sistema,
+        solicitante=payload.solicitante,
+        status='recebido',
+        impacto_regulatorio=payload.impacto_regulatorio,
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+    return ok({'id': req.id, 'codigo': req.codigo, 'status': req.status}, x_correlation_id)
 
 @router.post('/v1/requisitos/validar')
 def validar_requisito(
