@@ -13,6 +13,7 @@ const routes = [
   { path: '/rastreabilidade', component: () => import('../views/RastreabilidadeView.vue'), meta: { permissao: 'rastreabilidade:read' } },
   { path: '/auditoria', component: () => import('../views/AuditoriaView.vue'), meta: { permissao: 'auditoria:read' } },
   { path: '/notificacoes', component: () => import('../views/NotificacoesView.vue'), meta: { permissao: 'dashboard:read' } },
+  { path: '/hub-lowcode', component: () => import('../views/HubLowCodeView.vue'), meta: { permissao: 'dashboard:read' } },
 ]
 
 const router = createRouter({

@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     github_webhook_secret: str = Field(default_factory=lambda: get_secret('GITHUB_WEBHOOK_SECRET', '') or '')
     gitlab_webhook_token: str = Field(default_factory=lambda: get_secret('GITLAB_WEBHOOK_TOKEN', '') or '')
 
+    # Integracao Figma <-> GitHub
+    figma_access_token: str = Field(default_factory=lambda: get_secret('FIGMA_ACCESS_TOKEN', '') or '')
+    figma_webhook_secret: str = Field(default_factory=lambda: get_secret('FIGMA_WEBHOOK_SECRET', '') or '')
+    figma_default_file_key: str = Field(default_factory=lambda: get_secret('FIGMA_DEFAULT_FILE_KEY', '') or '')
+    figma_github_default_repo: str = Field(default_factory=lambda: get_secret('FIGMA_GITHUB_DEFAULT_REPO', '') or '')
+    enable_figma_github_sync: bool = Field(default_factory=lambda: (get_secret('ENABLE_FIGMA_GITHUB_SYNC', 'true') or 'true').strip().lower() in {'1', 'true', 'yes', 'on'})
+
     # Caminho para o .sdd do my-first-spec-project (absoluto ou relativo ao reqsys root)
     sdd_specs_path: str = Field(default_factory=lambda: get_secret('SDD_SPECS_PATH', '') or '')
 
@@ -47,6 +54,15 @@ class Settings(BaseSettings):
     # Azure AD (Microsoft Entra ID) — tenant Tieri659
     azure_tenant_id: str = Field(default_factory=lambda: get_secret('AZURE_TENANT_ID', '') or '')
     azure_client_id: str = Field(default_factory=lambda: get_secret('AZURE_CLIENT_ID', '') or '')
+    azure_client_secret: str = Field(default_factory=lambda: get_secret('AZURE_CLIENT_SECRET', '') or '')
+
+    # Hub Low-Code & IA
+    sharepoint_site_id: str = Field(default_factory=lambda: get_secret('SHAREPOINT_SITE_ID', '') or '')
+    sharepoint_list_ia: str = Field(default_factory=lambda: get_secret('SHAREPOINT_LIST_IA', 'IA_Catalogo_Projetos') or 'IA_Catalogo_Projetos')
+    github_pat: str = Field(default_factory=lambda: get_secret('GITHUB_PAT', '') or '')
+    github_alm_repo: str = Field(default_factory=lambda: get_secret('GITHUB_ALM_REPO', 'ericson-j-santos/reqsys-powerplatform-alm') or 'ericson-j-santos/reqsys-powerplatform-alm')
+    powerautomate_env_id: str = Field(default_factory=lambda: get_secret('POWERAUTOMATE_ENV_ID', '') or '')
+    powerautomate_flow_id: str = Field(default_factory=lambda: get_secret('POWERAUTOMATE_FLOW_ID', '73bd346b-c765-f111-ab0c-7ced8da7c8da') or '73bd346b-c765-f111-ab0c-7ced8da7c8da')
 
     @property
     def cors_origins_list(self) -> list[str]:

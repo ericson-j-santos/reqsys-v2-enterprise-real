@@ -14,6 +14,8 @@ from app.api import (  # noqa: E402
     auth,
     cofre,
     dashboard,
+    figma_github,
+    hub_lowcode,
     ia,
     pipeline,
     processos,
@@ -57,6 +59,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(requisitos.router)
 app.include_router(dashboard.router)
+app.include_router(figma_github.router)
 app.include_router(pipeline.router)
 app.include_router(relatorios.router)
 app.include_router(auditoria.router)
@@ -69,6 +72,7 @@ app.include_router(cofre.router)
 app.include_router(ia.router)
 app.include_router(webhooks.router)
 app.include_router(rastreabilidade.router)
+app.include_router(hub_lowcode.router)
 
 
 @app.middleware('http')

@@ -1,4 +1,5 @@
 <template>
+  <!-- eslint-disable vue/no-multiple-template-root -->
   <!-- MOBILE APP BAR -->
   <v-app-bar v-if="mobile" :elevation="2" color="surface">
     <v-app-bar-nav-icon @click="mobileDrawer = !mobileDrawer" />
@@ -154,6 +155,7 @@ const navItems = [
   { label: 'Rastreabilidade', icon: 'mdi-map-marker-path',           rota: '/rastreabilidade' },
   { label: 'Auditoria',       icon: 'mdi-history',                   rota: '/auditoria' },
   { label: 'Notificações',    icon: 'mdi-bell-outline',              rota: '/notificacoes' },
+  { label: 'Hub Low-Code',   icon: 'mdi-layers-triple-outline',     rota: '/hub-lowcode' },
 ]
 
 const iniciais = computed(() => {

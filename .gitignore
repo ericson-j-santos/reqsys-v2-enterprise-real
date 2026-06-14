@@ -48,6 +48,7 @@ Thumbs.db
 
 # Docker / Infra / Secrets
 .env
+.fly-figma-webhook-secret.local.txt
 .env.*
 *.env
 !.env.example

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.envelope import ok
 from app.db import get_db
-from app.services import git_parser, webhook_processor
+from app.services import figma_client, figma_github_sync, git_parser, webhook_processor
 
 router = APIRouter(prefix='/v1/webhooks', tags=['Webhooks Git'])
 
@@ -65,6 +65,9 @@ async def webhook_github(
         action = payload.get('action', '')
         if action in ('opened', 'reopened', 'closed', 'edited', 'synchronize'):
             vinculos = git_parser.processar_pr_github(payload)
+    elif event in ('issues', 'issue_comment'):
+        sync_result = figma_github_sync.handle_github_issue_event(db, payload)
+        return ok({'evento': event, 'processado': True, 'figma_github': sync_result.as_dict()})
     elif event == 'ping':
         return ok({'evento': 'ping', 'processado': True, 'motivo': 'Webhook configurado com sucesso.'})
     else:
@@ -76,6 +79,36 @@ async def webhook_github(
 
     ids = webhook_processor.salvar_vinculos(db, vinculos)
     return ok({'evento': event, 'processado': True, 'vinculos_criados': len(ids)})
+
+
+@router.post('/figma')
+async def webhook_figma(
+    request: Request,
+    x_figma_signature: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    body = await request.body()
+    try:
+        figma_client.validate_webhook_signature(body, x_figma_signature)
+    except figma_client.FigmaError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    try:
+        payload = json.loads(body)
+    except Exception:
+        raise HTTPException(status_code=400, detail='Payload JSON invalido.')
+
+    event = (payload.get('event_type') or payload.get('event') or payload.get('type') or '').upper()
+    if event == 'PING':
+        return ok({'evento': 'PING', 'processado': True, 'motivo': 'Webhook Figma configurado com sucesso.'})
+
+    file_key = payload.get('file_key') or payload.get('fileKey') or payload.get('file', {}).get('key')
+    repo = settings.figma_github_default_repo
+    if not file_key or not repo:
+        return ok({'evento': event or 'unknown', 'processado': False, 'motivo': 'file_key ou repo padrao nao configurado.'})
+
+    result = figma_github_sync.sync_bidirectional(db, file_key=file_key, repo=repo, include_frames=False)
+    return ok({'evento': event or 'unknown', 'processado': True, 'figma_github': result.as_dict()})
 
 
 @router.post('/gitlab')
