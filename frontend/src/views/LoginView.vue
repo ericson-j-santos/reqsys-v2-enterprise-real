@@ -74,7 +74,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
-import { initiateAzureLogin } from '../auth/azure'
+import { loginMicrosoft } from '../auth/msal'
 import { api } from '../services/api'
 
 const { width } = useDisplay()
@@ -115,11 +115,8 @@ async function entrarMicrosoft() {
   carregandoAzure.value = true
   erro.value = ''
   try {
-    await initiateAzureLogin(
-      azureConfig.value.azure_tenant_id,
-      azureConfig.value.azure_client_id,
-    )
-    // initiateAzureLogin() redireciona — esta linha não é alcançada
+    await loginMicrosoft()
+    // loginMicrosoft() redireciona; esta linha normalmente não é alcançada.
   } catch (e) {
     erro.value = `Erro ao abrir login Microsoft: ${e.message}`
     carregandoAzure.value = false

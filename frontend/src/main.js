@@ -10,7 +10,7 @@ import router from './router'
 import './styles.css'
 import { useAuthStore } from './stores/auth'
 import { api } from './services/api'
-import { extractOAuthCallback } from './auth/azure'
+import { handleRedirectResult } from './auth/msal'
 
 const vuetify = createVuetify({
   components,
@@ -43,24 +43,19 @@ async function boot() {
   const pinia = createPinia()
   setActivePinia(pinia)
 
-  // ── Processar retorno do Azure AD antes do Vue Router correr ─────────
-  const callback = extractOAuthCallback()
-  if (callback) {
-    if (callback.error) {
-      sessionStorage.setItem('azure_login_error', callback.error)
-    } else {
-      try {
-        const { data } = await api.post('/v1/auth/azure-code', callback)
-        useAuthStore().salvarSessao(data.data)
-      } catch (e) {
-        const msg = e.response?.data?.detail || e.message || 'Falha no login Microsoft'
-        sessionStorage.setItem('azure_login_error', msg)
-      }
+  // Apps SPA trocam o codigo no browser; o backend apenas valida o id_token.
+  try {
+    const idToken = await handleRedirectResult()
+    if (idToken) {
+      const { data } = await api.post('/v1/auth/azure', { id_token: idToken })
+      useAuthStore().salvarSessao(data.data)
+      window.history.replaceState({}, document.title, '/')
     }
-    // Limpar parâmetros OAuth da URL sem recarregar
-    window.history.replaceState({}, document.title, '/')
+  } catch (e) {
+    const msg = e.response?.data?.detail || e.message || 'Falha no login Microsoft'
+    sessionStorage.setItem('azure_login_error', msg)
+    window.history.replaceState({}, document.title, '/login')
   }
-  // ────────────────────────────────────────────────────────────────────
 
   createApp(App).use(pinia).use(router).use(vuetify).mount('#app')
 }
