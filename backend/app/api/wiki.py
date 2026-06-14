@@ -7,9 +7,12 @@ from app.core.envelope import ok
 from app.db import get_db
 from app.models.requisito import Requisito
 from app.schemas.requisito import RequisitoOut
-from app.schemas.wiki import PublicarWikiRequest, PublicarWikiResult, WikiStatusResult
+from app.schemas.wiki import PublicarWikiRequest
 from app.services.auditoria import registrar_evento
-from app.services.wiki_publisher import consultar_status_wiki, publicar_requisito_no_wiki
+from app.services.wiki_publisher import (
+    consultar_status_wiki,
+    publicar_requisito_no_wiki,
+)
 
 router = APIRouter(prefix="/v1/wiki", tags=["Wiki"])
 

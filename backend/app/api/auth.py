@@ -1,12 +1,14 @@
 import logging
+
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
+
 from app.core.config import settings
 from app.core.envelope import ok
 from app.core.security import criar_token
+from app.services.azure_auth import extrair_usuario, validar_token_azure
 from app.services.rbac import permissoes
-from app.services.azure_auth import validar_token_azure, extrair_usuario
 
 logger = logging.getLogger('reqsys.security')
 

@@ -1,6 +1,5 @@
 import hashlib
 import json
-from time import time_ns
 from urllib import request
 from urllib.error import HTTPError, URLError
 
@@ -102,7 +101,7 @@ def _publicar_redmine_wiki(wiki_page_title: str, conteudo: str, correlation_id: 
 
     try:
         req = request.Request(url=url, data=payload, headers=headers, method="PUT")
-        with request.urlopen(req, timeout=15) as resp:
+        with request.urlopen(req, timeout=15) as _:
             wiki_url = f"{base_url}/projects/{project_id}/wiki/{page_slug}"
             return {
                 "publicado": True,

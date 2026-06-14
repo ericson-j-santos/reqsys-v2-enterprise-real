@@ -7,7 +7,7 @@ import logging
 import threading
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, date
+from datetime import date, datetime, timezone
 
 logger = logging.getLogger('reqsys.ia')
 

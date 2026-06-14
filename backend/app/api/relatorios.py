@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 from urllib import parse
 
-import urllib3
 import requests as _requests
+import urllib3
 from requests_ntlm import HttpNtlmAuth
 
 try:
@@ -209,7 +209,6 @@ def ssrs_status():
     items = []
     for name in reports:
         render_url = _build_ssrs_render_url(base_url, folder, name)
-        pdf_url = _build_ssrs_pdf_url(base_url, folder, name)
         if auth_error:
             accessible = False
             status_code = None
@@ -261,7 +260,7 @@ def ssrs_pdf_download(nome: str):
         raise HTTPException(status_code=404, detail=f'Relatório "{nome}" não encontrado no catálogo')
 
     pdf_url = _build_ssrs_pdf_url(base_url, folder, nome)
-    
+
     try:
         auth = _get_ssrs_auth()
     except HTTPException as exc:

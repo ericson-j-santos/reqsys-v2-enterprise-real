@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from sqlalchemy.orm import Session
+
+from app.core.envelope import ok
 from app.db import get_db
 from app.models.auditoria import AuditoriaEvento
-from app.core.envelope import ok
 
 router = APIRouter(prefix='/v1/auditoria', tags=['Auditoria'])
 
@@ -17,22 +18,22 @@ def listar_eventos(
 ):
     """
     Lista eventos de auditoria com filtros opcionais.
-    
+
     - limit: quantidade de registros (1-500)
     - offset: deslocamento para paginacao
     - entidade: filtrar por entidade (ex.: 'infra', 'requisito')
     - acao: filtrar por acao (ex.: 'CONFIG_DOMINIO_ATUALIZADA', 'REQUISITO_CRIADO')
     """
     query = db.query(AuditoriaEvento).order_by(desc(AuditoriaEvento.criado_em))
-    
+
     if entidade:
         query = query.filter(AuditoriaEvento.entidade == entidade)
     if acao:
         query = query.filter(AuditoriaEvento.acao == acao)
-    
+
     total = query.count()
     eventos = query.limit(limit).offset(offset).all()
-    
+
     resultado = [
         {
             'id': e.id,
@@ -46,7 +47,7 @@ def listar_eventos(
         }
         for e in eventos
     ]
-    
+
     return ok({
         'dados': resultado,
         'paginacao': {'total': total, 'limit': limit, 'offset': offset}
@@ -65,7 +66,7 @@ def listar_eventos_config_infra(
         AuditoriaEvento.entidade == 'infra',
         AuditoriaEvento.acao.in_(['CONFIG_DOMINIO_ATUALIZADA', 'CONFIG_CORS_ATUALIZADA', 'ENV_ALTERADA'])
     ).order_by(desc(AuditoriaEvento.criado_em)).limit(limit).all()
-    
+
     resultado = [
         {
             'id': e.id,
@@ -78,5 +79,5 @@ def listar_eventos_config_infra(
         }
         for e in eventos
     ]
-    
+
     return ok({'config_historico': resultado, 'total': len(resultado)})

@@ -1,4 +1,5 @@
 import json
+
 from sqlalchemy.orm import Session
 
 from app.models.requisito import Requisito

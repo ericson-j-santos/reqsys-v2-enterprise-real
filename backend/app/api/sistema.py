@@ -1,9 +1,10 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from datetime import UTC, datetime
+
 from app.core.envelope import ok
 from app.core.secrets import describe_secret_resolution
-from app.core.security import get_current_user
 from app.db import get_db
 from app.models.requisito import Requisito
 
@@ -171,14 +172,14 @@ def health_check(db: Session = Depends(get_db)):
     Retorna status de database, endpoints críticos e configuração.
     """
     checks = {}
-    
+
     # Database check
     try:
         count = db.query(Requisito).count()
         checks['database'] = {'status': 'ok', 'requisitos_total': count}
     except Exception as e:
         checks['database'] = {'status': 'erro', 'detalhe': str(e)}
-    
+
     # Config check
     checks['config'] = {
         'status': 'ok',
@@ -186,7 +187,7 @@ def health_check(db: Session = Depends(get_db)):
         'dominio_dev': 'reqsys.local',
         'dominio_prod': 'app.seudominio.com (exemplo)'
     }
-    
+
     # Endpoints críticos
     checks['endpoints'] = {
         'health': '/health (GET)',
@@ -200,9 +201,9 @@ def health_check(db: Session = Depends(get_db)):
         'sistema_health': '/v1/sistema/health-check (GET)',
         'sistema_segredos_status': '/v1/sistema/segredos-status (GET)',
     }
-    
+
     all_ok = all(check.get('status') == 'ok' for check in checks.values())
-    
+
     return ok({
         'timestamp': datetime.now(UTC).isoformat(),
         'saude_geral': 'ok' if all_ok else 'aviso',
@@ -224,7 +225,7 @@ def listar_endpoints():
             'descricao': info['descricao'],
             'autenticacao_requerida': info['autenticacao']
         })
-    
+
     return ok({
         'total_endpoints': len(endpoints_list),
         'endpoints': endpoints_list,

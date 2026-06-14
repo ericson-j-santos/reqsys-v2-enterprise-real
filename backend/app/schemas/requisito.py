@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+
 class RequisitoCriar(BaseModel):
     titulo: str = Field(min_length=5, max_length=200)
     descricao: str = Field(min_length=20)

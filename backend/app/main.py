@@ -1,18 +1,34 @@
 import logging
 import sys
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[2] / '.env', override=False)
 
-from fastapi import FastAPI, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from app.api import auth, requisitos, dashboard, pipeline, relatorios, auditoria, sistema, qualidade_ia, processos, wiki, specs, cofre, ia, webhooks, rastreabilidade
-from app.core.config import settings
-from app.core.envelope import ok
-from app.db import Base, engine
-from app.models import requisito, auditoria as auditoria_model, ai_quality as ai_quality_model, vinculo_git as vinculo_git_model
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+from app.api import (  # noqa: E402
+    auditoria,
+    auth,
+    cofre,
+    dashboard,
+    ia,
+    pipeline,
+    processos,
+    qualidade_ia,
+    rastreabilidade,
+    relatorios,
+    requisitos,
+    sistema,
+    specs,
+    webhooks,
+    wiki,
+)
+from app.core.config import settings  # noqa: E402
+from app.core.envelope import ok  # noqa: E402
+from app.db import Base, engine  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,

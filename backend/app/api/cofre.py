@@ -1,16 +1,17 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
-from app.core.envelope import ok, erro
+
+from app.core.config import settings
+from app.core.envelope import ok
 from app.core.secrets import (
-    init_vault,
-    write_secret_to_vault,
+    _vault_service_name,
     delete_secret_from_vault,
+    init_vault,
     read_secret_from_vault,
     vault_initialized,
-    _vault_service_name,
+    write_secret_to_vault,
 )
 from app.core.security import require_admin
-from app.core.config import settings
 
 router = APIRouter(prefix='/v1/cofre', tags=['Cofre'])
 

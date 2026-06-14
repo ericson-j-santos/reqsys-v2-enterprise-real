@@ -1,6 +1,8 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from datetime import UTC, datetime
+
 from app.core.envelope import ok
 from app.db import get_db
 from app.models.requisito import Requisito
@@ -44,7 +46,7 @@ def dashboard_info(db: Session = Depends(get_db)):
     Retorna informações gerais do dashboard com links para toda documentação
     """
     total_requisitos = db.query(Requisito).count()
-    
+
     qualidade_ia = calcular_resumo_qualidade_ia(db)
 
     return ok({

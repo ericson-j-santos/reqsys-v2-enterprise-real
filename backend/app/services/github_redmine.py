@@ -72,7 +72,7 @@ def fetch_github_issues(repo: str, state: str = "open", limit: int = 20, labels:
                 "title": item.get("title"),
                 "state": item.get("state"),
                 "html_url": item.get("html_url"),
-                "labels": [l.get("name") for l in item.get("labels", []) if l.get("name")],
+                "labels": [lbl.get("name") for lbl in item.get("labels", []) if lbl.get("name")],
             }
         )
     return issues
