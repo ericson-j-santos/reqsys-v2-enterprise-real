@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SDD Dashboard — ReqSys v2 Enterprise</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3250;
+    --text: #e2e8f0;
+    --muted: #7c8db5;
+    --accent: #6366f1;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --blue: #3b82f6;
+    --gray: #374151;
+    --red: #ef4444;
+    --phase-init: #6366f1;
+    --phase-req: #8b5cf6;
+    --phase-design: #3b82f6;
+    --phase-tasks: #06b6d4;
+    --phase-impl: #22c55e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: linear-gradient(135deg, #1e1b4b 0%, #1a1d27 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .header-left h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+  .header-left .subtitle {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .header-badge {
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 99px;
+    letter-spacing: 0.05em;
+  }
+  .header-meta {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-align: right;
+  }
+  .header-meta strong {
+    color: var(--text);
+  }
+
+  /* ── LAYOUT ── */
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  section + section { margin-top: 40px; }
+
+  .section-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  /* ── SUMÁRIO RÁPIDO ── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .stat-card .stat-value {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .stat-card .stat-label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .stat-card.green .stat-value { color: var(--green); }
+  .stat-card.blue .stat-value  { color: var(--blue); }
+  .stat-card.yellow .stat-value{ color: var(--yellow); }
+  .stat-card.purple .stat-value{ color: var(--accent); }
+
+  /* ── PIPELINE DE FASES ── */
+  .phase-pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 32px;
+  }
+  .phase-step {
+    flex: 1;
+    padding: 14px 16px;
+    text-align: center;
+    position: relative;
+    border-right: 1px solid var(--border);
+  }
+  .phase-step:last-child { border-right: none; }
+  .phase-step .phase-num {
+    font-size: 0.65rem;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+  .phase-step .phase-name {
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .phase-step .phase-cmd {
+    font-size: 0.65rem;
+    color: var(--muted);
+    font-family: monospace;
+    margin-top: 4px;
+  }
+  .phase-step.active {
+    background: var(--surface2);
+  }
+  .phase-step.p-init    { border-top: 3px solid var(--phase-init); }
+  .phase-step.p-req     { border-top: 3px solid var(--phase-req); }
+  .phase-step.p-design  { border-top: 3px solid var(--phase-design); }
+  .phase-step.p-tasks   { border-top: 3px solid var(--phase-tasks); }
+  .phase-step.p-impl    { border-top: 3px solid var(--phase-impl); }
+
+  /* ── SPEC CARDS ── */
+  .specs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+  }
+
+  .spec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .spec-card:hover { border-color: var(--accent); }
+
+  .spec-card-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .spec-name {
+    font-family: monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    word-break: break-all;
+  }
+  .spec-project {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+
+  .phase-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 99px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    letter-spacing: 0.03em;
+  }
+  .badge-initialized     { background: #312e81; color: #a5b4fc; }
+  .badge-req-generated   { background: #4c1d95; color: #c4b5fd; }
+  .badge-req-approved    { background: #4c1d95; color: #c4b5fd; }
+  .badge-design-gen      { background: #1e3a5f; color: #93c5fd; }
+  .badge-design-approved { background: #1e3a5f; color: #93c5fd; }
+  .badge-tasks-gen       { background: #164e63; color: #67e8f9; }
+  .badge-tasks-approved  { background: #164e63; color: #67e8f9; }
+  .badge-impl            { background: #14532d; color: #86efac; }
+  .badge-done            { background: #14532d; color: #86efac; }
+
+  /* Progress bar */
+  .progress-bar-wrap {
+    padding: 12px 20px 8px;
+  }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .progress-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.4s ease;
+  }
+
+  /* Artifacts */
+  .spec-artifacts {
+    padding: 8px 20px 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .artifact {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.72rem;
+  }
+  .artifact .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-done    { background: var(--green); }
+  .dot-pending { background: var(--gray); }
+  .dot-current { background: var(--blue); box-shadow: 0 0 0 2px rgba(59,130,246,.25); }
+
+  /* Next action */
+  .spec-next {
+    border-top: 1px solid var(--border);
+    padding: 10px 20px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .spec-next .next-label {
+    color: var(--accent);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .spec-next code {
+    font-size: 0.7rem;
+    background: var(--surface2);
+    padding: 2px 7px;
+    border-radius: 4px;
+    color: #c4b5fd;
+    font-family: monospace;
+  }
+
+  /* ── FASES DETALHE TABLE ── */
+  .phases-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+  .phases-table th {
+    text-align: left;
+    padding: 8px 14px;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+  .phases-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .phases-table tr:last-child td { border-bottom: none; }
+  .phases-table tr:hover td { background: var(--surface2); }
+  .phases-table .spec-col { font-family: monospace; font-weight: 600; }
+  .check { color: var(--green); font-size: 1rem; }
+  .cross { color: var(--gray); font-size: 1rem; }
+  .curr  { color: var(--blue); font-size: 1rem; }
+
+  /* ── LEGEND ── */
+  .legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 12px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 16px 32px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 48px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>SDD Dashboard</h1>
+    <div class="subtitle">Spec-Driven Development · Acompanhamento de specs por fase</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="header-meta">
+      Projeto coordenado<br>
+      <strong>reqsys-v2-enterprise-real</strong>
+    </div>
+    <div class="header-badge">SDD v1</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- SUMÁRIO -->
+  <div class="summary-grid">
+    <div class="stat-card purple">
+      <div class="stat-value">3</div>
+      <div class="stat-label">Specs iniciadas</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-value">1</div>
+      <div class="stat-label">Em tasks-generated</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-value">2</div>
+      <div class="stat-label">Em initialized</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-value">0</div>
+      <div class="stat-label">Implementadas</div>
+    </div>
+  </div>
+
+  <!-- PIPELINE DE FASES -->
+  <p class="section-title">Fluxo SDD — Fases obrigatórias</p>
+  <div class="phase-pipeline">
+    <div class="phase-step p-init">
+      <div class="phase-num">FASE 0</div>
+      <div class="phase-name" style="color:#a5b4fc">Inicialização</div>
+      <div class="phase-cmd">/sdd:spec-init</div>
+    </div>
+    <div class="phase-step p-req">
+      <div class="phase-num">FASE 1A</div>
+      <div class="phase-name" style="color:#c4b5fd">Requisitos</div>
+      <div class="phase-cmd">/sdd:spec-requirements</div>
+    </div>
+    <div class="phase-step p-design">
+      <div class="phase-num">FASE 1B</div>
+      <div class="phase-name" style="color:#93c5fd">Design</div>
+      <div class="phase-cmd">/sdd:spec-design</div>
+    </div>
+    <div class="phase-step p-tasks active">
+      <div class="phase-num">FASE 1C</div>
+      <div class="phase-name" style="color:#67e8f9">Tarefas ← atual</div>
+      <div class="phase-cmd">/sdd:spec-tasks</div>
+    </div>
+    <div class="phase-step p-impl">
+      <div class="phase-num">FASE 2</div>
+      <div class="phase-name" style="color:#86efac">Implementação</div>
+      <div class="phase-cmd">/sdd:spec-impl</div>
+    </div>
+  </div>
+
+  <!-- SPEC CARDS -->
+  <p class="section-title">Specs em andamento</p>
+  <div class="specs-grid">
+
+    <!-- CARD 1: pipeline-encoding-fix -->
+    <div class="spec-card">
+      <div class="spec-card-header">
+        <div>
+          <div class="spec-name">pipeline-encoding-fix</div>
+          <div class="spec-project">ReqSys v2 Enterprise · Python/FastAPI</div>
+        </div>
+        <span class="phase-badge badge-tasks-gen">tasks-generated</span>
+      </div>
+
+      <div class="progress-bar-wrap">
+        <div class="progress-label">
+          <span>Progresso da spec</span>
+          <span>75%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:75%;background:linear-gradient(90deg,#6366f1,#06b6d4)"></div>
+        </div>
+      </div>
+
+      <div class="spec-artifacts">
+        <div class="artifact"><span class="dot dot-done"></span> spec.json</div>
+        <div class="artifact"><span class="dot dot-done"></span> requirements.md</div>
+        <div class="artifact"><span class="dot dot-done"></span> design.md</div>
+        <div class="artifact"><span class="dot dot-done"></span> research.md</div>
+        <div class="artifact"><span class="dot dot-current"></span> tasks.md</div>
+        <div class="artifact"><span class="dot dot-pending"></span> implementação</div>
+      </div>
+
+      <div class="spec-next">
+        <span class="next-label">▶ Próximo</span>
+        Aprovar tasks → <code>/sdd:spec-impl pipeline-encoding-fix 1.1</code>
+      </div>
+    </div>
+
+    <!-- CARD 2: backlog-redmine-sync -->
+    <div class="spec-card">
+      <div class="spec-card-header">
+        <div>
+          <div class="spec-name">backlog-redmine-sync</div>
+          <div class="spec-project">ReqSys v2 Enterprise · Python/FastAPI</div>
+        </div>
+        <span class="phase-badge badge-initialized">initialized</span>
+      </div>
+
+      <div class="progress-bar-wrap">
+        <div class="progress-label">
+          <span>Progresso da spec</span>
+          <span>10%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:10%;background:linear-gradient(90deg,#6366f1,#8b5cf6)"></div>
+        </div>
+      </div>
+
+      <div class="spec-artifacts">
+        <div class="artifact"><span class="dot dot-done"></span> spec.json</div>
+        <div class="artifact"><span class="dot dot-current"></span> requirements.md</div>
+        <div class="artifact"><span class="dot dot-pending"></span> design.md</div>
+        <div class="artifact"><span class="dot dot-pending"></span> research.md</div>
+        <div class="artifact"><span class="dot dot-pending"></span> tasks.md</div>
+        <div class="artifact"><span class="dot dot-pending"></span> implementação</div>
+      </div>
+
+      <div class="spec-next">
+        <span class="next-label">▶ Próximo</span>
+        <code>/sdd:spec-requirements backlog-redmine-sync</code>
+      </div>
+    </div>
+
+    <!-- CARD 3: ai-metrics-incident-report -->
+    <div class="spec-card">
+      <div class="spec-card-header">
+        <div>
+          <div class="spec-name">ai-metrics-incident-report</div>
+          <div class="spec-project">AI Metrics Backend · Python/FastAPI</div>
+        </div>
+        <span class="phase-badge badge-initialized">initialized</span>
+      </div>
+
+      <div class="progress-bar-wrap">
+        <div class="progress-label">
+          <span>Progresso da spec</span>
+          <span>10%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:10%;background:linear-gradient(90deg,#6366f1,#8b5cf6)"></div>
+        </div>
+      </div>
+
+      <div class="spec-artifacts">
+        <div class="artifact"><span class="dot dot-done"></span> spec.json</div>
+        <div class="artifact"><span class="dot dot-current"></span> requirements.md</div>
+        <div class="artifact"><span class="dot dot-pending"></span> design.md</div>
+        <div class="artifact"><span class="dot dot-pending"></span> research.md</div>
+        <div class="artifact"><span class="dot dot-pending"></span> tasks.md</div>
+        <div class="artifact"><span class="dot dot-pending"></span> implementação</div>
+      </div>
+
+      <div class="spec-next">
+        <span class="next-label">▶ Próximo</span>
+        <code>/sdd:spec-requirements ai-metrics-incident-report</code>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- TABELA DE FASES DETALHADA -->
+  <section>
+    <p class="section-title">Tabela de progresso por fase</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <table class="phases-table">
+        <thead>
+          <tr>
+            <th>Spec</th>
+            <th>Init</th>
+            <th>Requirements</th>
+            <th>Design</th>
+            <th>Tasks</th>
+            <th>Implementação</th>
+            <th>Pronto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="spec-col">pipeline-encoding-fix</td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span> gerado <span class="check">✓</span> aprovado</td>
+            <td><span class="check">✓</span> gerado <span class="check">✓</span> aprovado</td>
+            <td><span class="curr">◉</span> gerado</td>
+            <td><span class="cross">○</span></td>
+            <td><span class="cross">○</span></td>
+          </tr>
+          <tr>
+            <td class="spec-col">backlog-redmine-sync</td>
+            <td><span class="check">✓</span></td>
+            <td><span class="cross">○</span></td>
+            <td><span class="cross">○</span></td>
+            <td><span class="cross">○</span></td>
+            <td><span class="cross">○</span></td>
+            <td><span class="cross">○</span></td>
+          </tr>
+          <tr>
+            <td class="spec-col">ai-metrics-incident-report</td>
+            <td><span class="check">✓</span></td>
+            <td><span class="cross">○</span></td>
+            <td><span class="cross">○</span></td>
+            <td><span class="cross">○</span></td>
+            <td><span class="cross">○</span></td>
+            <td><span class="cross">○</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="check">✓</span> Concluído</div>
+      <div class="legend-item"><span class="curr">◉</span> Fase atual</div>
+      <div class="legend-item"><span class="cross">○</span> Pendente</div>
+    </div>
+  </section>
+
+  <!-- GUIA RÁPIDO -->
+  <section>
+    <p class="section-title">Guia rápido — Como usar o SDD</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+      <div>
+        <div style="font-size:0.8rem;font-weight:700;color:#fff;margin-bottom:12px;">O fluxo em 5 passos</div>
+        <ol style="list-style:none;counter-reset:step;display:flex;flex-direction:column;gap:10px;">
+          <li style="display:flex;gap:12px;align-items:flex-start;counter-increment:step;">
+            <span style="background:var(--phase-init);color:#fff;font-size:0.65rem;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">1</span>
+            <div>
+              <div style="font-size:0.78rem;font-weight:600;color:#a5b4fc">/sdd:spec-init "descrição"</div>
+              <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;">Cria a pasta da feature com spec.json</div>
+            </div>
+          </li>
+          <li style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="background:var(--phase-req);color:#fff;font-size:0.65rem;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">2</span>
+            <div>
+              <div style="font-size:0.78rem;font-weight:600;color:#c4b5fd">/sdd:spec-requirements {feature}</div>
+              <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;">IA gera o QUE o sistema deve fazer → você revisa</div>
+            </div>
+          </li>
+          <li style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="background:var(--phase-design);color:#fff;font-size:0.65rem;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">3</span>
+            <div>
+              <div style="font-size:0.78rem;font-weight:600;color:#93c5fd">/sdd:spec-design {feature}</div>
+              <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;">IA gera o COMO vai ser feito → você revisa</div>
+            </div>
+          </li>
+          <li style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="background:var(--phase-tasks);color:#fff;font-size:0.65rem;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">4</span>
+            <div>
+              <div style="font-size:0.78rem;font-weight:600;color:#67e8f9">/sdd:spec-tasks {feature}</div>
+              <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;">IA gera as tarefas de implementação → você revisa</div>
+            </div>
+          </li>
+          <li style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="background:var(--phase-impl);color:#fff;font-size:0.65rem;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">5</span>
+            <div>
+              <div style="font-size:0.78rem;font-weight:600;color:#86efac">/sdd:spec-impl {feature}</div>
+              <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;">Agora sim: IA implementa o código aprovado</div>
+            </div>
+          </li>
+        </ol>
+      </div>
+      <div>
+        <div style="font-size:0.8rem;font-weight:700;color:#fff;margin-bottom:12px;">Por que usar SDD?</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="background:var(--surface2);border-radius:8px;padding:12px;border-left:3px solid var(--accent);">
+            <div style="font-size:0.75rem;font-weight:600;color:#fff;margin-bottom:4px;">Rastreabilidade</div>
+            <div style="font-size:0.7rem;color:var(--muted);">Cada linha de código tem um requisito associado. Você sempre sabe <em>por que</em> algo foi feito.</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:8px;padding:12px;border-left:3px solid var(--green);">
+            <div style="font-size:0.75rem;font-weight:600;color:#fff;margin-bottom:4px;">Controle humano</div>
+            <div style="font-size:0.7rem;color:var(--muted);">A IA propõe; você aprova. Nenhuma fase avança sem sua revisão explícita.</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:8px;padding:12px;border-left:3px solid var(--blue);">
+            <div style="font-size:0.75rem;font-weight:600;color:#fff;margin-bottom:4px;">AI-agnóstico</div>
+            <div style="font-size:0.7rem;color:var(--muted);">O mesmo workflow funciona com Claude Code ou Gemini. Você não fica preso a uma ferramenta.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Gerado em 2026-06-14 · Repositório: <strong>ericson-j-santos/my-first-spec-project</strong> ·
+  Projeto coordenado: <strong>reqsys-v2-enterprise-real</strong>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SDD Dashboard — ReqSys</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      color: #fff;
+      padding: 2rem 2.5rem 1.75rem;
+    }
+    header h1 { font-size: 1.625rem; font-weight: 700; letter-spacing: -.025em; }
+    header .sub { margin-top: .3rem; font-size: .875rem; opacity: .8; }
+    .header-meta {
+      margin-top: 1rem;
+      display: flex; flex-wrap: wrap; gap: 1.25rem;
+      font-size: .775rem; opacity: .7;
+    }
+    .header-meta span { display: flex; align-items: center; gap: .35rem; }
+
+    /* ── Main layout ── */
+    main { max-width: 1160px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }
+    section { margin-bottom: 2.5rem; }
+    .section-label {
+      font-size: .7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: #94a3b8; margin-bottom: 1rem;
+    }
+
+    /* ── Workflow pipeline ── */
+    .workflow-card {
+      background: #fff;
+      border-radius: .75rem;
+      padding: 1.5rem 1.75rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .pipeline {
+      display: flex; align-items: flex-start;
+      gap: 0; overflow-x: auto; padding-bottom: .5rem;
+    }
+    .pstep {
+      display: flex; flex-direction: column; align-items: center;
+      flex: 1; min-width: 80px; position: relative;
+    }
+    .pstep:not(:last-child)::after {
+      content: '';
+      position: absolute; top: 15px; left: 50%; width: 100%; height: 2px;
+      background: #e2e8f0; z-index: 0;
+    }
+    .pstep.s-done:not(:last-child)::after { background: #10b981; }
+    .pstep.s-warn:not(:last-child)::after { background: #f59e0b; }
+
+    .pdot {
+      width: 30px; height: 30px; border-radius: 50%;
+      border: 2px solid #e2e8f0; background: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .7rem; font-weight: 700; color: #94a3b8;
+      position: relative; z-index: 1;
+    }
+    .s-done .pdot  { background: #10b981; border-color: #10b981; color: #fff; }
+    .s-warn .pdot  { background: #f59e0b; border-color: #f59e0b; color: #fff; }
+    .s-active .pdot { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+
+    .plabel {
+      margin-top: .5rem; font-size: .625rem; font-weight: 500;
+      color: #94a3b8; text-align: center; line-height: 1.4;
+    }
+    .s-done .plabel  { color: #10b981; }
+    .s-warn .plabel  { color: #d97706; font-weight: 600; }
+    .s-active .plabel { color: #4f46e5; font-weight: 600; }
+
+    .workflow-legend {
+      margin-top: 1.25rem; padding-top: 1rem;
+      border-top: 1px solid #f1f5f9;
+      display: flex; flex-wrap: wrap; gap: 1rem;
+      font-size: .75rem; color: #64748b;
+    }
+    .workflow-legend span { display: flex; align-items: center; gap: .35rem; }
+    code.tag {
+      background: #f1f5f9; border-radius: 3px;
+      padding: 1px 5px; font-family: 'SF Mono', Consolas, monospace;
+      font-size: .7rem; color: #4f46e5;
+    }
+
+    /* ── Spec cards ── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+      gap: 1.25rem;
+    }
+    .card {
+      background: #fff; border-radius: .75rem;
+      padding: 1.375rem; border-top: 3px solid #e2e8f0;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+      display: flex; flex-direction: column; gap: 1rem;
+    }
+    .card.c-indigo  { border-top-color: #4f46e5; }
+    .card.c-sky     { border-top-color: #0ea5e9; }
+    .card.c-emerald { border-top-color: #10b981; }
+
+    .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; }
+    .card-title { font-size: .9375rem; font-weight: 600; color: #1e293b; line-height: 1.35; }
+    .card-proj  { margin-top: .2rem; font-size: .7375rem; color: #64748b; }
+
+    .badge {
+      flex-shrink: 0; font-size: .625rem; font-weight: 700;
+      padding: .2rem .6rem; border-radius: 9999px; white-space: nowrap;
+    }
+    .b-init  { background: #f1f5f9; color: #64748b; }
+    .b-req   { background: #fef3c7; color: #92400e; }
+    .b-design{ background: #dbeafe; color: #1e40af; }
+    .b-tasks { background: #ede9fe; color: #5b21b6; }
+    .b-ready { background: #d1fae5; color: #065f46; }
+
+    /* Progress bar */
+    .pbar { display: flex; gap: .25rem; }
+    .pb { flex: 1; height: 4px; border-radius: 2px; background: #e2e8f0; }
+    .pb.done   { background: #10b981; }
+    .pb.warn   { background: #f59e0b; }
+    .pb.active { background: #4f46e5; }
+
+    /* Phase checklist */
+    .checklist { display: flex; flex-direction: column; gap: .45rem; }
+    .ci { display: flex; align-items: center; gap: .55rem; font-size: .8rem; }
+    .cicon {
+      width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .55rem; font-weight: 800;
+    }
+    .ci-done   .cicon { background: #10b981; color: #fff; }
+    .ci-warn   .cicon { background: #f59e0b; color: #fff; }
+    .ci-active .cicon { background: #4f46e5; color: #fff; }
+    .ci-pend   .cicon { background: #e2e8f0; color: #94a3b8; }
+
+    .ci-done   .ctext { color: #10b981; }
+    .ci-warn   .ctext { color: #d97706; font-weight: 500; }
+    .ci-active .ctext { color: #4f46e5; font-weight: 500; }
+    .ci-pend   .ctext { color: #94a3b8; }
+
+    /* Next action box */
+    .next {
+      background: #f8fafc; border-radius: .5rem; padding: .75rem;
+      font-size: .775rem; color: #475569;
+      margin-top: auto;
+    }
+    .next .nlabel {
+      display: block; font-size: .625rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .06em;
+      color: #94a3b8; margin-bottom: .3rem;
+    }
+    .next code {
+      display: block; margin-top: .25rem;
+      font-family: 'SF Mono', Consolas, monospace;
+      font-size: .725rem; color: #4f46e5;
+    }
+
+    /* ── Summary table ── */
+    .tbl-wrap {
+      background: #fff; border-radius: .75rem; overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: #f8fafc; padding: .65rem 1rem;
+      text-align: left; font-size: .7rem; font-weight: 700;
+      color: #64748b; text-transform: uppercase; letter-spacing: .06em;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    tbody td {
+      padding: .8rem 1rem; font-size: .8125rem;
+      color: #475569; border-bottom: 1px solid #f1f5f9;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #f8fafc; }
+
+    .dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      margin-right: .3rem; vertical-align: middle;
+    }
+    .d-done  { background: #10b981; }
+    .d-warn  { background: #f59e0b; }
+    .d-pend  { background: #e2e8f0; }
+
+    /* ── Guide section ── */
+    .guide {
+      background: #fff; border-radius: .75rem;
+      padding: 1.375rem 1.75rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .guide h3 { font-size: .875rem; font-weight: 600; color: #1e293b; margin-bottom: .875rem; }
+    .guide-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .75rem; }
+    .gitem {
+      background: #f8fafc; border-radius: .5rem;
+      padding: .75rem; font-size: .775rem;
+    }
+    .gitem strong { display: block; color: #1e293b; margin-bottom: .2rem; font-size: .8rem; }
+    .gitem p { color: #64748b; line-height: 1.5; }
+    .gitem code { font-family: 'SF Mono', Consolas, monospace; font-size: .7rem; color: #4f46e5; }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: center;
+      background: #fff; border-radius: .75rem;
+      padding: 1rem 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+      font-size: .775rem; color: #64748b;
+    }
+    .legend strong { color: #1e293b; }
+    .litem { display: flex; align-items: center; gap: .4rem; }
+    .licon {
+      width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .525rem; font-weight: 800; color: #fff;
+    }
+
+    footer {
+      text-align: center; padding: 1.5rem;
+      font-size: .725rem; color: #94a3b8;
+    }
+
+    @media (max-width: 640px) {
+      .cards-grid { grid-template-columns: 1fr; }
+      header { padding: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⚙ SDD Dashboard</h1>
+  <p class="sub">Spec-Driven Development — Acompanhamento de Especificações</p>
+  <div class="header-meta">
+    <span>📁 ericson-j-santos/my-first-spec-project</span>
+    <span>📅 Gerado em: 2026-06-14</span>
+    <span>📋 3 specs ativas</span>
+    <span>✅ Steering configurado</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Seção 1: Fluxo SDD ── -->
+  <section>
+    <div class="section-label">Fluxo SDD — Fases obrigatórias</div>
+    <div class="workflow-card">
+      <div class="pipeline">
+
+        <div class="pstep s-done">
+          <div class="pdot">✓</div>
+          <div class="plabel">Phase 0<br>Steering</div>
+        </div>
+
+        <div class="pstep s-done">
+          <div class="pdot">✓</div>
+          <div class="plabel">spec-init<br>Inicializar</div>
+        </div>
+
+        <div class="pstep s-warn">
+          <div class="pdot">!</div>
+          <div class="plabel">spec-requirements<br>Requisitos</div>
+        </div>
+
+        <div class="pstep s-warn">
+          <div class="pdot">!</div>
+          <div class="plabel">spec-design<br>Design</div>
+        </div>
+
+        <div class="pstep s-warn">
+          <div class="pdot">!</div>
+          <div class="plabel">spec-tasks<br>Tarefas</div>
+        </div>
+
+        <div class="pstep">
+          <div class="pdot">6</div>
+          <div class="plabel">spec-impl<br>Implementação</div>
+        </div>
+
+      </div>
+      <div class="workflow-legend">
+        <span>⛔ <strong>Revisão humana obrigatória</strong> entre cada fase — aprovar antes de avançar</span>
+        <span>⚡ Flag <code class="tag">-y</code> faz fast-track (use com cautela)</span>
+        <span>🔍 <code class="tag">validate-gap</code> · <code class="tag">validate-design</code> · <code class="tag">validate-impl</code> são opcionais mas recomendados</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Seção 2: Cards de Specs ── -->
+  <section>
+    <div class="section-label">Specs ativas (3)</div>
+    <div class="cards-grid">
+
+      <!-- Card 1: pipeline-encoding-fix -->
+      <div class="card c-indigo">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Correção de Encoding — pipeline.py</div>
+            <div class="card-proj">ReqSys v2 Enterprise · FastAPI Python 3.12</div>
+          </div>
+          <span class="badge b-tasks">Tarefas Geradas</span>
+        </div>
+
+        <!-- Barra de progresso: steering, init, req, design, tasks, impl -->
+        <div class="pbar">
+          <div class="pb done"></div>
+          <div class="pb done"></div>
+          <div class="pb warn"></div>
+          <div class="pb warn"></div>
+          <div class="pb warn"></div>
+          <div class="pb"></div>
+        </div>
+
+        <div class="checklist">
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">Phase 0 — Steering configurado</span>
+          </div>
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">spec-init — Spec inicializada</span>
+          </div>
+          <div class="ci ci-warn">
+            <div class="cicon">!</div>
+            <span class="ctext">spec-requirements — Gerado · aguarda aprovação</span>
+          </div>
+          <div class="ci ci-warn">
+            <div class="cicon">!</div>
+            <span class="ctext">spec-design — Gerado · aguarda aprovação</span>
+          </div>
+          <div class="ci ci-warn">
+            <div class="cicon">!</div>
+            <span class="ctext">spec-tasks — Gerado · aguarda aprovação</span>
+          </div>
+          <div class="ci ci-pend">
+            <div class="cicon">6</div>
+            <span class="ctext">spec-impl — Pendente</span>
+          </div>
+        </div>
+
+        <div class="next">
+          <span class="nlabel">Próxima ação</span>
+          Revisar design.md e tasks.md, depois executar implementação
+          <code>/sdd:spec-impl pipeline-encoding-fix 1.1</code>
+        </div>
+      </div>
+
+      <!-- Card 2: backlog-redmine-sync -->
+      <div class="card c-sky">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Sincronização Backlog → Redmine</div>
+            <div class="card-proj">ReqSys v2 Enterprise · FastAPI + Redmine API</div>
+          </div>
+          <span class="badge b-init">Inicializada</span>
+        </div>
+
+        <div class="pbar">
+          <div class="pb done"></div>
+          <div class="pb done"></div>
+          <div class="pb active"></div>
+          <div class="pb"></div>
+          <div class="pb"></div>
+          <div class="pb"></div>
+        </div>
+
+        <div class="checklist">
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">Phase 0 — Steering configurado</span>
+          </div>
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">spec-init — Spec inicializada</span>
+          </div>
+          <div class="ci ci-active">
+            <div class="cicon">→</div>
+            <span class="ctext">spec-requirements — A gerar</span>
+          </div>
+          <div class="ci ci-pend">
+            <div class="cicon">4</div>
+            <span class="ctext">spec-design — Pendente</span>
+          </div>
+          <div class="ci ci-pend">
+            <div class="cicon">5</div>
+            <span class="ctext">spec-tasks — Pendente</span>
+          </div>
+          <div class="ci ci-pend">
+            <div class="cicon">6</div>
+            <span class="ctext">spec-impl — Pendente</span>
+          </div>
+        </div>
+
+        <div class="next">
+          <span class="nlabel">Próxima ação</span>
+          Gerar requisitos
+          <code>/sdd:spec-requirements backlog-redmine-sync</code>
+        </div>
+      </div>
+
+      <!-- Card 3: ai-metrics-incident-report -->
+      <div class="card c-emerald">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Relatório de Incidentes — AI Metrics</div>
+            <div class="card-proj">AI Metrics Backend · FastAPI + SQLite</div>
+          </div>
+          <span class="badge b-init">Inicializada</span>
+        </div>
+
+        <div class="pbar">
+          <div class="pb done"></div>
+          <div class="pb done"></div>
+          <div class="pb active"></div>
+          <div class="pb"></div>
+          <div class="pb"></div>
+          <div class="pb"></div>
+        </div>
+
+        <div class="checklist">
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">Phase 0 — Steering configurado</span>
+          </div>
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">spec-init — Spec inicializada</span>
+          </div>
+          <div class="ci ci-active">
+            <div class="cicon">→</div>
+            <span class="ctext">spec-requirements — A gerar</span>
+          </div>
+          <div class="ci ci-pend">
+            <div class="cicon">4</div>
+            <span class="ctext">spec-design — Pendente</span>
+          </div>
+          <div class="ci ci-pend">
+            <div class="cicon">5</div>
+            <span class="ctext">spec-tasks — Pendente</span>
+          </div>
+          <div class="ci ci-pend">
+            <div class="cicon">6</div>
+            <span class="ctext">spec-impl — Pendente</span>
+          </div>
+        </div>
+
+        <div class="next">
+          <span class="nlabel">Próxima ação</span>
+          Gerar requisitos
+          <code>/sdd:spec-requirements ai-metrics-incident-report</code>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Seção 3: Resumo tabela ── -->
+  <section>
+    <div class="section-label">Resumo geral</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Spec</th>
+            <th>Projeto</th>
+            <th>Steering</th>
+            <th>Init</th>
+            <th>Requisitos</th>
+            <th>Design</th>
+            <th>Tarefas</th>
+            <th>Impl.</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>pipeline-encoding-fix</strong></td>
+            <td>ReqSys v2</td>
+            <td><span class="dot d-done"></span>Feito</td>
+            <td><span class="dot d-done"></span>Feito</td>
+            <td><span class="dot d-warn"></span>Revisão</td>
+            <td><span class="dot d-warn"></span>Revisão</td>
+            <td><span class="dot d-warn"></span>Revisão</td>
+            <td><span class="dot d-pend"></span>—</td>
+          </tr>
+          <tr>
+            <td><strong>backlog-redmine-sync</strong></td>
+            <td>ReqSys v2</td>
+            <td><span class="dot d-done"></span>Feito</td>
+            <td><span class="dot d-done"></span>Feito</td>
+            <td><span class="dot d-pend"></span>—</td>
+            <td><span class="dot d-pend"></span>—</td>
+            <td><span class="dot d-pend"></span>—</td>
+            <td><span class="dot d-pend"></span>—</td>
+          </tr>
+          <tr>
+            <td><strong>ai-metrics-incident-report</strong></td>
+            <td>AI Metrics</td>
+            <td><span class="dot d-done"></span>Feito</td>
+            <td><span class="dot d-done"></span>Feito</td>
+            <td><span class="dot d-pend"></span>—</td>
+            <td><span class="dot d-pend"></span>—</td>
+            <td><span class="dot d-pend"></span>—</td>
+            <td><span class="dot d-pend"></span>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Seção 4: Guia de Comandos ── -->
+  <section>
+    <div class="section-label">Como usar — Guia de Comandos</div>
+    <div class="guide">
+      <h3>Workflow passo a passo</h3>
+      <div class="guide-grid">
+        <div class="gitem">
+          <strong>Phase 0 — Steering</strong>
+          <p>Configura o contexto global do projeto. Execute uma vez.<br>
+          <code>/sdd:steering</code></p>
+        </div>
+        <div class="gitem">
+          <strong>1a — Inicializar spec</strong>
+          <p>Cria a estrutura da spec a partir de uma descrição.<br>
+          <code>/sdd:spec-init "descrição"</code></p>
+        </div>
+        <div class="gitem">
+          <strong>1b — Gerar Requisitos</strong>
+          <p>IA gera o <em>O QUÊ</em> o sistema deve fazer. Você revisa.<br>
+          <code>/sdd:spec-requirements {feature}</code></p>
+        </div>
+        <div class="gitem">
+          <strong>⛔ Revisão Humana</strong>
+          <p>Leia o <code>requirements.md</code> gerado. Se OK, avance. Se não, peça ajustes.</p>
+        </div>
+        <div class="gitem">
+          <strong>1c — Gerar Design</strong>
+          <p>IA gera o <em>COMO</em> será implementado. Você revisa.<br>
+          <code>/sdd:spec-design {feature}</code></p>
+        </div>
+        <div class="gitem">
+          <strong>1d — Gerar Tarefas</strong>
+          <p>IA divide o design em tarefas de 1-3h.<br>
+          <code>/sdd:spec-tasks {feature}</code></p>
+        </div>
+        <div class="gitem">
+          <strong>2 — Implementar</strong>
+          <p>IA escreve o código. Execute por tarefa.<br>
+          <code>/sdd:spec-impl {feature} 1.1</code></p>
+        </div>
+        <div class="gitem">
+          <strong>Fast-track com <code>-y</code></strong>
+          <p>Pula a pausa de aprovação naquela fase. Use só quando tiver certeza.<br>
+          <code>/sdd:spec-design {feature} -y</code></p>
+        </div>
+        <div class="gitem">
+          <strong>Status a qualquer hora</strong>
+          <p>Mostra fase atual, aprovações e próximos passos.<br>
+          <code>/sdd:spec-status {feature}</code></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Seção 5: Legenda ── -->
+  <section>
+    <div class="legend">
+      <strong>Legenda:</strong>
+      <div class="litem">
+        <div class="licon" style="background:#10b981">✓</div>
+        <span>Concluído e aprovado</span>
+      </div>
+      <div class="litem">
+        <div class="licon" style="background:#f59e0b">!</div>
+        <span>Gerado — aguarda revisão humana</span>
+      </div>
+      <div class="litem">
+        <div class="licon" style="background:#4f46e5">→</div>
+        <span>Próximo a executar</span>
+      </div>
+      <div class="litem">
+        <div class="licon" style="background:#e2e8f0; color:#94a3b8">—</div>
+        <span>Ainda pendente</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  SDD Dashboard · ericson-j-santos/my-first-spec-project · Gerado em 2026-06-14
+</footer>
+
+</body>
+</html>
