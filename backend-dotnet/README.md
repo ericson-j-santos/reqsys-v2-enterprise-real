@@ -47,3 +47,19 @@ cd backend-dotnet
 docker build -t reqsys-dotnet-api:3.1.0 .
 docker run --rm -p 8080:8080 reqsys-dotnet-api:3.1.0
 ```
+
+## Frontend conectado ao .NET
+
+Na raiz do repositorio, use a stack dedicada para subir o frontend recente com a API .NET:
+
+```bash
+docker compose -f docker-compose.dotnet.yml up --build
+```
+
+- App: `http://localhost:8090`
+- API direta: `http://localhost:8220/health`
+- Proxy do app: `http://localhost:8090/api/health`
+
+Essa stack nao altera os `docker-compose*.yml` atuais do backend FastAPI. Ela usa `backend-dotnet/`, `frontend/` e `infra/nginx/default.dotnet.conf`.
+
+Compatibilidade validada contra `origin/main` na versao `3.1.0`. O frontend recente consome o contrato `/api -> /v1/*`; por isso a API .NET inclui endpoints de compatibilidade para login, dashboard, requisitos, auditoria, qualidade IA, SSRS, cofre, specs e fluxo de pipeline demonstrativo.

@@ -1,0 +1,38 @@
+services:
+  api:
+    build: ./backend-dotnet
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "${DOTNET_BACKEND_PORT:-8220}:8080"
+    networks:
+      - reqsys-dotnet-net
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      - VITE_API_URL=/api
+    depends_on:
+      - api
+    networks:
+      - reqsys-dotnet-net
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "${DOTNET_GATEWAY_PORT:-8090}:80"
+    volumes:
+      - ./infra/nginx/default.dotnet.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - frontend
+    networks:
+      - reqsys-dotnet-net
+
+networks:
+  reqsys-dotnet-net:
+    driver: bridge

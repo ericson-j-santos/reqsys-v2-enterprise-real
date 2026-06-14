@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ReqSys.Api.Domain;
 
 public enum RequisitoStatus
@@ -10,11 +12,19 @@ public enum RequisitoStatus
     Cancelado
 }
 
-public sealed record Usuario(string Id, string Nome, string Email, string Perfil, string[] Escopos);
+public sealed record Usuario(
+    string Id,
+    string Nome,
+    string Email,
+    [property: JsonPropertyName("papel")] string Perfil,
+    [property: JsonPropertyName("permissoes")] string[] Escopos);
 
 public sealed record LoginRequest(string Email, string Senha);
 
-public sealed record LoginResponse(string AccessToken, Usuario Usuario, DateTimeOffset ExpiraEm);
+public sealed record LoginResponse(
+    [property: JsonPropertyName("access_token")] string AccessToken,
+    Usuario Usuario,
+    [property: JsonPropertyName("expira_em")] DateTimeOffset ExpiraEm);
 
 public sealed record Requisito(
     Guid Id,

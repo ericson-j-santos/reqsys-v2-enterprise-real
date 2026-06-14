@@ -15,7 +15,13 @@ public sealed class AuthService
 
     public LoginResponse? Login(LoginRequest request)
     {
-        if (!string.Equals(request.Email, Admin.Email, StringComparison.OrdinalIgnoreCase) || request.Senha != "admin123")
+        var demoEmails = new[]
+        {
+            Admin.Email,
+            "ericsonjosedossantos@tieri659.onmicrosoft.com"
+        };
+
+        if (!demoEmails.Contains(request.Email, StringComparer.OrdinalIgnoreCase) || request.Senha != "admin123")
         {
             return null;
         }
