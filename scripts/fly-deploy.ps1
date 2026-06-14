@@ -15,9 +15,6 @@ $apiConfig = switch ($Env) {
     "staging" { "fly.staging.toml" }
 }
 
-$appConfig = $apiConfig
-
-# Nomes dos apps (devem coincidir com os fly.toml)
 $apiApp = switch ($Env) {
     "prod"    { "reqsys-api" }
     "dev"     { "reqsys-api-dev" }
@@ -29,22 +26,21 @@ $frontendApp = switch ($Env) {
     "staging" { "reqsys-app-stg" }
 }
 
-Write-Host "`n=== ReqSys Fly.io Deploy — ambiente: $Env ===" -ForegroundColor Cyan
+Write-Host "`n=== ReqSys Fly.io Deploy - ambiente: $Env ===" -ForegroundColor Cyan
 
-# Verifica autenticacao
 $authCheck = & $fly auth whoami 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Nao autenticado. Abrindo login..." -ForegroundColor Yellow
     & $fly auth login
 }
 
-# Configura secrets do backend
 function Set-BackendSecrets([string]$app) {
     Write-Host "`n--- Configurando secrets do backend ($app) ---" -ForegroundColor Yellow
 
     $jwtSecret = Read-Host "JWT_SECRET (deixe em branco para gerar automaticamente)"
     if ([string]::IsNullOrWhiteSpace($jwtSecret)) {
-        $jwtSecret = [System.Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+        $jwtSecret = [System.Convert]::ToBase64String(
+            [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
         Write-Host "JWT_SECRET gerado: $jwtSecret" -ForegroundColor Green
     }
 
@@ -68,7 +64,6 @@ if ($SecretsOnly) {
 Write-Host "`n[1/2] Deploy do Backend ($apiApp)..." -ForegroundColor Cyan
 Push-Location "$root\backend"
 
-# Cria o app se nao existir
 $appExists = & $fly apps list 2>&1 | Select-String $apiApp
 if (-not $appExists) {
     Write-Host "Criando app $apiApp..." -ForegroundColor Yellow
@@ -95,7 +90,7 @@ if (-not $appExists) {
     & $fly apps create $frontendApp
 }
 
-& $fly deploy --config $appConfig --remote-only
+& $fly deploy --config $apiConfig --remote-only
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERRO no deploy do frontend!" -ForegroundColor Red
     Pop-Location; exit 1

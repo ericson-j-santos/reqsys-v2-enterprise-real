@@ -69,6 +69,15 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt pytest-cov
 
+      - name: Verificar encoding UTF-8 (anti-mojibake)
+        run: |
+          echo "Verificando strings com mojibake em app/api/ e app/services/ ..."
+          if grep -rn --include="*.py" -E "Ã§|Ã£|Ã©|Ã¡|Ãº" app/api/ app/services/ 2>/dev/null; then
+            echo "ERRO: Strings com mojibake detectadas. Corrija o encoding do arquivo antes do commit."
+            exit 1
+          fi
+          echo "OK: Nenhum mojibake encontrado."
+
       - name: Run tests with coverage
         env:
           DATABASE_URL: sqlite:///./reqsys_test.db
