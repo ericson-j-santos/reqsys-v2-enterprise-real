@@ -23,7 +23,7 @@ class TestCriarSolicitacao:
             json=PAYLOAD_BASE,
             headers={"X-Correlation-ID": correlation_id},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 201
         data = resp.json()
         assert data["success"] is True
         assert data["data"]["codigo"].startswith("SOL-")

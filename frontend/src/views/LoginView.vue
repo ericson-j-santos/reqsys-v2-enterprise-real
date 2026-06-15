@@ -74,7 +74,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
-import { loginMicrosoft } from '../auth/msal'
+import { loginMicrosoftPopup } from '../auth/msal'
 import { api } from '../services/api'
 
 const { width } = useDisplay()
@@ -115,10 +115,14 @@ async function entrarMicrosoft() {
   carregandoAzure.value = true
   erro.value = ''
   try {
-    await loginMicrosoft()
-    // loginMicrosoft() redireciona; esta linha normalmente não é alcançada.
+    const idToken = await loginMicrosoftPopup()
+    if (!idToken) throw new Error('Token não retornado pelo Microsoft')
+    const { data } = await api.post('/v1/auth/azure', { id_token: idToken })
+    auth.salvarSessao(data.data)
+    router.push('/')
   } catch (e) {
-    erro.value = `Erro ao abrir login Microsoft: ${e.message}`
+    erro.value = e.response?.data?.detail || e.message || 'Falha no login Microsoft'
+  } finally {
     carregandoAzure.value = false
   }
 }

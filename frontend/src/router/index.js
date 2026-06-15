@@ -9,6 +9,7 @@ import RelatoriosView from '../views/RelatoriosView.vue'
 import SegredosStatusView from '../views/SegredosStatusView.vue'
 import QualidadeIAView from '../views/QualidadeIAView.vue'
 import SpecsView from '../views/SpecsView.vue'
+import TaskConsoleView from '../views/TaskConsoleView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -21,6 +22,7 @@ const routes = [
   { path: '/relatorios', component: RelatoriosView, meta: { recurso: 'relatorios:read' } },
   { path: '/segredos-status', component: SegredosStatusView, meta: { recurso: 'dashboard:read' } },
   { path: '/qualidade-ia', component: QualidadeIAView, meta: { recurso: 'dashboard:read' } },
+  { path: '/task-console', component: TaskConsoleView, meta: { recurso: 'dashboard:read' } },
   { path: '/specs',        component: SpecsView,       meta: { recurso: 'dashboard:read' } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })

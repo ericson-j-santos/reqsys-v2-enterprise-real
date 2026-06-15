@@ -71,7 +71,7 @@ async def listar_pacotes_ia(limit: int = 20) -> dict[str, Any]:
             f'{_GRAPH_BASE}/sites/{settings.sharepoint_site_id}'
             f'/lists/{settings.sharepoint_list_ia}/items'
             f'?$expand=fields'
-            f'&$orderby=fields/ProcessadoEmUtc desc'
+            f'&$orderby=lastModifiedDateTime desc'
             f'&$top={limit}'
         )
         async with httpx.AsyncClient(timeout=15) as c:
@@ -102,23 +102,48 @@ async def listar_pacotes_ia(limit: int = 20) -> dict[str, Any]:
         return {'configurado': True, 'itens': [], 'erro': str(exc)}
 
 
+async def _token_dataverse(instance_url: str) -> str:
+    """Obtém access token para a Dataverse API via client_credentials."""
+    scope = instance_url.rstrip('/') + '/.default'
+    async with httpx.AsyncClient(timeout=10) as c:
+        resp = await c.post(
+            _GRAPH_TOKEN_URL.format(tenant=settings.azure_tenant_id),
+            data={
+                'grant_type': 'client_credentials',
+                'client_id': settings.azure_client_id,
+                'client_secret': settings.azure_client_secret,
+                'scope': scope,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()['access_token']
+
+
+# URL do ambiente tieri onde o flow vive
+_TIERI_URL = 'https://orga258f260.crm2.dynamics.com'
+
+
 async def listar_flows_pa() -> dict[str, Any]:
     """
-    Lista flows do Power Automate e as últimas execuções do flow principal.
+    Lista flows ativos via Dataverse API (o SPN tem papel Administrador do Sistema lá).
+    Lê execuções via flowsessions.
     Retorna: { configurado, flows, execucoes, erro }
     """
-    if not _tem_credenciais_graph() or not settings.powerautomate_env_id:
-        return {'configurado': False, 'flows': [], 'execucoes': [], 'erro': 'POWERAUTOMATE_ENV_ID não configurado'}
+    if not _tem_credenciais_graph():
+        return {'configurado': False, 'flows': [], 'execucoes': [], 'erro': 'Credenciais Azure AD não configuradas'}
 
     try:
-        token = await _token_power_automate()
-        headers = {'Authorization': f'Bearer {token}'}
-        env = settings.powerautomate_env_id
+        token = await _token_dataverse(_TIERI_URL)
+        headers = {'Authorization': f'Bearer {token}', 'OData-MaxVersion': '4.0', 'OData-Version': '4.0'}
+        base = f'{_TIERI_URL}/api/data/v9.2'
 
         async with httpx.AsyncClient(timeout=15) as c:
-            # Lista flows do ambiente
+            # Flows ativos (category=5 = Modern Flow)
             r_flows = await c.get(
-                f'{_PA_BASE}/environments/{env}/flows?api-version=2016-11-01',
+                f'{base}/workflows'
+                f'?$filter=category eq 5 and statecode eq 1'
+                f'&$select=workflowid,name,statecode,statuscode,createdon,modifiedon'
+                f'&$top=20',
                 headers=headers,
             )
             r_flows.raise_for_status()
@@ -126,45 +151,23 @@ async def listar_flows_pa() -> dict[str, Any]:
 
         flows = [
             {
-                'id': f.get('name'),
-                'nome': f.get('properties', {}).get('displayName', ''),
-                'estado': f.get('properties', {}).get('state', ''),
-                'criado_em': f.get('properties', {}).get('createdTime', ''),
-                'modificado_em': f.get('properties', {}).get('lastModifiedTime', ''),
+                'id': f.get('workflowid'),
+                'nome': f.get('name', ''),
+                'estado': 'Started' if f.get('statuscode') == 2 else 'Stopped',
+                'criado_em': f.get('createdon', ''),
+                'modificado_em': f.get('modifiedon', ''),
             }
             for f in flows_raw
         ]
 
-        # Execuções do flow principal
-        execucoes = []
-        flow_id = settings.powerautomate_flow_id
-        if flow_id:
-            try:
-                async with httpx.AsyncClient(timeout=15) as c:
-                    r_runs = await c.get(
-                        f'{_PA_BASE}/environments/{env}/flows/{flow_id}/runs?api-version=2016-11-01&$top=10',
-                        headers=headers,
-                    )
-                    r_runs.raise_for_status()
-                    runs_raw = r_runs.json().get('value', [])
-
-                execucoes = [
-                    {
-                        'id': r.get('name'),
-                        'inicio': r.get('properties', {}).get('startTime', ''),
-                        'fim': r.get('properties', {}).get('endTime', ''),
-                        'status': r.get('properties', {}).get('status', ''),
-                        'codigo': r.get('properties', {}).get('code', ''),
-                    }
-                    for r in runs_raw
-                ]
-            except Exception as exc_runs:
-                logger.warning('hub_lowcode: erro ao ler execucoes flow: %s', exc_runs)
+        # Execuções: flow acionado via PowerAppsV2 não grava em flowsessions no Dataverse.
+        # Histórico disponível apenas no portal Power Automate.
+        execucoes: list = []
 
         return {'configurado': True, 'flows': flows, 'execucoes': execucoes, 'erro': None}
 
     except Exception as exc:
-        logger.warning('hub_lowcode: erro ao ler flows PA: %s', exc)
+        logger.warning('hub_lowcode: erro ao ler flows via Dataverse: %s', exc)
         return {'configurado': True, 'flows': [], 'execucoes': [], 'erro': str(exc)}
 
 

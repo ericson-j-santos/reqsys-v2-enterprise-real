@@ -229,11 +229,30 @@
           GitHub Actions — ALM Pipeline
           <v-chip size="x-small" variant="tonal" color="warning">{{ settings.github_alm_repo || 'reqsys-powerplatform-alm' }}</v-chip>
         </div>
-        <v-chip v-if="!github.configurado" size="small" color="warning" variant="tonal">
-          Sem token — limite de rate
-        </v-chip>
+        <div class="d-flex align-center ga-2">
+          <v-chip v-if="falhasConsecutivas >= 2" size="small" color="error" variant="tonal" prepend-icon="mdi-alert">
+            {{ falhasConsecutivas }} falhas seguidas
+          </v-chip>
+          <v-chip v-if="!github.configurado" size="small" color="warning" variant="tonal">
+            Sem token — limite de rate
+          </v-chip>
+        </div>
       </v-card-title>
       <v-divider />
+
+      <v-alert
+        v-if="falhasConsecutivas >= 3"
+        type="error"
+        variant="tonal"
+        class="ma-4"
+        density="compact"
+        icon="mdi-pipe-disconnected"
+      >
+        <strong>{{ falhasConsecutivas }} deploys consecutivos falhando.</strong>
+        Causa provável: connection reference <code>new_sharedplanner_e51d2</code> não configurada nos ambientes Test/Prod.
+        Execute <code>.\scripts\07-obter-connection-ids.ps1</code> após criar uma conexão Planner em
+        <a href="https://make.powerapps.com" target="_blank" class="text-error">make.powerapps.com</a>.
+      </v-alert>
 
       <v-alert v-if="github.erro" type="warning" variant="tonal" class="ma-4" density="compact">
         {{ github.erro }}
@@ -248,10 +267,11 @@
             <th>Status</th>
             <th>Conclusão</th>
             <th>Data</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in github.runs" :key="r.id">
+          <tr v-for="r in github.runs" :key="r.id" :class="r.conclusao === 'failure' ? 'row-failure' : ''">
             <td class="text-caption font-weight-medium">{{ r.nome }}</td>
             <td><code class="text-caption">{{ r.branch }}</code></td>
             <td><code class="text-caption">{{ r.commit }}</code></td>
@@ -265,6 +285,17 @@
               <span v-else class="text-caption text-medium-emphasis">—</span>
             </td>
             <td class="text-caption">{{ formatarData(r.criado_em) }}</td>
+            <td>
+              <v-btn
+                v-if="r.url"
+                :href="r.url"
+                target="_blank"
+                size="x-small"
+                variant="text"
+                icon="mdi-open-in-new"
+                :color="r.conclusao === 'failure' ? 'error' : 'grey'"
+              />
+            </td>
           </tr>
         </tbody>
       </v-table>
@@ -331,6 +362,7 @@ const erroGlobal = ref('')
 const pacotes = ref({ configurado: false, itens: [], erro: null })
 const flows = ref({ configurado: false, flows: [], execucoes: [], erro: null })
 const github = ref({ configurado: false, runs: [], erro: null })
+const settings = ref({ github_alm_repo: '' })
 
 // --- Computeds de resumo ---
 
@@ -351,6 +383,15 @@ const labelUltimoRun = computed(() => {
   return r.conclusao || r.status || '—'
 })
 const chipCorGithub = computed(() => corConclusao(github.value.runs[0]?.conclusao))
+
+const falhasConsecutivas = computed(() => {
+  let count = 0
+  for (const r of github.value.runs) {
+    if (r.conclusao === 'failure') count++
+    else break
+  }
+  return count
+})
 
 // --- Helpers de cor ---
 
@@ -463,5 +504,9 @@ onMounted(carregarTudo)
 
 .text-mono {
   font-family: monospace;
+}
+
+.row-failure td {
+  background-color: rgba(var(--v-theme-error), 0.04);
 }
 </style>

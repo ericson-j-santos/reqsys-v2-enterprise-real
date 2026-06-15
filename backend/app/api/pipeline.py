@@ -1,4 +1,5 @@
 from time import time
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -72,7 +73,7 @@ def criar_solicitacao(
     db: Session = Depends(get_db),
     x_correlation_id: str | None = Header(default=None),
 ):
-    codigo = f"REQ-{str(int(time()))[-9:]}"
+    codigo = f"SOL-{uuid4().hex[:9].upper()}"
     req = Requisito(
         codigo=codigo,
         titulo=payload.titulo,

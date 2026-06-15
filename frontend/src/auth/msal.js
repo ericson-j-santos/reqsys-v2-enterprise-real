@@ -1,4 +1,4 @@
-import { PublicClientApplication } from '@azure/msal-browser'
+import { PublicClientApplication, NavigationClient } from '@azure/msal-browser'
 import { api } from '../services/api'
 
 let _instance = null
@@ -12,6 +12,12 @@ async function fetchAuthConfig() {
   }
 }
 
+class NoReloadNavigationClient extends NavigationClient {
+  navigateInternal(_url, _options) {
+    return Promise.resolve(false)
+  }
+}
+
 export async function getMsalInstance() {
   if (_instance) return _instance
 
@@ -22,14 +28,17 @@ export async function getMsalInstance() {
     auth: {
       clientId: serverConfig.azure_client_id,
       authority: `https://login.microsoftonline.com/${serverConfig.azure_tenant_id}`,
-      redirectUri: window.location.origin,        // URI principal (sem /blank.html)
+      redirectUri: window.location.origin,
       postLogoutRedirectUri: window.location.origin + '/login',
     },
     cache: {
       cacheLocation: 'localStorage',
       storeAuthStateInCookie: true,
     },
-    system: { allowNativeBroker: false },
+    system: {
+      allowNativeBroker: false,
+      navigationClient: new NoReloadNavigationClient(),
+    },
   })
 
   await _instance.initialize()
@@ -38,7 +47,6 @@ export async function getMsalInstance() {
 
 export const SCOPES = ['openid', 'profile', 'email']
 
-// Remove estado de interação travado que causa interaction_in_progress
 function clearInteractionState(clientId) {
   const prefix = `msal.${clientId}`
   ;[localStorage, sessionStorage].forEach(store => {
@@ -48,29 +56,30 @@ function clearInteractionState(clientId) {
   })
 }
 
-// Redireciona a página inteira para o Microsoft — sem popup, sem race condition
-export async function loginMicrosoft() {
+// Popup mode: sem page reload, sem handleRedirectPromise, sem race conditions.
+// Retorna o idToken diretamente para o caller processar.
+export async function loginMicrosoftPopup() {
   const msal = await getMsalInstance()
   if (!msal) throw new Error('Azure AD não configurado no servidor')
   try {
-    await msal.loginRedirect({ scopes: SCOPES, prompt: 'select_account' })
+    const result = await msal.loginPopup({ scopes: SCOPES, prompt: 'select_account' })
+    return result?.idToken ?? null
   } catch (err) {
     if (err.errorCode === 'interaction_in_progress') {
-      // Limpar estado travado e tentar uma vez mais
       clearInteractionState(msal.getConfiguration().auth.clientId)
-      await msal.loginRedirect({ scopes: SCOPES, prompt: 'select_account' })
-      return
+      const result = await msal.loginPopup({ scopes: SCOPES, prompt: 'select_account' })
+      return result?.idToken ?? null
     }
     throw err
   }
 }
 
-// Chamado em main.js ANTES do Vue montar — processa o retorno do redirect
+// Mantido como fallback para sessões de redirect que possam estar em trânsito
 export async function handleRedirectResult() {
   const msal = await getMsalInstance()
   if (!msal) return null
   try {
-    const response = await msal.handleRedirectPromise()
+    const response = await msal.handleRedirectPromise({ navigateToLoginRequestUrl: false })
     return response?.idToken ?? null
   } catch (err) {
     const ignorable = [
