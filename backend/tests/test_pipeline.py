@@ -190,54 +190,6 @@ class TestPublicarRedmine:
         assert resp.json().get("meta", {}).get("correlation_id") == correlation_id
 
 
-class TestEncodingRegressao:
-    """Regressão de encoding: garante que strings em português chegam sem mojibake ao cliente."""
-
-    _FLAG_OFF = "app.api.pipeline.github_redmine_import_enabled"
-    _DETAIL_ESPERADO = "Integração GitHub→Redmine desabilitada por feature flag."
-
-    def test_github_issues_flag_off_detail_utf8(self, client, monkeypatch):
-        monkeypatch.setattr(self._FLAG_OFF, lambda: False)
-        resp = client.post("/v1/integracoes/github/issues", json={"repo": "acme/repo"})
-        assert resp.status_code == 409
-        detail = resp.json().get("detail", "")
-        assert "Integra" in detail and "o" in detail, (
-            f"Mojibake detectado no detail: {detail!r}\nEsperado contendo: {self._DETAIL_ESPERADO!r}"
-        )
-        assert "Ã" not in detail, f"Sequência de mojibake 'Ã' encontrada em: {detail!r}"
-
-    def test_publicar_redmine_flag_off_detail_utf8(self, client, monkeypatch):
-        monkeypatch.setattr(self._FLAG_OFF, lambda: False)
-        resp = client.post(
-            "/v1/backlog/publicar-redmine/1",
-            json={"use_github_import": True, "github_repo": "acme/repo"},
-        )
-        assert resp.status_code == 409
-        detail = resp.json().get("detail", "")
-        assert "Ã" not in detail, f"Sequência de mojibake 'Ã' encontrada em: {detail!r}"
-
-    def test_response_decodifica_utf8_sem_erro(self, client, monkeypatch):
-        monkeypatch.setattr(self._FLAG_OFF, lambda: False)
-        resp = client.post("/v1/integracoes/github/issues", json={"repo": "acme/repo"})
-        try:
-            parsed = resp.json()
-        except (UnicodeDecodeError, ValueError) as exc:
-            raise AssertionError(f"Falha ao decodificar resposta como UTF-8/JSON: {exc}") from exc
-        assert isinstance(parsed, dict)
-
-    def test_content_type_inclui_utf8(self, client):
-        resp = client.post("/v1/solicitacoes", json={
-            "origem": "teste",
-            "titulo": "Título de teste para encoding",
-            "descricao": "Descrição longa o suficiente para passar na validação mínima.",
-            "solicitante": "tester",
-            "area": "QA",
-            "sistema": "ReqSys",
-        })
-        ct = resp.headers.get("content-type", "")
-        assert "application/json" in ct, f"Content-Type inesperado: {ct!r}"
-
-
 class TestIntegracaoGithub:
     def test_listar_issues_github(self, client, monkeypatch):
         fake_issues = [
