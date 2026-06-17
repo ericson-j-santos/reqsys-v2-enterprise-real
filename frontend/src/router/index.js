@@ -8,8 +8,12 @@ import PipelineView from '../views/PipelineView.vue'
 import RelatoriosView from '../views/RelatoriosView.vue'
 import SegredosStatusView from '../views/SegredosStatusView.vue'
 import QualidadeIAView from '../views/QualidadeIAView.vue'
+import RecomendacoesIAView from '../views/RecomendacoesIAView.vue'
 import SpecsView from '../views/SpecsView.vue'
 import TaskConsoleView from '../views/TaskConsoleView.vue'
+import ArquiteturaView from '../views/ArquiteturaView.vue'
+import HubLowCodeView from '../views/HubLowCodeView.vue'
+import GovBIView from '../views/GovBIView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -22,14 +26,16 @@ const routes = [
   { path: '/relatorios', component: RelatoriosView, meta: { recurso: 'relatorios:read' } },
   { path: '/segredos-status', component: SegredosStatusView, meta: { recurso: 'dashboard:read' } },
   { path: '/qualidade-ia', component: QualidadeIAView, meta: { recurso: 'dashboard:read' } },
+  { path: '/recomendacoes-ia', component: RecomendacoesIAView, meta: { recurso: 'dashboard:read' } },
   { path: '/task-console', component: TaskConsoleView, meta: { recurso: 'dashboard:read' } },
-  { path: '/specs',        component: SpecsView,       meta: { recurso: 'dashboard:read' } }
+  { path: '/specs',        component: SpecsView,       meta: { recurso: 'dashboard:read' } },
+  { path: '/hub-lowcode', component: HubLowCodeView,  meta: { recurso: 'dashboard:read' } },
+  { path: '/arquitetura', component: ArquiteturaView, meta: { recurso: 'dashboard:read' } },
+  { path: '/govbi-ia',    component: GovBIView,       meta: { recurso: 'dashboard:read' } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach((to) => {
   const auth = useAuthStore()
-  // Não interferir quando URL tem parâmetros OAuth (retorno de redirect MSAL)
-  if (to.query.code || to.query.state || to.query.error) return undefined
   if (!to.meta.public && !auth.autenticado) return '/login'
   if (to.meta.recurso && auth.usuario && !auth.pode(to.meta.recurso)) return '/'
 })
