@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from app.api import (  # noqa: E402
+    agents,
     auditoria,
     auth,
     cofre,
@@ -73,6 +74,7 @@ app.include_router(ia.router)
 app.include_router(webhooks.router)
 app.include_router(rastreabilidade.router)
 app.include_router(hub_lowcode.router)
+app.include_router(agents.router)
 
 
 @app.middleware('http')

@@ -1,4 +1,4 @@
-from time import time
+from time import time, time_ns
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -17,6 +17,11 @@ from app.services.github_redmine import (
 )
 
 router = APIRouter(tags=['Pipeline'])
+
+
+def gerar_codigo_requisito() -> str:
+    return f"REQ-{str(time_ns())[-9:]}"
+
 
 class SolicitacaoIn(BaseModel):
     origem: str
@@ -129,7 +134,12 @@ def estruturar_requisito(
         req.status = 'estruturado'
         db.commit()
 
-    codigo = req.codigo if req else f"REQ-{str(int(time()))[-8:]}"
+    codigo = req.codigo if req else gerar_codigo_requisito()
+    if req and not codigo.startswith('REQ-'):
+        codigo = gerar_codigo_requisito()
+        req.codigo = codigo
+        db.commit()
+
     return ok({
         'requisito_id': requisito_id,
         'codigo_requisito': codigo,

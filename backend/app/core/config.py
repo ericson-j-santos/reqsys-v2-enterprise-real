@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     powerautomate_env_id: str = Field(default_factory=lambda: get_secret('POWERAUTOMATE_ENV_ID', '') or '')
     powerautomate_flow_id: str = Field(default_factory=lambda: get_secret('POWERAUTOMATE_FLOW_ID', '73bd346b-c765-f111-ab0c-7ced8da7c8da') or '73bd346b-c765-f111-ab0c-7ced8da7c8da')
 
+    # Copilot Studio / Dataverse provisioning
+    copilotstudio_environment_url: str = Field(default_factory=lambda: get_secret('COPILOTSTUDIO_ENVIRONMENT_URL', '') or '')
+    copilotstudio_provisioning_webhook_url: str = Field(default_factory=lambda: get_secret('COPILOTSTUDIO_PROVISIONING_WEBHOOK_URL', '') or '')
+    copilotstudio_provisioning_webhook_key: str = Field(default_factory=lambda: get_secret('COPILOTSTUDIO_PROVISIONING_WEBHOOK_KEY', '') or '')
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(',') if origin.strip()]
