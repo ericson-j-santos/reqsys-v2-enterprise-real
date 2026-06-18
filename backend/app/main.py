@@ -41,12 +41,13 @@ logging.basicConfig(
 logger = logging.getLogger('reqsys.startup')
 sec_logger = logging.getLogger('reqsys.security')
 
-_WEAK_SECRETS = {'trocar-em-producao', 'secret', 'changeme', 'TROQUE-POR-UM-SEGREDO-FORTE-MINIMO-32-CHARS', ''}
-if settings.jwt_secret in _WEAK_SECRETS or len(settings.jwt_secret) < 32:
+if settings.is_jwt_secret_weak:
     logger.warning('JWT_SECRET fraco ou padrao detectado — substitua antes de ir para producao')
 
+settings.validate_production_gates()
+
 Base.metadata.create_all(bind=engine)
-app = FastAPI(title='ReqSys Enterprise API', version='3.1.0')
+app = FastAPI(title='ReqSys Enterprise API', version=settings.app_version)
 
 app.add_middleware(
     CORSMiddleware,
