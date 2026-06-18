@@ -1,5 +1,8 @@
 from io import BytesIO
 
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+
 from app.core.envelope import ok
 from app.schemas.agents import AgentGenerateRequest, AgentProvisionRequest
 from app.services.agent_generator import (
@@ -10,8 +13,6 @@ from app.services.agent_generator import (
     montar_arquivos_pacote,
 )
 from app.services.copilot_studio_provisioner import provisionar_copilot_studio
-from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix='/v1/agents', tags=['Agents'])
 

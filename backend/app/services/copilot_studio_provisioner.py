@@ -5,6 +5,7 @@ import uuid
 from typing import Any
 
 import httpx
+
 from app.core.config import settings
 from app.schemas.agents import AgentProvisionRequest
 from app.services.agent_generator import PACKAGE_NAME, gerar_pacote_agentes
