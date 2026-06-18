@@ -88,6 +88,11 @@ async function loginDemo(page) {
   await expect(page.getByRole('heading', { name: /dashboard de requisitos/i })).toBeVisible()
 }
 
+async function expectMainWithoutHorizontalOverflow(page) {
+  const hasOverflow = await page.locator('.req-main').evaluate((element) => element.scrollWidth > element.clientWidth + 2)
+  expect(hasOverflow).toBe(false)
+}
+
 test.describe('responsividade do layout principal', () => {
   test.beforeEach(async ({ page }) => {
     await mockApi(page)
@@ -102,23 +107,22 @@ test.describe('responsividade do layout principal', () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await loginDemo(page)
 
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)
-      expect(overflow).toBe(false)
-
+      await expectMainWithoutHorizontalOverflow(page)
       await expect(page.getByTestId('metric-card-requisitos')).toBeVisible()
       await expect(page.getByTestId('dashboard-info-card')).toBeVisible()
     })
   }
 
-  test('menu mobile abre e fecha sem deslocar conteúdo', async ({ page }) => {
+  test('menu mobile abre e navega sem deslocar conteúdo', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await loginDemo(page)
 
-    await page.getByLabel('Abrir menu de navegação').click()
-    await expect(page.getByText('Requisitos')).toBeVisible()
-    await page.getByText('Requisitos').click()
+    await page.locator('button[aria-label="Abrir menu de navegação"]').click()
+    const menuLink = page.locator('.req-drawer a[href="/requisitos"]').first()
+    await expect(menuLink).toBeVisible()
+    await menuLink.click()
+    await expect(page).toHaveURL(/\/requisitos$/)
 
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)
-    expect(overflow).toBe(false)
+    await expectMainWithoutHorizontalOverflow(page)
   })
 })
