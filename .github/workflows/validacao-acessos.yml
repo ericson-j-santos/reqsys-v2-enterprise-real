@@ -1,0 +1,44 @@
+name: Validação de Acessos Públicos — ReqSys
+
+on:
+  workflow_dispatch:
+    inputs:
+      fail_on_unavailable:
+        description: "Falhar quando algum endpoint estiver indisponível ou com status inesperado"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+  schedule:
+    - cron: "17 10 * * *"
+
+jobs:
+  validar-acessos:
+    name: Validar URLs públicas e gerar analítico
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validar acessos públicos
+        env:
+          ACCESS_VALIDATION_TIMEOUT_MS: "15000"
+          ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE: ${{ github.event.inputs.fail_on_unavailable || 'true' }}
+        run: |
+          mkdir -p reports
+          node scripts/validar-acessos-publicos.mjs | tee reports/validacao-acessos-publicos.json
+
+      - name: Publicar relatório analítico
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validacao-acessos-publicos
+          path: reports/validacao-acessos-publicos.json
+          if-no-files-found: error
