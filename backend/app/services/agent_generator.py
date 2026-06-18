@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import base64
 import json
+import zipfile
 from io import BytesIO
 from pathlib import PurePosixPath
 from typing import Any
-import zipfile
 
 from app.schemas.agents import AgentGenerateRequest
-
 
 PACKAGE_NAME = 'software-lifecycle-agents'
 
