@@ -1,6 +1,10 @@
 from time import time_ns
 from uuid import uuid4
 
+from fastapi import APIRouter, Depends, Header, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
 from app.core.envelope import ok
 from app.db import get_db
 from app.models.requisito import Requisito
@@ -11,9 +15,6 @@ from app.services.github_redmine import (
     publish_issues_to_redmine,
     publish_requisito_to_redmine,
 )
-from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
 
 router = APIRouter(tags=['Pipeline'])
 
