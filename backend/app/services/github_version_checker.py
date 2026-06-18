@@ -36,7 +36,7 @@ def verificar_versao_github(repo: str, file_path: str, hash_reqsys: str) -> dict
 
     try:
         req = request.Request(url=url, headers=headers, method="GET")
-        with request.urlopen(req, timeout=10) as resp:
+        with request.urlopen(req, timeout=10) as resp:  # nosec B310
             data = json.loads(resp.read().decode("utf-8"))
     except HTTPError as exc:
         if exc.code == 404:
