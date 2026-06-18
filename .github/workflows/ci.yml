@@ -82,6 +82,11 @@ jobs:
         env:
           DATABASE_URL: sqlite:///./reqsys_test.db
           JWT_SECRET_KEY: ci-secret-key-for-testing-only
+          JWT_SECRET: ci-secret-key-for-testing-only-minimum-32-characters
+          JWT_ISSUER: reqsys-ci
+          JWT_AUDIENCE: reqsys-ci-tests
+          ALLOW_DEMO_LOGIN: "true"
+          APP_ENV: test
           REDMINE_URL: https://placeholder.example.com
           REDMINE_API_KEY: placeholder
           ENABLE_GITHUB_REDMINE_IMPORT: "false"
@@ -124,3 +129,52 @@ jobs:
         env:
           VITE_API_URL: /api
         run: npm run build
+
+  # ──────────────────────────────────────────────
+  # JOB 4: Frontend — Responsividade E2E
+  # ──────────────────────────────────────────────
+  frontend-e2e-responsive:
+    name: Frontend Responsive E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: frontend-build
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start Vite dev server
+        env:
+          VITE_API_URL: /api
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5173 > /tmp/reqsys-vite.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then
+              echo "Vite disponível"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Vite não ficou disponível no tempo esperado"
+          cat /tmp/reqsys-vite.log || true
+          exit 1
+
+      - name: Run responsive layout tests
+        env:
+          E2E_BASE_URL: http://127.0.0.1:5173
+        run: npx playwright test tests/e2e/responsividade.spec.js

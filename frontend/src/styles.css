@@ -9,7 +9,21 @@
   --accent-tertiary: #00b3ad;
   --text: #333333;
   --muted: #6b6b6b;
+  --error: #c62828;
 }
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  margin: 0;
+  overflow-x: hidden;
+}
+
 .v-application {
   background: var(--bg) !important;
   color: var(--text) !important;
@@ -22,12 +36,24 @@
   font-size: 12px !important;
   border-radius: 6px !important;
   padding: 6px 10px !important;
-  max-width: 280px;
+  max-width: min(280px, calc(100vw - 32px));
   line-height: 1.4;
   box-shadow: 0 2px 8px rgba(0,0,0,0.25) !important;
 }
 
 /* Impede scroll horizontal indesejado */
+.req-layout,
+.req-main,
+.v-main,
+.v-container,
+.v-row,
+.v-col,
+.v-card,
+.v-table,
+.v-data-table {
+  min-width: 0;
+}
+
 .req-main {
   overflow-x: hidden;
 }
@@ -41,6 +67,7 @@
   font-weight: 800;
   color: var(--accent);
   font-size: 20px;
+  overflow-wrap: anywhere;
 }
 .muted {
   color: var(--muted);
@@ -52,30 +79,36 @@
 .page {
   padding: 24px;
   max-width: 1400px;
+  width: 100%;
   margin: 0 auto;
 }
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 18px;
 }
 .metric {
   padding: 18px;
   background: var(--card-alt);
+  min-height: 100%;
 }
 .metric-value {
-  font-size: 32px;
+  font-size: clamp(24px, 3vw, 32px);
   color: var(--accent);
   font-weight: 800;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 .table-card {
   background: var(--card) !important;
   border: 1px solid var(--border);
   border-radius: 12px;
+  overflow-x: auto;
 }
 h1 {
-  font-size: 24px;
+  font-size: clamp(20px, 2.4vw, 24px);
   margin-bottom: 16px;
   color: var(--accent-strong);
 }
@@ -83,6 +116,7 @@ h1 {
 .page-title {
   margin: 0;
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .v-data-table {
@@ -90,8 +124,16 @@ h1 {
   overflow: hidden;
 }
 
+.v-table__wrapper {
+  overflow-x: auto;
+}
+
 .v-list-item-title,
-.v-list-item-subtitle {
+.v-list-item-subtitle,
+.v-card-title,
+.v-card-subtitle,
+.v-card-text,
+.v-chip__content {
   overflow-wrap: anywhere;
 }
 
@@ -106,6 +148,15 @@ h1 {
   color: var(--accent) !important;
 }
 
+.v-btn {
+  max-width: 100%;
+}
+
+.v-btn__content {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 960px) {
   .page {
     padding: 16px;
@@ -116,8 +167,11 @@ h1 {
     flex-wrap: wrap;
   }
 
+  .page-header > * {
+    min-width: 0;
+  }
+
   h1 {
-    font-size: 22px;
     margin-bottom: 12px;
   }
 
@@ -131,15 +185,28 @@ h1 {
     padding: 12px;
   }
 
-  h1 {
-    font-size: 20px;
-  }
-
   .page-header {
     margin-bottom: 12px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-header .v-btn,
+  .page-header .v-btn-group,
+  .page-header .v-input {
+    width: 100%;
   }
 
   .v-btn {
-    min-height: 38px;
+    min-height: 40px;
+  }
+
+  .v-card-title {
+    font-size: 1rem;
+    line-height: 1.25;
+  }
+
+  .v-card-text {
+    padding: 12px !important;
   }
 }

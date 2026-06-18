@@ -2,10 +2,10 @@
   <v-layout class="req-layout">
     <!-- Mobile app bar -->
     <v-app-bar v-if="mobile" flat class="req-appbar" elevation="0" height="56">
-      <v-app-bar-nav-icon color="white" @click="drawer = !drawer" />
+      <v-app-bar-nav-icon color="white" aria-label="Abrir menu de navegação" @click="drawer = !drawer" />
       <span class="brand-sm ml-1">◈ ReqSys</span>
       <v-spacer />
-      <v-chip size="x-small" color="amber" variant="tonal" class="mr-2">
+      <v-chip size="x-small" color="amber" variant="tonal" class="mr-2 req-role-chip">
         {{ auth.usuario?.papel || 'user' }}
       </v-chip>
     </v-app-bar>
@@ -19,14 +19,14 @@
       class="req-drawer"
     >
       <!-- Brand -->
-      <div class="pa-5 pb-3">
+      <div class="pa-5 pb-3 req-brand-block">
         <div class="brand">◈ ReqSys</div>
         <div class="muted mt-1">SaaS Interno · v2 Enterprise</div>
       </div>
       <v-divider />
 
       <!-- Nav items -->
-      <v-list density="compact" nav class="pt-2">
+      <v-list density="compact" nav class="pt-2 req-nav-list" aria-label="Navegação principal">
         <v-tooltip
           v-for="item in navItems"
           :key="item.to"
@@ -50,22 +50,21 @@
       <template #append>
         <v-divider />
         <div v-if="auth.usuario" class="user-info">
-          <v-avatar size="30" color="amber">
-            <span style="font-size:12px;font-weight:700;color:#000">
+          <v-avatar size="30" color="amber" aria-hidden="true">
+            <span class="user-initials">
               {{ initials(auth.usuario) }}
             </span>
           </v-avatar>
           <div class="overflow-hidden">
             <div class="user-name">{{ auth.usuario.nome || auth.usuario.email }}</div>
-            <div class="muted" style="font-size:11px">{{ auth.usuario.papel }}</div>
+            <div class="muted user-role">{{ auth.usuario.papel }}</div>
           </div>
         </div>
         <v-list density="compact" class="pb-2">
           <v-list-item
             prepend-icon="mdi-logout"
             title="Sair"
-            class="nav-item"
-            style="color:var(--error)!important"
+            class="nav-item logout-item"
             @click="sair"
           />
         </v-list>
@@ -73,13 +72,15 @@
     </v-navigation-drawer>
 
     <v-main class="req-main">
-      <router-view />
+      <div class="req-content-shell">
+        <router-view />
+      </div>
     </v-main>
   </v-layout>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
@@ -87,7 +88,11 @@ import { useAuthStore } from '../stores/auth'
 const { mobile } = useDisplay()
 const auth = useAuthStore()
 const router = useRouter()
-const drawer = ref(true)
+const drawer = ref(!mobile.value)
+
+watch(mobile, (isMobile) => {
+  drawer.value = !isMobile
+})
 
 const navItems = [
   { to: '/',                icon: 'mdi-view-dashboard',     title: 'Dashboard',       tip: 'Visão consolidada das métricas e acessos rápidos.' },
@@ -124,16 +129,33 @@ function sair() {
   color: #fff;
   font-weight: 800;
   font-size: 16px;
+  letter-spacing: -0.01em;
+}
+.req-brand-block {
+  min-width: 0;
+}
+.req-nav-list {
+  max-height: calc(100vh - 176px);
+  overflow-y: auto;
 }
 .nav-item {
   border-radius: 8px;
   margin-bottom: 2px;
+}
+.logout-item {
+  color: var(--error) !important;
 }
 .user-info {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
+  min-width: 0;
+}
+.user-initials {
+  font-size: 12px;
+  font-weight: 700;
+  color: #000;
 }
 .user-name {
   font-size: 13px;
@@ -142,5 +164,21 @@ function sair() {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-</style>
+.user-role {
+  font-size: 11px;
+}
+.req-content-shell {
+  min-width: 0;
+  width: 100%;
+}
 
+@media (max-width: 600px) {
+  .req-role-chip {
+    max-width: 96px;
+  }
+
+  .req-main {
+    padding-top: 56px;
+  }
+}
+</style>

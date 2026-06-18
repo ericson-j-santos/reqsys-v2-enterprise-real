@@ -4,8 +4,13 @@ services:
     user: "1000:1000"
     # Sem ports: — backend nunca exposto diretamente em prod; acesso somente via nginx
     environment:
+      - APP_ENV=production
+      - ALLOW_DEMO_LOGIN=false
       - DATABASE_URL=sqlite:////data/reqsys.db
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET obrigatorio em prod}
+      - JWT_ISSUER=${JWT_ISSUER:?JWT_ISSUER obrigatorio em prod}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:?JWT_AUDIENCE obrigatorio em prod}
+      - JWT_EXP_MINUTES=${JWT_EXP_MINUTES:-60}
       - CORS_ORIGINS=${CORS_ORIGINS:-https://tieridev.duckdns.org,https://tierin.duckdns.org,https://tieriprod.duckdns.org}
       - WIKI_SYNC_BASE_URL=${WIKI_SYNC_BASE_URL:-}
       - WIKI_SYNC_TOKEN=${WIKI_SYNC_TOKEN:-}
