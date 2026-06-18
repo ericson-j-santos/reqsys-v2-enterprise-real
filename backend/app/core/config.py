@@ -112,6 +112,8 @@ class Settings(BaseSettings):
 
         if self.is_jwt_secret_weak:
             errors.append('JWT_SECRET fraco, ausente ou padrão')
+        if self.jwt_exp_minutes <= 0:
+            errors.append('JWT_EXP_MINUTES deve ser maior que 0 em produção')
         if any(origin == '*' for origin in cors_origins):
             errors.append('CORS_ORIGINS não pode conter * em produção')
         if not self.jwt_issuer.strip():
