@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-
 AgentTarget = Literal['copilot_studio']
 AgentPackageType = Literal['software_lifecycle_orchestrator']
 AgentProvisionMode = Literal['dry_run', 'webhook', 'dataverse_import']
