@@ -15,8 +15,9 @@ _bearer = HTTPBearer(auto_error=False)
 def criar_token(payload: dict, minutos: int | None = None):
     agora = datetime.now(timezone.utc)
     dados = payload.copy()
+    ttl_minutes = settings.jwt_exp_minutes if minutos is None else minutos
     dados['iat'] = agora
-    dados['exp'] = agora + timedelta(minutes=minutos or settings.jwt_exp_minutes)
+    dados['exp'] = agora + timedelta(minutes=ttl_minutes)
 
     if settings.jwt_issuer:
         dados['iss'] = settings.jwt_issuer
