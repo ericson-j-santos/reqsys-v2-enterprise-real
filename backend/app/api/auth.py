@@ -132,10 +132,11 @@ def auth_config():
         'azure_enabled': bool(settings.azure_tenant_id and settings.azure_client_id),
         'azure_tenant_id': settings.azure_tenant_id or None,
         'azure_client_id': settings.azure_client_id or None,
+        'demo_login_enabled': bool(settings.allow_demo_login and not settings.is_production),
     })
 
 
-# ─── Login demo (mantido para desenvolvimento) ────────────────────────────────
+# ─── Login demo (mantido somente para desenvolvimento controlado) ─────────────
 
 class LoginInput(BaseModel):
     email: EmailStr = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
@@ -144,11 +145,14 @@ class LoginInput(BaseModel):
 
 @router.post('/login')
 def login(body: LoginInput, request: Request):
-    """Login demo — sem validação de senha (apenas para desenvolvimento)."""
+    """Login demo — permitido apenas quando ALLOW_DEMO_LOGIN=true e fora de produção."""
+    if settings.is_production or not settings.allow_demo_login:
+        logger.warning('demo_login_bloqueado ip=%s environment=%s', request.client.host if request.client else '?', settings.app_environment)
+        raise HTTPException(403, 'Login demo desabilitado neste ambiente')
+
     email = body.email
     papel = _papel_from_email(email)
     logger.info('demo_login ip=%s email=%s papel=%s', request.client.host if request.client else '?', email, papel)
     usuario = {'email': email, 'nome': _nome_from_email(email), 'papel': papel, 'permissoes': permissoes(papel)}
     token = criar_token({'sub': email, 'papel': papel})
     return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})
-
