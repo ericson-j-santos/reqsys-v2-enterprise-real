@@ -27,7 +27,7 @@ def _request_json(method: str, url: str, headers: dict[str, str] | None = None, 
 
     req = request.Request(url=url, data=body, headers=req_headers, method=method)
     try:
-        with request.urlopen(req, timeout=20) as resp:
+        with request.urlopen(req, timeout=20) as resp:  # nosec B310
             raw = resp.read().decode("utf-8")
             return json.loads(raw) if raw else {}
     except HTTPError as exc:

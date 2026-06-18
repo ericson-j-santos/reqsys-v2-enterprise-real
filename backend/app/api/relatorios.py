@@ -18,9 +18,6 @@ from fastapi.responses import StreamingResponse
 from app.core.envelope import ok
 from app.core.secrets import get_secret
 
-# Suprime aviso de certificado auto-assinado para chamadas internas ao SSRS
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 router = APIRouter(prefix='/v1/relatorios', tags=['Relatorios'])
 
 DEFAULT_REPORTS = [
@@ -42,6 +39,14 @@ def _list_reports() -> list[str]:
 def _ssrs_require_https() -> bool:
     value = (get_secret('SSRS_REQUIRE_HTTPS', 'false') or 'false').strip().lower()
     return value in {'1', 'true', 'yes', 'on'}
+
+
+def _ssrs_verify_tls() -> bool:
+    value = (get_secret('SSRS_VERIFY_TLS', 'true') or 'true').strip().lower()
+    verify_tls = value not in {'0', 'false', 'no', 'off'}
+    if not verify_tls:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    return verify_tls
 
 
 def _get_ssrs_auth():
@@ -122,13 +127,14 @@ def ssrs_health():
     auth = _get_ssrs_auth()
     user = (get_secret('SSRS_USER', '') or '').strip()
     auth_mode = 'ntlm' if user else 'sspi'
+    verify_tls = _ssrs_verify_tls()
 
     try:
         resp = _requests.get(
             base_url,
             auth=auth,
             timeout=5,
-            verify=False,  # aceita certificado interno auto-assinado
+            verify=verify_tls,
             headers={'User-Agent': 'reqsys-ssrs-health/1.0'},
         )
         return ok({
@@ -155,11 +161,12 @@ def _check_report_accessibility(render_url: str, auth):
     Alguns ambientes SSRS bloqueiam HEAD e retornam 405/501 apesar de o relatório
     estar acessível via GET.
     """
+    verify_tls = _ssrs_verify_tls()
     resp = _requests.head(
         render_url,
         auth=auth,
         timeout=5,
-        verify=False,
+        verify=verify_tls,
         allow_redirects=True,
         headers={'User-Agent': 'reqsys-ssrs-status/1.0'},
     )
@@ -169,7 +176,7 @@ def _check_report_accessibility(render_url: str, auth):
             render_url,
             auth=auth,
             timeout=5,
-            verify=False,
+            verify=verify_tls,
             allow_redirects=True,
             stream=True,
             headers={'User-Agent': 'reqsys-ssrs-status/1.0'},
@@ -267,12 +274,13 @@ def ssrs_pdf_download(nome: str):
         # Em ambientes sem SSPI/credenciais, retorna o erro apropriado
         raise exc
 
+    verify_tls = _ssrs_verify_tls()
     try:
         resp = _requests.get(
             pdf_url,
             auth=auth,
             timeout=30,
-            verify=False,
+            verify=verify_tls,
             stream=True,
             headers={'User-Agent': 'reqsys-ssrs-pdf/1.0'},
         )

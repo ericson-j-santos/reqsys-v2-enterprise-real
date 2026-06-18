@@ -101,7 +101,7 @@ def _publicar_redmine_wiki(wiki_page_title: str, conteudo: str, correlation_id: 
 
     try:
         req = request.Request(url=url, data=payload, headers=headers, method="PUT")
-        with request.urlopen(req, timeout=15) as _:
+        with request.urlopen(req, timeout=15) as _:  # nosec B310
             wiki_url = f"{base_url}/projects/{project_id}/wiki/{page_slug}"
             return {
                 "publicado": True,
@@ -160,7 +160,7 @@ def _chamar_wiki_sync(wiki_page_title: str, conteudo: str, correlation_id: str) 
             headers=headers,
             method="POST",
         )
-        with request.urlopen(req, timeout=15) as resp:
+        with request.urlopen(req, timeout=15) as resp:  # nosec B310
             body = json.loads(resp.read().decode("utf-8"))
             novo_correlation = body.get("data", {}).get("correlationId", correlation_id)
             return {

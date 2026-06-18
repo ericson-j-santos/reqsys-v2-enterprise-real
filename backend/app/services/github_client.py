@@ -35,7 +35,7 @@ def _request_json(method: str, path: str, payload: dict[str, Any] | None = None)
 
     req = request.Request(url=f'https://api.github.com{path}', data=body, headers=headers, method=method)
     try:
-        with request.urlopen(req, timeout=20) as resp:
+        with request.urlopen(req, timeout=20) as resp:  # nosec B310
             raw = resp.read().decode('utf-8')
             return json.loads(raw) if raw else {}
     except HTTPError as exc:
