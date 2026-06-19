@@ -8,6 +8,7 @@ de configuração e permite cobertura isolada em testes.
 
 from __future__ import annotations
 
+import os
 from typing import Iterable
 
 
@@ -19,20 +20,28 @@ def _split_csv(value: str | None) -> list[str]:
     return [item.strip() for item in (value or '').split(',') if item.strip()]
 
 
+def _setting(settings_obj, attr: str, env_name: str, default=None):
+    value = getattr(settings_obj, attr, None)
+    if value not in (None, ''):
+        return value
+    return os.getenv(env_name, default)
+
+
 def _is_production(app_env: str | None) -> bool:
     return (app_env or '').strip().lower() in _PRODUCTION_ENVS
 
 
 def validar_gates_producao(settings_obj) -> None:
     """Levanta RuntimeError quando houver configuração insegura em produção."""
-    if not _is_production(getattr(settings_obj, 'app_env', None)):
+    app_env = _setting(settings_obj, 'app_env', 'APP_ENV', 'development')
+    if not _is_production(app_env):
         return
 
     violations: list[str] = []
-    jwt_value = getattr(settings_obj, 'jwt_secret', '')
-    cors_values: Iterable[str] = getattr(settings_obj, 'cors_origins_list', _split_csv(getattr(settings_obj, 'cors_origins', '')))
-    jwt_issuer = getattr(settings_obj, 'jwt_issuer', 'reqsys-api')
-    jwt_audience = getattr(settings_obj, 'jwt_audience', 'reqsys-web')
+    jwt_value = _setting(settings_obj, 'jwt_secret', 'JWT_SECRET', '')
+    cors_values: Iterable[str] = getattr(settings_obj, 'cors_origins_list', _split_csv(os.getenv('CORS_ORIGINS', '')))
+    jwt_issuer = _setting(settings_obj, 'jwt_issuer', 'JWT_ISSUER', '')
+    jwt_audience = _setting(settings_obj, 'jwt_audience', 'JWT_AUDIENCE', '')
 
     if jwt_value in _WEAK_VALUES or len(jwt_value) < 32:
         violations.append('jwt_secret fraco ou ausente')
