@@ -80,6 +80,63 @@ bash scripts/publicar_ambiente.sh hml
 bash scripts/publicar_ambiente.sh prod
 ```
 
+### Execução local sem Docker
+
+Para subir o stack diretamente (Python 3.12+, Node.js 20+, nginx instalados):
+
+```bash
+bash scripts/executar-local.sh
+```
+
+No Windows PowerShell, usar o equivalente:
+
+```powershell
+./scripts/executar-local.ps1
+```
+
+### E2E e validações no nível raiz
+
+A raiz do repositório expõe scripts npm para execução agregada:
+
+```bash
+npm ci
+npm run test:e2e          # Playwright via playwright.config.ts
+npm run test:e2e:ui       # modo UI interativo
+npm run test:e2e:report   # abrir relatório anterior
+npm run validate:access   # node scripts/validar-acessos-publicos.mjs
+```
+
+Validação agregada de qualidade (backend + builds + E2E):
+
+```bash
+bash scripts/validar_qualidade.sh
+```
+
+Smoke test rápido contra URLs publicadas:
+
+```bash
+bash scripts/testar_urls_ambiente.sh dev
+bash scripts/testar_urls_ambiente.sh hml
+bash scripts/testar_urls_ambiente.sh prod
+```
+
+Para o frontend principal há um runner E2E protegido por verificação de readiness:
+
+```bash
+cd frontend
+npm run test:e2e:stable
+```
+
+### Gates de segurança individuais
+
+Quando alterar autenticação, JWT, CORS ou gates de produção, executar a bateria isolada:
+
+```bash
+bash scripts/run_security_gate_tests.sh
+```
+
+No Windows PowerShell, usar `scripts/run_security_gate_tests.ps1`.
+
 ## CI obrigatório
 
 Antes de merge em `main`, validar o workflow `CI — ReqSys v2 Enterprise` com os jobs:
@@ -92,6 +149,15 @@ Antes de merge em `main`, validar o workflow `CI — ReqSys v2 Enterprise` com o
 | `Frontend Responsive E2E (Playwright)` | `success` |
 
 Não considerar um PR pronto para merge quando o E2E responsivo estiver ausente, em execução ou falho, salvo decisão técnica formal e documentada.
+
+Workflows complementares no diretório `.github/workflows/`:
+
+| Workflow | Disparo | Função |
+| --- | --- | --- |
+| `validacao-acessos.yml` | push em `main`, agendado (`cron: 17 10 * * *`) e `workflow_dispatch` | Executa `node scripts/validar-acessos-publicos.mjs` e publica artifact `validacao-acessos-publicos`. |
+| `validar-painel-ciclo.yml` | PRs em `docs/painel-ciclo-completo-reqsys.html`, `docs/ciclo-completo/**`, `scripts/validar_painel_ciclo.py` ou no próprio workflow, e `workflow_dispatch` | Executa `python scripts/validar_painel_ciclo.py` e publica artifact `reqsys-painel-ciclo-completo`. |
+
+O job `Backend Tests + Coverage (pytest)` também executa verificação anti-mojibake em `app/api/` e `app/services/`. Não introduzir strings com encoding quebrado nesses diretórios.
 
 ## Gates de produção
 
