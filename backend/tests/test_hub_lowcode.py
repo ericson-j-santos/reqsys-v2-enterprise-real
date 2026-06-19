@@ -92,7 +92,9 @@ def test_hub_lowcode_pacotes(client, monkeypatch):
     resp = client.get('/v1/hub-lowcode/pacotes?limit=1')
 
     assert resp.status_code == 200
-    data = resp.json()['data']
+    body = resp.json()
+    assert body['success'] is True
+    data = body['data']
     assert data['configurado'] is True
     assert len(data['itens']) == 1
     assert data['itens'][0]['projeto'] == 'ReqSys'
@@ -104,7 +106,9 @@ def test_hub_lowcode_flows(client, monkeypatch):
     resp = client.get('/v1/hub-lowcode/flows')
 
     assert resp.status_code == 200
-    data = resp.json()['data']
+    body = resp.json()
+    assert body['success'] is True
+    data = body['data']
     assert data['configurado'] is True
     assert data['flows'][0]['nome'] == 'ReqSys - Criar no Planner'
 
@@ -115,7 +119,9 @@ def test_hub_lowcode_github(client, monkeypatch):
     resp = client.get('/v1/hub-lowcode/github?limit=1')
 
     assert resp.status_code == 200
-    data = resp.json()['data']
+    body = resp.json()
+    assert body['success'] is True
+    data = body['data']
     assert data['configurado'] is True
     assert len(data['runs']) == 1
     assert data['runs'][0]['workflow'] == 'ci.yml'
