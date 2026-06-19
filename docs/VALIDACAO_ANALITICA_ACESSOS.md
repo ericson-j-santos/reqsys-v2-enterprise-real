@@ -29,17 +29,27 @@ Arquivo:
 scripts/validar-acessos-publicos.mjs
 ```
 
-Workflow criado:
+Workflow:
 
 ```text
 .github/workflows/validacao-acessos.yml
 ```
 
-Execução:
+## Gatilhos do workflow
 
-- manual via `workflow_dispatch`;
-- diária via schedule;
-- gera artefato `validacao-acessos-publicos.json`.
+| Gatilho | Quando executa | Comportamento esperado |
+| --- | --- | --- |
+| `workflow_dispatch` | Execução manual pela UI ou GitHub CLI | Permite escolher `fail_on_unavailable=true` ou `false` |
+| `push` em `main` | Após merge ou push direto na branch principal | Executa validação bloqueante com `fail_on_unavailable=true` |
+| `schedule` | Diariamente às 10:17 UTC | Executa validação recorrente com `fail_on_unavailable=true` |
+
+## Governança do workflow
+
+- Permissão mínima declarada: `contents: read`.
+- Concorrência controlada por branch via `validacao-acessos-${{ github.ref }}`.
+- Execuções novas cancelam execuções anteriores ainda em andamento para a mesma referência.
+- O relatório analítico é publicado sempre que o job executa, inclusive em falha controlada.
+- O artefato publicado é `validacao-acessos-publicos.json`.
 
 ## Campos analíticos gerados
 
@@ -68,8 +78,9 @@ O relatório JSON contém:
 | API Health | Deve retornar `200` |
 | Aplicação Web | Pode retornar `200`, `301`, `302`, `401` ou `403`, desde que esteja alcançável |
 | Timeout | Cada URL deve responder dentro de `ACCESS_VALIDATION_TIMEOUT_MS` |
-| Falha controlada | `ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE=false` permite relatório sem quebrar a pipeline |
+| Falha controlada | `ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE=false` permite relatório sem quebrar a pipeline manual |
 | Falha bloqueante | `ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE=true` falha a execução em indisponibilidade/status inesperado |
+| Pós-merge | Todo `push` na `main` deve gerar relatório de validação pública |
 
 ## Observação da validação externa neste ambiente
 

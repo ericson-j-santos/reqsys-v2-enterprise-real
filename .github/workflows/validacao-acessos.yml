@@ -11,8 +11,20 @@ on:
         options:
           - "true"
           - "false"
+
+  push:
+    branches:
+      - main
+
   schedule:
     - cron: "17 10 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validacao-acessos-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validar-acessos:
@@ -30,7 +42,7 @@ jobs:
       - name: Validar acessos públicos
         env:
           ACCESS_VALIDATION_TIMEOUT_MS: "15000"
-          ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE: ${{ github.event.inputs.fail_on_unavailable || 'true' }}
+          ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.fail_on_unavailable || 'true' }}
         run: |
           mkdir -p reports
           node scripts/validar-acessos-publicos.mjs | tee reports/validacao-acessos-publicos.json
