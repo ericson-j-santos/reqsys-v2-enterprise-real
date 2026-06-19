@@ -1,5 +1,7 @@
 import logging
 import sys
+import time
+import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -8,6 +10,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / '.env', override=False)
 
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 
 from app.api import (  # noqa: E402
     agents,
@@ -54,8 +57,8 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allow_headers=['Authorization', 'Content-Type', 'Accept', 'X-Requested-With', 'X-Correlation-Id'],
-    expose_headers=['X-Request-ID', 'X-Correlation-Id'],
+    allow_headers=['Authorization', 'Content-Type', 'Accept', 'X-Requested-With', 'X-Correlation-Id', 'X-Correlation-ID'],
+    expose_headers=['X-Request-ID', 'X-Correlation-Id', 'X-Correlation-ID'],
 )
 
 app.include_router(auth.router)
@@ -79,15 +82,50 @@ app.include_router(agents.router)
 
 
 @app.middleware('http')
+async def observability_and_security_headers(request: Request, call_next):
+    started_at = time.perf_counter()
+    correlation_id = (
+        request.headers.get('X-Correlation-ID')
+        or request.headers.get('X-Correlation-Id')
+        or request.headers.get('X-Request-ID')
+        or str(uuid.uuid4())
+    )
+    request.state.correlation_id = correlation_id
+
+    response = await call_next(request)
+    elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
+
+    response.headers['X-Correlation-ID'] = correlation_id
+    response.headers['X-Request-ID'] = correlation_id
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    if request.url.scheme == 'https':
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+
+    logger.info(
+        'http_request method=%s path=%s status=%s elapsed_ms=%s correlation_id=%s',
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed_ms,
+        correlation_id,
+    )
+    return response
+
+
+@app.middleware('http')
 async def log_security_events(request: Request, call_next):
     response = await call_next(request)
     if response.status_code in (401, 403):
         sec_logger.warning(
-            'acesso negado status=%s method=%s path=%s ip=%s',
+            'acesso negado status=%s method=%s path=%s ip=%s correlation_id=%s',
             response.status_code,
             request.method,
             request.url.path,
             request.client.host if request.client else 'unknown',
+            getattr(request.state, 'correlation_id', None),
         )
     return response
 
@@ -95,3 +133,23 @@ async def log_security_events(request: Request, call_next):
 @app.get('/health')
 def health():
     return ok({'status': 'ok', 'service': 'reqsys-api'})
+
+
+@app.get('/health/live')
+def health_live():
+    return ok({'status': 'alive', 'service': 'reqsys-api'})
+
+
+@app.get('/health/ready')
+def health_ready():
+    checks = {'database': 'unknown'}
+    try:
+        with engine.connect() as conn:
+            conn.execute(text('SELECT 1'))
+        checks['database'] = 'ok'
+    except Exception as exc:  # pragma: no cover - depende do ambiente de infraestrutura
+        logger.exception('readiness_check_failed database=%s', exc)
+        checks['database'] = 'error'
+
+    status = 'ready' if all(value == 'ok' for value in checks.values()) else 'degraded'
+    return ok({'status': status, 'service': 'reqsys-api', 'checks': checks})
