@@ -14,6 +14,7 @@ import TaskConsoleView from '../views/TaskConsoleView.vue'
 import ArquiteturaView from '../views/ArquiteturaView.vue'
 import HubLowCodeView from '../views/HubLowCodeView.vue'
 import GovBIView from '../views/GovBIView.vue'
+import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -30,6 +31,7 @@ const routes = [
   { path: '/task-console', component: TaskConsoleView, meta: { recurso: 'dashboard:read' } },
   { path: '/specs',        component: SpecsView,       meta: { recurso: 'dashboard:read' } },
   { path: '/hub-lowcode', component: HubLowCodeView,  meta: { recurso: 'dashboard:read' } },
+  { path: '/painel-integracao', component: PainelIntegracaoView, meta: { recurso: 'dashboard:read' } },
   { path: '/arquitetura', component: ArquiteturaView, meta: { recurso: 'dashboard:read' } },
   { path: '/govbi-ia',    component: GovBIView,       meta: { recurso: 'dashboard:read' } }
 ]

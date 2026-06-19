@@ -32,6 +32,7 @@ from app.api import (  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.envelope import ok  # noqa: E402
 from app.db import Base, engine  # noqa: E402
+import app.models  # noqa: F401 — garante create_all para integracao_log e configuracao_lowcode
 
 logging.basicConfig(
     level=logging.INFO,

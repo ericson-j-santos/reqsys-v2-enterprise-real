@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     github_alm_repo: str = Field(default_factory=lambda: get_secret('GITHUB_ALM_REPO', 'ericson-j-santos/reqsys-powerplatform-alm') or 'ericson-j-santos/reqsys-powerplatform-alm')
     powerautomate_env_id: str = Field(default_factory=lambda: get_secret('POWERAUTOMATE_ENV_ID', '') or '')
     powerautomate_flow_id: str = Field(default_factory=lambda: get_secret('POWERAUTOMATE_FLOW_ID', '73bd346b-c765-f111-ab0c-7ced8da7c8da') or '73bd346b-c765-f111-ab0c-7ced8da7c8da')
+    powerautomate_planner_webhook_url: str = Field(default_factory=lambda: get_secret('POWERAUTOMATE_PLANNER_WEBHOOK_URL', '') or '')
+    powerautomate_planner_webhook_key: str = Field(default_factory=lambda: get_secret('POWERAUTOMATE_PLANNER_WEBHOOK_KEY', '') or '')
+    teams_notifications_webhook_url: str = Field(default_factory=lambda: get_secret('TEAMS_NOTIFICATIONS_WEBHOOK_URL', '') or '')
+    app_public_url: str = Field(default_factory=lambda: get_secret('APP_PUBLIC_URL', '') or '')
+    api_public_url: str = Field(default_factory=lambda: get_secret('API_PUBLIC_URL', '') or '')
 
     # Copilot Studio / Dataverse provisioning
     copilotstudio_environment_url: str = Field(default_factory=lambda: get_secret('COPILOTSTUDIO_ENVIRONMENT_URL', '') or '')
@@ -125,6 +130,42 @@ class Settings(BaseSettings):
 
         if errors:
             raise RuntimeError('Configuração insegura para produção: ' + '; '.join(errors))
+
+    @property
+    def normalized_environment(self) -> str:
+        value = (self.app_environment or '').strip().lower().replace('-', '_')
+        aliases = {
+            'dev': 'desenvolvimento', 'development': 'desenvolvimento', 'local': 'desenvolvimento',
+            'test': 'testes', 'teste': 'testes', 'testing': 'testes',
+            'stg': 'homologacao', 'staging': 'homologacao', 'homolog': 'homologacao', 'hml': 'homologacao',
+            'prod': 'producao', 'production': 'producao',
+        }
+        return aliases.get(value, value or 'desenvolvimento')
+
+    @property
+    def ambientes_urls(self) -> dict[str, dict[str, str]]:
+        return {
+            'desenvolvimento': {
+                'frontend': 'https://reqsys-app-dev.fly.dev', 'api': 'https://reqsys-api-dev.fly.dev/docs',
+                'notas': 'Fly dev; local usa docker-compose.yml + docker-compose.dev.yml',
+            },
+            'producao': {
+                'frontend': 'https://reqsys-app.fly.dev', 'api': 'https://reqsys-api.fly.dev/docs',
+                'notas': 'Fly producao; local usa docker-compose.yml + docker-compose.prod.yml',
+            },
+            'testes': {'frontend': 'http://localhost:8084', 'api': 'http://localhost:8212/docs', 'notas': 'Docker test'},
+            'homologacao': {'frontend': 'https://reqsys-web-stg.fly.dev', 'api': 'https://reqsys-api-stg.fly.dev', 'notas': 'Fly staging'},
+        }
+
+    @property
+    def ambiente_atual_info(self) -> dict[str, str]:
+        ambiente = self.normalized_environment
+        info = dict(self.ambientes_urls.get(ambiente, self.ambientes_urls['desenvolvimento']))
+        if self.app_public_url:
+            info['frontend'] = self.app_public_url
+        if self.api_public_url:
+            info['api'] = self.api_public_url
+        return {'ambiente': ambiente, 'url_acesso': info.get('frontend', ''), **info}
 
 
 settings = Settings()

@@ -106,8 +106,9 @@ const navItems = [
   { to: '/rastreabilidade', icon: 'mdi-vector-link',        title: 'Rastreabilidade', tip: 'Matriz de vínculo entre requisito, história e entrega.' },
   { to: '/specs',            icon: 'mdi-file-code-outline',  title: 'Specs SDD',       tip: 'Especificações de features do my-first-spec-project.' },
   { to: '/auditoria',       icon: 'mdi-shield-search',      title: 'Auditoria',       tip: 'Linha do tempo de eventos e governança operacional.' },
-  { to: '/hub-lowcode',    icon: 'mdi-lightning-bolt-circle', title: 'Hub Low-Code',    tip: 'Pacotes IA, flows Power Automate, bot ReqSysAgent e pipeline GitHub ALM.' },
-  { to: '/arquitetura',    icon: 'mdi-sitemap',            title: 'Mapa da Solução', tip: 'Visão completa de todos os componentes Web e Low-Code.' },
+  { to: '/hub-lowcode',       icon: 'mdi-lightning-bolt-circle',    title: 'Hub Low-Code',   tip: 'Pacotes IA, flows Power Automate, bot ReqSysAgent e pipeline GitHub ALM.' },
+  { to: '/painel-integracao', icon: 'mdi-view-dashboard-outline',  title: 'Integrações',    tip: 'Painel de acompanhamento: Planner, Teams e histórico de eventos.' },
+  { to: '/arquitetura',       icon: 'mdi-sitemap',                  title: 'Mapa da Solução', tip: 'Visão completa de todos os componentes Web e Low-Code.' },
   { to: '/govbi-ia',      icon: 'mdi-database-search',    title: 'GovBI IA',        tip: 'Consultas analíticas em linguagem natural com IA governada.' },
 ]
 

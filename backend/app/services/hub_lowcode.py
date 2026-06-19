@@ -4,13 +4,18 @@ hub_lowcode.py — Agrega dados de baixo código para o Hub: SharePoint, Power A
 Todos os métodos degradam graciosamente quando as credenciais não estão configuradas,
 retornando listas vazias com flag `configurado=False` em vez de lançar exceção.
 """
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.configuracao_lowcode import ConfiguracaoLowCode
+from app.models.integracao_log import IntegracaoLog
+from app.schemas.planner import PlannerTaskIn
 
 logger = logging.getLogger('reqsys.hub_lowcode')
 
@@ -229,3 +234,188 @@ async def status_consolidado() -> dict[str, Any]:
         'ultimo_run': ultimo_run,
         'gerado_em': datetime.now(timezone.utc).isoformat(),
     }
+
+
+def obter_planner_webhook_config(db: Session) -> dict[str, str]:
+    """Retorna url e key do webhook Planner salvo no DB (ou fallback em settings)."""
+    url_row = db.query(ConfiguracaoLowCode).filter_by(chave='planner_webhook_url').first()
+    key_row = db.query(ConfiguracaoLowCode).filter_by(chave='planner_webhook_key').first()
+    url = (url_row.valor if url_row else '') or settings.powerautomate_planner_webhook_url
+    key = (key_row.valor if key_row else '') or settings.powerautomate_planner_webhook_key
+    return {
+        'url': url,
+        'key': key,
+        'configurado': bool(url),
+        'url_mascarada': (url[:30] + '...') if len(url) > 30 else url,
+    }
+
+
+def salvar_planner_webhook_config(db: Session, webhook_url: str, webhook_key: str = '') -> dict[str, Any]:
+    """Persiste a URL e key do trigger HTTP do Power Automate no DB."""
+    if not webhook_url.startswith('https://'):
+        raise ValueError('webhook_url deve começar com https://')
+    for chave, valor in [('planner_webhook_url', webhook_url), ('planner_webhook_key', webhook_key)]:
+        row = db.query(ConfiguracaoLowCode).filter_by(chave=chave).first()
+        if row:
+            row.valor = valor
+        else:
+            db.add(ConfiguracaoLowCode(chave=chave, valor=valor))
+    db.commit()
+    return {'salvo': True, 'url_mascarada': (webhook_url[:30] + '...') if len(webhook_url) > 30 else webhook_url}
+
+
+async def publicar_tarefas_planner(
+    tarefas: list[PlannerTaskIn],
+    autor: str,
+    correlation_id: str | None,
+    webhook_url: str,
+    webhook_key: str,
+) -> dict[str, Any]:
+    """Envia tarefas formatadas para o flow Power Automate via HTTP trigger."""
+    if not webhook_url:
+        return {'enviado': False, 'mensagem': 'Webhook Planner não configurado — acesse Hub Low-Code → Configurar Webhook', 'flow': None, 'resposta_flow': None, 'teams_notificado': False}
+
+    linhas = []
+    for t in tarefas:
+        campos = [t.titulo, t.responsavel, t.data_vencimento, t.bucket, t.prioridade, t.descricao]
+        linhas.append('|'.join(campos))
+    tarefas_texto = '\n'.join(linhas)
+
+    payload = {'tarefas_texto': tarefas_texto, 'autor': autor or ''}
+    headers = {'Content-Type': 'application/json'}
+    if webhook_key:
+        headers['X-Webhook-Key'] = webhook_key
+    if correlation_id:
+        headers['X-Correlation-Id'] = correlation_id
+
+    async with httpx.AsyncClient(timeout=60) as c:
+        resp = await c.post(webhook_url, json=payload, headers=headers)
+        resp.raise_for_status()
+        try:
+            resposta_flow = resp.json()
+        except Exception:
+            resposta_flow = {'raw': resp.text}
+
+    teams_notificado = bool(resposta_flow.get('teams_notificado')) if isinstance(resposta_flow, dict) else False
+    criadas = resposta_flow.get('criadas', len(tarefas)) if isinstance(resposta_flow, dict) else len(tarefas)
+
+    return {
+        'enviado': True,
+        'mensagem': f'{criadas} tarefa(s) criada(s) no Planner',
+        'flow': resposta_flow.get('flow') if isinstance(resposta_flow, dict) else None,
+        'criadas': criadas,
+        'resposta_flow': resposta_flow,
+        'teams_notificado': teams_notificado,
+    }
+
+
+async def listar_ambientes_powerplatform() -> dict[str, Any]:
+    """Lista ambientes Power Platform disponíveis via API de administração."""
+    if not _tem_credenciais_graph():
+        return {'configurado': False, 'ambientes': [], 'erro': 'Credenciais Azure AD não configuradas'}
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            token_resp = await c.post(
+                _PA_TOKEN_URL.format(tenant=settings.azure_tenant_id),
+                data={
+                    'grant_type': 'client_credentials',
+                    'client_id': settings.azure_client_id,
+                    'client_secret': settings.azure_client_secret,
+                    'scope': 'https://service.flow.microsoft.com/.default',
+                },
+            )
+            token_resp.raise_for_status()
+            token = token_resp.json()['access_token']
+            resp = await c.get(
+                f'{_PA_BASE}/environments?api-version=2016-11-01',
+                headers={'Authorization': f'Bearer {token}'},
+            )
+            resp.raise_for_status()
+            envs_raw = resp.json().get('value', [])
+        ambientes = [
+            {
+                'id': e.get('name'),
+                'nome': e.get('properties', {}).get('displayName', ''),
+                'regiao': e.get('location', ''),
+                'tipo': e.get('properties', {}).get('environmentSku', ''),
+                'url': e.get('properties', {}).get('linkedEnvironmentMetadata', {}).get('instanceUrl', ''),
+            }
+            for e in envs_raw
+        ]
+        return {'configurado': True, 'ambientes': ambientes, 'erro': None}
+    except Exception as exc:
+        logger.warning('hub_lowcode: erro ao listar ambientes PA: %s', exc)
+        return {'configurado': True, 'ambientes': [], 'erro': str(exc)}
+
+
+async def descobrir_planner_no_ambiente(instance_url: str, filtro: str = 'Planner') -> dict[str, Any]:
+    """Lista workflows Dataverse que contêm o filtro no nome."""
+    if not _tem_credenciais_graph():
+        return {'configurado': False, 'flows': [], 'erro': 'Credenciais Azure AD não configuradas'}
+    try:
+        token = await _token_dataverse(instance_url)
+        headers = {'Authorization': f'Bearer {token}', 'OData-MaxVersion': '4.0', 'OData-Version': '4.0'}
+        base = instance_url.rstrip('/') + '/api/data/v9.2'
+        async with httpx.AsyncClient(timeout=15) as c:
+            resp = await c.get(
+                f"{base}/workflows?$filter=category eq 5 and contains(name,'{filtro}')&$select=workflowid,name,statecode,statuscode,createdon",
+                headers=headers,
+            )
+            resp.raise_for_status()
+            flows_raw = resp.json().get('value', [])
+        flows = [
+            {'id': f.get('workflowid'), 'nome': f.get('name'), 'estado': 'Ativo' if f.get('statecode') == 1 else 'Rascunho', 'criado_em': f.get('createdon')}
+            for f in flows_raw
+        ]
+        return {'configurado': True, 'flows': flows, 'erro': None}
+    except Exception as exc:
+        return {'configurado': True, 'flows': [], 'erro': str(exc)}
+
+
+def _try_json(s: str) -> Any:
+    try:
+        return json.loads(s)
+    except Exception:
+        return s
+
+
+def salvar_log_integracao(
+    db: Session,
+    tipo: str,
+    status: str,
+    titulo: str = '',
+    autor: str = '',
+    total: int = 0,
+    mensagem: str = '',
+    detalhes: dict | None = None,
+    correlation_id: str = '',
+) -> IntegracaoLog:
+    entrada = IntegracaoLog(
+        tipo=tipo, status=status, titulo=titulo, autor=autor, total=total,
+        mensagem=mensagem,
+        detalhes=json.dumps(detalhes or {}, ensure_ascii=False, default=str),
+        correlation_id=correlation_id or '',
+    )
+    db.add(entrada)
+    db.commit()
+    db.refresh(entrada)
+    return entrada
+
+
+def listar_historico_integracoes(db: Session, limit: int = 50) -> list[dict[str, Any]]:
+    rows = db.query(IntegracaoLog).order_by(IntegracaoLog.id.desc()).limit(limit).all()
+    return [
+        {
+            'id': r.id,
+            'criado_em': r.criado_em.isoformat() if r.criado_em else None,
+            'tipo': r.tipo,
+            'status': r.status,
+            'titulo': r.titulo,
+            'autor': r.autor,
+            'total': r.total,
+            'mensagem': r.mensagem,
+            'detalhes': _try_json(r.detalhes),
+            'correlation_id': r.correlation_id,
+        }
+        for r in rows
+    ]
