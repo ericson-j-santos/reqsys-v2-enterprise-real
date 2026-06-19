@@ -34,6 +34,7 @@ from app.api import (  # noqa: E402
 )
 from app.core.config import settings  # noqa: E402
 from app.core.envelope import ok  # noqa: E402
+from app.core.production_gates import validar_gates_producao  # noqa: E402
 from app.db import Base, engine  # noqa: E402
 
 logging.basicConfig(
@@ -44,8 +45,7 @@ logging.basicConfig(
 logger = logging.getLogger('reqsys.startup')
 sec_logger = logging.getLogger('reqsys.security')
 
-if hasattr(settings, 'validate_production_gates'):
-    settings.validate_production_gates()
+validar_gates_producao(settings)
 
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title='ReqSys Enterprise API', version='3.1.0')
