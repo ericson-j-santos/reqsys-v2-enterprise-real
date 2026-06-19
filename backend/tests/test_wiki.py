@@ -78,6 +78,7 @@ def test_wiki_publicar_requisito_com_mock(client, monkeypatch):
     body = resp.json()
     assert body['success'] is True
     assert body['meta']['correlation_id'] == 'corr-wiki-body'
+    assert body['data']['correlation_id'] == 'corr-wiki-body'
     assert body['data']['publicado'] is True
     assert body['data']['status_publicacao'] == 'publicado'
     assert body['data']['forcar_atualizacao'] is True
@@ -94,7 +95,9 @@ def test_wiki_publicar_usa_correlation_header(client, monkeypatch):
     )
 
     assert resp.status_code == 200
-    assert resp.json()['meta']['correlation_id'] == 'corr-wiki-header'
+    body = resp.json()
+    assert body['meta']['correlation_id'] == 'corr-wiki-header'
+    assert body['data']['correlation_id'] == 'corr-wiki-header'
 
 
 def test_wiki_requisito_inexistente_retorna_404(client):
