@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0.0",
+  "versao_painel": "0.2.2",
+  "produto": "ReqSys v2 Enterprise Real",
+  "repositorio": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "issue_tracker": {
+    "issue": 21,
+    "url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/21",
+    "status": "open"
+  },
+  "visao_executiva": {
+    "id": "REQ-CYCLE#001",
+    "status": "em_evolucao",
+    "progresso_percentual": 78,
+    "decisao_atual": "Encerrar PR #18/#20 e priorizar atualizacao e validacao do PR #19 antes do proximo merge.",
+    "proxima_decisao_recomendada": "Atualizar PR #19 contra a main atual, validar CI completo e decidir merge se todos os checks permanecerem verdes.",
+    "gates_bloqueantes": [
+      "Auth desligada em producao",
+      "CORS com wildcard em producao",
+      "JWT sem issuer/audience em producao",
+      "JWT_EXP_MINUTES menor ou igual a zero",
+      "Login demo habilitado em producao",
+      "Consulta sem fonte retornando resposta inventada",
+      "Ingestao sem permissao administrativa",
+      "Logs com token, senha, CPF, PII ou connection string real",
+      "Auditoria sem correlation_id",
+      "Connector admin exposto sem autorizacao"
+    ]
+  },
+  "indicadores": {
+    "prs_relevantes": 3,
+    "prs_concluidos": 2,
+    "prs_abertos_prioritarios": 1,
+    "ci_verdes_confirmados": 2,
+    "validacao_publica_pendente": true,
+    "frontend_responsive_e2e_verde": true
+  },
+  "frentes": [
+    {"id":"REQ#018","titulo":"Production Security Gates","tipo":"seguranca","status":"concluido","progresso":100,"pr":18,"url":"https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/18","pendencia":"Acompanhar validacao publica pos-merge.","decisao":"Nao reabrir."},
+    {"id":"REQ#020","titulo":"Evidencias Pos-merge PR18","tipo":"documentacao","status":"concluido","progresso":100,"pr":20,"url":"https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/20","pendencia":"Aguardar validacao de acessos publicos.","decisao":"Manter como release note operacional."},
+    {"id":"REQ#019","titulo":"Cobertura de Testes Backend","tipo":"qualidade","status":"em_validacao","progresso":72,"pr":19,"url":"https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/19","pendencia":"Atualizar contra main e reexecutar CI.","decisao":"Aprovar merge se CI continuar verde."},
+    {"id":"REQ#021","titulo":"Validacao de Acessos Publicos","tipo":"operacao","status":"pendente","progresso":35,"pr":null,"url":"","pendencia":"Executar workflow e arquivar artifact.","decisao":"Bloquear declaracao de producao validada sem artifact."},
+    {"id":"REQ#022","titulo":"Painel de Acompanhamento do Ciclo Completo","tipo":"governanca","status":"em_versionamento","progresso":60,"pr":null,"url":"","pendencia":"Abrir PR documental e validar CI.","decisao":"Adotar como SSOT visual do ciclo operacional."}
+  ],
+  "ciclo": [
+    {"ordem":1,"fase":"Entrada","status":"ok"},
+    {"ordem":2,"fase":"Triagem","status":"ok"},
+    {"ordem":3,"fase":"Planejamento","status":"ok"},
+    {"ordem":4,"fase":"Implementacao","status":"ok"},
+    {"ordem":5,"fase":"CI","status":"ok"},
+    {"ordem":6,"fase":"Review","status":"ok"},
+    {"ordem":7,"fase":"Merge","status":"ok"},
+    {"ordem":8,"fase":"Evidencia","status":"ok"},
+    {"ordem":9,"fase":"Deploy","status":"atencao"},
+    {"ordem":10,"fase":"Validacao Publica","status":"pendente"},
+    {"ordem":11,"fase":"Operacao","status":"pendente"}
+  ],
+  "checks": [
+    {"nome":"Backend Lint & Security","status":"verde","evidencia":"PR #18 run #72; PR #19 run #63"},
+    {"nome":"Backend Tests + Coverage","status":"verde","evidencia":"PR #18 run #72; PR #19 run #63"},
+    {"nome":"Frontend Build + Security Audit","status":"verde","evidencia":"PR #18 run #72; PR #19 run #63"},
+    {"nome":"Frontend Responsive E2E","status":"verde","evidencia":"PR #18 run #72"},
+    {"nome":"Validacao de Acessos Publicos","status":"pendente","evidencia":"Workflow dedicado existe; artifact pendente"}
+  ]
+}
