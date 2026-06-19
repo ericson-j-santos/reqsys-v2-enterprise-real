@@ -50,3 +50,5 @@ def test_auditoria_limit_invalido_retorna_422(client):
     resp = client.get('/v1/auditoria/eventos?limit=0')
 
     assert resp.status_code == 422
+    detail = resp.json().get('detail', [])
+    assert any(err.get('loc') == ['query', 'limit'] for err in detail)
