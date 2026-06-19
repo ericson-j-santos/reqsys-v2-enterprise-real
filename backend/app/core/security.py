@@ -15,6 +15,9 @@ _bearer = HTTPBearer(auto_error=False)
 def criar_token(payload: dict, minutos: int = 60):
     dados = payload.copy()
     dados['exp'] = datetime.now(timezone.utc) + timedelta(minutes=minutos)
+    dados['iat'] = datetime.now(timezone.utc)
+    dados['iss'] = getattr(settings, 'jwt_issuer', 'reqsys-api')
+    dados['aud'] = getattr(settings, 'jwt_audience', 'reqsys-web')
     return jwt.encode(dados, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
@@ -26,6 +29,8 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
             credentials.credentials,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
+            issuer=getattr(settings, 'jwt_issuer', 'reqsys-api'),
+            audience=getattr(settings, 'jwt_audience', 'reqsys-web'),
         )
         return payload
     except InvalidTokenError:
