@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -12,12 +13,20 @@ pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 _bearer = HTTPBearer(auto_error=False)
 
 
+def _jwt_issuer() -> str:
+    return getattr(settings, 'jwt_issuer', None) or os.getenv('JWT_ISSUER', 'reqsys-api')
+
+
+def _jwt_audience() -> str:
+    return getattr(settings, 'jwt_audience', None) or os.getenv('JWT_AUDIENCE', 'reqsys-web')
+
+
 def criar_token(payload: dict, minutos: int = 60):
     dados = payload.copy()
     dados['exp'] = datetime.now(timezone.utc) + timedelta(minutes=minutos)
     dados['iat'] = datetime.now(timezone.utc)
-    dados['iss'] = getattr(settings, 'jwt_issuer', 'reqsys-api')
-    dados['aud'] = getattr(settings, 'jwt_audience', 'reqsys-web')
+    dados['iss'] = _jwt_issuer()
+    dados['aud'] = _jwt_audience()
     return jwt.encode(dados, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
@@ -29,8 +38,8 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
             credentials.credentials,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
-            issuer=getattr(settings, 'jwt_issuer', 'reqsys-api'),
-            audience=getattr(settings, 'jwt_audience', 'reqsys-web'),
+            issuer=_jwt_issuer(),
+            audience=_jwt_audience(),
         )
         return payload
     except InvalidTokenError:
