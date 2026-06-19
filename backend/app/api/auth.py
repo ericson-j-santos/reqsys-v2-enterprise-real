@@ -35,6 +35,12 @@ def _nome_from_email(email: str) -> str:
     return ' '.join(p.capitalize() for p in parts) if len(parts) > 1 else prefix.capitalize()
 
 
+def _demo_login_permitido() -> bool:
+    app_env = getattr(settings, 'app_env', 'development').strip().lower()
+    allow_demo_login = getattr(settings, 'allow_demo_login', True)
+    return app_env not in {'prod', 'production'} or bool(allow_demo_login)
+
+
 # ─── Azure AD (Microsoft Entra ID) ────────────────────────────────────────────
 
 class AzureLoginInput(BaseModel):
@@ -144,11 +150,14 @@ class LoginInput(BaseModel):
 
 @router.post('/login')
 def login(body: LoginInput, request: Request):
-    """Login demo — sem validação de senha (apenas para desenvolvimento)."""
+    """Login demo — permitido somente fora de produção ou com liberação explícita."""
+    if not _demo_login_permitido():
+        logger.warning('demo_login_bloqueado_em_producao ip=%s', request.client.host if request.client else '?')
+        raise HTTPException(403, 'Login demo bloqueado em produção')
+
     email = body.email
     papel = _papel_from_email(email)
     logger.info('demo_login ip=%s email=%s papel=%s', request.client.host if request.client else '?', email, papel)
     usuario = {'email': email, 'nome': _nome_from_email(email), 'papel': papel, 'permissoes': permissoes(papel)}
     token = criar_token({'sub': email, 'papel': papel})
     return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})
-
