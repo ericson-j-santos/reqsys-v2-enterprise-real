@@ -32,7 +32,17 @@ jobs:
         run: pip install ruff pip-audit bandit
 
       - name: Lint — ruff (erros, warnings e imports)
-        run: ruff check app/ --select E,F,W,I --ignore E501
+        run: |
+          ruff check app/ --select E,F,W,I --ignore E501 --output-format json --output-file /tmp/ruff-report.json
+          ruff check app/ --select E,F,W,I --ignore E501
+
+      - name: Publicar relatório ruff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-ruff-report
+          path: /tmp/ruff-report.json
+          if-no-files-found: ignore
 
       - name: Segurança deps — pip-audit
         run: pip-audit -r requirements.txt
