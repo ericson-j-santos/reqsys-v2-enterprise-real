@@ -85,3 +85,17 @@ Ao clicar em um card ou linha, abrir painel filtrado com:
 - Eventos auditáveis.
 - Gates de produção configurados.
 - Testes unitários e E2E cobrindo autorização, falha e retomada.
+
+---
+
+## Registro de recuperação da esteira
+
+Em 2026-06-20, o fluxo de publicação foi continuado com nova alteração controlada para restabelecer diferença entre a branch e `main`, mantendo a regra de não executar merge enquanto o CI e a revisão não estiverem concluídos.
+
+Decisão operacional:
+
+- manter PR em draft;
+- evitar force push ou alteração destrutiva de histórico;
+- preservar rastreabilidade dos artefatos de governança;
+- validar CI antes de qualquer ready for review;
+- somente liberar merge após checks verdes.
