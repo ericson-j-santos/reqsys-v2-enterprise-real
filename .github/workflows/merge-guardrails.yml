@@ -1,0 +1,70 @@
+name: Merge Guardrails
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, ready_for_review, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate-merge-guardrails:
+    name: Validar Merge Guardrails
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validar estado e checklist do PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+            const errors = [];
+
+            if (!pr) {
+              core.setFailed('Evento não contém pull_request.');
+              return;
+            }
+
+            if (!body.includes('## Merge Guardrails')) {
+              errors.push('PR sem seção obrigatória: ## Merge Guardrails');
+            }
+
+            const requiredItems = [
+              'PR mantido em draft durante implementação.',
+              'CI executado e verde.',
+              'Revisão concluída.',
+              'Sem comentários bloqueantes pendentes.',
+              'Ambiente alvo declarado.',
+              'Plano de validação pós-merge documentado.',
+              'Merge autorizado somente após confirmação final.'
+            ];
+
+            for (const item of requiredItems) {
+              if (!body.includes(item)) {
+                errors.push(`Checklist obrigatório ausente: ${item}`);
+              }
+            }
+
+            if (!body.includes('## Ambiente alvo')) {
+              errors.push('PR sem seção obrigatória: ## Ambiente alvo');
+            }
+
+            if (!body.includes('## Plano de validação pós-merge')) {
+              errors.push('PR sem seção obrigatória: ## Plano de validação pós-merge');
+            }
+
+            if (pr.draft === false && body.includes('- [ ] CI executado e verde.')) {
+              errors.push('PR saiu de draft sem marcar CI verde no checklist.');
+            }
+
+            if (pr.draft === false && body.includes('- [ ] Revisão concluída.')) {
+              errors.push('PR saiu de draft sem revisão concluída marcada no checklist.');
+            }
+
+            if (errors.length > 0) {
+              core.setFailed(errors.join('\n'));
+              return;
+            }
+
+            core.info('Merge Guardrails validado com sucesso.');
