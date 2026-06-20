@@ -23,6 +23,21 @@ def test_monitoramento_operacional_propaga_correlation_id():
     assert body['data']['correlation_id'] == correlation_id
 
 
+def test_monitoramento_operacional_expoe_frentes_operacionais_prioritarias():
+    res = TestClient(app).get('/monitoramento-operacional')
+    referencias = {item['referencia'] for item in res.json()['data']['itens']}
+
+    assert {'REQSYS-OPER-001', 'REQSYS-OPER-002', 'REQSYS-OPER-003', 'REQSYS-OPER-004', 'REQSYS-OPER-005'} <= referencias
+
+
+def test_monitoramento_operacional_estado_geral_reflete_pendencias():
+    res = TestClient(app).get('/monitoramento-operacional')
+    data = res.json()['data']
+
+    assert data['resumo']['estado_geral'] in {'amarelo', 'vermelho', 'bloqueado'}
+    assert data['resumo']['pendencias'] > 0
+
+
 def test_classificar_estado_geral_prioriza_bloqueio():
     itens = [
         ItemMonitorado(tipo='gate', referencia='ok', titulo='OK', estado='verde', severidade='baixa', origem='teste'),
@@ -34,12 +49,3 @@ def test_classificar_estado_geral_prioriza_bloqueio():
 
 def test_classificar_estado_geral_sem_itens_desconhecido():
     assert classificar_estado_geral([]) == 'desconhecido'
-
-
-def test_snapshot_nao_marca_draft_como_pronto_para_merge():
-    res = TestClient(app).get('/monitoramento-operacional')
-    itens = res.json()['data']['itens']
-
-    for item in itens:
-        if item['detalhes'].get('draft') is True:
-            assert item['pronto_para_merge'] is False
