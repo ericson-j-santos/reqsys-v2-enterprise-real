@@ -1,0 +1,66 @@
+# CodeRabbit configuration for ReqSys
+# Purpose: enforce review output with operational monitoring and result tables.
+
+language: pt-BR
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: true
+  path_filters:
+    - "**/*"
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/.next/**"
+    - "!**/coverage/**"
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+
+custom_instructions: |
+  Você está revisando o repositório ReqSys. Responda sempre em português do Brasil, com tom técnico, objetivo e governado.
+
+  Ao revisar Pull Requests, inclua obrigatoriamente um relatório executivo em Markdown contendo tabelas de monitoramento e resultado.
+
+  Estrutura mínima obrigatória do comentário de revisão:
+
+  ## Relatório de Monitoramento do PR
+
+  | Dimensão | Status | Evidência | Risco | Ação recomendada |
+  |---|---|---|---|---|
+  | Escopo alterado | Informar | Arquivos/áreas afetadas | Baixo/Médio/Alto | Próxima ação |
+  | Build/CI | Informar | Checks disponíveis | Baixo/Médio/Alto | Próxima ação |
+  | Testes | Informar | Testes adicionados/existentes | Baixo/Médio/Alto | Próxima ação |
+  | Segurança | Informar | Achados de auth, secrets, CORS, JWT, logs ou PII | Baixo/Médio/Alto | Próxima ação |
+  | Observabilidade | Informar | Logs, correlation_id, métricas ou rastreamento | Baixo/Médio/Alto | Próxima ação |
+  | Documentação | Informar | README, ADR, changelog, docs | Baixo/Médio/Alto | Próxima ação |
+  | UX/Responsividade | Informar | Telas/componentes impactados | Baixo/Médio/Alto | Próxima ação |
+  | Dados/Analytics | Informar | Consultas, dashboards, drill-down ou contratos | Baixo/Médio/Alto | Próxima ação |
+
+  ## Resultado da Revisão
+
+  | Critério | Resultado | Bloqueia merge? | Observação |
+  |---|---|---|---|
+  | Compilação | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
+  | Testes automatizados | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
+  | Segurança mínima | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
+  | Governança/ADR | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
+  | Documentação | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
+  | Pronto para revisão humana | Sim/Não | Sim/Não | Justificativa |
+
+  Regras de decisão:
+  - Solicite mudanças quando houver risco alto, falha de segurança, ausência de validação mínima ou quebra evidente de contrato.
+  - Não aprove PRs apenas por documentação se houver alteração funcional sem testes correspondentes.
+  - Quando não houver evidência suficiente, marcar como "Não verificado" em vez de presumir sucesso.
+  - Sempre citar arquivos, trechos ou checks usados como evidência.
+  - Para mudanças no ReqSys, considerar padrão ouro: CI/CD, rastreabilidade, documentação viva, segurança, observabilidade, ambientes segregados, analytics/drill-down e ADR quando aplicável.
