@@ -1,41 +1,26 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import LoginView from '../views/LoginView.vue'
-import DashboardView from '../views/DashboardView.vue'
-import RequisitosView from '../views/RequisitosView.vue'
-import RastreabilidadeView from '../views/RastreabilidadeView.vue'
-import AuditoriaView from '../views/AuditoriaView.vue'
-import PipelineView from '../views/PipelineView.vue'
-import RelatoriosView from '../views/RelatoriosView.vue'
-import SegredosStatusView from '../views/SegredosStatusView.vue'
-import QualidadeIAView from '../views/QualidadeIAView.vue'
-import RecomendacoesIAView from '../views/RecomendacoesIAView.vue'
-import SpecsView from '../views/SpecsView.vue'
-import TaskConsoleView from '../views/TaskConsoleView.vue'
-import ArquiteturaView from '../views/ArquiteturaView.vue'
-import GovernancaEnterpriseView from '../views/GovernancaEnterpriseView.vue'
-import HubLowCodeView from '../views/HubLowCodeView.vue'
-import GovBIView from '../views/GovBIView.vue'
-import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
 import { useAuthStore } from '../stores/auth'
 
+// Rotas com carregamento sob demanda (code-splitting): cada view vira um chunk
+// separado, reduzindo o bundle inicial e isolando falhas de uma view do resto da SPA.
 const routes = [
-  { path: '/login', component: LoginView, meta: { public: true } },
-  { path: '/', component: DashboardView, meta: { recurso: 'dashboard:read' } },
-  { path: '/requisitos', component: RequisitosView, meta: { recurso: 'requisitos:write' } },
-  { path: '/rastreabilidade', component: RastreabilidadeView, meta: { recurso: 'rastreabilidade:read' } },
-  { path: '/auditoria', component: AuditoriaView, meta: { recurso: 'auditoria:read' } },
-  { path: '/pipeline', component: PipelineView, meta: { recurso: 'requisitos:write' } },
-  { path: '/relatorios', component: RelatoriosView, meta: { recurso: 'relatorios:read' } },
-  { path: '/segredos-status', component: SegredosStatusView, meta: { recurso: 'dashboard:read' } },
-  { path: '/qualidade-ia', component: QualidadeIAView, meta: { recurso: 'dashboard:read' } },
-  { path: '/recomendacoes-ia', component: RecomendacoesIAView, meta: { recurso: 'dashboard:read' } },
-  { path: '/task-console', component: TaskConsoleView, meta: { recurso: 'dashboard:read' } },
-  { path: '/specs',        component: SpecsView,       meta: { recurso: 'dashboard:read' } },
-  { path: '/hub-lowcode', component: HubLowCodeView,  meta: { recurso: 'dashboard:read' } },
-  { path: '/painel-integracao', component: PainelIntegracaoView, meta: { recurso: 'dashboard:read' } },
-  { path: '/arquitetura', component: ArquiteturaView, meta: { recurso: 'dashboard:read' } },
-  { path: '/governanca', component: GovernancaEnterpriseView, meta: { recurso: 'dashboard:read' } },
-  { path: '/govbi-ia',    component: GovBIView,       meta: { recurso: 'dashboard:read' } }
+  { path: '/login', component: () => import('../views/LoginView.vue'), meta: { public: true } },
+  { path: '/', component: () => import('../views/DashboardView.vue'), meta: { recurso: 'dashboard:read' } },
+  { path: '/requisitos', component: () => import('../views/RequisitosView.vue'), meta: { recurso: 'requisitos:write' } },
+  { path: '/rastreabilidade', component: () => import('../views/RastreabilidadeView.vue'), meta: { recurso: 'rastreabilidade:read' } },
+  { path: '/auditoria', component: () => import('../views/AuditoriaView.vue'), meta: { recurso: 'auditoria:read' } },
+  { path: '/pipeline', component: () => import('../views/PipelineView.vue'), meta: { recurso: 'requisitos:write' } },
+  { path: '/relatorios', component: () => import('../views/RelatoriosView.vue'), meta: { recurso: 'relatorios:read' } },
+  { path: '/segredos-status', component: () => import('../views/SegredosStatusView.vue'), meta: { recurso: 'dashboard:read' } },
+  { path: '/qualidade-ia', component: () => import('../views/QualidadeIAView.vue'), meta: { recurso: 'dashboard:read' } },
+  { path: '/recomendacoes-ia', component: () => import('../views/RecomendacoesIAView.vue'), meta: { recurso: 'dashboard:read' } },
+  { path: '/task-console', component: () => import('../views/TaskConsoleView.vue'), meta: { recurso: 'dashboard:read' } },
+  { path: '/specs', component: () => import('../views/SpecsView.vue'), meta: { recurso: 'dashboard:read' } },
+  { path: '/hub-lowcode', component: () => import('../views/HubLowCodeView.vue'), meta: { recurso: 'dashboard:read' } },
+  { path: '/painel-integracao', component: () => import('../views/PainelIntegracaoView.vue'), meta: { recurso: 'dashboard:read' } },
+  { path: '/arquitetura', component: () => import('../views/ArquiteturaView.vue'), meta: { recurso: 'dashboard:read' } },
+  { path: '/governanca', component: () => import('../views/GovernancaEnterpriseView.vue'), meta: { recurso: 'dashboard:read' } },
+  { path: '/govbi-ia', component: () => import('../views/GovBIView.vue'), meta: { recurso: 'dashboard:read' } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach((to) => {
