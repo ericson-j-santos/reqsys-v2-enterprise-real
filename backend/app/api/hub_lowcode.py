@@ -3,11 +3,15 @@ from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
 from app.db import get_db
-from app.schemas.planner import PlannerDiscoveryRequest, PlannerPublishRequest, PlannerWebhookConfigRequest
+from app.schemas.planner import (
+    PlannerDiscoveryRequest,
+    PlannerPublishRequest,
+    PlannerWebhookConfigRequest,
+)
 from app.services.hub_lowcode import (
     descobrir_planner_no_ambiente,
-    listar_flows_pa,
     listar_ambientes_powerplatform,
+    listar_flows_pa,
     listar_historico_integracoes,
     listar_pacotes_ia,
     listar_runs_github,
