@@ -22,38 +22,50 @@
           Entrar com conta Microsoft
         </v-btn>
 
-        <v-divider v-if="azureDisponivel" class="mb-4">
-          <span class="text-caption text-medium-emphasis px-2">ou</span>
-        </v-divider>
-
-        <!-- Login demo (desenvolvimento) -->
-        <v-alert type="info" variant="tonal" density="compact" class="mb-4">
-          Acesso demo — apenas para desenvolvimento
+        <v-alert
+          v-if="!azureDisponivel && !demoLoginDisponivel"
+          type="warning"
+          variant="tonal"
+          density="compact"
+          class="mb-4"
+        >
+          Autenticação indisponível. Verifique a configuração do Azure AD no backend.
         </v-alert>
 
-        <v-text-field
-          v-model="email"
-          label="E-mail"
-          variant="outlined"
-          prepend-inner-icon="mdi-email-outline"
-          class="mb-2"
-          :disabled="carregandoDemo || carregandoAzure"
-        />
-        <v-text-field
-          v-model="senha"
-          label="Senha"
-          :type="mostrarSenha ? 'text' : 'password'"
-          variant="outlined"
-          prepend-inner-icon="mdi-lock-outline"
-          :append-inner-icon="mostrarSenha ? 'mdi-eye-off' : 'mdi-eye'"
-          :disabled="carregandoDemo || carregandoAzure"
-          @click:append-inner="mostrarSenha = !mostrarSenha"
-        />
+        <template v-if="demoLoginDisponivel">
+          <v-divider v-if="azureDisponivel" class="mb-4">
+            <span class="text-caption text-medium-emphasis px-2">ou</span>
+          </v-divider>
+
+          <!-- Login demo (desenvolvimento) -->
+          <v-alert type="info" variant="tonal" density="compact" class="mb-4">
+            Acesso demo — apenas para desenvolvimento
+          </v-alert>
+
+          <v-text-field
+            v-model="email"
+            label="E-mail"
+            variant="outlined"
+            prepend-inner-icon="mdi-email-outline"
+            class="mb-2"
+            :disabled="carregandoDemo || carregandoAzure"
+          />
+          <v-text-field
+            v-model="senha"
+            label="Senha"
+            :type="mostrarSenha ? 'text' : 'password'"
+            variant="outlined"
+            prepend-inner-icon="mdi-lock-outline"
+            :append-inner-icon="mostrarSenha ? 'mdi-eye-off' : 'mdi-eye'"
+            :disabled="carregandoDemo || carregandoAzure"
+            @click:append-inner="mostrarSenha = !mostrarSenha"
+          />
+        </template>
 
         <v-alert v-if="erro" type="error" density="compact" class="mt-1">{{ erro }}</v-alert>
       </v-card-text>
 
-      <v-card-actions class="px-4 pb-4">
+      <v-card-actions v-if="demoLoginDisponivel" class="px-4 pb-4">
         <v-btn
           block
           color="amber"
@@ -81,12 +93,13 @@ const { width } = useDisplay()
 const cardWidth = computed(() => Math.min(440, width.value - 32))
 
 const email          = ref('ericsonjosedossantos@tieri659.onmicrosoft.com')
-const senha          = ref('admin123')
+const senha          = ref('')
 const erro           = ref('')
 const carregandoDemo = ref(false)
 const carregandoAzure = ref(false)
 const mostrarSenha   = ref(false)
 const azureDisponivel = ref(false)
+const demoLoginDisponivel = ref(false)
 const azureConfig    = ref(null)
 
 const auth   = useAuthStore()
@@ -100,14 +113,15 @@ onMounted(async () => {
     sessionStorage.removeItem('azure_login_error')
   }
 
-  // Verificar se Azure está configurado
+  // Verificar configuração pública de autenticação
   try {
     const { data } = await api.get('/v1/auth/config')
-    if (data.data.azure_enabled) {
-      azureConfig.value = data.data
-      azureDisponivel.value = true
-    }
-  } catch { /* silencioso */ }
+    azureConfig.value = data.data
+    azureDisponivel.value = Boolean(data.data.azure_enabled)
+    demoLoginDisponivel.value = Boolean(data.data.demo_login_enabled)
+  } catch {
+    erro.value = 'Não foi possível obter a configuração de autenticação do servidor.'
+  }
 })
 
 async function entrarMicrosoft() {
@@ -133,8 +147,8 @@ async function entrarDemo() {
   try {
     await auth.login({ email: email.value, senha: senha.value })
     router.push('/')
-  } catch {
-    erro.value = 'Falha no login demo'
+  } catch (e) {
+    erro.value = e.response?.data?.detail || 'Falha no login demo'
   } finally {
     carregandoDemo.value = false
   }
