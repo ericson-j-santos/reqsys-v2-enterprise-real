@@ -6,8 +6,12 @@
         <h1 id="titulo-monitoramento">Monitoramento Operacional</h1>
         <p>Visão mínima de estado, bloqueios, pendências e itens monitorados.</p>
       </div>
-      <button type="button" @click="carregarMonitoramento">Atualizar</button>
+      <button type="button" :disabled="carregando" @click="carregarMonitoramento">
+        {{ carregando ? 'Atualizando...' : 'Atualizar' }}
+      </button>
     </section>
+
+    <p v-if="erro" class="erro" role="alert">{{ erro }}</p>
 
     <section class="cards" aria-label="Indicadores operacionais">
       <article class="card"><span>Estado geral</span><strong>{{ resumo.estado_geral || 'desconhecido' }}</strong></article>
@@ -58,15 +62,25 @@ const router = useRouter()
 const resumo = ref({})
 const itens = ref([])
 const filtroEstado = ref(route.query.estado || '')
+const carregando = ref(false)
+const erro = ref('')
 
 const itensFiltrados = computed(() => itens.value.filter((item) => !filtroEstado.value || item.estado === filtroEstado.value))
 
 async function carregarMonitoramento() {
-  const resposta = await fetch('/monitoramento-operacional', { headers: { Accept: 'application/json' } })
-  if (!resposta.ok) throw new Error('Falha ao carregar monitoramento operacional')
-  const payload = await resposta.json()
-  resumo.value = payload.data?.resumo || {}
-  itens.value = payload.data?.itens || []
+  carregando.value = true
+  erro.value = ''
+  try {
+    const resposta = await fetch('/api/monitoramento-operacional', { headers: { Accept: 'application/json' } })
+    if (!resposta.ok) throw new Error('Falha ao carregar monitoramento operacional')
+    const payload = await resposta.json()
+    resumo.value = payload.data?.resumo || {}
+    itens.value = payload.data?.itens || []
+  } catch (e) {
+    erro.value = e?.message || 'Erro inesperado ao carregar monitoramento operacional'
+  } finally {
+    carregando.value = false
+  }
 }
 
 watch(filtroEstado, () => {
@@ -86,6 +100,7 @@ onMounted(carregarMonitoramento)
 .card strong { font-size: 1.5rem; margin-top: 0.5rem; }
 .filtros { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .filtros label { display: grid; gap: 0.25rem; }
+.erro { border: 1px solid #d1242f; border-radius: 8px; color: #d1242f; padding: 0.75rem; }
 .analitico { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; }
 th, td { border-bottom: 1px solid #d0d7de; padding: 0.75rem; text-align: left; }
