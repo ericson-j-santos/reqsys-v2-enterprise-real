@@ -4,6 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Header
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
 from app.core.envelope import ok
 
 router = APIRouter(tags=['Monitoramento Operacional'])
@@ -74,7 +75,7 @@ def criar_snapshot_minimo(correlation_id: str) -> MonitoramentoOperacional:
     return MonitoramentoOperacional(
         correlation_id=correlation_id,
         coletado_em=datetime.now(timezone.utc).isoformat(),
-        ambiente='dev',
+        ambiente=settings.normalized_environment,
         resumo=ResumoMonitoramento(
             estado_geral=estado_geral,
             bloqueios=sum(1 for item in itens if item.estado == 'bloqueado' or item.bloqueante),
