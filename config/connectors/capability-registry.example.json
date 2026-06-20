@@ -1,0 +1,78 @@
+{
+  "$schema": "https://reqsys.local/schemas/capability-registry.schema.json",
+  "version": "1.0.0",
+  "updated_at": "2026-06-20T00:00:00-03:00",
+  "owner": "ReqSys Platform Governance",
+  "environments": ["dev", "homolog", "prod"],
+  "capabilities": [
+    {
+      "id": "github.repository.read",
+      "connector": "github",
+      "description": "Ler repositórios, arquivos, issues, pull requests e checks.",
+      "environments": ["dev", "homolog", "prod"],
+      "minimum_scopes": ["contents:read", "pull_requests:read", "issues:read", "checks:read"],
+      "criticality": "high",
+      "requires_human_confirmation": false,
+      "fallback": "Solicitar ao usuário link, arquivo exportado ou patch manual."
+    },
+    {
+      "id": "github.repository.write",
+      "connector": "github",
+      "description": "Criar branch, commits, issues, comentários e pull requests.",
+      "environments": ["dev", "homolog"],
+      "minimum_scopes": ["contents:write", "pull_requests:write", "issues:write"],
+      "criticality": "critical",
+      "requires_human_confirmation": true,
+      "fallback": "Gerar instruções e diff para aplicação manual."
+    },
+    {
+      "id": "google.drive.read",
+      "connector": "google_drive",
+      "description": "Ler documentos, planilhas, slides e arquivos de referência.",
+      "environments": ["dev", "homolog", "prod"],
+      "minimum_scopes": ["drive.readonly"],
+      "criticality": "medium",
+      "requires_human_confirmation": false,
+      "fallback": "Solicitar upload manual do arquivo ou exportação controlada."
+    },
+    {
+      "id": "gmail.send.report",
+      "connector": "gmail",
+      "description": "Criar rascunhos ou enviar relatórios executivos autorizados.",
+      "environments": ["dev", "homolog", "prod"],
+      "minimum_scopes": ["gmail.compose", "gmail.send"],
+      "criticality": "high",
+      "requires_human_confirmation": true,
+      "fallback": "Criar conteúdo do e-mail para revisão manual."
+    },
+    {
+      "id": "calendar.schedule.automation",
+      "connector": "google_calendar",
+      "description": "Consultar agenda e criar compromissos operacionais autorizados.",
+      "environments": ["dev", "homolog", "prod"],
+      "minimum_scopes": ["calendar.readonly", "calendar.events"],
+      "criticality": "medium",
+      "requires_human_confirmation": true,
+      "fallback": "Gerar texto de agendamento para criação manual."
+    },
+    {
+      "id": "figma.design.read",
+      "connector": "figma",
+      "description": "Consultar arquivos de design para análise de UI/UX e responsividade.",
+      "environments": ["dev", "homolog"],
+      "minimum_scopes": ["files:read"],
+      "criticality": "medium",
+      "requires_human_confirmation": false,
+      "fallback": "Solicitar exportação de telas ou prints."
+    }
+  ],
+  "production_gates": [
+    "critical_connector_without_health_check",
+    "capability_without_minimum_scopes",
+    "expired_token_without_safe_refresh",
+    "broad_scope_without_justification",
+    "missing_correlation_id",
+    "secret_or_token_detected_in_logs",
+    "write_action_without_required_human_confirmation"
+  ]
+}
