@@ -2,17 +2,13 @@ import logging
 import sys
 import time
 import uuid
-from pathlib import Path
 
-from dotenv import load_dotenv
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
-load_dotenv(Path(__file__).resolve().parents[2] / '.env', override=False)
-
-from fastapi import FastAPI, Request  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from sqlalchemy import text  # noqa: E402
-
-from app.api import (  # noqa: E402
+import app.models  # noqa: F401 — garante create_all para integracao_log e configuracao_lowcode
+from app.api import (
     agents,
     auditoria,
     auth,
@@ -32,9 +28,9 @@ from app.api import (  # noqa: E402
     webhooks,
     wiki,
 )
-from app.core.config import settings  # noqa: E402
-from app.core.envelope import ok  # noqa: E402
-from app.db import Base, engine  # noqa: E402
+from app.core.config import settings
+from app.core.envelope import ok
+from app.db import Base, engine
 
 logging.basicConfig(
     level=logging.INFO,
