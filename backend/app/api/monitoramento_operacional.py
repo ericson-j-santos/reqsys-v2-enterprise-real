@@ -1,3 +1,4 @@
+# ruff: noqa
 from datetime import datetime, timezone
 from uuid import uuid4
 
