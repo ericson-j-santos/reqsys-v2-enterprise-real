@@ -15,20 +15,24 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - Helper puro `frontend/src/utils/filtrosRequisitos.js` para normalização, query string e filtragem analítica de requisitos.
 - Teste unitário `frontend/src/utils/filtrosRequisitos.test.js` para filtros analíticos de requisitos.
 - Script `npm run test:unit` no frontend.
+- Painel runtime de Connection Broker em `frontend/src/views/MonitoramentoOperacionalView.vue`, com cards, analítico, fallback seguro e consumo futuro de `/api/connectors/health`.
+- Contrato técnico dos endpoints `/api/connectors/health` e `/api/connectors/capabilities/check` em `docs/api/connection-broker-runtime-contract.md`.
 
 ### Alterado
 
 - `DashboardView.vue`: cards de requisitos agora apontam para rotas analíticas com filtros por query string quando aplicável.
 - `DashboardView.vue`: melhoria de acessibilidade por teclado nos cards interativos.
+- `MonitoramentoOperacionalView.vue`: expansão para incluir indicadores de conectores, criticidade, ações sugeridas e `correlation_id`.
 
 ### Pendente
 
 - A atualização completa de `RequisitosView.vue` para consumir os filtros por query string foi bloqueada pelo conector de escrita durante este ciclo. Deve ser tratada em PR técnico específico, mantendo a lógica já isolada em `filtrosRequisitos.js`.
+- Backend real dos endpoints do Connection Broker permanece pendente quando não houver API ativa: `/api/connectors/health` e `/api/connectors/capabilities/check`.
 
 ### Ambiente
 
 - Ambiente observado: GitHub / branch `main`.
-- Ambiente de aplicação: branch `docs/padrao-ouro-transversal-reqsys`.
+- Ambiente de aplicação: branch `feature/connection-broker-runtime-ui`.
 - Produção: sem alteração direta.
 
 ---
