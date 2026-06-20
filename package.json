@@ -1,16 +1,17 @@
 {
-    "name": "reqsys-v2-enterprise-e2e",
-    "version": "3.1.0",
-    "description": "E2E tests and operational validation for ReqSys v2 Enterprise",
-    "type": "module",
-    "scripts": {
-        "test:e2e": "playwright test",
-        "test:e2e:ui": "playwright test --ui",
-        "test:e2e:debug": "playwright test --debug",
-        "test:e2e:report": "playwright show-report",
-        "validate:access": "node scripts/validar-acessos-publicos.mjs"
-    },
-    "devDependencies": {
-        "@playwright/test": "^1.48.0"
-    }
+  "name": "reqsys-v2-enterprise-e2e",
+  "version": "3.1.0",
+  "description": "E2E tests and operational validation for ReqSys v2 Enterprise",
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report",
+    "validate:access": "node scripts/validar-acessos-publicos.mjs",
+    "validate:pipeline": "node scripts/validar-pipeline-governanca.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
 }
