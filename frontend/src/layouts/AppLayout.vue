@@ -109,6 +109,7 @@ const navItems = [
   { to: '/hub-lowcode',       icon: 'mdi-lightning-bolt-circle',    title: 'Hub Low-Code',   tip: 'Pacotes IA, flows Power Automate, bot ReqSysAgent e pipeline GitHub ALM.' },
   { to: '/painel-integracao', icon: 'mdi-view-dashboard-outline',  title: 'Integrações',    tip: 'Painel de acompanhamento: Planner, Teams e histórico de eventos.' },
   { to: '/arquitetura',       icon: 'mdi-sitemap',                  title: 'Mapa da Solução', tip: 'Visão completa de todos os componentes Web e Low-Code.' },
+  { to: '/governanca',        icon: 'mdi-shield-check-outline',     title: 'Governança',     tip: 'Padrão Ouro Enterprise: gates, CI/CD, observabilidade, analytics e IA auditável.' },
   { to: '/govbi-ia',      icon: 'mdi-database-search',    title: 'GovBI IA',        tip: 'Consultas analíticas em linguagem natural com IA governada.' },
 ]
 
