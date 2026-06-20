@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys — Connection Broker e Permission-on-Demand AI</title>
+  <style>
+    :root{--bg:#0f172a;--panel:#111827;--card:#1f2937;--text:#e5e7eb;--muted:#9ca3af;--line:#374151;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--info:#38bdf8}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(135deg,#0f172a,#111827);color:var(--text);line-height:1.5}.wrap{max-width:1180px;margin:0 auto;padding:28px}header{padding:28px;border:1px solid var(--line);border-radius:18px;background:rgba(31,41,55,.72)}h1{margin:0 0 8px;font-size:clamp(28px,5vw,44px)}h2{margin:28px 0 12px;font-size:24px}p{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}.card{background:rgba(31,41,55,.9);border:1px solid var(--line);border-radius:14px;padding:18px}.tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--muted);font-size:13px}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.info{color:var(--info)}table{width:100%;border-collapse:collapse;background:rgba(31,41,55,.75);border:1px solid var(--line);border-radius:14px;overflow:hidden}th,td{padding:12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{background:#111827}.flow{white-space:pre-wrap;background:#020617;border:1px solid var(--line);border-radius:14px;padding:18px;overflow:auto}.footer{margin-top:30px;color:var(--muted);font-size:13px}@media(max-width:700px){.wrap{padding:14px}th,td{font-size:13px;padding:8px}}</style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <span class="tag">ReqSys • Arquitetura Viva • Segurança • Governança</span>
+      <h1>Connection Broker e Permission-on-Demand AI</h1>
+      <p>Referência canônica para validar conectores, solicitar permissão contextual, retomar fluxos e auditar integrações corporativas sem contornar consentimento humano.</p>
+    </header>
+
+    <section>
+      <h2>Decisão</h2>
+      <div class="grid">
+        <article class="card"><strong class="info">Capability Registry</strong><p>Catálogo de conectores, escopos mínimos, ambientes, criticidade e fallback.</p></article>
+        <article class="card"><strong class="ok">Health Check</strong><p>Validação de token, escopo, expiração, disponibilidade e configuração.</p></article>
+        <article class="card"><strong class="warn">Permission Request</strong><p>Solicitação contextual quando permissão ou escopo estiver ausente.</p></article>
+        <article class="card"><strong class="ok">Resume Controller</strong><p>Retomada segura do fluxo após nova autorização.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Estados operacionais</h2>
+      <table>
+        <thead><tr><th>Estado</th><th>Significado</th><th>Ação</th></tr></thead>
+        <tbody>
+          <tr><td class="ok">ready</td><td>Conector autorizado e com escopo suficiente.</td><td>Executar.</td></tr>
+          <tr><td class="warn">missing_permission</td><td>Conector não autorizado.</td><td>Solicitar autorização contextual.</td></tr>
+          <tr><td class="warn">insufficient_scope</td><td>Permissão existente não cobre a ação.</td><td>Solicitar escopo mínimo adicional.</td></tr>
+          <tr><td class="warn">expired</td><td>Token expirado.</td><td>Tentar refresh seguro; se falhar, reconectar.</td></tr>
+          <tr><td class="bad">unavailable</td><td>Conector indisponível.</td><td>Bloquear ação e registrar incidente.</td></tr>
+          <tr><td class="bad">misconfigured</td><td>Configuração incompleta.</td><td>Bloquear produção.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Fluxo canônico</h2>
+      <div class="flow">Usuário → Chat/Agente → Connection Broker → Verifica Capability
+                                      ↓
+                               ready?
+                         ┌────────────┴────────────┐
+                         │                         │
+                       sim                        não
+                         │                         │
+                  Executa ação          Solicita permissão contextual
+                         │                         │
+                  Retorna resultado      Revalida + retoma execução
+                         │                         │
+                   Auditoria com correlation_id e atualização do monitoramento</div>
+    </section>
+
+    <section>
+      <h2>Gates de produção</h2>
+      <div class="grid">
+        <article class="card bad">Conector crítico sem health-check válido.</article>
+        <article class="card bad">Capability sem escopos mínimos mapeados.</article>
+        <article class="card bad">Token expirado sem refresh seguro.</article>
+        <article class="card bad">Escopo amplo sem justificativa.</article>
+        <article class="card bad">Auditoria sem correlation_id.</article>
+        <article class="card bad">Token/secret detectado em log ou HTML.</article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Integração com /monitoramento-operacional</h2>
+      <p>Adicionar cards de conectores críticos, tokens expirados, permissões pendentes, escopo insuficiente, falhas nas últimas 24h e ações bloqueadas por gate, sempre com drill-down para analítico filtrado.</p>
+    </section>
+
+    <p class="footer">Versão 1.0.0 — Publicado como referência visual autocontida, sem CDN e sem segredos.</p>
+  </main>
+</body>
+</html>
