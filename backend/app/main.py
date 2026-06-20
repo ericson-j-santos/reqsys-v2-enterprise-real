@@ -14,6 +14,7 @@ from app.api import (
     figma_github,
     hub_lowcode,
     ia,
+    monitoramento_operacional,
     pipeline,
     processos,
     qualidade_ia,
@@ -72,6 +73,7 @@ app.include_router(webhooks.router)
 app.include_router(rastreabilidade.router)
 app.include_router(hub_lowcode.router)
 app.include_router(agents.router)
+app.include_router(monitoramento_operacional.router)
 
 
 @app.middleware('http')
