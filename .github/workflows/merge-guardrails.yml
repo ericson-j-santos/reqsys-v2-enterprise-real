@@ -18,7 +18,7 @@ jobs:
         with:
           script: |
             const pr = context.payload.pull_request;
-            const body = pr.body || '';
+            const body = pr?.body || '';
             const errors = [];
 
             if (!pr) {
@@ -26,8 +26,28 @@ jobs:
               return;
             }
 
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+            const hasChecklistItem = (item) => {
+              const pattern = new RegExp(`^\\s*-\\s*\\[[ xX]\\]\\s+${escapeRegExp(item)}\\s*$`, 'm');
+              return pattern.test(body);
+            };
+
+            const isChecklistItemChecked = (item) => {
+              const pattern = new RegExp(`^\\s*-\\s*\\[[xX]\\]\\s+${escapeRegExp(item)}\\s*$`, 'm');
+              return pattern.test(body);
+            };
+
             if (!body.includes('## Merge Guardrails')) {
               errors.push('PR sem seção obrigatória: ## Merge Guardrails');
+            }
+
+            if (!body.includes('## Ambiente alvo')) {
+              errors.push('PR sem seção obrigatória: ## Ambiente alvo');
+            }
+
+            if (!body.includes('## Plano de validação pós-merge')) {
+              errors.push('PR sem seção obrigatória: ## Plano de validação pós-merge');
             }
 
             const requiredItems = [
@@ -41,25 +61,26 @@ jobs:
             ];
 
             for (const item of requiredItems) {
-              if (!body.includes(item)) {
+              if (!hasChecklistItem(item)) {
                 errors.push(`Checklist obrigatório ausente: ${item}`);
               }
             }
 
-            if (!body.includes('## Ambiente alvo')) {
-              errors.push('PR sem seção obrigatória: ## Ambiente alvo');
+            const environmentChecked = /^\s*-\s*\[[xX]\]\s+(Desenvolvimento|Homologação|Produção|Documentação\/governança sem impacto runtime)\s*$/m.test(body);
+            if (!environmentChecked) {
+              errors.push('Nenhum ambiente alvo foi marcado no checklist.');
             }
 
-            if (!body.includes('## Plano de validação pós-merge')) {
-              errors.push('PR sem seção obrigatória: ## Plano de validação pós-merge');
+            if (pr.draft === false && /^draft:/i.test(pr.title || '')) {
+              errors.push('PR não está em draft, mas o título ainda começa com draft:.');
             }
 
-            if (pr.draft === false && body.includes('- [ ] CI executado e verde.')) {
-              errors.push('PR saiu de draft sem marcar CI verde no checklist.');
-            }
-
-            if (pr.draft === false && body.includes('- [ ] Revisão concluída.')) {
-              errors.push('PR saiu de draft sem revisão concluída marcada no checklist.');
+            if (pr.draft === false) {
+              for (const item of requiredItems) {
+                if (!isChecklistItemChecked(item)) {
+                  errors.push(`PR pronto para revisão exige checklist marcado: ${item}`);
+                }
+              }
             }
 
             if (errors.length > 0) {
