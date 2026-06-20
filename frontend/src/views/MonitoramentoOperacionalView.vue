@@ -1,0 +1,108 @@
+<template>
+  <main class="monitoramento-operacional" aria-labelledby="titulo-monitoramento">
+    <section class="cabecalho">
+      <div>
+        <p class="eyebrow">ReqSys Operacional</p>
+        <h1 id="titulo-monitoramento">Monitoramento Operacional</h1>
+        <p>Visão mínima de estado, bloqueios, pendências e itens monitorados.</p>
+      </div>
+      <button type="button" :disabled="carregando" @click="carregarMonitoramento">
+        {{ carregando ? 'Atualizando...' : 'Atualizar' }}
+      </button>
+    </section>
+
+    <p v-if="erro" class="erro" role="alert">{{ erro }}</p>
+
+    <section class="cards" aria-label="Indicadores operacionais">
+      <article class="card"><span>Estado geral</span><strong>{{ resumo.estado_geral || 'desconhecido' }}</strong></article>
+      <article class="card"><span>Bloqueios</span><strong>{{ resumo.bloqueios ?? 0 }}</strong></article>
+      <article class="card"><span>Pendências</span><strong>{{ resumo.pendencias ?? 0 }}</strong></article>
+      <article class="card"><span>Itens</span><strong>{{ resumo.total_itens ?? itens.length }}</strong></article>
+    </section>
+
+    <section class="filtros" aria-label="Filtros do analítico">
+      <label>
+        Estado
+        <select v-model="filtroEstado">
+          <option value="">Todos</option>
+          <option value="verde">Verde</option>
+          <option value="amarelo">Amarelo</option>
+          <option value="vermelho">Vermelho</option>
+          <option value="bloqueado">Bloqueado</option>
+          <option value="desconhecido">Desconhecido</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="analitico" aria-label="Itens monitorados">
+      <table>
+        <thead>
+          <tr><th>Tipo</th><th>Referência</th><th>Título</th><th>Estado</th><th>Severidade</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in itensFiltrados" :key="`${item.tipo}-${item.referencia}`">
+            <td>{{ item.tipo }}</td>
+            <td>{{ item.referencia }}</td>
+            <td>{{ item.titulo }}</td>
+            <td>{{ item.estado }}</td>
+            <td>{{ item.severidade }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</template>
+
+<script setup>
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
+const route = useRoute()
+const router = useRouter()
+const resumo = ref({})
+const itens = ref([])
+const filtroEstado = ref(route.query.estado || '')
+const carregando = ref(false)
+const erro = ref('')
+
+const itensFiltrados = computed(() => itens.value.filter((item) => !filtroEstado.value || item.estado === filtroEstado.value))
+
+async function carregarMonitoramento() {
+  carregando.value = true
+  erro.value = ''
+  try {
+    const resposta = await fetch('/api/monitoramento-operacional', { headers: { Accept: 'application/json' } })
+    if (!resposta.ok) throw new Error('Falha ao carregar monitoramento operacional')
+    const payload = await resposta.json()
+    resumo.value = payload.data?.resumo || {}
+    itens.value = payload.data?.itens || []
+  } catch (e) {
+    erro.value = e?.message || 'Erro inesperado ao carregar monitoramento operacional'
+  } finally {
+    carregando.value = false
+  }
+}
+
+watch(filtroEstado, () => {
+  router.replace({ query: { ...route.query, estado: filtroEstado.value || undefined } })
+})
+
+onMounted(carregarMonitoramento)
+</script>
+
+<style scoped>
+.monitoramento-operacional { display: grid; gap: 1rem; padding: 1rem; }
+.cabecalho { display: grid; gap: 1rem; align-items: center; }
+.eyebrow { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.card { border: 1px solid #d0d7de; border-radius: 12px; padding: 1rem; }
+.card span, .card strong { display: block; }
+.card strong { font-size: 1.5rem; margin-top: 0.5rem; }
+.filtros { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.filtros label { display: grid; gap: 0.25rem; }
+.erro { border: 1px solid #d1242f; border-radius: 8px; color: #d1242f; padding: 0.75rem; }
+.analitico { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border-bottom: 1px solid #d0d7de; padding: 0.75rem; text-align: left; }
+@media (min-width: 768px) { .cabecalho { grid-template-columns: 1fr auto; } }
+</style>
