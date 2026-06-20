@@ -1,0 +1,36 @@
+name: Governance Quality Gates
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  governance-validation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate governance structure
+        run: |
+          test -f docs/ai-governance/00_PRIORITY_RULES.md
+          test -f docs/ai-governance/INDEX.md
+          test -f docs/ai-governance/06-DEVOPS/QUALITY_GATES.md
+          test -f docs/ai-governance/09-CHECKLISTS/PR_CHECKLIST.md
+
+      - name: Validate monitoring docs
+        run: |
+          test -f docs/monitoramento-operacional-reqsys.md
+          test -f docs/pipeline-governanca.md
+
+      - name: Validate governance script
+        run: |
+          test -f scripts/validar-pipeline-governanca.mjs
+
+      - name: Governance gates passed
+        run: echo "Governance validation passed"
