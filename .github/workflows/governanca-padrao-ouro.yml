@@ -1,0 +1,65 @@
+name: Governança Padrão Ouro
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validar-governanca:
+    name: Validar artefatos de governança
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar documentos obrigatórios
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          arquivos_obrigatorios=(
+            "docs/governanca/PADRAO_OURO_ENTERPRISE.md"
+            "docs/ADR/ADR-0001-padrao-ouro-enterprise.md"
+            ".github/PULL_REQUEST_TEMPLATE.md"
+          )
+
+          for arquivo in "${arquivos_obrigatorios[@]}"; do
+            if [ ! -s "$arquivo" ]; then
+              echo "Arquivo obrigatório ausente ou vazio: $arquivo"
+              exit 1
+            fi
+          done
+
+      - name: Validar termos mínimos de governança
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          documento="docs/governanca/PADRAO_OURO_ENTERPRISE.md"
+
+          termos=(
+            "correlation_id"
+            "CI/CD"
+            "ADR"
+            "drill-down"
+            "Schema-Driven UI"
+            "IA corporativa auditável"
+            "Gates bloqueantes"
+          )
+
+          for termo in "${termos[@]}"; do
+            if ! grep -qi "$termo" "$documento"; then
+              echo "Termo obrigatório não localizado no documento de governança: $termo"
+              exit 1
+            fi
+          done
+
+      - name: Resultado
+        run: echo "Governança padrão ouro validada com sucesso."
