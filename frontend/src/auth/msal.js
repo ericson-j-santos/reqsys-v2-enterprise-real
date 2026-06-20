@@ -48,11 +48,22 @@ export async function getMsalInstance() {
 export const SCOPES = ['openid', 'profile', 'email']
 
 function clearInteractionState(clientId) {
-  const prefix = `msal.${clientId}`
-  ;[localStorage, sessionStorage].forEach(store => {
+  const prefixes = [`msal.${clientId}`, 'msal.']
+  const markers = [
+    'interaction',
+    'request',
+    'nonce',
+    'state',
+    'authority',
+    'login',
+    'token',
+  ]
+
+  ;[localStorage, sessionStorage].forEach((store) => {
     Object.keys(store)
-      .filter(k => k.startsWith(prefix) && (k.includes('interaction') || k.includes('request')))
-      .forEach(k => store.removeItem(k))
+      .filter((key) => prefixes.some((prefix) => key.startsWith(prefix)))
+      .filter((key) => markers.some((marker) => key.toLowerCase().includes(marker)))
+      .forEach((key) => store.removeItem(key))
   })
 }
 
@@ -61,12 +72,16 @@ function clearInteractionState(clientId) {
 export async function loginMicrosoftPopup() {
   const msal = await getMsalInstance()
   if (!msal) throw new Error('Azure AD não configurado no servidor')
+
+  const clientId = msal.getConfiguration().auth.clientId
+  clearInteractionState(clientId)
+
   try {
     const result = await msal.loginPopup({ scopes: SCOPES, prompt: 'select_account' })
     return result?.idToken ?? null
   } catch (err) {
     if (err.errorCode === 'interaction_in_progress') {
-      clearInteractionState(msal.getConfiguration().auth.clientId)
+      clearInteractionState(clientId)
       const result = await msal.loginPopup({ scopes: SCOPES, prompt: 'select_account' })
       return result?.idToken ?? null
     }
