@@ -26,6 +26,8 @@
               :data-testid="`metric-card-${card.id}`"
               role="button"
               tabindex="0"
+              @keyup.enter="irPara(card.rota)"
+              @keyup.space.prevent="irPara(card.rota)"
             >
               <div class="metric-head">
                 <v-icon size="18" :icon="card.icone" class="metric-icon" />
@@ -50,7 +52,7 @@
 
               <div class="metric-value-row">
                 <div class="metric-value">{{ card.valor }}</div>
-                <v-tooltip text="Abrir detalhe relacionado" location="top">
+                <v-tooltip text="Abrir analítico filtrado" location="top">
                   <template #activator="{ props: actionProps }">
                     <v-btn
                       v-bind="actionProps"
@@ -58,7 +60,7 @@
                       variant="tonal"
                       size="small"
                       color="amber"
-                      aria-label="Abrir detalhe da métrica"
+                      aria-label="Abrir analítico filtrado da métrica"
                       @click.stop="irPara(card.rota)"
                     />
                   </template>
@@ -73,7 +75,7 @@
             <v-divider class="my-2" />
             <div class="preview-value">Valor atual: {{ card.valor }}</div>
             <v-btn class="mt-2" size="small" color="amber" variant="flat" @click="irPara(card.rota)">
-              Ver detalhes
+              Ver analítico
             </v-btn>
           </v-card>
         </v-menu>
@@ -160,7 +162,7 @@ const cards = computed(() => [
     icone: 'mdi-file-document-outline',
     tooltip: 'Quantidade total de requisitos cadastrados.',
     resumo: 'Acompanhe a base completa de requisitos e entre no módulo para filtrar por área, urgência e status.',
-    rota: '/requisitos',
+    rota: { path: '/requisitos' },
   },
   {
     id: 'em-analise',
@@ -168,8 +170,8 @@ const cards = computed(() => [
     valor: store.metricas.em_analise ?? 0,
     icone: 'mdi-chart-timeline-variant',
     tooltip: 'Requisitos atualmente em avaliação técnica/funcional.',
-    resumo: 'Itens que ainda precisam de refinamento técnico e validação de regra de negócio.',
-    rota: '/pipeline',
+    resumo: 'Abre o analítico de requisitos filtrado por status em análise.',
+    rota: { path: '/requisitos', query: { status: 'em_analise' } },
   },
   {
     id: 'aprovados',
@@ -177,8 +179,8 @@ const cards = computed(() => [
     valor: store.metricas.aprovados ?? 0,
     icone: 'mdi-check-decagram-outline',
     tooltip: 'Requisitos aprovados para execução.',
-    resumo: 'Demandas prontas para execução e acompanhamento no fluxo operacional.',
-    rota: '/rastreabilidade',
+    resumo: 'Abre o analítico de requisitos aprovados para execução e rastreabilidade.',
+    rota: { path: '/requisitos', query: { status: 'aprovado' } },
   },
   {
     id: 'qualidade-ia',
@@ -187,7 +189,7 @@ const cards = computed(() => [
     icone: 'mdi-brain',
     tooltip: 'Score geral de qualidade do módulo de IA monitorado no backend.',
     resumo: 'Monitore acurácia, consistência, segurança e tendência de qualidade dos resultados de IA.',
-    rota: '/qualidade-ia',
+    rota: { path: '/qualidade-ia' },
   },
   {
     id: 'pendencias',
@@ -195,8 +197,8 @@ const cards = computed(() => [
     valor: store.metricas.pendentes ?? 0,
     icone: 'mdi-alert-circle-outline',
     tooltip: 'Itens que ainda demandam ajuste ou decisão.',
-    resumo: 'Pontos críticos que exigem ação rápida para evitar bloqueios na operação.',
-    rota: '/auditoria',
+    resumo: 'Abre o analítico de requisitos recebidos, que normalmente ainda exigem triagem ou decisão.',
+    rota: { path: '/requisitos', query: { status: 'recebido' } },
   },
 ])
 
@@ -265,10 +267,13 @@ const timestampLabel = computed(() => {
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.metric-interactive:hover {
+.metric-interactive:hover,
+.metric-interactive:focus-visible {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
 }
 
 .metric-head {
