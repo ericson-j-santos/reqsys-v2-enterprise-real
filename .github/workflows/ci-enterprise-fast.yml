@@ -1,0 +1,196 @@
+name: CI Enterprise Fast
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: ci-enterprise-fast-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20.14.0"
+  PYTHON_VERSION: "3.12"
+  CI: "true"
+
+jobs:
+  guardrails:
+    name: Guardrails determinísticos e segurança
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Executar guardrails enterprise
+        run: python scripts/ci_enterprise_guardrails.py
+
+      - name: Publicar relatório de guardrails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-enterprise-guardrails
+          path: ci-reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  backend-fast:
+    name: Backend fast checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: guardrails
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detectar backend Python
+        id: detect
+        shell: bash
+        run: |
+          if [ -f requirements.txt ] || [ -f backend/requirements.txt ] || [ -f pyproject.toml ] || [ -d backend/app ] || [ -d app ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Python
+        if: steps.detect.outputs.enabled == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Instalar dependências backend
+        if: steps.detect.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
+          pip install ruff pytest
+
+      - name: Ruff backend
+        if: steps.detect.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          TARGETS=()
+          [ -d app ] && TARGETS+=(app)
+          [ -d backend ] && TARGETS+=(backend)
+          [ -d scripts ] && TARGETS+=(scripts)
+          if [ ${#TARGETS[@]} -gt 0 ]; then
+            ruff check "${TARGETS[@]}" --output-format=github
+          fi
+
+      - name: Testes unitários backend
+        if: steps.detect.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          if [ -d tests ] || [ -d backend/tests ]; then
+            pytest -q --maxfail=1 --disable-warnings
+          else
+            echo "Sem diretório de testes Python detectado."
+          fi
+
+  frontend-fast:
+    name: Frontend fast checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: guardrails
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detectar frontend Node
+        id: detect
+        shell: bash
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "workdir=frontend" >> "$GITHUB_OUTPUT"
+          elif [ -f package.json ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "workdir=." >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "workdir=." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node
+        if: steps.detect.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Instalar dependências frontend
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Lint frontend
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        run: npm run lint --if-present
+
+      - name: Typecheck frontend
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        run: npm run typecheck --if-present
+
+      - name: Testes unitários frontend
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        run: npm test --if-present -- --runInBand
+
+      - name: Build frontend
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        run: npm run build --if-present
+
+  ci-fast-summary:
+    name: Sumário CI Enterprise Fast
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    needs: [guardrails, backend-fast, frontend-fast]
+    if: always()
+    steps:
+      - name: Consolidar status
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          # CI Enterprise Fast
+
+          | Gate | Resultado |
+          |---|---|
+          | Guardrails | `${{ needs.guardrails.result }}` |
+          | Backend fast | `${{ needs.backend-fast.result }}` |
+          | Frontend fast | `${{ needs.frontend-fast.result }}` |
+
+          Política: este workflow deve permanecer rápido, determinístico e bloqueante para PRs.
+          EOF
+
+          if [ "${{ needs.guardrails.result }}" != "success" ] || [ "${{ needs.backend-fast.result }}" != "success" ] || [ "${{ needs.frontend-fast.result }}" != "success" ]; then
+            exit 1
+          fi
