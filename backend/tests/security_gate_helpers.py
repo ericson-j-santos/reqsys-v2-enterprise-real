@@ -5,6 +5,8 @@ import pytest
 from app.core.config import Settings
 
 _SECURE_SECRET = 'reqsys-ci-secret-with-at-least-thirty-two-characters'
+_SECURE_AZURE_TENANT_ID = '11111111-1111-1111-1111-111111111111'
+_SECURE_AZURE_CLIENT_ID = '22222222-2222-2222-2222-222222222222'
 
 
 def configure_secure_prod(monkeypatch: pytest.MonkeyPatch, **overrides: str) -> None:
@@ -18,6 +20,8 @@ def configure_secure_prod(monkeypatch: pytest.MonkeyPatch, **overrides: str) -> 
         'JWT_AUDIENCE',
         'JWT_EXP_MINUTES',
         'CORS_ORIGINS',
+        'AZURE_TENANT_ID',
+        'AZURE_CLIENT_ID',
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -29,6 +33,8 @@ def configure_secure_prod(monkeypatch: pytest.MonkeyPatch, **overrides: str) -> 
         'JWT_AUDIENCE': 'reqsys-frontend',
         'JWT_EXP_MINUTES': '60',
         'CORS_ORIGINS': 'https://tieriprod.duckdns.org',
+        'AZURE_TENANT_ID': _SECURE_AZURE_TENANT_ID,
+        'AZURE_CLIENT_ID': _SECURE_AZURE_CLIENT_ID,
     }
     values.update({key: str(value) for key, value in overrides.items()})
 
