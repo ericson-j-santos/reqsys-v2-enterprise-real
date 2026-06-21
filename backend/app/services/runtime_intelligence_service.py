@@ -1,4 +1,8 @@
-from app.models.operational_intelligence_models import DiagnosticoRuntime, SinalRuntime, StatusOperacional
+from app.models.operational_intelligence_models import (
+    DiagnosticoRuntime,
+    SinalRuntime,
+    StatusOperacional,
+)
 
 
 class RuntimeIntelligenceService:
@@ -40,10 +44,13 @@ class RuntimeIntelligenceService:
 
         score = max(0, min(100, score))
         status = (
-            StatusOperacional.saudavel if score >= 90 else
-            StatusOperacional.atencao if score >= 70 else
-            StatusOperacional.degradado if score >= 40 else
-            StatusOperacional.bloqueado
+            StatusOperacional.saudavel
+            if score >= 90
+            else StatusOperacional.atencao
+            if score >= 70
+            else StatusOperacional.degradado
+            if score >= 40
+            else StatusOperacional.bloqueado
         )
 
         if not recomendacoes:
