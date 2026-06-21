@@ -68,10 +68,19 @@ Arquivo: `scripts/ci_enterprise_guardrails.py`
 | `CI_DETERMINISM_NPM_INSTALL` | Warning | Recomenda `npm ci` quando houver lockfile |
 | `CI_GOVERNANCE_CONTINUE_ON_ERROR` | Warning | Evita erro mascarado em gate obrigatório |
 | `CI_LOCKFILE_MISSING` | Warning | Evidencia falta de lockfile |
-| `SECURITY_AUTH_DISABLED` | Erro | Bloqueia autenticação desligada versionada |
-| `SECURITY_CORS_WILDCARD` | Erro | Bloqueia CORS `*` em código/configuração |
-| `SECURITY_JWT_DISABLED` | Erro | Bloqueia JWT sem validação real |
-| `SECURITY_SECRET_LITERAL` | Erro | Bloqueia segredo literal versionado |
+| `SECURITY_AUTH_DISABLED` | Erro | Bloqueia autenticação desligada versionada em runtime/config produtivo |
+| `SECURITY_CORS_WILDCARD` | Erro | Bloqueia CORS `*` em runtime/config produtivo |
+| `SECURITY_JWT_DISABLED` | Erro | Bloqueia JWT sem validação real em runtime/config produtivo |
+| `SECURITY_SECRET_LITERAL` | Erro | Bloqueia segredo literal versionado em runtime/config produtivo |
+
+### Classificação de severidade dos guardrails de segurança
+
+| Contexto | Tratamento |
+|---|---|
+| Código runtime e configuração produtiva | Erro bloqueante |
+| Documentação | Warning |
+| Testes, specs, fixtures, mocks e exemplos | Não bloqueante |
+| Perfis demo em frontend | Permitidos apenas para e-mail/perfil; senha não pode ser versionada |
 
 ---
 
