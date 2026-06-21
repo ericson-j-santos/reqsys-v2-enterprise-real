@@ -1,0 +1,31 @@
+name: Operational Intelligence Governance
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/**'
+      - 'backend/sql/**'
+      - 'docs/adr/**'
+      - 'docs/monitoramento-operacional/**'
+      - 'docs/runbooks/**'
+      - 'tests/backend/**'
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required operational intelligence files
+        run: |
+          test -f docs/adr/ADR-022-operational-intelligence-platform.md
+          test -f docs/monitoramento-operacional/operational-intelligence-platform.md
+          test -f docs/runbooks/RUNBOOK-operational-intelligence-platform.md
+          test -f backend/sql/002_operational_intelligence_platform.sql
+          test -f backend/app/api/operational_intelligence.py
+
+      - name: Validate mandatory governance terms
+        run: |
+          grep -R "correlation_id" backend/app docs backend/sql
+          grep -R "dead_letter" backend/sql backend/app
+          grep -R "Runtime Intelligence" docs/adr docs/monitoramento-operacional
