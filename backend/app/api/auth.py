@@ -44,7 +44,7 @@ class AzureLoginInput(BaseModel):
 @router.post('/azure')
 def login_azure(body: AzureLoginInput, request: Request):
     """Login via Azure AD — valida ID token emitido pelo Microsoft Entra ID."""
-    if not settings.azure_tenant_id or not settings.azure_client_id:
+    if not settings.azure_configured:
         raise HTTPException(503, 'Azure AD não configurado (AZURE_TENANT_ID / AZURE_CLIENT_ID ausentes)')
 
     try:
@@ -78,7 +78,7 @@ _TOKEN_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token'
 @router.post('/azure-code')
 def login_azure_code(body: AzureCodeInput, request: Request):
     """Recebe o authorization code do PKCE flow e faz o exchange com Azure AD."""
-    if not settings.azure_tenant_id or not settings.azure_client_id:
+    if not settings.azure_configured:
         raise HTTPException(503, 'Azure AD não configurado')
 
     url = _TOKEN_URL.format(tenant=settings.azure_tenant_id)
@@ -127,12 +127,20 @@ def login_azure_code(body: AzureCodeInput, request: Request):
 
 @router.get('/config')
 def auth_config():
-    """Retorna configuração pública do Azure AD para o frontend."""
+    """Retorna configuração pública do Azure AD para o frontend, sem expor segredo."""
+    azure_enabled = settings.azure_configured
+    missing_fields = settings.azure_missing_fields
+    redirect_uri = settings.azure_expected_redirect_uri
     return ok({
-        'azure_enabled': bool(settings.azure_tenant_id and settings.azure_client_id),
+        'azure_enabled': azure_enabled,
         'azure_tenant_id': settings.azure_tenant_id or None,
         'azure_client_id': settings.azure_client_id or None,
         'demo_login_enabled': bool(settings.allow_demo_login and not settings.is_production),
+        'environment': settings.normalized_environment,
+        'expected_redirect_uri': redirect_uri or None,
+        'auth_status': 'ready' if azure_enabled else 'misconfigured',
+        'missing_fields': missing_fields,
+        'operator_action': None if azure_enabled else 'Configure AZURE_TENANT_ID e AZURE_CLIENT_ID no ambiente e registre o expected_redirect_uri no Microsoft Entra ID.',
     })
 
 
