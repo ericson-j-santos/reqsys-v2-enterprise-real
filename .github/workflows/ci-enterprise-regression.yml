@@ -1,0 +1,190 @@
+name: CI Enterprise Regression
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+    inputs:
+      executar_e2e_completo:
+        description: "Executar E2E completo quando houver suporte no projeto"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ci-enterprise-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20.14.0"
+  PYTHON_VERSION: "3.12"
+  CI: "true"
+
+jobs:
+  regression-map:
+    name: Mapa de regressão e maturidade
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Gerar mapa de regressão
+        shell: bash
+        run: |
+          mkdir -p ci-reports
+          cat > ci-reports/regression-map.md <<'EOF'
+          # Mapa de Regressão Enterprise
+
+          | Camada | Execução | Bloqueia PR | Objetivo |
+          |---|---|---:|---|
+          | Fast checks | Pull request | Sim | Lint, typecheck, unitários e build rápido |
+          | Integration | Pull request/release | Sim | Contratos, adapters e persistência |
+          | Smoke E2E | Pull request/release | Sim | Fluxos críticos, login e health |
+          | Full regression | Nightly/manual | Não por padrão | E2E completo, responsividade e acessibilidade |
+          | Observabilidade | Sempre | Sim em gates críticos | Flaky rate, tempo até verde, top falhas |
+          EOF
+
+      - name: Publicar mapa
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-enterprise-regression-map
+          path: ci-reports/
+          retention-days: 30
+
+  frontend-regression:
+    name: Frontend regression/E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detectar frontend
+        id: detect
+        shell: bash
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "workdir=frontend" >> "$GITHUB_OUTPUT"
+          elif [ -f package.json ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "workdir=." >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "workdir=." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node
+        if: steps.detect.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Instalar dependências
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+
+      - name: Build de regressão
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        run: npm run build --if-present
+
+      - name: Instalar browsers Playwright se aplicável
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        shell: bash
+        run: |
+          if [ -f playwright.config.ts ] || [ -f playwright.config.js ]; then
+            npx playwright install --with-deps
+          else
+            echo "Playwright não detectado."
+          fi
+
+      - name: Executar E2E/regressão se aplicável
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        shell: bash
+        run: |
+          if [ -f playwright.config.ts ] || [ -f playwright.config.js ]; then
+            npx playwright test --reporter=list,html
+          else
+            npm run test:e2e --if-present
+          fi
+
+      - name: Publicar evidências E2E
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-enterprise-e2e-evidences
+          path: |
+            frontend/playwright-report/
+            playwright-report/
+            frontend/test-results/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  backend-regression:
+    name: Backend regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Instalar dependências backend
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
+          pip install pytest pytest-cov ruff bandit pip-audit
+
+      - name: Testes regressivos backend
+        shell: bash
+        run: |
+          if [ -d tests ] || [ -d backend/tests ]; then
+            pytest --maxfail=3 --disable-warnings --cov=. --cov-report=xml --cov-report=term-missing
+          else
+            echo "Sem testes backend detectados."
+          fi
+
+      - name: Segurança backend
+        shell: bash
+        run: |
+          TARGETS=()
+          [ -d app ] && TARGETS+=(app)
+          [ -d backend ] && TARGETS+=(backend)
+          if [ ${#TARGETS[@]} -gt 0 ]; then
+            bandit -q -r "${TARGETS[@]}"
+          fi
+          if [ -f requirements.txt ]; then pip-audit -r requirements.txt; fi
+          if [ -f backend/requirements.txt ]; then pip-audit -r backend/requirements.txt; fi
+
+      - name: Publicar cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-enterprise-backend-coverage
+          path: coverage.xml
+          if-no-files-found: ignore
+          retention-days: 30
