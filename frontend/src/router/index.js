@@ -17,6 +17,7 @@ import HubLowCodeView from '../views/HubLowCodeView.vue'
 import GovBIView from '../views/GovBIView.vue'
 import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
 import MonitoramentoOperacionalView from '../views/MonitoramentoOperacionalView.vue'
+import QueryIntelligenceView from '../views/QueryIntelligenceView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -37,7 +38,8 @@ const routes = [
   { path: '/arquitetura', component: ArquiteturaView, meta: { recurso: 'dashboard:read' } },
   { path: '/governanca', component: GovernancaEnterpriseView, meta: { recurso: 'dashboard:read' } },
   { path: '/monitoramento-operacional', component: MonitoramentoOperacionalView, meta: { recurso: 'dashboard:read' } },
-  { path: '/govbi-ia',    component: GovBIView,       meta: { recurso: 'dashboard:read' } }
+  { path: '/govbi-ia',    component: GovBIView,       meta: { recurso: 'dashboard:read' } },
+  { path: '/query-intelligence', component: QueryIntelligenceView, meta: { recurso: 'dashboard:read' } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach((to) => {
