@@ -1,4 +1,7 @@
-from app.models.operational_intelligence_models import DiagnosticoRuntime, StatusOperacional
+from app.models.operational_intelligence_models import (
+    DiagnosticoRuntime,
+    StatusOperacional,
+)
 
 
 class AutonomousOperationService:
