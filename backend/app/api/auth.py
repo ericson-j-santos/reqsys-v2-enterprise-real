@@ -153,7 +153,7 @@ class LoginInput(BaseModel):
 
 @router.post('/login')
 def login(body: LoginInput, request: Request):
-    """Login demo — permitido apenas quando ALLOW_DEMO_LOGIN=true e fora de produção."""
+    """Login demo permitido apenas por configuração segura fora de produção."""
     if settings.is_production or not settings.allow_demo_login:
         logger.warning('demo_login_bloqueado ip=%s environment=%s', request.client.host if request.client else '?', settings.app_environment)
         raise HTTPException(403, 'Login demo desabilitado neste ambiente')
