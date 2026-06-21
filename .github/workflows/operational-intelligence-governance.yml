@@ -8,6 +8,7 @@ on:
       - 'docs/adr/**'
       - 'docs/monitoramento-operacional/**'
       - 'docs/runbooks/**'
+      - 'backend/tests/**'
       - 'tests/backend/**'
 
 jobs:
@@ -26,6 +27,6 @@ jobs:
 
       - name: Validate mandatory governance terms
         run: |
-          grep -R "correlation_id" backend/app docs backend/sql
-          grep -R "dead_letter" backend/sql backend/app
-          grep -R "Runtime Intelligence" docs/adr docs/monitoramento-operacional
+          grep -Ri "correlation_id" backend/app docs backend/sql
+          grep -Ri "dead_letter" backend/sql backend/app
+          grep -Ri "runtime intelligence" docs/adr docs/monitoramento-operacional
