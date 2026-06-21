@@ -24,11 +24,16 @@ export async function getMsalInstance() {
   const serverConfig = await fetchAuthConfig()
   if (!serverConfig.azure_enabled) return null
 
+  // O redirect URI precisa ser EXATAMENTE igual ao registrado no Entra (tipo SPA).
+  // Usa o valor vindo do backend quando definido (AZURE_REDIRECT_URI); caso
+  // contrário, cai para a origem atual da página.
+  const redirectUri = serverConfig.azure_redirect_uri || window.location.origin
+
   _instance = new PublicClientApplication({
     auth: {
       clientId: serverConfig.azure_client_id,
       authority: `https://login.microsoftonline.com/${serverConfig.azure_tenant_id}`,
-      redirectUri: window.location.origin,
+      redirectUri,
       postLogoutRedirectUri: window.location.origin + '/login',
     },
     cache: {
