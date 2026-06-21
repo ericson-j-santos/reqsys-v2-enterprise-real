@@ -6,6 +6,7 @@
         "build": "vite build",
         "preview": "vite preview --host 0.0.0.0",
         "test:unit": "vitest run",
+        "test:coverage": "vitest run --coverage",
         "test:e2e": "playwright test",
         "test:e2e:stable": "node scripts/run-e2e-safe.js --reporter=line"
     },
@@ -24,6 +25,7 @@
     "devDependencies": {
         "@playwright/test": "^1.59.1",
         "@vitest/coverage-v8": "^4.1.8",
+        "@vue/test-utils": "^2.4.11",
         "jsdom": "^29.1.1",
         "vitest": "^4.1.8"
     }

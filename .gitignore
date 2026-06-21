@@ -25,6 +25,7 @@ coverage.xml
 # Node / Frontend
 node_modules/
 dist/
+coverage/
 .cache/
 .parcel-cache/
 .nuxt/
