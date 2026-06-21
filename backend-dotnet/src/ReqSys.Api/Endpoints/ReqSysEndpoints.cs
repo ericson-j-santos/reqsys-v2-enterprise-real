@@ -14,6 +14,12 @@ public static class ReqSysEndpoints
         app.MapGet("/health", (HttpContext context) =>
             ApiEnvelope<object>.Ok(new { status = "ok", service = "reqsys-dotnet-api" }, context));
 
+        app.MapGet("/api/connectors/health", (HttpContext context) =>
+            ApiEnvelope<object>.Ok(BuildConnectorHealth(context), context));
+
+        app.MapPost("/api/connectors/capabilities/check", async (HttpContext context) =>
+            ApiEnvelope<object>.Ok(await BuildCapabilityCheckAsync(context), context));
+
         v1.MapPost("/auth/login", (LoginRequest request, AuthService auth, HttpContext context) =>
         {
             var response = auth.Login(request);
@@ -44,7 +50,7 @@ public static class ReqSysEndpoints
                 nome = "ReqSys Enterprise API .NET",
                 versao = configuration["ReqSys:Version"] ?? "3.1.0",
                 stack = ".NET 8 / C# 12",
-                modulos = new[] { "auth", "dashboard", "requisitos", "pipeline", "relatorios", "auditoria", "qualidade-ia" }
+                modulos = new[] { "auth", "dashboard", "requisitos", "pipeline", "relatorios", "auditoria", "qualidade-ia", "connection-broker" }
             }, context));
 
         v1.MapGet("/dashboard/resumo", (ReqSysStore store, HttpContext context) =>
@@ -72,6 +78,12 @@ public static class ReqSysEndpoints
                 stack = ".NET 8 / C# 12",
                 conectado = true
             }, context));
+
+        v1.MapGet("/connectors/health", (HttpContext context) =>
+            ApiEnvelope<object>.Ok(BuildConnectorHealth(context), context));
+
+        v1.MapPost("/connectors/capabilities/check", async (HttpContext context) =>
+            ApiEnvelope<object>.Ok(await BuildCapabilityCheckAsync(context), context));
 
         v1.MapGet("/requisitos", (ReqSysStore store, HttpContext context) =>
             ApiEnvelope<IReadOnlyCollection<Requisito>>.Ok(store.ListarRequisitos(), context));
@@ -281,6 +293,82 @@ public static class ReqSysEndpoints
             ApiEnvelope<object>.Ok(new { criado = true }, context));
 
         return app;
+    }
+
+    private static object BuildConnectorHealth(HttpContext context) => new
+    {
+        correlation_id = context.TraceIdentifier,
+        conectores = new object[]
+        {
+            new
+            {
+                ambiente = "dev",
+                conector = "repository_provider",
+                capability = "repository.read",
+                status = "ready",
+                criticidade = "high",
+                acao_sugerida = "Executar com auditoria e rastreabilidade."
+            },
+            new
+            {
+                ambiente = "homolog",
+                conector = "repository_provider",
+                capability = "repository.write",
+                status = "missing_permission",
+                criticidade = "critical",
+                acao_sugerida = "Solicitar autorizacao contextual antes de escrita governada."
+            },
+            new
+            {
+                ambiente = "prod",
+                conector = "document_provider",
+                capability = "document.read",
+                status = "ready",
+                criticidade = "medium",
+                acao_sugerida = "Manter health-check periodico."
+            },
+            new
+            {
+                ambiente = "prod",
+                conector = "communication_provider",
+                capability = "message.compose",
+                status = "blocked",
+                criticidade = "high",
+                acao_sugerida = "Exigir confirmacao humana antes de envio."
+            }
+        },
+        resumo = new
+        {
+            total = 4,
+            prontos = 2,
+            pendentes = 1,
+            bloqueados = 1,
+            estado_geral = "bloqueado"
+        }
+    };
+
+    private static async Task<object> BuildCapabilityCheckAsync(HttpContext context)
+    {
+        var payload = await JsonSerializer.DeserializeAsync<JsonElement>(context.Request.Body);
+        var ambiente = GetString(payload, "ambiente", "dev");
+        var capability = GetString(payload, "capability", "repository.read");
+        var acao = GetString(payload, "acao", "consultar");
+        var criticalWrite = capability.EndsWith(".write", StringComparison.OrdinalIgnoreCase) || acao.Contains("publicar", StringComparison.OrdinalIgnoreCase);
+        var productionWrite = ambiente.Equals("prod", StringComparison.OrdinalIgnoreCase) && criticalWrite;
+        var allowed = !productionWrite;
+
+        return new
+        {
+            allowed,
+            status = allowed ? "ready" : "blocked",
+            ambiente,
+            capability,
+            acao,
+            requires_human_confirmation = criticalWrite,
+            message = allowed
+                ? "Capability autorizada para execucao governada."
+                : "Capability bloqueada por gate de producao."
+        };
     }
 
     private static string UsuarioAtual(HttpContext context) =>
