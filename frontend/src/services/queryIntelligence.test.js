@@ -30,6 +30,29 @@ describe('queryIntelligence', () => {
     expect(result.graph.nodes.length).toBeGreaterThan(0)
   })
 
+  it('extrai CTEs encadeadas preservando a intenção lógica e o grafo', () => {
+    const result = analyzeSql(`
+      WITH vendas_mes AS (
+        SELECT cliente_id, SUM(valor_total) AS total_mes
+        FROM vendas
+        WHERE status = 'CONCLUIDA'
+        GROUP BY cliente_id
+      ), ranking AS (
+        SELECT cliente_id, total_mes, RANK() OVER (ORDER BY total_mes DESC) AS posicao
+        FROM vendas_mes
+      )
+      SELECT cliente_id, total_mes, posicao
+      FROM ranking
+      WHERE posicao <= 10
+      ORDER BY posicao
+    `)
+
+    expect(result.ctes).toEqual(['vendas_mes', 'ranking'])
+    expect(result.summary).toContain('usa 2 CTE(s)')
+    expect(result.graph.nodes.filter((node) => node.type === 'cte')).toHaveLength(2)
+    expect(result.findings.some((finding) => finding.type === 'analytics')).toBe(true)
+  })
+
   it('detecta SELECT estrela como risco', () => {
     const result = analyzeSql('SELECT * FROM clientes')
     expect(result.riskScore).toBeGreaterThanOrEqual(20)
