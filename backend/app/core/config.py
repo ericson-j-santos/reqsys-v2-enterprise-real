@@ -104,6 +104,23 @@ class Settings(BaseSettings):
         return secret in _WEAK_SECRETS or len(secret) < 32
 
     @property
+    def azure_configured(self) -> bool:
+        return bool(self.azure_tenant_id.strip() and self.azure_client_id.strip())
+
+    @property
+    def azure_missing_fields(self) -> list[str]:
+        missing: list[str] = []
+        if not self.azure_tenant_id.strip():
+            missing.append('AZURE_TENANT_ID')
+        if not self.azure_client_id.strip():
+            missing.append('AZURE_CLIENT_ID')
+        return missing
+
+    @property
+    def azure_expected_redirect_uri(self) -> str:
+        return (self.app_public_url or self.ambiente_atual_info.get('frontend', '')).rstrip('/')
+
+    @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(',') if origin.strip()]
 
@@ -127,6 +144,8 @@ class Settings(BaseSettings):
             errors.append('JWT_AUDIENCE é obrigatório em produção')
         if self.allow_demo_login:
             errors.append('ALLOW_DEMO_LOGIN deve ser false em produção')
+        if not self.azure_configured:
+            errors.append('Azure AD obrigatório em produção: configure AZURE_TENANT_ID e AZURE_CLIENT_ID')
 
         if errors:
             raise RuntimeError('Configuração insegura para produção: ' + '; '.join(errors))
