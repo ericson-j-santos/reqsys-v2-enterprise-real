@@ -4,7 +4,7 @@
 Objetivo:
 - detectar causas recorrentes de CI instável antes de executar testes caros;
 - bloquear configurações inseguras ou não determinísticas apenas em código runtime/config produtivo;
-- evitar falsos positivos em testes, fixtures, documentação e exemplos;
+- evitar falsos positivos em testes, fixtures, documentação, exemplos e mensagens de validação;
 - gerar relatório legível para artifact e GitHub Step Summary.
 """
 from __future__ import annotations
@@ -71,6 +71,20 @@ DOCUMENTATION_EXTENSIONS = {".md", ".txt"}
 DOCUMENTATION_DIRS = {"docs", "doc", "documentation", "adr"}
 PRODUCTION_CONFIG_DIRS = {"config", "configs", "deploy", "deployment", "infra", "nginx"}
 RUNTIME_CODE_MARKERS = {"app", "backend", "frontend", "src", "server", "api", "services", "core"}
+VALIDATION_OR_UI_MESSAGE_PATTERNS = (
+    "errors.",
+    "error.",
+    "errMsg",
+    "erro.set",
+    "mat-error",
+    "required",
+    "obrigatório",
+    "obrigatoria",
+    "obrigatória",
+    "inválid",
+    "invalid",
+    "credenciais inválidas",
+)
 
 
 @dataclass(frozen=True)
@@ -148,6 +162,11 @@ def is_runtime_or_production_config(path: Path) -> bool:
         "fly.toml",
         "nginx.conf",
     }
+
+
+def is_validation_or_ui_message(line: str) -> bool:
+    lowered = line.lower()
+    return any(marker.lower() in lowered for marker in VALIDATION_OR_UI_MESSAGE_PATTERNS)
 
 
 def add(
@@ -270,6 +289,8 @@ def check_security_gates(finds: list[Finding]) -> None:
             if not stripped or stripped.startswith(("#", "//", "*", "<!--")):
                 continue
             for rule, pattern, recommendation in patterns:
+                if rule == "SECURITY_SECRET_LITERAL" and is_validation_or_ui_message(line):
+                    continue
                 if pattern.search(line):
                     add(
                         finds,
