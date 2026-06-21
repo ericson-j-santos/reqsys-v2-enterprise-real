@@ -58,9 +58,33 @@ function extractClause(sql, startPattern, endPatterns) {
 function extractCtes(sql) {
   const normalized = normalizeSql(sql)
   if (!/^with\b/i.test(normalized)) return []
-  const beforeSelect = normalized.match(/^with\s+(recursive\s+)?(.+?)\s+select\b/i)
-  if (!beforeSelect) return []
-  return [...beforeSelect[2].matchAll(/([a-zA-Z_][\w]*)\s+as\s*\(/gi)].map((item) => item[1])
+
+  const cteBody = normalized.replace(/^with\s+(recursive\s+)?/i, '')
+  const ctes = []
+  let depth = 0
+  let index = 0
+
+  while (index < cteBody.length) {
+    const remaining = cteBody.slice(index)
+
+    if (depth === 0 && /^\s*select\b/i.test(remaining)) break
+
+    if (depth === 0) {
+      const cteMatch = remaining.match(/^\s*([a-zA-Z_][\w]*)\s+as\s*\(/i)
+      if (cteMatch) {
+        ctes.push(cteMatch[1])
+        index += cteMatch[0].length - 1
+        continue
+      }
+    }
+
+    const char = cteBody[index]
+    if (char === '(') depth += 1
+    if (char === ')') depth = Math.max(0, depth - 1)
+    index += 1
+  }
+
+  return [...new Set(ctes)]
 }
 
 function calculateRisk({ sql, columns, tables, joins, filters, ctes }) {
