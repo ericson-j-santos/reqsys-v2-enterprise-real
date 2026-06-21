@@ -12,6 +12,7 @@ import RecomendacoesIAView from '../views/RecomendacoesIAView.vue'
 import SpecsView from '../views/SpecsView.vue'
 import TaskConsoleView from '../views/TaskConsoleView.vue'
 import ArquiteturaView from '../views/ArquiteturaView.vue'
+import ArquiteturaVivaView from '../views/ArquiteturaVivaView.vue'
 import HubLowCodeView from '../views/HubLowCodeView.vue'
 import GovBIView from '../views/GovBIView.vue'
 import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
@@ -33,6 +34,7 @@ const routes = [
   { path: '/hub-lowcode', component: HubLowCodeView,  meta: { recurso: 'dashboard:read' } },
   { path: '/painel-integracao', component: PainelIntegracaoView, meta: { recurso: 'dashboard:read' } },
   { path: '/arquitetura', component: ArquiteturaView, meta: { recurso: 'dashboard:read' } },
+  { path: '/arquitetura-viva', component: ArquiteturaVivaView, meta: { recurso: 'dashboard:read' } },
   { path: '/govbi-ia',    component: GovBIView,       meta: { recurso: 'dashboard:read' } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })
