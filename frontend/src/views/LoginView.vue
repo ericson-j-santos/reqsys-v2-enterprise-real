@@ -29,7 +29,14 @@
           density="compact"
           class="mb-4"
         >
-          Autenticação indisponível. Verifique a configuração do Azure AD no backend.
+          <div class="font-weight-medium">Autenticação corporativa indisponível.</div>
+          <div>{{ mensagemDiagnosticoAuth }}</div>
+          <div v-if="camposAusentes.length" class="mt-2 text-caption">
+            Campos ausentes: {{ camposAusentes.join(', ') }}
+          </div>
+          <div v-if="redirectEsperado" class="mt-1 text-caption">
+            Redirect URI esperado no Microsoft Entra ID: {{ redirectEsperado }}
+          </div>
         </v-alert>
 
         <template v-if="demoLoginDisponivel">
@@ -104,6 +111,12 @@ const azureConfig    = ref(null)
 
 const auth   = useAuthStore()
 const router = useRouter()
+
+const camposAusentes = computed(() => azureConfig.value?.missing_fields || [])
+const redirectEsperado = computed(() => azureConfig.value?.expected_redirect_uri || '')
+const mensagemDiagnosticoAuth = computed(() => {
+  return azureConfig.value?.operator_action || 'Verifique a configuração do Azure AD no backend.'
+})
 
 onMounted(async () => {
   // Exibir erro do retorno Azure (gravado em main.js antes de montar)
