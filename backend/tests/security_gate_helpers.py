@@ -18,6 +18,9 @@ def configure_secure_prod(monkeypatch: pytest.MonkeyPatch, **overrides: str) -> 
         'JWT_AUDIENCE',
         'JWT_EXP_MINUTES',
         'CORS_ORIGINS',
+        'AZURE_TENANT_ID',
+        'AZURE_CLIENT_ID',
+        'AZURE_CLIENT_SECRET',
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -29,6 +32,9 @@ def configure_secure_prod(monkeypatch: pytest.MonkeyPatch, **overrides: str) -> 
         'JWT_AUDIENCE': 'reqsys-frontend',
         'JWT_EXP_MINUTES': '60',
         'CORS_ORIGINS': 'https://tieriprod.duckdns.org',
+        'AZURE_TENANT_ID': '00000000-0000-0000-0000-000000000000',
+        'AZURE_CLIENT_ID': '11111111-1111-1111-1111-111111111111',
+        'AZURE_CLIENT_SECRET': 'ci-placeholder-not-used-by-gate',
     }
     values.update({key: str(value) for key, value in overrides.items()})
 
