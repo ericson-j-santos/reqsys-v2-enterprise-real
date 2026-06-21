@@ -59,7 +59,7 @@
 
           <v-divider />
           <v-card-text class="pa-4">
-            <div class="text-caption text-medium-emphasis mb-2 font-weight-medium">Credenciais de demonstração:</div>
+            <div class="text-caption text-medium-emphasis mb-2 font-weight-medium">Perfis de demonstração:</div>
             <div class="d-flex flex-wrap gap-2">
               <v-chip
                 v-for="demo in demos"
@@ -72,6 +72,9 @@
               >
                 {{ demo.papel }}
               </v-chip>
+            </div>
+            <div class="text-caption text-medium-emphasis mt-2">
+              Informe a senha por variável segura ou credencial corporativa. Senhas não são versionadas no frontend.
             </div>
           </v-card-text>
         </v-card>
@@ -88,22 +91,22 @@ import { useAuthStore } from '../stores/auth'
 const auth = useAuthStore()
 const router = useRouter()
 
-const email = ref('admin@reqsys.local')
-const senha = ref('admin123')
+const email = ref('')
+const senha = ref('')
 const mostrarSenha = ref(false)
 const carregando = ref(false)
 const errMsg = ref('')
 const errors = reactive({ email: '', senha: '' })
 
 const demos = [
-  { papel: 'Admin', email: 'admin@reqsys.local', senha: 'admin123' },
-  { papel: 'Analista', email: 'analista@reqsys.local', senha: 'analista123' },
-  { papel: 'Auditor', email: 'auditor@reqsys.local', senha: 'auditor123' },
+  { papel: 'Admin', email: 'admin@reqsys.local' },
+  { papel: 'Analista', email: 'analista@reqsys.local' },
+  { papel: 'Auditor', email: 'auditor@reqsys.local' },
 ]
 
 function preencherDemo(demo) {
   email.value = demo.email
-  senha.value = demo.senha
+  senha.value = ''
 }
 
 async function efetuarLogin() {
