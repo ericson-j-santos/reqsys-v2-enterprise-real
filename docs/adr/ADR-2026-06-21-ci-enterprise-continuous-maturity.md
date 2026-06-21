@@ -41,6 +41,7 @@ Adotar uma arquitetura de CI em camadas para maturidade enterprise contínua:
    - JWT sem validação real de issuer/audience/assinatura;
    - segredo literal versionado;
    - auditoria sem rastreabilidade.
+6. Frontend pode expor perfis/e-mails demonstrativos, mas não pode versionar senhas demo. Senhas devem ser provisionadas por mecanismo seguro, ambiente controlado ou credencial corporativa.
 
 ## Consequências positivas
 
@@ -50,6 +51,7 @@ Adotar uma arquitetura de CI em camadas para maturidade enterprise contínua:
 - Maior previsibilidade de merge.
 - Base para indicadores reais de maturidade.
 - Menor chance de regressão silenciosa.
+- Redução de exposição de segredos em artefatos frontend.
 
 ## Riscos
 
@@ -59,6 +61,7 @@ Adotar uma arquitetura de CI em camadas para maturidade enterprise contínua:
 | Workflow novo conflitar com scripts existentes | Implementação defensiva: detecta frontend/backend antes de executar |
 | E2E completo continuar lento | Rodar no workflow de regressão, não no fast path de PR |
 | Status parecer avançado sem evidência | Diferenciar estado alvo de estado atual até CI verde e métricas coletadas |
+| Remoção de senhas demo afetar fluxo manual de demonstração | Manter seleção de perfil/e-mail e documentar provisionamento seguro da senha |
 
 ## Critérios de aceite
 
@@ -69,6 +72,7 @@ Adotar uma arquitetura de CI em camadas para maturidade enterprise contínua:
 - Observabilidade publica artifact Markdown.
 - Guardrails geram relatório JSON e Markdown.
 - Documentação viva atualizada.
+- Senhas demo hardcoded removidas de frontend runtime.
 
 ## Decisão final
 
