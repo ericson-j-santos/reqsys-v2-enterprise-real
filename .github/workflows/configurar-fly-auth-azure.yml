@@ -1,0 +1,84 @@
+name: Configurar Fly Auth Azure
+
+on:
+  workflow_dispatch:
+    inputs:
+      fly_app:
+        description: Nome do app Fly.io da API
+        required: true
+        default: reqsys-api
+      app_env:
+        description: Ambiente da aplicação
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - staging
+          - development
+      app_public_url:
+        description: URL pública do frontend
+        required: true
+        default: https://reqsys-app.fly.dev
+      api_public_url:
+        description: URL pública da API
+        required: true
+        default: https://reqsys-api.fly.dev
+      azure_tenant_id:
+        description: Opcional. Se vazio, tenta buscar AZURE_TENANT_ID no cofre.
+        required: false
+        default: ''
+      azure_client_id:
+        description: Opcional. Se vazio, tenta buscar AZURE_CLIENT_ID no cofre.
+        required: false
+        default: ''
+      cofre_tenant_key:
+        description: Nome da chave do tenant no cofre
+        required: true
+        default: AZURE_TENANT_ID
+      cofre_client_key:
+        description: Nome da chave do client id no cofre
+        required: true
+        default: AZURE_CLIENT_ID
+
+jobs:
+  configurar-auth-azure:
+    name: Configurar secrets Fly e validar Azure AD
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Resolver secrets, configurar Fly e validar
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
+          VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
+        run: |
+          python scripts/configurar_fly_auth_azure.py \
+            --fly-app "${{ inputs.fly_app }}" \
+            --app-env "${{ inputs.app_env }}" \
+            --app-public-url "${{ inputs.app_public_url }}" \
+            --api-public-url "${{ inputs.api_public_url }}" \
+            --azure-tenant-id "${{ inputs.azure_tenant_id }}" \
+            --azure-client-id "${{ inputs.azure_client_id }}" \
+            --cofre-tenant-key "${{ inputs.cofre_tenant_key }}" \
+            --cofre-client-key "${{ inputs.cofre_client_key }}" \
+            | tee fly-auth-azure-report.json
+
+      - name: Publicar evidência operacional
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fly-auth-azure-report
+          path: fly-auth-azure-report.json

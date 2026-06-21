@@ -7,7 +7,24 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     clearMocks: true,
-    setupFiles: [],
+    setupFiles: ['./src/test/setup.js'],
+    // Apenas testes unitários do app; os specs Playwright em tests/e2e usam outro runner.
+    include: ['src/**/*.{test,spec}.{js,mjs,ts}'],
+    exclude: ['node_modules/**', 'dist/**', 'tests/e2e/**'],
+    server: {
+      deps: { inline: ['vuetify'] },
+    },
+    coverage: {
+      provider: 'v8',
+      reportsDirectory: './coverage',
+      reporter: ['text', 'text-summary', 'json-summary', 'html'],
+      include: ['src/**/*.{js,vue}'],
+      exclude: [
+        'src/**/*.{test,spec}.{js,mjs,ts}',
+        'src/test/**',
+        'src/main.js',
+      ],
+    },
   },
   server: {
     host: '0.0.0.0',

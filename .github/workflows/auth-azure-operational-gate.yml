@@ -1,0 +1,42 @@
+name: Auth Azure Operational Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: URL base da API ReqSys
+        required: true
+        default: https://reqsys-api.fly.dev
+      expected_redirect_uri:
+        description: Redirect URI esperado do frontend
+        required: true
+        default: https://reqsys-app.fly.dev
+
+jobs:
+  validar-auth-azure:
+    name: Validar configuração Azure AD
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validar configuração operacional
+        run: |
+          python scripts/validar_login_azure_operacional.py \
+            --api-url "${{ inputs.api_url }}" \
+            --expected-redirect-uri "${{ inputs.expected_redirect_uri }}" \
+            | tee auth-azure-operational-report.json
+
+      - name: Publicar evidência operacional
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: auth-azure-operational-report
+          path: auth-azure-operational-report.json

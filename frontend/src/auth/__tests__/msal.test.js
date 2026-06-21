@@ -2,23 +2,25 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── Mocks declarados antes dos vi.mock() ─────────────────────────────────────
 const mockHandleRedirectPromise = vi.fn()
-const mockLoginRedirect = vi.fn()
+const mockLoginPopup = vi.fn()
 const mockGetAllAccounts = vi.fn(() => [])
 const mockGetConfiguration = vi.fn(() => ({ auth: { clientId: 'test-client-id' } }))
 const mockInitialize = vi.fn()
 
-// PublicClientApplication precisa ser uma classe real (constructor) para suportar `new`
+// PublicClientApplication precisa ser uma classe real (constructor) para suportar `new`.
+// NavigationClient também é importado pelo módulo (NoReloadNavigationClient estende-o).
 vi.mock('@azure/msal-browser', () => {
   class PublicClientApplication {
     constructor() {
       this.initialize = mockInitialize
       this.handleRedirectPromise = mockHandleRedirectPromise
-      this.loginRedirect = mockLoginRedirect
+      this.loginPopup = mockLoginPopup
       this.getAllAccounts = mockGetAllAccounts
       this.getConfiguration = mockGetConfiguration
     }
   }
-  return { PublicClientApplication }
+  class NavigationClient {}
+  return { PublicClientApplication, NavigationClient }
 })
 
 vi.mock('../../services/api', () => ({
@@ -36,11 +38,11 @@ vi.mock('../../services/api', () => ({
   },
 }))
 
-// Resetar módulos entre testes para limpar o singleton _instance
+// Resetar módulos entre testes para limpar o singleton _instance.
 beforeEach(() => {
   vi.resetModules()
   mockHandleRedirectPromise.mockReset().mockResolvedValue(null)
-  mockLoginRedirect.mockReset().mockResolvedValue(undefined)
+  mockLoginPopup.mockReset().mockResolvedValue({ idToken: 'eyJ.popup.sig' })
   mockInitialize.mockReset().mockResolvedValue(undefined)
   localStorage.clear()
   sessionStorage.clear()
@@ -105,30 +107,33 @@ describe('handleRedirectResult', () => {
   })
 })
 
-// ─── loginMicrosoft ───────────────────────────────────────────────────────────
+// ─── loginMicrosoftPopup ──────────────────────────────────────────────────────
 
-describe('loginMicrosoft', () => {
-  it('chama loginRedirect com openid/profile/email e select_account', async () => {
-    const { loginMicrosoft, SCOPES } = await import('../msal')
-    await loginMicrosoft()
-    expect(mockLoginRedirect).toHaveBeenCalledWith(
+describe('loginMicrosoftPopup', () => {
+  it('chama loginPopup com openid/profile/email e select_account, retornando o idToken', async () => {
+    const { loginMicrosoftPopup, SCOPES } = await import('../msal')
+    const idToken = await loginMicrosoftPopup()
+    expect(mockLoginPopup).toHaveBeenCalledWith(
       expect.objectContaining({ scopes: SCOPES, prompt: 'select_account' })
     )
+    expect(idToken).toBe('eyJ.popup.sig')
   })
 
   it('limpa chaves de interação do localStorage e retenta em interaction_in_progress', async () => {
     const interactionErr = Object.assign(new Error(), { errorCode: 'interaction_in_progress' })
-    mockLoginRedirect
+    mockLoginPopup
+      .mockReset()
       .mockRejectedValueOnce(interactionErr)
-      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ idToken: 'eyJ.retry.sig' })
 
     localStorage.setItem('msal.test-client-id.interaction.status', 'interaction_in_progress')
     localStorage.setItem('msal.test-client-id.request.correlationId', 'abc')
 
-    const { loginMicrosoft } = await import('../msal')
-    await loginMicrosoft()
+    const { loginMicrosoftPopup } = await import('../msal')
+    const idToken = await loginMicrosoftPopup()
 
-    expect(mockLoginRedirect).toHaveBeenCalledTimes(2)
+    expect(mockLoginPopup).toHaveBeenCalledTimes(2)
+    expect(idToken).toBe('eyJ.retry.sig')
     expect(localStorage.getItem('msal.test-client-id.interaction.status')).toBeNull()
     expect(localStorage.getItem('msal.test-client-id.request.correlationId')).toBeNull()
   })
@@ -136,7 +141,7 @@ describe('loginMicrosoft', () => {
   it('lança erro quando Azure AD não está configurado', async () => {
     const { api } = await import('../../services/api')
     api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
-    const { loginMicrosoft } = await import('../msal')
-    await expect(loginMicrosoft()).rejects.toThrow('Azure AD não configurado')
+    const { loginMicrosoftPopup } = await import('../msal')
+    await expect(loginMicrosoftPopup()).rejects.toThrow('Azure AD não configurado')
   })
 })
