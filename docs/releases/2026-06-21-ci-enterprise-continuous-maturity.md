@@ -16,6 +16,7 @@ Incremento para estabilizar a esteira do ReqSys e reduzir falhas recorrentes de 
 | ADR | Implementado | `docs/adr/ADR-2026-06-21-ci-enterprise-continuous-maturity.md` |
 | Runbook/documentação viva | Implementado | `docs/governanca/CI_ENTERPRISE_CONTINUOUS_MATURITY.md` |
 | Correção objetiva de falso positivo | Implementado | `scripts/ci_enterprise_guardrails.py` |
+| Remoção de senhas demo hardcoded | Implementado | `frontend-vuetify/src/views/LoginView.vue` e `frontend-angular/src/app/views/login/login.component.ts` |
 
 ## Decisões aplicadas
 
@@ -27,6 +28,7 @@ Incremento para estabilizar a esteira do ReqSys e reduzir falhas recorrentes de 
 6. Política explícita para flaky tests.
 7. Estado de maturidade condicionado à evidência real, não a status manual.
 8. Guardrails de segurança passam a bloquear apenas código runtime/config produtivo; testes, specs, fixtures, mocks, exemplos e documentação não bloqueiam CI por falso positivo.
+9. Perfis de demonstração podem preencher e-mail, mas não versionam senha no frontend.
 
 ## Impacto esperado
 
@@ -38,6 +40,7 @@ Incremento para estabilizar a esteira do ReqSys e reduzir falhas recorrentes de 
 | Falha recorrente | Corrigida pontualmente | Convertida em guardrail/teste |
 | Evidência operacional | Dispersa | Artifact + summary por workflow |
 | Falso positivo de guardrail | Bloqueante | Reduzido por classificação de contexto |
+| Senhas demo no frontend | Versionadas | Removidas do runtime frontend |
 
 ## Correção objetiva aplicada
 
@@ -47,6 +50,8 @@ Incremento para estabilizar a esteira do ReqSys e reduzir falhas recorrentes de 
 | Tratar documentação como warning | Mantém visibilidade sem bloquear merge indevidamente |
 | Manter erro em runtime/config produtivo | Preserva segurança real |
 | Classificar exemplos e `.env.example` como não bloqueantes | Evita falso positivo em material de orientação |
+| Remover senha demo hardcoded do login Vuetify | Preserva escolha de perfil sem expor segredo |
+| Remover senha demo hardcoded do login Angular | Preserva escolha de perfil sem expor segredo |
 
 ## Pendências intencionais
 
@@ -66,4 +71,4 @@ Incremento para estabilizar a esteira do ReqSys e reduzir falhas recorrentes de 
 
 ## Rollback
 
-Remover os workflows novos e o script de guardrails da branch/PR. Não há alteração runtime da aplicação neste incremento.
+Remover os workflows novos e o script de guardrails da branch/PR. As alterações de frontend retornariam o autopreenchimento de senhas demo e, por isso, só devem ser revertidas se houver substituição por mecanismo seguro de provisionamento em ambiente não produtivo.
