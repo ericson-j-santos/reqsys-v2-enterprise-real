@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     azure_tenant_id: str = Field(default_factory=lambda: get_secret('AZURE_TENANT_ID', '') or '')
     azure_client_id: str = Field(default_factory=lambda: get_secret('AZURE_CLIENT_ID', '') or '')
     azure_client_secret: str = Field(default_factory=lambda: get_secret('AZURE_CLIENT_SECRET', '') or '')
+    # Redirect URI registrado no Entra (tipo SPA). Quando vazio, o frontend usa
+    # window.location.origin. Permite alinhar o redirect URI exato registrado no
+    # Entra (ex.: https://reqsys-app.fly.dev) sem rebuild do frontend.
+    azure_redirect_uri: str = Field(default_factory=lambda: get_secret('AZURE_REDIRECT_URI', '') or '')
 
     # Hub Low-Code & IA
     sharepoint_site_id: str = Field(default_factory=lambda: get_secret('SHAREPOINT_SITE_ID', '') or '')

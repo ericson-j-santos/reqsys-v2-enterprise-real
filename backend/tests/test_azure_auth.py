@@ -39,6 +39,31 @@ class TestAuthConfig:
         r = client.get('/v1/auth/config', headers={})
         assert r.status_code == 200
 
+    def test_config_tem_campo_azure_redirect_uri(self):
+        r = client.get('/v1/auth/config')
+        assert 'azure_redirect_uri' in r.json()['data']
+
+    def test_config_redirect_uri_nulo_quando_nao_configurado(self):
+        from app.core.config import settings
+        original = settings.azure_redirect_uri
+        settings.azure_redirect_uri = ''
+        try:
+            r = client.get('/v1/auth/config')
+            assert r.json()['data']['azure_redirect_uri'] is None
+        finally:
+            settings.azure_redirect_uri = original
+
+    def test_config_expoe_redirect_uri_quando_configurado(self):
+        """Permite alinhar o redirect URI exato registrado no Entra."""
+        from app.core.config import settings
+        original = settings.azure_redirect_uri
+        settings.azure_redirect_uri = 'https://reqsys-app.fly.dev'
+        try:
+            r = client.get('/v1/auth/config')
+            assert r.json()['data']['azure_redirect_uri'] == 'https://reqsys-app.fly.dev'
+        finally:
+            settings.azure_redirect_uri = original
+
 
 # ─── POST /v1/auth/login (demo) ───────────────────────────────────────────────
 
