@@ -125,4 +125,21 @@ test.describe('responsividade do layout principal', () => {
 
     await expectMainWithoutHorizontalOverflow(page)
   })
+
+  test('arquitetura viva navega e abre inspector sem overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await loginDemo(page)
+
+    await page.goto('/arquitetura-viva')
+    await expect(page.getByRole('heading', { name: /arquitetura viva/i })).toBeVisible()
+    await expect(page.getByTestId('architecture-live-canvas')).toBeVisible()
+
+    await page.getByTestId('architecture-node-ci').click()
+    await expect(page.getByTestId('architecture-live-inspector')).toContainText('CI/CD')
+
+    await page.getByTestId('architecture-live-filter').fill('analytics')
+    await expect(page.getByTestId('architecture-node-analytics')).toBeVisible()
+
+    await expectMainWithoutHorizontalOverflow(page)
+  })
 })
