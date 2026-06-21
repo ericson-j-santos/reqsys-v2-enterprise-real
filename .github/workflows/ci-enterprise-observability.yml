@@ -1,0 +1,64 @@
+name: CI Enterprise Observability
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - CI Enterprise Fast
+      - CI Enterprise Regression
+      - Governance Quality Gates
+      - Merge Guardrails
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ci-enterprise-observability-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pipeline-observability:
+    name: Observabilidade do CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Gerar relatório operacional
+        shell: bash
+        run: |
+          mkdir -p ci-reports
+          cat > ci-reports/ci-observability.md <<EOF
+          # Observabilidade do CI
+
+          | Campo | Valor |
+          |---|---|
+          | Workflow monitorado | ${{ github.event.workflow_run.name || github.workflow }} |
+          | Conclusão | ${{ github.event.workflow_run.conclusion || 'manual' }} |
+          | Branch | ${{ github.event.workflow_run.head_branch || github.ref_name }} |
+          | Commit | ${{ github.event.workflow_run.head_sha || github.sha }} |
+          | Execução | ${{ github.run_id }} |
+
+          ## Indicadores de maturidade
+
+          | Indicador | Meta enterprise | Observação |
+          |---|---:|---|
+          | Tempo médio PR fast | <= 8 min | Medir via histórico de runs |
+          | Flaky rate | < 2% | Falhas que passam em rerun devem virar issue técnica |
+          | Taxa de rerun | < 5% | Rerun frequente indica não determinismo |
+          | Testes E2E completos | Nightly/manual | Não devem bloquear todos os PRs |
+          | Gates de produção | 100% bloqueantes | Auth, CORS, JWT, secrets, auditoria |
+
+          ## Próxima ação operacional
+
+          Converter qualquer falha recorrente em: teste preventivo, guardrail, ADR e item de monitoramento.
+          EOF
+          cat ci-reports/ci-observability.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar relatório
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-enterprise-observability
+          path: ci-reports/
+          retention-days: 30
