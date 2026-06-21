@@ -22,6 +22,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - Registry em memória do Connection Broker no `ReqSysStore`, com capabilities por ambiente, status, criticidade e necessidade de confirmação humana.
 - Auditoria operacional para `connection_broker.capability_check` com `correlation_id` rastreável.
 - Teste xUnit validando que a validação de capability registra trilha de auditoria com `correlation_id`.
+- Registry persistente versionado em `backend-dotnet/src/ReqSys.Api/config/connectors/connection-broker-registry.json`.
+- Carga configurável do registry via variável `REQSYS_CONNECTION_BROKER_REGISTRY`, com fallback governado em memória quando o arquivo não estiver disponível ou for inválido.
+- Teste xUnit validando carga do registry JSON e auditoria de carregamento.
 
 ### Alterado
 
@@ -30,16 +33,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - `MonitoramentoOperacionalView.vue`: expansão para incluir indicadores de conectores, criticidade, ações sugeridas e `correlation_id`.
 - `ReqSysEndpoints.cs`: módulo `connection-broker` passa a constar em `/v1/sistema/info`.
 - `ReqSysEndpoints.cs`: endpoints do Connection Broker deixam de usar payload estático local e passam a consumir o registry do `ReqSysStore`.
+- `ReqSys.Api.csproj`: registry JSON passa a ser copiado para o output da aplicação.
 
 ### Pendente
 
 - A atualização completa de `RequisitosView.vue` para consumir os filtros por query string foi bloqueada pelo conector de escrita durante este ciclo. Deve ser tratada em PR técnico específico, mantendo a lógica já isolada em `filtrosRequisitos.js`.
-- Evoluir o Connection Broker para persistência durável, health-check real por provedor e exportação de métricas.
+- Evoluir o Connection Broker para health-check real por provedor e exportação de métricas.
+- Persistir auditoria em storage durável externo ao processo.
 
 ### Ambiente
 
 - Ambiente observado: GitHub / branch `main`.
-- Ambiente de aplicação: branch `feature/connection-broker-registry-audit`.
+- Ambiente de aplicação: branch `feature/connection-broker-registry-file`.
 - Produção: sem alteração direta.
 
 ---

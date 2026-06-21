@@ -76,6 +76,18 @@ public sealed class ApiSmokeTests : IClassFixture<WebApplicationFactory<Program>
     }
 
     [Fact]
+    public async Task ConnectionBrokerHealth_LoadsRegistryFromJsonFile()
+    {
+        var response = await _client.GetAsync("/api/connectors/health");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("connection_broker.registry.loaded", await (await _client.GetAsync("/v1/auditoria/eventos")).Content.ReadAsStringAsync());
+        Assert.Contains("repository.write", body);
+        Assert.Contains("missing_permission", body);
+    }
+
+    [Fact]
     public async Task ConnectionBrokerCapabilityCheck_BlocksProductionWrite()
     {
         var response = await _client.PostAsJsonAsync("/api/connectors/capabilities/check", new
