@@ -1,0 +1,47 @@
+name: Security Strong Guardrails
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: security-strong-guardrails-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  CI: "true"
+
+jobs:
+  security-strong-guardrails:
+    name: Segurança forte e gates de produção
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Executar guardrails fortes de segurança
+        run: python scripts/security_strong_guardrails.py
+
+      - name: Publicar relatório de segurança
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-strong-guardrails
+          path: security-reports/
+          if-no-files-found: ignore
+          retention-days: 30
