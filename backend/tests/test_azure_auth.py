@@ -1,6 +1,6 @@
 """Testes automatizados para o fluxo de autenticação Azure AD."""
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -38,6 +38,102 @@ class TestAuthConfig:
         """Endpoint público — não deve exigir JWT."""
         r = client.get('/v1/auth/config', headers={})
         assert r.status_code == 200
+
+    def test_config_retorna_diagnostico_seguro_quando_azure_ausente(self):
+        """Diagnóstico deve orientar operação sem expor segredo."""
+        from app.core.config import settings
+        original_tenant = settings.azure_tenant_id
+        original_client = settings.azure_client_id
+        settings.azure_tenant_id = ''
+        settings.azure_client_id = ''
+        try:
+            r = client.get('/v1/auth/config')
+            data = r.json()['data']
+            assert data['auth_status'] == 'misconfigured'
+            assert data['missing_fields'] == ['AZURE_TENANT_ID', 'AZURE_CLIENT_ID']
+            assert 'AZURE_TENANT_ID' in data['operator_action']
+            assert data['expected_redirect_uri']
+        finally:
+            settings.azure_tenant_id = original_tenant
+            settings.azure_client_id = original_client
+
+    def test_config_retorna_ready_quando_azure_configurado(self):
+        from app.core.config import settings
+        original_tenant = settings.azure_tenant_id
+        original_client = settings.azure_client_id
+        settings.azure_tenant_id = 'tenant-teste'
+        settings.azure_client_id = 'client-teste'
+        try:
+            r = client.get('/v1/auth/config')
+            data = r.json()['data']
+            assert data['azure_enabled'] is True
+            assert data['auth_status'] == 'ready'
+            assert data['missing_fields'] == []
+            assert data['operator_action'] is None
+        finally:
+            settings.azure_tenant_id = original_tenant
+            settings.azure_client_id = original_client
+
+
+# ─── Gates de produção ───────────────────────────────────────────────────────
+
+class TestProductionAuthGates:
+    def test_producao_sem_azure_configurado_bloqueia_boot(self):
+        from app.core.config import settings
+        original_env = settings.app_environment
+        original_demo = settings.allow_demo_login
+        original_jwt_secret = settings.jwt_secret
+        original_issuer = settings.jwt_issuer
+        original_audience = settings.jwt_audience
+        original_tenant = settings.azure_tenant_id
+        original_client = settings.azure_client_id
+
+        settings.app_environment = 'production'
+        settings.allow_demo_login = False
+        settings.jwt_secret = 'segredo-forte-para-testes-com-mais-de-32-caracteres'
+        settings.jwt_issuer = 'reqsys-test'
+        settings.jwt_audience = 'reqsys-users'
+        settings.azure_tenant_id = ''
+        settings.azure_client_id = ''
+        try:
+            with pytest.raises(RuntimeError, match='Azure AD obrigatório em produção'):
+                settings.validate_production_gates()
+        finally:
+            settings.app_environment = original_env
+            settings.allow_demo_login = original_demo
+            settings.jwt_secret = original_jwt_secret
+            settings.jwt_issuer = original_issuer
+            settings.jwt_audience = original_audience
+            settings.azure_tenant_id = original_tenant
+            settings.azure_client_id = original_client
+
+    def test_producao_com_azure_configurado_nao_bloqueia_por_auth(self):
+        from app.core.config import settings
+        original_env = settings.app_environment
+        original_demo = settings.allow_demo_login
+        original_jwt_secret = settings.jwt_secret
+        original_issuer = settings.jwt_issuer
+        original_audience = settings.jwt_audience
+        original_tenant = settings.azure_tenant_id
+        original_client = settings.azure_client_id
+
+        settings.app_environment = 'production'
+        settings.allow_demo_login = False
+        settings.jwt_secret = 'segredo-forte-para-testes-com-mais-de-32-caracteres'
+        settings.jwt_issuer = 'reqsys-test'
+        settings.jwt_audience = 'reqsys-users'
+        settings.azure_tenant_id = 'tenant-teste'
+        settings.azure_client_id = 'client-teste'
+        try:
+            settings.validate_production_gates()
+        finally:
+            settings.app_environment = original_env
+            settings.allow_demo_login = original_demo
+            settings.jwt_secret = original_jwt_secret
+            settings.jwt_issuer = original_issuer
+            settings.jwt_audience = original_audience
+            settings.azure_tenant_id = original_tenant
+            settings.azure_client_id = original_client
 
 
 # ─── POST /v1/auth/login (demo) ───────────────────────────────────────────────
