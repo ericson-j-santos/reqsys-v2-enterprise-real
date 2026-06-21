@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Guardrails fortes de seguranca para CI.
-
-Este script falha o CI quando encontra configuracoes inseguras versionadas
-relacionadas a autenticacao, CORS, JWT, TLS e exposicao indevida de ambiente.
-"""
+"""Guardrails fortes de seguranca para CI."""
 
 from __future__ import annotations
 
@@ -17,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REPORT_DIR = ROOT / "security-reports"
 REPORT_JSON = REPORT_DIR / "security-strong-guardrails.json"
 REPORT_MD = REPORT_DIR / "security-strong-guardrails.md"
+SCANNER_RELATIVE_PATH = "scripts/security_strong_guardrails.py"
 
 EXCLUDED_DIRS = {".git", ".venv", "venv", "node_modules", "dist", "build", "coverage", "security-reports", "ci-reports"}
 TEXT_EXTENSIONS = {".py", ".js", ".jsx", ".ts", ".tsx", ".vue", ".json", ".yml", ".yaml", ".toml", ".ini", ".cfg", ".env", ".example", ".md", ".html", ".css", ".sh", ".ps1"}
@@ -38,6 +35,8 @@ def normalize(value: str) -> str:
 
 def should_skip(path: Path) -> bool:
     rel = path.relative_to(ROOT).as_posix()
+    if rel == SCANNER_RELATIVE_PATH:
+        return True
     if path.is_dir():
         return True
     if any(rel == item or rel.startswith(f"{item}/") for item in EXCLUDED_DIRS):
@@ -109,7 +108,6 @@ def write_reports(critical: list[Finding], warnings: list[Finding]) -> None:
         "warning_findings": [asdict(item) for item in warnings],
     }
     REPORT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
     lines = ["# Security Strong Guardrails", "", f"- Status: **{status}**", f"- Criticos: **{len(critical)}**", f"- Alertas: **{len(warnings)}**", "", "## Achados criticos", ""]
     if critical:
         lines += ["| Regra | Categoria | Arquivo | Linha | Recomendacao |", "|---|---|---|---:|---|"]
