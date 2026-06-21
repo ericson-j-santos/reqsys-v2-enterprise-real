@@ -17,22 +17,25 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - Script `npm run test:unit` no frontend.
 - Painel runtime de Connection Broker em `frontend/src/views/MonitoramentoOperacionalView.vue`, com cards, analítico, fallback seguro e consumo futuro de `/api/connectors/health`.
 - Contrato técnico dos endpoints `/api/connectors/health` e `/api/connectors/capabilities/check` em `docs/api/connection-broker-runtime-contract.md`.
+- Backend .NET inicial do Connection Broker com `GET /api/connectors/health`, `POST /api/connectors/capabilities/check` e aliases versionados em `/v1/connectors/*`.
+- Testes xUnit cobrindo shape do health-check e bloqueio governado de escrita em produção.
 
 ### Alterado
 
 - `DashboardView.vue`: cards de requisitos agora apontam para rotas analíticas com filtros por query string quando aplicável.
 - `DashboardView.vue`: melhoria de acessibilidade por teclado nos cards interativos.
 - `MonitoramentoOperacionalView.vue`: expansão para incluir indicadores de conectores, criticidade, ações sugeridas e `correlation_id`.
+- `ReqSysEndpoints.cs`: módulo `connection-broker` passa a constar em `/v1/sistema/info`.
 
 ### Pendente
 
 - A atualização completa de `RequisitosView.vue` para consumir os filtros por query string foi bloqueada pelo conector de escrita durante este ciclo. Deve ser tratada em PR técnico específico, mantendo a lógica já isolada em `filtrosRequisitos.js`.
-- Backend real dos endpoints do Connection Broker permanece pendente quando não houver API ativa: `/api/connectors/health` e `/api/connectors/capabilities/check`.
+- Evoluir o Connection Broker de payload estático governado para registry persistente, health-check real por provedor e auditoria operacional durável.
 
 ### Ambiente
 
 - Ambiente observado: GitHub / branch `main`.
-- Ambiente de aplicação: branch `feature/connection-broker-runtime-ui`.
+- Ambiente de aplicação: branch `feature/connection-broker-backend`.
 - Produção: sem alteração direta.
 
 ---
