@@ -15,6 +15,7 @@ Incremento para estabilizar a esteira do ReqSys e reduzir falhas recorrentes de 
 | Observabilidade de CI | Implementado | `.github/workflows/ci-enterprise-observability.yml` |
 | ADR | Implementado | `docs/adr/ADR-2026-06-21-ci-enterprise-continuous-maturity.md` |
 | Runbook/documentação viva | Implementado | `docs/governanca/CI_ENTERPRISE_CONTINUOUS_MATURITY.md` |
+| Correção objetiva de falso positivo | Implementado | `scripts/ci_enterprise_guardrails.py` |
 
 ## Decisões aplicadas
 
@@ -25,6 +26,7 @@ Incremento para estabilizar a esteira do ReqSys e reduzir falhas recorrentes de 
 5. Guardrails para bloquear insegurança e não determinismo.
 6. Política explícita para flaky tests.
 7. Estado de maturidade condicionado à evidência real, não a status manual.
+8. Guardrails de segurança passam a bloquear apenas código runtime/config produtivo; testes, specs, fixtures, mocks, exemplos e documentação não bloqueiam CI por falso positivo.
 
 ## Impacto esperado
 
@@ -35,6 +37,16 @@ Incremento para estabilizar a esteira do ReqSys e reduzir falhas recorrentes de 
 | Rerun sem causa raiz | Comum | Exceção documentada |
 | Falha recorrente | Corrigida pontualmente | Convertida em guardrail/teste |
 | Evidência operacional | Dispersa | Artifact + summary por workflow |
+| Falso positivo de guardrail | Bloqueante | Reduzido por classificação de contexto |
+
+## Correção objetiva aplicada
+
+| Ajuste | Resultado |
+|---|---|
+| Ignorar `tests`, `__tests__`, `.spec`, `.test`, fixtures e mocks | Evita bloqueio de CI por dados controlados de teste |
+| Tratar documentação como warning | Mantém visibilidade sem bloquear merge indevidamente |
+| Manter erro em runtime/config produtivo | Preserva segurança real |
+| Classificar exemplos e `.env.example` como não bloqueantes | Evita falso positivo em material de orientação |
 
 ## Pendências intencionais
 
