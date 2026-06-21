@@ -102,6 +102,7 @@ const navItems = [
   { to: '/task-console',    icon: 'mdi-clipboard-check-outline', title: 'Task Console', tip: 'Console web para revisar tarefas e preparar envio ao Planner.' },
   { to: '/qualidade-ia',    icon: 'mdi-brain',              title: 'Qualidade IA',    tip: 'Monitoramento contínuo de score e tendência de qualidade de IA.' },
   { to: '/recomendacoes-ia', icon: 'mdi-robot-outline',     title: 'Recomendações IA', tip: 'Criação, decisão e outcome de recomendações geradas por IA.' },
+  { to: '/query-intelligence', icon: 'mdi-transit-connection-variant', title: 'Query Intelligence', tip: 'Análise estática de SQL, intenção lógica, riscos e grafo navegável.' },
   { to: '/relatorios',      icon: 'mdi-file-chart-outline', title: 'Relatórios SSRS', tip: 'Catálogo e status dos relatórios SSRS publicados.' },
   { to: '/segredos-status', icon: 'mdi-key-chain-variant',  title: 'Segredos',        tip: 'Diagnóstico da origem dos segredos do backend.' },
   { to: '/rastreabilidade', icon: 'mdi-vector-link',        title: 'Rastreabilidade', tip: 'Matriz de vínculo entre requisito, história e entrega.' },
