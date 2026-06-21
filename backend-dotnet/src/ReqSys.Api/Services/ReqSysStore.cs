@@ -1,10 +1,14 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using ReqSys.Api.Domain;
 
 namespace ReqSys.Api.Services;
 
 public sealed class ReqSysStore
 {
+    private const string DefaultRegistryPath = "config/connectors/connection-broker-registry.json";
+
     private readonly ConcurrentDictionary<Guid, Requisito> _requisitos = new();
     private readonly ConcurrentDictionary<string, ConnectorCapability> _connectorRegistry = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<AuditoriaEvento> _auditoria = new();
@@ -154,23 +158,85 @@ public sealed class ReqSysStore
             new RequisitoRequest("Rastreabilidade de releases", "Versionamento semântico, changelog e GitFlow documentados.", "Alta", "DevOps", RequisitoStatus.Aprovado),
             "system");
 
-        SeedConnectorRegistry();
+        LoadConnectorRegistry();
     }
 
-    private void SeedConnectorRegistry()
+    private void LoadConnectorRegistry()
+    {
+        var path = Environment.GetEnvironmentVariable("REQSYS_CONNECTION_BROKER_REGISTRY") ?? DefaultRegistryPath;
+        if (!File.Exists(path))
+        {
+            SeedConnectorRegistryFallback("registry_file_not_found");
+            return;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(path);
+            var registry = JsonSerializer.Deserialize<ConnectorRegistryDocument>(json, SerializerOptions());
+            var capabilities = registry?.Capabilities ?? Array.Empty<ConnectorCapability>();
+            var validCapabilities = capabilities.Where(IsValidConnectorCapability).ToArray();
+
+            if (validCapabilities.Length == 0)
+            {
+                SeedConnectorRegistryFallback("registry_without_valid_capabilities");
+                return;
+            }
+
+            foreach (var capability in validCapabilities)
+            {
+                AddConnectorCapability(capability);
+            }
+
+            RegistrarAuditoria("connection_broker.registry.loaded", "connection_broker", $"source={path}; total={validCapabilities.Length}", "system");
+        }
+        catch (JsonException)
+        {
+            SeedConnectorRegistryFallback("registry_invalid_json");
+        }
+        catch (IOException)
+        {
+            SeedConnectorRegistryFallback("registry_io_error");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            SeedConnectorRegistryFallback("registry_access_denied");
+        }
+    }
+
+    private void SeedConnectorRegistryFallback(string reason)
     {
         AddConnectorCapability(new ConnectorCapability("dev", "repository_provider", "repository.read", "ready", "high", "Executar com auditoria e rastreabilidade.", false));
         AddConnectorCapability(new ConnectorCapability("homolog", "repository_provider", "repository.write", "missing_permission", "critical", "Solicitar autorizacao contextual antes de escrita governada.", true));
         AddConnectorCapability(new ConnectorCapability("prod", "document_provider", "document.read", "ready", "medium", "Manter health-check periodico.", false));
         AddConnectorCapability(new ConnectorCapability("prod", "communication_provider", "message.compose", "blocked", "high", "Exigir confirmacao humana antes de envio.", true));
+        RegistrarAuditoria("connection_broker.registry.fallback", "connection_broker", $"reason={reason}; total={_connectorRegistry.Count}", "system");
     }
+
+    private static bool IsValidConnectorCapability(ConnectorCapability capability) =>
+        !string.IsNullOrWhiteSpace(capability.Ambiente) &&
+        !string.IsNullOrWhiteSpace(capability.Conector) &&
+        !string.IsNullOrWhiteSpace(capability.Capability) &&
+        !string.IsNullOrWhiteSpace(capability.Status) &&
+        !string.IsNullOrWhiteSpace(capability.Criticidade) &&
+        !string.IsNullOrWhiteSpace(capability.AcaoSugerida);
 
     private void AddConnectorCapability(ConnectorCapability capability) =>
         _connectorRegistry[ConnectorRegistryKey(capability.Ambiente, capability.Capability)] = capability;
 
     private static string ConnectorRegistryKey(string ambiente, string capability) =>
         $"{ambiente.Trim().ToLowerInvariant()}::{capability.Trim().ToLowerInvariant()}";
+
+    private static JsonSerializerOptions SerializerOptions() => new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 }
+
+public sealed record ConnectorRegistryDocument(
+    string Version,
+    [property: JsonPropertyName("updated_at")] string UpdatedAt,
+    IReadOnlyCollection<ConnectorCapability> Capabilities);
 
 public sealed record ConnectorCapability(
     string Ambiente,
@@ -179,7 +245,7 @@ public sealed record ConnectorCapability(
     string Status,
     string Criticidade,
     string AcaoSugerida,
-    bool RequiresHumanConfirmation);
+    [property: JsonPropertyName("requires_human_confirmation")] bool RequiresHumanConfirmation);
 
 public sealed record CapabilityCheckResult(
     bool Allowed,
