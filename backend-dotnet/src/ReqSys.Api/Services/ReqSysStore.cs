@@ -6,6 +6,7 @@ namespace ReqSys.Api.Services;
 public sealed class ReqSysStore
 {
     private readonly ConcurrentDictionary<Guid, Requisito> _requisitos = new();
+    private readonly ConcurrentDictionary<string, ConnectorCapability> _connectorRegistry = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<AuditoriaEvento> _auditoria = new();
 
     public ReqSysStore()
@@ -93,6 +94,51 @@ public sealed class ReqSysStore
         return result;
     }
 
+    public IReadOnlyCollection<ConnectorCapability> ListarConnectorCapabilities() =>
+        _connectorRegistry.Values
+            .OrderBy(item => item.Ambiente)
+            .ThenBy(item => item.Conector)
+            .ThenBy(item => item.Capability)
+            .ToArray();
+
+    public ConnectorCapability? ObterConnectorCapability(string ambiente, string capability)
+    {
+        var key = ConnectorRegistryKey(ambiente, capability);
+        return _connectorRegistry.TryGetValue(key, out var item) ? item : null;
+    }
+
+    public CapabilityCheckResult VerificarConnectorCapability(string ambiente, string capability, string acao, string correlationId, string usuario)
+    {
+        var item = ObterConnectorCapability(ambiente, capability);
+        var criticalWrite = capability.EndsWith(".write", StringComparison.OrdinalIgnoreCase) || acao.Contains("publicar", StringComparison.OrdinalIgnoreCase);
+        var productionWrite = ambiente.Equals("prod", StringComparison.OrdinalIgnoreCase) && criticalWrite;
+        var status = item?.Status ?? "misconfigured";
+        var allowed = item is not null && status is "ready" && !productionWrite;
+
+        if (productionWrite)
+        {
+            status = "blocked";
+        }
+
+        var result = new CapabilityCheckResult(
+            allowed,
+            status,
+            ambiente,
+            capability,
+            acao,
+            criticalWrite || item?.RequiresHumanConfirmation == true,
+            allowed ? "Capability autorizada para execucao governada." : "Capability bloqueada ou pendente por regra de governanca.",
+            correlationId);
+
+        RegistrarAuditoria(
+            "connection_broker.capability_check",
+            "connection_broker",
+            $"correlation_id={correlationId}; ambiente={ambiente}; capability={capability}; status={result.Status}; allowed={result.Allowed}",
+            usuario);
+
+        return result;
+    }
+
     public IReadOnlyCollection<AuditoriaEvento> ListarAuditoria() =>
         _auditoria.Reverse().Take(100).ToArray();
 
@@ -107,5 +153,40 @@ public sealed class ReqSysStore
         CriarRequisito(
             new RequisitoRequest("Rastreabilidade de releases", "Versionamento semântico, changelog e GitFlow documentados.", "Alta", "DevOps", RequisitoStatus.Aprovado),
             "system");
+
+        SeedConnectorRegistry();
     }
+
+    private void SeedConnectorRegistry()
+    {
+        AddConnectorCapability(new ConnectorCapability("dev", "repository_provider", "repository.read", "ready", "high", "Executar com auditoria e rastreabilidade.", false));
+        AddConnectorCapability(new ConnectorCapability("homolog", "repository_provider", "repository.write", "missing_permission", "critical", "Solicitar autorizacao contextual antes de escrita governada.", true));
+        AddConnectorCapability(new ConnectorCapability("prod", "document_provider", "document.read", "ready", "medium", "Manter health-check periodico.", false));
+        AddConnectorCapability(new ConnectorCapability("prod", "communication_provider", "message.compose", "blocked", "high", "Exigir confirmacao humana antes de envio.", true));
+    }
+
+    private void AddConnectorCapability(ConnectorCapability capability) =>
+        _connectorRegistry[ConnectorRegistryKey(capability.Ambiente, capability.Capability)] = capability;
+
+    private static string ConnectorRegistryKey(string ambiente, string capability) =>
+        $"{ambiente.Trim().ToLowerInvariant()}::{capability.Trim().ToLowerInvariant()}";
 }
+
+public sealed record ConnectorCapability(
+    string Ambiente,
+    string Conector,
+    string Capability,
+    string Status,
+    string Criticidade,
+    string AcaoSugerida,
+    bool RequiresHumanConfirmation);
+
+public sealed record CapabilityCheckResult(
+    bool Allowed,
+    string Status,
+    string Ambiente,
+    string Capability,
+    string Acao,
+    bool RequiresHumanConfirmation,
+    string Message,
+    string CorrelationId);

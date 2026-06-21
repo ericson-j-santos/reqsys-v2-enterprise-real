@@ -14,11 +14,11 @@ public static class ReqSysEndpoints
         app.MapGet("/health", (HttpContext context) =>
             ApiEnvelope<object>.Ok(new { status = "ok", service = "reqsys-dotnet-api" }, context));
 
-        app.MapGet("/api/connectors/health", (HttpContext context) =>
-            ApiEnvelope<object>.Ok(BuildConnectorHealth(context), context));
+        app.MapGet("/api/connectors/health", (ReqSysStore store, HttpContext context) =>
+            ApiEnvelope<object>.Ok(BuildConnectorHealth(store, context), context));
 
-        app.MapPost("/api/connectors/capabilities/check", async (HttpContext context) =>
-            ApiEnvelope<object>.Ok(await BuildCapabilityCheckAsync(context), context));
+        app.MapPost("/api/connectors/capabilities/check", async (ReqSysStore store, HttpContext context) =>
+            ApiEnvelope<object>.Ok(await BuildCapabilityCheckAsync(store, context), context));
 
         v1.MapPost("/auth/login", (LoginRequest request, AuthService auth, HttpContext context) =>
         {
@@ -79,11 +79,11 @@ public static class ReqSysEndpoints
                 conectado = true
             }, context));
 
-        v1.MapGet("/connectors/health", (HttpContext context) =>
-            ApiEnvelope<object>.Ok(BuildConnectorHealth(context), context));
+        v1.MapGet("/connectors/health", (ReqSysStore store, HttpContext context) =>
+            ApiEnvelope<object>.Ok(BuildConnectorHealth(store, context), context));
 
-        v1.MapPost("/connectors/capabilities/check", async (HttpContext context) =>
-            ApiEnvelope<object>.Ok(await BuildCapabilityCheckAsync(context), context));
+        v1.MapPost("/connectors/capabilities/check", async (ReqSysStore store, HttpContext context) =>
+            ApiEnvelope<object>.Ok(await BuildCapabilityCheckAsync(store, context), context));
 
         v1.MapGet("/requisitos", (ReqSysStore store, HttpContext context) =>
             ApiEnvelope<IReadOnlyCollection<Requisito>>.Ok(store.ListarRequisitos(), context));
@@ -295,79 +295,59 @@ public static class ReqSysEndpoints
         return app;
     }
 
-    private static object BuildConnectorHealth(HttpContext context) => new
+    private static object BuildConnectorHealth(ReqSysStore store, HttpContext context)
     {
-        correlation_id = context.TraceIdentifier,
-        conectores = new object[]
-        {
-            new
+        var conectores = store.ListarConnectorCapabilities()
+            .Select(item => new
             {
-                ambiente = "dev",
-                conector = "repository_provider",
-                capability = "repository.read",
-                status = "ready",
-                criticidade = "high",
-                acao_sugerida = "Executar com auditoria e rastreabilidade."
-            },
-            new
-            {
-                ambiente = "homolog",
-                conector = "repository_provider",
-                capability = "repository.write",
-                status = "missing_permission",
-                criticidade = "critical",
-                acao_sugerida = "Solicitar autorizacao contextual antes de escrita governada."
-            },
-            new
-            {
-                ambiente = "prod",
-                conector = "document_provider",
-                capability = "document.read",
-                status = "ready",
-                criticidade = "medium",
-                acao_sugerida = "Manter health-check periodico."
-            },
-            new
-            {
-                ambiente = "prod",
-                conector = "communication_provider",
-                capability = "message.compose",
-                status = "blocked",
-                criticidade = "high",
-                acao_sugerida = "Exigir confirmacao humana antes de envio."
-            }
-        },
-        resumo = new
-        {
-            total = 4,
-            prontos = 2,
-            pendentes = 1,
-            bloqueados = 1,
-            estado_geral = "bloqueado"
-        }
-    };
-
-    private static async Task<object> BuildCapabilityCheckAsync(HttpContext context)
-    {
-        var payload = await JsonSerializer.DeserializeAsync<JsonElement>(context.Request.Body);
-        var ambiente = GetString(payload, "ambiente", "dev");
-        var capability = GetString(payload, "capability", "repository.read");
-        var acao = GetString(payload, "acao", "consultar");
-        var criticalWrite = capability.EndsWith(".write", StringComparison.OrdinalIgnoreCase) || acao.Contains("publicar", StringComparison.OrdinalIgnoreCase);
-        var productionWrite = ambiente.Equals("prod", StringComparison.OrdinalIgnoreCase) && criticalWrite;
-        var allowed = !productionWrite;
+                ambiente = item.Ambiente,
+                conector = item.Conector,
+                capability = item.Capability,
+                status = item.Status,
+                criticidade = item.Criticidade,
+                acao_sugerida = item.AcaoSugerida,
+                requires_human_confirmation = item.RequiresHumanConfirmation
+            })
+            .ToArray();
 
         return new
         {
-            allowed,
-            status = allowed ? "ready" : "blocked",
-            ambiente,
-            capability,
-            acao,
-            requires_human_confirmation = criticalWrite,
-            message = allowed
-                ? "Capability autorizada para execucao governada."
-                : "Capability bloqueada por gate de producao."
+            correlation_id = context.TraceIdentifier,
+            conectores,
+            resumo = new
+            {
+                total = conectores.Length,
+                prontos = conectores.Count(item => item.status == "ready"),
+                pendentes = conectores.Count(item => item.status is "missing_permission" or "insufficient_permission" or "expired"),
+                bloqueados = conectores.Count(item => item.status is "blocked" or "unavailable" or "misconfigured"),
+                estado_geral = conectores.Any(item => item.status is "blocked" or "unavailable" or "misconfigured")
+                    ? "bloqueado"
+                    : conectores.Any(item => item.status is "missing_permission" or "insufficient_permission" or "expired") ? "amarelo" : "verde"
+            }
+        };
+    }
+
+    private static async Task<object> BuildCapabilityCheckAsync(ReqSysStore store, HttpContext context)
+    {
+        var payload = await JsonSerializer.DeserializeAsync<JsonElement>(context.Request.Body);
+        var correlationId = GetString(payload, "correlation_id", context.TraceIdentifier);
+        var result = store.VerificarConnectorCapability(
+            GetString(payload, "ambiente", "dev"),
+            GetString(payload, "capability", "repository.read"),
+            GetString(payload, "acao", "consultar"),
+            correlationId,
+            UsuarioAtual(context));
+
+        return new
+        {
+            allowed = result.Allowed,
+            status = result.Status,
+            ambiente = result.Ambiente,
+            capability = result.Capability,
+            acao = result.Acao,
+            requires_human_confirmation = result.RequiresHumanConfirmation,
+            message = result.Message,
+            correlation_id = result.CorrelationId
         };
     }
 
