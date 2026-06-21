@@ -2,7 +2,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TypeVar
 
-from app.core.telemetry import log_evento, log_erro
+from app.core.telemetry import log_erro, log_evento
 
 T = TypeVar("T")
 
