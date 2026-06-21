@@ -60,6 +60,42 @@ public sealed class ApiSmokeTests : IClassFixture<WebApplicationFactory<Program>
     }
 
     [Fact]
+    public async Task ConnectionBrokerHealth_ReturnsOperationalShape()
+    {
+        var response = await _client.GetAsync("/api/connectors/health");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(body);
+        var data = document.RootElement.GetProperty("data");
+
+        Assert.True(data.TryGetProperty("correlation_id", out _));
+        Assert.True(data.TryGetProperty("conectores", out var connectors));
+        Assert.True(connectors.GetArrayLength() >= 1);
+        Assert.True(data.TryGetProperty("resumo", out _));
+    }
+
+    [Fact]
+    public async Task ConnectionBrokerCapabilityCheck_BlocksProductionWrite()
+    {
+        var response = await _client.PostAsJsonAsync("/api/connectors/capabilities/check", new
+        {
+            ambiente = "prod",
+            capability = "repository.write",
+            acao = "publicar_pr"
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(body);
+        var data = document.RootElement.GetProperty("data");
+
+        Assert.False(data.GetProperty("allowed").GetBoolean());
+        Assert.Equal("blocked", data.GetProperty("status").GetString());
+        Assert.True(data.GetProperty("requires_human_confirmation").GetBoolean());
+    }
+
+    [Fact]
     public async Task FrontendPipelineFlow_ReturnsExpectedShape()
     {
         var solicitacao = await _client.PostAsJsonAsync("/v1/solicitacoes", new
