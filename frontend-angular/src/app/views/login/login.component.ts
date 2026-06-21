@@ -10,6 +10,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../core/auth.service';
 
+interface CredencialDemo {
+  label: string;
+  email: string;
+}
+
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -31,10 +36,10 @@ export class LoginComponent {
     senha: ['', Validators.required]
   });
 
-  credenciais = [
-    { label: 'Admin', email: 'admin@reqsys.local', senha: 'Admin@123' },
-    { label: 'Analista', email: 'analista@reqsys.local', senha: 'Analista@123' },
-    { label: 'Auditor', email: 'auditor@reqsys.local', senha: 'Auditor@123' }
+  credenciais: CredencialDemo[] = [
+    { label: 'Admin', email: 'admin@reqsys.local' },
+    { label: 'Analista', email: 'analista@reqsys.local' },
+    { label: 'Auditor', email: 'auditor@reqsys.local' }
   ];
 
   constructor(
@@ -43,8 +48,8 @@ export class LoginComponent {
     private router: Router
   ) {}
 
-  preencherCredencial(c: { email: string; senha: string }): void {
-    this.loginForm.patchValue(c);
+  preencherCredencial(c: CredencialDemo): void {
+    this.loginForm.patchValue({ email: c.email, senha: '' });
   }
 
   onSubmit(): void {
