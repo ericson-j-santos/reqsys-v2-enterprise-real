@@ -137,7 +137,7 @@ test.describe('responsividade do layout principal', () => {
     await page.getByTestId('architecture-node-ci').click()
     await expect(page.getByTestId('architecture-live-inspector')).toContainText('CI/CD')
 
-    await page.getByTestId('architecture-live-filter').fill('analytics')
+    await page.getByTestId('architecture-live-filter').locator('input').fill('analytics')
     await expect(page.getByTestId('architecture-node-analytics')).toBeVisible()
 
     await expectMainWithoutHorizontalOverflow(page)
