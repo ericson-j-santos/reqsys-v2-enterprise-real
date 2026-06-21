@@ -46,7 +46,8 @@ public static class ConnectionBrokerMetricsEndpoints
 
         AppendHelp(builder, "reqsys_connection_broker_audit_events_total", "Total de eventos de auditoria relacionados ao Connection Broker mantidos no processo.");
         AppendType(builder, "reqsys_connection_broker_audit_events_total", "gauge");
-        builder.AppendLine($"reqsys_connection_broker_audit_events_total {auditEvents.Count(item => item.Entidade == "connection_broker")}");
+        var connectionBrokerAuditEvents = auditEvents.Count(item => item.Entidade == "connection_broker");
+        builder.AppendLine($"reqsys_connection_broker_audit_events_total {connectionBrokerAuditEvents}");
 
         return builder.ToString();
     }
