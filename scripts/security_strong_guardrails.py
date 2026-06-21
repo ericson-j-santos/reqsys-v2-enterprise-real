@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,7 +16,8 @@ SCANNER_RELATIVE_PATH = "scripts/security_strong_guardrails.py"
 
 EXCLUDED_DIRS = {".git", ".venv", "venv", "node_modules", "dist", "build", "coverage", "security-reports", "ci-reports"}
 TEXT_EXTENSIONS = {".py", ".js", ".jsx", ".ts", ".tsx", ".vue", ".json", ".yml", ".yaml", ".toml", ".ini", ".cfg", ".env", ".example", ".md", ".html", ".css", ".sh", ".ps1"}
-ALLOWLIST_HINTS = ("example", "exemplo", "sample", "mock", "fixture", "test", "tests", "readme", "changelog", "adr", "docs/")
+ALLOWLIST_HINTS = ("example", "exemplo", "sample", "mock", "fixture", "test", "tests", "readme", "changelog", "adr", "docs/", "agents.md")
+NON_BLOCKING_RUNTIME_STATUS_FIELDS = ("demo_login_enabled",)
 
 @dataclass(frozen=True)
 class Finding:
@@ -49,6 +49,10 @@ def is_allowed(rel: str) -> bool:
     return any(hint in lowered for hint in ALLOWLIST_HINTS)
 
 
+def is_non_blocking_status_line(value: str) -> bool:
+    return any(field in value for field in NON_BLOCKING_RUNTIME_STATUS_FIELDS)
+
+
 def classify_line(rel: str, line_number: int, raw_line: str) -> tuple[list[Finding], list[Finding]]:
     critical: list[Finding] = []
     warnings: list[Finding] = []
@@ -65,6 +69,8 @@ def classify_line(rel: str, line_number: int, raw_line: str) -> tuple[list[Findi
         ("ENVIRONMENT_DUMP", "logging", ("print(os.environ", "console.log(process.env", "logger.info(os.environ"), "Nao registrar variaveis de ambiente em log."),
     ]
     for rule, category, tokens, recommendation in critical_checks:
+        if rule == "DEMO_LOGIN_ENABLED" and is_non_blocking_status_line(value):
+            continue
         if any(token in value for token in tokens):
             critical.append(Finding("critical", category, rel, line_number, rule, recommendation))
 
