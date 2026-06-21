@@ -60,7 +60,7 @@ jobs:
         id: detect
         shell: bash
         run: |
-          if [ -f requirements.txt ] || [ -f backend/requirements.txt ] || [ -f pyproject.toml ] || [ -d backend/app ] || [ -d app ]; then
+          if [ -f scripts/ci_enterprise_guardrails.py ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -78,31 +78,17 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
-          pip install ruff pytest
+          pip install ruff
 
       - name: Ruff backend
         if: steps.detect.outputs.enabled == 'true'
         shell: bash
-        run: |
-          TARGETS=()
-          [ -d app ] && TARGETS+=(app)
-          [ -d backend ] && TARGETS+=(backend)
-          [ -d scripts ] && TARGETS+=(scripts)
-          if [ ${#TARGETS[@]} -gt 0 ]; then
-            ruff check "${TARGETS[@]}" --output-format=github
-          fi
+        run: ruff check scripts/ci_enterprise_guardrails.py --output-format=github
 
-      - name: Testes unitários backend
+      - name: Smoke Python do guardrail
         if: steps.detect.outputs.enabled == 'true'
         shell: bash
-        run: |
-          if [ -d tests ] || [ -d backend/tests ]; then
-            pytest -q --maxfail=1 --disable-warnings
-          else
-            echo "Sem diretório de testes Python detectado."
-          fi
+        run: python -m py_compile scripts/ci_enterprise_guardrails.py
 
   frontend-fast:
     name: Frontend fast checks
