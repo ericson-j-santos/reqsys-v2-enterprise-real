@@ -82,7 +82,8 @@ public sealed class ApiSmokeTests : IClassFixture<WebApplicationFactory<Program>
         {
             ambiente = "prod",
             capability = "repository.write",
-            acao = "publicar_pr"
+            acao = "publicar_pr",
+            correlation_id = "test-correlation-prod-write"
         });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -93,6 +94,28 @@ public sealed class ApiSmokeTests : IClassFixture<WebApplicationFactory<Program>
         Assert.False(data.GetProperty("allowed").GetBoolean());
         Assert.Equal("blocked", data.GetProperty("status").GetString());
         Assert.True(data.GetProperty("requires_human_confirmation").GetBoolean());
+        Assert.Equal("test-correlation-prod-write", data.GetProperty("correlation_id").GetString());
+    }
+
+    [Fact]
+    public async Task ConnectionBrokerCapabilityCheck_RegistersAuditTrail()
+    {
+        const string correlationId = "test-correlation-audit";
+        var response = await _client.PostAsJsonAsync("/api/connectors/capabilities/check", new
+        {
+            ambiente = "dev",
+            capability = "repository.read",
+            acao = "consultar",
+            correlation_id = correlationId
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var auditResponse = await _client.GetAsync("/v1/auditoria/eventos");
+        Assert.Equal(HttpStatusCode.OK, auditResponse.StatusCode);
+
+        var body = await auditResponse.Content.ReadAsStringAsync();
+        Assert.Contains("connection_broker.capability_check", body);
+        Assert.Contains(correlationId, body);
     }
 
     [Fact]
