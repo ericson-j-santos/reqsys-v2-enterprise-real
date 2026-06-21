@@ -46,6 +46,7 @@ app.MapHealthChecks("/healthz");
 app.MapHealthChecks("/live");
 app.MapHealthChecks("/ready");
 app.MapReqSysEndpoints();
+app.MapConnectionBrokerMetricsEndpoints();
 
 app.Run();
 
