@@ -97,6 +97,8 @@ jobs:
           JWT_AUDIENCE: reqsys-ci-tests
           ALLOW_DEMO_LOGIN: "true"
           APP_ENV: test
+          AZURE_TENANT_ID: tenant-id-ci-valido
+          AZURE_CLIENT_ID: client-id-ci-valido
           REDMINE_URL: https://placeholder.example.com
           REDMINE_API_KEY: placeholder
           ENABLE_GITHUB_REDMINE_IMPORT: "false"
