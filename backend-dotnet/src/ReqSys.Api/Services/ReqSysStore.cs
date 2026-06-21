@@ -244,7 +244,7 @@ public sealed record ConnectorCapability(
     string Capability,
     string Status,
     string Criticidade,
-    string AcaoSugerida,
+    [property: JsonPropertyName("acao_sugerida")] string AcaoSugerida,
     [property: JsonPropertyName("requires_human_confirmation")] bool RequiresHumanConfirmation);
 
 public sealed record CapabilityCheckResult(
