@@ -158,3 +158,5 @@ jobs:
         with:
           name: fly-auth-azure-report-${{ matrix.environment }}
           path: fly-auth-azure-report-${{ matrix.environment }}.json
+
+# operational-trigger: 2026-06-21-auth-windows-all-envs
