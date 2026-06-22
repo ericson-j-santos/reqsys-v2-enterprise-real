@@ -1,0 +1,152 @@
+name: Governed PR Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Numero do PR a validar"
+        required: true
+        type: string
+      execute_merge:
+        description: "Executar merge se todos os gates passarem"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      required_label:
+        description: "Label obrigatoria para autorizar merge governado"
+        required: true
+        default: "governed-merge-approved"
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+  issues: read
+
+env:
+  REQUIRED_WORKFLOWS: >-
+    CI Enterprise Fast
+    CI — ReqSys v2 Enterprise
+    Governance Quality Gates
+    Governança Padrão Ouro
+    Branch Protection Audit
+    PR Conflict Guard
+
+jobs:
+  governed-pr-check:
+    name: Validate governed PR merge readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate PR gates
+        id: validate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = Number(core.getInput('pr_number'));
+            const executeMerge = core.getInput('execute_merge') === 'true';
+            const requiredLabel = core.getInput('required_label');
+            const requiredWorkflows = process.env.REQUIRED_WORKFLOWS
+              .split('\n')
+              .map((item) => item.trim())
+              .filter(Boolean);
+
+            const { owner, repo } = context.repo;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+
+            const failures = [];
+            if (pr.state !== 'open') failures.push(`PR precisa estar aberto. Estado atual: ${pr.state}`);
+            if (pr.draft) failures.push('PR ainda esta em draft.');
+            if (!pr.mergeable) failures.push(`PR nao esta mergeable. Valor atual: ${pr.mergeable}`);
+
+            const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+              owner,
+              repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            const labelNames = labels.map((label) => label.name);
+            if (!labelNames.includes(requiredLabel)) {
+              failures.push(`Label obrigatoria ausente: ${requiredLabel}`);
+            }
+
+            const headSha = pr.head.sha;
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              owner,
+              repo,
+              head_sha: headSha,
+              event: 'pull_request',
+              per_page: 100,
+            });
+
+            const latestByWorkflow = new Map();
+            for (const run of runs) {
+              const existing = latestByWorkflow.get(run.name);
+              if (!existing || new Date(run.created_at) > new Date(existing.created_at)) {
+                latestByWorkflow.set(run.name, run);
+              }
+            }
+
+            const workflowSummary = [];
+            for (const workflow of requiredWorkflows) {
+              const run = latestByWorkflow.get(workflow);
+              if (!run) {
+                failures.push(`Workflow obrigatorio nao encontrado no head SHA: ${workflow}`);
+                workflowSummary.push({ workflow, status: 'missing', conclusion: 'missing' });
+                continue;
+              }
+              workflowSummary.push({ workflow, status: run.status, conclusion: run.conclusion, url: run.html_url });
+              if (run.status !== 'completed') failures.push(`Workflow ainda nao completou: ${workflow} (${run.status})`);
+              if (run.conclusion !== 'success') failures.push(`Workflow sem sucesso: ${workflow} (${run.conclusion})`);
+            }
+
+            const summaryLines = [
+              '# Governed PR Automation',
+              '',
+              `PR: #${prNumber}`,
+              `Head SHA: ${headSha}`,
+              `Modo merge: ${executeMerge ? 'executar' : 'dry-run'}`,
+              `Label obrigatoria: ${requiredLabel}`,
+              '',
+              '| Workflow | Status | Conclusao |',
+              '|---|---|---|',
+              ...workflowSummary.map((item) => `| ${item.workflow} | ${item.status} | ${item.conclusion} |`),
+              '',
+              failures.length ? '## Bloqueios' : '## Resultado',
+              failures.length ? failures.map((item) => `- ${item}`).join('\n') : '- PR elegivel para merge governado.',
+            ];
+            await core.summary.addRaw(summaryLines.join('\n')).write();
+
+            core.setOutput('eligible', failures.length === 0 ? 'true' : 'false');
+            core.setOutput('execute_merge', executeMerge ? 'true' : 'false');
+            core.setOutput('head_sha', headSha);
+
+            if (failures.length) {
+              core.setFailed(failures.join('\n'));
+            }
+
+      - name: Merge PR when explicitly authorized
+        if: steps.validate.outputs.eligible == 'true' && steps.validate.outputs.execute_merge == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = Number(core.getInput('pr_number'));
+            const headSha = '${{ steps.validate.outputs.head_sha }}';
+            const { owner, repo } = context.repo;
+            await github.rest.pulls.merge({
+              owner,
+              repo,
+              pull_number: prNumber,
+              merge_method: 'squash',
+              sha: headSha,
+              commit_title: `chore: governed merge PR #${prNumber}`,
+              commit_message: 'Merge executado por Governed PR Automation apos validacao de gates obrigatorios.',
+            });
