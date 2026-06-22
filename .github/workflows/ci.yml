@@ -28,6 +28,7 @@ jobs:
       codex_static: ${{ steps.detect.outputs.codex_static }}
       workflows: ${{ steps.detect.outputs.workflows }}
       full_ci: ${{ steps.detect.outputs.full_ci }}
+      e2e_required: ${{ steps.detect.outputs.e2e_required }}
       changed_files: ${{ steps.detect.outputs.changed_files }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -64,6 +65,7 @@ jobs:
           codex_static=false
           workflows=false
           full_ci=false
+          e2e_required=false
 
           while IFS= read -r file; do
             [[ -z "$file" ]] && continue
@@ -87,6 +89,12 @@ jobs:
                 full_ci=true
                 ;;
             esac
+
+            case "$file" in
+              frontend/tests/e2e/*|frontend/playwright.config.*|frontend/src/router/*|frontend/src/views/Login*|frontend/src/views/*Auth*|frontend/src/services/auth*|frontend/src/stores/*auth*)
+                e2e_required=true
+                ;;
+            esac
           done < /tmp/changed-files.txt
 
           if [[ "$workflows" == "true" ]]; then
@@ -95,6 +103,15 @@ jobs:
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && ! -s /tmp/changed-files.txt ]]; then
             full_ci=true
+            e2e_required=true
+          fi
+
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            e2e_required=true
+          fi
+
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'e2e') }}" == "true" || "${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}" == "true" ]]; then
+            e2e_required=true
           fi
 
           {
@@ -104,6 +121,7 @@ jobs:
             echo "codex_static=$codex_static"
             echo "workflows=$workflows"
             echo "full_ci=$full_ci"
+            echo "e2e_required=$e2e_required"
             echo "changed_files<<EOF"
             cat /tmp/changed-files.txt
             echo "EOF"
@@ -123,6 +141,7 @@ jobs:
             echo "| Codex estático | ${{ steps.detect.outputs.codex_static }} |"
             echo "| Workflows | ${{ steps.detect.outputs.workflows }} |"
             echo "| CI completo | ${{ steps.detect.outputs.full_ci }} |"
+            echo "| E2E obrigatório | ${{ steps.detect.outputs.e2e_required }} |"
             echo ""
             echo "### Arquivos alterados"
             echo '```text'
@@ -299,13 +318,13 @@ jobs:
         run: npm run build
 
   # ──────────────────────────────────────────────
-  # JOB 4: Frontend — Responsividade E2E
+  # JOB 4: Frontend — Responsividade E2E condicional
   # ──────────────────────────────────────────────
   frontend-e2e-responsive:
     name: Frontend Responsive E2E (Playwright)
     runs-on: ubuntu-latest
     needs: [ci-router, frontend-build]
-    if: always() && (needs.ci-router.outputs.frontend == 'true' || needs.ci-router.outputs.full_ci == 'true') && needs.frontend-build.result == 'success'
+    if: always() && needs.ci-router.outputs.e2e_required == 'true' && (needs.ci-router.outputs.frontend == 'true' || needs.ci-router.outputs.full_ci == 'true') && needs.frontend-build.result == 'success'
 
     defaults:
       run:
@@ -320,6 +339,14 @@ jobs:
           node-version: "20"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
 
       - name: Install dependencies
         run: npm ci
