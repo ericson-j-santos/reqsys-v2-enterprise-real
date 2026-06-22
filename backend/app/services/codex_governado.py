@@ -19,7 +19,7 @@ from app.models.codex_auditoria import CodexAuditoria
 logger = logging.getLogger('reqsys.codex_governado')
 audit_logger = logging.getLogger('reqsys.audit.codex_governado')
 
-Provider = Literal['mock', 'ollama', 'openai', 'claude']
+Provider = Literal['mock', 'ollama']
 
 _PADROES_SENSIVEIS = [
     re.compile(r'(senha|password|passwd)\s*[:=]', re.I),
@@ -103,41 +103,6 @@ def chamar_ollama(prompt: str) -> str:
     return str(data.get('response') or '')
 
 
-def chamar_openai(prompt: str) -> str:
-    if not settings.codex_openai_key:
-        raise RuntimeError('CODEX_OPENAI_KEY ausente')
-    payload = {
-        'model': settings.codex_openai_model,
-        'messages': [
-            {'role': 'system', 'content': _SYSTEM_PROMPT},
-            {'role': 'user', 'content': prompt},
-        ],
-        'temperature': 0.1,
-    }
-    headers = {'Authorization': f'Bearer {settings.codex_openai_key}', 'Content-Type': 'application/json'}
-    data = _post_json('https://api.openai.com/v1/chat/completions', payload, headers=headers)
-    return str(data['choices'][0]['message']['content'])
-
-
-def chamar_claude(prompt: str) -> str:
-    if not settings.codex_claude_key:
-        raise RuntimeError('CODEX_CLAUDE_KEY ausente')
-    payload = {
-        'model': settings.codex_claude_model,
-        'max_tokens': 1600,
-        'temperature': 0.1,
-        'system': _SYSTEM_PROMPT,
-        'messages': [{'role': 'user', 'content': prompt}],
-    }
-    headers = {
-        'x-api-key': settings.codex_claude_key,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-    }
-    data = _post_json('https://api.anthropic.com/v1/messages', payload, headers=headers)
-    blocos = data.get('content') or []
-    return '\n'.join(str(item.get('text') or '') for item in blocos if isinstance(item, dict))
-
 
 def resposta_mock(contexto: str, entrada: str, correlation_id: str) -> str:
     return json.dumps({
@@ -155,10 +120,6 @@ def executar_provider(provider: Provider, prompt: str, contexto: str, entrada: s
         return resposta_mock(contexto, entrada, correlation_id)
     if provider == 'ollama':
         return chamar_ollama(prompt)
-    if provider == 'openai':
-        return chamar_openai(prompt)
-    if provider == 'claude':
-        return chamar_claude(prompt)
     raise RuntimeError(f'Provider nao suportado: {provider}')
 
 
