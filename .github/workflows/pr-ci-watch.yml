@@ -1,0 +1,98 @@
+name: PR CI Watch
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_run:
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Número do PR a validar"
+        required: true
+        type: string
+      sha:
+        description: "Head SHA do PR"
+        required: true
+        type: string
+      comment:
+        description: "Comentar diagnóstico no PR"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  issues: write
+
+concurrency:
+  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  pr-ci-watch:
+    name: PR CI Watch seguro
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      REPORT_DIR: artifacts/pr-ci-watch
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolver contexto
+        id: ctx
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            echo "comment=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "pr_number=${{ github.event.inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.inputs.sha }}" >> "$GITHUB_OUTPUT"
+            echo "comment=${{ github.event.inputs.comment }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_number=0" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "comment=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Executar PR CI Watch
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          COMMENT_FLAG=""
+          if [ "${{ steps.ctx.outputs.comment }}" = "true" ]; then
+            COMMENT_FLAG="--comment"
+          fi
+
+          python scripts/pr_ci_watch.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pr-number "${{ steps.ctx.outputs.pr_number }}" \
+            --sha "${{ steps.ctx.outputs.sha }}" \
+            --report-dir "${REPORT_DIR}" \
+            ${COMMENT_FLAG}
+
+      - name: Publicar artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-ci-watch-report
+          path: artifacts/pr-ci-watch
+          if-no-files-found: error
+          retention-days: 15
