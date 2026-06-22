@@ -13,6 +13,7 @@ from app.api import (
     cofre,
     dashboard,
     figma_github,
+    govbi,
     hub_lowcode,
     ia,
     monitoramento_operacional,
@@ -76,6 +77,7 @@ app.include_router(rastreabilidade.router)
 app.include_router(hub_lowcode.router)
 app.include_router(agents.router)
 app.include_router(monitoramento_operacional.router)
+app.include_router(govbi.router)
 
 
 @app.middleware('http')
