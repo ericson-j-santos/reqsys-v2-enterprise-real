@@ -1,0 +1,21 @@
+{
+  "schema_version": "runtime-center-p0.1",
+  "environment": "dev",
+  "generated_at": "2026-06-21T22:00:00Z",
+  "correlation_id": "rtc-p0-dev-20260621",
+  "services": [
+    { "name": "CI/CD", "status": "healthy", "latency_ms": 0, "source": "github-actions" },
+    { "name": "Deploy", "status": "healthy", "latency_ms": 0, "source": "github-pages" },
+    { "name": "Auth", "status": "watch", "latency_ms": null, "source": "runtime-validation" },
+    { "name": "API", "status": "ready", "latency_ms": null, "source": "contract" },
+    { "name": "Observabilidade", "status": "ready", "latency_ms": null, "source": "runtime-events" },
+    { "name": "RAG/IA", "status": "stand-by", "latency_ms": null, "source": "future-runtime" }
+  ],
+  "metrics": {
+    "runtime_availability_target": 99.0,
+    "ci_success_rate_target": 95.0,
+    "mttr_minutes_target": 30,
+    "critical_incidents_target": 0
+  },
+  "next_gate": "Self-Healing Runtime somente apos Runtime Center P0 validado em tela e CI verde"
+}
