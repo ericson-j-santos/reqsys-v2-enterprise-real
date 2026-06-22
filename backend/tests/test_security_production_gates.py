@@ -6,6 +6,8 @@ from app.core import security
 
 
 _SECURE_SECRET = 'reqsys-ci-secret-with-at-least-thirty-two-characters'
+_SECURE_AZURE_TENANT_ID = '00000000-0000-0000-0000-000000000001'
+_SECURE_AZURE_CLIENT_ID = '00000000-0000-0000-0000-000000000002'
 
 
 def test_production_gate_blocks_insecure_defaults(monkeypatch):
@@ -15,6 +17,8 @@ def test_production_gate_blocks_insecure_defaults(monkeypatch):
     monkeypatch.setenv('JWT_AUDIENCE', '')
     monkeypatch.setenv('ALLOW_DEMO_LOGIN', 'true')
     monkeypatch.setenv('CORS_ORIGINS', '*')
+    monkeypatch.setenv('AZURE_TENANT_ID', '')
+    monkeypatch.setenv('AZURE_CLIENT_ID', '')
 
     settings = Settings()
 
@@ -27,6 +31,7 @@ def test_production_gate_blocks_insecure_defaults(monkeypatch):
     assert 'JWT_ISSUER é obrigatório' in mensagem
     assert 'JWT_AUDIENCE é obrigatório' in mensagem
     assert 'ALLOW_DEMO_LOGIN deve ser false' in mensagem
+    assert 'Azure AD obrigatório em produção' in mensagem
 
 
 def test_production_gate_allows_secure_configuration(monkeypatch):
@@ -36,12 +41,15 @@ def test_production_gate_allows_secure_configuration(monkeypatch):
     monkeypatch.setenv('JWT_AUDIENCE', 'reqsys-frontend')
     monkeypatch.setenv('ALLOW_DEMO_LOGIN', 'false')
     monkeypatch.setenv('CORS_ORIGINS', 'https://tieriprod.duckdns.org')
+    monkeypatch.setenv('AZURE_TENANT_ID', _SECURE_AZURE_TENANT_ID)
+    monkeypatch.setenv('AZURE_CLIENT_ID', _SECURE_AZURE_CLIENT_ID)
 
     settings = Settings()
 
     settings.validate_production_gates()
     assert settings.is_production is True
     assert settings.is_jwt_secret_weak is False
+    assert settings.azure_configured is True
 
 
 def test_criar_token_includes_issuer_and_audience(monkeypatch):
