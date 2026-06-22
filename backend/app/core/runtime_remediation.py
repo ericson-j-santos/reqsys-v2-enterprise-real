@@ -177,6 +177,22 @@ def avaliar_remediacao(
             auditoria={'motivo': request.motivo, 'ambiente': health_snapshot.ambiente},
         )
 
+    if request.dry_run is False:
+        return RemediationDecision(
+            correlation_id=correlation_id,
+            avaliado_em=datetime.now(timezone.utc).isoformat(),
+            codigo_acao=request.codigo_acao,
+            componente=request.componente,
+            tipo=request.tipo,
+            estado='bloqueado_por_politica',
+            permitido=False,
+            dry_run=False,
+            politica_aplicada='AOP-RUN-DRY-RUN-BYPASS-DENY-001',
+            razoes=['execucao real nao e permitida no P0.2; envie dry_run=true'],
+            validacoes_obrigatorias=validacoes,
+            auditoria={'motivo': request.motivo, 'estado_componente': componente.estado, 'score_componente': componente.score},
+        )
+
     if request.tipo in {'restart_controlado', 'rollback_seguro'}:
         return RemediationDecision(
             correlation_id=correlation_id,

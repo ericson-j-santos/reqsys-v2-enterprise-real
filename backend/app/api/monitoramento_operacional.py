@@ -1,7 +1,8 @@
+import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
 
 from app.core.autonomous_operations import gerar_snapshot_operacao_autonoma
@@ -12,8 +13,10 @@ from app.core.runtime_remediation import (
     avaliar_remediacao,
     criar_health_snapshot_base,
 )
+from app.core.security import require_admin
 
 router = APIRouter(tags=['Monitoramento Operacional'])
+logger = logging.getLogger(__name__)
 
 
 class ItemMonitorado(BaseModel):
@@ -152,30 +155,49 @@ def criar_snapshot_minimo(correlation_id: str) -> MonitoramentoOperacional:
     )
 
 
+def _resolver_correlation_id(x_correlation_id: str | None, x_request_id: str | None) -> str:
+    correlation_id = x_correlation_id or x_request_id or str(uuid4())
+    logger.info('monitoramento_operacional_correlation_id_resolvido', extra={'correlation_id': correlation_id})
+    return correlation_id
+
+
 @router.get('/monitoramento-operacional')
-def obter_monitoramento_operacional(x_correlation_id: str | None = Header(default=None)):
-    correlation_id = x_correlation_id or str(uuid4())
+def obter_monitoramento_operacional(
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+    x_request_id: str | None = Header(default=None, alias='X-Request-ID'),
+):
+    correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
     snapshot = criar_snapshot_minimo(correlation_id)
     return ok(snapshot.model_dump(), correlation_id)
 
 
 @router.get('/operacao-autonoma/maturidade')
-def obter_maturidade_operacao_autonoma(x_correlation_id: str | None = Header(default=None)):
-    correlation_id = x_correlation_id or str(uuid4())
+def obter_maturidade_operacao_autonoma(
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+    x_request_id: str | None = Header(default=None, alias='X-Request-ID'),
+):
+    correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
     snapshot = gerar_snapshot_operacao_autonoma(correlation_id)
     return ok(snapshot.model_dump(), correlation_id)
 
 
 @router.get('/operacao-autonoma/runtime-health')
-def obter_runtime_health(x_correlation_id: str | None = Header(default=None)):
-    correlation_id = x_correlation_id or str(uuid4())
+def obter_runtime_health(
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+    x_request_id: str | None = Header(default=None, alias='X-Request-ID'),
+):
+    correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
     snapshot = criar_health_snapshot_base(correlation_id, settings.normalized_environment)
     return ok(snapshot.model_dump(), correlation_id)
 
 
-@router.post('/operacao-autonoma/remediacoes/avaliar')
-def avaliar_remediacao_governada(payload: RemediationRequest, x_correlation_id: str | None = Header(default=None)):
-    correlation_id = x_correlation_id or str(uuid4())
+@router.post('/operacao-autonoma/remediacoes/avaliar', dependencies=[Depends(require_admin)])
+def avaliar_remediacao_governada(
+    payload: RemediationRequest,
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+    x_request_id: str | None = Header(default=None, alias='X-Request-ID'),
+):
+    correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
     health_snapshot = criar_health_snapshot_base(correlation_id, settings.normalized_environment)
     decisao = avaliar_remediacao(payload, health_snapshot, correlation_id)
     return ok(decisao.model_dump(), correlation_id)

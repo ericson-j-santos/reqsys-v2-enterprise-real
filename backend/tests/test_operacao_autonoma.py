@@ -9,8 +9,20 @@ from app.core.autonomous_operations import (
     criar_politicas_base,
     gerar_snapshot_operacao_autonoma,
 )
-from app.core.runtime_remediation import RemediationRequest, avaliar_remediacao, criar_health_snapshot_base
+from app.core.runtime_remediation import (
+    RemediationRequest,
+    avaliar_remediacao,
+    criar_health_snapshot_base,
+)
+from app.core.security import criar_token
 from app.main import app
+
+
+def _admin_headers(correlation_id: str | None = None) -> dict[str, str]:
+    headers = {'Authorization': f'Bearer {criar_token({"sub": "test-admin", "papel": "admin"})}'}
+    if correlation_id:
+        headers['X-Correlation-ID'] = correlation_id
+    return headers
 
 
 def test_operacao_autonoma_maturidade_status_200():
@@ -124,6 +136,29 @@ def test_runtime_health_validator_propaga_correlation_id():
     assert body['data']['correlation_id'] == correlation_id
 
 
+def test_runtime_health_validator_aceita_x_request_id_como_fallback():
+    request_id = 'req-runtime-health-test'
+    res = TestClient(app).get('/operacao-autonoma/runtime-health', headers={'X-Request-ID': request_id})
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body['meta']['correlation_id'] == request_id
+    assert body['data']['correlation_id'] == request_id
+
+
+def test_executor_governado_exige_admin():
+    payload = {
+        'codigo_acao': 'AOP-ACT-004',
+        'componente': 'auto_remediacao_runtime',
+        'tipo': 'retry_governado',
+        'motivo': 'falha transitÃ³ria simulada',
+        'dry_run': True,
+    }
+    res = TestClient(app).post('/operacao-autonoma/remediacoes/avaliar', json=payload)
+
+    assert res.status_code == 401
+
+
 def test_executor_governado_permite_retry_nao_destrutivo_em_dry_run():
     payload = {
         'codigo_acao': 'AOP-ACT-004',
@@ -132,7 +167,7 @@ def test_executor_governado_permite_retry_nao_destrutivo_em_dry_run():
         'motivo': 'falha transitória simulada',
         'dry_run': True,
     }
-    res = TestClient(app).post('/operacao-autonoma/remediacoes/avaliar', json=payload)
+    res = TestClient(app).post('/operacao-autonoma/remediacoes/avaliar', json=payload, headers=_admin_headers())
 
     assert res.status_code == 200
     data = res.json()['data']
@@ -151,14 +186,15 @@ def test_executor_governado_bloqueia_execucao_real_nao_destrutiva_no_p0_2():
         'motivo': 'incidente simulado',
         'dry_run': False,
     }
-    res = TestClient(app).post('/operacao-autonoma/remediacoes/avaliar', json=payload)
+    res = TestClient(app).post('/operacao-autonoma/remediacoes/avaliar', json=payload, headers=_admin_headers())
 
     assert res.status_code == 200
     data = res.json()['data']
-    assert data['permitido'] is True
-    assert data['estado'] == 'permitido_dry_run'
-    assert data['dry_run'] is True
-    assert 'persistir auditoria antes de execução real' in data['validacoes_obrigatorias']
+    assert data['permitido'] is False
+    assert data['estado'] == 'bloqueado_por_politica'
+    assert data['dry_run'] is False
+    assert data['politica_aplicada'] == 'AOP-RUN-DRY-RUN-BYPASS-DENY-001'
+    assert 'execucao real nao e permitida no P0.2; envie dry_run=true' in data['razoes']
 
 
 def test_executor_governado_permite_bloquear_deploy_em_dry_run():
@@ -202,15 +238,15 @@ def test_executor_governado_bloqueia_restart_real_por_politica():
         'motivo': 'health degradado simulado',
         'dry_run': False,
     }
-    res = TestClient(app).post('/operacao-autonoma/remediacoes/avaliar', json=payload)
+    res = TestClient(app).post('/operacao-autonoma/remediacoes/avaliar', json=payload, headers=_admin_headers())
 
     assert res.status_code == 200
     data = res.json()['data']
     assert data['permitido'] is False
-    assert data['dry_run'] is True
+    assert data['dry_run'] is False
     assert data['estado'] == 'bloqueado_por_politica'
-    assert data['politica_aplicada'] == 'AOP-RUN-DESTRUCTIVE-BLOCK-001'
-    assert 'aprovação humana' in data['validacoes_obrigatorias']
+    assert data['politica_aplicada'] == 'AOP-RUN-DRY-RUN-BYPASS-DENY-001'
+    assert 'execucao real nao e permitida no P0.2; envie dry_run=true' in data['razoes']
 
 
 def test_executor_governado_bloqueia_rollback_real_por_politica():
@@ -227,8 +263,9 @@ def test_executor_governado_bloqueia_rollback_real_por_politica():
 
     assert decisao.permitido is False
     assert decisao.estado == 'bloqueado_por_politica'
-    assert decisao.politica_aplicada == 'AOP-RUN-DESTRUCTIVE-BLOCK-001'
-    assert 'rollback validado' in decisao.validacoes_obrigatorias
+    assert decisao.dry_run is False
+    assert decisao.politica_aplicada == 'AOP-RUN-DRY-RUN-BYPASS-DENY-001'
+    assert 'execucao real nao e permitida no P0.2; envie dry_run=true' in decisao.razoes
 
 
 def test_executor_governado_bloqueia_componente_desconhecido():
