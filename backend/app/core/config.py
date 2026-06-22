@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     app_name: str = 'ReqSys API'
     app_version: str = '3.1.0'
     app_environment: str = Field(default_factory=lambda: get_secret('APP_ENV', get_secret('ENVIRONMENT', 'development') or 'development') or 'development')
+    public_environment: str = Field(default_factory=lambda: get_secret('PUBLIC_ENVIRONMENT', '') or '')
     allow_demo_login: bool = Field(default_factory=lambda: _bool_secret('ALLOW_DEMO_LOGIN', 'true'))
     jwt_secret: str = Field(default_factory=lambda: get_secret('JWT_SECRET', 'trocar-em-producao') or 'trocar-em-producao')
     jwt_algorithm: str = 'HS256'
@@ -163,6 +164,15 @@ class Settings(BaseSettings):
     @property
     def normalized_environment(self) -> str:
         value = (self.app_environment or '').strip().lower().replace('-', '_')
+        return self._normalize_environment_name(value)
+
+    @property
+    def normalized_public_environment(self) -> str:
+        value = (self.public_environment or self.app_environment or '').strip().lower().replace('-', '_')
+        return self._normalize_environment_name(value)
+
+    @staticmethod
+    def _normalize_environment_name(value: str) -> str:
         aliases = {
             'dev': 'desenvolvimento', 'development': 'desenvolvimento', 'local': 'desenvolvimento',
             'test': 'testes', 'teste': 'testes', 'testing': 'testes',

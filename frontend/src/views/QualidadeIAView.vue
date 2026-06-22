@@ -89,6 +89,19 @@
       {{ erro }}
     </v-alert>
 
+    <v-alert
+      v-if="guardrail100"
+      :type="guardrail100.passou ? 'success' : 'warning'"
+      variant="tonal"
+      class="mb-4"
+    >
+      <div class="font-weight-medium">Guard rail de Qualidade IA: meta 100%</div>
+      <div>{{ guardrail100.mensagem }}</div>
+      <div v-if="guardrail100.gaps?.length" class="mt-2 text-caption">
+        Gaps: {{ guardrail100.gaps.map((item) => `${item.metrica} -${item.gap}%`).join(', ') }}
+      </div>
+    </v-alert>
+
     <!-- Providers IA -->
     <v-row class="mb-1">
       <v-col cols="12">
@@ -343,6 +356,7 @@ const periodoFiltro = ref(30)
 const scoreGeral = computed(() => Math.round(resumo.value?.score_geral || 0))
 const tendencia = computed(() => resumo.value?.tendencia || [])
 const recomendacoes = computed(() => resumo.value?.recomendacoes || [])
+const guardrail100 = computed(() => resumo.value?.guardrail_100 || null)
 
 const tendenciaValues = computed(() => tendencia.value.map((i) => Number(i.score_geral || 0)))
 

@@ -1,0 +1,94 @@
+name: Actions Dispatcher — ReqSys
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag ou SHA para executar"
+        required: false
+        default: "main"
+      mode:
+        description: "Modo de disparo: all ou essential"
+        required: false
+        default: "essential"
+  push:
+    branches: [main]
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: actions-dispatcher-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: Disparar workflows governados
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    steps:
+      - name: Definir alvo e modo
+        id: config
+        shell: bash
+        run: |
+          set -euo pipefail
+          REF="${{ github.event.inputs.ref || github.ref_name || 'main' }}"
+          MODE="${{ github.event.inputs.mode || 'essential' }}"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
+      - name: Disparar workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER_REPO: ${{ github.repository }}
+          TARGET_REF: ${{ steps.config.outputs.ref }}
+          MODE: ${{ steps.config.outputs.mode }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          essential_workflows=(
+            "ci.yml"
+            "governance-quality-gates.yml"
+            "governanca-padrao-ouro.yml"
+            "codex-local-online.yml"
+          )
+
+          all_workflows=(
+            "ci.yml"
+            "governance-quality-gates.yml"
+            "governanca-padrao-ouro.yml"
+            "codex-local-online.yml"
+            "nginx-security.yml"
+            "validar-painel-ciclo.yml"
+            "deploy-reqsys-showcase-pages.yml"
+          )
+
+          if [[ "$MODE" == "all" ]]; then
+            workflows=("${all_workflows[@]}")
+          else
+            workflows=("${essential_workflows[@]}")
+          fi
+
+          echo "## Actions Dispatcher" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Campo | Valor |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Ref | $TARGET_REF |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Modo | $MODE |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Workflow | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---:|" >> "$GITHUB_STEP_SUMMARY"
+
+          for workflow in "${workflows[@]}"; do
+            if gh api "repos/$OWNER_REPO/actions/workflows/$workflow" --silent >/dev/null 2>&1; then
+              gh workflow run "$workflow" --repo "$OWNER_REPO" --ref "$TARGET_REF"
+              echo "| $workflow | dispatched |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| $workflow | not_found |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done

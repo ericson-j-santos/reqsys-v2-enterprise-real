@@ -4,6 +4,9 @@
     <v-app-bar v-if="mobile" flat class="req-appbar" elevation="0" height="56">
       <v-app-bar-nav-icon color="white" aria-label="Abrir menu de navegação" @click="drawer = !drawer" />
       <span class="brand-sm ml-1">◈ ReqSys</span>
+      <v-chip size="x-small" :color="environmentColor" variant="flat" class="ml-2 req-env-chip">
+        {{ environmentLabel }}
+      </v-chip>
       <v-spacer />
       <v-chip size="x-small" color="amber" variant="tonal" class="mr-2 req-role-chip">
         {{ auth.usuario?.papel || 'user' }}
@@ -22,6 +25,9 @@
       <div class="pa-5 pb-3 req-brand-block">
         <div class="brand">◈ ReqSys</div>
         <div class="muted mt-1">SaaS Interno · v2 Enterprise</div>
+        <v-chip size="x-small" :color="environmentColor" variant="flat" class="mt-2 req-env-chip">
+          {{ environmentLabel }}
+        </v-chip>
       </div>
       <v-divider />
 
@@ -80,18 +86,42 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
+import { api } from '../services/api'
 
 const { mobile } = useDisplay()
 const auth = useAuthStore()
 const router = useRouter()
 const drawer = ref(!mobile.value)
+const environment = ref(import.meta.env.VITE_APP_ENVIRONMENT || '')
+
+const environmentLabel = computed(() => {
+  const value = (environment.value || 'ambiente').replace(/_/g, ' ')
+  return value.toUpperCase()
+})
+
+const environmentColor = computed(() => {
+  const value = (environment.value || '').toLowerCase()
+  if (['prod', 'producao', 'production'].includes(value)) return 'red'
+  if (['staging', 'homolog', 'homologacao', 'hml'].includes(value)) return 'amber'
+  if (['dev', 'development', 'desenvolvimento'].includes(value)) return 'blue'
+  return 'grey'
+})
 
 watch(mobile, (isMobile) => {
   drawer.value = !isMobile
+})
+
+onMounted(async () => {
+  try {
+    const { data } = await api.get('/v1/auth/config')
+    if (data?.data?.environment) environment.value = data.data.environment
+  } catch {
+    // Mantem fallback do build quando a API publica nao estiver disponivel.
+  }
 })
 
 const navItems = [
@@ -142,6 +172,10 @@ function sair() {
 .req-nav-list {
   max-height: calc(100vh - 176px);
   overflow-y: auto;
+}
+.req-env-chip {
+  font-weight: 700;
+  letter-spacing: 0;
 }
 .nav-item {
   border-radius: 8px;

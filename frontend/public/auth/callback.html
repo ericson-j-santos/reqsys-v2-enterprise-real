@@ -1,15 +1,51 @@
 <!doctype html>
 <html lang="pt-BR">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ReqSys · Autenticação Microsoft</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReqSys - retorno Microsoft</title>
+    <style>
+      body {
+        align-items: center;
+        background: #f6f8fb;
+        color: #1f2937;
+        display: flex;
+        font-family: Arial, sans-serif;
+        justify-content: center;
+        margin: 0;
+        min-height: 100vh;
+      }
+
+      main {
+        max-width: 360px;
+        padding: 24px;
+        text-align: center;
+      }
+
+      h1 {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+
+      p {
+        color: #4b5563;
+        font-size: 14px;
+        line-height: 1.5;
+        margin: 0;
+      }
+    </style>
   </head>
   <body>
-    <p>Concluindo autenticação Microsoft...</p>
+    <main>
+      <h1>Finalizando login Microsoft</h1>
+      <p>Voce sera redirecionado de volta ao ReqSys automaticamente.</p>
+    </main>
     <script>
-      // Página intencionalmente estática para o MSAL capturar o hash do retorno.
-      // Não carregar Vue, router, service worker ou qualquer lógica que altere location/hash.
+      const target = new URL('/', window.location.origin)
+      target.search = window.location.search
+      target.hash = window.location.hash
+      window.location.replace(target.toString())
     </script>
   </body>
 </html>

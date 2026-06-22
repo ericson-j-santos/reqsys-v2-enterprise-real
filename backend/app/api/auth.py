@@ -136,7 +136,7 @@ def auth_config():
         'azure_tenant_id': settings.azure_tenant_id or None,
         'azure_client_id': settings.azure_client_id or None,
         'demo_login_enabled': bool(settings.allow_demo_login and not settings.is_production),
-        'environment': settings.normalized_environment,
+        'environment': settings.normalized_public_environment,
         'expected_redirect_uri': redirect_uri or None,
         'auth_status': 'ready' if azure_enabled else 'misconfigured',
         'missing_fields': missing_fields,

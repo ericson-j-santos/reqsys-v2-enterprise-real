@@ -4,7 +4,7 @@ import sys
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-import app.models  # noqa: F401 — garante create_all para integracao_log e configuracao_lowcode
+import app.models  # noqa: F401
 from app.api import (
     agents,
     auditoria,
@@ -12,6 +12,7 @@ from app.api import (
     codex_governado,
     cofre,
     dashboard,
+    estatisticas,
     figma_github,
     hub_lowcode,
     ia,
@@ -40,7 +41,7 @@ logger = logging.getLogger('reqsys.startup')
 sec_logger = logging.getLogger('reqsys.security')
 
 if settings.is_jwt_secret_weak:
-    logger.warning('JWT_SECRET fraco ou padrao detectado — substitua antes de ir para producao')
+    logger.warning('JWT_SECRET fraco ou padrao detectado - substitua antes de ir para producao')
 
 settings.validate_production_gates()
 
@@ -59,6 +60,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(requisitos.router)
 app.include_router(dashboard.router)
+app.include_router(estatisticas.router)
 app.include_router(figma_github.router)
 app.include_router(pipeline.router)
 app.include_router(relatorios.router)

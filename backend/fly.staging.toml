@@ -5,6 +5,8 @@ primary_region = "gru"
   dockerfile = "Dockerfile"
 
 [env]
+  APP_ENV = "staging"
+  PUBLIC_ENVIRONMENT = "staging"
   DATABASE_URL = "sqlite:////data/reqsys.db"
   CORS_ORIGINS = "https://reqsys-app-stg.fly.dev,http://localhost:5173,http://localhost:8081"
 
