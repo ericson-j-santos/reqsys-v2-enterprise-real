@@ -1,6 +1,7 @@
 name: CI — ReqSys v2 Enterprise
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, master, develop]
   pull_request:
@@ -42,6 +43,9 @@ jobs:
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            BASE_SHA="$(git rev-parse HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)"
+            HEAD_SHA="${{ github.sha }}"
           else
             BASE_SHA="${{ github.event.before }}"
             HEAD_SHA="${{ github.sha }}"
@@ -86,6 +90,10 @@ jobs:
           done < /tmp/changed-files.txt
 
           if [[ "$workflows" == "true" ]]; then
+            full_ci=true
+          fi
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && ! -s /tmp/changed-files.txt ]]; then
             full_ci=true
           fi
 
@@ -241,9 +249,7 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest tests/ -v --tb=short \
-            --cov=app.core.autonomous_operations \
-            --cov=app.core.runtime_remediation \
-            --cov=app.api.monitoramento_operacional \
+            --cov=app \
             --cov-report=term-missing:skip-covered \
             --cov-report=xml:/tmp/backend-coverage.xml \
             --cov-fail-under=60 2>&1 | tee /tmp/backend-pytest-output.log
