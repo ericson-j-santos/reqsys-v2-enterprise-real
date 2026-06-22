@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Operational Runtime Governance Platform v1</title>
+  <style>
+    :root{--bg:#f6f8fb;--card:#fff;--text:#172033;--muted:#5f6b7a;--ok:#1f8a4c;--warn:#b7791f;--bad:#b42318;--info:#1d4ed8;--line:#d9e2ec;--dark:#0f172a}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}header{background:linear-gradient(135deg,#0f172a,#1d4ed8);color:#fff;padding:32px 24px}main{max-width:1180px;margin:0 auto;padding:24px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 2px 10px rgba(15,23,42,.06)}.span-12{grid-column:span 12}.span-6{grid-column:span 6}.span-4{grid-column:span 4}.kpi{font-size:32px;font-weight:700}.muted{color:var(--muted)}.badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}.ok{background:#e8f7ee;color:var(--ok)}.warn{background:#fff6df;color:var(--warn)}.bad{background:#fdebea;color:var(--bad)}.info{background:#eaf1ff;color:var(--info)}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:10px;vertical-align:top}th{font-size:13px;color:var(--muted)}code,pre{background:#0f172a;color:#e5e7eb;border-radius:10px}pre{padding:16px;overflow:auto}.bar{height:12px;background:#e5e7eb;border-radius:999px;overflow:hidden}.bar>div{height:100%;background:#1d4ed8}.footer{font-size:12px;color:var(--muted);padding:24px 0}@media(max-width:800px){.span-6,.span-4{grid-column:span 12}header{padding:24px 16px}main{padding:16px}}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Operational Runtime Governance Platform v1</h1>
+  <p>Consolidação governada dos PRs #70, #74, #75 e #94 para estabilização operacional, runtime intelligence, autonomia governada e monitoramento de GitHub Actions.</p>
+</header>
+<main>
+  <section class="grid">
+    <div class="card span-4"><div class="muted">Status evidenciado</div><div class="kpi">35%</div><div class="bar"><div style="width:35%"></div></div><p class="muted">Documentação canônica criada; PRs ainda precisam de atualização, CI e resolução de conflito.</p></div>
+    <div class="card span-4"><div class="muted">PRs consolidados</div><div class="kpi">4</div><p><span class="badge info">#70</span> <span class="badge info">#74</span> <span class="badge info">#75</span> <span class="badge info">#94</span></p></div>
+    <div class="card span-4"><div class="muted">Risco atual</div><div class="kpi">Alto</div><p><span class="badge bad">mergeable=false em #70 e #74</span></p></div>
+
+    <div class="card span-12">
+      <h2>Decisão operacional</h2>
+      <p>Os PRs #70, #74, #75 e #94 passam a ser tratados como insumos de uma única plataforma: <strong>Operational Runtime Governance Platform v1</strong>. O objetivo é eliminar fragmentação entre CI/CD, runtime intelligence, operação autônoma e monitoramento de Actions.</p>
+    </div>
+
+    <div class="card span-12">
+      <h2>Matriz de consolidação</h2>
+      <table>
+        <thead><tr><th>PR</th><th>Camada</th><th>Papel</th><th>Status observado</th><th>Próxima ação objetiva</th></tr></thead>
+        <tbody>
+          <tr><td>#70</td><td>Pipeline Governance</td><td>CI/CD determinístico, guardrails e observabilidade</td><td><span class="badge bad">draft / mergeable=false</span></td><td>Atualizar contra main e corrigir Backend Tests + Coverage.</td></tr>
+          <tr><td>#74</td><td>Runtime Intelligence</td><td>Telemetria, correlation_id, diagnóstico e resiliência</td><td><span class="badge bad">draft / mergeable=false</span></td><td>Atualizar contra main e integrar router no backend.</td></tr>
+          <tr><td>#75</td><td>Autonomous Operations</td><td>Maturidade, health validator e remediação governada</td><td><span class="badge warn">mergeable=true</span></td><td>Validar CI real e alinhar escopo P0.1/P0.2.</td></tr>
+          <tr><td>#94</td><td>Operational Actions Center</td><td>Monitor de Actions, classificação de runs e score de saúde</td><td><span class="badge warn">draft / mergeable=true</span></td><td>Validar CI real e integrar ao OCC.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card span-6">
+      <h2>Arquitetura lógica</h2>
+      <pre>Operational Runtime Governance Platform v1
+├── Pipeline Governance Layer
+├── Runtime Intelligence Layer
+├── Autonomous Operations Layer
+└── Operational Actions Center</pre>
+    </div>
+
+    <div class="card span-6">
+      <h2>Critérios para 100%</h2>
+      <ul>
+        <li>#70 sem conflito e CI fast verde.</li>
+        <li>#74 sem conflito e router integrado.</li>
+        <li>#75 validado por testes.</li>
+        <li>#94 validado por testes.</li>
+        <li>CI completo verde.</li>
+        <li>Squash merge autorizado somente com evidência.</li>
+      </ul>
+    </div>
+
+    <div class="card span-12">
+      <h2>Endpoints-alvo</h2>
+      <table>
+        <thead><tr><th>Área</th><th>Endpoint</th><th>Origem</th><th>Finalidade</th></tr></thead>
+        <tbody>
+          <tr><td>Runtime</td><td><code>GET /monitoramento-operacional/runtime/health</code></td><td>#74</td><td>Saúde operacional do runtime.</td></tr>
+          <tr><td>Runtime</td><td><code>GET /monitoramento-operacional/runtime/diagnostico</code></td><td>#74</td><td>Diagnóstico operacional explicável.</td></tr>
+          <tr><td>AOP</td><td><code>GET /operacao-autonoma/maturidade</code></td><td>#75</td><td>Maturidade operacional consolidada.</td></tr>
+          <tr><td>AOP</td><td><code>GET /operacao-autonoma/runtime-health</code></td><td>#75</td><td>Health validator por componente.</td></tr>
+          <tr><td>AOP</td><td><code>POST /operacao-autonoma/remediacoes/avaliar</code></td><td>#75</td><td>Avaliação governada de remediações.</td></tr>
+          <tr><td>Actions</td><td><code>a documentar no PR #94</code></td><td>#94</td><td>Score e classificação de GitHub Actions.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card span-12">
+      <h2>Próximas ações objetivas</h2>
+      <ol>
+        <li>Usar esta branch como trilho canônico da consolidação.</li>
+        <li>Atualizar #70 e #74 contra main.</li>
+        <li>Validar #75 e #94 como bases funcionais.</li>
+        <li>Integrar documentação, endpoints, runbooks e ADRs.</li>
+        <li>Executar CI fast e corrigir sem relaxar gates.</li>
+        <li>Promover o PR final para ready for review somente com evidência real.</li>
+      </ol>
+    </div>
+  </section>
+  <div class="footer">Gerado em 2026-06-22. Status não inflado: consolidação iniciada, ainda não 100%.</div>
+</main>
+</body>
+</html>
