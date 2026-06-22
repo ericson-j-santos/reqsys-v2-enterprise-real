@@ -9,8 +9,8 @@ const mockSnapshot = {
     confidence_score: 92,
     ai_governance_score: 89,
     operational_quality_score: 91,
-    production_ready: false,
-    draft_recomendado: true,
+    production_ready: true,
+    draft_recomendado: false,
     figma: {
       status: 'aguardando_plano_figma',
       artefato: 'Enterprise Operations Center / Analytics Runtime Intelligence',
@@ -21,25 +21,25 @@ const mockSnapshot = {
         capability: 'Backend ARI',
         estado: 'VALIDADO',
         evidencia: 'Endpoint snapshot e testes backend verdes.',
-        gap: 'Conectar adapter real por fonte.',
+        gap: 'Conectar fonte oficial produtiva.',
         cor: 'verde',
         bloqueia_producao: false,
       },
       {
         capability: 'Production Readiness',
-        estado: 'BLOQUEIO',
-        evidencia: 'Ainda sem runtime staging validado.',
-        gap: 'Manter PR em draft ate evidencia operacional.',
-        cor: 'vermelho',
-        bloqueia_producao: true,
+        estado: 'VALIDADO',
+        evidencia: 'Sem bloqueios logicos remanescentes no snapshot governado.',
+        gap: 'Exigir validacao externa antes do merge produtivo.',
+        cor: 'verde',
+        bloqueia_producao: false,
       },
     ],
-    production_gaps: ['Validar ARI Center em staging publicado.'],
+    production_gaps: ['Sem gaps bloqueantes no snapshot governado.'],
     runtime_timeline: [
       {
-        evento: 'Readiness Layer',
-        estado: 'IMPLEMENTADO',
-        detalhe: 'Matriz, gaps e timeline em tela.',
+        evento: 'Runtime governado',
+        estado: 'VALIDADO',
+        detalhe: 'Sem bloqueios logicos remanescentes.',
         cor: 'verde',
       },
     ],
@@ -85,9 +85,9 @@ describe('AnalyticsRuntimeIntelligenceView', () => {
     expect(wrapper.text()).toContain('IA Governance')
     expect(wrapper.text()).toContain('Operational Quality')
     expect(wrapper.text()).toContain('Operational Readiness Matrix')
-    expect(wrapper.text()).toContain('DRAFT MANTIDO')
+    expect(wrapper.text()).toContain('PRODUCTION READY')
     expect(wrapper.text()).toContain('Production Readiness')
-    expect(wrapper.text()).toContain('Validar ARI Center em staging publicado.')
+    expect(wrapper.text()).toContain('Sem gaps bloqueantes no snapshot governado.')
     expect(wrapper.text()).toContain('aguardando_plano_figma')
     expect(wrapper.text()).toContain('IA sem fonte ou sem grounding')
   })
