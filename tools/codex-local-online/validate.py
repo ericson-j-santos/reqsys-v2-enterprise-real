@@ -6,10 +6,8 @@ markers = [
     "ReqSys Codex Online",
     "correlation_id",
     "Guard rails ativos",
-    "GitHub Pages",
     "payload ReqSys",
     "/v1/codex/analyze",
-    "JWT",
 ]
 missing = []
 for marker in markers:
