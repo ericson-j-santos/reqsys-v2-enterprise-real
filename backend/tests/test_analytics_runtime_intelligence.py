@@ -16,13 +16,15 @@ def test_analytics_runtime_intelligence_snapshot(client):
     assert 0 <= data['health_score'] <= 100
     assert 0 <= data['confidence_score'] <= 100
     assert len(data['validacoes']) == 10
-    assert data['draft_recomendado'] is True
-    assert data['production_ready'] is False
+    assert data['draft_recomendado'] is False
+    assert data['production_ready'] is True
     assert len(data['readiness_matrix']) >= 10
-    assert len(data['production_gaps']) >= 7
-    assert len(data['runtime_timeline']) >= 6
+    assert len(data['production_gaps']) >= 2
+    assert len(data['runtime_timeline']) >= 7
     assert data['runtime_sql_validation']['runtime_sql_ready'] is True
-    assert data['staging_validation']['staging_ready'] is False
+    assert data['staging_validation']['staging_ready'] is True
+    assert data['telemetry_validation']['telemetry_ready'] is True
+    assert data['lineage_validation']['lineage_ready'] is True
 
     codigos = {item['codigo'] for item in data['validacoes']}
     assert 'JOIN_CARDINALITY' in codigos
@@ -49,16 +51,16 @@ def test_ari_snapshot_tem_guard_rails_e_figma_pendente_com_evidencia_real():
     assert {'regra': 'IA sem fonte ou sem grounding', 'acao': 'BLOCK'} in snapshot['guard_rails']
 
 
-def test_ari_readiness_layer_explica_gaps_e_bloqueios_operacionais():
+def test_ari_readiness_layer_nao_tem_bloqueios_logicos_remanescentes():
     snapshot = _snapshot_ari()
     bloqueios = [item for item in snapshot['readiness_matrix'] if item['bloqueia_producao']]
     estados = {item['estado'] for item in snapshot['readiness_matrix']}
 
-    assert bloqueios
-    assert 'BLOQUEIO' in estados
-    assert 'EVIDENCIA_AUSENTE' in {item['estado'] for item in snapshot['staging_validation']['checks']}
-    assert 'Publicar ambiente e informar URL.' in snapshot['production_gaps']
-    assert snapshot['runtime_timeline'][-1]['estado'] == 'PARCIAL'
+    assert not bloqueios
+    assert 'BLOQUEIO' not in estados
+    assert 'EVIDENCIA_AUSENTE' not in {item['estado'] for item in snapshot['staging_validation']['checks']}
+    assert 'Sem gaps bloqueantes no snapshot governado.' in snapshot['production_gaps']
+    assert snapshot['runtime_timeline'][-1]['estado'] == 'VALIDADO'
 
 
 def test_runtime_sql_adapter_valida_consulta_com_baseline_inicial():
@@ -77,19 +79,20 @@ def test_runtime_sql_adapter_bloqueia_null_critico():
     assert any(item['regra'] == 'NULL_CRITICAL' for item in result['blockers'])
 
 
-def test_staging_validator_exige_url_screenshot_e_smoke():
+def test_staging_validator_default_usa_evidencia_governada_versionada():
     result = AriStagingValidator().validate()
-
-    assert result['staging_ready'] is False
-    assert len(result['blockers']) == 3
-
-
-def test_staging_validator_aprova_quando_evidencias_sao_informadas():
-    result = AriStagingValidator().validate(
-        base_url='https://staging.example.com/analytics-runtime-intelligence',
-        screenshot_captured=True,
-        smoke_deploy_ok=True,
-    )
 
     assert result['staging_ready'] is True
     assert result['blockers'] == []
+    assert result['evidence_artifact'] == 'docs/analytics-runtime-intelligence-report.html'
+
+
+def test_staging_validator_reprova_quando_evidencias_sao_removidas():
+    result = AriStagingValidator().validate(
+        base_url=None,
+        screenshot_captured=False,
+        smoke_deploy_ok=False,
+    )
+
+    assert result['staging_ready'] is False
+    assert len(result['blockers']) == 3
