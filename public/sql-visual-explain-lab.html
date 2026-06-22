@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SQL Visual Explain Lab</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0f1115; --card:#171b22; --muted:#aab2c0; --text:#eef2f8; --accent:#61dafb; --ok:#70e000; --warn:#ffd166; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family: Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+    header { padding:32px 20px; border-bottom:1px solid #2a303b; }
+    main { max-width:1100px; margin:0 auto; padding:24px 16px 56px; }
+    h1,h2,h3 { margin-top:0; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:16px; }
+    .card { background:var(--card); border:1px solid #2a303b; border-radius:16px; padding:18px; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    pre { overflow:auto; padding:16px; background:#090b10; border-radius:12px; border:1px solid #242a35; }
+    table { width:100%; border-collapse:collapse; overflow:hidden; border-radius:12px; }
+    th, td { padding:10px; border-bottom:1px solid #2a303b; text-align:left; vertical-align:top; }
+    th { color:var(--accent); }
+    .pill { display:inline-block; padding:4px 10px; border-radius:999px; background:#202735; color:var(--accent); font-weight:700; }
+    .muted { color:var(--muted); }
+    .flow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .flow span { background:#202735; border:1px solid #31394a; border-radius:999px; padding:8px 12px; }
+  </style>
+</head>
+<body>
+<header>
+  <main>
+    <span class="pill">SQL Visual Explain Stack</span>
+    <h1>Laboratório visual para entender, validar e governar consultas SQL</h1>
+    <p class="muted">Aplicação prática das recomendações: actuallyEXPLAIN + IA + DBeaver/pgAdmin e stack enterprise com EXPLAIN ANALYZE + SQLGlot + Mermaid/ERD versionado.</p>
+  </main>
+</header>
+<main>
+  <section class="card">
+    <h2>Fluxo operacional</h2>
+    <div class="flow">
+      <span>Contexto</span><span>Missão</span><span>Análise</span><span>Query</span><span>Resultado</span>
+    </div>
+  </section>
+
+  <section class="grid" style="margin-top:16px">
+    <article class="card">
+      <h2>Uso didático</h2>
+      <table>
+        <tr><th>Ferramenta</th><th>Uso</th></tr>
+        <tr><td>actuallyEXPLAIN</td><td>Visualizar intenção lógica da query.</td></tr>
+        <tr><td>IA</td><td>Explicar regra, risco, lacuna e alternativa.</td></tr>
+        <tr><td>DBeaver/pgAdmin</td><td>Executar e validar resultado real.</td></tr>
+      </table>
+    </article>
+    <article class="card">
+      <h2>Uso enterprise</h2>
+      <table>
+        <tr><th>Camada</th><th>Uso</th></tr>
+        <tr><td>EXPLAIN ANALYZE</td><td>Validar plano e performance.</td></tr>
+        <tr><td>SQLGlot</td><td>Parsear tabelas, colunas, joins e filtros.</td></tr>
+        <tr><td>Mermaid/ERD</td><td>Versionar documentação viva.</td></tr>
+      </table>
+    </article>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <h2>Consulta base</h2>
+    <pre><code>SELECT
+  u.id,
+  u.name,
+  o.total
+FROM users u
+JOIN orders o ON o.user_id = u.id
+WHERE o.total &gt; 100
+ORDER BY o.total DESC;</code></pre>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <h2>Leitura lógica</h2>
+    <table>
+      <tr><th>Etapa</th><th>Elemento</th><th>Interpretação</th></tr>
+      <tr><td>Fonte</td><td>users u</td><td>Usuários/clientes.</td></tr>
+      <tr><td>Join</td><td>orders o ON o.user_id = u.id</td><td>Relaciona cada pedido ao usuário.</td></tr>
+      <tr><td>Filtro</td><td>o.total &gt; 100</td><td>Seleciona pedidos acima do valor mínimo.</td></tr>
+      <tr><td>Ordenação</td><td>ORDER BY o.total DESC</td><td>Prioriza maiores pedidos.</td></tr>
+    </table>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <h2>Consultas derivadas recomendadas</h2>
+    <ul>
+      <li>Total gasto por usuário.</li>
+      <li>Quantidade de pedidos por usuário.</li>
+      <li>Ticket médio por usuário.</li>
+      <li>Usuários sem pedidos.</li>
+      <li>Pedidos acima da média geral.</li>
+      <li>Ranking dos maiores pedidos por usuário.</li>
+      <li>Maior pedido de cada usuário.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>
