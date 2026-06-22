@@ -1,0 +1,208 @@
+name: Fly.io Governed Command Center
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: "Nome do app Fly.io"
+        required: true
+        default: "reqsys-api"
+        type: string
+      environment:
+        description: "Ambiente alvo"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - development
+          - homologation
+          - production
+      command:
+        description: "Comando operacional permitido"
+        required: true
+        default: "status"
+        type: choice
+        options:
+          - status
+          - logs
+          - deploy
+          - restart
+          - scale-count
+          - secrets-list
+      scale_count:
+        description: "Quantidade de máquinas para scale-count"
+        required: false
+        default: "1"
+        type: string
+      confirmacao:
+        description: "Obrigatório para deploy/restart/scale-count em production: CONFIRMO_EXECUCAO_FLY"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: fly-governed-command-center-${{ github.event.inputs.app_name }}-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  governed-command:
+    name: Executar comando Fly.io governado
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      APP_NAME: ${{ github.event.inputs.app_name }}
+      TARGET_ENVIRONMENT: ${{ github.event.inputs.environment }}
+      COMMAND: ${{ github.event.inputs.command }}
+      SCALE_COUNT: ${{ github.event.inputs.scale_count }}
+      CONFIRMACAO: ${{ github.event.inputs.confirmacao }}
+      REPORT_DIR: artifacts/fly-governed-command
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Preparar evidência
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${REPORT_DIR}"
+          cat > "${REPORT_DIR}/request.json" <<EOF
+          {
+            "app_name": "${APP_NAME}",
+            "environment": "${TARGET_ENVIRONMENT}",
+            "command": "${COMMAND}",
+            "scale_count": "${SCALE_COUNT}",
+            "repository": "${GITHUB_REPOSITORY}",
+            "workflow": "${GITHUB_WORKFLOW}",
+            "run_id": "${GITHUB_RUN_ID}",
+            "run_attempt": "${GITHUB_RUN_ATTEMPT}",
+            "actor": "${GITHUB_ACTOR}",
+            "ref": "${GITHUB_REF}",
+            "sha": "${GITHUB_SHA}",
+            "requested_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+      - name: Validar guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo "FLY_API_TOKEN ausente nos GitHub Actions Secrets." | tee "${REPORT_DIR}/validation.txt"
+            exit 1
+          fi
+
+          case "${COMMAND}" in
+            status|logs|deploy|restart|scale-count|secrets-list)
+              echo "Comando permitido: ${COMMAND}" | tee "${REPORT_DIR}/validation.txt"
+              ;;
+            *)
+              echo "Comando bloqueado pela allowlist: ${COMMAND}" | tee "${REPORT_DIR}/validation.txt"
+              exit 1
+              ;;
+          esac
+
+          if [ "${TARGET_ENVIRONMENT}" = "production" ]; then
+            case "${COMMAND}" in
+              deploy|restart|scale-count)
+                if [ "${CONFIRMACAO}" != "CONFIRMO_EXECUCAO_FLY" ]; then
+                  echo "Confirmação obrigatória ausente para ${COMMAND} em production." | tee -a "${REPORT_DIR}/validation.txt"
+                  exit 1
+                fi
+                ;;
+            esac
+          fi
+
+          if [ "${COMMAND}" = "scale-count" ]; then
+            if ! [[ "${SCALE_COUNT}" =~ ^[0-9]+$ ]]; then
+              echo "scale_count deve ser numérico." | tee -a "${REPORT_DIR}/validation.txt"
+              exit 1
+            fi
+            if [ "${SCALE_COUNT}" -lt 0 ] || [ "${SCALE_COUNT}" -gt 5 ]; then
+              echo "scale_count fora do limite governado: permitido de 0 a 5." | tee -a "${REPORT_DIR}/validation.txt"
+              exit 1
+            fi
+          fi
+
+      - name: Executar comando governado
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+
+          echo "Iniciando execução governada Fly.io" | tee "${REPORT_DIR}/execution.log"
+          echo "App: ${APP_NAME}" | tee -a "${REPORT_DIR}/execution.log"
+          echo "Ambiente: ${TARGET_ENVIRONMENT}" | tee -a "${REPORT_DIR}/execution.log"
+          echo "Comando: ${COMMAND}" | tee -a "${REPORT_DIR}/execution.log"
+
+          case "${COMMAND}" in
+            status)
+              flyctl status --app "${APP_NAME}" 2>&1 | tee -a "${REPORT_DIR}/execution.log"
+              ;;
+            logs)
+              timeout 60s flyctl logs --app "${APP_NAME}" --no-tail 2>&1 | tee -a "${REPORT_DIR}/execution.log" || true
+              ;;
+            deploy)
+              flyctl deploy --app "${APP_NAME}" --remote-only 2>&1 | tee -a "${REPORT_DIR}/execution.log"
+              ;;
+            restart)
+              flyctl apps restart "${APP_NAME}" 2>&1 | tee -a "${REPORT_DIR}/execution.log"
+              ;;
+            scale-count)
+              flyctl scale count "${SCALE_COUNT}" --app "${APP_NAME}" --yes 2>&1 | tee -a "${REPORT_DIR}/execution.log"
+              ;;
+            secrets-list)
+              flyctl secrets list --app "${APP_NAME}" 2>&1 | tee -a "${REPORT_DIR}/execution.log"
+              ;;
+          esac
+
+      - name: Gerar resumo operacional
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="${{ job.status }}"
+          cat > "${REPORT_DIR}/summary.md" <<EOF
+          # Fly.io Governed Command Center — Evidência Operacional
+
+          | Campo | Valor |
+          |---|---|
+          | App | ${APP_NAME} |
+          | Ambiente | ${TARGET_ENVIRONMENT} |
+          | Comando | ${COMMAND} |
+          | Scale count | ${SCALE_COUNT} |
+          | Status do job | ${STATUS} |
+          | Repository | ${GITHUB_REPOSITORY} |
+          | Run ID | ${GITHUB_RUN_ID} |
+          | Run Attempt | ${GITHUB_RUN_ATTEMPT} |
+          | Actor | ${GITHUB_ACTOR} |
+          | SHA | ${GITHUB_SHA} |
+          | Gerado em UTC | $(date -u +%Y-%m-%dT%H:%M:%SZ) |
+
+          ## Guardrails aplicados
+
+          - Execução somente por `workflow_dispatch`.
+          - Comandos limitados por `choice` e por validação bash.
+          - Produção exige confirmação textual para comandos mutáveis.
+          - Não há shell livre informado pelo operador.
+          - Evidência publicada como artifact.
+          EOF
+
+      - name: Publicar artifact de evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly-governed-command-report
+          path: artifacts/fly-governed-command
+          if-no-files-found: error
+          retention-days: 30
