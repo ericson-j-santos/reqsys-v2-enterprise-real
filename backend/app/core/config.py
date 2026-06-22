@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     # Codex Governado — providers opcionais
     codex_ollama_base_url: str = Field(default_factory=lambda: get_secret('CODEX_OLLAMA_BASE_URL', 'http://localhost:11434') or 'http://localhost:11434')
     codex_ollama_model: str = Field(default_factory=lambda: get_secret('CODEX_OLLAMA_MODEL', 'qwen2.5-coder:7b') or 'qwen2.5-coder:7b')
+    codex_ollama_gateway_url: str = Field(default_factory=lambda: get_secret('CODEX_OLLAMA_GATEWAY_URL', '') or '')
+    codex_ollama_gateway_api_key: str = Field(default_factory=lambda: get_secret('CODEX_OLLAMA_GATEWAY_API_KEY', '') or '')
+    codex_ollama_gateway_model: str = Field(default_factory=lambda: get_secret('CODEX_OLLAMA_GATEWAY_MODEL', '') or '')
+    codex_ollama_gateway_timeout_seconds: int = Field(default_factory=lambda: int(get_secret('CODEX_OLLAMA_GATEWAY_TIMEOUT_SECONDS', '60') or '60'))
     codex_openai_key: str = Field(default_factory=lambda: get_secret('CODEX_OPENAI_KEY', '') or '')
     codex_openai_model: str = Field(default_factory=lambda: get_secret('CODEX_OPENAI_MODEL', 'gpt-4.1-mini') or 'gpt-4.1-mini')
     codex_claude_key: str = Field(default_factory=lambda: get_secret('CODEX_CLAUDE_KEY', '') or '')
