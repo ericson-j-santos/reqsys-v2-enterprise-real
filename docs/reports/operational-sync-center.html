@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Operational Sync Engine v1 — ReqSys ROC</title>
+  <style>
+    :root { --ok:#137333; --warn:#b06000; --bad:#b3261e; --info:#005ca9; --bg:#f6f8fb; --card:#fff; --text:#17212b; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: Arial, Helvetica, sans-serif; color:var(--text); background:var(--bg); line-height:1.45; }
+    header { padding:32px; color:#fff; background:linear-gradient(120deg, #005ca9, #00b3ad); }
+    main { max-width:1180px; margin:0 auto; padding:24px; }
+    h1,h2 { margin:0 0 12px; }
+    .grid { display:grid; gap:16px; grid-template-columns:repeat(4, minmax(0,1fr)); }
+    .card { background:var(--card); border:1px solid #d9e2ec; border-radius:16px; padding:18px; box-shadow:0 4px 16px rgba(15,23,42,.06); }
+    .kpi { font-size:30px; font-weight:800; }
+    .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .info { color:var(--info); }
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:14px; overflow:hidden; }
+    th,td { padding:12px; border-bottom:1px solid #e6edf5; text-align:left; vertical-align:top; }
+    th { background:#edf4fb; }
+    .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-weight:700; font-size:12px; }
+    .pill-ok { background:#e6f4ea; color:var(--ok); }
+    .pill-warn { background:#fff4e5; color:var(--warn); }
+    .pill-bad { background:#fce8e6; color:var(--bad); }
+    .flow { display:grid; gap:10px; grid-template-columns:repeat(5, 1fr); align-items:center; }
+    .node { background:#fff; border:2px solid #b7d5ef; border-radius:14px; padding:14px; text-align:center; font-weight:700; min-height:70px; display:flex; align-items:center; justify-content:center; }
+    .arrow { text-align:center; color:var(--info); font-size:24px; font-weight:900; }
+    code { background:#eef3f8; border-radius:6px; padding:2px 6px; }
+    @media (max-width: 900px) { .grid { grid-template-columns:1fr 1fr; } .flow { grid-template-columns:1fr; } .arrow { transform:rotate(90deg); } }
+    @media (max-width: 560px) { .grid { grid-template-columns:1fr; } header, main { padding:18px; } table { font-size:14px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Operational Sync Engine v1 — ReqSys Runtime Operational Center</h1>
+    <p>Relatório autocontido para monitoramento, sincronização, governança, Figma/FigJam e próxima ação objetiva.</p>
+  </header>
+  <main>
+    <section class="grid" aria-label="Indicadores principais">
+      <article class="card"><h2>Status</h2><div class="kpi warn">Ação requerida</div><p>PR #81 verde; PR #82 requer correção backend.</p></article>
+      <article class="card"><h2>Risco médio</h2><div class="kpi info">67.7</div><p>Score ponderado por impacto, produção, recorrência, bloqueio, dependências e urgência.</p></article>
+      <article class="card"><h2>CI validado</h2><div class="kpi ok">3/3</div><p>PR #81 com CI, Governança e Quality Gates verdes.</p></article>
+      <article class="card"><h2>Retorno visual</h2><div class="kpi ok">HTML + Figma</div><p>Fallback versionado e diagrama FigJam solicitado.</p></article>
+    </section>
+    <section class="card" style="margin-top:16px">
+      <h2>Fluxo operacional consolidado</h2>
+      <div class="flow" role="img" aria-label="Fluxo GitHub Agenda ReqSys Figma Operational Sync Engine">
+        <div class="node">GitHub PRs / CI</div><div class="arrow">→</div><div class="node">Operational Sync Engine</div><div class="arrow">→</div><div class="node">Snapshot + HTML + Figma</div>
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
+      <h2>Tarefas sincronizadas</h2>
+      <table>
+        <thead><tr><th>ID</th><th>Tarefa</th><th>Status</th><th>Risco</th><th>Evidência</th></tr></thead>
+        <tbody>
+          <tr><td>ROC-PR-081</td><td>Validar PR #81 — ARI e retorno Figma</td><td><span class="pill pill-ok">verde em draft</span></td><td>médio</td><td>CI principal, Governança Padrão Ouro e Quality Gates verdes.</td></tr>
+          <tr><td>ROC-PR-082</td><td>Monitorar PR #82 — falha em testes backend</td><td><span class="pill pill-bad">ação requerida</span></td><td>alto</td><td>Backend Tests + Coverage falhou; lint/security e frontend verdes.</td></tr>
+          <tr><td>ROC-FIGMA-001</td><td>Materializar retorno visual Figma/FigJam</td><td><span class="pill pill-warn">fallback controlado</span></td><td>médio</td><td>Diagrama Mermaid versionado e HTML autocontido.</td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="card" style="margin-top:16px">
+      <h2>Guard rails</h2>
+      <ul>
+        <li>Sem segredos em logs, relatórios ou comentários.</li>
+        <li>Sem execução produtiva automática sem aprovação humana.</li>
+        <li><code>correlation_id</code> obrigatório em snapshot operacional.</li>
+        <li>Relatório <code>.html</code> autocontido obrigatório em incrementos operacionais relevantes.</li>
+        <li>Retorno Figma/FigJam obrigatório quando houver plano/arquivo disponível; fallback versionado quando indisponível.</li>
+      </ul>
+    </section>
+    <section class="card" style="margin-top:16px">
+      <h2>Decisão operacional</h2>
+      <p>Manter o PR #81 como base verde para consolidação do Runtime Operational Center e tratar o PR #82 como risco operacional separado até correção dos testes backend.</p>
+      <p><strong>Próxima ação objetiva:</strong> validar o novo workflow <code>Operational Sync Engine</code>, capturar o artifact <code>operational-sync-snapshot</code> e atualizar o comentário do PR com evidência.</p>
+    </section>
+  </main>
+</body>
+</html>
