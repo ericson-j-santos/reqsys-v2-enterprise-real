@@ -17,6 +17,8 @@ def test_production_gate_blocks_insecure_defaults(monkeypatch):
     monkeypatch.setenv('JWT_AUDIENCE', '')
     monkeypatch.setenv('ALLOW_DEMO_LOGIN', 'true')
     monkeypatch.setenv('CORS_ORIGINS', '*')
+    monkeypatch.delenv('AZURE_TENANT_ID', raising=False)
+    monkeypatch.delenv('AZURE_CLIENT_ID', raising=False)
 
     settings = Settings()
 
