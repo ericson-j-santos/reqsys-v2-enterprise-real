@@ -9,6 +9,7 @@ from app.api import (
     agents,
     auditoria,
     auth,
+    codex_governado,
     cofre,
     dashboard,
     figma_github,
@@ -69,6 +70,7 @@ app.include_router(wiki.router)
 app.include_router(specs.router)
 app.include_router(cofre.router)
 app.include_router(ia.router)
+app.include_router(codex_governado.router)
 app.include_router(webhooks.router)
 app.include_router(rastreabilidade.router)
 app.include_router(hub_lowcode.router)
