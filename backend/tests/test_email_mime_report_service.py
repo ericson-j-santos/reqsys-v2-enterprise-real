@@ -47,7 +47,8 @@ def test_render_exec_report_html_preserva_cores_inline_e_correlation_id():
     assert "#3b82f6" in html
     assert "#fffbeb" in html
     assert "#f59e0b" in html
-    assert "multipart" not in html.lower()
+    assert "Content-Type:" not in html
+    assert "MIME-Version:" not in html
 
 
 def test_render_exec_report_text_cria_fallback_sem_html():
