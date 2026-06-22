@@ -1,0 +1,100 @@
+name: PR Governed CI Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Número do PR a validar"
+        required: true
+        default: "108"
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: pr-governed-ci-validation-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  validate-pr-ci:
+    name: Validar CI governado do PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Resolver PR alvo
+        id: context
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+            echo "head_sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            echo "draft=${{ github.event.pull_request.draft }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+            echo "head_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "draft=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Validar estrutura mínima dos workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          required_files=(
+            ".github/workflows/ci.yml"
+            ".github/workflows/ci-security.yml"
+            ".github/workflows/ci-e2e.yml"
+            ".github/workflows/ci-observability.yml"
+            "scripts/select_backend_tests.py"
+            "docs/ci/CI_ACCELERATION_STRATEGY.md"
+          )
+          for file in "${required_files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "Arquivo obrigatório ausente: $file"
+              exit 1
+            fi
+          done
+      - name: Validar sintaxe YAML dos workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          for path in Path('.github/workflows').glob('*.yml'):
+              with path.open('r', encoding='utf-8') as handle:
+                  yaml.safe_load(handle)
+              print(f'OK YAML: {path}')
+          PY
+      - name: Validar seletor de testes backend
+        shell: bash
+        run: python -m py_compile scripts/select_backend_tests.py
+      - name: Gerar evidência
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-validation-evidence
+          cat > ci-validation-evidence/pr-${{ steps.context.outputs.pr_number }}-validation.md <<EOF
+          # PR Governed CI Validation
+
+          | Campo | Valor |
+          |---|---|
+          | PR | #${{ steps.context.outputs.pr_number }} |
+          | Head SHA | ${{ steps.context.outputs.head_sha }} |
+          | Draft | ${{ steps.context.outputs.draft }} |
+          | Run ID | ${{ github.run_id }} |
+          | Tempo médio esperado | 1-3 min |
+          | Próximo passo | Validar CI real do PR |
+          EOF
+          cat ci-validation-evidence/pr-${{ steps.context.outputs.pr_number }}-validation.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Publicar evidência
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-governed-ci-validation-${{ steps.context.outputs.pr_number }}
+          path: ci-validation-evidence/
+          if-no-files-found: error
+          retention-days: 30
