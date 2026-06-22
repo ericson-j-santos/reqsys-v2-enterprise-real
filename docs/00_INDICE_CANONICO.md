@@ -1,6 +1,6 @@
 # Índice Canônico — ReqSys
 
-Data de referência: 2026-06-20
+Data de referência: 2026-06-22
 
 Este índice consolida os documentos canônicos do ReqSys para orientar humanos, agentes, automações e futuras evoluções do repositório.
 
@@ -15,18 +15,29 @@ Este índice consolida os documentos canônicos do ReqSys para orientar humanos,
 | `docs/adr/ADR-0004-ci-cd-qualidade.md` | CI/CD, testes, quality gates e política de merge. |
 | `docs/adr/ADR-0005-observabilidade-auditoria.md` | Observabilidade, logs, auditoria e correlação. |
 | `docs/adr/ADR-0006-analytics-drilldown-schema-driven-ui.md` | Analíticos, drill-down e UI orientada a schema. |
+| `docs/adr/ADR-0021-coderabbit-fast-review-governance.md` | Governança de revisão IA/CodeRabbit com fast path, PRs pequenos e deep review condicional. |
+| `docs/governance/CODERABBIT_FAST_REVIEW_GUARDRAILS.md` | Guardrails operacionais para reduzir tempo de CodeRabbit sem reduzir governança. |
+| `docs/ci/CI_ACCELERATION_STRATEGY.md` | Estratégia de aceleração de CI, fast path e validações profundas condicionais. |
 
 ## Regra de precedência
 
 1. Segurança, LGPD, auditoria e gates de produção prevalecem sobre produtividade.
-2. CI completo e verde é pré-condição para merge em `main`.
-3. Documentação canônica deve refletir o estado real do código.
-4. Dúvidas devem ser registradas como pendência, não assumidas como fato.
+2. CI Fast determinístico é o primeiro gate operacional para PRs pequenos.
+3. CI completo e verde é pré-condição para merge em `main` quando requerido por proteção, risco ou política do repositório.
+4. Revisão IA/CodeRabbit complementa qualidade, mas não substitui testes, SAST, validação de workflow ou revisão humana obrigatória.
+5. Documentação canônica deve refletir o estado real do código.
+6. Dúvidas devem ser registradas como pendência, não assumidas como fato.
 
 ## Fluxo canônico
 
 ```text
 visão estratégica → engenharia de requisitos → processos → arquitetura → ADRs → backlog → roadmap → qualidade → DevOps → observabilidade → riscos → documentação → produção
+```
+
+## Fluxo operacional de PR
+
+```text
+micro PR → CI Fast → revisão objetiva → merge controlado → deep review condicional/pós-merge
 ```
 
 ## Política de atualização
