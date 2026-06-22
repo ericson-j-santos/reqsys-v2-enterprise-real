@@ -1,5 +1,3 @@
-import pytest
-
 import app.api.govbi as govbi_api
 
 
@@ -36,8 +34,7 @@ def test_govbi_status_autenticado(client, auth_headers):
     assert payload['data']['timeout_ms'] >= 1000
 
 
-@pytest.mark.asyncio
-async def test_govbi_perguntas_retorna_fallback_governado_quando_provider_falha(client, auth_headers, monkeypatch):
+def test_govbi_perguntas_retorna_fallback_governado_quando_provider_falha(client, auth_headers, monkeypatch):
     monkeypatch.setattr(govbi_api.httpx, 'AsyncClient', _FakeAsyncClient)
 
     resp = client.post(
