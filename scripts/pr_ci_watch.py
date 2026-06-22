@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """PR CI Watcher seguro para ReqSys.
 
-Responsabilidades P0:
+Responsabilidades P1:
 - consultar runs de GitHub Actions associados a um commit SHA;
 - classificar status operacional dos workflows;
+- coletar jobs e steps falhos;
+- classificar causa provável das falhas;
 - gerar artefato JSON/Markdown;
 - opcionalmente comentar no PR;
 - não fazer merge automático;
@@ -14,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -43,6 +46,26 @@ class WorkflowRun:
         if self.conclusion in {"failure", "cancelled", "timed_out", "action_required"}:
             return "unhealthy"
         return "unknown"
+
+
+@dataclass(frozen=True)
+class FailedStep:
+    name: str
+    number: int | None
+    conclusion: str | None
+
+
+@dataclass(frozen=True)
+class FailedJob:
+    run_id: int
+    run_name: str
+    job_id: int
+    job_name: str
+    conclusion: str | None
+    html_url: str | None
+    failed_steps: list[FailedStep]
+    probable_cause: str
+    recommended_action: str
 
 
 def request_json(method: str, url: str, token: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -81,7 +104,67 @@ def fetch_runs(repo: str, sha: str, token: str) -> list[WorkflowRun]:
     ]
 
 
-def classify(runs: list[WorkflowRun]) -> dict[str, Any]:
+def classify_probable_cause(run_name: str, job_name: str, failed_steps: list[FailedStep]) -> tuple[str, str]:
+    haystack = " ".join([run_name, job_name, *[step.name for step in failed_steps]]).lower()
+
+    rules: list[tuple[str, str, str]] = [
+        (r"conflict|merge", "conflito_de_merge", "Atualizar branch contra main e resolver conflitos."),
+        (r"governance|quality|guardrail|baseline|security", "gate_de_governanca", "Verificar arquivos de governança, baseline, LGPD e quality gates."),
+        (r"ruff|lint|eslint|typecheck|py_compile", "qualidade_estatica", "Corrigir lint, typecheck ou compilação estática."),
+        (r"test|pytest|unit", "teste_automatizado", "Abrir log do job e corrigir teste, fixture ou regressão funcional."),
+        (r"artifact|upload", "artifact_ausente_ou_invalido", "Garantir geração de diretório/arquivos antes do upload-artifact."),
+        (r"branch protection|ruleset|codeowners", "branch_protection", "Validar CODEOWNERS, ruleset e permissões obrigatórias."),
+        (r"deploy|fly|runtime|health", "runtime_ou_deploy", "Validar health, status Fly.io e logs operacionais."),
+    ]
+
+    for pattern, cause, action in rules:
+        if re.search(pattern, haystack):
+            return cause, action
+
+    return "falha_nao_classificada", "Abrir logs do job falho e classificar manualmente a causa raiz."
+
+
+def fetch_failed_jobs(repo: str, runs: list[WorkflowRun], token: str) -> list[FailedJob]:
+    failed_jobs: list[FailedJob] = []
+    unhealthy_runs = [run for run in runs if run.health == "unhealthy"]
+
+    for run in unhealthy_runs:
+        url = f"https://api.github.com/repos/{repo}/actions/runs/{run.id}/jobs?per_page=100"
+        data = request_json("GET", url, token)
+        for job in data.get("jobs", []):
+            conclusion = job.get("conclusion")
+            if conclusion not in {"failure", "cancelled", "timed_out", "action_required"}:
+                continue
+
+            steps = [
+                FailedStep(
+                    name=str(step.get("name") or "step-desconhecido"),
+                    number=step.get("number"),
+                    conclusion=step.get("conclusion"),
+                )
+                for step in job.get("steps", [])
+                if step.get("conclusion") in {"failure", "cancelled", "timed_out", "action_required"}
+            ]
+            job_name = str(job.get("name") or "job-desconhecido")
+            cause, action = classify_probable_cause(run.name, job_name, steps)
+            failed_jobs.append(
+                FailedJob(
+                    run_id=run.id,
+                    run_name=run.name,
+                    job_id=int(job.get("id") or 0),
+                    job_name=job_name,
+                    conclusion=conclusion,
+                    html_url=job.get("html_url"),
+                    failed_steps=steps,
+                    probable_cause=cause,
+                    recommended_action=action,
+                )
+            )
+
+    return failed_jobs
+
+
+def classify(runs: list[WorkflowRun], failed_jobs: list[FailedJob]) -> dict[str, Any]:
     total = len(runs)
     healthy = sum(1 for run in runs if run.health == "healthy")
     running = sum(1 for run in runs if run.health == "running")
@@ -106,12 +189,20 @@ def classify(runs: list[WorkflowRun]) -> dict[str, Any]:
         "running": running,
         "unhealthy": unhealthy,
         "unknown": unknown,
+        "failed_jobs": len(failed_jobs),
         "score": score,
         "decision": decision,
     }
 
 
-def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun], summary: dict[str, Any]) -> str:
+def render_markdown(
+    repo: str,
+    pr_number: str,
+    sha: str,
+    runs: list[WorkflowRun],
+    failed_jobs: list[FailedJob],
+    summary: dict[str, Any],
+) -> str:
     lines = [
         "# PR CI Watch",
         "",
@@ -121,6 +212,7 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
         f"| PR | `{pr_number}` |",
         f"| SHA | `{sha}` |",
         f"| Score | `{summary['score']}` |",
+        f"| Jobs falhos | `{summary['failed_jobs']}` |",
         f"| Decisão | `{summary['decision']}` |",
         f"| Gerado em UTC | `{datetime.now(timezone.utc).isoformat()}` |",
         "",
@@ -136,15 +228,33 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
         link = f"[abrir]({run.html_url})" if run.html_url else "—"
         lines.append(f"| `{run.health}` | `{run.name}` | `{run.status}` | `{run.conclusion}` | {link} |")
 
+    lines.extend(["", "## Falhas classificadas", ""])
+    if not failed_jobs:
+        lines.append("Nenhum job falho encontrado.")
+    else:
+        lines.extend(
+            [
+                "| Workflow | Job | Steps falhos | Causa provável | Ação recomendada | Link |",
+                "|---|---|---|---|---|---|",
+            ]
+        )
+        for job in failed_jobs:
+            steps = ", ".join(step.name for step in job.failed_steps) or "—"
+            link = f"[abrir]({job.html_url})" if job.html_url else "—"
+            lines.append(
+                f"| `{job.run_name}` | `{job.job_name}` | `{steps}` | `{job.probable_cause}` | {job.recommended_action} | {link} |"
+            )
+
     lines.extend(
         [
             "",
-            "## Política P0",
+            "## Política P1",
             "",
             "- Não faz merge automático.",
             "- Não altera produção.",
-            "- Não altera status de draft automaticamente nesta versão.",
-            "- Gera diagnóstico e evidência operacional.",
+            "- Não altera status de draft automaticamente.",
+            "- Coleta jobs e steps falhos via API do GitHub.",
+            "- Classifica causa provável sem expor logs extensos ou secrets.",
         ]
     )
     return "\n".join(lines) + "\n"
@@ -170,7 +280,8 @@ def main() -> int:
         return 1
 
     runs = fetch_runs(args.repo, args.sha, token)
-    summary = classify(runs)
+    failed_jobs = fetch_failed_jobs(args.repo, runs, token)
+    summary = classify(runs, failed_jobs)
     report_dir = Path(args.report_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
 
@@ -180,11 +291,12 @@ def main() -> int:
         "sha": args.sha,
         "summary": summary,
         "runs": [asdict(run) | {"health": run.health} for run in runs],
+        "failed_jobs": [asdict(job) for job in failed_jobs],
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
     }
     (report_dir / "pr-ci-watch.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    markdown = render_markdown(args.repo, args.pr_number, args.sha, runs, summary)
+    markdown = render_markdown(args.repo, args.pr_number, args.sha, runs, failed_jobs, summary)
     (report_dir / "pr-ci-watch.md").write_text(markdown, encoding="utf-8")
 
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
