@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from base64 import b64encode
+from base64 import b64decode, b64encode
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi.testclient import TestClient
@@ -41,9 +41,18 @@ def _vault_patch(monkeypatch) -> _FakeKeyring:
     return fk
 
 
-def _setup_vault_value(fk: _FakeKeyring, key: str, value: str) -> None:
+def _get_or_create_master_key(fk: _FakeKeyring) -> bytes:
+    raw_master_key = fk.get_password(SVC, secrets_module._MASTER_KEY_SLOT)
+    if raw_master_key:
+        return b64decode(raw_master_key)
+
     master_key = AESGCM.generate_key(bit_length=256)
     fk.set_password(SVC, secrets_module._MASTER_KEY_SLOT, b64encode(master_key).decode())
+    return master_key
+
+
+def _setup_vault_value(fk: _FakeKeyring, key: str, value: str) -> None:
+    master_key = _get_or_create_master_key(fk)
     nonce = b'\x00' * secrets_module._NONCE_BYTES
     blob = AESGCM(master_key).encrypt(nonce, value.encode(), None)
     fk.set_password(SVC, key, b64encode(nonce + blob).decode())
