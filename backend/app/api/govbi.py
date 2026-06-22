@@ -5,8 +5,8 @@ import httpx
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
-from app.core.config import settings
 from app.core.envelope import ok
+from app.core.secrets import get_secret
 from app.core.security import get_current_user
 
 router = APIRouter(prefix='/api/govbi', tags=['GovBI'])
@@ -31,7 +31,15 @@ def _correlation_id(request: Request) -> str:
 
 
 def _govbi_base_url() -> str:
-    return (settings.govbi_base_url or 'https://govbi-ia-hom.fly.dev').rstrip('/')
+    return (get_secret('GOVBI_BASE_URL', 'https://govbi-ia-hom.fly.dev') or 'https://govbi-ia-hom.fly.dev').rstrip('/')
+
+
+def _govbi_timeout_ms() -> int:
+    raw = get_secret('GOVBI_TIMEOUT_MS', '15000') or '15000'
+    try:
+        return max(int(raw), 1000)
+    except ValueError:
+        return 15000
 
 
 def _normalizar_resposta(data: dict, pergunta: str, correlation_id: str) -> dict:
@@ -83,7 +91,11 @@ def _fallback_governado(pergunta: str, detalhe: str, correlation_id: str) -> dic
             'linhas': [
                 {'item': 'Pergunta recebida', 'valor': pergunta, 'status': 'VALIDADA_PELO_BACKEND'},
                 {'item': 'GovBI externo', 'valor': detalhe, 'status': 'INDISPONIVEL_OU_FORA_DO_CONTRATO'},
-                {'item': 'Próxima ação', 'valor': 'Validar health, CORS, timeout e contrato de /api/v1/perguntas no provider.', 'status': 'ACAO_OPERACIONAL'},
+                {
+                    'item': 'Próxima ação',
+                    'valor': 'Validar health, CORS, timeout e contrato de /api/v1/perguntas no provider.',
+                    'status': 'ACAO_OPERACIONAL',
+                },
             ],
         },
         'mascaramentoAplicado': True,
@@ -101,8 +113,8 @@ def status_govbi(user: dict = Depends(get_current_user)):
         GovBIProxyStatus(
             status='ok',
             modo='proxy_governado',
-            provider_url_configurado=bool(settings.govbi_base_url.strip()),
-            timeout_ms=settings.govbi_timeout_ms,
+            provider_url_configurado=bool(_govbi_base_url()),
+            timeout_ms=_govbi_timeout_ms(),
         ).model_dump(),
         meta={'usuario': user.get('sub')},
     )
@@ -124,7 +136,7 @@ async def perguntar_govbi(body: GovBIPerguntaRequest, request: Request, user: di
     }
 
     url = f'{_govbi_base_url()}/api/v1/perguntas'
-    timeout = max(settings.govbi_timeout_ms, 1000) / 1000
+    timeout = _govbi_timeout_ms() / 1000
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
