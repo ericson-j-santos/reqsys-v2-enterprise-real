@@ -9,7 +9,7 @@ from app.core.envelope import ok
 from app.core.secrets import get_secret
 from app.core.security import get_current_user
 
-router = APIRouter(prefix='/api/govbi', tags=['GovBI'])
+router = APIRouter(prefix='/govbi', tags=['GovBI'])
 logger = logging.getLogger('reqsys.govbi')
 
 
