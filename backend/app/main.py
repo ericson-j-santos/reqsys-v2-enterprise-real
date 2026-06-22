@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import app.models  # noqa: F401
 from app.api import (
+    actions_runtime_center,
     agents,
     auditoria,
     auth,
@@ -80,6 +81,7 @@ app.include_router(hub_lowcode.router)
 app.include_router(agents.router)
 app.include_router(monitoramento_operacional.router)
 app.include_router(operational_intelligence.router)
+app.include_router(actions_runtime_center.router)
 
 
 @app.middleware('http')
