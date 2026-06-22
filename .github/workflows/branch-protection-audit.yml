@@ -73,24 +73,28 @@ jobs:
             require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Squash merge" "política de squash merge documentada"
           fi
 
-          cat > "$REPORT_DIR/branch-protection-baseline.md" <<EOF
-          # Branch Protection Audit
-
-          | Item | Resultado |
-          |---|---|
-          | Branch alvo | \`$TARGET_BRANCH\` |
-          | Baseline versionável | \`$STATUS\` |
-          | CODEOWNERS | \`$(test -f .github/CODEOWNERS && echo presente || echo ausente)\` |
-          | Documento canônico | \`$(test -f docs/governance/branch-protection-enterprise-baseline.md && echo presente || echo ausente)\` |
-
-          ## Falhas
-
-          $(if [ -n "$FAILURES" ]; then printf "%b\n" "$FAILURES"; else echo "Nenhuma falha versionável detectada."; fi)
-
-          ## Observação
-
-          A confirmação efetiva de ruleset/branch protection depende das permissões administrativas do token/usuário no GitHub.
-          EOF
+          {
+            echo "# Branch Protection Audit"
+            echo
+            echo "| Item | Resultado |"
+            echo "|---|---|"
+            echo "| Branch alvo | \`$TARGET_BRANCH\` |"
+            echo "| Baseline versionável | \`$STATUS\` |"
+            echo "| CODEOWNERS | \`$(test -f .github/CODEOWNERS && echo presente || echo ausente)\` |"
+            echo "| Documento canônico | \`$(test -f docs/governance/branch-protection-enterprise-baseline.md && echo presente || echo ausente)\` |"
+            echo
+            echo "## Falhas"
+            echo
+            if [ -n "$FAILURES" ]; then
+              printf "%b\n" "$FAILURES"
+            else
+              echo "Nenhuma falha versionável detectada."
+            fi
+            echo
+            echo "## Observação"
+            echo
+            echo "A confirmação efetiva de ruleset/branch protection depende das permissões administrativas do token/usuário no GitHub."
+          } > "$REPORT_DIR/branch-protection-baseline.md"
 
           cat "$REPORT_DIR/branch-protection-baseline.md" >> "$GITHUB_STEP_SUMMARY"
 
