@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import app.models  # noqa: F401 — garante create_all para integracao_log e configuracao_lowcode
 from app.api import (
     agents,
+    analytics_runtime_intelligence,
     auditoria,
     auth,
     cofre,
@@ -59,6 +60,7 @@ app.include_router(auth.router)
 app.include_router(requisitos.router)
 app.include_router(dashboard.router)
 app.include_router(figma_github.router)
+app.include_router(analytics_runtime_intelligence.router)
 app.include_router(pipeline.router)
 app.include_router(relatorios.router)
 app.include_router(auditoria.router)
