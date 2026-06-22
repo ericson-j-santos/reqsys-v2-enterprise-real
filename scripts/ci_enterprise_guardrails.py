@@ -70,7 +70,8 @@ TEST_OR_EXAMPLE_MARKERS = {
 DOCUMENTATION_EXTENSIONS = {".md", ".txt"}
 DOCUMENTATION_DIRS = {"docs", "doc", "documentation", "adr"}
 PRODUCTION_CONFIG_DIRS = {"config", "configs", "deploy", "deployment", "infra", "nginx"}
-RUNTIME_CODE_MARKERS = {"app", "backend", "frontend", "src", "server", "api", "services", "core"}
+RUNTIME_CODE_MARKERS = {"app", "backend", "server", "api", "services", "core"}
+FRONTEND_UI_MARKERS = {"frontend", "frontend-angular", "frontend-vuetify", "ui", "web"}
 VALIDATION_OR_UI_MESSAGE_PATTERNS = (
     "errors.",
     "error.",
@@ -151,6 +152,10 @@ def is_documentation(path: Path) -> bool:
     return path.suffix.lower() in DOCUMENTATION_EXTENSIONS or bool(parts & DOCUMENTATION_DIRS)
 
 
+def is_frontend_ui(path: Path) -> bool:
+    return bool(path_parts_lower(path) & FRONTEND_UI_MARKERS)
+
+
 def is_runtime_or_production_config(path: Path) -> bool:
     parts = path_parts_lower(path)
     if is_test_or_example(path) or is_documentation(path):
@@ -213,6 +218,8 @@ def classify_security_severity(path: Path) -> str | None:
     if is_test_or_example(path):
         return None
     if is_documentation(path):
+        return "warning"
+    if is_frontend_ui(path):
         return "warning"
     if is_runtime_or_production_config(path):
         return "error"
