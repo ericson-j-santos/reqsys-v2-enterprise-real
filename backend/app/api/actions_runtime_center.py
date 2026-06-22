@@ -5,7 +5,12 @@ from pydantic import BaseModel, Field
 
 from app.core.envelope import ok
 from app.core.security import get_current_user, require_admin
-from app.services.actions_runtime_monitor import GitHubActionsClient, classificar_runs, montar_snapshot_operacional, normalizar_run
+from app.services.actions_runtime_monitor import (
+    GitHubActionsClient,
+    classificar_runs,
+    montar_snapshot_operacional,
+    normalizar_run,
+)
 
 router = APIRouter(prefix='/v1/actions-runtime', tags=['Actions Runtime Center'])
 
