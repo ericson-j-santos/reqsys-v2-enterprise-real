@@ -28,3 +28,36 @@ def obter_chave_operacional() -> str:
     if not valor or len(valor.encode('utf-8')) < 32:
         raise VerificadorCegoIndisponivel('REQSYS_COFRE_VERIFICADOR_PEPPER ausente ou fraco')
     return valor
+
+
+def _derivar_chave_interna(valor_operacional: str, key: str) -> bytes:
+    return hmac.digest(
+        valor_operacional.encode('utf-8'),
+        _CONTEXTO + b':inner:' + key.encode('utf-8'),
+        _DIGEST,
+    )
+
+
+def _derivar_chave_externa(valor_operacional: str, key: str) -> bytes:
+    chave_interna = _derivar_chave_interna(valor_operacional, key)
+    return hmac.digest(
+        valor_operacional.encode('utf-8'),
+        _CONTEXTO + b':outer:' + key.encode('utf-8') + b':' + chave_interna,
+        _DIGEST,
+    )
+
+
+def _calcular_marcador_cego(valor_operacional: str, key: str, value: str) -> bytes:
+    chave_externa = _derivar_chave_externa(valor_operacional, key)
+    return hmac.digest(chave_externa, value.encode('utf-8'), _DIGEST)
+
+
+def verificar_valor_cego(key: str, valor_armazenado: str, valor_candidato: str) -> ResultadoVerificacaoCega:
+    """Compara valor armazenado e candidato sem retornar texto claro, digest ou fingerprint."""
+    valor_operacional = obter_chave_operacional()
+    marcador_armazenado = _calcular_marcador_cego(valor_operacional, key, valor_armazenado)
+    marcador_candidato = _calcular_marcador_cego(valor_operacional, key, valor_candidato)
+    return ResultadoVerificacaoCega(
+        key=key,
+        match=hmac.compare_digest(marcador_armazenado, marcador_candidato),
+    )
