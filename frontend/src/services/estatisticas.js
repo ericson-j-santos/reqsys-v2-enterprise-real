@@ -1,3 +1,5 @@
+import { api } from './api'
+
 const ESTADOS_ATUAIS = new Set(['nao_medido', 'critico', 'atencao', 'adequado', 'avancado'])
 const ESTADOS_ALVO = new Set(['adequado', 'avancado', 'excelencia'])
 const TENDENCIAS = new Set(['subindo', 'estavel', 'caindo', 'indefinida'])
@@ -19,13 +21,13 @@ export const estatisticasInternasIniciais = [
       id: 'reqsys-governanca-local',
       tipo: 'interna',
       nome: 'Governança ReqSys',
-      origem: 'frontend-runtime',
+      origem: 'frontend-runtime-fallback',
       coletadoEm: new Date().toISOString(),
       confiabilidade: 'media',
-      versaoConector: 'local-v1'
+      versaoConector: 'fallback-v1'
     },
     evidencias: ['ADR versionada', 'especificação da aba estatísticas', 'guard rails documentados'],
-    pendencias: ['conectar backend real de maturidade', 'calcular pesos por domínio']
+    pendencias: ['API /v1/estatisticas indisponível no momento da carga']
   },
   {
     id: 'requisitos-com-bdd',
@@ -42,13 +44,13 @@ export const estatisticasInternasIniciais = [
       id: 'reqsys-requisitos-local',
       tipo: 'interna',
       nome: 'Requisitos ReqSys',
-      origem: 'frontend-runtime',
+      origem: 'frontend-runtime-fallback',
       coletadoEm: new Date().toISOString(),
       confiabilidade: 'media',
-      versaoConector: 'local-v1'
+      versaoConector: 'fallback-v1'
     },
     evidencias: ['modelo de requisitos rastreáveis'],
-    pendencias: ['substituir valor local por API de requisitos']
+    pendencias: ['API /v1/estatisticas indisponível no momento da carga']
   },
   {
     id: 'guard-rails-violados',
@@ -65,13 +67,13 @@ export const estatisticasInternasIniciais = [
       id: 'reqsys-security-local',
       tipo: 'interna',
       nome: 'Guard Rails ReqSys',
-      origem: 'frontend-runtime',
+      origem: 'frontend-runtime-fallback',
       coletadoEm: new Date().toISOString(),
       confiabilidade: 'media',
-      versaoConector: 'local-v1'
+      versaoConector: 'fallback-v1'
     },
     evidencias: ['gates documentados para dados externos e mocks'],
-    pendencias: ['integrar com CI e runtime de segurança']
+    pendencias: ['API /v1/estatisticas indisponível no momento da carga']
   }
 ]
 
@@ -95,7 +97,7 @@ export const estatisticasExternasIniciais = [
       coletadoEm: new Date().toISOString(),
       ttlMinutos: 1440,
       confiabilidade: 'baixa',
-      versaoConector: 'planejado-v1'
+      versaoConector: 'planejado-v2'
     },
     evidencias: ['contrato de fonte externa definido'],
     pendencias: ['implementar registry de fontes externas', 'definir conectores autorizados']
@@ -146,6 +148,15 @@ function normalizarValor(valor) {
 }
 
 export async function carregarEstatisticas() {
-  // Internal-first: mantém contrato definitivo e evita simular fonte externa real.
+  try {
+    const resposta = await api.get('/v1/estatisticas')
+    const payload = resposta.data?.data
+    if (Array.isArray(payload?.indicadores)) {
+      return payload.indicadores
+    }
+  } catch (erro) {
+    console.warn('Falha ao carregar /v1/estatisticas; usando fallback local controlado.', erro)
+  }
+
   return [...estatisticasInternasIniciais, ...estatisticasExternasIniciais]
 }
