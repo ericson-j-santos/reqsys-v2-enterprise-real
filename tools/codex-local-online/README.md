@@ -17,6 +17,8 @@ Permitir uso totalmente online via GitHub Pages, mantendo o modelo seguro por pa
 
 O workflow `.github/workflows/codex-local-online.yml` valida o artefato em Pull Request e publica no GitHub Pages quando a alteração chegar à `main` ou quando o workflow for executado manualmente.
 
+Este README também funciona como marcador operacional para forçar nova validação/publicação do Pages quando necessário.
+
 URL esperada após publicação:
 
 ```text
