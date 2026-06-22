@@ -3,8 +3,18 @@ name: CI — ReqSys v2 Enterprise
 on:
   push:
     branches: [main, master, develop]
+    paths-ignore:
+      - "docs/**"
+      - "tools/codex-local-online/**"
+      - ".github/workflows/codex-local-online.yml"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main, master, develop]
+    paths-ignore:
+      - "docs/**"
+      - "tools/codex-local-online/**"
+      - ".github/workflows/codex-local-online.yml"
+      - ".github/workflows/ci.yml"
 
 jobs:
   # ──────────────────────────────────────────────
