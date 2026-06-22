@@ -11,6 +11,7 @@ from app.api import (
     auth,
     cofre,
     dashboard,
+    estatisticas,
     figma_github,
     hub_lowcode,
     ia,
@@ -58,6 +59,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(requisitos.router)
 app.include_router(dashboard.router)
+app.include_router(estatisticas.router)
 app.include_router(figma_github.router)
 app.include_router(pipeline.router)
 app.include_router(relatorios.router)
