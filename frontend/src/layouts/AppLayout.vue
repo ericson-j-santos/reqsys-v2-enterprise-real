@@ -98,6 +98,7 @@ const navItems = [
   { to: '/',                icon: 'mdi-view-dashboard',     title: 'Dashboard',       tip: 'Visão consolidada das métricas e acessos rápidos.' },
   { to: '/monitoramento-operacional', icon: 'mdi-monitor-dashboard', title: 'Monitoramento', tip: 'Estado operacional de PRs, gates, integrações e pendências.' },
   { to: '/analytics-runtime-intelligence', icon: 'mdi-chart-timeline-variant-shimmer', title: 'ARI Center', tip: 'Analytics Runtime Intelligence: inteligência operacional auditável, Figma e runtime observável.' },
+  { to: '/estatisticas',    icon: 'mdi-chart-box-outline',  title: 'Estatísticas',    tip: 'Indicadores internos e externos auditáveis com fonte, fórmula e analítico.' },
   { to: '/requisitos',      icon: 'mdi-file-document-edit', title: 'Requisitos',      tip: 'Cadastro, listagem e acompanhamento dos requisitos.' },
   { to: '/pipeline',        icon: 'mdi-pipe',               title: 'Pipeline',        tip: 'Fluxo operacional detalhado do requisito até a publicação.' },
   { to: '/task-console',    icon: 'mdi-clipboard-check-outline', title: 'Task Console', tip: 'Console web para revisar tarefas e preparar envio ao Planner.' },
