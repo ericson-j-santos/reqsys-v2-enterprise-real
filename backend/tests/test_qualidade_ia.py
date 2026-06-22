@@ -17,6 +17,15 @@ class TestQualidadeIA:
         assert isinstance(data['metricas'], dict)
         assert 'seguranca' in data['metricas']
 
+    def test_resumo_expoe_guardrail_100_sem_mascarar_score(self):
+        resp = client.get('/v1/qualidade-ia/resumo')
+        data = resp.json()['data']
+        guardrail = data['guardrail_100']
+        assert guardrail['meta_score'] == 100.0
+        assert guardrail['passou'] == (data['score_geral'] == 100.0 and len(guardrail['gaps']) == 0)
+        assert isinstance(guardrail['bloqueante'], bool)
+        assert isinstance(guardrail['gaps'], list)
+
     def test_resumo_tem_tendencia_lista(self):
         resp = client.get('/v1/qualidade-ia/resumo')
         data = resp.json()['data']

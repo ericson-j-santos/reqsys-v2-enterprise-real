@@ -1,8 +1,13 @@
-import { PublicClientApplication, NavigationClient } from '@azure/msal-browser'
+import { PublicClientApplication } from '@azure/msal-browser'
 import { api } from '../services/api'
 
 let _instance = null
-let _redirectUri = null
+
+const CALLBACK_PATH = '/auth/callback.html'
+
+export function getAuthCallbackUri() {
+  return new URL(CALLBACK_PATH, window.location.origin).toString()
+}
 
 async function fetchAuthConfig() {
   try {
@@ -13,25 +18,17 @@ async function fetchAuthConfig() {
   }
 }
 
-class NoReloadNavigationClient extends NavigationClient {
-  navigateInternal(_url, _options) {
-    return Promise.resolve(false)
-  }
-}
-
 export async function getMsalInstance() {
   if (_instance) return _instance
 
   const serverConfig = await fetchAuthConfig()
   if (!serverConfig.azure_enabled) return null
 
-  _redirectUri = `${window.location.origin}/auth/callback.html`
-
   _instance = new PublicClientApplication({
     auth: {
       clientId: serverConfig.azure_client_id,
       authority: `https://login.microsoftonline.com/${serverConfig.azure_tenant_id}`,
-      redirectUri: _redirectUri,
+      redirectUri: getAuthCallbackUri(),
       postLogoutRedirectUri: window.location.origin + '/login',
       navigateToLoginRequestUrl: false,
     },
@@ -41,11 +38,9 @@ export async function getMsalInstance() {
     },
     system: {
       allowNativeBroker: false,
-      asyncPopups: true,
       windowHashTimeout: 120000,
       iframeHashTimeout: 120000,
       loadFrameTimeout: 120000,
-      navigationClient: new NoReloadNavigationClient(),
     },
   })
 
@@ -75,40 +70,36 @@ function clearInteractionState(clientId) {
   })
 }
 
-async function executarLoginPopup(msal) {
-  return msal.loginPopup({
+async function executarLoginRedirect(msal) {
+  return msal.loginRedirect({
     scopes: SCOPES,
     prompt: 'select_account',
-    redirectUri: _redirectUri || `${window.location.origin}/auth/callback.html`,
+    redirectUri: getAuthCallbackUri(),
+    redirectStartPage: window.location.origin + '/login',
   })
 }
 
-// Popup mode com callback estático: evita carregar a SPA no retorno da Microsoft.
-// Retorna o idToken diretamente para o caller processar.
-export async function loginMicrosoftPopup() {
+// Redirect mode: evita popup travado e deixa a SPA finalizar o retorno no boot.
+export async function loginMicrosoftRedirect() {
   const msal = await getMsalInstance()
-  if (!msal) throw new Error('Azure AD não configurado no servidor')
+  if (!msal) throw new Error('Azure AD nao configurado no servidor')
 
   const clientId = msal.getConfiguration().auth.clientId
   clearInteractionState(clientId)
 
   try {
-    const result = await executarLoginPopup(msal)
-    return result?.idToken ?? null
+    await executarLoginRedirect(msal)
   } catch (err) {
     if (err.errorCode === 'interaction_in_progress') {
       clearInteractionState(clientId)
-      const result = await executarLoginPopup(msal)
-      return result?.idToken ?? null
-    }
-    if (err.errorCode === 'timed_out') {
-      throw new Error('Login Microsoft expirou antes de retornar para o ReqSys. Tente novamente após a publicação desta correção.')
+      await executarLoginRedirect(msal)
+      return
     }
     throw err
   }
 }
 
-// Mantido como fallback para sessões de redirect que possam estar em trânsito
+// Mantido como fallback para sessoes de redirect que possam estar em transito.
 export async function handleRedirectResult() {
   const msal = await getMsalInstance()
   if (!msal) return null

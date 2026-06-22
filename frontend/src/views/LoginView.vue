@@ -5,10 +5,9 @@
         <span>ReqSys Enterprise</span>
         <v-chip size="small" color="amber" variant="tonal">RBAC</v-chip>
       </v-card-title>
-      <v-card-subtitle>Login corporativo · Tieri659</v-card-subtitle>
+      <v-card-subtitle>Login corporativo - Tieri659</v-card-subtitle>
 
       <v-card-text>
-        <!-- Botão Microsoft (principal) -->
         <v-btn
           v-if="azureDisponivel"
           block
@@ -29,7 +28,7 @@
           density="compact"
           class="mb-4"
         >
-          <div class="font-weight-medium">Autenticação corporativa indisponível.</div>
+          <div class="font-weight-medium">Autenticacao corporativa indisponivel.</div>
           <div>{{ mensagemDiagnosticoAuth }}</div>
           <div v-if="camposAusentes.length" class="mt-2 text-caption">
             Campos ausentes: {{ camposAusentes.join(', ') }}
@@ -44,9 +43,8 @@
             <span class="text-caption text-medium-emphasis px-2">ou</span>
           </v-divider>
 
-          <!-- Login demo (desenvolvimento) -->
           <v-alert type="info" variant="tonal" density="compact" class="mb-4">
-            Acesso demo — apenas para desenvolvimento
+            Acesso demo - apenas para desenvolvimento
           </v-alert>
 
           <v-text-field
@@ -93,47 +91,45 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
-import { loginMicrosoftPopup } from '../auth/msal'
+import { loginMicrosoftRedirect } from '../auth/msal'
 import { api } from '../services/api'
 
 const { width } = useDisplay()
 const cardWidth = computed(() => Math.min(440, width.value - 32))
 
-const email          = ref('ericsonjosedossantos@tieri659.onmicrosoft.com')
-const senha          = ref('')
-const erro           = ref('')
+const email = ref('ericsonjosedossantos@tieri659.onmicrosoft.com')
+const senha = ref('')
+const erro = ref('')
 const carregandoDemo = ref(false)
 const carregandoAzure = ref(false)
-const mostrarSenha   = ref(false)
+const mostrarSenha = ref(false)
 const azureDisponivel = ref(false)
 const demoLoginDisponivel = ref(false)
-const azureConfig    = ref(null)
+const azureConfig = ref(null)
 
-const auth   = useAuthStore()
+const auth = useAuthStore()
 const router = useRouter()
 
 const camposAusentes = computed(() => azureConfig.value?.missing_fields || [])
 const redirectEsperado = computed(() => azureConfig.value?.expected_redirect_uri || '')
 const mensagemDiagnosticoAuth = computed(() => {
-  return azureConfig.value?.operator_action || 'Verifique a configuração do Azure AD no backend.'
+  return azureConfig.value?.operator_action || 'Verifique a configuracao do Azure AD no backend.'
 })
 
 onMounted(async () => {
-  // Exibir erro do retorno Azure (gravado em main.js antes de montar)
   const azureErr = sessionStorage.getItem('azure_login_error')
   if (azureErr) {
     erro.value = azureErr
     sessionStorage.removeItem('azure_login_error')
   }
 
-  // Verificar configuração pública de autenticação
   try {
     const { data } = await api.get('/v1/auth/config')
     azureConfig.value = data.data
     azureDisponivel.value = Boolean(data.data.azure_enabled)
     demoLoginDisponivel.value = Boolean(data.data.demo_login_enabled)
   } catch {
-    erro.value = 'Não foi possível obter a configuração de autenticação do servidor.'
+    erro.value = 'Nao foi possivel obter a configuracao de autenticacao do servidor.'
   }
 })
 
@@ -142,14 +138,9 @@ async function entrarMicrosoft() {
   carregandoAzure.value = true
   erro.value = ''
   try {
-    const idToken = await loginMicrosoftPopup()
-    if (!idToken) throw new Error('Token não retornado pelo Microsoft')
-    const { data } = await api.post('/v1/auth/azure', { id_token: idToken })
-    auth.salvarSessao(data.data)
-    router.push('/')
+    await loginMicrosoftRedirect()
   } catch (e) {
     erro.value = e.response?.data?.detail || e.message || 'Falha no login Microsoft'
-  } finally {
     carregandoAzure.value = false
   }
 }
@@ -177,7 +168,11 @@ async function entrarDemo() {
   padding: 16px;
   background: var(--bg);
 }
-.login-card { width: 100%; }
+
+.login-card {
+  width: 100%;
+}
+
 .btn-microsoft {
   border-color: #0078d4 !important;
   color: #0078d4 !important;

@@ -14,6 +14,64 @@
       </div>
     </div>
 
+    <!-- Configuração Teams webhook -->
+    <v-expansion-panels v-model="configAberto" class="mb-4">
+      <v-expansion-panel>
+        <v-expansion-panel-title>
+          <div class="d-flex align-center gap-2">
+            <v-icon size="small" class="mr-2">mdi-cog-outline</v-icon>
+            <span>Configuração de Webhooks</span>
+            <v-chip v-if="configStatus.teams" size="x-small" color="success" variant="tonal" class="ml-2">Teams OK</v-chip>
+            <v-chip v-else size="x-small" color="warning" variant="tonal" class="ml-2">Teams não configurado</v-chip>
+          </div>
+        </v-expansion-panel-title>
+        <v-expansion-panel-text>
+          <v-row dense class="mt-1">
+            <v-col cols="12">
+              <div class="text-caption text-medium-emphasis mb-3">
+                Para notificações no Teams, crie um webhook via <strong>Teams → canal → (...) → Workflows → "Postar em um canal quando uma solicitação de webhook é recebida"</strong>, depois cole a URL abaixo.
+              </div>
+            </v-col>
+            <v-col cols="12" md="8">
+              <v-text-field
+                v-model="configForm.teams_webhook_url"
+                label="URL do Webhook Teams (Workflows)"
+                density="compact"
+                variant="outlined"
+                hide-details="auto"
+                placeholder="https://prod-XX.westus.logic.azure.com/..."
+                prepend-inner-icon="mdi-microsoft-teams"
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="4" class="d-flex align-center gap-2">
+              <v-btn
+                color="primary"
+                variant="tonal"
+                size="small"
+                :loading="salvando"
+                @click="salvarConfig"
+                prepend-icon="mdi-content-save-outline"
+              >
+                Salvar
+              </v-btn>
+              <v-btn
+                color="info"
+                variant="tonal"
+                size="small"
+                :loading="testando"
+                :disabled="!configForm.teams_webhook_url"
+                @click="testarTeams"
+                prepend-icon="mdi-send-check-outline"
+              >
+                Testar
+              </v-btn>
+            </v-col>
+          </v-row>
+        </v-expansion-panel-text>
+      </v-expansion-panel>
+    </v-expansion-panels>
+
     <!-- Cards de resumo -->
     <v-row class="mb-4">
       <v-col cols="12" sm="6" md="3">
@@ -58,7 +116,7 @@
           <v-col cols="12" sm="4">
             <v-select
               v-model="filtroTipo"
-              :items="['Todos', 'planner_task', 'teams_notification']"
+              :items="['Todos', 'planner', 'teams']"
               label="Tipo"
               density="compact"
               variant="outlined"
@@ -68,7 +126,7 @@
           <v-col cols="12" sm="4">
             <v-select
               v-model="filtroStatus"
-              :items="['Todos', 'ok', 'erro', 'skip']"
+              :items="['Todos', 'sucesso', 'erro']"
               label="Status"
               density="compact"
               variant="outlined"
@@ -99,26 +157,31 @@
         class="painel-tabela"
         no-data-text="Nenhum evento encontrado."
       >
+        <!-- eslint-disable-next-line vue/valid-v-slot -->
         <template #item.criado_em="{ item }">
           <span class="text-caption">{{ formatarData(item.criado_em) }}</span>
         </template>
+        <!-- eslint-disable-next-line vue/valid-v-slot -->
         <template #item.tipo="{ item }">
-          <v-chip size="x-small" :color="item.tipo === 'planner_task' ? 'primary' : 'info'" variant="tonal">
-            {{ item.tipo === 'planner_task' ? 'Planner' : 'Teams' }}
+          <v-chip size="x-small" :color="item.tipo === 'planner' ? 'primary' : 'info'" variant="tonal">
+            {{ item.tipo === 'planner' ? 'Planner' : item.tipo === 'teams' ? 'Teams' : item.tipo }}
           </v-chip>
         </template>
+        <!-- eslint-disable-next-line vue/valid-v-slot -->
         <template #item.status="{ item }">
           <v-chip
             size="x-small"
-            :color="item.status === 'ok' ? 'success' : item.status === 'erro' ? 'error' : 'grey'"
+            :color="item.status === 'sucesso' ? 'success' : item.status === 'erro' ? 'error' : 'grey'"
             variant="tonal"
           >
             {{ item.status }}
           </v-chip>
         </template>
+        <!-- eslint-disable-next-line vue/valid-v-slot -->
         <template #item.total="{ item }">
           <span>{{ item.total || '—' }}</span>
         </template>
+        <!-- eslint-disable-next-line vue/valid-v-slot -->
         <template #item.acoes="{ item }">
           <v-btn icon="mdi-eye" size="x-small" variant="text" @click="abrirDetalhes(item)" />
         </template>
@@ -142,9 +205,9 @@
             <v-list-item v-if="itemSelecionado.mensagem" subtitle="Mensagem" :title="itemSelecionado.mensagem" />
             <v-list-item v-if="itemSelecionado.correlation_id" subtitle="Correlation ID" :title="itemSelecionado.correlation_id" />
           </v-list>
-          <div v-if="itemSelecionado.detalhes" class="mt-3">
+          <div v-if="itemSelecionado.detalhes && itemSelecionado.detalhes !== '{}'" class="mt-3">
             <div class="text-caption text-medium-emphasis mb-1">Resposta do Flow</div>
-            <pre class="detalhes-json">{{ JSON.stringify(itemSelecionado.detalhes, null, 2) }}</pre>
+            <pre class="detalhes-json">{{ formatarDetalhes(itemSelecionado.detalhes) }}</pre>
           </div>
         </v-card-text>
       </v-card>
@@ -169,6 +232,12 @@ const dialogAberto = ref(false)
 const itemSelecionado = ref(null)
 const snackbar = ref({ aberto: false, msg: '', cor: 'error' })
 
+const configAberto = ref(undefined)
+const configStatus = ref({ teams: false })
+const configForm = ref({ teams_webhook_url: '' })
+const salvando = ref(false)
+const testando = ref(false)
+
 const headers = [
   { title: 'Data', key: 'criado_em', width: '160px' },
   { title: 'Tipo', key: 'tipo', width: '110px' },
@@ -192,8 +261,10 @@ const totalEnvios = computed(() => itensFiltrados.value.length)
 const totalTarefas = computed(() => itensFiltrados.value.reduce((s, i) => s + (i.total || 0), 0))
 const totalTeams = computed(() => {
   return itensFiltrados.value.filter((i) => {
-    const det = i.detalhes
-    return det && typeof det === 'object' && det.teams_notificado
+    try {
+      const det = typeof i.detalhes === 'string' ? JSON.parse(i.detalhes) : i.detalhes
+      return det?.teams_notificado === true
+    } catch (_) { return false }
   }).length
 })
 const ultimoStatus = computed(() => itens.value[0]?.status || '')
@@ -204,16 +275,67 @@ function formatarData(iso) {
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+function formatarDetalhes(detalhes) {
+  try {
+    const obj = typeof detalhes === 'string' ? JSON.parse(detalhes) : detalhes
+    return JSON.stringify(obj, null, 2)
+  } catch (_) {
+    return detalhes
+  }
+}
+
 function abrirDetalhes(item) {
   itemSelecionado.value = item
   dialogAberto.value = true
+}
+
+async function carregarConfig() {
+  try {
+    const resp = await api.get('/v1/hub-lowcode/planner/webhook-config')
+    const data = resp.data?.data || {}
+    configStatus.value.teams = data.teams_configurado || false
+  } catch (_) {}
+}
+
+async function salvarConfig() {
+  salvando.value = true
+  try {
+    await api.put('/v1/hub-lowcode/planner/webhook-config', {
+      teams_webhook_url: configForm.value.teams_webhook_url || '',
+    })
+    await carregarConfig()
+    snackbar.value = { aberto: true, msg: 'Configuração salva com sucesso.', cor: 'success' }
+  } catch (e) {
+    snackbar.value = { aberto: true, msg: 'Erro ao salvar: ' + (e?.response?.data?.detail || e.message), cor: 'error' }
+  } finally {
+    salvando.value = false
+  }
+}
+
+async function testarTeams() {
+  testando.value = true
+  try {
+    const resp = await api.post('/v1/hub-lowcode/teams/testar-webhook', {
+      teams_webhook_url: configForm.value.teams_webhook_url || null,
+    })
+    const ok = resp.data?.data?.ok
+    snackbar.value = {
+      aberto: true,
+      msg: ok ? 'Mensagem de teste enviada ao Teams!' : ('Erro: ' + (resp.data?.data?.erro || 'desconhecido')),
+      cor: ok ? 'success' : 'error',
+    }
+  } catch (e) {
+    snackbar.value = { aberto: true, msg: 'Erro ao testar: ' + (e?.response?.data?.detail || e.message), cor: 'error' }
+  } finally {
+    testando.value = false
+  }
 }
 
 async function carregar() {
   carregando.value = true
   try {
     const resp = await api.get('/v1/hub-lowcode/integracoes/historico?limit=100')
-    itens.value = resp.data?.data || []
+    itens.value = resp.data?.data?.eventos || []
   } catch (e) {
     snackbar.value = { aberto: true, msg: 'Erro ao carregar histórico: ' + (e?.response?.data?.detail || e.message), cor: 'error' }
   } finally {
@@ -221,7 +343,10 @@ async function carregar() {
   }
 }
 
-onMounted(carregar)
+onMounted(async () => {
+  await carregarConfig()
+  await carregar()
+})
 </script>
 
 <style scoped>

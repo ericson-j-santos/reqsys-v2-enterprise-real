@@ -1,28 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// ── Mocks declarados antes dos vi.mock() ─────────────────────────────────────
 const mockHandleRedirectPromise = vi.fn()
-const mockLoginPopup = vi.fn()
+const mockLoginRedirect = vi.fn()
 const mockGetAllAccounts = vi.fn(() => [])
 const mockGetConfiguration = vi.fn(() => ({ auth: { clientId: 'test-client-id' } }))
 const mockInitialize = vi.fn()
 const mockConstructor = vi.fn()
 
-// PublicClientApplication precisa ser uma classe real (constructor) para suportar `new`.
-// NavigationClient também é importado pelo módulo (NoReloadNavigationClient estende-o).
 vi.mock('@azure/msal-browser', () => {
   class PublicClientApplication {
     constructor(config) {
       mockConstructor(config)
       this.initialize = mockInitialize
       this.handleRedirectPromise = mockHandleRedirectPromise
-      this.loginPopup = mockLoginPopup
+      this.loginRedirect = mockLoginRedirect
       this.getAllAccounts = mockGetAllAccounts
       this.getConfiguration = mockGetConfiguration
     }
   }
-  class NavigationClient {}
-  return { PublicClientApplication, NavigationClient }
+  return { PublicClientApplication }
 })
 
 vi.mock('../../services/api', () => ({
@@ -40,41 +36,45 @@ vi.mock('../../services/api', () => ({
   },
 }))
 
-// Resetar módulos entre testes para limpar o singleton _instance.
 beforeEach(() => {
   vi.resetModules()
   mockConstructor.mockReset()
   mockHandleRedirectPromise.mockReset().mockResolvedValue(null)
-  mockLoginPopup.mockReset().mockResolvedValue({ idToken: 'eyJ.popup.sig' })
+  mockLoginRedirect.mockReset().mockResolvedValue(undefined)
   mockInitialize.mockReset().mockResolvedValue(undefined)
   localStorage.clear()
   sessionStorage.clear()
 })
 
-// ─── getMsalInstance ──────────────────────────────────────────────────────────
+describe('getAuthCallbackUri', () => {
+  it('retorna a URL absoluta do callback de redirect', async () => {
+    const { getAuthCallbackUri } = await import('../msal')
+    expect(getAuthCallbackUri()).toBe(`${window.location.origin}/auth/callback.html`)
+  })
+})
 
 describe('getMsalInstance', () => {
-  it('retorna null quando azure_enabled é false', async () => {
+  it('retorna null quando azure_enabled e false', async () => {
     const { api } = await import('../../services/api')
     api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
     const { getMsalInstance } = await import('../msal')
     expect(await getMsalInstance()).toBeNull()
   })
 
-  it('retorna instância MSAL quando azure_enabled é true', async () => {
+  it('retorna instancia MSAL quando azure_enabled e true', async () => {
     const { getMsalInstance } = await import('../msal')
     const instance = await getMsalInstance()
     expect(instance).not.toBeNull()
   })
 
-  it('chama initialize() exatamente uma vez (singleton)', async () => {
+  it('chama initialize() exatamente uma vez', async () => {
     const { getMsalInstance } = await import('../msal')
     await getMsalInstance()
     await getMsalInstance()
     expect(mockInitialize).toHaveBeenCalledTimes(1)
   })
 
-  it('configura redirectUri para callback estático, sem carregar a SPA no popup', async () => {
+  it('configura MSAL para redirect no callback registrado', async () => {
     const { getMsalInstance } = await import('../msal')
     await getMsalInstance()
     expect(mockConstructor).toHaveBeenCalledWith(
@@ -91,16 +91,54 @@ describe('getMsalInstance', () => {
   })
 })
 
-// ─── handleRedirectResult ────────────────────────────────────────────────────
+describe('loginMicrosoftRedirect', () => {
+  it('chama loginRedirect com escopos, select_account, callback e redirectStartPage', async () => {
+    const { loginMicrosoftRedirect, SCOPES } = await import('../msal')
+    await loginMicrosoftRedirect()
+    expect(mockLoginRedirect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopes: SCOPES,
+        prompt: 'select_account',
+        redirectUri: `${window.location.origin}/auth/callback.html`,
+        redirectStartPage: `${window.location.origin}/login`,
+      })
+    )
+  })
+
+  it('limpa estado de interacao e retenta em interaction_in_progress', async () => {
+    const interactionErr = Object.assign(new Error(), { errorCode: 'interaction_in_progress' })
+    mockLoginRedirect
+      .mockReset()
+      .mockRejectedValueOnce(interactionErr)
+      .mockResolvedValueOnce(undefined)
+
+    localStorage.setItem('msal.test-client-id.interaction.status', 'interaction_in_progress')
+    localStorage.setItem('msal.test-client-id.request.correlationId', 'abc')
+
+    const { loginMicrosoftRedirect } = await import('../msal')
+    await loginMicrosoftRedirect()
+
+    expect(mockLoginRedirect).toHaveBeenCalledTimes(2)
+    expect(localStorage.getItem('msal.test-client-id.interaction.status')).toBeNull()
+    expect(localStorage.getItem('msal.test-client-id.request.correlationId')).toBeNull()
+  })
+
+  it('lanca erro quando Azure AD nao esta configurado', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
+    const { loginMicrosoftRedirect } = await import('../msal')
+    await expect(loginMicrosoftRedirect()).rejects.toThrow('Azure AD nao configurado')
+  })
+})
 
 describe('handleRedirectResult', () => {
-  it('retorna null quando não há redirect pendente', async () => {
+  it('retorna null quando nao ha redirect pendente', async () => {
     mockHandleRedirectPromise.mockResolvedValue(null)
     const { handleRedirectResult } = await import('../msal')
     expect(await handleRedirectResult()).toBeNull()
   })
 
-  it('retorna idToken quando há redirect bem-sucedido', async () => {
+  it('retorna idToken quando ha redirect bem-sucedido', async () => {
     mockHandleRedirectPromise.mockResolvedValue({ idToken: 'eyJ.payload.sig' })
     const { handleRedirectResult } = await import('../msal')
     expect(await handleRedirectResult()).toBe('eyJ.payload.sig')
@@ -112,67 +150,17 @@ describe('handleRedirectResult', () => {
     'no_cached_authority_error',
     'interaction_in_progress',
     'timed_out',
-  ])('suprime %s silenciosamente (retorna null)', async (errorCode) => {
+  ])('suprime %s silenciosamente', async (errorCode) => {
     const err = Object.assign(new Error(errorCode), { errorCode })
     mockHandleRedirectPromise.mockRejectedValue(err)
     const { handleRedirectResult } = await import('../msal')
     await expect(handleRedirectResult()).resolves.toBeNull()
   })
 
-  it('propaga erros desconhecidos (não suprime)', async () => {
+  it('propaga erros desconhecidos', async () => {
     const err = Object.assign(new Error('unexpected failure'), { errorCode: 'unknown_error' })
     mockHandleRedirectPromise.mockRejectedValue(err)
     const { handleRedirectResult } = await import('../msal')
     await expect(handleRedirectResult()).rejects.toThrow('unexpected failure')
-  })
-})
-
-// ─── loginMicrosoftPopup ──────────────────────────────────────────────────────
-
-describe('loginMicrosoftPopup', () => {
-  it('chama loginPopup com openid/profile/email, select_account e callback estático', async () => {
-    const { loginMicrosoftPopup, SCOPES } = await import('../msal')
-    const idToken = await loginMicrosoftPopup()
-    expect(mockLoginPopup).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scopes: SCOPES,
-        prompt: 'select_account',
-        redirectUri: `${window.location.origin}/auth/callback.html`,
-      })
-    )
-    expect(idToken).toBe('eyJ.popup.sig')
-  })
-
-  it('limpa chaves de interação do localStorage e retenta em interaction_in_progress', async () => {
-    const interactionErr = Object.assign(new Error(), { errorCode: 'interaction_in_progress' })
-    mockLoginPopup
-      .mockReset()
-      .mockRejectedValueOnce(interactionErr)
-      .mockResolvedValueOnce({ idToken: 'eyJ.retry.sig' })
-
-    localStorage.setItem('msal.test-client-id.interaction.status', 'interaction_in_progress')
-    localStorage.setItem('msal.test-client-id.request.correlationId', 'abc')
-
-    const { loginMicrosoftPopup } = await import('../msal')
-    const idToken = await loginMicrosoftPopup()
-
-    expect(mockLoginPopup).toHaveBeenCalledTimes(2)
-    expect(idToken).toBe('eyJ.retry.sig')
-    expect(localStorage.getItem('msal.test-client-id.interaction.status')).toBeNull()
-    expect(localStorage.getItem('msal.test-client-id.request.correlationId')).toBeNull()
-  })
-
-  it('lança erro orientado quando MSAL retorna timed_out', async () => {
-    const timeoutErr = Object.assign(new Error('timed_out'), { errorCode: 'timed_out' })
-    mockLoginPopup.mockReset().mockRejectedValueOnce(timeoutErr)
-    const { loginMicrosoftPopup } = await import('../msal')
-    await expect(loginMicrosoftPopup()).rejects.toThrow('Login Microsoft expirou')
-  })
-
-  it('lança erro quando Azure AD não está configurado', async () => {
-    const { api } = await import('../../services/api')
-    api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
-    const { loginMicrosoftPopup } = await import('../msal')
-    await expect(loginMicrosoftPopup()).rejects.toThrow('Azure AD não configurado')
   })
 })

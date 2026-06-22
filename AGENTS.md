@@ -107,6 +107,14 @@ ProduÃ§Ã£o deve ser bloqueada se qualquer condiÃ§Ã£o abaixo ocorrer:
 - Auditoria sem `correlation_id`.
 - Endpoint administrativo de conector exposto sem autorizaÃ§Ã£o adequada.
 
+## Deploy de hotfix e ambientes
+
+- Quando houver mudanÃ§as locais fora do escopo do hotfix, publicar a partir de uma Ã¡rvore limpa contendo somente os arquivos do ajuste aprovado.
+- Para mudanÃ§as de frontend/autenticaÃ§Ã£o, validar localmente com `npm run build` e teste unitÃ¡rio ou regressivo focado antes de publicar.
+- Promover ambientes em ordem: `dev` primeiro, depois `staging`, depois `prod`.
+- ApÃ³s cada publicaÃ§Ã£o, validar o endpoint afetado no ambiente publicado antes de seguir para o prÃ³ximo.
+- NÃ£o publicar produÃ§Ã£o quando o deploy puder carregar alteraÃ§Ãµes locais nÃ£o revisadas ou nÃ£o relacionadas.
+
 ## PadrÃ£o de PR
 
 Cada PR deve conter:
