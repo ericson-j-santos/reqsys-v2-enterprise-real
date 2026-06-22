@@ -1,0 +1,133 @@
+name: Runtime Operational Health
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "URL alvo para health check"
+        required: true
+        default: "https://reqsys-app.fly.dev"
+        type: string
+      environment:
+        description: "Ambiente"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - development
+          - homologation
+          - production
+  schedule:
+    - cron: '*/30 * * * *'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: runtime-operational-health-${{ github.event.inputs.environment || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  runtime-health:
+    name: Runtime health check governado
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      TARGET_URL: ${{ github.event.inputs.target_url || 'https://reqsys-app.fly.dev' }}
+      TARGET_ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
+      REPORT_DIR: artifacts/runtime-health
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar diretório
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${REPORT_DIR}"
+
+      - name: Validar alvo
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${TARGET_URL}" in
+            https://*)
+              echo "URL HTTPS válida: ${TARGET_URL}"
+              ;;
+            *)
+              echo "Apenas URLs HTTPS são permitidas." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Executar health check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          START_MS=$(date +%s%3N)
+          HTTP_STATUS=$(curl -L -sS -o "${REPORT_DIR}/response-body.txt" -w "%{http_code}" --connect-timeout 10 --max-time 30 "${TARGET_URL}" || echo "000")
+          END_MS=$(date +%s%3N)
+          RESPONSE_TIME_MS=$((END_MS - START_MS))
+
+          STATUS="healthy"
+          if [ "${HTTP_STATUS}" -lt 200 ] || [ "${HTTP_STATUS}" -ge 400 ]; then
+            STATUS="unhealthy"
+          fi
+
+          cat > "${REPORT_DIR}/runtime-health.json" <<EOF
+          {
+            "target_url": "${TARGET_URL}",
+            "environment": "${TARGET_ENVIRONMENT}",
+            "http_status": "${HTTP_STATUS}",
+            "response_time_ms": ${RESPONSE_TIME_MS},
+            "status": "${STATUS}",
+            "repository": "${GITHUB_REPOSITORY}",
+            "workflow": "${GITHUB_WORKFLOW}",
+            "run_id": "${GITHUB_RUN_ID}",
+            "run_attempt": "${GITHUB_RUN_ATTEMPT}",
+            "actor": "${GITHUB_ACTOR}",
+            "sha": "${GITHUB_SHA}",
+            "generated_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+          cat > "${REPORT_DIR}/summary.md" <<EOF
+          # Runtime Operational Health
+
+          | Campo | Valor |
+          |---|---|
+          | URL | ${TARGET_URL} |
+          | Ambiente | ${TARGET_ENVIRONMENT} |
+          | HTTP Status | ${HTTP_STATUS} |
+          | Tempo de resposta (ms) | ${RESPONSE_TIME_MS} |
+          | Status | ${STATUS} |
+          | Run ID | ${GITHUB_RUN_ID} |
+          | SHA | ${GITHUB_SHA} |
+          | UTC | $(date -u +%Y-%m-%dT%H:%M:%SZ) |
+
+          ## Critérios
+
+          - Healthy: HTTP 2xx/3xx.
+          - Unhealthy: HTTP 4xx/5xx/000.
+          - Evidência operacional publicada como artifact.
+          EOF
+
+          cat "${REPORT_DIR}/summary.md" >> "${GITHUB_STEP_SUMMARY}"
+
+          if [ "${STATUS}" = "unhealthy" ]; then
+            echo "Runtime unhealthy: ${TARGET_URL} retornou ${HTTP_STATUS}" >&2
+            exit 1
+          fi
+
+      - name: Publicar artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-operational-health
+          path: artifacts/runtime-health
+          if-no-files-found: error
+          retention-days: 15
