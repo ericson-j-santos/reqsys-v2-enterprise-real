@@ -2,10 +2,12 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
 from app.core.security import get_current_user
-from app.services.codex_governado import analisar_governado
+from app.db import get_db
+from app.services.codex_governado import analisar_governado, resumo_operacional
 
 router = APIRouter(prefix='/v1/codex', tags=['Codex Governado'])
 
@@ -19,7 +21,12 @@ class CodexAnalyzeRequest(BaseModel):
 
 
 @router.post('/analyze')
-def analyze(body: CodexAnalyzeRequest, request: Request, user: dict = Depends(get_current_user)):
+def analyze(
+    body: CodexAnalyzeRequest,
+    request: Request,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     resultado = analisar_governado(
         provider=body.provider,
         contexto=body.contexto,
@@ -27,6 +34,7 @@ def analyze(body: CodexAnalyzeRequest, request: Request, user: dict = Depends(ge
         usuario=user,
         correlation_id=body.correlation_id or request.headers.get('X-Correlation-Id'),
         publicar_no_reqsys=body.publicar_no_reqsys,
+        db=db,
     )
     if resultado.get('bloqueado') and resultado.get('motivo') == 'rate_limit':
         raise HTTPException(
@@ -47,4 +55,14 @@ def status_codex(user: dict = Depends(get_current_user)):
         'usuario': user.get('sub'),
         'providers': ['mock', 'ollama', 'openai', 'claude'],
         'guard_rails': ['jwt', 'rate_limit', 'auditoria', 'bloqueio_conteudo_sensivel', 'correlation_id'],
+        'operacional': ['auditoria_persistente', 'score_confianca', 'latencia_media', 'dashboard_summary'],
+    })
+
+
+@router.get('/operational-summary')
+def operational_summary(limite: int = 10, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    limite_normalizado = min(max(limite, 1), 50)
+    return ok({
+        'usuario': user.get('sub'),
+        'dashboard': resumo_operacional(db, limite=limite_normalizado),
     })
