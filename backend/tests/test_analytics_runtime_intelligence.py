@@ -1,3 +1,6 @@
+from app.api.analytics_runtime_intelligence import _calcular_health_score, _snapshot_ari, _validacoes_base
+
+
 def test_analytics_runtime_intelligence_snapshot(client):
     resp = client.get('/v1/analytics-runtime-intelligence/snapshot')
 
@@ -16,4 +19,22 @@ def test_analytics_runtime_intelligence_snapshot(client):
     assert 'JOIN_CARDINALITY' in codigos
     assert 'AI_GROUNDING' in codigos
     assert any(gate['acao'] == 'BLOCK' for gate in data['guard_rails'])
-    assert data['figma']['status'] == 'design_operacional_publicado'
+    assert data['figma']['status'] == 'aguardando_plano_figma'
+
+
+def test_ari_validacoes_base_contem_scores_e_status_operacionais():
+    validacoes = _validacoes_base()
+
+    assert len(validacoes) == 10
+    assert all(0 <= item['score'] <= 100 for item in validacoes)
+    assert {item['status'] for item in validacoes}.issubset({'ok', 'warn', 'fail', 'block'})
+    assert _calcular_health_score(validacoes) == 92
+
+
+def test_ari_snapshot_tem_guard_rails_e_figma_pendente_com_evidencia_real():
+    snapshot = _snapshot_ari()
+
+    assert snapshot['health_score'] == 92
+    assert snapshot['figma']['status'] == 'aguardando_plano_figma'
+    assert len(snapshot['guard_rails']) >= 6
+    assert {'regra': 'IA sem fonte ou sem grounding', 'acao': 'BLOCK'} in snapshot['guard_rails']
