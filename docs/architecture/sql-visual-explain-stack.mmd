@@ -1,0 +1,12 @@
+flowchart TD
+  A[Contexto da pergunta] --> B[Missao da consulta]
+  B --> C[Analise de tabelas e joins]
+  C --> D[Query SQL]
+  D --> E[Resultado validado]
+  D --> F[EXPLAIN / EXPLAIN ANALYZE]
+  D --> G[Parser SQLGlot futuro]
+  F --> H[Diagnostico de performance]
+  G --> I[Linhagem e documentacao viva]
+  I --> J[Mermaid / ERD versionado]
+  H --> K[Decisao operacional]
+  J --> K
