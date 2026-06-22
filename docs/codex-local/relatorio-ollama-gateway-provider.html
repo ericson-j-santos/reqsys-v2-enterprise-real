@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ReqSys — Relatório Codex Ollama Gateway Provider</title>
+  <style>
+    :root{--bg:#f6f8fb;--card:#fff;--text:#1f2937;--muted:#667085;--border:#d0d5dd;--ok:#027a48;--warn:#b54708;--blue:#005ca9}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);line-height:1.55}
+    header{background:linear-gradient(135deg,#005ca9,#003b6f);color:#fff;padding:28px 32px}
+    main{max-width:1120px;margin:0 auto;padding:24px}
+    h1,h2,h3{margin-top:0} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.06)}
+    .badge{display:inline-block;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;background:#e6f4ff;color:#005ca9}
+    .ok{color:var(--ok);font-weight:700}.warn{color:var(--warn);font-weight:700}
+    table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    th,td{border-bottom:1px solid var(--border);padding:10px;text-align:left;vertical-align:top}
+    th{background:#eef4fb} code,pre{background:#101828;color:#e5e7eb;border-radius:8px}
+    code{padding:2px 5px} pre{padding:14px;overflow:auto}
+    .mermaid-like{font-family:monospace;background:#fff;border:1px dashed var(--border);border-radius:12px;padding:14px;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <header>
+    <span class="badge">ReqSys • Codex Local/Online</span>
+    <h1>Relatório — Ollama Gateway Provider</h1>
+    <p>Publicação de decisão e integração incremental para manter o Codex no ReqSys como produto canônico e o gateway como provider local governado.</p>
+  </header>
+  <main>
+    <section class="grid">
+      <div class="card"><h2>Decisão</h2><p class="ok">Manter Codex Local/Online no ReqSys.</p><p>O gateway permanece como infraestrutura/provider local.</p></div>
+      <div class="card"><h2>Branch</h2><p><code>feature/ollama-gateway-provider</code></p></div>
+      <div class="card"><h2>Issue</h2><p><code>#95</code> — Integrar provider Ollama Local Gateway ao Codex Local/Online.</p></div>
+      <div class="card"><h2>Status</h2><p class="warn">Aguardando CI do PR.</p></div>
+    </section>
+
+    <section class="card">
+      <h2>Matriz de equivalência</h2>
+      <table>
+        <thead><tr><th>Capacidade</th><th>Gateway</th><th>Codex ReqSys</th><th>Decisão</th></tr></thead>
+        <tbody>
+          <tr><td>Servir modelos Ollama</td><td>Sim</td><td>Consome</td><td>Gateway</td></tr>
+          <tr><td>UI operacional</td><td>Não</td><td>Sim</td><td>ReqSys</td></tr>
+          <tr><td>GitHub, PR e CI</td><td>Não</td><td>Sim</td><td>ReqSys</td></tr>
+          <tr><td>Auditoria corporativa</td><td>Parcial</td><td>Sim</td><td>ReqSys</td></tr>
+          <tr><td>Provider local seguro</td><td>Sim</td><td>Orquestra</td><td>Ambos</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Arquitetura alvo</h2>
+      <div class="mermaid-like">Usuario / ReqSys UI
+  → Codex Local/Online no ReqSys
+    → Router de providers
+      → provider: ollama_gateway
+        → ReqSys Ollama Local Gateway
+          → Ollama no PC servidor
+            → Qwen Coder / Llama / DeepSeek</div>
+    </section>
+
+    <section class="card">
+      <h2>Configuração recomendada</h2>
+      <pre>CODEX_LOCAL_PROVIDER=ollama_gateway
+CODEX_OLLAMA_GATEWAY_URL=http://&lt;ip-do-pc-servidor&gt;:8008
+CODEX_OLLAMA_GATEWAY_API_KEY=&lt;secret-em-cofre&gt;
+CODEX_OLLAMA_GATEWAY_MODEL=qwen2.5-coder:7b
+CODEX_OLLAMA_GATEWAY_TIMEOUT_SECONDS=60</pre>
+    </section>
+
+    <section class="card">
+      <h2>Validação</h2>
+      <p>O teste novo valida o provider <code>ollama_gateway</code> com monkeypatch, sem dependência de rede real.</p>
+      <pre>pytest backend/tests/test_codex_governado.py</pre>
+    </section>
+  </main>
+</body>
+</html>
