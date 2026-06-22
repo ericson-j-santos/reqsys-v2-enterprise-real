@@ -1,0 +1,180 @@
+name: CI Enterprise Fast
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: ci-enterprise-fast-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20.19.0"
+  PYTHON_VERSION: "3.12"
+  CI: "true"
+
+jobs:
+  guardrails:
+    name: Guardrails deterministicos
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Executar guardrails enterprise
+        run: python scripts/ci_enterprise_guardrails.py
+
+      - name: Publicar relatorio de guardrails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-enterprise-guardrails
+          path: ci-reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  backend-fast:
+    name: Backend fast checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: guardrails
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detectar backend Python
+        id: detect
+        shell: bash
+        run: |
+          if [ -f scripts/ci_enterprise_guardrails.py ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Python
+        if: steps.detect.outputs.enabled == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Instalar dependencias backend
+        if: steps.detect.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Ruff backend
+        if: steps.detect.outputs.enabled == 'true'
+        shell: bash
+        run: ruff check scripts/ci_enterprise_guardrails.py --output-format=github
+
+      - name: Smoke Python do guardrail
+        if: steps.detect.outputs.enabled == 'true'
+        shell: bash
+        run: python -m py_compile scripts/ci_enterprise_guardrails.py
+
+  frontend-fast:
+    name: Frontend fast checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: guardrails
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detectar frontend Node
+        id: detect
+        shell: bash
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "workdir=frontend" >> "$GITHUB_OUTPUT"
+          elif [ -f package.json ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "workdir=." >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "workdir=." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node
+        if: steps.detect.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Instalar dependencias frontend
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Lint frontend
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        run: npm run lint --if-present
+
+      - name: Typecheck frontend
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        run: npm run typecheck --if-present
+
+      - name: Testes unitarios frontend
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        run: npm test --if-present -- --runInBand
+
+      - name: Scripts frontend
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        run: npm pkg get scripts
+
+  ci-fast-summary:
+    name: Sumario CI Enterprise Fast
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    needs: [guardrails, backend-fast, frontend-fast]
+    if: always()
+    steps:
+      - name: Consolidar status
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          # CI Enterprise Fast
+
+          | Gate | Resultado |
+          |---|---|
+          | Guardrails | `${{ needs.guardrails.result }}` |
+          | Backend fast | `${{ needs.backend-fast.result }}` |
+          | Frontend fast | `${{ needs.frontend-fast.result }}` |
+          EOF
+
+          if [ "${{ needs.guardrails.result }}" != "success" ] || [ "${{ needs.backend-fast.result }}" != "success" ] || [ "${{ needs.frontend-fast.result }}" != "success" ]; then
+            exit 1
+          fi
