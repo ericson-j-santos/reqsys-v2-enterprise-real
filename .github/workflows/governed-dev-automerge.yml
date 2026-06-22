@@ -1,0 +1,229 @@
+name: Governed Dev Auto Merge
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Número do PR a avaliar para merge governado em dev'
+        required: true
+        type: string
+      dry_run:
+        description: 'Executar apenas validação, sem merge'
+        required: true
+        default: true
+        type: boolean
+      require_manual_approval:
+        description: 'Exigir aprovação humana antes de merge em dev'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: governed-dev-automerge-${{ github.event.inputs.pr_number }}
+  cancel-in-progress: false
+
+env:
+  TARGET_ENVIRONMENT: dev
+  CORRELATION_ID: governed-dev-automerge-${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  governed-dev-policy:
+    name: Governed Dev Policy
+    runs-on: ubuntu-latest
+    outputs:
+      approved: ${{ steps.policy.outputs.approved }}
+      risk_level: ${{ steps.policy.outputs.risk_level }}
+      blocked_reason: ${{ steps.policy.outputs.blocked_reason }}
+      head_ref: ${{ steps.pr.outputs.head_ref }}
+      base_ref: ${{ steps.pr.outputs.base_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Capturar metadados do PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.inputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts/governed-dev-automerge
+
+          gh pr view "$PR_NUMBER" \
+            --json number,title,state,isDraft,baseRefName,headRefName,mergeable,reviewDecision,author,changedFiles,additions,deletions,url \
+            > artifacts/governed-dev-automerge/pr.json
+
+          cat artifacts/governed-dev-automerge/pr.json
+
+          BASE_REF="$(jq -r '.baseRefName' artifacts/governed-dev-automerge/pr.json)"
+          HEAD_REF="$(jq -r '.headRefName' artifacts/governed-dev-automerge/pr.json)"
+
+          echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Coletar arquivos alterados
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.inputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          gh pr diff "$PR_NUMBER" --name-only | tee artifacts/governed-dev-automerge/changed-files.txt
+
+      - name: Avaliar política de risco para dev
+        id: policy
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          REQUIRE_MANUAL_APPROVAL: ${{ github.event.inputs.require_manual_approval }}
+        run: |
+          set -euo pipefail
+
+          PR_STATE="$(jq -r '.state' artifacts/governed-dev-automerge/pr.json)"
+          IS_DRAFT="$(jq -r '.isDraft' artifacts/governed-dev-automerge/pr.json)"
+          BASE_REF="$(jq -r '.baseRefName' artifacts/governed-dev-automerge/pr.json)"
+          MERGEABLE="$(jq -r '.mergeable' artifacts/governed-dev-automerge/pr.json)"
+          REVIEW_DECISION="$(jq -r '.reviewDecision // "UNKNOWN"' artifacts/governed-dev-automerge/pr.json)"
+          CHANGED_FILES="$(jq -r '.changedFiles' artifacts/governed-dev-automerge/pr.json)"
+          ADDITIONS="$(jq -r '.additions' artifacts/governed-dev-automerge/pr.json)"
+          DELETIONS="$(jq -r '.deletions' artifacts/governed-dev-automerge/pr.json)"
+
+          BLOCKED_REASON=""
+          RISK_LEVEL="low"
+
+          if [ "$PR_STATE" != "OPEN" ]; then
+            BLOCKED_REASON="PR não está aberto"
+          fi
+
+          if [ "$IS_DRAFT" = "true" ]; then
+            BLOCKED_REASON="PR está em draft"
+          fi
+
+          if [ "$BASE_REF" != "dev" ]; then
+            BLOCKED_REASON="baseRefName precisa ser dev para auto-merge governado de desenvolvimento"
+          fi
+
+          if [ "$MERGEABLE" != "MERGEABLE" ] && [ "$MERGEABLE" != "true" ]; then
+            BLOCKED_REASON="PR não está mergeável"
+          fi
+
+          if [ "$REQUIRE_MANUAL_APPROVAL" = "true" ] && [ "$REVIEW_DECISION" != "APPROVED" ]; then
+            BLOCKED_REASON="aprovação humana obrigatória ausente"
+          fi
+
+          if [ "$CHANGED_FILES" -gt 20 ] || [ "$ADDITIONS" -gt 800 ] || [ "$DELETIONS" -gt 800 ]; then
+            RISK_LEVEL="medium"
+          fi
+
+          BLOCK_PATTERNS='(^|/)(auth|security|secrets|vault|cofre|jwt|cors|deploy|fly|terraform|infra|migrations|database|db|production|prod|homolog|environments?)/|(^|/)docker-compose\.prod\.ya?ml$|(^|/)\.github/workflows/(release|deploy|production|prod|fly).*\.ya?ml$|(^|/)SECURITY|(^|/)\.env|(^|/)package-lock\.json$'
+
+          if grep -Eiq "$BLOCK_PATTERNS" artifacts/governed-dev-automerge/changed-files.txt; then
+            RISK_LEVEL="high"
+            BLOCKED_REASON="alterações em área bloqueada para auto-merge em dev"
+          fi
+
+          if grep -Eiq '(^|/)(main|prod|production|homolog|release)' artifacts/governed-dev-automerge/changed-files.txt; then
+            RISK_LEVEL="high"
+            BLOCKED_REASON="alteração indica escopo de homologação/produção/release"
+          fi
+
+          APPROVED="false"
+          if [ -z "$BLOCKED_REASON" ] && [ "$RISK_LEVEL" = "low" ]; then
+            APPROVED="true"
+          fi
+
+          {
+            echo "correlation_id=$CORRELATION_ID"
+            echo "target_environment=$TARGET_ENVIRONMENT"
+            echo "approved=$APPROVED"
+            echo "risk_level=$RISK_LEVEL"
+            echo "blocked_reason=$BLOCKED_REASON"
+            echo "dry_run=$DRY_RUN"
+            echo "require_manual_approval=$REQUIRE_MANUAL_APPROVAL"
+            echo "base_ref=$BASE_REF"
+            echo "mergeable=$MERGEABLE"
+            echo "review_decision=$REVIEW_DECISION"
+            echo "changed_files=$CHANGED_FILES"
+            echo "additions=$ADDITIONS"
+            echo "deletions=$DELETIONS"
+          } | tee artifacts/governed-dev-automerge/policy.env
+
+          jq -n \
+            --arg correlation_id "$CORRELATION_ID" \
+            --arg target_environment "$TARGET_ENVIRONMENT" \
+            --arg approved "$APPROVED" \
+            --arg risk_level "$RISK_LEVEL" \
+            --arg blocked_reason "$BLOCKED_REASON" \
+            --arg dry_run "$DRY_RUN" \
+            --arg require_manual_approval "$REQUIRE_MANUAL_APPROVAL" \
+            '{correlation_id:$correlation_id,target_environment:$target_environment,approved:$approved,risk_level:$risk_level,blocked_reason:$blocked_reason,dry_run:$dry_run,require_manual_approval:$require_manual_approval}' \
+            > artifacts/governed-dev-automerge/policy.json
+
+          echo "approved=$APPROVED" >> "$GITHUB_OUTPUT"
+          echo "risk_level=$RISK_LEVEL" >> "$GITHUB_OUTPUT"
+          echo "blocked_reason=$BLOCKED_REASON" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar evidência de política
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-dev-automerge-evidence
+          path: artifacts/governed-dev-automerge/
+          if-no-files-found: error
+
+  guarded-merge-dev:
+    name: Guarded Merge to Dev
+    runs-on: ubuntu-latest
+    needs: governed-dev-policy
+    if: needs.governed-dev-policy.outputs.approved == 'true' && github.event.inputs.dry_run == 'false'
+    environment: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Merge governado em dev
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.inputs.pr_number }}
+          CORRELATION_ID: ${{ env.CORRELATION_ID }}
+        run: |
+          set -euo pipefail
+
+          gh pr merge "$PR_NUMBER" \
+            --squash \
+            --delete-branch \
+            --subject "chore(dev): merge governado PR #$PR_NUMBER" \
+            --body "Merge governado para dev. Correlation ID: $CORRELATION_ID"
+
+  blocked-or-dry-run-summary:
+    name: Summary
+    runs-on: ubuntu-latest
+    needs: governed-dev-policy
+    if: always()
+    steps:
+      - name: Resumo operacional
+        run: |
+          set -euo pipefail
+          {
+            echo "## Governed Dev Auto Merge"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|---|---|"
+            echo "| Correlation ID | $CORRELATION_ID |"
+            echo "| Ambiente alvo | $TARGET_ENVIRONMENT |"
+            echo "| PR | #${{ github.event.inputs.pr_number }} |"
+            echo "| Dry run | ${{ github.event.inputs.dry_run }} |"
+            echo "| Aprovado pela política | ${{ needs.governed-dev-policy.outputs.approved }} |"
+            echo "| Risco | ${{ needs.governed-dev-policy.outputs.risk_level }} |"
+            echo "| Bloqueio | ${{ needs.governed-dev-policy.outputs.blocked_reason }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ needs.governed-dev-policy.outputs.approved }}" != "true" ]; then
+            echo "Policy blocked governed dev auto-merge: ${{ needs.governed-dev-policy.outputs.blocked_reason }}"
+          fi
