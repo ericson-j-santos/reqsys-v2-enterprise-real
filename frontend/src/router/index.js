@@ -17,6 +17,7 @@ import HubLowCodeView from '../views/HubLowCodeView.vue'
 import GovBIView from '../views/GovBIView.vue'
 import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
 import MonitoramentoOperacionalView from '../views/MonitoramentoOperacionalView.vue'
+import RuntimeCenterView from '../views/RuntimeCenterView.vue'
 import FigmaGithubView from '../views/FigmaGithubView.vue'
 import { useAuthStore } from '../stores/auth'
 
@@ -39,6 +40,7 @@ const routes = [
   { path: '/arquitetura', component: ArquiteturaView, meta: { recurso: 'dashboard:read' } },
   { path: '/governanca', component: GovernancaEnterpriseView, meta: { recurso: 'dashboard:read' } },
   { path: '/monitoramento-operacional', component: MonitoramentoOperacionalView, meta: { recurso: 'dashboard:read' } },
+  { path: '/runtime-center', component: RuntimeCenterView, meta: { recurso: 'dashboard:read' } },
   { path: '/govbi-ia',    component: GovBIView,       meta: { recurso: 'dashboard:read' } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })
