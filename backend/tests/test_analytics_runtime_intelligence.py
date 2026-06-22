@@ -14,6 +14,11 @@ def test_analytics_runtime_intelligence_snapshot(client):
     assert 0 <= data['health_score'] <= 100
     assert 0 <= data['confidence_score'] <= 100
     assert len(data['validacoes']) == 10
+    assert data['draft_recomendado'] is True
+    assert data['production_ready'] is False
+    assert len(data['readiness_matrix']) >= 10
+    assert len(data['production_gaps']) >= 7
+    assert len(data['runtime_timeline']) >= 6
 
     codigos = {item['codigo'] for item in data['validacoes']}
     assert 'JOIN_CARDINALITY' in codigos
@@ -38,3 +43,15 @@ def test_ari_snapshot_tem_guard_rails_e_figma_pendente_com_evidencia_real():
     assert snapshot['figma']['status'] == 'aguardando_plano_figma'
     assert len(snapshot['guard_rails']) >= 6
     assert {'regra': 'IA sem fonte ou sem grounding', 'acao': 'BLOCK'} in snapshot['guard_rails']
+
+
+def test_ari_readiness_layer_explica_gaps_e_bloqueios_operacionais():
+    snapshot = _snapshot_ari()
+    bloqueios = [item for item in snapshot['readiness_matrix'] if item['bloqueia_producao']]
+    estados = {item['estado'] for item in snapshot['readiness_matrix']}
+
+    assert bloqueios
+    assert 'BLOQUEIO' in estados
+    assert 'EVIDENCIA AUSENTE' in estados
+    assert 'Validar ARI Center em staging publicado.' in snapshot['production_gaps']
+    assert snapshot['runtime_timeline'][-1]['estado'] == 'PENDENTE'
