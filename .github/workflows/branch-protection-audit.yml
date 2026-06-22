@@ -1,0 +1,108 @@
+name: Branch Protection Audit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+  schedule:
+    - cron: "30 8 * * *"
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  statuses: read
+  checks: read
+
+concurrency:
+  group: branch-protection-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TARGET_BRANCH: main
+  REPORT_DIR: ci-reports/branch-protection
+
+jobs:
+  audit:
+    name: Auditar proteção enterprise da branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar baseline versionável
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$REPORT_DIR"
+
+          STATUS="OK"
+          FAILURES=""
+
+          require_file() {
+            local path="$1"
+            local description="$2"
+            if [ ! -f "$path" ]; then
+              STATUS="FAIL"
+              FAILURES="$FAILURES\n- Ausente: $description ($path)"
+            fi
+          }
+
+          require_contains() {
+            local path="$1"
+            local pattern="$2"
+            local description="$3"
+            if ! grep -Eq "$pattern" "$path"; then
+              STATUS="FAIL"
+              FAILURES="$FAILURES\n- Incompleto: $description ($path)"
+            fi
+          }
+
+          require_file ".github/CODEOWNERS" "CODEOWNERS enterprise"
+          require_file "docs/governance/branch-protection-enterprise-baseline.md" "documentação canônica de branch protection"
+
+          if [ -f ".github/CODEOWNERS" ]; then
+            require_contains ".github/CODEOWNERS" "@ericson-j-santos" "owner técnico definido"
+            require_contains ".github/CODEOWNERS" "^/.github/workflows/" "ownership de workflows"
+          fi
+
+          if [ -f "docs/governance/branch-protection-enterprise-baseline.md" ]; then
+            require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Require status checks" "checks obrigatórios documentados"
+            require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Block force pushes" "bloqueio de force push documentado"
+            require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Squash merge" "política de squash merge documentada"
+          fi
+
+          cat > "$REPORT_DIR/branch-protection-baseline.md" <<EOF
+          # Branch Protection Audit
+
+          | Item | Resultado |
+          |---|---|
+          | Branch alvo | \`$TARGET_BRANCH\` |
+          | Baseline versionável | \`$STATUS\` |
+          | CODEOWNERS | \`$(test -f .github/CODEOWNERS && echo presente || echo ausente)\` |
+          | Documento canônico | \`$(test -f docs/governance/branch-protection-enterprise-baseline.md && echo presente || echo ausente)\` |
+
+          ## Falhas
+
+          $(if [ -n "$FAILURES" ]; then printf "%b\n" "$FAILURES"; else echo "Nenhuma falha versionável detectada."; fi)
+
+          ## Observação
+
+          A confirmação efetiva de ruleset/branch protection depende das permissões administrativas do token/usuário no GitHub.
+          EOF
+
+          cat "$REPORT_DIR/branch-protection-baseline.md" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$STATUS" != "OK" ]; then
+            exit 1
+          fi
+
+      - name: Publicar evidência de auditoria
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: branch-protection-audit
+          path: ci-reports/branch-protection/
+          if-no-files-found: error
+          retention-days: 30
