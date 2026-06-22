@@ -1,6 +1,13 @@
+import hmac
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
 
+from app.core.cofre_verificador_cego import (
+    CHAVE_OPERACIONAL_VERIFICADOR,
+    VerificadorCegoIndisponivel,
+    verificar_valor_cego,
+)
 from app.core.config import settings
 from app.core.envelope import ok
 from app.core.secrets import (
@@ -15,14 +22,16 @@ from app.core.security import require_admin
 
 router = APIRouter(prefix='/v1/cofre', tags=['Cofre'])
 
-_BLOCKED_KEYS = {'__master_key__'}
+_BLOCKED_KEYS = {'__master_key__', CHAVE_OPERACIONAL_VERIFICADOR}
 
 
 def _check_vault_token(x_vault_token: str | None = Header(default=None)) -> None:
-    """Autenticação service-to-service via header X-Vault-Token."""
+    """Autenticacao service-to-service via header X-Vault-Token."""
     if not settings.vault_api_token:
         raise HTTPException(status_code=503, detail='VAULT_API_TOKEN não configurado no servidor')
-    if not x_vault_token or x_vault_token != settings.vault_api_token:
+    if not x_vault_token:
+        raise HTTPException(status_code=401, detail='Vault token inválido ou ausente')
+    if not hmac.compare_digest(x_vault_token.encode('utf-8'), settings.vault_api_token.encode('utf-8')):
         raise HTTPException(status_code=401, detail='Vault token inválido ou ausente')
 
 
@@ -49,6 +58,27 @@ class GravarSegredoPayload(BaseModel):
 
 class ResolverSegredoPayload(BaseModel):
     key: str
+
+
+class VerificarSegredoPayload(BaseModel):
+    key: str
+    value: str
+
+    @field_validator('key')
+    @classmethod
+    def key_nao_reservada(cls, v: str) -> str:
+        if v.strip() in _BLOCKED_KEYS:
+            raise ValueError('Chave reservada não permitida')
+        if not v.strip():
+            raise ValueError('Chave não pode ser vazia')
+        return v.strip()
+
+    @field_validator('value')
+    @classmethod
+    def value_nao_vazio(cls, v: str) -> str:
+        if not v:
+            raise ValueError('Valor não pode ser vazio')
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -128,3 +158,24 @@ def resolver_segredo(payload: ResolverSegredoPayload):
     if value is None:
         raise HTTPException(status_code=404, detail=f'Segredo "{payload.key}" não encontrado no cofre')
     return ok({'key': payload.key, 'value': value})
+
+
+@router.post('/verificar', dependencies=[Depends(_check_vault_token)])
+def verificar_segredo(payload: VerificarSegredoPayload):
+    """
+    Verifica igualdade contra um segredo do cofre sem retornar o segredo bruto.
+    Retorna apenas match True/False e metadados seguros de verificacao.
+    """
+    value = read_secret_from_vault(payload.key)
+    if value is None:
+        raise HTTPException(status_code=404, detail=f'Segredo "{payload.key}" não encontrado no cofre')
+    try:
+        result = verificar_valor_cego(payload.key, value, payload.value)
+    except VerificadorCegoIndisponivel as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return ok({
+        'key': result.key,
+        'match': result.match,
+        'verifier_version': result.verifier_version,
+        'value_exposed': result.value_exposed,
+    })
