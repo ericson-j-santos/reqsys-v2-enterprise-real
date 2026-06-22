@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys/GovBI · Analytics Runtime Intelligence</title>
+  <style>
+    :root { --bg:#0b1020; --panel:#111827; --card:#172033; --text:#f8fafc; --muted:#cbd5e1; --gold:#f6c445; --purple:#8b5cf6; --green:#22c55e; --red:#ef4444; --blue:#38bdf8; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: Arial, Helvetica, sans-serif; background: radial-gradient(circle at top right, rgba(139,92,246,.25), transparent 28%), var(--bg); color:var(--text); line-height:1.55; }
+    main { width:min(1180px, calc(100% - 32px)); margin:0 auto; padding:32px 0; display:grid; gap:20px; }
+    .hero, .panel, .card { border:1px solid rgba(255,255,255,.12); border-radius:22px; background:rgba(17,24,39,.86); box-shadow:0 22px 70px rgba(0,0,0,.22); }
+    .hero { padding:32px; display:grid; gap:18px; }
+    .eyebrow { color:var(--gold); font-weight:800; letter-spacing:.08em; text-transform:uppercase; font-size:.8rem; }
+    h1 { margin:0; font-size:clamp(2.1rem, 5vw, 4.5rem); line-height:1; letter-spacing:-.055em; }
+    h2 { margin:0 0 10px; letter-spacing:-.025em; }
+    p { margin:0; color:var(--muted); }
+    .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); }
+    .card, .panel { padding:20px; }
+    .score { font-size:2.4rem; font-weight:900; letter-spacing:-.05em; display:block; margin-top:8px; }
+    .ok { color:var(--green); } .warn { color:var(--gold); } .block { color:var(--red); } .info { color:var(--blue); }
+    table { width:100%; border-collapse:collapse; overflow:hidden; border-radius:14px; }
+    th, td { border-bottom:1px solid rgba(255,255,255,.10); text-align:left; padding:12px; vertical-align:top; }
+    th { color:#e2e8f0; background:rgba(255,255,255,.06); }
+    .flow { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+    .flow span { border:1px solid rgba(255,255,255,.14); border-radius:999px; padding:10px 14px; background:rgba(255,255,255,.06); font-weight:800; }
+    .badge { border-radius:999px; padding:4px 10px; font-weight:800; font-size:.8rem; background:rgba(139,92,246,.20); color:#ddd6fe; }
+    @media print { body { background:#fff; color:#111827; } .hero,.panel,.card { background:#fff; color:#111827; box-shadow:none; border-color:#ddd; } p { color:#334155; } }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div class="eyebrow">ReqSys/GovBI · Capability transversal</div>
+      <h1>Analytics Runtime Intelligence</h1>
+      <p>Implementação inicial da evolução para plataforma enterprise de inteligência operacional auditável, com analytics confiável, IA governada, runtime observável, validação automática, explainability, confiança mensurável, operação autônoma, governança contínua, arquitetura viva e qualidade operacional contínua.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card"><span>Health Score</span><strong class="score ok">91%</strong><p>Saúde operacional consolidada.</p></article>
+      <article class="card"><span>Confidence</span><strong class="score info">92%</strong><p>Confiança analítica mensurável.</p></article>
+      <article class="card"><span>IA Governance</span><strong class="score warn">89%</strong><p>Governança de IA com grounding.</p></article>
+      <article class="card"><span>Operational Quality</span><strong class="score ok">91%</strong><p>Qualidade contínua.</p></article>
+    </section>
+
+    <section class="panel">
+      <h2>Fluxo end to end</h2>
+      <div class="flow"><span>Dados</span>→<span>Validation Engine</span>→<span>Confidence Engine</span>→<span>AI Governance</span>→<span>Operations Center</span>→<span>Figma/GitHub</span></div>
+    </section>
+
+    <section class="panel">
+      <h2>10 validações operacionalizadas</h2>
+      <table>
+        <thead><tr><th>#</th><th>Validação</th><th>Categoria</th><th>Uso</th><th>Ação runtime</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Comparar totais antes/depois</td><td>Volume</td><td>COUNT(*)</td><td><span class="badge">checkpoint</span></td></tr>
+          <tr><td>2</td><td>Validar valores extremos</td><td>Estatística</td><td>MIN(), MAX()</td><td><span class="badge">anomalia</span></td></tr>
+          <tr><td>3</td><td>Conferir médias inesperadas</td><td>Estatística</td><td>AVG()</td><td><span class="badge">drift</span></td></tr>
+          <tr><td>4</td><td>Testar filtros separadamente</td><td>Query Intelligence</td><td>WHERE incremental</td><td><span class="badge">isolamento</span></td></tr>
+          <tr><td>5</td><td>Validar JOINs utilizados</td><td>Relacionamento</td><td>contagem incremental</td><td><span class="badge">FAIL se explosão</span></td></tr>
+          <tr><td>6</td><td>Procurar nulos indevidos</td><td>Data Quality</td><td>IS NULL</td><td><span class="badge">FAIL crítico</span></td></tr>
+          <tr><td>7</td><td>Comparar com outra fonte</td><td>Reconciliação</td><td>query equivalente</td><td><span class="badge">cross-source</span></td></tr>
+          <tr><td>8</td><td>Revisar agregações</td><td>Granularidade</td><td>GROUP BY</td><td><span class="badge">granularidade</span></td></tr>
+          <tr><td>9</td><td>Analisar amostras manuais</td><td>Evidência</td><td>LIMIT/TOP</td><td><span class="badge">golden sample</span></td></tr>
+          <tr><td>10</td><td>Revisar regra de negócio aplicada</td><td>Governança funcional</td><td>requisito/ADR/teste</td><td><span class="badge">rastreabilidade</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Retorno em tela e Figma</h2>
+      <p>A tela `/analytics-runtime-intelligence` exibe o snapshot operacional, scores, guard rails, validações, fluxo end to end e status do artefato Figma/GitHub. O desenho correspondente foi materializado em Figma como referência navegável do Enterprise Operations Center.</p>
+    </section>
+  </main>
+</body>
+</html>
