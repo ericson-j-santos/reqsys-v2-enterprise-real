@@ -49,7 +49,7 @@ jobs:
           MODE: ${{ steps.config.outputs.mode }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
 
           essential_workflows=(
             "ci.yml"
@@ -84,11 +84,22 @@ jobs:
           echo "| Workflow | Status |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---:|" >> "$GITHUB_STEP_SUMMARY"
 
+          failures=0
           for workflow in "${workflows[@]}"; do
-            if gh api "repos/$OWNER_REPO/actions/workflows/$workflow" --silent >/dev/null 2>&1; then
-              gh workflow run "$workflow" --repo "$OWNER_REPO" --ref "$TARGET_REF"
+            if ! gh api "repos/$OWNER_REPO/actions/workflows/$workflow" --silent >/dev/null 2>&1; then
+              echo "| $workflow | not_found |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
+            if gh workflow run "$workflow" --repo "$OWNER_REPO" --ref "$TARGET_REF"; then
               echo "| $workflow | dispatched |" >> "$GITHUB_STEP_SUMMARY"
             else
-              echo "| $workflow | not_found |" >> "$GITHUB_STEP_SUMMARY"
+              echo "| $workflow | dispatch_failed |" >> "$GITHUB_STEP_SUMMARY"
+              failures=$((failures + 1))
             fi
           done
+
+          if [[ "$failures" -gt 0 ]]; then
+            echo "Dispatcher concluiu com $failures falha(s) de disparo. Verifique se os workflows possuem workflow_dispatch habilitado." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
