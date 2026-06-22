@@ -10,7 +10,10 @@ Scanner preventivo para bloquear padrões incompatíveis com entrega enterprise:
 - connection strings expostas;
 - ausência de correlation_id em código operacional.
 
-O scanner evita diretórios gerados/dependências para reduzir falsos positivos.
+Diretriz de escopo v1:
+- bloquear apenas violações HIGH em artefatos operacionais/configuracionais;
+- tratar achados MEDIUM como warnings;
+- evitar varrer documentação Markdown para reduzir falso positivo em runbooks/ADRs.
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ IGNORED_DIRS = {
     "coverage",
     ".next",
     ".nuxt",
+    "docs",
 }
 
 TEXT_EXTENSIONS = {
@@ -54,7 +58,6 @@ TEXT_EXTENSIONS = {
     ".yml",
     ".yaml",
     ".json",
-    ".md",
     ".sh",
     ".env",
     ".properties",
@@ -69,9 +72,10 @@ ALLOWLIST_PATTERNS = [
     re.compile(r"placeholder", re.IGNORECASE),
     re.compile(r"dummy", re.IGNORECASE),
     re.compile(r"changeme", re.IGNORECASE),
-    re.compile(r"docs/governance/enterprise-runtime-governance-gates.md"),
     re.compile(r"scripts/governance/enterprise_runtime_governance_gates.py"),
 ]
+
+BLOCKING_SEVERITIES = {"HIGH"}
 
 @dataclass(frozen=True)
 class Finding:
@@ -203,9 +207,16 @@ def main() -> int:
 
     findings.extend(scan_correlation_id_presence(files))
 
-    if findings:
-        print("[FAIL] Enterprise Runtime Governance Gates encontraram violações:")
-        for finding in findings:
+    blocking = [finding for finding in findings if finding.severity in BLOCKING_SEVERITIES]
+    warnings = [finding for finding in findings if finding.severity not in BLOCKING_SEVERITIES]
+
+    for finding in warnings:
+        location = f"{finding.path}:{finding.line}" if finding.line else finding.path
+        print(f"[WARN] {finding.code} {location} — {finding.message}")
+
+    if blocking:
+        print("[FAIL] Enterprise Runtime Governance Gates encontraram violações bloqueantes:")
+        for finding in blocking:
             location = f"{finding.path}:{finding.line}" if finding.line else finding.path
             print(f"- [{finding.severity}] {finding.code} {location} — {finding.message}")
         return 1
