@@ -22,7 +22,8 @@ from app.core.security import require_admin
 
 router = APIRouter(prefix='/v1/cofre', tags=['Cofre'])
 
-_BLOCKED_KEYS = {'__master_key__', CHAVE_OPERACIONAL_VERIFICADOR}
+_MANAGEMENT_BLOCKED_KEYS = {'__master_key__'}
+_LOOKUP_BLOCKED_KEYS = {'__master_key__', CHAVE_OPERACIONAL_VERIFICADOR}
 
 
 def _check_vault_token(x_vault_token: str | None = Header(default=None)) -> None:
@@ -42,7 +43,7 @@ class GravarSegredoPayload(BaseModel):
     @field_validator('key')
     @classmethod
     def key_nao_reservada(cls, v: str) -> str:
-        if v.strip() in _BLOCKED_KEYS:
+        if v.strip() in _MANAGEMENT_BLOCKED_KEYS:
             raise ValueError('Chave reservada não permitida')
         if not v.strip():
             raise ValueError('Chave não pode ser vazia')
@@ -67,7 +68,7 @@ class VerificarSegredoPayload(BaseModel):
     @field_validator('key')
     @classmethod
     def key_nao_reservada(cls, v: str) -> str:
-        if v.strip() in _BLOCKED_KEYS:
+        if v.strip() in _LOOKUP_BLOCKED_KEYS:
             raise ValueError('Chave reservada não permitida')
         if not v.strip():
             raise ValueError('Chave não pode ser vazia')
@@ -121,7 +122,7 @@ def gravar_segredo(payload: GravarSegredoPayload):
 @router.delete('/segredos/{key}', dependencies=[Depends(require_admin)])
 def remover_segredo(key: str):
     """Remove um segredo do cofre."""
-    if key in _BLOCKED_KEYS:
+    if key in _LOOKUP_BLOCKED_KEYS:
         raise HTTPException(status_code=400, detail='Chave reservada não pode ser removida por esta rota')
     removido = delete_secret_from_vault(key)
     return ok({'key': key, 'removido': removido})
@@ -138,7 +139,7 @@ def obter_segredo(key: str):
     Ideal para scripts e aplicações: GET /v1/cofre/segredos/MINHA_CHAVE
     Autenticação via header: X-Vault-Token: <VAULT_API_TOKEN>
     """
-    if key in _BLOCKED_KEYS:
+    if key in _LOOKUP_BLOCKED_KEYS:
         raise HTTPException(status_code=400, detail='Chave reservada')
     value = read_secret_from_vault(key)
     if value is None:
@@ -152,7 +153,7 @@ def resolver_segredo(payload: ResolverSegredoPayload):
     Retorna o valor de um segredo via POST (alias de GET /segredos/{key}).
     Autenticação via header: X-Vault-Token: <VAULT_API_TOKEN>
     """
-    if payload.key in _BLOCKED_KEYS:
+    if payload.key in _LOOKUP_BLOCKED_KEYS:
         raise HTTPException(status_code=400, detail='Chave reservada')
     value = read_secret_from_vault(payload.key)
     if value is None:
