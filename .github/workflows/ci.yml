@@ -16,13 +16,33 @@ on:
       - ".github/workflows/codex-local-online.yml"
       - ".github/workflows/ci.yml"
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
-  # ──────────────────────────────────────────────
-  # JOB 1: Backend — Lint + Segurança de dependências
-  # ──────────────────────────────────────────────
+  changes:
+    name: Detectar escopo alterado
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
   backend-lint:
     name: Backend Lint & Security (ruff + pip-audit + bandit)
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
 
     defaults:
       run:
@@ -60,12 +80,11 @@ jobs:
       - name: Segurança código — bandit
         run: bandit -r app/ -ll -x app/tests
 
-  # ──────────────────────────────────────────────
-  # JOB 2: Backend — Testes com cobertura
-  # ──────────────────────────────────────────────
   backend-test:
     name: Backend Tests + Coverage (pytest)
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
 
     defaults:
       run:
@@ -130,12 +149,11 @@ jobs:
           path: /tmp/backend-pytest.log
           if-no-files-found: ignore
 
-  # ──────────────────────────────────────────────
-  # JOB 3: Frontend — Build + Audit de dependências
-  # ──────────────────────────────────────────────
   frontend-build:
     name: Frontend Build + Security Audit (Vite + npm audit)
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
 
     defaults:
       run:
@@ -162,13 +180,11 @@ jobs:
           VITE_API_URL: /api
         run: npm run build
 
-  # ──────────────────────────────────────────────
-  # JOB 4: Frontend — Responsividade E2E
-  # ──────────────────────────────────────────────
   frontend-e2e-responsive:
     name: Frontend Responsive E2E (Playwright)
     runs-on: ubuntu-latest
-    needs: frontend-build
+    needs: [changes, frontend-build]
+    if: needs.changes.outputs.frontend == 'true'
 
     defaults:
       run:
