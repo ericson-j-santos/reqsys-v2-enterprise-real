@@ -17,6 +17,7 @@ from app.api import (
     hub_lowcode,
     ia,
     monitoramento_operacional,
+    operational_intelligence,
     pipeline,
     processos,
     qualidade_ia,
@@ -78,6 +79,7 @@ app.include_router(rastreabilidade.router)
 app.include_router(hub_lowcode.router)
 app.include_router(agents.router)
 app.include_router(monitoramento_operacional.router)
+app.include_router(operational_intelligence.router)
 
 
 @app.middleware('http')
