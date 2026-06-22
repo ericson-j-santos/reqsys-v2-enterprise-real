@@ -54,14 +54,14 @@ jobs:
           essential_workflows=(
             "ci.yml"
             "governance-quality-gates.yml"
-            "gold-standard-governance.yml"
+            "governanca-padrao-ouro.yml"
             "codex-local-online.yml"
           )
 
           all_workflows=(
             "ci.yml"
             "governance-quality-gates.yml"
-            "gold-standard-governance.yml"
+            "governanca-padrao-ouro.yml"
             "codex-local-online.yml"
             "nginx-security.yml"
             "validar-painel-ciclo.yml"
