@@ -19,13 +19,31 @@ jobs:
 
       - name: Validate governance structure
         run: |
+          set -euo pipefail
+
+          echo "[INFO] Validando estrutura de governança..."
+
           test -f docs/ai-governance/00_PRIORITY_RULES.md
           test -f docs/ai-governance/INDEX.md
           test -f docs/ai-governance/06-DEVOPS/QUALITY_GATES.md
           test -f docs/ai-governance/09-CHECKLISTS/PR_CHECKLIST.md
+          test -f docs/ai-governance/02-SEGURANCA/SECURITY_BASELINE.md
+
+          echo "[OK] Estrutura de governança validada com sucesso."
 
       - name: Validate governance content
         run: |
-          grep -q "P0" docs/ai-governance/00_PRIORITY_RULES.md
-          grep -q "CI" docs/ai-governance/06-DEVOPS/QUALITY_GATES.md
-          grep -q "LGPD" docs/ai-governance/02-SEGURANCA/SECURITY_BASELINE.md
+          set -euo pipefail
+
+          echo "[INFO] Validando conteúdo de governança..."
+
+          echo "[CHECK] PRIORITY_RULES contém P0"
+          grep -qi "P0" docs/ai-governance/00_PRIORITY_RULES.md
+
+          echo "[CHECK] QUALITY_GATES contém CI"
+          grep -qi "CI" docs/ai-governance/06-DEVOPS/QUALITY_GATES.md
+
+          echo "[CHECK] SECURITY_BASELINE contém LGPD"
+          grep -qi "LGPD" docs/ai-governance/02-SEGURANCA/SECURITY_BASELINE.md
+
+          echo "[OK] Conteúdo de governança validado com sucesso."
