@@ -10,6 +10,7 @@ Codigo: AI-GOV-SEC-001
 - Restringir origens de acesso conforme ambiente.
 - Aplicar menor privilegio.
 - Exigir correlation_id em auditoria.
+- Atender aos controles de privacidade, minimizacao e rastreabilidade exigidos pela LGPD.
 - Separar configuracoes por ambiente.
 
 ## Bloqueios
