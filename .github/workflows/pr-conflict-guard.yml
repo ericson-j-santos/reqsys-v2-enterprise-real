@@ -1,0 +1,61 @@
+name: PR Conflict Guard
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  # Necessario para fazer checkout do codigo do PR.
+  contents: read
+  # Necessario para ler metadados do pull request.
+  pull-requests: read
+
+jobs:
+  conflict-guard:
+    name: Detectar conflito antes do merge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout head do PR
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Buscar base atualizada
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          case "${BASE_REF}" in
+            ''|*[!A-Za-z0-9._/-]*)
+              echo "ERRO: base ref invalida."
+              exit 1
+              ;;
+          esac
+          git fetch origin "${BASE_REF}" --depth=1
+
+      - name: Validar merge limpo com a base
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          case "${BASE_REF}" in
+            ''|*[!A-Za-z0-9._/-]*)
+              echo "ERRO: base ref invalida."
+              exit 1
+              ;;
+          esac
+          git config user.name "reqsys-conflict-guard"
+          git config user.email "actions@users.noreply.github.com"
+          if git merge --no-commit --no-ff "origin/${BASE_REF}"; then
+            echo "OK: PR sem conflitos contra ${BASE_REF}."
+            git merge --abort || true
+          else
+            echo "ERRO: PR possui conflitos contra ${BASE_REF}. Atualize o branch antes do merge."
+            git status --short
+            exit 1
+          fi
