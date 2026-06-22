@@ -1,0 +1,52 @@
+name: Operational Sync Engine
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: '0 11,15,21 * * 1-5'
+
+permissions:
+  contents: read
+
+jobs:
+  operational-sync:
+    name: Gerar snapshot operacional auditavel
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Executar Operational Sync Engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/operational-sync/operational_sync_engine.py --output artifacts/operational-sync-snapshot.json
+
+      - name: Validar snapshot gerado
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/operational-sync-snapshot.json
+          grep -q "Operational Sync Engine v1" artifacts/operational-sync-snapshot.json
+          grep -q "correlation_id" artifacts/operational-sync-snapshot.json
+          grep -q "html_autocontido_obrigatorio" artifacts/operational-sync-snapshot.json
+          grep -q "figma_retorno_visual_obrigatorio_quando_disponivel" artifacts/operational-sync-snapshot.json
+
+      - name: Publicar snapshot operacional
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-sync-snapshot
+          path: artifacts/operational-sync-snapshot.json
+          if-no-files-found: error
