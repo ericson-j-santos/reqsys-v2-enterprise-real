@@ -1,0 +1,61 @@
+name: Codex Local Online
+
+on:
+  pull_request:
+    paths:
+      - 'tools/codex-local-online/**'
+      - 'docs/adrs/ADR-022-codex-local-online-integrado-reqsys.md'
+      - 'docs/runbooks/codex-local-online.md'
+      - '.github/workflows/codex-local-online.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'tools/codex-local-online/**'
+      - 'docs/adrs/ADR-022-codex-local-online-integrado-reqsys.md'
+      - 'docs/runbooks/codex-local-online.md'
+      - '.github/workflows/codex-local-online.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: codex-local-online-pages
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validar app online
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validar artefato estatico
+        run: python tools/codex-local-online/validate.py
+      - name: Evidencia operacional
+        run: |
+          echo "## Codex Local Online" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Validacao estatica: OK" >> "$GITHUB_STEP_SUMMARY"
+          echo "- App: tools/codex-local-online/index.html" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Publicacao: GitHub Pages apos merge na main ou workflow_dispatch" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Publicar GitHub Pages
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: tools/codex-local-online
+      - id: deployment
+        uses: actions/deploy-pages@v4

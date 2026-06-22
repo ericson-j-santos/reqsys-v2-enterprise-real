@@ -6,13 +6,126 @@ on:
   pull_request:
     branches: [main, master, develop]
 
+permissions:
+  contents: read
+
 jobs:
+  # ──────────────────────────────────────────────
+  # JOB 0: CI Router — decide quais suites precisam rodar
+  # ──────────────────────────────────────────────
+  ci-router:
+    name: CI Router (paths + Pareto)
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.detect.outputs.backend }}
+      frontend: ${{ steps.detect.outputs.frontend }}
+      docs: ${{ steps.detect.outputs.docs }}
+      codex_static: ${{ steps.detect.outputs.codex_static }}
+      workflows: ${{ steps.detect.outputs.workflows }}
+      full_ci: ${{ steps.detect.outputs.full_ci }}
+      changed_files: ${{ steps.detect.outputs.changed_files }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detectar arquivos alterados
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+            if [[ "$BASE_SHA" =~ ^0+$ ]]; then
+              BASE_SHA="$(git rev-parse HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)"
+            fi
+          fi
+
+          git fetch --no-tags --depth=200 origin || true
+          CHANGED_FILES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" || git diff --name-only HEAD^)"
+          echo "$CHANGED_FILES" > /tmp/changed-files.txt
+
+          backend=false
+          frontend=false
+          docs=false
+          codex_static=false
+          workflows=false
+          full_ci=false
+
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            case "$file" in
+              backend/*)
+                backend=true
+                ;;
+              frontend/*)
+                frontend=true
+                ;;
+              docs/*|*.md|README.md|CHANGELOG.md)
+                docs=true
+                ;;
+              tools/codex-local-online/*)
+                codex_static=true
+                ;;
+              .github/workflows/*)
+                workflows=true
+                ;;
+              *)
+                full_ci=true
+                ;;
+            esac
+          done < /tmp/changed-files.txt
+
+          if [[ "$workflows" == "true" ]]; then
+            full_ci=true
+          fi
+
+          {
+            echo "backend=$backend"
+            echo "frontend=$frontend"
+            echo "docs=$docs"
+            echo "codex_static=$codex_static"
+            echo "workflows=$workflows"
+            echo "full_ci=$full_ci"
+            echo "changed_files<<EOF"
+            cat /tmp/changed-files.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Resumo visual do roteamento
+        shell: bash
+        run: |
+          {
+            echo "## CI Router — ReqSys v2 Enterprise"
+            echo ""
+            echo "| Área | Rodar? |"
+            echo "|---|---:|"
+            echo "| Backend | ${{ steps.detect.outputs.backend }} |"
+            echo "| Frontend | ${{ steps.detect.outputs.frontend }} |"
+            echo "| Docs | ${{ steps.detect.outputs.docs }} |"
+            echo "| Codex estático | ${{ steps.detect.outputs.codex_static }} |"
+            echo "| Workflows | ${{ steps.detect.outputs.workflows }} |"
+            echo "| CI completo | ${{ steps.detect.outputs.full_ci }} |"
+            echo ""
+            echo "### Arquivos alterados"
+            echo '```text'
+            cat /tmp/changed-files.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # ──────────────────────────────────────────────
   # JOB 1: Backend — Lint + Segurança de dependências
   # ──────────────────────────────────────────────
   backend-lint:
     name: Backend Lint & Security (ruff + pip-audit + bandit)
     runs-on: ubuntu-latest
+    needs: ci-router
+    if: needs.ci-router.outputs.backend == 'true' || needs.ci-router.outputs.full_ci == 'true'
 
     defaults:
       run:
@@ -56,6 +169,8 @@ jobs:
   backend-test:
     name: Backend Tests + Coverage (pytest)
     runs-on: ubuntu-latest
+    needs: ci-router
+    if: needs.ci-router.outputs.backend == 'true' || needs.ci-router.outputs.full_ci == 'true'
 
     defaults:
       run:
@@ -95,8 +210,11 @@ jobs:
           JWT_SECRET: ci-secret-key-for-testing-only-minimum-32-characters
           JWT_ISSUER: reqsys-ci
           JWT_AUDIENCE: reqsys-ci-tests
+          JWT_EXP_MINUTES: "60"
           ALLOW_DEMO_LOGIN: "true"
           APP_ENV: test
+          AZURE_TENANT_ID: 00000000-0000-0000-0000-000000000000
+          AZURE_CLIENT_ID: 11111111-1111-1111-1111-111111111111
           REDMINE_URL: https://placeholder.example.com
           REDMINE_API_KEY: placeholder
           ENABLE_GITHUB_REDMINE_IMPORT: "false"
@@ -104,9 +222,18 @@ jobs:
           GITHUB_WEBHOOK_SECRET: ""
           GITLAB_WEBHOOK_TOKEN: ""
         run: |
+          set -o pipefail
           python -m pytest tests/ -v --tb=short \
             --cov=app --cov-report=term-missing \
-            --cov-fail-under=60
+            --cov-fail-under=60 2>&1 | tee /tmp/backend-pytest.log
+
+      - name: Publicar log pytest backend
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-pytest-log
+          path: /tmp/backend-pytest.log
+          if-no-files-found: ignore
 
   # ──────────────────────────────────────────────
   # JOB 3: Frontend — Build + Audit de dependências
@@ -114,6 +241,8 @@ jobs:
   frontend-build:
     name: Frontend Build + Security Audit (Vite + npm audit)
     runs-on: ubuntu-latest
+    needs: ci-router
+    if: needs.ci-router.outputs.frontend == 'true' || needs.ci-router.outputs.full_ci == 'true'
 
     defaults:
       run:
@@ -146,7 +275,8 @@ jobs:
   frontend-e2e-responsive:
     name: Frontend Responsive E2E (Playwright)
     runs-on: ubuntu-latest
-    needs: frontend-build
+    needs: [ci-router, frontend-build]
+    if: always() && (needs.ci-router.outputs.frontend == 'true' || needs.ci-router.outputs.full_ci == 'true') && needs.frontend-build.result == 'success'
 
     defaults:
       run:
@@ -188,3 +318,39 @@ jobs:
         env:
           E2E_BASE_URL: http://127.0.0.1:5173
         run: npx playwright test tests/e2e/responsividade.spec.js
+
+  # ──────────────────────────────────────────────
+  # JOB 5: Resultado consolidado — gate estável
+  # ──────────────────────────────────────────────
+  ci-result:
+    name: CI Router Result
+    runs-on: ubuntu-latest
+    needs: [ci-router, backend-lint, backend-test, frontend-build, frontend-e2e-responsive]
+    if: always()
+    steps:
+      - name: Consolidar resultado
+        shell: bash
+        run: |
+          echo "## Resultado consolidado do CI Router" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job | Resultado |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---:|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| CI Router | ${{ needs.ci-router.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Backend Lint | ${{ needs.backend-lint.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Backend Tests | ${{ needs.backend-test.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Frontend Build | ${{ needs.frontend-build.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Frontend E2E | ${{ needs.frontend-e2e-responsive.result }} |" >> "$GITHUB_STEP_SUMMARY"
+
+          for result in \
+            "${{ needs.ci-router.result }}" \
+            "${{ needs.backend-lint.result }}" \
+            "${{ needs.backend-test.result }}" \
+            "${{ needs.frontend-build.result }}" \
+            "${{ needs.frontend-e2e-responsive.result }}"; do
+            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+              echo "CI Router Result: falha detectada em job obrigatório."
+              exit 1
+            fi
+          done
+
+          echo "CI Router Result: OK. Jobs não aplicáveis foram ignorados sem bloquear PR pequeno."
