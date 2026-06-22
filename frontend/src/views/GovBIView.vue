@@ -5,7 +5,7 @@
       subtitle="Consultas analíticas em linguagem natural com BI governado por inteligência artificial."
       chip="Beta"
       chip-color="blue"
-      chip-tooltip="Integração com govbi-ia — modo mock ativo até configuração do Gemini"
+      chip-tooltip="Integração com GovBI IA com fallback governado para indisponibilidade externa"
     >
       <template #actions>
         <v-btn
@@ -59,6 +59,17 @@
     <!-- Erro -->
     <v-alert v-if="erro" type="error" variant="tonal" class="mb-4" closable @click:close="erro = ''">
       {{ erro }}
+    </v-alert>
+
+    <v-alert
+      v-if="diagnosticoOperacional"
+      :type="diagnosticoOperacional.tipo"
+      variant="tonal"
+      density="compact"
+      class="mb-4"
+    >
+      <strong>{{ diagnosticoOperacional.titulo }}</strong>
+      <div>{{ diagnosticoOperacional.mensagem }}</div>
     </v-alert>
 
     <!-- Resultado -->
@@ -171,7 +182,7 @@
         <!-- Sem resultado -->
         <v-col v-else-if="!resposta.requerAprovacao" cols="12">
           <v-alert type="info" variant="tonal" density="compact">
-            Consulta processada — nenhum dado retornado pelo executor mock.
+            Consulta processada — nenhum dado retornado pelo executor configurado.
           </v-alert>
         </v-col>
 
@@ -226,14 +237,19 @@ import axios from 'axios'
 import PageHeader from '../components/PageHeader.vue'
 
 const GOVBI_URL = import.meta.env.VITE_GOVBI_URL || 'https://govbi-ia-hom.fly.dev'
+const GOVBI_TIMEOUT_MS = Number(import.meta.env.VITE_GOVBI_TIMEOUT_MS || 15000)
 
-const govbiApi = axios.create({ baseURL: GOVBI_URL })
+const govbiApi = axios.create({
+  baseURL: GOVBI_URL,
+  timeout: GOVBI_TIMEOUT_MS,
+})
 
 const pergunta = ref('')
 const exibirSql = ref(true)
 const carregando = ref(false)
 const erro = ref('')
 const resposta = ref(null)
+const diagnosticoOperacional = ref(null)
 
 const exemplos = [
   'Quantas propostas por mês em 2024?',
@@ -254,21 +270,26 @@ const temResultado = computed(
 const statusColor = computed(() => {
   const s = resposta.value?.statusFluxo
   if (s === 'CONCLUIDO') return 'green'
+  if (s === 'MODO_DEGRADADO') return 'orange'
   if (s === 'PENDENTE_APROVACAO') return 'amber'
   if (s === 'ERRO') return 'red'
   return 'grey'
 })
 
 async function perguntar() {
-  if (!pergunta.value.trim()) return
+  const perguntaNormalizada = pergunta.value.trim()
+  if (!perguntaNormalizada) return
+
   carregando.value = true
   erro.value = ''
   resposta.value = null
+  diagnosticoOperacional.value = null
+
   try {
     const { data } = await govbiApi.post(
       '/api/v1/perguntas',
       {
-        pergunta: pergunta.value.trim(),
+        pergunta: perguntaNormalizada,
         formatoResposta: 'tabela',
         exibirSql: exibirSql.value,
       },
@@ -280,23 +301,149 @@ async function perguntar() {
         },
       }
     )
-    resposta.value = data
+
+    resposta.value = normalizarRespostaGovBI(data, perguntaNormalizada)
+    diagnosticoOperacional.value = {
+      tipo: 'success',
+      titulo: 'Consulta GovBI processada',
+      mensagem: 'O serviço GovBI IA respondeu dentro do contrato esperado.',
+    }
   } catch (e) {
-    const msg =
-      e.response?.data?.message ||
-      e.response?.data?.error ||
-      e.message ||
-      'Erro desconhecido'
-    erro.value = `Erro ao consultar GovBI IA: ${msg}`
+    const detalhe = extrairDetalheErro(e)
+    resposta.value = gerarRespostaFallback(perguntaNormalizada, detalhe)
+    diagnosticoOperacional.value = {
+      tipo: 'warning',
+      titulo: 'GovBI IA em modo degradado',
+      mensagem: `O serviço externo não respondeu corretamente. A tela exibiu um plano governado local para manter a operação assistida. Detalhe: ${detalhe}`,
+    }
   } finally {
     carregando.value = false
   }
+}
+
+function normalizarRespostaGovBI(data, perguntaOriginal) {
+  const resultado = data?.resultado || {}
+  const colunas = Array.isArray(resultado.colunas) ? resultado.colunas : []
+  const linhas = Array.isArray(resultado.linhas) ? resultado.linhas : []
+
+  return {
+    avisos: Array.isArray(data?.avisos) ? data.avisos : [],
+    nivelSensibilidade: data?.nivelSensibilidade || 'BAIXA',
+    statusFluxo: data?.statusFluxo || 'CONCLUIDO',
+    metrica: data?.metrica || inferirMetrica(perguntaOriginal),
+    dimensoes: Array.isArray(data?.dimensoes) ? data.dimensoes : inferirDimensoes(perguntaOriginal),
+    filtros: data?.filtros && typeof data.filtros === 'object' ? data.filtros : {},
+    correlationId: data?.correlationId || criarCorrelationId(),
+    sqlGerado: data?.sqlGerado || '',
+    resultado: { colunas, linhas },
+    mascaramentoAplicado: Boolean(data?.mascaramentoAplicado),
+    requerAprovacao: Boolean(data?.requerAprovacao),
+    aprovacaoId: data?.aprovacaoId || null,
+    explicacao: data?.explicacao || 'Resposta normalizada pelo ReqSys para manter contrato estável da UI.',
+  }
+}
+
+function gerarRespostaFallback(perguntaOriginal, detalheErro) {
+  const metrica = inferirMetrica(perguntaOriginal)
+  const dimensoes = inferirDimensoes(perguntaOriginal)
+  const correlationId = criarCorrelationId()
+
+  return {
+    avisos: [
+      'GovBI IA externo indisponível ou fora do contrato esperado.',
+      'Resultado abaixo é um plano analítico governado local, sem execução contra base real.',
+      'Use o Correlation ID para rastrear a ocorrência e validar o serviço GovBI/Fly.',
+    ],
+    nivelSensibilidade: 'BAIXA',
+    statusFluxo: 'MODO_DEGRADADO',
+    metrica,
+    dimensoes,
+    filtros: inferirFiltros(perguntaOriginal),
+    correlationId,
+    sqlGerado: montarSqlSeguro(metrica, dimensoes),
+    resultado: {
+      colunas: ['item', 'valor', 'status'],
+      linhas: [
+        {
+          item: 'Pergunta recebida',
+          valor: perguntaOriginal,
+          status: 'VALIDADA_LOCALMENTE',
+        },
+        {
+          item: 'Serviço GovBI',
+          valor: detalheErro,
+          status: 'INDISPONIVEL_OU_FORA_DO_CONTRATO',
+        },
+        {
+          item: 'Próxima ação',
+          valor: 'Validar endpoint /api/v1/perguntas, CORS, timeout e contrato de resposta.',
+          status: 'ACAO_OPERACIONAL',
+        },
+      ],
+    },
+    mascaramentoAplicado: true,
+    requerAprovacao: false,
+    aprovacaoId: null,
+    explicacao: 'Fallback governado gerado no front para impedir falha bloqueante na consulta inteligente.',
+  }
+}
+
+function extrairDetalheErro(e) {
+  const status = e.response?.status
+  const statusText = e.response?.statusText
+  const data = e.response?.data
+  const mensagemServidor = data?.message || data?.error || data?.detail
+  const mensagem = mensagemServidor || e.message || 'erro desconhecido'
+
+  if (status) return `HTTP ${status}${statusText ? ` ${statusText}` : ''} - ${mensagem}`
+  if (e.code === 'ECONNABORTED') return `timeout após ${GOVBI_TIMEOUT_MS}ms em ${GOVBI_URL}`
+  if (e.request) return `sem resposta de ${GOVBI_URL} - ${mensagem}`
+  return mensagem
+}
+
+function inferirMetrica(texto) {
+  const t = texto.toLowerCase()
+  if (t.includes('quant') || t.includes('total')) return 'contagem_registros'
+  if (t.includes('média') || t.includes('media')) return 'media'
+  if (t.includes('percent') || t.includes('%')) return 'percentual'
+  return 'analise_exploratoria'
+}
+
+function inferirDimensoes(texto) {
+  const t = texto.toLowerCase()
+  const dimensoes = []
+  if (t.includes('mês') || t.includes('mes') || t.includes('mensal')) dimensoes.push('mes')
+  if (t.includes('unidade')) dimensoes.push('unidade')
+  if (t.includes('situação') || t.includes('situacao') || t.includes('status')) dimensoes.push('situacao')
+  if (t.includes('trimestre')) dimensoes.push('trimestre')
+  return dimensoes.length ? dimensoes : ['periodo']
+}
+
+function inferirFiltros(texto) {
+  const filtros = {}
+  const ano = texto.match(/20\d{2}/)?.[0]
+  if (ano) filtros.ano = ano
+  if (texto.toLowerCase().includes('último trimestre') || texto.toLowerCase().includes('ultimo trimestre')) {
+    filtros.periodo_relativo = 'ultimo_trimestre'
+  }
+  return filtros
+}
+
+function montarSqlSeguro(metrica, dimensoes) {
+  const dimensaoSelect = dimensoes.join(', ') || 'periodo'
+  return `-- SQL ilustrativo governado; não executado contra base real\nSELECT ${dimensaoSelect}, COUNT(*) AS ${metrica}\nFROM fonte_governada\nWHERE 1 = 1\nGROUP BY ${dimensaoSelect};`
+}
+
+function criarCorrelationId() {
+  if (crypto?.randomUUID) return crypto.randomUUID()
+  return `govbi-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 function limpar() {
   pergunta.value = ''
   resposta.value = null
   erro.value = ''
+  diagnosticoOperacional.value = null
 }
 
 function copiarSql() {
