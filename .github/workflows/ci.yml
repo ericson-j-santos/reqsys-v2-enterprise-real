@@ -1,6 +1,7 @@
 name: CI — ReqSys v2 Enterprise
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, master, develop]
     paths-ignore:
@@ -25,8 +26,8 @@ jobs:
     name: Detectar escopo alterado
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend == 'true' || github.event_name == 'workflow_dispatch' }}
+      frontend: ${{ steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
