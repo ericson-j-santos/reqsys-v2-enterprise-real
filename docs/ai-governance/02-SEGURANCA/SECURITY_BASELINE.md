@@ -4,6 +4,7 @@ Codigo: AI-GOV-SEC-001
 
 ## Regras obrigatorias
 
+- Atender LGPD, minimizacao de dados e finalidade explicita no tratamento.
 - Proteger credenciais e dados sensiveis.
 - Evitar registro de dados pessoais ou credenciais em logs.
 - Validar autenticacao e autorizacao por ambiente.
