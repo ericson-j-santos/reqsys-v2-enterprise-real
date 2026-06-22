@@ -1,0 +1,38 @@
+name: PR Conflict Guard
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  conflict-guard:
+    name: Detectar conflito antes do merge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout head do PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Buscar base atualizada
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+
+      - name: Validar merge limpo com a base
+        run: |
+          set -euo pipefail
+          git config user.name "reqsys-conflict-guard"
+          git config user.email "actions@users.noreply.github.com"
+          if git merge --no-commit --no-ff "origin/${{ github.base_ref }}"; then
+            echo "OK: PR sem conflitos contra ${{ github.base_ref }}."
+            git merge --abort || true
+          else
+            echo "ERRO: PR possui conflitos contra ${{ github.base_ref }}. Atualize o branch antes do merge."
+            git status --short
+            exit 1
+          fi

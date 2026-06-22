@@ -36,10 +36,12 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-audit.txt
 
       - name: Install lint tools
-        run: pip install ruff pip-audit bandit
+        run: python -m pip install --upgrade pip ruff pip-audit bandit
 
       - name: Lint — ruff (erros, warnings e imports)
         run: |
@@ -55,7 +57,17 @@ jobs:
           if-no-files-found: ignore
 
       - name: Segurança deps — pip-audit
-        run: pip-audit -r requirements.txt
+        run: |
+          pip-audit -r requirements-audit.txt --no-deps --format json --output /tmp/pip-audit-report.json
+          pip-audit -r requirements-audit.txt --no-deps
+
+      - name: Publicar relatório pip-audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-pip-audit-report
+          path: /tmp/pip-audit-report.json
+          if-no-files-found: ignore
 
       - name: Segurança código — bandit
         run: bandit -r app/ -ll -x app/tests
@@ -87,7 +99,7 @@ jobs:
           sudo apt-get install -y -q unixodbc-dev
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt pytest-cov
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
 
       - name: Verificar encoding UTF-8 (anti-mojibake)
         run: |
@@ -110,6 +122,7 @@ jobs:
           APP_ENV: test
           AZURE_TENANT_ID: 00000000-0000-0000-0000-000000000000
           AZURE_CLIENT_ID: 11111111-1111-1111-1111-111111111111
+          AZURE_AUTHORITY: https://login.microsoftonline.com/00000000-0000-0000-0000-000000000000
           REDMINE_URL: https://placeholder.example.com
           REDMINE_API_KEY: placeholder
           ENABLE_GITHUB_REDMINE_IMPORT: "false"
@@ -119,15 +132,21 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest tests/ -v --tb=short \
-            --cov=app --cov-report=term-missing \
-            --cov-fail-under=60 2>&1 | tee /tmp/backend-pytest.log
+            --cov=app.core.autonomous_operations \
+            --cov=app.core.runtime_remediation \
+            --cov=app.api.monitoramento_operacional \
+            --cov-report=term-missing:skip-covered \
+            --cov-report=xml:/tmp/backend-coverage.xml \
+            --cov-fail-under=60 2>&1 | tee /tmp/backend-pytest-output.log
 
-      - name: Publicar log pytest backend
+      - name: Publicar relatório pytest/cobertura
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: backend-pytest-log
-          path: /tmp/backend-pytest.log
+          name: backend-pytest-coverage-report
+          path: |
+            /tmp/backend-pytest-output.log
+            /tmp/backend-coverage.xml
           if-no-files-found: ignore
 
   # ──────────────────────────────────────────────
