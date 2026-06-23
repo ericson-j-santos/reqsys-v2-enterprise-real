@@ -2,23 +2,23 @@
 
 ## Objetivo
 
-Garantir evidência mínima e rápida de saúde da `main` após merges, sem executar deploy e sem alterar produção.
+Garantir evidencia minima e rapida de saude da `main` apos merges, sem executar deploy e sem alterar producao.
 
-## Checklist Governança
+## Checklist Governanca
 
-- [x] Escopo pequeno, rastreável e limitado a CI/documentação.
+- [x] Escopo pequeno, rastreavel e limitado a CI/documentacao.
 - [x] Sem deploy.
-- [x] Sem alteração de produção.
-- [x] Sem alteração de secrets.
-- [x] Sem merge automático.
-- [x] Sem aumento de permissões além de `contents: read`.
+- [x] Sem alteracao de producao.
+- [x] Sem alteracao de secrets.
+- [x] Sem merge automatico.
+- [x] Sem aumento de permissoes alem de `contents: read`.
 - [x] Artifact operacional publicado para auditoria.
-- [x] Runbook atualizado com relatório operacional e resultado da revisão.
-- [x] CI do head deve estar verde antes de qualquer decisão de merge.
+- [x] Runbook atualizado com relatorio operacional e resultado da revisao.
+- [x] CI do head deve estar verde antes de qualquer decisao de merge.
 
-## Motivação
+## Motivacao
 
-O PR #131 estabilizou o `PR CI Watch`, mas a validação pós-merge não tinha um workflow explícito em `push` para `main`. Este smoke check cria um sinal operacional objetivo para confirmar que a branch principal continua validável depois da integração.
+O PR #131 estabilizou o `PR CI Watch`, mas a validacao pos-merge nao tinha um workflow explicito em `push` para `main`. Este smoke check cria um sinal operacional objetivo para confirmar que a branch principal continua validavel depois da integracao.
 
 ## Gatilhos
 
@@ -29,75 +29,75 @@ O PR #131 estabilizou o `PR CI Watch`, mas a validação pós-merge não tinha u
 
 O workflow valida:
 
-- presença de `.github/workflows/pr-ci-watch.yml`;
-- presença de `.github/workflows/ci-fast-operational.yml`;
-- presença de `scripts/pr_ci_watch.py`;
-- presença de `tests/test_pr_ci_watch.py`;
-- presença de `docs/runbooks/pr-ci-watch.md`;
+- presenca de `.github/workflows/pr-ci-watch.yml`;
+- presenca de `.github/workflows/ci-fast-operational.yml`;
+- presenca de `scripts/pr_ci_watch.py`;
+- presenca de `tests/test_pr_ci_watch.py`;
+- presenca de `docs/runbooks/pr-ci-watch.md`;
 - uso de `--exclude-run-id` no PR CI Watch;
 - uso de artifact no PR CI Watch;
-- presença do workflow `Fast CI - Operational Guardrails`;
+- presenca do workflow `Fast CI - Operational Guardrails`;
 - sintaxe Python do watcher;
-- testes rápidos do watcher.
+- testes rapidos do watcher.
 
-## Relatório de Monitoramento do PR
+## Relatorio de Monitoramento do PR
 
-| Dimensão | Status | Evidência | Risco | Ação recomendada |
+| Dimensao | Status | Evidencia | Risco | Acao recomendada |
 |---|---|---|---|---|
-| Escopo alterado | Controlado | Novo workflow `main-smoke-ci.yml` e este runbook | Baixo | Manter mudança pequena e rastreável |
-| Build/CI | Validável no head do PR | Checks principais do PR devem estar verdes antes do merge | Médio | Bloquear merge se houver falha, cancelamento ou pendência |
-| Testes | Coberto por smoke rápido | `python -m pytest tests/test_pr_ci_watch.py -q` | Baixo | Reexecutar em caso de falha e capturar log |
-| Segurança | Sem alteração produtiva | `contents: read`, sem secrets e sem deploy | Baixo | Não adicionar permissões elevadas |
-| Observabilidade | Artifact operacional | `main-smoke-ci-evidence` com `summary.md` e `evidence.json` | Baixo | Validar artifact após execução em `main` |
-| Documentação | Atualizada | Runbook com escopo, decisão operacional e tabelas | Baixo | Manter este documento sincronizado com o workflow |
-| Ambiente | Main pós-merge | Gatilho em `push` para `main` | Médio | Usar apenas como evidência pós-merge, não como aprovação de deploy |
-| Auditoria | Rastreável | SHA, branch, run id e flags de não deploy no JSON | Baixo | Preservar retenção do artifact |
+| Escopo alterado | Controlado | Novo workflow `main-smoke-ci.yml` e este runbook | Baixo | Manter mudanca pequena e rastreavel |
+| Build/CI | Validavel no head do PR | Checks principais do PR devem estar verdes antes do merge | Medio | Bloquear merge se houver falha, cancelamento ou pendencia |
+| Testes | Coberto por smoke rapido | `python -m pytest tests/test_pr_ci_watch.py -q` | Baixo | Reexecutar em caso de falha e capturar log |
+| Seguranca | Sem alteracao produtiva | `contents: read`, sem secrets e sem deploy | Baixo | Nao adicionar permissoes elevadas |
+| Observabilidade | Artifact operacional | `main-smoke-ci-evidence` com `summary.md` e `evidence.json` | Baixo | Validar artifact apos execucao em `main` |
+| Documentacao | Atualizada | Runbook com escopo, decisao operacional e tabelas | Baixo | Manter este documento sincronizado com o workflow |
+| Ambiente | Main pos-merge | Gatilho em `push` para `main` | Medio | Usar apenas como evidencia pos-merge, nao como aprovacao de deploy |
+| Auditoria | Rastreavel | SHA, branch, run id e flags de nao deploy no JSON | Baixo | Preservar retencao do artifact |
 
-## Resultado da Revisão
+## Resultado da Revisao
 
-| Critério | Resultado | Bloqueia merge? | Observação |
+| Criterio | Resultado | Bloqueia merge? | Observacao |
 |---|---|---|---|
-| Compilação YAML | Aprovado quando GitHub Actions aceitar o workflow | Sim, se falhar | Validar no head do PR |
-| Testes automatizados | Aprovado quando `tests/test_pr_ci_watch.py` passar | Sim, se falhar | Executado no próprio workflow |
-| Segurança mínima | Aprovado | Não | Permissão mínima `contents: read`; sem secrets, deploy ou produção |
-| Governança/ADR | Aprovado | Não | Incremento operacional pós-PR #131; sem mudança arquitetural de negócio |
-| Documentação | Aprovado | Não | Runbook contém escopo, tabelas, decisão operacional e evidência |
-| Pronto para revisão humana | Condicional | Sim | Só considerar pronto se CI completo do head estiver verde |
+| Compilacao YAML | Aprovado quando GitHub Actions aceitar o workflow | Sim, se falhar | Validar no head do PR |
+| Testes automatizados | Aprovado quando `tests/test_pr_ci_watch.py` passar | Sim, se falhar | Executado no proprio workflow |
+| Seguranca minima | Aprovado | Nao | Permissao minima `contents: read`; sem secrets, deploy ou producao |
+| Governanca/ADR | Aprovado | Nao | Incremento operacional pos-PR #131; sem mudanca arquitetural de negocio |
+| Documentacao | Aprovado | Nao | Runbook contem escopo, tabelas, decisao operacional e evidencia |
+| Pronto para revisao humana | Condicional | Sim | So considerar pronto se CI completo do head estiver verde |
 
 ## Fora de escopo
 
-Este workflow não:
+Este workflow nao:
 
 - executa deploy;
-- altera produção;
+- altera producao;
 - cria release;
 - altera secrets;
-- aplica remediação automática;
-- faz merge automático.
+- aplica remediacao automatica;
+- faz merge automatico.
 
-## Artifact de evidência
+## Artifact de evidencia
 
-O artifact `main-smoke-ci-evidence` contém:
+O artifact `main-smoke-ci-evidence` contem:
 
-- `summary.md` com o escopo da validação;
-- `evidence.json` com branch, SHA, run id e flags explícitas de não deploy/não alteração de ambiente.
+- `summary.md` com o escopo da validacao;
+- `evidence.json` com branch, SHA, run id e flags explicitas de nao deploy/nao alteracao de ambiente.
 
-## Decisão operacional
+## Decisao operacional
 
-- Verde: `main` tem evidência mínima pós-merge.
-- Vermelho: bloquear próximo incremento até capturar log e corrigir a causa raiz.
-- Ausência de run em `main`: tratar como lacuna de evidência operacional.
+- Verde: `main` tem evidencia minima pos-merge.
+- Vermelho: bloquear proximo incremento ate capturar log e corrigir a causa raiz.
+- Ausencia de run em `main`: tratar como lacuna de evidencia operacional.
 
-## Relação com PR CI Watch
+## Relacao com PR CI Watch
 
-O `Main Smoke CI` não substitui o `PR CI Watch`. Ele complementa a esteira:
+O `Main Smoke CI` nao substitui o `PR CI Watch`. Ele complementa a esteira:
 
 1. PR valida antes do merge.
 2. Merge integra na `main`.
-3. Main Smoke CI gera evidência pós-merge.
+3. Main Smoke CI gera evidencia pos-merge.
 
 ## Risco reduzido
 
-- Merge sem sinal pós-integração.
+- Merge sem sinal pos-integracao.
 - Falso conforto por checks apenas no PR.
-- Falta de artifact rastreável para a `main`.
+- Falta de artifact rastreavel para a `main`.
