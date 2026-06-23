@@ -28,6 +28,33 @@ jobs:
             const repo = context.repo.repo;
             const issue_number = context.payload.pull_request.number;
 
+            const managedLabels = {
+              'docs-only': { color: '0366d6', description: 'Mudança exclusivamente documental.' },
+              'workflow-only': { color: '5319e7', description: 'Mudança exclusivamente em GitHub Actions/workflows.' },
+              'fast-path': { color: '0e8a16', description: 'PR pequeno e objetivo elegível para ciclo rápido.' },
+              'deep-review': { color: 'fbca04', description: 'Exige revisão profunda/CodeRabbit/full review por risco ou escopo.' },
+              'security-critical': { color: 'd73a4a', description: 'Altera segurança, auth, secrets, deploy, produção ou superfície crítica.' }
+            };
+
+            async function ensureLabel(name, metadata) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name,
+                  color: metadata.color,
+                  description: metadata.description
+                });
+              }
+            }
+
+            for (const [label, metadata] of Object.entries(managedLabels)) {
+              await ensureLabel(label, metadata);
+            }
+
             const files = await github.paginate(
               github.rest.pulls.listFiles,
               { owner, repo, pull_number: issue_number, per_page: 100 }
@@ -56,13 +83,7 @@ jobs:
               path.startsWith('terraform/');
 
             const labelsToAdd = new Set();
-            const labelsToRemove = new Set([
-              'docs-only',
-              'workflow-only',
-              'fast-path',
-              'deep-review',
-              'security-critical'
-            ]);
+            const labelsToRemove = new Set(Object.keys(managedLabels));
 
             const onlyDocs = paths.length > 0 && paths.every(isDocs);
             const onlyWorkflow = paths.length > 0 && paths.every(isWorkflow);
