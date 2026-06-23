@@ -86,6 +86,7 @@ jobs:
             --pr-number "${{ steps.ctx.outputs.pr_number }}" \
             --sha "${{ steps.ctx.outputs.sha }}" \
             --report-dir "${REPORT_DIR}" \
+            --exclude-run-id "${GITHUB_RUN_ID}" \
             ${COMMENT_FLAG}
 
       - name: Publicar artifact
