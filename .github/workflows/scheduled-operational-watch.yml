@@ -91,10 +91,11 @@ jobs:
             }
 
             const audit = {
-              schema_version: '1.0.0',
+              schema_version: '1.1.0',
               generated_at: now,
               repository: `${owner}/${repo}`,
               status: findings.some((f) => f.severity === 'high') ? 'failed' : findings.length ? 'warning' : 'passed',
+              mode: 'report_only',
               findings,
               pull_requests: prEvidence,
             };
@@ -107,14 +108,19 @@ jobs:
               `- Repository: ${owner}/${repo}`,
               `- Generated at: ${now}`,
               `- Status: ${audit.status}`,
+              `- Mode: ${audit.mode}`,
               `- Findings: ${findings.length}`,
               '',
               '## Findings',
               findings.length ? findings.map((f) => `- PR #${f.pr} [${f.severity}] ${f.type}: ${f.message}`).join('\n') : '- None',
+              '',
+              '## Policy',
+              '- Report-only monitor: evidence gaps are surfaced in artifacts without breaking the scheduled workflow.',
+              '- Blocking remains delegated to required CI/quality gates on pull requests.',
             ].join('\n'));
 
             if (audit.status === 'failed') {
-              core.setFailed(`Operational watch found high severity gaps: ${findings.length}`);
+              core.warning(`Operational watch found high severity gaps: ${findings.length}`);
             }
 
       - name: Upload operational evidence
