@@ -35,10 +35,10 @@ def test_classify_failure_blocks_review() -> None:
     assert summary["unhealthy"] == 1
 
 
-def test_classify_running_waits() -> None:
+def test_classify_running_waits_without_failing_watch() -> None:
     summary = classify([run("in_progress", None)])
 
-    assert summary["severity"] == "warning"
+    assert summary["severity"] == "pending"
     assert summary["decision"] == "aguardar_finalizacao_dos_workflows"
     assert summary["running"] == 1
 
