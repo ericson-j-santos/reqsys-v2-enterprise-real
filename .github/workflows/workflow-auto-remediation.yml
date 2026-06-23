@@ -1,0 +1,34 @@
+name: Workflow Auto Remediation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  auto-remediation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Execute remediation runtime
+        run: |
+          python scripts/workflow_auto_remediation.py
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-runtime-health
+          path: workflow-runtime-health.json
