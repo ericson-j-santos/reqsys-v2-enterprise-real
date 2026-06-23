@@ -36,6 +36,7 @@ Revisão IA/CodeRabbit profunda deve ser tratada como condicional quando:
 
 - o PR tiver label `deep-review`;
 - o PR tiver label `full-ci`;
+- houver alteração em `.github/workflows/`;
 - houver alteração em segurança, autenticação, autorização, secrets, deploy ou produção;
 - houver mudança arquitetural transversal;
 - o PR exceder escopo recomendado de micro PR;
@@ -64,7 +65,7 @@ Diretrizes resumidas:
 
 - PRs backend pequenos deixam de aguardar Playwright.
 - PRs apenas de documentação deixam de executar suites desnecessárias.
-- PRs de workflow pequenos deixam de aguardar revisão profunda quando CI Fast é suficiente.
+- PRs de workflow pequenos recebem feedback rápido de CI, mas continuam classificados como `security-critical` e `deep-review` por alterarem superfície de automação privilegiada.
 - O tempo principal de feedback passa a depender do fast path.
 - CodeRabbit passa a agregar valor em mudanças relevantes sem bloquear todo incremento trivial.
 
@@ -74,7 +75,7 @@ Diretrizes resumidas:
 - Jobs não aplicáveis devem ser `skipped`, não falhos.
 - Falhas reais continuam bloqueando merge.
 - Evidências devem permanecer publicadas como artifact ou job summary.
-- Mudanças de segurança, auth, produção, secrets e dados sensíveis exigem revisão profunda.
+- Mudanças de segurança, auth, produção, secrets, dados sensíveis e workflows exigem revisão profunda.
 - Revisão IA não substitui testes, SAST, validação de workflow, revisão humana ou gates de produção.
 
 ## Próximos incrementos recomendados
