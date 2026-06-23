@@ -17,6 +17,20 @@
       </div>
     </div>
 
+    <v-card class="shell-navigation mt-4" variant="tonal" data-testid="user-final-navigation">
+      <v-btn
+        v-for="item in shellNavItems"
+        :key="item.route"
+        :prepend-icon="item.icon"
+        :variant="route.path === item.route ? 'flat' : 'text'"
+        :color="route.path === item.route ? 'amber' : undefined"
+        class="shell-nav-button"
+        @click="goTo(item.route)"
+      >
+        {{ item.label }}
+      </v-btn>
+    </v-card>
+
     <v-row class="mt-4">
       <v-col v-for="card in operationalCards" :key="card.id" cols="12" md="4">
         <v-card
@@ -99,6 +113,13 @@ const router = useRouter()
 
 const frontendVersion = '3.1.0'
 const correlationId = `ufs-${Date.now().toString(36)}`
+
+const shellNavItems = [
+  { label: 'Início', route: '/home', icon: 'mdi-home-outline' },
+  { label: 'Workspace', route: '/workspace', icon: 'mdi-view-dashboard-edit-outline' },
+  { label: 'Analytics', route: '/analytics', icon: 'mdi-chart-box-outline' },
+  { label: 'Ajuda', route: '/ajuda', icon: 'mdi-help-circle-outline' },
+]
 
 const sections = {
   '/home': {
@@ -262,12 +283,24 @@ function goTo(target) {
   color: rgba(0, 0, 0, 0.7);
 }
 
-.hero-actions {
+.hero-actions,
+.shell-navigation {
   display: flex;
   align-items: flex-end;
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.shell-navigation {
+  align-items: center;
+  justify-content: flex-start;
+  padding: 10px;
+  border-radius: 14px;
+}
+
+.shell-nav-button {
+  min-width: 132px;
 }
 
 .environment-chip {
@@ -357,13 +390,15 @@ function goTo(target) {
     padding: 18px;
   }
 
-  .hero-actions {
+  .hero-actions,
+  .shell-navigation {
     align-items: stretch;
     justify-content: flex-start;
     width: 100%;
   }
 
-  .hero-actions :deep(.v-btn) {
+  .hero-actions :deep(.v-btn),
+  .shell-nav-button {
     width: 100%;
   }
 }
