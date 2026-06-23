@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "generated_at_epoch": 0,
+  "overall_status": "unknown",
+  "health_score": 40,
+  "critical_failure_count": null,
+  "warning_count": null,
+  "source_missing": true,
+  "checks": [],
+  "links": {
+    "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
+    "pulls": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pulls",
+    "main": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/tree/main"
+  }
+}
