@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     govbi_base_url: str = Field(default_factory=lambda: get_secret('GOVBI_BASE_URL', 'https://govbi-ia-hom.fly.dev') or 'https://govbi-ia-hom.fly.dev')
     govbi_timeout_seconds: float = Field(default_factory=lambda: float(get_secret('GOVBI_TIMEOUT_SECONDS', '15') or '15'))
 
+    # RAG governado — LlamaIndex-ready com fallback offline auditável
+    reqsys_rag_documents_path: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_DOCUMENTS_PATH', '') or '')
+    reqsys_rag_vector_store: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_VECTOR_STORE', 'in_memory') or 'in_memory')
+    reqsys_rag_require_sources: bool = Field(default_factory=lambda: _bool_secret('REQSYS_RAG_REQUIRE_SOURCES', 'true'))
+
     # Integração com Redmine Wiki Sync service
     wiki_sync_base_url: str = Field(default_factory=lambda: get_secret('WIKI_SYNC_BASE_URL', '') or '')
     wiki_sync_token: str = Field(default_factory=lambda: get_secret('WIKI_SYNC_TOKEN', '') or '')
@@ -208,7 +213,7 @@ class Settings(BaseSettings):
             info['frontend'] = self.app_public_url
         if self.api_public_url:
             info['api'] = self.api_public_url
-        return {'ambiente': ambiente, 'url_acesso': info.get('frontend', ''), **info}
+        return info
 
 
 settings = Settings()
