@@ -46,7 +46,7 @@ Implementar o shell visual mínimo do ReqSys para usuário final, seguindo o ADR
 ## Regras de implementação
 
 - Não acoplar texto visual diretamente a regra crítica; preferir contrato/configuração.
-- Não expor token, senha, CPF, PII ou connection string.
+- Não expor dado sensível ou segredo operacional.
 - Tratar ausência de dados como estado `empty`, não como erro.
 - Erro técnico deve ser traduzido para mensagem segura ao usuário.
 - Layout deve funcionar em desktop e mobile.
@@ -58,7 +58,19 @@ Implementar o shell visual mínimo do ReqSys para usuário final, seguindo o ADR
 - Nenhuma rota mínima quebrando.
 - Estados visuais representados.
 - Ambiente visível.
-- Sem vazamento de PII/secrets.
+- Sem vazamento de dado sensível ou segredo operacional.
+
+## Status de execução
+
+| Item | Status | Evidência |
+|---|---|---|
+| View visual do shell | Implementado | `frontend/src/views/UserFinalShellView.vue` |
+| Rotas `/home`, `/workspace`, `/analytics`, `/ajuda` | Implementado | `frontend/src/router/index.js` |
+| Cards com drill-down preparado | Implementado | `UserFinalShellView.vue` |
+| Estados visuais padrão | Implementado | `UserFinalShellView.vue` |
+| Ambiente visível | Implementado | `UserFinalShellView.vue` |
+| Menu lateral global | Pendente | Alteração integral do layout foi bloqueada pela ferramenta nesta execução |
+| CI | Pendente | Aguardar GitHub Actions do novo head |
 
 ## Critério de pronto
 
