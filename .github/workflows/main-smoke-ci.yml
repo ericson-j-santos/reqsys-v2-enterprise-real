@@ -61,31 +61,45 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/main-smoke-ci
-          cat > artifacts/main-smoke-ci/summary.md <<'EOF'
-          # Main Smoke CI
 
-          Validação pós-merge da branch `main`.
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
 
-          ## Escopo
+          output_dir = Path("artifacts/main-smoke-ci")
+          output_dir.mkdir(parents=True, exist_ok=True)
 
-          - Verifica presença dos workflows operacionais críticos.
-          - Verifica guardrail `--exclude-run-id` no PR CI Watch.
-          - Valida sintaxe do watcher Python.
-          - Executa testes rápidos do watcher.
-          - Não executa deploy.
-          - Não altera produção.
-          EOF
-          cat > artifacts/main-smoke-ci/evidence.json <<EOF
-          {
-            "workflow": "Main Smoke CI",
-            "branch": "${GITHUB_REF_NAME}",
-            "sha": "${GITHUB_SHA}",
-            "run_id": "${GITHUB_RUN_ID}",
-            "environment_change": false,
-            "deploy": false,
-            "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          summary = """# Main Smoke CI
+
+Validação pós-merge da branch `main`.
+
+## Escopo
+
+- Verifica presença dos workflows operacionais críticos.
+- Verifica guardrail `--exclude-run-id` no PR CI Watch.
+- Valida sintaxe do watcher Python.
+- Executa testes rápidos do watcher.
+- Não executa deploy.
+- Não altera produção.
+"""
+          (output_dir / "summary.md").write_text(summary, encoding="utf-8")
+
+          evidence = {
+              "workflow": "Main Smoke CI",
+              "branch": os.environ.get("GITHUB_REF_NAME", ""),
+              "sha": os.environ.get("GITHUB_SHA", ""),
+              "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+              "environment_change": False,
+              "deploy": False,
+              "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
           }
-          EOF
+          (output_dir / "evidence.json").write_text(
+              json.dumps(evidence, indent=2, ensure_ascii=False) + "\n",
+              encoding="utf-8",
+          )
+          PY
 
       - name: Publicar artifact de evidência
         if: always()
