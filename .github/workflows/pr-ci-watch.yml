@@ -1,6 +1,10 @@
 name: PR CI Watch
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_run:
+    types: [completed]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -14,15 +18,8 @@ on:
       comment:
         description: "Comentar diagnóstico no PR"
         required: true
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-  workflow_run:
-    types: [completed]
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -35,55 +32,74 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  watch:
-    name: PR CI Watch governado
+  pr-ci-watch:
+    name: PR CI Watch seguro
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       REPORT_DIR: artifacts/pr-ci-watch
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Resolver contexto
         id: ctx
         shell: bash
         run: |
           set -euo pipefail
-          PR_NUMBER="${{ github.event.inputs.pr_number || github.event.pull_request.number || '' }}"
-          SHA="${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.event.workflow_run.head_sha || '' }}"
-          COMMENT="${{ github.event.inputs.comment || 'false' }}"
-          echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
-          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
-          echo "comment=${COMMENT}" >> "$GITHUB_OUTPUT"
-          if [ -z "${PR_NUMBER}" ] || [ -z "${SHA}" ]; then
-            echo "PR number ou SHA ausente. Em workflow_run sem PR explícito, execute manualmente com inputs." >&2
-            exit 0
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            echo "comment=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "pr_number=${{ github.event.inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.inputs.sha }}" >> "$GITHUB_OUTPUT"
+            echo "comment=${{ github.event.inputs.comment }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_number=" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.workflow_run.head_sha || github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "comment=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Executar watcher
-        if: steps.ctx.outputs.pr_number != '' && steps.ctx.outputs.sha != ''
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Executar PR CI Watch
+        if: steps.ctx.outputs.pr_number != ''
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+
           COMMENT_FLAG=""
           if [ "${{ steps.ctx.outputs.comment }}" = "true" ]; then
             COMMENT_FLAG="--comment"
           fi
+
           python scripts/pr_ci_watch.py \
-            --repo "${{ github.repository }}" \
+            --repo "${GITHUB_REPOSITORY}" \
             --pr-number "${{ steps.ctx.outputs.pr_number }}" \
             --sha "${{ steps.ctx.outputs.sha }}" \
             --report-dir "${REPORT_DIR}" \
             ${COMMENT_FLAG}
+
+      - name: Registrar evento sem PR resolvido
+        if: steps.ctx.outputs.pr_number == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${REPORT_DIR}"
+          cat > "${REPORT_DIR}/pr-ci-watch.md" <<'EOF'
+          # PR CI Watch
+
+          Evento recebido sem PR resolvido automaticamente. Execute manualmente com `workflow_dispatch` informando `pr_number` e `sha`.
+          EOF
 
       - name: Publicar artifact
         if: always()
