@@ -23,11 +23,13 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
-    auto_incremental_review: true
-    auto_pause_after_reviewed_commits: 3
+    auto_incremental_review: false
+    auto_pause_after_reviewed_commits: 1
     ignore_title_keywords:
       - "wip"
       - "draft:"
+      - "chore(ci):"
+      - "docs(ci):"
 
   path_filters:
     - "**/*"
