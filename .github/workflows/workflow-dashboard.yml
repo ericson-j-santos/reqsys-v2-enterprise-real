@@ -1,0 +1,50 @@
+name: Workflow Dashboard
+
+on:
+  schedule:
+    - cron: "47 9 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: workflow-dashboard-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  dashboard:
+    name: Gerar dashboard executivo de workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Gerar dashboard
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python scripts/workflow_dashboard.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --branch "main" \
+            --limit "50" \
+            --output-dir "artifacts/workflow-dashboard"
+
+      - name: Publicar artifact do dashboard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-dashboard
+          path: artifacts/workflow-dashboard
+          if-no-files-found: error
+          retention-days: 15
