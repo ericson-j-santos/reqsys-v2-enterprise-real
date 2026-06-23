@@ -1,0 +1,141 @@
+{
+  "schema_version": "1.0.0",
+  "product": "ReqSys",
+  "contract": "user-final-shell",
+  "status": "proposed",
+  "environments": [
+    {
+      "id": "DEV",
+      "label": "Desenvolvimento",
+      "allows_mock_data": true,
+      "production_gate": false
+    },
+    {
+      "id": "HML",
+      "label": "Homologação",
+      "allows_mock_data": false,
+      "production_gate": false
+    },
+    {
+      "id": "PRD",
+      "label": "Produção",
+      "allows_mock_data": false,
+      "production_gate": true
+    }
+  ],
+  "navigation": [
+    {
+      "id": "home",
+      "label": "Início",
+      "route": "/home",
+      "required_for_mvp": true,
+      "description": "Entrada operacional do usuário final."
+    },
+    {
+      "id": "workspace",
+      "label": "Workspace",
+      "route": "/workspace",
+      "required_for_mvp": true,
+      "description": "Área principal de trabalho."
+    },
+    {
+      "id": "requisitos",
+      "label": "Requisitos",
+      "route": "/requisitos",
+      "required_for_mvp": true,
+      "description": "Catálogo de requisitos e demandas."
+    },
+    {
+      "id": "analytics",
+      "label": "Analytics",
+      "route": "/analytics",
+      "required_for_mvp": false,
+      "description": "Indicadores executivos e drill-down."
+    },
+    {
+      "id": "govbi_ia",
+      "label": "GovBI IA",
+      "route": "/govbi-ia",
+      "required_for_mvp": false,
+      "description": "BI conversacional governado."
+    },
+    {
+      "id": "governanca",
+      "label": "Governança",
+      "route": "/governanca",
+      "required_for_mvp": false,
+      "description": "Gates, evidências e auditoria."
+    },
+    {
+      "id": "ajuda",
+      "label": "Ajuda",
+      "route": "/ajuda",
+      "required_for_mvp": true,
+      "description": "Onboarding e orientação rápida."
+    }
+  ],
+  "ui_states": [
+    {
+      "id": "loading",
+      "label": "Carregando",
+      "message": "Carregando informações operacionais..."
+    },
+    {
+      "id": "empty",
+      "label": "Sem dados",
+      "message": "Nenhuma informação encontrada para os filtros atuais."
+    },
+    {
+      "id": "error",
+      "label": "Erro operacional",
+      "message": "Não foi possível carregar esta informação. Tente novamente ou consulte o suporte operacional."
+    },
+    {
+      "id": "success",
+      "label": "Disponível",
+      "message": "Informações carregadas com sucesso."
+    },
+    {
+      "id": "unauthorized",
+      "label": "Acesso restrito",
+      "message": "Acesse com uma conta autorizada para visualizar esta área."
+    }
+  ],
+  "cards": [
+    {
+      "id": "requisitos_total",
+      "label": "Requisitos",
+      "drilldown_enabled": true,
+      "default_route": "/requisitos"
+    },
+    {
+      "id": "pendencias_operacionais",
+      "label": "Pendências Operacionais",
+      "drilldown_enabled": true,
+      "default_route": "/workspace?status=pendente"
+    },
+    {
+      "id": "status_governanca",
+      "label": "Status de Governança",
+      "drilldown_enabled": true,
+      "default_route": "/governanca"
+    }
+  ],
+  "production_blockers": [
+    "auth_disabled",
+    "cors_wildcard",
+    "jwt_without_issuer_or_audience",
+    "logs_with_secret_or_pii",
+    "audit_without_correlation_id"
+  ],
+  "observability": {
+    "required_fields": [
+      "correlation_id",
+      "timestamp_utc",
+      "environment",
+      "route",
+      "status"
+    ],
+    "pii_policy": "Do not log token, password, CPF, PII or connection strings."
+  }
+}
