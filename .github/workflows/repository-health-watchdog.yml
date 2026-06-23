@@ -1,0 +1,86 @@
+name: Repository Health Watchdog
+
+on:
+  workflow_dispatch:
+    inputs:
+      fail_on_critical:
+        description: "Falhar o workflow quando houver gap crítico"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: repository-health-watchdog-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  repository-health:
+    name: Repository health / evidence monitor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate watchdog syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/repository_health_watchdog.py
+
+      - name: Run repository health watchdog
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          FAIL_FLAG=""
+          if [ "${{ github.event.inputs.fail_on_critical || 'false' }}" = "true" ]; then
+            FAIL_FLAG="--fail-on-critical"
+          fi
+
+          python scripts/repository_health_watchdog.py \
+            --repo "${{ github.repository }}" \
+            --output-dir artifacts/repository-health-watchdog \
+            --main-workflow-name "Main Smoke CI" \
+            --required-artifact "main-smoke-ci-evidence" \
+            --max-age-hours 24 \
+            ${FAIL_FLAG}
+
+      - name: Publish repository health evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-health-watchdog-report
+          path: artifacts/repository-health-watchdog
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Summarize evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f artifacts/repository-health-watchdog/repository-health-summary.md ]; then
+            cat artifacts/repository-health-watchdog/repository-health-summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Repository Health Watchdog nao gerou summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
