@@ -34,3 +34,8 @@ Incremento complementar ao PR-001A de contrato do shell do usuário final.
 ## Risco residual
 
 A entrada `/home` está roteada e acessível, mas a exposição no menu lateral global foi mantida como pendência porque a tentativa de atualização integral do layout foi bloqueada pela ferramenta durante esta execução. O próximo incremento deve aplicar essa alteração de menu em patch menor ou via checkout local/CLI.
+
+## Status de CI
+
+- Build frontend: verde no workflow principal anterior ao último ajuste documental.
+- CI completo do head final: em validação.
