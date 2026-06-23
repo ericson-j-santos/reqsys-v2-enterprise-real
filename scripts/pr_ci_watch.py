@@ -27,6 +27,7 @@ API_VERSION = "2022-11-28"
 DEFAULT_REPORT_DIR = Path("artifacts/pr-ci-watch")
 BLOCKING_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required"}
 NON_BLOCKING_CONCLUSIONS = {"success", "neutral", "skipped"}
+FAIL_SEVERITIES = {"critical"}
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,7 @@ def request_json(method: str, url: str, token: str, payload: dict[str, Any] | No
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:  # noqa: S310 - GitHub API URL controlada
             body = response.read().decode("utf-8")
             return json.loads(body) if body else {}
     except urllib.error.HTTPError as exc:
@@ -195,7 +196,7 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
             "- Não altera status de draft automaticamente nesta versão.",
             "- Exclui a própria execução do watcher quando `GITHUB_RUN_ID` está disponível, evitando falso bloqueio por auto-observação.",
             "- Diferencia workflows `pending/running` de falhas reais.",
-            "- Falha apenas quando existe workflow unhealthy real ou ausência total de evidência CI.",
+            "- Falha apenas quando existe workflow unhealthy real; warning permanece visível para decisão humana sem bloquear por padrão.",
         ]
     )
     return "\n".join(lines) + "\n"
@@ -256,7 +257,7 @@ def main() -> int:
     if args.comment:
         post_comment(args.repo, args.pr_number, token, markdown)
 
-    if summary["severity"] == "critical":
+    if summary["severity"] in FAIL_SEVERITIES:
         return 1
     return 0
 
