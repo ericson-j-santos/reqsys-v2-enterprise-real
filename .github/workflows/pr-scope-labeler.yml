@@ -43,24 +43,25 @@ jobs:
             async function ensureLabel(name, metadata) {
               try {
                 await github.rest.issues.getLabel({ owner, repo, name });
+                return;
               } catch (error) {
-                if (error.status !== 404) throw error;
-                try {
-                  await github.rest.issues.createLabel({
-                    owner,
-                    repo,
-                    name,
-                    color: metadata.color,
-                    description: metadata.description
-                  });
-                } catch (createError) {
-                  core.warning(`Não foi possível criar label ${name}: ${createError.message}`);
+                if (error.status !== 404) {
+                  core.warning(`Não foi possível verificar label ${name}: ${error.message}`);
+                  return;
                 }
               }
-            }
 
-            for (const [label, metadata] of Object.entries(managedLabels)) {
-              await ensureLabel(label, metadata);
+              try {
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name,
+                  color: metadata.color,
+                  description: metadata.description
+                });
+              } catch (createError) {
+                core.warning(`Não foi possível criar label ${name}: ${createError.message}`);
+              }
             }
 
             const files = await github.paginate(
@@ -111,6 +112,10 @@ jobs:
             if (isFork) {
               core.warning(`PR de fork detectado (${headRepo}). Pulando mutação de labels por segurança.`);
             } else {
+              for (const [label, metadata] of Object.entries(managedLabels)) {
+                await ensureLabel(label, metadata);
+              }
+
               let currentNames = new Set();
               try {
                 const current = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number });
