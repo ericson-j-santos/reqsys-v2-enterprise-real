@@ -1,0 +1,74 @@
+name: Workflow Command Center
+
+on:
+  schedule:
+    - cron: "37 9 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dispatch_workflow:
+        description: "Workflow allowlisted a executar. Ex.: main-smoke-ci.yml"
+        required: false
+        default: ""
+        type: choice
+        options:
+          - ""
+          - "main-smoke-ci.yml"
+          - "main-operational-health.yml"
+          - "pr-ci-watch.yml"
+          - "ci-fast-operational.yml"
+      dispatch_ref:
+        description: "Ref para workflow_dispatch"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: workflow-command-center-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  monitor-and-dispatch:
+    name: Monitorar workflows e executar allowlist
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Executar command center
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISPATCH_WORKFLOW: ${{ github.event.inputs.dispatch_workflow || '' }}
+          DISPATCH_REF: ${{ github.event.inputs.dispatch_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          args=(
+            --repo "${GITHUB_REPOSITORY}"
+            --branch "main"
+            --limit "30"
+            --output-dir "artifacts/workflow-command-center"
+          )
+          if [[ -n "${DISPATCH_WORKFLOW}" ]]; then
+            args+=(--dispatch "${DISPATCH_WORKFLOW}" --dispatch-ref "${DISPATCH_REF}")
+          fi
+          python scripts/workflow_command_center.py "${args[@]}"
+
+      - name: Publicar artifact de evidencia
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-command-center-evidence
+          path: artifacts/workflow-command-center
+          if-no-files-found: error
+          retention-days: 15
