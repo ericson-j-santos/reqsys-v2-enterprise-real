@@ -37,14 +37,15 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile scripts/pr_ci_watch.py
+          python -m py_compile scripts/workflow_command_center.py
 
-      - name: Executar testes rápidos do watcher
+      - name: Executar testes rápidos operacionais
         shell: bash
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install pytest
-          python -m pytest tests/test_pr_ci_watch.py -q
+          python -m pytest tests/test_pr_ci_watch.py tests/test_workflow_command_center.py -q
 
       - name: Validar workflow PR CI Watch
         shell: bash
@@ -54,3 +55,13 @@ jobs:
           grep -qi -- "--exclude-run-id" .github/workflows/pr-ci-watch.yml
           grep -qi "upload-artifact" .github/workflows/pr-ci-watch.yml
           grep -qi "set -euo pipefail" .github/workflows/pr-ci-watch.yml
+
+      - name: Validar Workflow Command Center
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/workflow-command-center.yml
+          test -f scripts/workflow_command_center.py
+          test -f tests/test_workflow_command_center.py
+          grep -qi "workflow-command-center.html" scripts/workflow_command_center.py
+          grep -qi "operational_score" scripts/workflow_command_center.py
