@@ -1,0 +1,79 @@
+name: Failure Pattern Engine
+
+on:
+  pull_request:
+    paths:
+      - "config/failure-patterns.json"
+      - "scripts/failure_pattern_engine.py"
+      - ".github/workflows/failure-pattern-engine.yml"
+  workflow_dispatch:
+    inputs:
+      sample_text:
+        description: "Texto opcional para classificar manualmente"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: failure-pattern-engine-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  classify-known-failures:
+    name: Classificar padroes conhecidos
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar sintaxe do catalogo
+        run: python -m json.tool config/failure-patterns.json > /tmp/failure-patterns.pretty.json
+
+      - name: Validar sintaxe Python
+        run: python -m py_compile scripts/failure_pattern_engine.py
+
+      - name: Preparar entrada de classificacao
+        env:
+          SAMPLE_TEXT: ${{ inputs.sample_text }}
+        run: |
+          mkdir -p artifacts/failure-pattern-engine/input
+          if [ -n "${SAMPLE_TEXT:-}" ]; then
+            printf '%s\n' "$SAMPLE_TEXT" > artifacts/failure-pattern-engine/input/sample.txt
+          else
+            cat > artifacts/failure-pattern-engine/input/sample.txt <<'EOF'
+          Failure Pattern Engine validation sample.
+          Resource not accessible by integration
+          Artifact not found
+          EOF
+          fi
+
+      - name: Executar Failure Pattern Engine
+        run: |
+          python scripts/failure_pattern_engine.py \
+            --catalog config/failure-patterns.json \
+            --input artifacts/failure-pattern-engine/input/sample.txt \
+            --out-dir artifacts/failure-pattern-engine
+
+      - name: Publicar resumo executivo
+        run: cat artifacts/failure-pattern-engine/failure-pattern-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-pattern-engine-report
+          path: |
+            artifacts/failure-pattern-engine/failure-pattern-report.json
+            artifacts/failure-pattern-engine/failure-pattern-report.md
+            artifacts/failure-pattern-engine/input/sample.txt
+          retention-days: 30
