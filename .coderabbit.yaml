@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # CodeRabbit configuration for ReqSys
-# Objetivo: reduzir tempo de revisão em micro PRs sem perder cobertura em áreas críticas.
+# Objetivo: evitar rate limit em micro PRs, mantendo revisão manual/intencional em riscos reais.
 
 language: pt-BR
 tone_instructions: "Responder em português do Brasil, com tom técnico, objetivo, governado e baseado em evidências. Priorizar achados que alterem risco, decisão de merge ou segurança."
@@ -20,15 +20,18 @@ reviews:
   sequence_diagrams: false
   assess_linked_issues: true
 
+  # Correção operacional: desliga review automático para evitar estouro de limite.
+  # Uso recomendado: acionar manualmente com comentário "@coderabbitai review"
+  # apenas quando o PR estiver pronto ou tiver label de alto risco.
   auto_review:
-    enabled: true
+    enabled: false
     drafts: false
-    auto_incremental_review: true
-    auto_pause_after_reviewed_commits: 3
+    auto_incremental_review: false
     ignore_title_keywords:
       - "wip"
       - "draft:"
       - "docs:"
+      - "chore:"
 
   path_filters:
     # Revisar primeiro o que muda execução, segurança, runtime e CI.
