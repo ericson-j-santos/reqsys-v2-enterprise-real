@@ -13,6 +13,7 @@ import os
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from html import escape
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -34,7 +35,10 @@ CRITICAL_WORKFLOWS = {
     "PR Conflict Guard",
     "Main Smoke CI",
     "Main Operational Health",
+    "Main Post-Merge Validation",
 }
+
+BLOCKING_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required"}
 
 
 @dataclass(frozen=True)
@@ -118,21 +122,119 @@ def dispatch_workflow(repo: str, token: str, workflow_file: str, ref: str) -> di
     return {"workflow_file": workflow_file, "ref": ref, "dispatched": True}
 
 
+def _percent(part: int, total: int) -> float:
+    return round((part / total) * 100, 2) if total else 0.0
+
+
+def _status_label(run: WorkflowRunSummary) -> str:
+    if run.status != "completed":
+        return "pending"
+    if run.conclusion == "success":
+        return "success"
+    if run.conclusion in BLOCKING_CONCLUSIONS:
+        return "failure"
+    return "non_blocking"
+
+
+def _operational_score(total: int, success: int, failed_critical: int, pending_critical: int, missing_critical: int) -> int:
+    score = 100
+    score -= failed_critical * 25
+    score -= pending_critical * 10
+    score -= missing_critical * 5
+    if total:
+        score -= round((100 - _percent(success, total)) * 0.25)
+    return max(0, min(100, int(score)))
+
+
 def build_report(runs: list[WorkflowRunSummary], dispatched: dict[str, Any] | None) -> dict[str, Any]:
     critical = [run for run in runs if run.name in CRITICAL_WORKFLOWS]
-    failed = [run for run in critical if run.conclusion in {"failure", "cancelled", "timed_out", "action_required"}]
+    failed = [run for run in critical if run.conclusion in BLOCKING_CONCLUSIONS]
     pending = [run for run in critical if run.status != "completed"]
     missing = sorted(CRITICAL_WORKFLOWS - {run.name for run in runs})
+
+    total = len(runs)
+    success = sum(1 for run in runs if _status_label(run) == "success")
+    failed_all = sum(1 for run in runs if _status_label(run) == "failure")
+    pending_all = sum(1 for run in runs if _status_label(run) == "pending")
+    non_blocking = sum(1 for run in runs if _status_label(run) == "non_blocking")
+    operational_score = _operational_score(total, success, len(failed), len(pending), len(missing))
+
+    metrics = {
+        "total_runs": total,
+        "success_runs": success,
+        "failed_runs": failed_all,
+        "pending_runs": pending_all,
+        "non_blocking_runs": non_blocking,
+        "success_rate_percent": _percent(success, total),
+        "critical_observed_percent": _percent(len(critical), len(CRITICAL_WORKFLOWS)),
+    }
+
+    status = "attention" if failed or pending else "ok"
+    if status == "ok" and operational_score < 90:
+        status = "watch"
+
     return {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "critical_workflows_observed": len(critical),
         "failed_critical_workflows": [asdict(run) for run in failed],
         "pending_critical_workflows": [asdict(run) for run in pending],
         "missing_from_recent_window": missing,
-        "recent_runs": [asdict(run) for run in runs],
+        "recent_runs": [asdict(run) | {"health": _status_label(run)} for run in runs],
         "dispatch": dispatched,
-        "status": "attention" if failed or pending else "ok",
+        "status": status,
+        "operational_score": operational_score,
+        "metrics": metrics,
     }
+
+
+def _render_html(report: dict[str, Any]) -> str:
+    rows = []
+    for run in report["recent_runs"][:30]:
+        rows.append(
+            "<tr>"
+            f"<td>{escape(run['health'])}</td>"
+            f"<td><a href=\"{escape(run['url'])}\">{escape(run['name'])}</a></td>"
+            f"<td>{escape(str(run['status']))}</td>"
+            f"<td>{escape(str(run['conclusion']))}</td>"
+            f"<td>{escape(str(run['event']))}</td>"
+            f"<td>{escape(str(run['updated_at']))}</td>"
+            "</tr>"
+        )
+    return f"""<!doctype html>
+<html lang=\"pt-BR\">
+<head>
+  <meta charset=\"utf-8\" />
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+  <title>ReqSys Workflow Command Center</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; margin: 24px; color: #111827; }}
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }}
+    .card {{ border: 1px solid #d1d5db; border-radius: 12px; padding: 16px; background: #f9fafb; }}
+    .ok {{ color: #166534; }} .attention {{ color: #991b1b; }} .watch {{ color: #854d0e; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 18px; }}
+    th, td {{ border: 1px solid #e5e7eb; padding: 8px; text-align: left; font-size: 14px; }}
+    th {{ background: #f3f4f6; }}
+  </style>
+</head>
+<body>
+  <h1>ReqSys Workflow Command Center</h1>
+  <p>Gerado em UTC: <strong>{escape(report['generated_at'])}</strong></p>
+  <div class=\"grid\">
+    <div class=\"card\"><strong>Status</strong><br><span class=\"{escape(report['status'])}\">{escape(report['status'])}</span></div>
+    <div class=\"card\"><strong>Operational Score</strong><br>{report['operational_score']}/100</div>
+    <div class=\"card\"><strong>Success rate</strong><br>{report['metrics']['success_rate_percent']}%</div>
+    <div class=\"card\"><strong>Critical observed</strong><br>{report['metrics']['critical_observed_percent']}%</div>
+    <div class=\"card\"><strong>Failed critical</strong><br>{len(report['failed_critical_workflows'])}</div>
+    <div class=\"card\"><strong>Pending critical</strong><br>{len(report['pending_critical_workflows'])}</div>
+  </div>
+  <h2>Recent workflow runs</h2>
+  <table>
+    <thead><tr><th>Health</th><th>Workflow</th><th>Status</th><th>Conclusion</th><th>Event</th><th>Updated</th></tr></thead>
+    <tbody>{''.join(rows)}</tbody>
+  </table>
+</body>
+</html>
+"""
 
 
 def write_artifacts(report: dict[str, Any], output_dir: Path) -> None:
@@ -147,6 +249,7 @@ def write_artifacts(report: dict[str, Any], output_dir: Path) -> None:
         f"Generated at: `{report['generated_at']}`",
         "",
         f"Status: `{report['status']}`",
+        f"Operational score: `{report['operational_score']}/100`",
         "",
         "## Summary",
         "",
@@ -154,6 +257,8 @@ def write_artifacts(report: dict[str, Any], output_dir: Path) -> None:
         f"- Failed critical workflows: `{len(report['failed_critical_workflows'])}`",
         f"- Pending critical workflows: `{len(report['pending_critical_workflows'])}`",
         f"- Missing from recent window: `{len(report['missing_from_recent_window'])}`",
+        f"- Success rate: `{report['metrics']['success_rate_percent']}%`",
+        f"- Critical observed: `{report['metrics']['critical_observed_percent']}%`",
         "",
     ]
     if report.get("dispatch"):
@@ -162,7 +267,12 @@ def write_artifacts(report: dict[str, Any], output_dir: Path) -> None:
         lines.extend(["## Failed critical workflows", ""])
         for run in report["failed_critical_workflows"]:
             lines.append(f"- [{run['name']}]({run['url']}) — `{run['conclusion']}`")
+    if report["pending_critical_workflows"]:
+        lines.extend(["", "## Pending critical workflows", ""])
+        for run in report["pending_critical_workflows"]:
+            lines.append(f"- [{run['name']}]({run['url']}) — `{run['status']}`")
     (output_dir / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (output_dir / "workflow-command-center.html").write_text(_render_html(report), encoding="utf-8")
 
 
 def parse_args() -> argparse.Namespace:
