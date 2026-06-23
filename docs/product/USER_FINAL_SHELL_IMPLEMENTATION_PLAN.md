@@ -69,8 +69,10 @@ Implementar o shell visual mínimo do ReqSys para usuário final, seguindo o ADR
 | Cards com drill-down preparado | Implementado | `UserFinalShellView.vue` |
 | Estados visuais padrão | Implementado | `UserFinalShellView.vue` |
 | Ambiente visível | Implementado | `UserFinalShellView.vue` |
+| Build frontend | Verde no CI | `Frontend Build + Security Audit` |
+| E2E responsivo | Em validação | `Frontend Responsive E2E` |
 | Menu lateral global | Pendente | Alteração integral do layout foi bloqueada pela ferramenta nesta execução |
-| CI | Pendente | Aguardar GitHub Actions do novo head |
+| CI completo | Em andamento | Aguardar conclusão do workflow principal |
 
 ## Critério de pronto
 
