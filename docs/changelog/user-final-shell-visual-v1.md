@@ -12,6 +12,7 @@ Incremento complementar ao PR-001A de contrato do shell do usuário final.
   - `/workspace`;
   - `/analytics`;
   - `/ajuda`.
+- Navegação interna do shell entre Início, Workspace, Analytics e Ajuda.
 - Hero operacional com ambiente visível.
 - Cards navegáveis com preparação para drill-down.
 - Estados visuais padrão: `loading`, `empty`, `error`, `success` e `unauthorized`.
@@ -33,9 +34,9 @@ Incremento complementar ao PR-001A de contrato do shell do usuário final.
 
 ## Risco residual
 
-A entrada `/home` está roteada e acessível, mas a exposição no menu lateral global foi mantida como pendência porque a tentativa de atualização integral do layout foi bloqueada pela ferramenta durante esta execução. O próximo incremento deve aplicar essa alteração de menu em patch menor ou via checkout local/CLI.
+A navegação interna do shell está implementada. A exposição no menu lateral global segue como pendência técnica separada porque a tentativa de atualização integral do layout foi bloqueada pela ferramenta durante esta execução. O próximo incremento deve aplicar essa alteração de menu em patch menor ou via checkout local/CLI.
 
 ## Status de CI
 
-- Build frontend: verde no workflow principal anterior ao último ajuste documental.
-- CI completo do head final: em validação.
+- Checks rápidos e governança do head atual: verdes.
+- CI principal do head atual: aguardando execução.
