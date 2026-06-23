@@ -62,7 +62,7 @@ def request_json(method: str, url: str, token: str, payload: dict[str, Any] | No
     data = None
     headers = {
         "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {token}",
+        "Authorization": "token " + token,
         "X-GitHub-Api-Version": API_VERSION,
         "User-Agent": "reqsys-pr-ci-watch",
     }
@@ -196,7 +196,7 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
             "- Não altera status de draft automaticamente nesta versão.",
             "- Exclui a própria execução do watcher quando `GITHUB_RUN_ID` está disponível, evitando falso bloqueio por auto-observação.",
             "- Diferencia workflows `pending/running` de falhas reais.",
-            "- Falha apenas quando existe workflow unhealthy real; warning permanece visível para decisão humana sem bloquear por padrão.",
+            "- Por padrão, o watcher reporta falhas sem quebrar a própria execução; use `--fail-on-unhealthy` apenas quando ele for gate bloqueante explícito.",
         ]
     )
     return "\n".join(lines) + "\n"
@@ -224,6 +224,11 @@ def main() -> int:
     parser.add_argument("--report-dir", default=str(DEFAULT_REPORT_DIR))
     parser.add_argument("--comment", action="store_true")
     parser.add_argument("--exclude-run-id", default=os.environ.get("GITHUB_RUN_ID"))
+    parser.add_argument(
+        "--fail-on-unhealthy",
+        action="store_true",
+        help="Retorna exit code 1 quando houver workflow unhealthy. Use apenas em gates bloqueantes explícitos.",
+    )
     args = parser.parse_args()
 
     token = os.environ.get("GITHUB_TOKEN")
@@ -243,6 +248,7 @@ def main() -> int:
         "summary": summary,
         "runs": [asdict(run) | {"health": run.health} for run in runs],
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "strict_gate": args.fail_on_unhealthy,
     }
     (report_dir / "pr-ci-watch.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -257,7 +263,7 @@ def main() -> int:
     if args.comment:
         post_comment(args.repo, args.pr_number, token, markdown)
 
-    if summary["severity"] in FAIL_SEVERITIES:
+    if args.fail_on_unhealthy and summary["severity"] in FAIL_SEVERITIES:
         return 1
     return 0
 
