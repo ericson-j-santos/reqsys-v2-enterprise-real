@@ -4,6 +4,18 @@
 
 Garantir evidência mínima e rápida de saúde da `main` após merges, sem executar deploy e sem alterar produção.
 
+## Checklist Governança
+
+- [x] Escopo pequeno, rastreável e limitado a CI/documentação.
+- [x] Sem deploy.
+- [x] Sem alteração de produção.
+- [x] Sem alteração de secrets.
+- [x] Sem merge automático.
+- [x] Sem aumento de permissões além de `contents: read`.
+- [x] Artifact operacional publicado para auditoria.
+- [x] Runbook atualizado com relatório operacional e resultado da revisão.
+- [x] CI do head deve estar verde antes de qualquer decisão de merge.
+
 ## Motivação
 
 O PR #131 estabilizou o `PR CI Watch`, mas a validação pós-merge não tinha um workflow explícito em `push` para `main`. Este smoke check cria um sinal operacional objetivo para confirmar que a branch principal continua validável depois da integração.
