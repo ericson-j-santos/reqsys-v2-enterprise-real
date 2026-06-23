@@ -51,6 +51,6 @@ jobs:
         run: |
           set -euo pipefail
           test -f .github/workflows/pr-ci-watch.yml
-          grep -qi "--exclude-run-id" .github/workflows/pr-ci-watch.yml
+          grep -qi -- "--exclude-run-id" .github/workflows/pr-ci-watch.yml
           grep -qi "upload-artifact" .github/workflows/pr-ci-watch.yml
           grep -qi "set -euo pipefail" .github/workflows/pr-ci-watch.yml
