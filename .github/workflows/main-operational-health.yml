@@ -1,0 +1,101 @@
+name: Main Operational Health
+
+on:
+  schedule:
+    - cron: "17 9 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: main-operational-health-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  operational-health:
+    name: Main operational health / evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar artefatos operacionais criticos
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/main-smoke-ci.yml
+          test -f .github/workflows/pr-scope-labeler.yml
+          test -f .github/workflows/pr-ci-watch.yml
+          test -f .github/workflows/ci-fast-operational.yml
+          test -f scripts/pr_ci_watch.py
+          test -f tests/test_pr_ci_watch.py
+          test -f docs/runbooks/main-smoke-ci.md
+          test -f docs/runbooks/pr-ci-watch.md
+
+      - name: Validar guardrails sem mutacao indevida
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -qi -- "read-only" .github/workflows/pr-scope-labeler.yml
+          grep -qi -- "sem mutação de labels" .github/workflows/pr-scope-labeler.yml
+          grep -qi -- "main-smoke-ci-evidence" .github/workflows/main-smoke-ci.yml
+          grep -qi -- "environment_change\":False" .github/workflows/main-smoke-ci.yml
+          grep -qi -- "deploy\":False" .github/workflows/main-smoke-ci.yml
+          grep -qi -- "--exclude-run-id" .github/workflows/pr-ci-watch.yml
+          grep -qi -- "upload-artifact" .github/workflows/pr-ci-watch.yml
+
+      - name: Validar sintaxe Python operacional
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/pr_ci_watch.py
+
+      - name: Executar testes rapidos do watcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pytest tests/test_pr_ci_watch.py -q
+
+      - name: Gerar evidencia operacional
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/main-operational-health
+
+          {
+            printf '# Main Operational Health\n\n'
+            printf 'Validacao operacional continua da branch main.\n\n'
+            printf '## Escopo\n\n'
+            printf -- '- Confirma existencia dos workflows criticos.\n'
+            printf -- '- Confirma PR Scope Labeler em modo read-only.\n'
+            printf -- '- Confirma Main Smoke CI com artifact de evidencia.\n'
+            printf -- '- Confirma guardrails do PR CI Watch.\n'
+            printf -- '- Valida sintaxe e testes rapidos do watcher.\n'
+            printf -- '- Nao executa deploy.\n'
+            printf -- '- Nao altera producao.\n'
+          } > artifacts/main-operational-health/summary.md
+
+          export GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python -c 'import json, os; print(json.dumps({"workflow":"Main Operational Health","branch":os.environ.get("GITHUB_REF_NAME", ""),"sha":os.environ.get("GITHUB_SHA", ""),"run_id":os.environ.get("GITHUB_RUN_ID", ""),"environment_change":False,"deploy":False,"generated_at":os.environ["GENERATED_AT"]}, indent=2, ensure_ascii=False))' \
+            > artifacts/main-operational-health/evidence.json
+
+      - name: Publicar artifact de evidencia
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-operational-health-evidence
+          path: artifacts/main-operational-health
+          if-no-files-found: error
+          retention-days: 15
