@@ -1,0 +1,65 @@
+name: ReqSys VS Code Local RAG Agent CI
+
+on:
+  pull_request:
+    paths:
+      - "tools/reqsys-vscode-local-rag-agent/**"
+      - ".github/workflows/reqsys-vscode-agent-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-agent:
+    name: Validate Python Agent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install agent dependencies
+        working-directory: tools/reqsys-vscode-local-rag-agent/agent
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run agent tests
+        run: |
+          set -euo pipefail
+          PYTHONPATH=tools/reqsys-vscode-local-rag-agent/agent pytest tools/reqsys-vscode-local-rag-agent/agent/tests -q
+
+      - name: Run health check
+        run: |
+          set -euo pipefail
+          PYTHONPATH=tools/reqsys-vscode-local-rag-agent/agent python -m reqsys_agent.cli health
+
+  validate-extension:
+    name: Validate VS Code Extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install extension dependencies
+        working-directory: tools/reqsys-vscode-local-rag-agent/extension
+        run: |
+          set -euo pipefail
+          npm ci || npm install
+
+      - name: Compile extension
+        working-directory: tools/reqsys-vscode-local-rag-agent/extension
+        run: |
+          set -euo pipefail
+          npm run compile
