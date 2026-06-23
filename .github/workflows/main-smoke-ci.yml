@@ -1,0 +1,88 @@
+name: Main Smoke CI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-smoke-ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  main-smoke:
+    name: Main smoke / post-merge evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar arquivos criticos de CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/pr-ci-watch.yml
+          test -f .github/workflows/ci-fast-operational.yml
+          test -f scripts/pr_ci_watch.py
+          test -f tests/test_pr_ci_watch.py
+          test -f docs/runbooks/pr-ci-watch.md
+          grep -qi -- "--exclude-run-id" .github/workflows/pr-ci-watch.yml
+          grep -qi -- "upload-artifact" .github/workflows/pr-ci-watch.yml
+          grep -qi -- "Fast CI - Operational Guardrails" .github/workflows/ci-fast-operational.yml
+
+      - name: Validar sintaxe Python
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/pr_ci_watch.py
+
+      - name: Executar testes rapidos do watcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pytest tests/test_pr_ci_watch.py -q
+
+      - name: Gerar evidencia pos-merge
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/main-smoke-ci
+
+          {
+            printf '# Main Smoke CI\n\n'
+            printf 'Validacao pos-merge da branch main.\n\n'
+            printf '## Escopo\n\n'
+            printf -- '- Verifica presenca dos workflows operacionais criticos.\n'
+            printf -- '- Verifica guardrail de exclusao de run no PR CI Watch.\n'
+            printf -- '- Valida sintaxe do watcher Python.\n'
+            printf -- '- Executa testes rapidos do watcher.\n'
+            printf -- '- Nao executa deploy.\n'
+            printf -- '- Nao altera producao.\n'
+          } > artifacts/main-smoke-ci/summary.md
+
+          export GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python -c 'import json, os; print(json.dumps({"workflow":"Main Smoke CI","branch":os.environ.get("GITHUB_REF_NAME", ""),"sha":os.environ.get("GITHUB_SHA", ""),"run_id":os.environ.get("GITHUB_RUN_ID", ""),"environment_change":False,"deploy":False,"generated_at":os.environ["GENERATED_AT"]}, indent=2, ensure_ascii=False))' \
+            > artifacts/main-smoke-ci/evidence.json
+
+      - name: Publicar artifact de evidencia
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-smoke-ci-evidence
+          path: artifacts/main-smoke-ci
+          if-no-files-found: error
+          retention-days: 15
