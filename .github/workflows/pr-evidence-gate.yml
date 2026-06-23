@@ -1,0 +1,198 @@
+name: PR Evidence Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to validate'
+        required: false
+        type: string
+
+concurrency:
+  group: pr-evidence-gate-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  pull-requests: read
+
+jobs:
+  evidence-gate:
+    name: Validate PR head, workflows and artifacts
+    runs-on: ubuntu-latest
+    env:
+      REQUIRED_WORKFLOW_NAMES: |
+        CI — ReqSys v2 Enterprise
+        Governance Quality Gates
+        Governança Padrão Ouro
+      OPTIONAL_WORKFLOW_NAMES: |
+        NGINX Security Profile
+      REQUIRED_ARTIFACT_PATTERNS: |
+        evidence
+        artifact
+      MIN_COMPLETED_REQUIRED_RUNS: '1'
+    steps:
+      - name: Build audit evidence
+        id: evidence
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const now = new Date().toISOString();
+
+            async function getPullRequest() {
+              if (context.payload.pull_request) return context.payload.pull_request;
+              const inputNumber = core.getInput('pr_number');
+              if (!inputNumber) {
+                throw new Error('pr_number is required for workflow_dispatch runs.');
+              }
+              const { data } = await github.rest.pulls.get({ owner, repo, pull_number: Number(inputNumber) });
+              return data;
+            }
+
+            function parseList(value) {
+              return String(value || '')
+                .split('\n')
+                .map((item) => item.trim())
+                .filter(Boolean);
+            }
+
+            const pr = await getPullRequest();
+            const headSha = pr.head.sha;
+            const requiredWorkflowNames = parseList(process.env.REQUIRED_WORKFLOW_NAMES);
+            const optionalWorkflowNames = parseList(process.env.OPTIONAL_WORKFLOW_NAMES);
+            const artifactPatterns = parseList(process.env.REQUIRED_ARTIFACT_PATTERNS).map((item) => item.toLowerCase());
+            const minCompletedRequiredRuns = Number(process.env.MIN_COMPLETED_REQUIRED_RUNS || '1');
+
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              owner,
+              repo,
+              head_sha: headSha,
+              per_page: 100,
+            });
+
+            const runSummaries = [];
+            for (const run of runs) {
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                owner,
+                repo,
+                run_id: run.id,
+                per_page: 100,
+              });
+
+              runSummaries.push({
+                id: run.id,
+                name: run.name,
+                event: run.event,
+                status: run.status,
+                conclusion: run.conclusion,
+                head_sha: run.head_sha,
+                html_url: run.html_url,
+                created_at: run.created_at,
+                updated_at: run.updated_at,
+                artifacts: artifacts.map((artifact) => ({
+                  id: artifact.id,
+                  name: artifact.name,
+                  expired: artifact.expired,
+                  size_in_bytes: artifact.size_in_bytes,
+                  archive_download_url: artifact.archive_download_url,
+                })),
+              });
+            }
+
+            const failures = [];
+            if (!headSha) failures.push('PR head SHA was not resolved.');
+            if (runs.length === 0) failures.push(`No workflow runs found for PR head SHA ${headSha}.`);
+
+            const requiredResults = requiredWorkflowNames.map((name) => {
+              const matchingRuns = runSummaries.filter((run) => run.name === name);
+              const successfulRuns = matchingRuns.filter((run) => run.status === 'completed' && run.conclusion === 'success');
+              const latest = matchingRuns.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0] || null;
+              if (successfulRuns.length < minCompletedRequiredRuns) {
+                failures.push(`Required workflow missing or not successful on current head SHA: ${name}`);
+              }
+              return { name, matching_runs: matchingRuns.length, successful_runs: successfulRuns.length, latest };
+            });
+
+            const optionalResults = optionalWorkflowNames.map((name) => {
+              const matchingRuns = runSummaries.filter((run) => run.name === name);
+              return { name, matching_runs: matchingRuns.length };
+            });
+
+            const allArtifacts = runSummaries.flatMap((run) => run.artifacts.map((artifact) => ({ ...artifact, workflow: run.name, run_id: run.id })));
+            const evidenceArtifacts = allArtifacts.filter((artifact) => {
+              const lower = artifact.name.toLowerCase();
+              return artifactPatterns.some((pattern) => lower.includes(pattern));
+            });
+
+            if (evidenceArtifacts.length === 0) {
+              failures.push(`No audit/evidence artifact found on workflow runs for current head SHA ${headSha}.`);
+            }
+
+            const audit = {
+              schema_version: '1.0.0',
+              generated_at: now,
+              repository: `${owner}/${repo}`,
+              pr: {
+                number: pr.number,
+                title: pr.title,
+                draft: pr.draft,
+                state: pr.state,
+                head_ref: pr.head.ref,
+                base_ref: pr.base.ref,
+                head_sha: headSha,
+                html_url: pr.html_url,
+              },
+              gate: {
+                status: failures.length === 0 ? 'passed' : 'failed',
+                failures,
+                required_workflows: requiredResults,
+                optional_workflows: optionalResults,
+                evidence_artifacts: evidenceArtifacts,
+              },
+              workflow_runs: runSummaries,
+            };
+
+            fs.mkdirSync('audit', { recursive: true });
+            fs.writeFileSync('audit/pr-evidence-gate.json', JSON.stringify(audit, null, 2));
+            fs.writeFileSync('audit/pr-evidence-gate.md', [
+              `# PR Evidence Gate`,
+              ``,
+              `- Repository: ${owner}/${repo}`,
+              `- PR: #${pr.number}`,
+              `- Head SHA: ${headSha}`,
+              `- Status: ${audit.gate.status}`,
+              `- Failures: ${failures.length}`,
+              ``,
+              `## Failures`,
+              failures.length ? failures.map((failure) => `- ${failure}`).join('\n') : '- None',
+            ].join('\n'));
+
+            core.setOutput('status', audit.gate.status);
+            core.setOutput('head_sha', headSha);
+
+            if (failures.length > 0) {
+              core.setFailed(failures.join('\n'));
+            }
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-evidence-gate-${{ steps.evidence.outputs.head_sha || github.sha }}
+          path: audit/
+          if-no-files-found: error
+          retention-days: 30
