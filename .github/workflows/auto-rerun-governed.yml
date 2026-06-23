@@ -1,0 +1,68 @@
+name: Governed Auto-Rerun
+
+on:
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: "Executar reruns elegiveis. false = dry-run auditavel"
+        required: true
+        default: false
+        type: boolean
+      branch:
+        description: "Branch monitorada"
+        required: true
+        default: "main"
+        type: string
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: governed-auto-rerun-${{ github.event.inputs.branch || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  governed-auto-rerun:
+    name: Governed auto-rerun audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Executar auto-rerun governado
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXECUTE_RERUN: ${{ github.event.inputs.execute || 'false' }}
+          TARGET_BRANCH: ${{ github.event.inputs.branch || 'main' }}
+        run: |
+          set -euo pipefail
+          args=(
+            --repo "${GITHUB_REPOSITORY}"
+            --branch "${TARGET_BRANCH}"
+            --limit "30"
+            --output-dir "artifacts/auto-rerun"
+          )
+          if [[ "${EXECUTE_RERUN}" == "true" ]]; then
+            args+=(--execute)
+          fi
+          python scripts/auto_rerun_governed.py "${args[@]}"
+
+      - name: Publicar artifact de auditoria
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-auto-rerun-evidence
+          path: artifacts/auto-rerun
+          if-no-files-found: error
+          retention-days: 15
