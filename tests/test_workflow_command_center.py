@@ -1,4 +1,4 @@
-from scripts.workflow_command_center import WorkflowRunSummary, build_report
+from scripts.workflow_command_center import CRITICAL_WORKFLOWS, WorkflowRunSummary, build_report
 
 
 def sample_run(name: str, status: str = "completed", conclusion: str | None = "success") -> WorkflowRunSummary:
@@ -17,16 +17,12 @@ def sample_run(name: str, status: str = "completed", conclusion: str | None = "s
 
 
 def test_build_report_scores_healthy_critical_workflows() -> None:
-    report = build_report([
-        sample_run("CI — ReqSys v2 Enterprise"),
-        sample_run("Governance Quality Gates"),
-        sample_run("Governança Padrão Ouro"),
-        sample_run("Main Post-Merge Validation"),
-    ], None)
+    report = build_report([sample_run(name) for name in CRITICAL_WORKFLOWS], None)
 
     assert report["status"] == "ok"
-    assert report["operational_score"] >= 90
+    assert report["operational_score"] == 100
     assert report["metrics"]["success_rate_percent"] == 100.0
+    assert report["missing_from_recent_window"] == []
 
 
 def test_build_report_marks_failed_critical_workflow_attention() -> None:
