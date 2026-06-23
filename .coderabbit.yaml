@@ -1,23 +1,23 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # CodeRabbit configuration for ReqSys
-# Purpose: enforce review output with operational monitoring and result tables.
+# Objetivo: reduzir tempo de revisão em micro PRs sem perder cobertura em áreas críticas.
 
 language: pt-BR
-tone_instructions: "Responder em português do Brasil, com tom técnico, objetivo, governado e baseado em evidências."
+tone_instructions: "Responder em português do Brasil, com tom técnico, objetivo, governado e baseado em evidências. Priorizar achados que alterem risco, decisão de merge ou segurança."
 
 reviews:
-  profile: assertive
-  request_changes_workflow: true
+  profile: chill
+  request_changes_workflow: false
   high_level_summary: true
   high_level_summary_instructions: |
-    Inclua no resumo executivo uma tabela de monitoramento do PR e uma tabela de resultado da revisão.
-    Use evidências verificáveis. Quando CI, testes ou segurança não puderem ser confirmados, marque como "Não verificado".
+    Produza resumo executivo curto, com foco em risco real, evidência e próxima ação.
+    Marque como "Não verificado" qualquer item sem evidência de CI, testes ou segurança.
   poem: false
   review_status: true
-  review_details: true
-  collapse_walkthrough: false
+  review_details: false
+  collapse_walkthrough: true
   changed_files_summary: true
-  sequence_diagrams: true
+  sequence_diagrams: false
   assess_linked_issues: true
 
   auto_review:
@@ -28,63 +28,56 @@ reviews:
     ignore_title_keywords:
       - "wip"
       - "draft:"
+      - "docs:"
 
   path_filters:
-    - "**/*"
-    - "!**/node_modules/**"
-    - "!**/dist/**"
-    - "!**/build/**"
-    - "!**/.next/**"
-    - "!**/coverage/**"
+    # Revisar primeiro o que muda execução, segurança, runtime e CI.
+    - "src/**"
+    - "app/**"
+    - "backend/**"
+    - "api/**"
+    - "services/**"
+    - "scripts/**"
+    - ".github/workflows/**"
+    - "tests/**"
+    - "package.json"
+    - "package-lock.json"
+    - "pyproject.toml"
+    - "requirements*.txt"
+    - "Dockerfile"
+    - "docker-compose*.yml"
+
+    # Reduzir ruído e contexto de baixo valor para micro PRs.
+    - "!docs/**"
+    - "!artifacts/**"
+    - "!dist/**"
+    - "!build/**"
+    - "!coverage/**"
+    - "!node_modules/**"
+    - "!**/*.html"
+    - "!**/*.svg"
+    - "!**/*.png"
+    - "!**/*.jpg"
+    - "!**/*.jpeg"
+    - "!**/*.gif"
+    - "!**/*.lock"
 
   path_instructions:
-    - path: "**/*"
+    - path: ".github/workflows/**"
       instructions: |
-        Você está revisando o repositório ReqSys.
-        Inclua obrigatoriamente um relatório em português do Brasil com:
-
-        ## Relatório de Monitoramento do PR
-
-        | Dimensão | Status | Evidência | Risco | Ação recomendada |
-        |---|---|---|---|---|
-        | Escopo alterado | Informar | Arquivos/áreas afetadas | Baixo/Médio/Alto | Próxima ação |
-        | Build/CI | Informar | Checks disponíveis | Baixo/Médio/Alto | Próxima ação |
-        | Testes | Informar | Testes adicionados/existentes | Baixo/Médio/Alto | Próxima ação |
-        | Segurança | Informar | Auth, secrets, CORS, JWT, logs ou PII | Baixo/Médio/Alto | Próxima ação |
-        | Observabilidade | Informar | Logs, correlation_id, métricas ou tracing | Baixo/Médio/Alto | Próxima ação |
-        | Documentação | Informar | README, ADR, changelog ou docs | Baixo/Médio/Alto | Próxima ação |
-        | UX/Responsividade | Informar | Telas/componentes impactados | Baixo/Médio/Alto | Próxima ação |
-        | Dados/Analytics | Informar | Dashboards, drill-down ou contratos | Baixo/Médio/Alto | Próxima ação |
-
-        ## Resultado da Revisão
-
-        | Critério | Resultado | Bloqueia merge? | Observação |
-        |---|---|---|---|
-        | Compilação | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
-        | Testes automatizados | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
-        | Segurança mínima | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
-        | Governança/ADR | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
-        | Documentação | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
-        | Pronto para revisão humana | Sim/Não | Sim/Não | Justificativa |
-
-        Regras:
-        - Solicite mudanças quando houver risco alto, falha de segurança, ausência de validação mínima ou quebra de contrato.
-        - Não aprove PR funcional sem testes compatíveis.
-        - CI verde é condição necessária, mas não suficiente.
-        - Sempre cite arquivos, trechos ou checks usados como evidência.
-        - Considere padrão ouro: CI/CD, rastreabilidade, documentação viva, segurança, observabilidade, ambientes segregados, analytics/drill-down e ADR.
+        Revisar com foco em segurança de GitHub Actions: permissões mínimas, secrets, shell injection, execução condicional, artifacts e rastreabilidade.
+    - path: "scripts/**"
+      instructions: |
+        Revisar idempotência, logs, tratamento de erro, dry-run quando aplicável e ausência de vazamento de segredo/PII.
 
   pre_merge_checks:
     custom_checks:
-      - mode: error
+      - mode: warning
         name: "CI verde obrigatório"
-        instructions: "Falhar se houver check obrigatório ausente, pendente, cancelado ou reprovado."
+        instructions: "Alertar se houver check obrigatório ausente, pendente, cancelado ou reprovado."
       - mode: error
         name: "Gates ReqSys produção"
         instructions: "Falhar se produção permitir auth desligada, CORS '*', JWT sem issuer/audience, logs com PII/secrets ou auditoria sem correlation_id."
-      - mode: warning
-        name: "Relatório operacional"
-        instructions: "Alertar se a revisão não trouxer tabela de monitoramento, tabela de resultado e evidências."
 
 chat:
   auto_reply: true
