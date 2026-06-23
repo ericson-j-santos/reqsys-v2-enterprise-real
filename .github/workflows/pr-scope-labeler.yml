@@ -1,0 +1,115 @@
+name: PR Scope Labeler
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+jobs:
+  label-scope:
+    name: Classificar escopo do PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Classificar por arquivos alterados
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              { owner, repo, pull_number: issue_number, per_page: 100 }
+            );
+
+            const paths = files.map(file => file.filename);
+            const changedFiles = paths.length;
+            const changedLines = files.reduce((total, file) => total + file.additions + file.deletions, 0);
+
+            const isDocs = path =>
+              path.startsWith('docs/') ||
+              path.endsWith('.md') ||
+              path.startsWith('README') ||
+              path.startsWith('CHANGELOG');
+
+            const isWorkflow = path => path.startsWith('.github/workflows/');
+            const isSecurityCritical = path =>
+              path.includes('auth') ||
+              path.includes('security') ||
+              path.includes('secrets') ||
+              path.includes('deploy') ||
+              path.includes('production') ||
+              path.startsWith('.github/workflows/') ||
+              path.startsWith('infra/') ||
+              path.startsWith('k8s/') ||
+              path.startsWith('terraform/');
+
+            const labelsToAdd = new Set();
+            const labelsToRemove = new Set([
+              'docs-only',
+              'workflow-only',
+              'fast-path',
+              'deep-review',
+              'security-critical'
+            ]);
+
+            const onlyDocs = paths.length > 0 && paths.every(isDocs);
+            const onlyWorkflow = paths.length > 0 && paths.every(isWorkflow);
+            const hasSecurityCritical = paths.some(isSecurityCritical);
+            const isSmallPr = changedFiles <= 10 && changedLines <= 400;
+
+            if (onlyDocs) labelsToAdd.add('docs-only');
+            if (onlyWorkflow) labelsToAdd.add('workflow-only');
+            if (isSmallPr && !hasSecurityCritical) labelsToAdd.add('fast-path');
+            if (hasSecurityCritical) labelsToAdd.add('security-critical');
+            if (!isSmallPr || hasSecurityCritical) labelsToAdd.add('deep-review');
+
+            for (const label of labelsToAdd) {
+              labelsToRemove.delete(label);
+            }
+
+            const current = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number });
+            const currentNames = new Set(current.data.map(label => label.name));
+
+            const removableExisting = [...labelsToRemove].filter(label => currentNames.has(label));
+            for (const label of removableExisting) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label });
+              } catch (error) {
+                core.warning(`Não foi possível remover label ${label}: ${error.message}`);
+              }
+            }
+
+            if (labelsToAdd.size > 0) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number,
+                labels: [...labelsToAdd]
+              });
+            }
+
+            core.summary
+              .addHeading('PR Scope Labeler')
+              .addTable([
+                [{ data: 'Métrica', header: true }, { data: 'Valor', header: true }],
+                ['Arquivos alterados', String(changedFiles)],
+                ['Linhas alteradas', String(changedLines)],
+                ['Docs only', String(onlyDocs)],
+                ['Workflow only', String(onlyWorkflow)],
+                ['Security critical', String(hasSecurityCritical)],
+                ['Small PR', String(isSmallPr)],
+                ['Labels aplicadas', [...labelsToAdd].join(', ') || 'nenhuma']
+              ])
+              .write();
