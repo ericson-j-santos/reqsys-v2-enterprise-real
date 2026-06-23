@@ -1,7 +1,7 @@
 name: PR Scope Labeler
 
 on:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - synchronize
@@ -100,37 +100,42 @@ jobs:
               labelsToRemove.delete(label);
             }
 
-            const current = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number });
-            const currentNames = new Set(current.data.map(label => label.name));
+            try {
+              const current = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number });
+              const currentNames = new Set(current.data.map(label => label.name));
 
-            const removableExisting = [...labelsToRemove].filter(label => currentNames.has(label));
-            for (const label of removableExisting) {
-              try {
-                await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label });
-              } catch (error) {
-                core.warning(`Não foi possível remover label ${label}: ${error.message}`);
+              const removableExisting = [...labelsToRemove].filter(label => currentNames.has(label));
+              for (const label of removableExisting) {
+                try {
+                  await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label });
+                } catch (error) {
+                  core.warning(`Não foi possível remover label ${label}: ${error.message}`);
+                }
               }
-            }
 
-            if (labelsToAdd.size > 0) {
-              await github.rest.issues.addLabels({
-                owner,
-                repo,
-                issue_number,
-                labels: [...labelsToAdd]
-              });
+              if (labelsToAdd.size > 0) {
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number,
+                  labels: [...labelsToAdd]
+                });
+              }
+            } catch (error) {
+              core.warning(`Rotulagem não aplicada. Possível PR de fork ou token sem permissão de escrita: ${error.message}`);
             }
 
             core.summary
               .addHeading('PR Scope Labeler')
               .addTable([
                 [{ data: 'Métrica', header: true }, { data: 'Valor', header: true }],
+                ['Evento', context.eventName],
                 ['Arquivos alterados', String(changedFiles)],
                 ['Linhas alteradas', String(changedLines)],
                 ['Docs only', String(onlyDocs)],
                 ['Workflow only', String(onlyWorkflow)],
                 ['Security critical', String(hasSecurityCritical)],
                 ['Small PR', String(isSmallPr)],
-                ['Labels aplicadas', [...labelsToAdd].join(', ') || 'nenhuma']
+                ['Labels previstas', [...labelsToAdd].join(', ') || 'nenhuma']
               ])
               .write();
