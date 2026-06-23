@@ -28,6 +28,7 @@ DEFAULT_REPORT_DIR = Path("artifacts/pr-ci-watch")
 BLOCKING_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required"}
 NON_BLOCKING_CONCLUSIONS = {"success", "neutral", "skipped"}
 FAIL_SEVERITIES = {"critical"}
+PR_EVENTS = {"pull_request", "pull_request_target"}
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,9 @@ def fetch_runs(repo: str, sha: str, token: str, exclude_run_id: int | None = Non
     data = request_json("GET", url, token)
     runs: list[WorkflowRun] = []
     for item in data.get("workflow_runs", []):
+        event = str(item.get("event") or "")
+        if event not in PR_EVENTS:
+            continue
         run_id = int(item.get("id") or 0)
         if exclude_run_id and run_id == exclude_run_id:
             continue
@@ -95,7 +99,7 @@ def fetch_runs(repo: str, sha: str, token: str, exclude_run_id: int | None = Non
                 status=str(item.get("status") or "unknown"),
                 conclusion=item.get("conclusion"),
                 html_url=item.get("html_url"),
-                event=item.get("event"),
+                event=event,
                 created_at=item.get("created_at"),
                 updated_at=item.get("updated_at"),
             )
@@ -178,7 +182,7 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
     ]
 
     if not runs:
-        lines.append("| `warning` | Nenhum workflow encontrado para o SHA | — | — | — | — | — |")
+        lines.append("| `warning` | Nenhum workflow de PR encontrado para o SHA | — | — | — | — | — |")
     for run in runs:
         link = f"[abrir]({run.html_url})" if run.html_url else "—"
         lines.append(
@@ -195,6 +199,7 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
             "- Não altera produção.",
             "- Não altera status de draft automaticamente nesta versão.",
             "- Exclui a própria execução do watcher quando `GITHUB_RUN_ID` está disponível, evitando falso bloqueio por auto-observação.",
+            "- Considera apenas eventos de PR, evitando falso bloqueio por runs `push` associados ao mesmo SHA.",
             "- Diferencia workflows `pending/running` de falhas reais.",
             "- Falha apenas quando existe workflow unhealthy real; warning permanece visível para decisão humana sem bloquear por padrão.",
         ]
