@@ -4,6 +4,13 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_run:
+    workflows:
+      - CI — ReqSys v2 Enterprise
+      - CI Enterprise Fast
+      - Governance Quality Gates
+      - Governança Padrão Ouro
+      - PR Conflict Guard
+      - Branch Protection Audit
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -28,7 +35,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
+  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.workflow_run.id || github.event.inputs.pr_number || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -50,26 +57,74 @@ jobs:
         run: |
           set -euo pipefail
 
+          mkdir -p "${REPORT_DIR}"
+
           if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "reason=pull_request" >> "$GITHUB_OUTPUT"
             echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
             echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
             echo "comment=false" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "reason=workflow_dispatch" >> "$GITHUB_OUTPUT"
             echo "pr_number=${{ github.event.inputs.pr_number }}" >> "$GITHUB_OUTPUT"
             echo "sha=${{ github.event.inputs.sha }}" >> "$GITHUB_OUTPUT"
             echo "comment=${{ github.event.inputs.comment }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
+            SHA="${{ github.event.workflow_run.head_sha }}"
+
+            if [ -z "${PR_NUMBER}" ] || [ "${PR_NUMBER}" = "null" ]; then
+              echo "enabled=false" >> "$GITHUB_OUTPUT"
+              echo "reason=workflow_run_without_pull_request" >> "$GITHUB_OUTPUT"
+              echo "pr_number=0" >> "$GITHUB_OUTPUT"
+              echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+              echo "comment=false" >> "$GITHUB_OUTPUT"
+              cat > "${REPORT_DIR}/pr-ci-watch.json" << JSON
+          {
+            "status": "skipped",
+            "reason": "workflow_run_without_pull_request",
+            "workflow_run_id": "${{ github.event.workflow_run.id }}",
+            "workflow_name": "${{ github.event.workflow_run.name }}",
+            "sha": "${SHA}"
+          }
+          JSON
+              cat > "${REPORT_DIR}/pr-ci-watch.md" << MD
+          # PR CI Watch
+
+          | Campo | Valor |
+          |---|---|
+          | Status | \`skipped\` |
+          | Motivo | \`workflow_run_without_pull_request\` |
+          | Workflow | \`${{ github.event.workflow_run.name }}\` |
+          | SHA | \`${SHA}\` |
+
+          Execução ignorada de forma segura porque o \`workflow_run\` não está associado a um PR.
+          MD
+            else
+              echo "enabled=true" >> "$GITHUB_OUTPUT"
+              echo "reason=workflow_run_with_pull_request" >> "$GITHUB_OUTPUT"
+              echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+              echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+              echo "comment=false" >> "$GITHUB_OUTPUT"
+            fi
           else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "reason=unsupported_event" >> "$GITHUB_OUTPUT"
             echo "pr_number=0" >> "$GITHUB_OUTPUT"
             echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
             echo "comment=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Setup Python
+        if: steps.ctx.outputs.enabled == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Executar PR CI Watch
+        if: steps.ctx.outputs.enabled == 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
