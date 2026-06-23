@@ -26,21 +26,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Buscar base atualizada
+      - name: Buscar base do evento
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: |
-          case "${BASE_REF}" in
-            ''|*[!A-Za-z0-9._/-]*)
-              echo "ERRO: base ref invalida."
-              exit 1
-              ;;
-          esac
-          git fetch origin "${BASE_REF}" --depth=1
-
-      - name: Validar merge limpo com a base
-        env:
-          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           case "${BASE_REF}" in
@@ -49,13 +38,39 @@ jobs:
               exit 1
               ;;
           esac
+          case "${BASE_SHA}" in
+            ''|*[!A-Fa-f0-9]*|???????????????????????????????????????|?????????????????????????????????????????)
+              echo "ERRO: base sha invalido."
+              exit 1
+              ;;
+          esac
+          git fetch origin "${BASE_SHA}" --depth=1
+
+      - name: Validar merge limpo com a base do evento
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          case "${BASE_REF}" in
+            ''|*[!A-Za-z0-9._/-]*)
+              echo "ERRO: base ref invalida."
+              exit 1
+              ;;
+          esac
+          case "${BASE_SHA}" in
+            ''|*[!A-Fa-f0-9]*|???????????????????????????????????????|?????????????????????????????????????????)
+              echo "ERRO: base sha invalido."
+              exit 1
+              ;;
+          esac
           git config user.name "reqsys-conflict-guard"
           git config user.email "actions@users.noreply.github.com"
-          if git merge --no-commit --no-ff "origin/${BASE_REF}"; then
-            echo "OK: PR sem conflitos contra ${BASE_REF}."
+          if git merge --no-commit --no-ff "${BASE_SHA}"; then
+            echo "OK: PR sem conflitos contra ${BASE_REF} no SHA de base do evento ${BASE_SHA}."
             git merge --abort || true
           else
-            echo "ERRO: PR possui conflitos contra ${BASE_REF}. Atualize o branch antes do merge."
+            echo "ERRO: PR possui conflitos contra ${BASE_REF} no SHA de base do evento ${BASE_SHA}. Atualize o branch antes do merge."
             git status --short
             exit 1
           fi
