@@ -9,9 +9,11 @@ Reduzir o tempo de espera em PRs do ReqSys sem reduzir governança, segurança o
 O fluxo padrão passa a ser:
 
 ```text
-Micro PR → PR Fast Classifier → CI rápido → CodeRabbit com escopo reduzido → merge seguro
+Micro PR → PR Fast Classifier → CI rápido → revisão sob demanda → merge seguro
                                       ↓
                          Deep Governance Review sob demanda/nightly
+                                      ↓
+                         Codex gratuito governado como apoio opcional
 ```
 
 ## Estratégia
@@ -53,12 +55,54 @@ Arquivo: `.coderabbit.yaml`.
 
 Decisão:
 
+- `auto_review.enabled=false` para evitar consumo automático de quota;
+- CodeRabbit não é gate obrigatório de merge;
+- revisão CodeRabbit deve ser acionada manualmente apenas quando houver real valor de revisão;
 - revisar primeiro código, scripts, workflows e testes;
 - ignorar por padrão artefatos pesados de baixa utilidade para revisão rápida;
 - reduzir diagramas automáticos e walkthrough expandido;
 - manter regras de segurança como alerta/erro.
 
-### 4. Deep Governance Review
+#### Quando o CodeRabbit atingir limite
+
+Se o CodeRabbit retornar `Review limit reached`, a decisão operacional é:
+
+1. não bloquear o PR apenas por limite de quota;
+2. validar CI obrigatório;
+3. validar `PR Fast Classifier`;
+4. acionar `Deep Governance Review` quando o PR alterar workflow, segurança, arquitetura, deploy ou runtime crítico;
+5. aplicar revisão humana focada nos arquivos alterados;
+6. acionar `@coderabbitai review` apenas após recarga de quota e somente se ainda houver necessidade.
+
+### 4. Codex gratuito governado
+
+O Codex gratuito do ecossistema ReqSys pode ser usado como **revisor complementar**, mas não deve ser tratado como gate de produção enquanto não publicar evidência versionada.
+
+Uso recomendado:
+
+- revisão local ou assistida do diff;
+- checklist de riscos por arquivo alterado;
+- análise de workflow GitHub Actions;
+- sugestão de correções pequenas;
+- geração de comentário de revisão para anexar ao PR.
+
+Condições mínimas para virar gate futuro:
+
+- execução via workflow governado ou comando manual auditável;
+- allowlist de comandos;
+- sem acesso irrestrito a secrets;
+- artifact obrigatório com relatório;
+- `correlation_id` ou `review_id`;
+- falha determinística apenas para violações objetivas;
+- runbook versionado.
+
+Até essa integração existir, a ordem de confiança é:
+
+```text
+CI obrigatório + checks determinísticos > Deep Governance Review > revisão humana > Codex gratuito > CodeRabbit sob demanda
+```
+
+### 5. Deep Governance Review
 
 Workflow: `.github/workflows/deep-governance-review.yml`.
 
@@ -86,6 +130,7 @@ Responsabilidades:
 | `architecture` | Decisão arquitetural ou ADR |
 | `fast-path` | PR pequeno de baixo risco |
 | `docs-only` | Documentação sem impacto de runtime |
+| `codex-review` | Solicitar revisão complementar pelo Codex gratuito |
 
 ## Política de merge recomendada
 
@@ -105,7 +150,8 @@ Um PR pode seguir para merge quando:
 - não houver bloqueador de segurança;
 - risco estiver classificado e entendido;
 - artifacts de classificação forem gerados;
-- revisão profunda tiver sido usada quando o risco exigir.
+- revisão profunda tiver sido usada quando o risco exigir;
+- ausência de review CodeRabbit por limite de quota estiver registrada como risco operacional não bloqueante.
 
 ## Operação prática
 
@@ -115,7 +161,8 @@ Um PR pode seguir para merge quando:
 2. Aguardar `PR Fast Classifier`.
 3. Corrigir riscos apontados.
 4. Aguardar CI obrigatório.
-5. Fazer merge.
+5. Se CodeRabbit estiver limitado, registrar como não bloqueante.
+6. Fazer merge.
 
 ### Para PR crítico
 
@@ -123,8 +170,23 @@ Um PR pode seguir para merge quando:
 2. Aguardar `Deep Governance Review`.
 3. Revisar artifact.
 4. Corrigir riscos reais.
-5. Prosseguir apenas com evidência verde.
+5. Usar Codex gratuito como apoio complementar quando houver diff relevante.
+6. Prosseguir apenas com evidência verde.
+
+### Para reativar CodeRabbit manualmente
+
+Após recarga de quota, comentar no PR:
+
+```text
+@coderabbitai review
+```
+
+Usar esse comando apenas quando:
+
+- o PR estiver pronto para revisão;
+- houver mudança em workflow, segurança, runtime ou arquitetura;
+- a revisão humana/CI ainda não tiver coberto o risco principal.
 
 ## Observação
 
-Esta estratégia não substitui branch protection, rulesets ou revisão humana em áreas críticas. Ela reduz tempo no caminho comum e desloca análise profunda para os casos que realmente justificam custo operacional maior.
+Esta estratégia não substitui branch protection, rulesets ou revisão humana em áreas críticas. Ela reduz tempo no caminho comum, evita dependência de quota do CodeRabbit e desloca análise profunda para os casos que realmente justificam custo operacional maior.
