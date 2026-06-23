@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
-  issues: write
+  issues: read
 
 jobs:
   label-scope:
@@ -28,32 +28,9 @@ jobs:
             const repo = context.repo.repo;
             const issue_number = context.payload.pull_request.number;
 
-            const managedLabels = {
-              'docs-only': { color: '0366d6', description: 'Mudança exclusivamente documental.' },
-              'workflow-only': { color: '5319e7', description: 'Mudança exclusivamente em GitHub Actions/workflows.' },
-              'fast-path': { color: '0e8a16', description: 'PR pequeno e objetivo elegível para ciclo rápido.' },
-              'deep-review': { color: 'fbca04', description: 'Exige revisão profunda/CodeRabbit/full review por risco ou escopo.' },
-              'security-critical': { color: 'd73a4a', description: 'Altera segurança, auth, secrets, deploy, produção ou superfície crítica.' }
-            };
-
-            async function ensureLabel(name, metadata) {
-              try {
-                await github.rest.issues.getLabel({ owner, repo, name });
-              } catch (error) {
-                if (error.status !== 404) throw error;
-                await github.rest.issues.createLabel({
-                  owner,
-                  repo,
-                  name,
-                  color: metadata.color,
-                  description: metadata.description
-                });
-              }
-            }
-
-            for (const [label, metadata] of Object.entries(managedLabels)) {
-              await ensureLabel(label, metadata);
-            }
+            const headRepo = context.payload.pull_request.head.repo.full_name;
+            const baseRepo = context.payload.pull_request.base.repo.full_name;
+            const isFork = headRepo !== baseRepo;
 
             const files = await github.paginate(
               github.rest.pulls.listFiles,
@@ -82,44 +59,21 @@ jobs:
               path.startsWith('k8s/') ||
               path.startsWith('terraform/');
 
-            const labelsToAdd = new Set();
-            const labelsToRemove = new Set(Object.keys(managedLabels));
-
+            const labelsCalculated = new Set();
             const onlyDocs = paths.length > 0 && paths.every(isDocs);
             const onlyWorkflow = paths.length > 0 && paths.every(isWorkflow);
             const hasSecurityCritical = paths.some(isSecurityCritical);
             const isSmallPr = changedFiles <= 10 && changedLines <= 400;
 
-            if (onlyDocs) labelsToAdd.add('docs-only');
-            if (onlyWorkflow) labelsToAdd.add('workflow-only');
-            if (isSmallPr && !hasSecurityCritical) labelsToAdd.add('fast-path');
-            if (hasSecurityCritical) labelsToAdd.add('security-critical');
-            if (!isSmallPr || hasSecurityCritical) labelsToAdd.add('deep-review');
+            if (onlyDocs) labelsCalculated.add('docs-only');
+            if (onlyWorkflow) labelsCalculated.add('workflow-only');
+            if (isSmallPr && !hasSecurityCritical) labelsCalculated.add('fast-path');
+            if (hasSecurityCritical) labelsCalculated.add('security-critical');
+            if (!isSmallPr || hasSecurityCritical) labelsCalculated.add('deep-review');
 
-            for (const label of labelsToAdd) {
-              labelsToRemove.delete(label);
-            }
-
-            const current = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number });
-            const currentNames = new Set(current.data.map(label => label.name));
-
-            const removableExisting = [...labelsToRemove].filter(label => currentNames.has(label));
-            for (const label of removableExisting) {
-              try {
-                await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label });
-              } catch (error) {
-                core.warning(`Não foi possível remover label ${label}: ${error.message}`);
-              }
-            }
-
-            if (labelsToAdd.size > 0) {
-              await github.rest.issues.addLabels({
-                owner,
-                repo,
-                issue_number,
-                labels: [...labelsToAdd]
-              });
-            }
+            core.notice(`PR ${issue_number} (${isFork ? 'fork' : 'same-repo'}) classificado sem mutação de labels.`);
+            core.notice(`Labels calculadas: ${[...labelsCalculated].join(', ') || 'nenhuma'}`);
+            core.notice('PR Scope Labeler opera em modo read-only para evitar 403 Resource not accessible by integration.');
 
             core.summary
               .addHeading('PR Scope Labeler')
@@ -131,6 +85,8 @@ jobs:
                 ['Workflow only', String(onlyWorkflow)],
                 ['Security critical', String(hasSecurityCritical)],
                 ['Small PR', String(isSmallPr)],
-                ['Labels aplicadas', [...labelsToAdd].join(', ') || 'nenhuma']
+                ['Fork', String(isFork)],
+                ['Labels calculadas', [...labelsCalculated].join(', ') || 'nenhuma'],
+                ['Modo', 'read-only; sem mutação de labels']
               ])
               .write();
