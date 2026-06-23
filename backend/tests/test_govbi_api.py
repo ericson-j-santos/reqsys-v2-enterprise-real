@@ -1,0 +1,47 @@
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+
+def test_govbi_perguntas_retorna_fallback_governado_quando_servico_externo_falha(monkeypatch):
+    class ClientComFalha:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, *args, **kwargs):
+            raise RuntimeError('falha simulada')
+
+    import app.api.govbi as govbi
+
+    monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientComFalha)
+
+    client = TestClient(app)
+    response = client.post(
+        '/api/govbi/perguntas',
+        json={
+            'pergunta': 'Quantas propostas por mês em 2024?',
+            'formatoResposta': 'tabela',
+            'exibirSql': True,
+        },
+        headers={'X-Correlation-Id': 'test-correlation-id'},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data['statusFluxo'] == 'MODO_DEGRADADO'
+    assert data['correlationId'] == 'test-correlation-id'
+    assert data['resultado']['colunas'] == ['item', 'valor', 'status']
+    assert data['mascaramentoAplicado'] is True
+
+
+def test_govbi_perguntas_valida_payload_minimo():
+    client = TestClient(app)
+    response = client.post('/api/govbi/perguntas', json={'pergunta': 'oi'})
+
+    assert response.status_code == 422
