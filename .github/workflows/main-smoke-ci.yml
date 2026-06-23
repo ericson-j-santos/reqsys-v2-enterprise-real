@@ -74,11 +74,9 @@ jobs:
             printf -- '- Não altera produção.\n'
           } > artifacts/main-smoke-ci/summary.md
 
-          generated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           python -c 'import json, os; print(json.dumps({"workflow":"Main Smoke CI","branch":os.environ.get("GITHUB_REF_NAME", ""),"sha":os.environ.get("GITHUB_SHA", ""),"run_id":os.environ.get("GITHUB_RUN_ID", ""),"environment_change":False,"deploy":False,"generated_at":os.environ["GENERATED_AT"]}, indent=2, ensure_ascii=False))' \
             > artifacts/main-smoke-ci/evidence.json
-        env:
-          GENERATED_AT: ${{ github.run_id }}
 
       - name: Publicar artifact de evidência
         if: always()
