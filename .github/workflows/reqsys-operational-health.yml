@@ -1,0 +1,68 @@
+name: ReqSys Operational Health
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 10 * * 1-5"
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: reqsys-operational-health-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  operational-health:
+    name: Generate operational health report
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Collect pull request data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts
+          gh pr list \
+            --repo "${{ github.repository }}" \
+            --state all \
+            --limit 50 \
+            --json number,title,state,createdAt,updatedAt,mergedAt,isDraft,mergeStateStatus,reviewDecision,url,headRefName,baseRefName \
+            > artifacts/prs.json
+
+      - name: Collect workflow run data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run list \
+            --repo "${{ github.repository }}" \
+            --limit 50 \
+            --json databaseId,workflowName,status,conclusion,createdAt,updatedAt,event,headBranch,headSha,url \
+            > artifacts/runs.json
+
+      - name: Generate operational health statistics
+        run: |
+          python scripts/reqsys_operational_health.py \
+            --prs artifacts/prs.json \
+            --runs artifacts/runs.json \
+            --out-dir artifacts
+
+      - name: Publish job summary
+        run: cat artifacts/operational-health.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload operational health artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-operational-health
+          path: |
+            artifacts/operational-health.json
+            artifacts/operational-health.md
+            artifacts/prs.json
+            artifacts/runs.json
+          retention-days: 30
