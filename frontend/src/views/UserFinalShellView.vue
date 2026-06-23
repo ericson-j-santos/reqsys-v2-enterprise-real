@@ -85,7 +85,7 @@
         <strong>Rodapé técnico</strong>
         <span class="muted">Versão frontend {{ frontendVersion }} · ambiente {{ environment.id }} · correlation_id {{ correlationId }}</span>
       </div>
-      <v-chip size="small" color="green" variant="tonal">sem PII</v-chip>
+      <v-chip size="small" color="green" variant="tonal">sem dado sensível</v-chip>
     </v-card>
   </section>
 </template>
