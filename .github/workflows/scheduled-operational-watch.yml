@@ -1,0 +1,127 @@
+name: Scheduled Operational Watch
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  operational-watch:
+    name: Detect PR evidence gaps
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build operational watch evidence
+        id: watch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const now = new Date().toISOString();
+            const requiredWorkflowNames = [
+              'CI — ReqSys v2 Enterprise',
+              'Governance Quality Gates',
+              'Governança Padrão Ouro',
+              'PR Evidence Gate',
+            ];
+
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            const findings = [];
+            const prEvidence = [];
+
+            for (const pr of prs) {
+              const headSha = pr.head.sha;
+              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+                owner,
+                repo,
+                head_sha: headSha,
+                per_page: 100,
+              });
+
+              const artifactCountByRun = {};
+              for (const run of runs) {
+                const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                  owner,
+                  repo,
+                  run_id: run.id,
+                  per_page: 100,
+                });
+                artifactCountByRun[run.id] = artifacts.length;
+              }
+
+              const required = requiredWorkflowNames.map((name) => {
+                const matchingRuns = runs.filter((run) => run.name === name);
+                const successfulRuns = matchingRuns.filter((run) => run.status === 'completed' && run.conclusion === 'success');
+                return { name, matching_runs: matchingRuns.length, successful_runs: successfulRuns.length };
+              });
+
+              const missing = required.filter((item) => item.successful_runs === 0).map((item) => item.name);
+              const hasArtifact = runs.some((run) => artifactCountByRun[run.id] > 0);
+
+              if (runs.length === 0) findings.push({ pr: pr.number, severity: 'high', type: 'missing_runs', message: `No workflow runs for head SHA ${headSha}` });
+              if (missing.length > 0) findings.push({ pr: pr.number, severity: 'medium', type: 'missing_required_success', message: `Missing successful required workflows: ${missing.join(', ')}` });
+              if (!hasArtifact) findings.push({ pr: pr.number, severity: 'medium', type: 'missing_artifact', message: `No artifact found for current head SHA ${headSha}` });
+
+              prEvidence.push({
+                number: pr.number,
+                title: pr.title,
+                draft: pr.draft,
+                html_url: pr.html_url,
+                head_ref: pr.head.ref,
+                head_sha: headSha,
+                mergeable_state: pr.mergeable_state,
+                workflow_run_count: runs.length,
+                required,
+                has_artifact: hasArtifact,
+              });
+            }
+
+            const audit = {
+              schema_version: '1.0.0',
+              generated_at: now,
+              repository: `${owner}/${repo}`,
+              status: findings.some((f) => f.severity === 'high') ? 'failed' : findings.length ? 'warning' : 'passed',
+              findings,
+              pull_requests: prEvidence,
+            };
+
+            fs.mkdirSync('audit', { recursive: true });
+            fs.writeFileSync('audit/scheduled-operational-watch.json', JSON.stringify(audit, null, 2));
+            fs.writeFileSync('audit/scheduled-operational-watch.md', [
+              '# Scheduled Operational Watch',
+              '',
+              `- Repository: ${owner}/${repo}`,
+              `- Generated at: ${now}`,
+              `- Status: ${audit.status}`,
+              `- Findings: ${findings.length}`,
+              '',
+              '## Findings',
+              findings.length ? findings.map((f) => `- PR #${f.pr} [${f.severity}] ${f.type}: ${f.message}`).join('\n') : '- None',
+            ].join('\n'));
+
+            if (audit.status === 'failed') {
+              core.setFailed(`Operational watch found high severity gaps: ${findings.length}`);
+            }
+
+      - name: Upload operational evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-operational-watch-${{ github.run_id }}
+          path: audit/
+          if-no-files-found: error
+          retention-days: 30
