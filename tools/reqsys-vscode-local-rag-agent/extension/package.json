@@ -1,0 +1,64 @@
+{
+  "name": "reqsys-vscode-local-rag-agent",
+  "displayName": "ReqSys Local RAG Agent",
+  "description": "Assistente local governado para ReqSys com RAG local e segurança por padrão.",
+  "version": "0.1.0",
+  "publisher": "reqsys",
+  "engines": {
+    "vscode": "^1.92.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:reqsys.openPanel",
+    "onCommand:reqsys.indexProject",
+    "onCommand:reqsys.askProject",
+    "onCommand:reqsys.governanceChecklist"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "reqsys.openPanel",
+        "title": "ReqSys: Abrir Painel Operacional"
+      },
+      {
+        "command": "reqsys.indexProject",
+        "title": "ReqSys: Indexar Projeto"
+      },
+      {
+        "command": "reqsys.askProject",
+        "title": "ReqSys: Perguntar ao Projeto"
+      },
+      {
+        "command": "reqsys.governanceChecklist",
+        "title": "ReqSys: Gerar Checklist Padrão Ouro"
+      }
+    ],
+    "configuration": {
+      "title": "ReqSys Local RAG Agent",
+      "properties": {
+        "reqsys.agent.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Caminho do Python usado para executar o agente local."
+        },
+        "reqsys.agent.timeoutMs": {
+          "type": "number",
+          "default": 60000,
+          "description": "Timeout dos comandos locais do agente."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "test": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.92.0",
+    "typescript": "^5.5.0"
+  }
+}
