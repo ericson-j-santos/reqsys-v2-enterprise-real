@@ -19,9 +19,10 @@ Reduz validação manual de checks, cria rastreabilidade operacional e prepara a
 
 - Não faz merge automático.
 - Não altera produção.
-- Não altera draft automaticamente.
-- Usa `GITHUB_TOKEN` com permissões mínimas necessárias.
+- Não altera status de draft automaticamente.
+- Não executa shell arbitrário.
+- Usa apenas `GITHUB_TOKEN`.
 
 ## Próximo incremento
 
-Adicionar leitura de logs de jobs falhos e classificação automática da causa provável.
+Buscar logs de jobs falhos, classificar causa provável e integrar resultado ao Operational Actions Center.
