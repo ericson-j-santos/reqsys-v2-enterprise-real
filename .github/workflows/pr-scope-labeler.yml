@@ -1,7 +1,7 @@
 name: PR Scope Labeler
 
 on:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - synchronize
@@ -11,7 +11,6 @@ on:
 permissions:
   contents: read
   pull-requests: read
-  issues: read
 
 jobs:
   label-scope:
@@ -26,20 +25,36 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const issue_number = context.payload.pull_request.number;
+            const pr = context.payload.pull_request;
+            const issue_number = pr.number;
 
-            const headRepo = context.payload.pull_request.head.repo?.full_name ?? null;
-            const baseRepo = context.payload.pull_request.base.repo?.full_name ?? null;
+            const headRepo = pr.head.repo?.full_name ?? null;
+            const baseRepo = pr.base.repo?.full_name ?? null;
             const isFork = headRepo === null || headRepo !== baseRepo;
 
-            const files = await github.paginate(
-              github.rest.pulls.listFiles,
-              { owner, repo, pull_number: issue_number, per_page: 100 }
-            );
+            let files = [];
+            let source = 'github-api';
+            let apiWarning = null;
 
-            const paths = files.map(file => file.filename);
-            const changedFiles = paths.length;
-            const changedLines = files.reduce((total, file) => total + file.additions + file.deletions, 0);
+            try {
+              files = await github.paginate(
+                github.rest.pulls.listFiles,
+                { owner, repo, pull_number: issue_number, per_page: 100 }
+              );
+            } catch (error) {
+              source = 'payload-fallback';
+              apiWarning = `${error.status ?? 'unknown'} ${error.message ?? error}`;
+              core.warning(`Nao foi possivel consultar arquivos do PR via API. Fallback acionado: ${apiWarning}`);
+            }
+
+            const paths = files.map(file => file.filename).filter(Boolean);
+            const changedFiles = paths.length || Number(pr.changed_files ?? 0);
+            const changedLinesFromApi = files.reduce(
+              (total, file) => total + Number(file.additions ?? 0) + Number(file.deletions ?? 0),
+              0
+            );
+            const changedLines = changedLinesFromApi || Number(pr.additions ?? 0) + Number(pr.deletions ?? 0);
+            const hasPathEvidence = paths.length > 0;
 
             const isDocs = path =>
               path.startsWith('docs/') ||
@@ -60,25 +75,26 @@ jobs:
               path.startsWith('terraform/');
 
             const labelsCalculated = new Set();
-            const onlyDocs = paths.length > 0 && paths.every(isDocs);
-            const onlyWorkflow = paths.length > 0 && paths.every(isWorkflow);
-            const hasSecurityCritical = paths.some(isSecurityCritical);
+            const onlyDocs = hasPathEvidence && paths.every(isDocs);
+            const onlyWorkflow = hasPathEvidence && paths.every(isWorkflow);
+            const hasSecurityCritical = hasPathEvidence && paths.some(isSecurityCritical);
             const isSmallPr = changedFiles <= 10 && changedLines <= 400;
 
             if (onlyDocs) labelsCalculated.add('docs-only');
             if (onlyWorkflow) labelsCalculated.add('workflow-only');
-            if (isSmallPr && !hasSecurityCritical) labelsCalculated.add('fast-path');
+            if (hasPathEvidence && isSmallPr && !hasSecurityCritical) labelsCalculated.add('fast-path');
             if (hasSecurityCritical) labelsCalculated.add('security-critical');
-            if (!isSmallPr || hasSecurityCritical) labelsCalculated.add('deep-review');
+            if (!isSmallPr || hasSecurityCritical || !hasPathEvidence) labelsCalculated.add('deep-review');
 
-            core.notice(`PR ${issue_number} (${isFork ? 'fork' : 'same-repo'}) classificado sem mutação de labels.`);
+            core.notice(`PR ${issue_number} (${isFork ? 'fork' : 'same-repo'}) classificado sem mutacao de labels.`);
+            core.notice(`Origem dos dados: ${source}`);
             core.notice(`Labels calculadas: ${[...labelsCalculated].join(', ') || 'nenhuma'}`);
-            core.notice('PR Scope Labeler opera em modo read-only para evitar 403 Resource not accessible by integration.');
+            core.notice('PR Scope Labeler opera em modo read-only e fail-safe para evitar 403 Resource not accessible by integration.');
 
-            core.summary
+            await core.summary
               .addHeading('PR Scope Labeler')
               .addTable([
-                [{ data: 'Métrica', header: true }, { data: 'Valor', header: true }],
+                [{ data: 'Metrica', header: true }, { data: 'Valor', header: true }],
                 ['Arquivos alterados', String(changedFiles)],
                 ['Linhas alteradas', String(changedLines)],
                 ['Docs only', String(onlyDocs)],
@@ -86,7 +102,10 @@ jobs:
                 ['Security critical', String(hasSecurityCritical)],
                 ['Small PR', String(isSmallPr)],
                 ['Fork', String(isFork)],
+                ['Evidencia de paths', String(hasPathEvidence)],
+                ['Origem dos dados', source],
+                ['Aviso API', apiWarning ?? 'nenhum'],
                 ['Labels calculadas', [...labelsCalculated].join(', ') || 'nenhuma'],
-                ['Modo', 'read-only; sem mutação de labels']
+                ['Modo', 'read-only; fail-safe; sem mutacao de labels']
               ])
               .write();
