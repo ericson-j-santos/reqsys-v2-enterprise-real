@@ -4,11 +4,14 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_run:
+    workflows:
+      - CI — ReqSys v2 Enterprise
+      - CI
     types: [completed]
   workflow_dispatch:
     inputs:
       pr_number:
-        description: "Número do PR a validar"
+        description: "Numero do PR a validar"
         required: true
         type: string
       sha:
@@ -16,7 +19,7 @@ on:
         required: true
         type: string
       comment:
-        description: "Comentar diagnóstico no PR"
+        description: "Comentar diagnostico no PR"
         required: true
         default: false
         type: boolean
@@ -28,14 +31,17 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
-  cancel-in-progress: false
+  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.event.workflow_run.head_sha || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   pr-ci-watch:
     name: PR CI Watch seguro
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: >
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.event == 'pull_request'
 
     env:
       REPORT_DIR: artifacts/pr-ci-watch
@@ -60,16 +66,28 @@ jobs:
             echo "comment=${{ github.event.inputs.comment }}" >> "$GITHUB_OUTPUT"
           else
             echo "pr_number=0" >> "$GITHUB_OUTPUT"
-            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
             echo "comment=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Validar contexto resolvido
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ steps.ctx.outputs.pr_number }}" = "0" ]; then
+            echo "PR CI Watch ignorado: evento sem PR associado."
+            exit 0
+          fi
+
       - name: Setup Python
+        if: steps.ctx.outputs.pr_number != '0'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Executar PR CI Watch
+        if: steps.ctx.outputs.pr_number != '0'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -89,7 +107,7 @@ jobs:
             ${COMMENT_FLAG}
 
       - name: Publicar artifact
-        if: always()
+        if: always() && steps.ctx.outputs.pr_number != '0'
         uses: actions/upload-artifact@v4
         with:
           name: pr-ci-watch-report
