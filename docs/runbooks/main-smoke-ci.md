@@ -28,6 +28,30 @@ O workflow valida:
 - sintaxe Python do watcher;
 - testes rápidos do watcher.
 
+## Relatório de Monitoramento do PR
+
+| Dimensão | Status | Evidência | Risco | Ação recomendada |
+|---|---|---|---|---|
+| Escopo alterado | Controlado | Novo workflow `main-smoke-ci.yml` e este runbook | Baixo | Manter mudança pequena e rastreável |
+| Build/CI | Validável no head do PR | Checks principais do PR devem estar verdes antes do merge | Médio | Bloquear merge se houver falha, cancelamento ou pendência |
+| Testes | Coberto por smoke rápido | `python -m pytest tests/test_pr_ci_watch.py -q` | Baixo | Reexecutar em caso de falha e capturar log |
+| Segurança | Sem alteração produtiva | `contents: read`, sem secrets e sem deploy | Baixo | Não adicionar permissões elevadas |
+| Observabilidade | Artifact operacional | `main-smoke-ci-evidence` com `summary.md` e `evidence.json` | Baixo | Validar artifact após execução em `main` |
+| Documentação | Atualizada | Runbook com escopo, decisão operacional e tabelas | Baixo | Manter este documento sincronizado com o workflow |
+| Ambiente | Main pós-merge | Gatilho em `push` para `main` | Médio | Usar apenas como evidência pós-merge, não como aprovação de deploy |
+| Auditoria | Rastreável | SHA, branch, run id e flags de não deploy no JSON | Baixo | Preservar retenção do artifact |
+
+## Resultado da Revisão
+
+| Critério | Resultado | Bloqueia merge? | Observação |
+|---|---|---|---|
+| Compilação YAML | Aprovado quando GitHub Actions aceitar o workflow | Sim, se falhar | Validar no head do PR |
+| Testes automatizados | Aprovado quando `tests/test_pr_ci_watch.py` passar | Sim, se falhar | Executado no próprio workflow |
+| Segurança mínima | Aprovado | Não | Permissão mínima `contents: read`; sem secrets, deploy ou produção |
+| Governança/ADR | Aprovado | Não | Incremento operacional pós-PR #131; sem mudança arquitetural de negócio |
+| Documentação | Aprovado | Não | Runbook contém escopo, tabelas, decisão operacional e evidência |
+| Pronto para revisão humana | Condicional | Sim | Só considerar pronto se CI completo do head estiver verde |
+
 ## Fora de escopo
 
 Este workflow não:
