@@ -1,0 +1,56 @@
+name: Fast CI - Operational Guardrails
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/**"
+      - "tests/**"
+      - "docs/runbooks/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fast-ci-operational-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  operational-guardrails:
+    name: Fast CI / operational guardrails
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar sintaxe Python
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/pr_ci_watch.py
+
+      - name: Executar testes rápidos do watcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pytest tests/test_pr_ci_watch.py -q
+
+      - name: Validar workflow PR CI Watch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/pr-ci-watch.yml
+          grep -qi "--exclude-run-id" .github/workflows/pr-ci-watch.yml
+          grep -qi "upload-artifact" .github/workflows/pr-ci-watch.yml
+          grep -qi "set -euo pipefail" .github/workflows/pr-ci-watch.yml
