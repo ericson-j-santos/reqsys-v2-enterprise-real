@@ -1,0 +1,39 @@
+{
+  "project": "reqsys-v2-enterprise-real",
+  "agentRepository": "https://github.com/ericson-j-santos/reqsys-vscode-agent",
+  "mode": "safe-readonly",
+  "allowedPaths": [
+    "README.md",
+    "docs",
+    ".github/workflows",
+    "frontend",
+    "backend",
+    "src",
+    "tests"
+  ],
+  "blockedActions": [
+    "merge",
+    "push",
+    "production-change",
+    "delete-files",
+    "read-secrets",
+    "auto-remediation"
+  ],
+  "evidencePolicy": {
+    "requireCorrelationId": true,
+    "requireFileEvidence": true,
+    "allowAnswerWithoutContext": false,
+    "requireCiEvidenceForGreen": true
+  },
+  "statusModel": {
+    "green": "validado com evidência real",
+    "yellow": "parcial, pendente ou depende de validação",
+    "red": "bloqueado, inseguro ou sem evidência"
+  },
+  "integration": {
+    "type": "vscode-local-agent",
+    "required": false,
+    "runtime": "local",
+    "scope": "developer-experience"
+  }
+}
