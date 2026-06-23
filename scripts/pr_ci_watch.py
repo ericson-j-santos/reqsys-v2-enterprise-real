@@ -27,6 +27,7 @@ API_VERSION = "2022-11-28"
 DEFAULT_REPORT_DIR = Path("artifacts/pr-ci-watch")
 BLOCKING_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required"}
 NON_BLOCKING_CONCLUSIONS = {"success", "neutral", "skipped"}
+FAIL_SEVERITIES = {"critical", "warning"}
 
 
 @dataclass(frozen=True)
@@ -122,7 +123,7 @@ def classify(runs: list[WorkflowRun]) -> dict[str, Any]:
         severity = "critical"
     elif running:
         decision = "aguardar_finalizacao_dos_workflows"
-        severity = "warning"
+        severity = "pending"
     elif unknown:
         decision = "investigar_status_desconhecido"
         severity = "warning"
@@ -194,7 +195,8 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
             "- Não altera produção.",
             "- Não altera status de draft automaticamente nesta versão.",
             "- Exclui a própria execução do watcher quando `GITHUB_RUN_ID` está disponível, evitando falso bloqueio por auto-observação.",
-            "- Falha o job quando há workflow unhealthy ou quando não existe evidência CI suficiente para o SHA.",
+            "- Estado `pending` por workflows em execução é informativo e não bloqueia por si só.",
+            "- Falha o job quando há workflow unhealthy, status desconhecido ou quando não existe evidência CI suficiente para o SHA.",
         ]
     )
     return "\n".join(lines) + "\n"
@@ -255,7 +257,7 @@ def main() -> int:
     if args.comment:
         post_comment(args.repo, args.pr_number, token, markdown)
 
-    if summary["severity"] in {"critical", "warning"}:
+    if summary["severity"] in FAIL_SEVERITIES:
         return 1
     return 0
 
