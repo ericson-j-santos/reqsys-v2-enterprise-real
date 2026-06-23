@@ -1,0 +1,161 @@
+{
+  "schema_version": "1.0.0",
+  "updated_at": "2026-06-23",
+  "description": "Catalogo versionado de padroes conhecidos de falha operacional do ReqSys.",
+  "safety_policy": {
+    "automatic_remediation_enabled": false,
+    "allowed_actions": [
+      "classify",
+      "summarize",
+      "recommend",
+      "publish_artifact"
+    ],
+    "blocked_actions": [
+      "merge_pull_request",
+      "push_to_main",
+      "modify_production",
+      "delete_artifact",
+      "rerun_without_policy"
+    ]
+  },
+  "patterns": [
+    {
+      "id": "FPE-GH-PERM-001",
+      "name": "GitHub integration permission denied",
+      "category": "permissions",
+      "severity": "high",
+      "confidence": "high",
+      "match_any": [
+        "Resource not accessible by integration",
+        "HttpError: Resource not accessible by integration",
+        "403 Resource not accessible by integration"
+      ],
+      "tags": ["github", "actions", "permissions", "token"],
+      "recommended_action": "Validar permissions do workflow, escopo do GITHUB_TOKEN e uso de pull_request_target apenas quando houver justificativa e guardrails.",
+      "can_auto_rerun": false,
+      "can_auto_fix": false
+    },
+    {
+      "id": "FPE-GH-CONFLICT-001",
+      "name": "Pull request merge conflict",
+      "category": "git_conflict",
+      "severity": "high",
+      "confidence": "high",
+      "match_any": [
+        "Automatic merge failed",
+        "CONFLICT (",
+        "Merge conflict",
+        "This branch has conflicts that must be resolved"
+      ],
+      "tags": ["git", "merge", "conflict", "pr"],
+      "recommended_action": "Atualizar a branch com a base main, resolver conflitos localmente e reexecutar PR Conflict Guard antes de liberar merge.",
+      "can_auto_rerun": false,
+      "can_auto_fix": false
+    },
+    {
+      "id": "FPE-GH-QUOTA-001",
+      "name": "GitHub or provider quota exhausted",
+      "category": "quota",
+      "severity": "medium",
+      "confidence": "medium",
+      "match_any": [
+        "You have no quota",
+        "quota exceeded",
+        "rate limit exceeded",
+        "API rate limit exceeded"
+      ],
+      "tags": ["quota", "rate-limit", "provider"],
+      "recommended_action": "Aplicar backoff, reduzir chamadas redundantes e evitar rerun em loop. Reexecutar somente após janela operacional segura.",
+      "can_auto_rerun": false,
+      "can_auto_fix": false
+    },
+    {
+      "id": "FPE-GH-ARTIFACT-001",
+      "name": "Missing or unavailable artifact",
+      "category": "artifact",
+      "severity": "medium",
+      "confidence": "medium",
+      "match_any": [
+        "Artifact not found",
+        "No artifacts found",
+        "Unable to download artifact",
+        "upload-artifact"
+      ],
+      "tags": ["artifact", "evidence", "ci"],
+      "recommended_action": "Validar etapa de upload, nome do artifact, retention-days e permissao de leitura do workflow.",
+      "can_auto_rerun": true,
+      "can_auto_fix": false
+    },
+    {
+      "id": "FPE-GH-TIMEOUT-001",
+      "name": "Workflow timeout or cancellation",
+      "category": "timeout",
+      "severity": "medium",
+      "confidence": "medium",
+      "match_any": [
+        "The job running on runner",
+        "exceeded the maximum execution time",
+        "timed out",
+        "cancelled"
+      ],
+      "tags": ["timeout", "flaky", "runner", "ci"],
+      "recommended_action": "Classificar se foi instabilidade ou teste lento. Permitir rerun governado apenas se nao houver alteracao de codigo necessaria.",
+      "can_auto_rerun": true,
+      "can_auto_fix": false
+    },
+    {
+      "id": "FPE-NODE-DEPS-001",
+      "name": "Node dependency installation failure",
+      "category": "dependencies",
+      "severity": "medium",
+      "confidence": "medium",
+      "match_any": [
+        "npm ERR!",
+        "npm ci",
+        "pnpm install",
+        "yarn install",
+        "ERESOLVE unable to resolve dependency tree"
+      ],
+      "tags": ["node", "frontend", "dependencies"],
+      "recommended_action": "Validar lockfile, versao Node, cache e compatibilidade de dependencias antes de reexecutar.",
+      "can_auto_rerun": false,
+      "can_auto_fix": false
+    },
+    {
+      "id": "FPE-PY-RUFF-001",
+      "name": "Python lint or formatting failure",
+      "category": "quality_gate",
+      "severity": "medium",
+      "confidence": "high",
+      "match_any": [
+        "ruff check",
+        "ruff format",
+        "would reformat",
+        "Found ",
+        "E501"
+      ],
+      "tags": ["python", "ruff", "lint", "quality"],
+      "recommended_action": "Corrigir lint/formatacao no codigo-fonte e manter falha como bloqueio legitimo, sem rerun como solucao.",
+      "can_auto_rerun": false,
+      "can_auto_fix": true
+    },
+    {
+      "id": "FPE-TEST-FAIL-001",
+      "name": "Automated test failure",
+      "category": "test_failure",
+      "severity": "high",
+      "confidence": "medium",
+      "match_any": [
+        "FAILED tests/",
+        "AssertionError",
+        "Test failed",
+        "pytest",
+        "vitest"
+      ],
+      "tags": ["tests", "quality", "regression"],
+      "recommended_action": "Tratar como regressao ate prova contraria. Inspecionar teste, alterar codigo ou teste somente com evidencia.",
+      "can_auto_rerun": false,
+      "can_auto_fix": false
+    }
+  ]
+}
