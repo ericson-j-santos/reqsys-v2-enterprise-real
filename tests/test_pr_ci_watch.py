@@ -31,15 +31,15 @@ def test_classify_failure_blocks_review() -> None:
     summary = classify([run("completed", "success"), run("completed", "failure", "Lint")])
 
     assert summary["severity"] == "critical"
-    assert summary["decision"] == "corrigir_falhas_antes_de_liberar_revisao"
+    assert summary["decision"] == "corrigir_falhas_reais_antes_de_liberar_revisao"
     assert summary["unhealthy"] == 1
 
 
-def test_classify_running_waits() -> None:
+def test_classify_running_waits_without_failing_watch() -> None:
     summary = classify([run("in_progress", None)])
 
-    assert summary["severity"] == "warning"
-    assert summary["decision"] == "aguardar_finalizacao_dos_workflows"
+    assert summary["severity"] == "pending"
+    assert summary["decision"] == "workflows_ainda_em_execucao"
     assert summary["running"] == 1
 
 
