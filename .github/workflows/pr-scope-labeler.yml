@@ -28,9 +28,9 @@ jobs:
             const repo = context.repo.repo;
             const issue_number = context.payload.pull_request.number;
 
-            const headRepo = context.payload.pull_request.head.repo.full_name;
-            const baseRepo = context.payload.pull_request.base.repo.full_name;
-            const isFork = headRepo !== baseRepo;
+            const headRepo = context.payload.pull_request.head.repo?.full_name ?? null;
+            const baseRepo = context.payload.pull_request.base.repo?.full_name ?? null;
+            const isFork = headRepo === null || headRepo !== baseRepo;
 
             const files = await github.paginate(
               github.rest.pulls.listFiles,
