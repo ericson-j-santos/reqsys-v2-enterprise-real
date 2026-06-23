@@ -97,7 +97,7 @@ class EmailOperation:
 
     operation_id: str
     request: EmailDeliveryRequest
-    status: EmailOperationStatus
+    status: EmailOperationStatus = EmailOperationStatus.QUEUED
     attempts: int = 0
     provider_message_id: str | None = None
     last_error: str | None = None
