@@ -1,0 +1,6 @@
+# Dependências opcionais para evolução RAG com LlamaIndex.
+# Mantidas fora de requirements.txt para não quebrar o CI principal nem exigir chave de LLM.
+
+llama-index-core>=0.12,<0.15
+llama-index-vector-stores-qdrant>=0.6,<0.8
+qdrant-client>=1.12,<2
