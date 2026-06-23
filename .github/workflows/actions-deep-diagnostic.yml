@@ -1,0 +1,75 @@
+name: Actions Deep Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "GitHub Actions run id to inspect"
+        required: false
+        type: string
+      job_id:
+        description: "GitHub Actions job id to inspect"
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: actions-deep-diagnostic-${{ inputs.run_id || inputs.job_id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  deep-diagnostic:
+    name: Capture run/job evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Capture metadata and logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ inputs.run_id }}
+          JOB_ID: ${{ inputs.job_id }}
+        run: |
+          set -euo pipefail
+          args=(--repo "$REPO" --out-dir artifacts/deep-diagnostic)
+          if [[ -n "${RUN_ID:-}" ]]; then
+            args+=(--run-id "$RUN_ID")
+          fi
+          if [[ -n "${JOB_ID:-}" ]]; then
+            args+=(--job-id "$JOB_ID")
+          fi
+          python scripts/github_actions_deep_diagnostic.py "${args[@]}"
+
+      - name: Classify captured logs
+        run: |
+          log_files=(artifacts/deep-diagnostic/logs/*.log)
+          if [[ -e "${log_files[0]}" ]]; then
+            python scripts/failure_pattern_engine.py \
+              --catalog config/failure-patterns.json \
+              --input "${log_files[@]}" \
+              --out-dir artifacts/deep-diagnostic/classification
+          else
+            mkdir -p artifacts/deep-diagnostic/classification
+            echo "No log files captured." > artifacts/deep-diagnostic/classification/failure-pattern-report.md
+            echo '{"matches": []}' > artifacts/deep-diagnostic/classification/failure-pattern-report.json
+          fi
+
+      - name: Publish summary
+        run: |
+          cat artifacts/deep-diagnostic/deep-diagnostic.md >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/deep-diagnostic/classification/failure-pattern-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload deep diagnostic artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: actions-deep-diagnostic-${{ inputs.run_id || inputs.job_id || github.run_id }}
+          path: artifacts/deep-diagnostic/
+          retention-days: 30
