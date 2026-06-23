@@ -5,7 +5,7 @@
       subtitle="Consultas analíticas em linguagem natural com BI governado por inteligência artificial."
       chip="Beta"
       chip-color="blue"
-      chip-tooltip="Integração com GovBI IA com fallback governado para indisponibilidade externa"
+      chip-tooltip="Integração com GovBI IA via proxy governado do backend ReqSys"
     >
       <template #actions>
         <v-btn
@@ -20,7 +20,6 @@
       </template>
     </PageHeader>
 
-    <!-- Input de pergunta -->
     <v-card class="table-card mb-4">
       <v-card-text>
         <v-textarea
@@ -56,7 +55,6 @@
       </v-card-text>
     </v-card>
 
-    <!-- Erro -->
     <v-alert v-if="erro" type="error" variant="tonal" class="mb-4" closable @click:close="erro = ''">
       {{ erro }}
     </v-alert>
@@ -72,9 +70,7 @@
       <div>{{ diagnosticoOperacional.mensagem }}</div>
     </v-alert>
 
-    <!-- Resultado -->
     <template v-if="resposta">
-      <!-- Avisos de governança -->
       <v-alert
         v-for="(aviso, i) in resposta.avisos"
         :key="i"
@@ -87,7 +83,6 @@
       </v-alert>
 
       <v-row class="mt-2">
-        <!-- Plano analítico -->
         <v-col cols="12" md="4">
           <v-card class="table-card h-100">
             <v-card-title class="d-flex align-center gap-2">
@@ -140,7 +135,6 @@
           </v-card>
         </v-col>
 
-        <!-- SQL gerado -->
         <v-col v-if="exibirSql && resposta.sqlGerado" cols="12" md="8">
           <v-card class="table-card h-100">
             <v-card-title class="d-flex align-center gap-2">
@@ -157,7 +151,6 @@
           </v-card>
         </v-col>
 
-        <!-- Resultado da consulta -->
         <v-col v-if="temResultado" cols="12">
           <v-card class="table-card">
             <v-card-title class="d-flex align-center gap-2">
@@ -179,14 +172,12 @@
           </v-card>
         </v-col>
 
-        <!-- Sem resultado -->
         <v-col v-else-if="!resposta.requerAprovacao" cols="12">
           <v-alert type="info" variant="tonal" density="compact">
             Consulta processada — nenhum dado retornado pelo executor configurado.
           </v-alert>
         </v-col>
 
-        <!-- Requer aprovação -->
         <v-col v-if="resposta.requerAprovacao" cols="12">
           <v-alert type="warning" variant="tonal">
             Esta consulta requer aprovação. ID de aprovação:
@@ -195,7 +186,6 @@
         </v-col>
       </v-row>
 
-      <!-- Explicação -->
       <v-card v-if="resposta.explicacao" class="table-card mt-4">
         <v-card-text>
           <div class="govbi-label mb-1">Fonte do plano</div>
@@ -204,7 +194,6 @@
       </v-card>
     </template>
 
-    <!-- Estado inicial (sem resposta) -->
     <template v-else-if="!carregando && !erro">
       <v-card class="table-card">
         <v-card-text class="text-center pa-8">
@@ -236,11 +225,11 @@ import { computed, ref } from 'vue'
 import axios from 'axios'
 import PageHeader from '../components/PageHeader.vue'
 
-const GOVBI_URL = import.meta.env.VITE_GOVBI_URL || 'https://govbi-ia-hom.fly.dev'
+const REQSYS_API_URL = import.meta.env.VITE_API_URL || window.location.origin
 const GOVBI_TIMEOUT_MS = Number(import.meta.env.VITE_GOVBI_TIMEOUT_MS || 15000)
 
 const govbiApi = axios.create({
-  baseURL: GOVBI_URL,
+  baseURL: REQSYS_API_URL,
   timeout: GOVBI_TIMEOUT_MS,
 })
 
@@ -286,8 +275,9 @@ async function perguntar() {
   diagnosticoOperacional.value = null
 
   try {
+    const correlationId = criarCorrelationId()
     const { data } = await govbiApi.post(
-      '/api/v1/perguntas',
+      '/api/govbi/perguntas',
       {
         pergunta: perguntaNormalizada,
         formatoResposta: 'tabela',
@@ -295,29 +285,39 @@ async function perguntar() {
       },
       {
         headers: {
-          'X-Usuario': 'reqsys-usuario',
-          'X-Perfil': 'ANALISTA',
-          'X-Escopo-Unidade': 'GERAL',
+          'X-Correlation-Id': correlationId,
         },
       }
     )
 
     resposta.value = normalizarRespostaGovBI(data, perguntaNormalizada)
-    diagnosticoOperacional.value = {
-      tipo: 'success',
-      titulo: 'Consulta GovBI processada',
-      mensagem: 'O serviço GovBI IA respondeu dentro do contrato esperado.',
-    }
+    diagnosticoOperacional.value = montarDiagnosticoSucesso(resposta.value)
   } catch (e) {
     const detalhe = extrairDetalheErro(e)
     resposta.value = gerarRespostaFallback(perguntaNormalizada, detalhe)
     diagnosticoOperacional.value = {
       tipo: 'warning',
-      titulo: 'GovBI IA em modo degradado',
-      mensagem: `O serviço externo não respondeu corretamente. A tela exibiu um plano governado local para manter a operação assistida. Detalhe: ${detalhe}`,
+      titulo: 'GovBI IA em modo degradado local',
+      mensagem: `O proxy backend não respondeu corretamente. A tela exibiu um plano governado local. Detalhe: ${detalhe}`,
     }
   } finally {
     carregando.value = false
+  }
+}
+
+function montarDiagnosticoSucesso(respostaNormalizada) {
+  if (respostaNormalizada.statusFluxo === 'MODO_DEGRADADO') {
+    return {
+      tipo: 'warning',
+      titulo: 'GovBI IA em modo degradado governado',
+      mensagem: 'O backend ReqSys respondeu, mas o serviço GovBI externo ficou indisponível ou fora do contrato.',
+    }
+  }
+
+  return {
+    tipo: 'success',
+    titulo: 'Consulta GovBI processada',
+    mensagem: 'O backend ReqSys processou a consulta GovBI dentro do contrato esperado.',
   }
 }
 
@@ -350,9 +350,9 @@ function gerarRespostaFallback(perguntaOriginal, detalheErro) {
 
   return {
     avisos: [
-      'GovBI IA externo indisponível ou fora do contrato esperado.',
+      'GovBI IA indisponível ou fora do contrato esperado.',
       'Resultado abaixo é um plano analítico governado local, sem execução contra base real.',
-      'Use o Correlation ID para rastrear a ocorrência e validar o serviço GovBI/Fly.',
+      'Use o Correlation ID para rastrear a ocorrência e validar o backend ReqSys/Fly.',
     ],
     nivelSensibilidade: 'BAIXA',
     statusFluxo: 'MODO_DEGRADADO',
@@ -370,13 +370,13 @@ function gerarRespostaFallback(perguntaOriginal, detalheErro) {
           status: 'VALIDADA_LOCALMENTE',
         },
         {
-          item: 'Serviço GovBI',
+          item: 'Proxy GovBI',
           valor: detalheErro,
           status: 'INDISPONIVEL_OU_FORA_DO_CONTRATO',
         },
         {
           item: 'Próxima ação',
-          valor: 'Validar endpoint /api/v1/perguntas, CORS, timeout e contrato de resposta.',
+          valor: 'Validar endpoint /api/govbi/perguntas, CORS, timeout e logs Fly.io.',
           status: 'ACAO_OPERACIONAL',
         },
       ],
@@ -396,8 +396,8 @@ function extrairDetalheErro(e) {
   const mensagem = mensagemServidor || e.message || 'erro desconhecido'
 
   if (status) return `HTTP ${status}${statusText ? ` ${statusText}` : ''} - ${mensagem}`
-  if (e.code === 'ECONNABORTED') return `timeout após ${GOVBI_TIMEOUT_MS}ms em ${GOVBI_URL}`
-  if (e.request) return `sem resposta de ${GOVBI_URL} - ${mensagem}`
+  if (e.code === 'ECONNABORTED') return `timeout após ${GOVBI_TIMEOUT_MS}ms em ${REQSYS_API_URL}`
+  if (e.request) return `sem resposta de ${REQSYS_API_URL} - ${mensagem}`
   return mensagem
 }
 
