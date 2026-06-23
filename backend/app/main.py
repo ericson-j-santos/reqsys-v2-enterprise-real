@@ -15,6 +15,7 @@ from app.api import (
     dashboard,
     estatisticas,
     figma_github,
+    govbi,
     hub_lowcode,
     ia,
     monitoramento_operacional,
@@ -82,6 +83,7 @@ app.include_router(agents.router)
 app.include_router(monitoramento_operacional.router)
 app.include_router(operational_intelligence.router)
 app.include_router(actions_runtime_center.router)
+app.include_router(govbi.router)
 
 
 @app.middleware('http')
