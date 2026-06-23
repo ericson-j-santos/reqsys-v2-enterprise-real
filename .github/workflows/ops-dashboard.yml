@@ -1,0 +1,76 @@
+name: Ops Dashboard
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Repository Health Watchdog
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ops-dashboard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-dashboard:
+    name: Build ops dashboard artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate dashboard generator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/generate_ops_dashboard_data.py
+
+      - name: Generate fallback dashboard data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/generate_ops_dashboard_data.py \
+            --repo "${{ github.repository }}" \
+            --watchdog-report artifacts/repository-health-watchdog/repository-health-report.json \
+            --output docs/ops-dashboard/data/health.json
+
+      - name: Prepare dashboard artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ops-dashboard
+          cp -R docs/ops-dashboard/* artifacts/ops-dashboard/
+          test -f artifacts/ops-dashboard/index.html
+          test -f artifacts/ops-dashboard/data/health.json
+
+      - name: Publish ops dashboard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops-dashboard-static
+          path: artifacts/ops-dashboard
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Summarize dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "# Ops Dashboard"
+            echo ""
+            echo "Artifact publicado: ops-dashboard-static"
+            echo ""
+            echo "Escopo: painel estatico, sem deploy, sem alteracao de producao e sem secrets."
+          } >> "$GITHUB_STEP_SUMMARY"
