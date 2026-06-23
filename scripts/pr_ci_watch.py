@@ -6,6 +6,7 @@ Responsabilidades P0:
 - classificar status operacional dos workflows;
 - gerar artefato JSON/Markdown;
 - opcionalmente comentar no PR;
+- evitar falso verde quando não há evidência suficiente;
 - não fazer merge automático;
 - não alterar produção.
 """
@@ -24,6 +25,8 @@ from typing import Any
 
 API_VERSION = "2022-11-28"
 DEFAULT_REPORT_DIR = Path("artifacts/pr-ci-watch")
+BLOCKING_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required"}
+NON_BLOCKING_CONCLUSIONS = {"success", "neutral", "skipped"}
 
 
 @dataclass(frozen=True)
@@ -33,6 +36,9 @@ class WorkflowRun:
     status: str
     conclusion: str | None
     html_url: str | None
+    event: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
     @property
     def health(self) -> str:
@@ -40,9 +46,15 @@ class WorkflowRun:
             return "running"
         if self.conclusion == "success":
             return "healthy"
-        if self.conclusion in {"failure", "cancelled", "timed_out", "action_required"}:
+        if self.conclusion in BLOCKING_CONCLUSIONS:
             return "unhealthy"
+        if self.conclusion in NON_BLOCKING_CONCLUSIONS:
+            return "non_blocking"
         return "unknown"
+
+    @property
+    def is_completed_success(self) -> bool:
+        return self.status == "completed" and self.conclusion == "success"
 
 
 def request_json(method: str, url: str, token: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -51,6 +63,7 @@ def request_json(method: str, url: str, token: str, payload: dict[str, Any] | No
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {token}",
         "X-GitHub-Api-Version": API_VERSION,
+        "User-Agent": "reqsys-pr-ci-watch",
     }
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
@@ -66,19 +79,27 @@ def request_json(method: str, url: str, token: str, payload: dict[str, Any] | No
         raise RuntimeError(f"GitHub API falhou {exc.code}: {detail}") from exc
 
 
-def fetch_runs(repo: str, sha: str, token: str) -> list[WorkflowRun]:
+def fetch_runs(repo: str, sha: str, token: str, exclude_run_id: int | None = None) -> list[WorkflowRun]:
     url = f"https://api.github.com/repos/{repo}/actions/runs?head_sha={sha}&per_page=100"
     data = request_json("GET", url, token)
-    return [
-        WorkflowRun(
-            id=int(item.get("id") or 0),
-            name=str(item.get("name") or "workflow-desconhecido"),
-            status=str(item.get("status") or "unknown"),
-            conclusion=item.get("conclusion"),
-            html_url=item.get("html_url"),
+    runs: list[WorkflowRun] = []
+    for item in data.get("workflow_runs", []):
+        run_id = int(item.get("id") or 0)
+        if exclude_run_id and run_id == exclude_run_id:
+            continue
+        runs.append(
+            WorkflowRun(
+                id=run_id,
+                name=str(item.get("name") or "workflow-desconhecido"),
+                status=str(item.get("status") or "unknown"),
+                conclusion=item.get("conclusion"),
+                html_url=item.get("html_url"),
+                event=item.get("event"),
+                created_at=item.get("created_at"),
+                updated_at=item.get("updated_at"),
+            )
         )
-        for item in data.get("workflow_runs", [])
-    ]
+    return runs
 
 
 def classify(runs: list[WorkflowRun]) -> dict[str, Any]:
@@ -86,27 +107,42 @@ def classify(runs: list[WorkflowRun]) -> dict[str, Any]:
     healthy = sum(1 for run in runs if run.health == "healthy")
     running = sum(1 for run in runs if run.health == "running")
     unhealthy = sum(1 for run in runs if run.health == "unhealthy")
+    non_blocking = sum(1 for run in runs if run.health == "non_blocking")
     unknown = sum(1 for run in runs if run.health == "unknown")
-    score = round((healthy / total) * 100, 2) if total else 0.0
+    completed = sum(1 for run in runs if run.status == "completed")
+    blocking_total = total - non_blocking
+    blocking_healthy = healthy
+    score = round((blocking_healthy / blocking_total) * 100, 2) if blocking_total else 0.0
 
     if not runs:
-        decision = "aguardar_checks_ou_verificar_disparo_de_workflows"
+        decision = "sem_evidencia_ci_para_o_sha"
+        severity = "warning"
     elif unhealthy:
         decision = "corrigir_falhas_antes_de_liberar_revisao"
+        severity = "critical"
     elif running:
         decision = "aguardar_finalizacao_dos_workflows"
+        severity = "warning"
     elif unknown:
         decision = "investigar_status_desconhecido"
-    else:
+        severity = "warning"
+    elif healthy:
         decision = "pronto_para_revisao"
+        severity = "ok"
+    else:
+        decision = "sem_check_bloqueante_conclusivo"
+        severity = "warning"
 
     return {
         "total": total,
+        "completed": completed,
         "healthy": healthy,
         "running": running,
         "unhealthy": unhealthy,
+        "non_blocking": non_blocking,
         "unknown": unknown,
         "score": score,
+        "severity": severity,
         "decision": decision,
     }
 
@@ -120,21 +156,34 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
         f"| Repositório | `{repo}` |",
         f"| PR | `{pr_number}` |",
         f"| SHA | `{sha}` |",
-        f"| Score | `{summary['score']}` |",
+        f"| Severidade | `{summary['severity']}` |",
+        f"| Score bloqueante | `{summary['score']}` |",
         f"| Decisão | `{summary['decision']}` |",
         f"| Gerado em UTC | `{datetime.now(timezone.utc).isoformat()}` |",
         "",
+        "## Resumo operacional",
+        "",
+        "| Total | Completed | Healthy | Running | Unhealthy | Non blocking | Unknown |",
+        "|---:|---:|---:|---:|---:|---:|---:|",
+        (
+            f"| {summary['total']} | {summary['completed']} | {summary['healthy']} | "
+            f"{summary['running']} | {summary['unhealthy']} | {summary['non_blocking']} | {summary['unknown']} |"
+        ),
+        "",
         "## Workflows",
         "",
-        "| Health | Workflow | Status | Conclusion | Link |",
-        "|---|---|---|---|---|",
+        "| Health | Workflow | Status | Conclusion | Event | Atualizado | Link |",
+        "|---|---|---|---|---|---|---|",
     ]
 
     if not runs:
-        lines.append("| warning | Nenhum workflow encontrado para o SHA | — | — | — |")
+        lines.append("| `warning` | Nenhum workflow encontrado para o SHA | — | — | — | — | — |")
     for run in runs:
         link = f"[abrir]({run.html_url})" if run.html_url else "—"
-        lines.append(f"| `{run.health}` | `{run.name}` | `{run.status}` | `{run.conclusion}` | {link} |")
+        lines.append(
+            f"| `{run.health}` | `{run.name}` | `{run.status}` | `{run.conclusion}` | "
+            f"`{run.event}` | `{run.updated_at}` | {link} |"
+        )
 
     lines.extend(
         [
@@ -144,7 +193,8 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
             "- Não faz merge automático.",
             "- Não altera produção.",
             "- Não altera status de draft automaticamente nesta versão.",
-            "- Gera diagnóstico e evidência operacional.",
+            "- Exclui a própria execução do watcher quando `GITHUB_RUN_ID` está disponível, evitando falso bloqueio por auto-observação.",
+            "- Falha o job quando há workflow unhealthy ou quando não existe evidência CI suficiente para o SHA.",
         ]
     )
     return "\n".join(lines) + "\n"
@@ -155,6 +205,15 @@ def post_comment(repo: str, pr_number: str, token: str, markdown: str) -> None:
     request_json("POST", url, token, {"body": markdown})
 
 
+def parse_optional_int(value: str | None) -> int | None:
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", required=True)
@@ -162,6 +221,7 @@ def main() -> int:
     parser.add_argument("--pr-number", required=True)
     parser.add_argument("--report-dir", default=str(DEFAULT_REPORT_DIR))
     parser.add_argument("--comment", action="store_true")
+    parser.add_argument("--exclude-run-id", default=os.environ.get("GITHUB_RUN_ID"))
     args = parser.parse_args()
 
     token = os.environ.get("GITHUB_TOKEN")
@@ -169,7 +229,7 @@ def main() -> int:
         print("GITHUB_TOKEN ausente.", file=sys.stderr)
         return 1
 
-    runs = fetch_runs(args.repo, args.sha, token)
+    runs = fetch_runs(args.repo, args.sha, token, exclude_run_id=parse_optional_int(args.exclude_run_id))
     summary = classify(runs)
     report_dir = Path(args.report_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -195,7 +255,7 @@ def main() -> int:
     if args.comment:
         post_comment(args.repo, args.pr_number, token, markdown)
 
-    if summary["decision"] == "corrigir_falhas_antes_de_liberar_revisao":
+    if summary["severity"] in {"critical", "warning"}:
         return 1
     return 0
 
