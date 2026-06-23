@@ -27,7 +27,7 @@ API_VERSION = "2022-11-28"
 DEFAULT_REPORT_DIR = Path("artifacts/pr-ci-watch")
 BLOCKING_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required"}
 NON_BLOCKING_CONCLUSIONS = {"success", "neutral", "skipped"}
-FAIL_SEVERITIES = {"critical", "warning"}
+FAIL_SEVERITIES = {"critical"}
 
 
 @dataclass(frozen=True)
@@ -119,10 +119,10 @@ def classify(runs: list[WorkflowRun]) -> dict[str, Any]:
         decision = "sem_evidencia_ci_para_o_sha"
         severity = "warning"
     elif unhealthy:
-        decision = "corrigir_falhas_antes_de_liberar_revisao"
+        decision = "corrigir_falhas_reais_antes_de_liberar_revisao"
         severity = "critical"
     elif running:
-        decision = "aguardar_finalizacao_dos_workflows"
+        decision = "workflows_ainda_em_execucao"
         severity = "pending"
     elif unknown:
         decision = "investigar_status_desconhecido"
@@ -195,8 +195,8 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
             "- Não altera produção.",
             "- Não altera status de draft automaticamente nesta versão.",
             "- Exclui a própria execução do watcher quando `GITHUB_RUN_ID` está disponível, evitando falso bloqueio por auto-observação.",
-            "- Estado `pending` por workflows em execução é informativo e não bloqueia por si só.",
-            "- Falha o job quando há workflow unhealthy, status desconhecido ou quando não existe evidência CI suficiente para o SHA.",
+            "- Diferencia workflows `pending/running` de falhas reais.",
+            "- Falha apenas quando existe workflow unhealthy real; warning permanece visível para decisão humana sem bloquear por padrão.",
         ]
     )
     return "\n".join(lines) + "\n"
