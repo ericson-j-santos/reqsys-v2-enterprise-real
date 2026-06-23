@@ -1,10 +1,6 @@
 name: PR CI Watch
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-  workflow_run:
-    types: [completed]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -18,8 +14,15 @@ on:
       comment:
         description: "Comentar diagnóstico no PR"
         required: true
-        default: false
-        type: boolean
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_run:
+    types: [completed]
 
 permissions:
   contents: read
@@ -28,61 +31,55 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
+  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.event.workflow_run.id || github.run_id }}
   cancel-in-progress: false
 
 jobs:
-  pr-ci-watch:
-    name: PR CI Watch seguro
+  watch:
+    name: PR CI Watch governado
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       REPORT_DIR: artifacts/pr-ci-watch
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolver contexto
-        id: ctx
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
-            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
-            echo "comment=false" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "pr_number=${{ github.event.inputs.pr_number }}" >> "$GITHUB_OUTPUT"
-            echo "sha=${{ github.event.inputs.sha }}" >> "$GITHUB_OUTPUT"
-            echo "comment=${{ github.event.inputs.comment }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "pr_number=0" >> "$GITHUB_OUTPUT"
-            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-            echo "comment=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Executar PR CI Watch
+      - name: Resolver contexto
+        id: ctx
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          PR_NUMBER="${{ github.event.inputs.pr_number || github.event.pull_request.number || '' }}"
+          SHA="${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.event.workflow_run.head_sha || '' }}"
+          COMMENT="${{ github.event.inputs.comment || 'false' }}"
+          echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "comment=${COMMENT}" >> "$GITHUB_OUTPUT"
+          if [ -z "${PR_NUMBER}" ] || [ -z "${SHA}" ]; then
+            echo "PR number ou SHA ausente. Em workflow_run sem PR explícito, execute manualmente com inputs." >&2
+            exit 0
+          fi
 
+      - name: Executar watcher
+        if: steps.ctx.outputs.pr_number != '' && steps.ctx.outputs.sha != ''
+        shell: bash
+        run: |
+          set -euo pipefail
           COMMENT_FLAG=""
           if [ "${{ steps.ctx.outputs.comment }}" = "true" ]; then
             COMMENT_FLAG="--comment"
           fi
-
           python scripts/pr_ci_watch.py \
-            --repo "${GITHUB_REPOSITORY}" \
+            --repo "${{ github.repository }}" \
             --pr-number "${{ steps.ctx.outputs.pr_number }}" \
             --sha "${{ steps.ctx.outputs.sha }}" \
             --report-dir "${REPORT_DIR}" \
@@ -94,5 +91,5 @@ jobs:
         with:
           name: pr-ci-watch-report
           path: artifacts/pr-ci-watch
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 15
