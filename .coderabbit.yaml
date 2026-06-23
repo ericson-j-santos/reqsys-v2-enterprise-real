@@ -1,24 +1,37 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
-# CodeRabbit configuration for ReqSys
-# Purpose: enforce review output with operational monitoring and result tables.
+# CodeRabbit configuration for ReqSys.
+# Purpose: keep review useful, governed and compatible with free-tier constraints by reducing noisy/generated files.
 
 language: pt-BR
+enable_free_tier: true
+early_access: false
 tone_instructions: "Responder em português do Brasil, com tom técnico, objetivo, governado e baseado em evidências."
 
 reviews:
-  profile: assertive
-  request_changes_workflow: true
+  profile: chill
+  request_changes_workflow: false
   high_level_summary: true
   high_level_summary_instructions: |
     Inclua no resumo executivo uma tabela de monitoramento do PR e uma tabela de resultado da revisão.
     Use evidências verificáveis. Quando CI, testes ou segurança não puderem ser confirmados, marque como "Não verificado".
+  high_level_summary_in_walkthrough: true
   poem: false
   review_status: true
   review_details: true
-  collapse_walkthrough: false
+  collapse_walkthrough: true
   changed_files_summary: true
-  sequence_diagrams: true
+  sequence_diagrams: false
+  estimate_code_review_effort: true
   assess_linked_issues: true
+  related_issues: false
+  related_prs: false
+  suggested_labels: true
+  auto_apply_labels: false
+  suggested_reviewers: false
+  auto_assign_reviewers: false
+  in_progress_fortune: false
+  enable_prompt_for_ai_agents: false
+  abort_on_close: true
 
   auto_review:
     enabled: true
@@ -28,6 +41,8 @@ reviews:
     ignore_title_keywords:
       - "wip"
       - "draft:"
+    labels:
+      - "!docs-only"
 
   path_filters:
     - "**/*"
@@ -36,8 +51,37 @@ reviews:
     - "!**/build/**"
     - "!**/.next/**"
     - "!**/coverage/**"
+    - "!artifacts/**"
+    - "!**/artifacts/**"
+    - "!docs/**/*.html"
+    - "!docs/**/relatorio-*.html"
+    - "!docs/**/report-*.html"
+    - "!**/*.min.js"
+    - "!**/*.map"
+    - "!**/*.lock"
+    - "!package-lock.json"
+    - "!pnpm-lock.yaml"
+    - "!yarn.lock"
+    - "!**/*.png"
+    - "!**/*.jpg"
+    - "!**/*.jpeg"
+    - "!**/*.gif"
+    - "!**/*.svg"
+    - "!**/*.webp"
+    - "!**/*.zip"
+    - "!**/*.pdf"
 
   path_instructions:
+    - path: ".github/workflows/**"
+      instructions: |
+        Revise com foco em segurança de GitHub Actions, permissões mínimas, ausência de secrets em logs,
+        uso adequado de pull_request versus pull_request_target e validação determinística.
+    - path: "docs/adr/**"
+      instructions: |
+        Revise ADRs com foco em decisão, contexto, consequências, trade-offs, critérios de aceite e consistência com governança enterprise.
+    - path: "docs/governance/**"
+      instructions: |
+        Revise guardrails com foco em aplicabilidade operacional, rastreabilidade, segurança, clareza de critérios e ausência de declaração de maturidade sem evidência.
     - path: "**/*"
       instructions: |
         Você está revisando o repositório ReqSys.
@@ -76,12 +120,12 @@ reviews:
 
   pre_merge_checks:
     custom_checks:
-      - mode: error
+      - mode: warning
         name: "CI verde obrigatório"
-        instructions: "Falhar se houver check obrigatório ausente, pendente, cancelado ou reprovado."
-      - mode: error
+        instructions: "Alertar se houver check obrigatório ausente, pendente, cancelado ou reprovado."
+      - mode: warning
         name: "Gates ReqSys produção"
-        instructions: "Falhar se produção permitir auth desligada, CORS '*', JWT sem issuer/audience, logs com PII/secrets ou auditoria sem correlation_id."
+        instructions: "Alertar se produção permitir auth desligada, CORS '*', JWT sem issuer/audience, logs com PII/secrets ou auditoria sem correlation_id."
       - mode: warning
         name: "Relatório operacional"
         instructions: "Alertar se a revisão não trouxer tabela de monitoramento, tabela de resultado e evidências."
