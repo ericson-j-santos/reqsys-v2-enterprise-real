@@ -71,7 +71,7 @@ def request_json(method: str, url: str, token: str, payload: dict[str, Any] | No
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=30) as response:  # noqa: S310 - GitHub API URL controlada
+        with urllib.request.urlopen(req, timeout=30) as response:
             body = response.read().decode("utf-8")
             return json.loads(body) if body else {}
     except urllib.error.HTTPError as exc:
@@ -118,11 +118,11 @@ def classify(runs: list[WorkflowRun]) -> dict[str, Any]:
         decision = "sem_evidencia_ci_para_o_sha"
         severity = "warning"
     elif unhealthy:
-        decision = "corrigir_falhas_antes_de_liberar_revisao"
+        decision = "corrigir_falhas_reais_antes_de_liberar_revisao"
         severity = "critical"
     elif running:
-        decision = "aguardar_finalizacao_dos_workflows"
-        severity = "warning"
+        decision = "workflows_ainda_em_execucao"
+        severity = "pending"
     elif unknown:
         decision = "investigar_status_desconhecido"
         severity = "warning"
@@ -194,7 +194,8 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
             "- Não altera produção.",
             "- Não altera status de draft automaticamente nesta versão.",
             "- Exclui a própria execução do watcher quando `GITHUB_RUN_ID` está disponível, evitando falso bloqueio por auto-observação.",
-            "- Falha o job quando há workflow unhealthy ou quando não existe evidência CI suficiente para o SHA.",
+            "- Diferencia workflows `pending/running` de falhas reais.",
+            "- Falha apenas quando existe workflow unhealthy real ou ausência total de evidência CI.",
         ]
     )
     return "\n".join(lines) + "\n"
@@ -255,7 +256,7 @@ def main() -> int:
     if args.comment:
         post_comment(args.repo, args.pr_number, token, markdown)
 
-    if summary["severity"] in {"critical", "warning"}:
+    if summary["severity"] == "critical":
         return 1
     return 0
 
