@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.core.config import ApiAlvo, Configuracao
+from app.core.logger import configurar_logger
 from app.domain.models import ResultadoMonitoramento
 from app.infra.api_client import ApiClient
 from app.infra.cache import CacheTTL
@@ -41,6 +42,16 @@ def test_configuracao_padrao_deve_expor_caminhos_e_retries():
     assert config.diretorio_relatorios == Path("reports")
     assert config.tentativas_retry == 3
     assert config.cache_ttl_segundos == 30
+
+
+def test_configurar_logger_deve_criar_handlers_e_arquivo(tmp_path):
+    logger = configurar_logger(tmp_path / "logs")
+
+    assert logger.name == "monitorador_apis"
+    assert logger.level == logging.INFO
+    assert len(logger.handlers) == 2
+    logger.info("mensagem de teste")
+    assert (tmp_path / "logs" / "monitorador.log").exists()
 
 
 def test_api_alvo_deve_usar_timeout_padrao():
@@ -89,6 +100,12 @@ def test_repository_sqlite_deve_salvar_e_listar(tmp_path):
     assert registros[0]["status_operacional"] == "VERDE"
 
 
+def test_repository_sqlite_deve_retornar_lista_vazia(tmp_path):
+    repo = ResultadoRepositorySQLite(tmp_path / "monitoramento.db")
+
+    assert repo.listar_ultimos(limite=5) == []
+
+
 def test_relatorio_html_deve_gerar_arquivo_com_semaforo(tmp_path):
     caminho = tmp_path / "reports" / "dashboard.html"
     resultados = [
@@ -105,6 +122,17 @@ def test_relatorio_html_deve_gerar_arquivo_com_semaforo(tmp_path):
     assert "verde" in html
     assert "AMARELO" in html
     assert "HTTP 500" in html
+
+
+def test_relatorio_html_deve_gerar_tabela_vazia(tmp_path):
+    caminho = tmp_path / "reports" / "dashboard-vazio.html"
+
+    retorno = gerar_relatorio_html([], caminho)
+
+    assert retorno == caminho
+    html = caminho.read_text(encoding="utf-8")
+    assert "<tbody>" in html
+    assert "Relatório Monitorador de APIs" in html
 
 
 @pytest.mark.asyncio
@@ -142,6 +170,27 @@ async def test_service_deve_usar_cache_e_persistir_resultados():
     assert segunda_execucao == [resultado]
     assert api_client.chamadas == 1
     assert repository.salvos == [resultado, resultado]
+
+
+@pytest.mark.asyncio
+async def test_service_deve_tratar_lista_vazia():
+    class ApiClientFake:
+        async def consultar(self, api_alvo, tentativas):
+            raise AssertionError("não deveria consultar APIs")
+
+    class RepositoryFake:
+        def salvar(self, item):
+            raise AssertionError("não deveria persistir resultados")
+
+    service = MonitoramentoService(
+        ApiClientFake(),
+        RepositoryFake(),
+        CacheTTL[ResultadoMonitoramento](ttl_segundos=60),
+        logging.getLogger("test-monitorador-service-empty"),
+        tentativas_retry=2,
+    )
+
+    assert await service.executar([]) == []
 
 
 @pytest.mark.asyncio
@@ -185,6 +234,48 @@ async def test_api_client_deve_retornar_sucesso_com_client_session_mockado(monke
     assert resultado.sucesso is True
     assert resultado.erro is None
     assert resultado.status_operacional == "VERDE"
+
+
+@pytest.mark.asyncio
+async def test_api_client_deve_retornar_http_nao_2xx(monkeypatch):
+    class ResponseFake:
+        status = 503
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def text(self):
+            return "erro"
+
+    class ClientSessionFake:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def get(self, url):
+            assert url == "https://api.local"
+            return ResponseFake()
+
+    monkeypatch.setattr("app.infra.api_client.aiohttp.ClientSession", ClientSessionFake)
+
+    resultado = await ApiClient().consultar(
+        ApiAlvo(nome="api", url="https://api.local", timeout_segundos=0.01),
+        tentativas=1,
+        atraso_base=0,
+    )
+
+    assert resultado.status_code == 503
+    assert resultado.sucesso is False
+    assert resultado.erro == "HTTP 503"
+    assert resultado.status_operacional == "VERMELHO"
 
 
 @pytest.mark.asyncio
