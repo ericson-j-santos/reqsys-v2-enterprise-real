@@ -88,8 +88,16 @@ jobs:
             --history data/operational-history/history.json \
             --out-dir artifacts/operational-history
 
+      - name: Generate Operational Artifact Index
+        run: |
+          python scripts/operational_artifact_index.py
+
       - name: Publish historical summary
-        run: cat artifacts/operational-history/operational-history.md >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          cat artifacts/operational-history/operational-history.md >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Operational Artifact Index" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artifact navegável consolidado disponível em operational-index/index.html" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload operational history artifact
         uses: actions/upload-artifact@v4
@@ -101,4 +109,5 @@ jobs:
             artifacts/operational-health/
             artifacts/operational-ci-intelligence/
             artifacts/failure-pattern-engine/
+            artifacts/operational-index/
           retention-days: 60
