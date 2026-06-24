@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0.0",
+  "updated_at": "2026-06-23",
+  "description": "Base versionada de conhecimento operacional para falhas recorrentes de CI/CD do ReqSys.",
+  "governance": {
+    "automatic_merge_enabled": false,
+    "automatic_fix_enabled": false,
+    "unrestricted_rerun_enabled": false,
+    "requires_evidence_before_rerun": true,
+    "requires_root_cause_before_remediation": true
+  },
+  "rerun_policy": {
+    "max_reruns_without_commit_change": 2,
+    "max_reruns_per_workflow_24h": 4,
+    "safe_rerun_categories": [
+      "timeout",
+      "artifact",
+      "runner_instability",
+      "network_transient"
+    ],
+    "blocked_rerun_categories": [
+      "test_failure",
+      "quality_gate",
+      "security",
+      "git_conflict",
+      "permissions",
+      "missing_secret"
+    ]
+  },
+  "owners": {
+    "ci_cd": [".github/workflows", "scripts", "audit"],
+    "backend": ["backend", "app", "tests"],
+    "frontend": ["frontend", "src", "tests/e2e"],
+    "security": ["auth", "jwt", "secrets", "cors", "audit"],
+    "governance": ["docs", "governance", "ADR", "evidence"]
+  },
+  "known_failures": [
+    {
+      "id": "OCI-ARTIFACT-001",
+      "category": "artifact",
+      "severity": "medium",
+      "owner": "ci_cd",
+      "symptoms": ["No audit/report/evidence artifact found", "Artifact not found", "No artifacts found"],
+      "probable_root_cause": "Workflow dependente de artifact que ainda nao foi publicado ou foi nomeado fora do padrao esperado.",
+      "recommended_action": "Validar ordem dos workflows, retention, nome do artifact e transformar ausencia inicial em warning quando o proprio workflow publicar evidencia.",
+      "safe_rerun": true,
+      "requires_code_change": "conditional"
+    },
+    {
+      "id": "OCI-CANCELLED-001",
+      "category": "runner_instability",
+      "severity": "low",
+      "owner": "ci_cd",
+      "symptoms": ["cancelled", "The operation was canceled", "concurrency"],
+      "probable_root_cause": "Run substituido por concorrencia, roteamento ou cancelamento operacional sem falha real de codigo.",
+      "recommended_action": "Nao tratar cancelled como failure automaticamente. Verificar se existe run posterior para o mesmo ref/SHA.",
+      "safe_rerun": true,
+      "requires_code_change": false
+    },
+    {
+      "id": "OCI-PERM-001",
+      "category": "permissions",
+      "severity": "high",
+      "owner": "ci_cd",
+      "symptoms": ["Resource not accessible by integration", "403", "permission denied"],
+      "probable_root_cause": "Permissoes insuficientes do GITHUB_TOKEN ou uso inadequado de evento/fork.",
+      "recommended_action": "Ajustar bloco permissions e evitar elevar para write sem justificativa. Validar uso de pull_request_target com guardrails.",
+      "safe_rerun": false,
+      "requires_code_change": true
+    },
+    {
+      "id": "OCI-TEST-001",
+      "category": "test_failure",
+      "severity": "high",
+      "owner": "backend",
+      "symptoms": ["FAILED", "AssertionError", "pytest", "vitest", "test failed"],
+      "probable_root_cause": "Regressao funcional ou teste desatualizado.",
+      "recommended_action": "Inspecionar falha, corrigir codigo ou teste com evidencia. Nao usar rerun como solucao inicial.",
+      "safe_rerun": false,
+      "requires_code_change": true
+    },
+    {
+      "id": "OCI-SECURITY-001",
+      "category": "security",
+      "severity": "critical",
+      "owner": "security",
+      "symptoms": ["pip-audit", "npm audit", "bandit", "secret", "vulnerability"],
+      "probable_root_cause": "Gate de seguranca detectou vulnerabilidade, segredo ou configuracao insegura.",
+      "recommended_action": "Tratar como bloqueio real. Corrigir dependencia/configuracao e documentar evidencia.",
+      "safe_rerun": false,
+      "requires_code_change": true
+    },
+    {
+      "id": "OCI-CONFLICT-001",
+      "category": "git_conflict",
+      "severity": "high",
+      "owner": "ci_cd",
+      "symptoms": ["CONFLICT", "Automatic merge failed", "This branch has conflicts"],
+      "probable_root_cause": "Branch divergente da base ou conflito de arquivos.",
+      "recommended_action": "Atualizar branch com main, resolver conflitos e validar PR Conflict Guard.",
+      "safe_rerun": false,
+      "requires_code_change": true
+    }
+  ]
+}

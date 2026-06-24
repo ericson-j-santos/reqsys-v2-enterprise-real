@@ -1,0 +1,59 @@
+name: Operational CI Intelligence
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Quantidade de runs recentes para analisar"
+        required: false
+        default: "30"
+        type: string
+  schedule:
+    - cron: "35 10 * * 1-5"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: operational-ci-intelligence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  operational-ci-intelligence:
+    name: Generate CI intelligence report
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Collect recent workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIMIT: ${{ inputs.limit || '30' }}
+        run: |
+          mkdir -p artifacts/operational-ci-intelligence/input
+          gh run list \
+            --repo "${{ github.repository }}" \
+            --limit "$LIMIT" \
+            --json databaseId,name,workflowName,status,conclusion,event,headBranch,headSha,url,createdAt,updatedAt \
+            > artifacts/operational-ci-intelligence/input/runs.json
+
+      - name: Generate operational intelligence
+        run: |
+          python scripts/operational_ci_intelligence.py \
+            --runs artifacts/operational-ci-intelligence/input/runs.json \
+            --knowledge-base config/ci-failure-knowledge-base.json \
+            --out-dir artifacts/operational-ci-intelligence
+
+      - name: Publish summary
+        run: cat artifacts/operational-ci-intelligence/operational-ci-intelligence.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-ci-intelligence
+          path: artifacts/operational-ci-intelligence/
+          retention-days: 30
