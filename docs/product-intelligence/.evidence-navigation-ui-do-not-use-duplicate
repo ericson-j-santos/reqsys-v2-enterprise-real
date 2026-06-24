@@ -1,0 +1,2 @@
+Do not use bot/product-intelligence-evidence-navigation-ui if it is behind main.
+Use bot/product-intelligence-evidence-navigation-ui-v2 for the clean increment PR.
