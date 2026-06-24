@@ -30,3 +30,12 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/governance/enterprise_runtime_governance_gates.py
+
+      - name: Publicar evidência Enterprise Runtime Governance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: enterprise-runtime-governance
+          path: artifacts/enterprise-runtime-governance
+          if-no-files-found: error
+          retention-days: 30
