@@ -1,0 +1,71 @@
+name: Actions Auto Operator
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Modo de execução"
+        required: true
+        default: "dry_run"
+        type: choice
+        options:
+          - dry_run
+          - execute
+      branch:
+        description: "Branch monitorada"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: actions-auto-operator-${{ github.event.inputs.branch || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  auto-operator:
+    name: Verificar e executar Actions allowlisted
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Executar operador governado
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODE: ${{ github.event.inputs.mode || 'dry_run' }}
+          TARGET_BRANCH: ${{ github.event.inputs.branch || 'main' }}
+        run: |
+          set -euo pipefail
+          args=(
+            --repo "${GITHUB_REPOSITORY}"
+            --branch "${TARGET_BRANCH}"
+            --limit "30"
+            --output-dir "artifacts/actions-auto-operator"
+          )
+          if [[ "${MODE}" == "execute" ]]; then
+            args+=(--execute)
+          fi
+          python scripts/actions_auto_operator.py "${args[@]}"
+
+      - name: Publicar artifact de auditoria
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: actions-auto-operator-evidence
+          path: artifacts/actions-auto-operator
+          if-no-files-found: error
+          retention-days: 30
