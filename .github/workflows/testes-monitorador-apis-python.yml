@@ -33,9 +33,51 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Executar testes com cobertura mínima
+      - name: Executar testes e gerar cobertura
         run: |
-          pytest --cov=app --cov-report=term-missing --cov-fail-under=60
+          pytest \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:htmlcov
+
+      - name: Resumir cobertura no job
+        if: always()
+        run: |
+          echo "## Cobertura — Monitorador APIs Python" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f coverage.xml ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+import xml.etree.ElementTree as ET
+
+tree = ET.parse('coverage.xml')
+root = tree.getroot()
+line_rate = float(root.attrib.get('line-rate', 0)) * 100
+branch_rate = float(root.attrib.get('branch-rate', 0)) * 100
+print(f"- Line coverage: {line_rate:.2f}%")
+print(f"- Branch coverage: {branch_rate:.2f}%")
+print("- Limiar obrigatório: 60.00%")
+print("- Arquivos gerados localmente: `coverage.xml` e `htmlcov/`")
+PY
+          else
+            echo "- coverage.xml não foi gerado; verificar falha antes da coleta de cobertura." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Validar cobertura mínima
+        run: |
+          python - <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+LIMIAR = 60.0
+root = ET.parse('coverage.xml').getroot()
+line_rate = float(root.attrib.get('line-rate', 0)) * 100
+print(f"Cobertura de linhas apurada: {line_rate:.2f}%")
+print(f"Limiar obrigatório: {LIMIAR:.2f}%")
+if line_rate < LIMIAR:
+    print(f"Cobertura insuficiente: {line_rate:.2f}% < {LIMIAR:.2f}%")
+    sys.exit(1)
+print("Cobertura mínima atendida.")
+PY
 
       - name: Validar import FastAPI
         run: |
