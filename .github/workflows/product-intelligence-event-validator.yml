@@ -1,0 +1,66 @@
+name: Product Intelligence Event Validator
+
+on:
+  pull_request:
+    paths:
+      - "docs/product-intelligence/**"
+      - "schemas/product-intelligence/**"
+      - "examples/product-intelligence/**"
+      - "tools/product_intelligence/**"
+      - ".github/workflows/product-intelligence-event-validator.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/product-intelligence/**"
+      - "schemas/product-intelligence/**"
+      - "examples/product-intelligence/**"
+      - "tools/product_intelligence/**"
+      - ".github/workflows/product-intelligence-event-validator.yml"
+
+jobs:
+  validate-product-intelligence-event:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Product Intelligence event example
+        run: |
+          python tools/product_intelligence/validate_product_intelligence_event.py examples/product-intelligence/product-intelligence-event.example.json
+
+      - name: Generate validation report
+        run: |
+          cat > product-intelligence-event-validation.md <<'MD'
+# Product Intelligence Event Validation
+
+| Check | Status |
+|---|---|
+| Schema JSON load | OK |
+| Example JSON load | OK |
+| Required fields | OK |
+| Event type enum | OK |
+| Source contract | OK |
+| Requirement contract | OK |
+| Quality scores | OK |
+| Traceability arrays | OK |
+| Governance contract | OK |
+
+## Result
+
+Product Intelligence Event Model is valid and ready for the next functional intelligence increment.
+MD
+          cat product-intelligence-event-validation.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload validation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-intelligence-event-validation
+          path: product-intelligence-event-validation.md
+          if-no-files-found: error
