@@ -12,10 +12,16 @@ Projeto prático para treinar Python com foco profissional e base reutilizável 
 | Persistência SQLite | VERDE | VERDE |
 | Logs estruturados | VERDE | VERDE |
 | Relatório HTML | VERDE | VERDE |
+| FastAPI | VERDE | VERDE |
+| Endpoint `/health` | VERDE | VERDE |
+| Dashboard HTML runtime | VERDE | VERDE |
+| Dockerfile | VERDE | VERDE |
+| Render/Railway config | VERDE | VERDE |
 | Testes pytest | VERDE | VERDE |
 | CI GitHub Actions | VERDE após execução do PR | VERDE |
+| URL pública executável | AMARELO | VERDE após deploy no provedor |
 
-## Execução local
+## Execução local CLI
 
 ```bash
 cd examples/monitorador_apis_python
@@ -31,6 +37,28 @@ Linux/macOS:
 source .venv/bin/activate
 ```
 
+## Execução web FastAPI
+
+```bash
+uvicorn app.api:app --host 0.0.0.0 --port 8000
+```
+
+Rotas:
+
+- `/`
+- `/health`
+- `/api/monitorar`
+- `/api/resultados`
+- `/dashboard`
+- `/docs`
+
+## Docker
+
+```bash
+docker build -t monitorador-apis-python .
+docker run --rm -p 8000:8000 monitorador-apis-python
+```
+
 ## Testes
 
 ```bash
@@ -44,6 +72,13 @@ pytest --cov=app --cov-report=term-missing --cov-fail-under=85
 - `logs/monitorador.log`
 - `reports/relatorio_monitoramento.html`
 
-## Observação sobre publicação online
+## Deploy
 
-Este incremento deixa o código e a documentação disponíveis online no GitHub. Para executar como serviço público com URL própria, o próximo incremento recomendado é empacotar uma API FastAPI e publicar em Fly.io, Render ou Railway.
+Arquivos disponíveis:
+
+- `Dockerfile`
+- `render.yaml`
+- `railway.json`
+- `DEPLOY.md`
+
+A URL pública depende da conexão do repositório a um provedor de deploy autenticado, como Render ou Railway.
