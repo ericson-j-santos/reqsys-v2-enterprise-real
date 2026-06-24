@@ -1,0 +1,65 @@
+name: Operational Drift Analyzer
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '10 12 * * 1-5'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  operational-drift-analyzer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare fallback artifacts
+        run: |
+          mkdir -p artifacts/operational-history
+          mkdir -p artifacts/operational-risk-engine
+
+          cat > artifacts/operational-history/operational-history.json <<'EOF'
+          [
+            {
+              "hub_score": 84,
+              "metrics": {
+                "overall_failure_rate_percent": 8
+              }
+            },
+            {
+              "hub_score": 82,
+              "metrics": {
+                "overall_failure_rate_percent": 12
+              }
+            }
+          ]
+          EOF
+
+          cat > artifacts/operational-risk-engine/operational-risk-engine.json <<'EOF'
+          {
+            "risk_score": 30
+          }
+          EOF
+
+      - name: Execute operational drift analyzer
+        run: |
+          python scripts/operational_drift_analyzer.py \
+            --history artifacts/operational-history/operational-history.json \
+            --risk artifacts/operational-risk-engine/operational-risk-engine.json \
+            --out-dir artifacts/operational-drift-analyzer
+
+      - name: Publish drift summary
+        run: |
+          cat artifacts/operational-drift-analyzer/operational-drift-analyzer.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload drift artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-drift-analyzer
+          path: artifacts/operational-drift-analyzer/
+          retention-days: 30
