@@ -36,3 +36,11 @@ jobs:
       - name: Executar testes com cobertura mínima
         run: |
           pytest --cov=app --cov-report=term-missing --cov-fail-under=85
+
+      - name: Validar import FastAPI
+        run: |
+          python -c "from app.api import app; print(app.title)"
+
+      - name: Validar Docker build
+        run: |
+          docker build -t monitorador-apis-python:test .
