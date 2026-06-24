@@ -1,0 +1,68 @@
+name: Runtime Health Validator
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Modo de execução"
+        required: true
+        default: "report_only"
+        type: choice
+        options:
+          - report_only
+          - dry_run
+          - execute
+      branch:
+        description: "Branch monitorada"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: runtime-health-validator-${{ github.event.inputs.branch || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  validate-and-remediate:
+    name: Validar runtime e remediar governado
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Executar Runtime Health Validator
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODE: ${{ github.event.inputs.mode || 'report_only' }}
+          TARGET_BRANCH: ${{ github.event.inputs.branch || 'main' }}
+        run: |
+          set -euo pipefail
+          python scripts/runtime_health_validator.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --branch "${TARGET_BRANCH}" \
+            --limit "50" \
+            --mode "${MODE}" \
+            --output-dir "artifacts/runtime-health-validator"
+
+      - name: Publicar artifact de auditoria
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-health-validator-evidence
+          path: artifacts/runtime-health-validator
+          if-no-files-found: error
+          retention-days: 30
