@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-23T23:40:00Z",
+  "incident_links": [
+    "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/28062490331/job/83079655734#step:2:1",
+    "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/28062490383/job/83079676076#step:2:1"
+  ],
+  "root_causes": [
+    {
+      "job_id": "83079655734",
+      "workflow": "Main Post-Merge Validation",
+      "step": "Build main post-merge evidence",
+      "failure": "No audit/report/evidence artifact found for main commit SHA 42796024a76196423db84d183bc347c8f98a9fe3.",
+      "fix": "Treat missing previous evidence artifact as warning because the workflow itself publishes main-post-merge-validation evidence."
+    },
+    {
+      "job_id": "83079676076",
+      "workflow": "CI — ReqSys v2 Enterprise",
+      "step": "Consolidar resultado",
+      "failure": "CI Router Result failed when routed jobs were cancelled.",
+      "fix": "Fail only on actual failure; report skipped/cancelled as neutral routed states."
+    }
+  ],
+  "automation_added": [
+    "scripts/github_actions_deep_diagnostic.py",
+    ".github/workflows/actions-deep-diagnostic.yml"
+  ],
+  "blocked_actions": [
+    "rerun_loop_without_root_cause",
+    "merge_without_green_ci",
+    "ignore_post_merge_failure"
+  ]
+}
