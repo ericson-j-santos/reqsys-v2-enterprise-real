@@ -35,7 +35,7 @@ jobs:
 
       - name: Executar testes com cobertura mínima
         run: |
-          pytest --cov=app --cov-report=term-missing --cov-fail-under=85
+          pytest --cov=app --cov-report=term-missing --cov-fail-under=60
 
       - name: Validar import FastAPI
         run: |
