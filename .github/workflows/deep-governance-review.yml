@@ -1,0 +1,99 @@
+name: Deep Governance Review
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Motivo da revisão profunda"
+        required: false
+        default: "manual"
+        type: string
+  schedule:
+    - cron: "17 3 * * 1-5"
+  pull_request:
+    types: [labeled, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: deep-governance-review-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  deep-review:
+    name: Revisão profunda governada
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      contains(github.event.pull_request.labels.*.name, 'deep-review') ||
+      contains(github.event.pull_request.labels.*.name, 'security') ||
+      contains(github.event.pull_request.labels.*.name, 'architecture')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preparar revisão profunda
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/deep-governance-review
+
+          REVIEW_ID="DGR-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date -u +%Y%m%dT%H%M%SZ)"
+          echo "REVIEW_ID=${REVIEW_ID}" >> "${GITHUB_ENV}"
+
+          cat > artifacts/deep-governance-review/request.json <<EOF
+          {
+            "review_id": "${REVIEW_ID}",
+            "repository": "${GITHUB_REPOSITORY}",
+            "event": "${GITHUB_EVENT_NAME}",
+            "ref": "${GITHUB_REF}",
+            "sha": "${GITHUB_SHA}",
+            "actor": "${GITHUB_ACTOR}",
+            "run_id": "${GITHUB_RUN_ID}",
+            "run_attempt": "${GITHUB_RUN_ATTEMPT}",
+            "created_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+          python -m json.tool artifacts/deep-governance-review/request.json > artifacts/deep-governance-review/request.validated.json
+          mv artifacts/deep-governance-review/request.validated.json artifacts/deep-governance-review/request.json
+
+      - name: Executar revisão profunda leve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          WORKFLOW_COUNT="$(find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null | wc -l | tr -d ' ')"
+          DOC_COUNT="$(find docs -type f 2>/dev/null | wc -l | tr -d ' ')"
+          SCRIPT_COUNT="$(find scripts -type f 2>/dev/null | wc -l | tr -d ' ')"
+
+          {
+            echo "# Deep Governance Review"
+            echo
+            echo "| Dimensão | Status | Evidência |"
+            echo "|---|---|---|"
+            echo "| Review ID | info | ${REVIEW_ID} |"
+            echo "| Workflows | info | ${WORKFLOW_COUNT} arquivos |"
+            echo "| Documentação | info | ${DOC_COUNT} arquivos |"
+            echo "| Scripts | info | ${SCRIPT_COUNT} arquivos |"
+            echo
+            echo "## Resultado"
+            echo "Revisão leve concluída. Use revisão humana adicional para alterações em segurança, deploy, autenticação ou runtime crítico."
+          } | tee artifacts/deep-governance-review/summary.md
+
+          cat artifacts/deep-governance-review/summary.md >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Publicar artifact de revisão profunda
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-governance-review
+          path: artifacts/deep-governance-review
+          retention-days: 30
