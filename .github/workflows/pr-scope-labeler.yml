@@ -12,11 +12,17 @@ permissions:
   contents: read
   pull-requests: read
 
+concurrency:
+  group: pr-scope-labeler-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   label-scope:
     name: Classificar escopo do PR
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    if: github.event.pull_request != null && github.actor != 'dependabot[bot]'
+    continue-on-error: true
 
     steps:
       - name: Classificar por arquivos alterados
@@ -26,6 +32,12 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const pr = context.payload.pull_request;
+
+            if (!pr || !pr.number) {
+              core.warning('PR Scope Labeler ignorado: payload sem pull_request valido.');
+              return;
+            }
+
             const issue_number = pr.number;
 
             const headRepo = pr.head.repo?.full_name ?? null;

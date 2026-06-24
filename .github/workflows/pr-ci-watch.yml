@@ -35,8 +35,8 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.workflow_run.id || github.event.inputs.pr_number || github.run_id }}
-  cancel-in-progress: false
+  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.workflow_run.head_sha || github.event.inputs.pr_number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   pr-ci-watch:
