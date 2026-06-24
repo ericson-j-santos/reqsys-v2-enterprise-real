@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Monitorador de APIs Python</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f8fafc; color: #111827; }
+    header { background: #111827; color: #fff; padding: 28px; }
+    main { padding: 24px; max-width: 1080px; margin: auto; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .ok { background: #dcfce7; border-color: #86efac; }
+    .warn { background: #fef9c3; border-color: #fde047; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; background: #fff; }
+    th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; }
+    th { background: #111827; color: #fff; }
+    a { color: #005CA9; font-weight: 700; }
+    code { background: #e5e7eb; padding: 2px 5px; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Monitorador de APIs Python</h1>
+    <p>Projeto prático com async, retry, cache TTL, SQLite, logs, relatório HTML, testes e CI.</p>
+  </header>
+  <main>
+    <section class="grid">
+      <div class="card ok"><strong>Status evidenciado</strong><br>Publicado em branch/PR</div>
+      <div class="card warn"><strong>Deploy executável público</strong><br>Próximo incremento: FastAPI + Fly/Render</div>
+      <div class="card ok"><strong>CI</strong><br>Workflow incluído para pull_request e push em main</div>
+      <div class="card ok"><strong>Testes</strong><br>pytest + cobertura mínima de 85%</div>
+    </section>
+
+    <h2>Fluxo operacional</h2>
+    <pre><code>APIs alvo → Async client → Retry/backoff → Cache TTL → SQLite → Logs → Relatório HTML → Testes CI</code></pre>
+
+    <h2>Matriz de entrega</h2>
+    <table>
+      <thead><tr><th>Capacidade</th><th>Estado evidenciado</th><th>Estado alvo</th></tr></thead>
+      <tbody>
+        <tr><td>Fonte no GitHub</td><td>VERDE</td><td>VERDE</td></tr>
+        <tr><td>Testes automatizados</td><td>VERDE</td><td>VERDE</td></tr>
+        <tr><td>CI dedicado</td><td>VERDE após execução do PR</td><td>VERDE</td></tr>
+        <tr><td>URL pública executável</td><td>AMARELO</td><td>VERDE com FastAPI + deploy</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Comandos</h2>
+    <pre><code>cd examples/monitorador_apis_python
+python -m venv .venv
+pip install -r requirements.txt
+python -m app.main
+pytest --cov=app --cov-report=term-missing --cov-fail-under=85</code></pre>
+  </main>
+</body>
+</html>
