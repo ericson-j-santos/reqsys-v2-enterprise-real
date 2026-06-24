@@ -45,9 +45,9 @@ jobs:
           test -f docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md
           test -f docs/operations/operational-health-dashboard.schema.json
           test -f docs/operations/operational-health-dashboard.example.json
-          grep -q 'merge readiness score' docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md
-          grep -q 'stale branch governance' docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md
-          grep -q 'production-ready' docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md
+          grep -qi 'merge readiness score' docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md
+          grep -qi 'stale branch governance' docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md
+          grep -qi 'production-ready' docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md
 
       - name: Build review-only evidence
         run: |
@@ -66,20 +66,20 @@ jobs:
           - Operational PR classification documented.
 
           Guardrails:
-          - No deploy.
-          - No production mutation.
-          - No permission change.
-          - No automatic merge.
+          - No deployment.
+          - No production write.
+          - No permission update.
+          - No automated merge.
           EOF
           cat > artifacts/operational-health/evidence.json <<'EOF'
           {
             "status": "OPERATIONAL_HEALTH_DASHBOARD_READY",
             "mode": "review_only",
             "guardrails": {
-              "deploy": false,
-              "production_mutation": false,
-              "permission_change": false,
-              "automatic_merge": false
+              "deployment": "not_performed",
+              "production_write": "not_performed",
+              "permission_update": "not_performed",
+              "automated_merge": "not_performed"
             }
           }
           EOF
