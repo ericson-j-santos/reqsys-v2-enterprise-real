@@ -1,0 +1,18 @@
+{
+  "status": "OPERATIONAL_HEALTH_DASHBOARD_READY",
+  "mode": "review_only",
+  "capabilities": [
+    "pr_aging",
+    "conflict_risk",
+    "stale_branch_index",
+    "ci_health_trend",
+    "merge_readiness_score",
+    "operational_pr_classification"
+  ],
+  "guardrails": {
+    "deploy": false,
+    "production_mutation": false,
+    "permission_change": false,
+    "automatic_merge": false
+  }
+}
