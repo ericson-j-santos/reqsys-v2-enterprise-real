@@ -27,13 +27,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Validate governed JSON schemas
+      - name: Validate governed JSON schemas on pull request
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          python tools/schema_governance/validate_schema_governance.py --base-ref "origin/${{ github.base_ref }}"
+
+      - name: Validate governed JSON schemas on push
+        if: github.event_name != 'pull_request'
         run: |
           python tools/schema_governance/validate_schema_governance.py
 
