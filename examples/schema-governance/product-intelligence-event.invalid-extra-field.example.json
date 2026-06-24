@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "invalid-extra-field",
+  "event_type": "requirement.created",
+  "event_class": "PRODUCT_INTELLIGENCE",
+  "occurred_at": "2026-06-24T00:00:00Z",
+  "source": {
+    "system": "reqsys",
+    "channel": "api",
+    "actor_type": "system",
+    "actor_id": "schema-governance-gate",
+    "unexpected_source_field": true
+  },
+  "requirement": {
+    "id": "REQ-INVALID",
+    "title": "Invalid fixture with extra source field",
+    "type": "functional",
+    "status": "draft",
+    "priority": "must",
+    "confidence": "high"
+  },
+  "quality": {
+    "bdd_coverage": 100,
+    "ambiguity_score": 0,
+    "traceability_score": 100,
+    "risk_score": 0,
+    "readiness_score": 100
+  },
+  "traceability": {
+    "parent_ids": [],
+    "linked_prs": [],
+    "linked_tests": [],
+    "linked_decisions": [],
+    "linked_risks": []
+  },
+  "governance": {
+    "correlation_id": "schema-governance-invalid-fixture",
+    "pii_masked": true,
+    "human_review_required": true,
+    "ai_generated": false,
+    "evidence_level": "complete"
+  }
+}

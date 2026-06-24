@@ -1,0 +1,53 @@
+name: Schema Governance Gate
+
+on:
+  pull_request:
+    paths:
+      - "schemas/**"
+      - "examples/**"
+      - "docs/schema-registry.json"
+      - "docs/schema-governance-gates.md"
+      - "tools/schema_governance/**"
+      - ".github/workflows/schema-governance-gate.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "schemas/**"
+      - "examples/**"
+      - "docs/schema-registry.json"
+      - "docs/schema-governance-gates.md"
+      - "tools/schema_governance/**"
+      - ".github/workflows/schema-governance-gate.yml"
+
+jobs:
+  schema-governance:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate governed JSON schemas
+        run: |
+          python tools/schema_governance/validate_schema_governance.py
+
+      - name: Publish schema governance summary
+        if: always()
+        run: |
+          if [ -f schema-governance-report.md ]; then
+            cat schema-governance-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload schema governance artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-governance-report
+          path: schema-governance-report.md
+          if-no-files-found: error
