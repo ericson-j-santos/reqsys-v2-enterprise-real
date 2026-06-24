@@ -23,6 +23,7 @@ from app.api import (
     pipeline,
     processos,
     qualidade_ia,
+    rag_governado,
     rastreabilidade,
     relatorios,
     requisitos,
@@ -84,6 +85,7 @@ app.include_router(monitoramento_operacional.router)
 app.include_router(operational_intelligence.router)
 app.include_router(actions_runtime_center.router)
 app.include_router(govbi.router)
+app.include_router(rag_governado.router)
 
 
 @app.middleware('http')
