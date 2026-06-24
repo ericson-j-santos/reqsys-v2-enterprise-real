@@ -1,0 +1,104 @@
+name: Operational Stability Score
+
+on:
+  workflow_run:
+    workflows:
+      - "CI Incident Intelligence"
+      - "Post Merge Operational Summary"
+      - "Testes Monitorador APIs Python"
+    types:
+      - completed
+
+jobs:
+  operational-stability-score:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate operational stability score
+        env:
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          echo "# Operational Stability Score" > operational-stability-score.md
+          echo "" >> operational-stability-score.md
+          echo "- Workflow: ${WORKFLOW_NAME}" >> operational-stability-score.md
+          echo "- Conclusion: ${WORKFLOW_CONCLUSION}" >> operational-stability-score.md
+          echo "- Branch: ${HEAD_BRANCH}" >> operational-stability-score.md
+          echo "- Commit: ${HEAD_SHA}" >> operational-stability-score.md
+          echo "- URL: ${WORKFLOW_URL}" >> operational-stability-score.md
+          echo "" >> operational-stability-score.md
+
+          python - <<'PY'
+from pathlib import Path
+import os
+
+workflow = os.getenv('WORKFLOW_NAME', '')
+conclusion = os.getenv('WORKFLOW_CONCLUSION', '')
+
+score = 100
+classification = 'STABLE'
+trend = 'HEALTHY'
+
+if conclusion != 'success':
+    score -= 35
+    classification = 'DEGRADED'
+    trend = 'ATTENTION'
+
+if 'Monitorador' in workflow:
+    score -= 5
+
+if 'Incident Intelligence' in workflow:
+    score -= 2
+
+if score < 70:
+    classification = 'CRITICAL'
+    trend = 'RISK'
+elif score < 85:
+    classification = 'WARNING'
+    trend = 'MONITORING'
+
+lines = []
+lines.append('## Stability Analysis')
+lines.append(f'- Operational stability score: {score}/100')
+lines.append(f'- Classification: {classification}')
+lines.append(f'- Trend: {trend}')
+lines.append('')
+lines.append('## Recommendations')
+
+if score >= 90:
+    lines.append('- Operational ecosystem stable.')
+    lines.append('- Continue continuous monitoring.')
+elif score >= 75:
+    lines.append('- Minor operational degradation detected.')
+    lines.append('- Review recurrent workflows and flaky signals.')
+else:
+    lines.append('- Critical operational instability detected.')
+    lines.append('- Prioritize CI remediation before new functional increments.')
+
+lines.append('')
+lines.append('## Governance')
+lines.append('- Preserve mandatory gates.')
+lines.append('- Avoid force merge with active CI failures.')
+lines.append('- Correlate incidents with deployments and PRs.')
+
+Path('stability-analysis.md').write_text('\n'.join(lines), encoding='utf-8')
+PY
+
+          cat stability-analysis.md >> operational-stability-score.md
+
+      - name: Publish operational stability summary
+        run: |
+          cat operational-stability-score.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload operational stability artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-stability-score
+          path: operational-stability-score.md
+          if-no-files-found: error
