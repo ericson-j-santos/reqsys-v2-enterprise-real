@@ -1,0 +1,57 @@
+name: Operational Analytics Engine
+
+on:
+  schedule:
+    - cron: "41 * * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch monitorada"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: operational-analytics-engine-${{ github.event.inputs.branch || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  analytics:
+    name: Gerar analytics operacional
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Gerar analytics e dashboard
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ github.event.inputs.branch || 'main' }}
+        run: |
+          set -euo pipefail
+          python scripts/operational_analytics_engine.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --branch "${TARGET_BRANCH}" \
+            --limit "100" \
+            --output-dir "artifacts/operational-analytics"
+
+      - name: Publicar artifact de analytics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-analytics-evidence
+          path: artifacts/operational-analytics
+          if-no-files-found: error
+          retention-days: 30
