@@ -1,0 +1,83 @@
+name: Product Intelligence Evidence Navigation Governance Lifecycle Index
+
+on:
+  pull_request:
+    paths:
+      - "tools/product_intelligence/**"
+      - "docs/product-intelligence/**"
+      - ".github/workflows/product-intelligence-evidence-navigation-governance-lifecycle-index.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "tools/product_intelligence/**"
+      - "docs/product-intelligence/**"
+      - ".github/workflows/product-intelligence-evidence-navigation-governance-lifecycle-index.yml"
+
+jobs:
+  evidence-navigation-governance-lifecycle-index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build prerequisite retention index
+        run: |
+          python tools/product_intelligence/validate_product_intelligence_event.py examples/product-intelligence/product-intelligence-event.example.json
+          python tools/product_intelligence/score_requirement_quality.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/build_functional_traceability_graph.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/generate_product_intelligence_dashboard.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/generate_product_decision_intelligence.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/generate_living_backlog.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/publish_living_backlog_governed.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_backlog_governance_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_functional_roadmap.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_runtime_readiness_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_runtime_planning_package.py reports/product-intelligence
+          python tools/product_intelligence/generate_release_evidence_pack.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_release_governance_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_executive_release_board.py reports/product-intelligence
+          python tools/product_intelligence/generate_executive_summary_trendline.py reports/product-intelligence
+          python tools/product_intelligence/generate_executive_control_tower.py reports/product-intelligence
+          python tools/product_intelligence/generate_continuous_governance_snapshot.py reports/product-intelligence
+          python tools/product_intelligence/detect_governance_drift.py reports/product-intelligence
+          python tools/product_intelligence/generate_governance_stability_index.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_governance_stabilization_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_consolidated_governance_report.py reports/product-intelligence
+          python tools/product_intelligence/generate_governance_closure_pack.py reports/product-intelligence
+          python tools/product_intelligence/generate_final_evidence_index.py reports/product-intelligence
+          python tools/product_intelligence/generate_evidence_navigation_ui.py reports/product-intelligence
+          python tools/product_intelligence/publish_evidence_navigation_artifacts.py reports/product-intelligence
+          python tools/product_intelligence/generate_evidence_navigation_retention_index.py reports/product-intelligence
+      - name: Build governance lifecycle index
+        run: python tools/product_intelligence/generate_evidence_navigation_governance_lifecycle_index.py reports/product-intelligence
+      - name: Validate governance lifecycle index
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report_dir = Path('reports/product-intelligence')
+          payload = json.loads((report_dir / 'product-intelligence-evidence-navigation-governance-lifecycle-index.json').read_text(encoding='utf-8'))
+          summary = (report_dir / 'product-intelligence-evidence-navigation-governance-lifecycle-index.md').read_text(encoding='utf-8')
+          assert payload['mode'] == 'review_only', payload
+          assert payload['readiness_state'] == 'EVIDENCE_NAVIGATION_GOVERNANCE_LIFECYCLE_COMPLETE', payload
+          assert payload['lifecycle_complete'] is True, payload
+          assert payload['risk_percent'] <= 2, payload
+          assert payload['confidence_percent'] >= 97, payload
+          assert payload['production_promotion_authorized'] is False, payload
+          assert payload['human_governance_review_required'] is True, payload
+          assert not payload['incomplete_artifacts'], payload
+          assert 'Lifecycle map' in summary
+          PY
+      - name: Upload governance lifecycle index bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-intelligence-evidence-navigation-governance-lifecycle-index
+          path: |
+            reports/product-intelligence/product-intelligence-evidence-navigation-governance-lifecycle-index.json
+            reports/product-intelligence/product-intelligence-evidence-navigation-governance-lifecycle-index.md
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish summary
+        run: cat reports/product-intelligence/product-intelligence-evidence-navigation-governance-lifecycle-index.md >> "$GITHUB_STEP_SUMMARY"
