@@ -1,0 +1,83 @@
+name: Product Intelligence Evidence Navigation Artifact Publisher
+
+on:
+  pull_request:
+    paths:
+      - "tools/product_intelligence/**"
+      - "docs/product-intelligence/**"
+      - ".github/workflows/product-intelligence-evidence-navigation-artifact-publisher.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "tools/product_intelligence/**"
+      - "docs/product-intelligence/**"
+      - ".github/workflows/product-intelligence-evidence-navigation-artifact-publisher.yml"
+
+jobs:
+  evidence-navigation-artifact-publisher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build prerequisite final evidence index and navigation UI
+        run: |
+          python tools/product_intelligence/validate_product_intelligence_event.py examples/product-intelligence/product-intelligence-event.example.json
+          python tools/product_intelligence/score_requirement_quality.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/build_functional_traceability_graph.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/generate_product_intelligence_dashboard.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/generate_product_decision_intelligence.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/generate_living_backlog.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/publish_living_backlog_governed.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_backlog_governance_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_functional_roadmap.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_runtime_readiness_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_runtime_planning_package.py reports/product-intelligence
+          python tools/product_intelligence/generate_release_evidence_pack.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_release_governance_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_executive_release_board.py reports/product-intelligence
+          python tools/product_intelligence/generate_executive_summary_trendline.py reports/product-intelligence
+          python tools/product_intelligence/generate_executive_control_tower.py reports/product-intelligence
+          python tools/product_intelligence/generate_continuous_governance_snapshot.py reports/product-intelligence
+          python tools/product_intelligence/detect_governance_drift.py reports/product-intelligence
+          python tools/product_intelligence/generate_governance_stability_index.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_governance_stabilization_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_consolidated_governance_report.py reports/product-intelligence
+          python tools/product_intelligence/generate_governance_closure_pack.py reports/product-intelligence
+          python tools/product_intelligence/generate_final_evidence_index.py reports/product-intelligence
+          python tools/product_intelligence/generate_evidence_navigation_ui.py reports/product-intelligence
+      - name: Build artifact publisher manifest
+        run: python tools/product_intelligence/publish_evidence_navigation_artifacts.py reports/product-intelligence
+      - name: Validate artifact publisher manifest
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report_dir = Path('reports/product-intelligence')
+          payload = json.loads((report_dir / 'product-intelligence-evidence-navigation-artifact-manifest.json').read_text(encoding='utf-8'))
+          summary = (report_dir / 'product-intelligence-evidence-navigation-artifact-manifest.md').read_text(encoding='utf-8')
+          assert payload['mode'] == 'review_only', payload
+          assert payload['readiness_state'] == 'EVIDENCE_NAVIGATION_ARTIFACTS_PUBLISHABLE', payload
+          assert payload['artifact_coverage_percent'] == 100.0, payload
+          assert payload['risk_percent'] <= 4, payload
+          assert payload['confidence_percent'] >= 95, payload
+          assert payload['production_publish_authorized'] is False, payload
+          assert all(item['sha256'] for item in payload['artifacts']), payload
+          assert 'Artifact manifest' in summary
+          PY
+      - name: Upload evidence navigation review bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-intelligence-evidence-navigation-review-bundle
+          path: |
+            reports/product-intelligence/product-intelligence-evidence-navigation-ui.json
+            reports/product-intelligence/product-intelligence-evidence-navigation-ui.md
+            reports/product-intelligence/product-intelligence-evidence-navigation-ui.html
+            reports/product-intelligence/product-intelligence-evidence-navigation-artifact-manifest.json
+            reports/product-intelligence/product-intelligence-evidence-navigation-artifact-manifest.md
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish summary
+        run: cat reports/product-intelligence/product-intelligence-evidence-navigation-artifact-manifest.md >> "$GITHUB_STEP_SUMMARY"
