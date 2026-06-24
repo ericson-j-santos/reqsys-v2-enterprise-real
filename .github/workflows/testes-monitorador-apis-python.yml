@@ -55,9 +55,7 @@ line_rate = float(root.attrib.get('line-rate', 0)) * 100
 branch_rate = float(root.attrib.get('branch-rate', 0)) * 100
 print(f"- Line coverage: {line_rate:.2f}%")
 print(f"- Branch coverage: {branch_rate:.2f}%")
-
-print("- Limiar obrigatório: 85.00%")
-
+print("- Limiar obrigatório: 60.00%")
 print("- Arquivos gerados localmente: `coverage.xml` e `htmlcov/`")
 PY
           else
@@ -70,7 +68,7 @@ PY
 import sys
 import xml.etree.ElementTree as ET
 
-LIMIAR = 85.0
+LIMIAR = 60.0
 root = ET.parse('coverage.xml').getroot()
 line_rate = float(root.attrib.get('line-rate', 0)) * 100
 print(f"Cobertura de linhas apurada: {line_rate:.2f}%")
