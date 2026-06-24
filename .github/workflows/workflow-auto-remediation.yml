@@ -1,16 +1,35 @@
 name: Workflow Auto Remediation
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: "47 9 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: "Executar rerun de failed jobs allowlisted. false = dry-run"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      max_reruns:
+        description: "Numero maximo de runs remediados"
+        required: false
+        default: "3"
+        type: string
 
 permissions:
   contents: read
   actions: write
 
+concurrency:
+  group: workflow-auto-remediation-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   auto-remediation:
+    name: Auto-remediar workflows allowlisted
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -21,14 +40,33 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.12"
 
-      - name: Execute remediation runtime
+      - name: Executar auto-remediacao segura
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXECUTE: ${{ github.event.inputs.execute || 'false' }}
+          MAX_RERUNS: ${{ github.event.inputs.max_reruns || '3' }}
         run: |
-          python scripts/workflow_auto_remediation.py
+          set -euo pipefail
+          args=(
+            --repo "${GITHUB_REPOSITORY}"
+            --branch "main"
+            --limit "30"
+            --max-reruns "${MAX_RERUNS}"
+            --output-dir "artifacts/workflow-auto-remediation"
+          )
+          if [[ "${EXECUTE}" == "true" ]]; then
+            args+=(--execute)
+          fi
+          python scripts/workflow_auto_remediation.py "${args[@]}"
 
-      - name: Upload evidence
+      - name: Publicar artifact de evidencia
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: workflow-runtime-health
-          path: workflow-runtime-health.json
+          name: workflow-auto-remediation-evidence
+          path: artifacts/workflow-auto-remediation
+          if-no-files-found: error
+          retention-days: 15
