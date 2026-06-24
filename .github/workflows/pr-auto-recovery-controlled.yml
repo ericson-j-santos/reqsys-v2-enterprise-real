@@ -1,0 +1,93 @@
+name: PR Auto Recovery Controlled
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Numero do PR alvo"
+        required: true
+        type: string
+      execution_mode:
+        description: "Modo de execucao"
+        required: true
+        default: "dry-run"
+        type: choice
+        options:
+          - dry-run
+          - controlled-draft-only
+      operator_confirmation:
+        description: "Digite CONFIRMAR para prosseguir"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: pr-auto-recovery-controlled-${{ github.event.inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  controlled-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Validar confirmacao manual
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event.inputs.operator_confirmation }}" != "CONFIRMAR" ]]; then
+            echo "Confirmacao invalida"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Exibir modo operacional
+        shell: bash
+        run: |
+          echo "Modo: ${{ github.event.inputs.execution_mode }}"
+          echo "PR alvo: #${{ github.event.inputs.pr_number }}"
+          echo "Execucao controlada ativa"
+
+      - name: Validar gates versionados
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f config/pr-auto-recovery-gates.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('config/pr-auto-recovery-gates.json').read_text())
+          assert payload['default_enabled'] is False
+          assert payload['required_gates']['auto_merge'] is False
+          assert payload['required_gates']['deploy'] is False
+          print('Gates validados')
+          PY
+
+      - name: Gerar plano controlado
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/pr-auto-recovery-controlled
+          cat <<EOF > artifacts/pr-auto-recovery-controlled/execution-plan.json
+          {
+            "mode": "${{ github.event.inputs.execution_mode }}",
+            "pr_number": "${{ github.event.inputs.pr_number }}",
+            "operator_confirmation": true,
+            "real_mutation_executed": false,
+            "next_step": "human_review_required"
+          }
+          EOF
+
+      - name: Publicar artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-auto-recovery-controlled
+          path: artifacts/pr-auto-recovery-controlled
+          if-no-files-found: error
+          retention-days: 15
