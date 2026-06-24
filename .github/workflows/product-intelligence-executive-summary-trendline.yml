@@ -1,0 +1,45 @@
+name: Product Intelligence Executive Summary Trendline
+
+on:
+  pull_request:
+    paths:
+      - "tools/product_intelligence/**"
+      - "examples/product-intelligence/**"
+      - "schemas/product-intelligence/**"
+      - ".github/workflows/product-intelligence-executive-summary-trendline.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "tools/product_intelligence/**"
+      - "examples/product-intelligence/**"
+      - "schemas/product-intelligence/**"
+      - ".github/workflows/product-intelligence-executive-summary-trendline.yml"
+
+jobs:
+  executive-summary-trendline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build executive summary trendline
+        run: |
+          python tools/product_intelligence/validate_product_intelligence_event.py examples/product-intelligence/product-intelligence-event.example.json
+          python tools/product_intelligence/score_requirement_quality.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/build_functional_traceability_graph.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/generate_product_intelligence_dashboard.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/generate_product_decision_intelligence.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/generate_living_backlog.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/publish_living_backlog_governed.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_backlog_governance_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_functional_roadmap.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_runtime_readiness_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_runtime_planning_package.py reports/product-intelligence
+          python tools/product_intelligence/generate_release_evidence_pack.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_release_governance_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_executive_release_board.py reports/product-intelligence
+          python tools/product_intelligence/generate_executive_summary_trendline.py reports/product-intelligence
+      - name: Publish summary
+        run: cat reports/product-intelligence/product-intelligence-executive-summary-trendline.md >> "$GITHUB_STEP_SUMMARY"
