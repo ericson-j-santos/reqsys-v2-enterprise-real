@@ -1,0 +1,75 @@
+name: Product Intelligence Evidence Navigation UI
+
+on:
+  pull_request:
+    paths:
+      - "tools/product_intelligence/**"
+      - "docs/product-intelligence/**"
+      - ".github/workflows/product-intelligence-evidence-navigation-ui.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "tools/product_intelligence/**"
+      - "docs/product-intelligence/**"
+      - ".github/workflows/product-intelligence-evidence-navigation-ui.yml"
+
+jobs:
+  evidence-navigation-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build prerequisite final evidence index
+        run: |
+          python tools/product_intelligence/validate_product_intelligence_event.py examples/product-intelligence/product-intelligence-event.example.json
+          python tools/product_intelligence/score_requirement_quality.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/build_functional_traceability_graph.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/generate_product_intelligence_dashboard.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/generate_product_decision_intelligence.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/generate_living_backlog.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+          python tools/product_intelligence/publish_living_backlog_governed.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_backlog_governance_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_functional_roadmap.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_runtime_readiness_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_runtime_planning_package.py reports/product-intelligence
+          python tools/product_intelligence/generate_release_evidence_pack.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_release_governance_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_executive_release_board.py reports/product-intelligence
+          python tools/product_intelligence/generate_executive_summary_trendline.py reports/product-intelligence
+          python tools/product_intelligence/generate_executive_control_tower.py reports/product-intelligence
+          python tools/product_intelligence/generate_continuous_governance_snapshot.py reports/product-intelligence
+          python tools/product_intelligence/detect_governance_drift.py reports/product-intelligence
+          python tools/product_intelligence/generate_governance_stability_index.py reports/product-intelligence
+          python tools/product_intelligence/evaluate_governance_stabilization_gate.py reports/product-intelligence
+          python tools/product_intelligence/generate_consolidated_governance_report.py reports/product-intelligence
+          python tools/product_intelligence/generate_governance_closure_pack.py reports/product-intelligence
+          python tools/product_intelligence/generate_final_evidence_index.py reports/product-intelligence
+      - name: Build evidence navigation UI
+        run: |
+          python tools/product_intelligence/generate_evidence_navigation_ui.py reports/product-intelligence
+      - name: Validate evidence navigation UI
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report_dir = Path('reports/product-intelligence')
+          json_path = report_dir / 'product-intelligence-evidence-navigation-ui.json'
+          html_path = report_dir / 'product-intelligence-evidence-navigation-ui.html'
+          md_path = report_dir / 'product-intelligence-evidence-navigation-ui.md'
+
+          payload = json.loads(json_path.read_text(encoding='utf-8'))
+          assert payload['mode'] == 'review_only', payload
+          assert payload['readiness_color'] == 'green', payload
+          assert payload['evidence_coverage_percent'] == 100.0, payload
+          assert payload['risk_percent'] <= 5, payload
+          assert payload['confidence_percent'] >= 90, payload
+          assert payload['available_count'] == payload['artifact_count'], payload
+          assert html_path.exists() and 'Product Intelligence Evidence Navigation UI' in html_path.read_text(encoding='utf-8')
+          assert md_path.exists() and 'Navigable evidence cards' in md_path.read_text(encoding='utf-8')
+          PY
+      - name: Publish summary
+        run: cat reports/product-intelligence/product-intelligence-evidence-navigation-ui.md >> "$GITHUB_STEP_SUMMARY"
