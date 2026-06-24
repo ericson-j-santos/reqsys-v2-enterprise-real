@@ -1,0 +1,41 @@
+{
+  "registry_version": "1.0.0",
+  "updated_at": "2026-06-24T00:00:00Z",
+  "governance": {
+    "owner": "ReqSys Architecture Governance",
+    "default_draft": "2020-12",
+    "versioning_policy": "semver",
+    "required_gates": [
+      "schema_contract_gate",
+      "schema_version_gate",
+      "example_validation_gate",
+      "breaking_change_gate",
+      "additional_properties_gate",
+      "required_fields_gate",
+      "enum_evolution_gate",
+      "contract_registry_gate",
+      "ci_artifact_gate",
+      "runtime_validation_gate"
+    ]
+  },
+  "schemas": [
+    {
+      "domain": "product-intelligence",
+      "name": "product-intelligence-event",
+      "version": "1.0.0",
+      "status": "active",
+      "schema_path": "schemas/product-intelligence/product-intelligence-event.schema.json",
+      "owner": "Product Intelligence",
+      "compatibility": "strict",
+      "runtime_validation_required": true,
+      "ci_validation_required": true,
+      "breaking_change_policy": "major_version_required",
+      "valid_examples": [
+        "examples/product-intelligence/product-intelligence-event.example.json"
+      ],
+      "invalid_examples": [
+        "examples/schema-governance/product-intelligence-event.invalid-extra-field.example.json"
+      ]
+    }
+  ]
+}
