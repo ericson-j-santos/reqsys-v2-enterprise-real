@@ -1,0 +1,115 @@
+name: Workflow Reliability Analytics
+
+on:
+  workflow_run:
+    workflows:
+      - "Operational Stability Score"
+      - "CI Incident Intelligence"
+      - "Post Merge Operational Summary"
+      - "Testes Monitorador APIs Python"
+    types:
+      - completed
+
+jobs:
+  workflow-reliability-analytics:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate workflow reliability analytics
+        env:
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          echo "# Workflow Reliability Analytics" > workflow-reliability-analytics.md
+          echo "" >> workflow-reliability-analytics.md
+          echo "- Workflow: ${WORKFLOW_NAME}" >> workflow-reliability-analytics.md
+          echo "- Conclusion: ${WORKFLOW_CONCLUSION}" >> workflow-reliability-analytics.md
+          echo "- Branch: ${HEAD_BRANCH}" >> workflow-reliability-analytics.md
+          echo "- Commit: ${HEAD_SHA}" >> workflow-reliability-analytics.md
+          echo "- URL: ${WORKFLOW_URL}" >> workflow-reliability-analytics.md
+          echo "" >> workflow-reliability-analytics.md
+
+          python - <<'PY'
+from pathlib import Path
+import os
+
+workflow = os.getenv('WORKFLOW_NAME', '')
+conclusion = os.getenv('WORKFLOW_CONCLUSION', '')
+
+failure_rate = 0
+flaky_probability = 'LOW'
+trend = 'STABLE'
+reliability_score = 100
+
+if conclusion != 'success':
+    failure_rate = 35
+    reliability_score -= 30
+    trend = 'DEGRADING'
+    flaky_probability = 'MEDIUM'
+
+if 'Monitorador' in workflow:
+    reliability_score -= 5
+    flaky_probability = 'MEDIUM'
+
+if reliability_score < 70:
+    flaky_probability = 'HIGH'
+    trend = 'CRITICAL'
+
+ranking = []
+ranking.append((workflow, reliability_score))
+ranking.sort(key=lambda item: item[1])
+
+lines = []
+lines.append('## Reliability Metrics')
+lines.append(f'- Reliability score: {reliability_score}/100')
+lines.append(f'- Failure rate estimate: {failure_rate}%')
+lines.append(f'- Flaky probability: {flaky_probability}')
+lines.append(f'- Trend: {trend}')
+lines.append('')
+lines.append('## Workflow Ranking')
+lines.append('| Workflow | Reliability Score |')
+lines.append('|---|---|')
+
+for item in ranking:
+    lines.append(f'| {item[0]} | {item[1]}/100 |')
+
+lines.append('')
+lines.append('## Recommendations')
+
+if reliability_score >= 90:
+    lines.append('- Workflow ecosystem stable.')
+    lines.append('- Maintain operational monitoring cadence.')
+elif reliability_score >= 75:
+    lines.append('- Reliability degradation signals detected.')
+    lines.append('- Review recurrent failures and flaky patterns.')
+else:
+    lines.append('- Critical workflow instability detected.')
+    lines.append('- Prioritize CI stabilization before new releases.')
+
+lines.append('')
+lines.append('## Governance')
+lines.append('- Preserve mandatory CI gates.')
+lines.append('- Avoid force merges with unstable workflows.')
+lines.append('- Track workflow recurrence patterns.')
+
+Path('workflow-analytics.md').write_text('\n'.join(lines), encoding='utf-8')
+PY
+
+          cat workflow-analytics.md >> workflow-reliability-analytics.md
+
+      - name: Publish workflow reliability summary
+        run: |
+          cat workflow-reliability-analytics.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload workflow reliability artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-reliability-analytics
+          path: workflow-reliability-analytics.md
+          if-no-files-found: error

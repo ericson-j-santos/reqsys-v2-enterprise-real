@@ -1,0 +1,84 @@
+name: CI Incident Intelligence
+
+on:
+  workflow_run:
+    workflows:
+      - "Post Merge Operational Summary"
+      - "Testes Monitorador APIs Python"
+    types:
+      - completed
+
+jobs:
+  incident-intelligence:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build CI incident intelligence report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          echo "# CI Incident Intelligence" > ci-incident-intelligence.md
+          echo "" >> ci-incident-intelligence.md
+          echo "- Workflow: ${WORKFLOW_NAME}" >> ci-incident-intelligence.md
+          echo "- Conclusion: ${WORKFLOW_CONCLUSION}" >> ci-incident-intelligence.md
+          echo "- Branch: ${HEAD_BRANCH}" >> ci-incident-intelligence.md
+          echo "- Commit: ${HEAD_SHA}" >> ci-incident-intelligence.md
+          echo "- URL: ${WORKFLOW_URL}" >> ci-incident-intelligence.md
+          echo "" >> ci-incident-intelligence.md
+
+          python - <<'PY'
+from pathlib import Path
+import os
+
+workflow = os.getenv('WORKFLOW_NAME', '')
+conclusion = os.getenv('WORKFLOW_CONCLUSION', '')
+
+lines = []
+lines.append('## Incident Classification')
+
+if conclusion == 'success':
+    lines.append('- No active CI incident detected.')
+else:
+    lines.append('- CI incident detected.')
+
+    if 'Monitorador' in workflow:
+        lines.append('- Classification: probable coverage or deterministic test regression.')
+        lines.append('- Suggested action: inspect coverage summary and flaky patterns.')
+    elif 'Post Merge' in workflow:
+        lines.append('- Classification: operational observability regression.')
+        lines.append('- Suggested action: inspect workflow aggregation and GitHub API access.')
+    else:
+        lines.append('- Classification: generic CI regression.')
+        lines.append('- Suggested action: inspect workflow logs and affected files.')
+
+lines.append('')
+lines.append('## Operational Recommendations')
+lines.append('- Verify whether failure is flaky or structural.')
+lines.append('- Correlate PR, workflow and deployment impact.')
+lines.append('- Preserve governance gates before merge.')
+lines.append('- Avoid rerun storms and duplicate retries.')
+
+Path('incident-summary.md').write_text('\n'.join(lines), encoding='utf-8')
+PY
+
+          cat incident-summary.md >> ci-incident-intelligence.md
+
+      - name: Publish incident intelligence summary
+        run: |
+          cat ci-incident-intelligence.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload CI incident intelligence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-incident-intelligence
+          path: ci-incident-intelligence.md
+          if-no-files-found: error
