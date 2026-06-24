@@ -1,0 +1,22 @@
+{
+  "mode": "assisted-dry-run",
+  "recovery_candidate": true,
+  "original_pr": 129,
+  "original_mergeable": false,
+  "recommended_branch": "bot/recovery-pr129-clean",
+  "recommended_pr_title": "docs(product): definir shell do usuário final v2",
+  "risk_level": "low",
+  "allowed_files": [
+    "frontend/src/views/UserFinalShellView.vue",
+    "frontend/src/router/index.js",
+    "docs/product/user-final-shell-contract.json"
+  ],
+  "blocked_files": [],
+  "actions": [
+    "create_clean_branch_from_main",
+    "reapply_allowlisted_files",
+    "open_draft_pr",
+    "comment_superseded_on_original_pr"
+  ],
+  "mutations_executed": false
+}
