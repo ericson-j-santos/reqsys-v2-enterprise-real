@@ -19,7 +19,10 @@ Este gate transforma schema version JSON em capacidade governada da plataforma, 
 | Exemplo inválido obrigatório | Governado por registry |
 | Detector base/head de breaking changes | Implementado para PRs |
 | Self-validation do gate | Implementada em `tests/schema_governance/test_schema_governance_gate.py` |
-| Artifact de evidência | `schema-governance-report` |
+| Relatório executivo Markdown | `schema-governance-report.md` |
+| Relatório executivo JSON | `schema-governance-report.json` |
+| Relatório executivo HTML | `schema-governance-report.html` |
+| Artifact de evidência | `schema-governance-executive-report` |
 
 ## Gates mínimos obrigatórios
 
@@ -55,6 +58,30 @@ python tests/schema_governance/test_schema_governance_gate.py
 ```
 
 Essa suíte protege o próprio mecanismo de governança contra regressões.
+
+## Relatório executivo
+
+O gate gera três evidências complementares:
+
+| Arquivo | Uso |
+|---|---|
+| `schema-governance-report.md` | Step Summary e leitura rápida no GitHub Actions |
+| `schema-governance-report.json` | Consumo por dashboards, automações e analytics |
+| `schema-governance-report.html` | Leitura executiva visual, mobile-friendly e zero-CDN |
+
+## Indicadores executivos
+
+| Indicador | Finalidade |
+|---|---|
+| Maturity score | Percentual consolidado de maturidade do gate |
+| Production readiness | Prontidão operacional para uso como bloqueio produtivo |
+| Risk level | Classificação objetiva: low, medium, high ou critical |
+| Gate coverage | Cobertura dos gates obrigatórios |
+| Runtime validation coverage | Percentual de contratos com validação runtime requerida |
+| CI validation coverage | Percentual de contratos com validação CI requerida |
+| Example coverage | Cobertura mínima entre exemplos válidos e inválidos |
+| Total contracts | Quantidade de contratos governados |
+| Errors | Bloqueios técnicos encontrados |
 
 ## Cenários testados
 
@@ -105,6 +132,7 @@ Essa suíte protege o próprio mecanismo de governança contra regressões.
 7. Executar `python tools/schema_governance/validate_schema_governance.py`.
 8. Em PR, validar o comparativo base/head pelo workflow `Schema Governance Gate`.
 9. Preservar a self-validation do gate verde antes de alterar regras internas.
+10. Consultar o artifact `schema-governance-executive-report` para evidência executiva.
 
 ## O que não pode passar batido
 
@@ -120,6 +148,7 @@ Essa suíte protege o próprio mecanismo de governança contra regressões.
 - Runtime crítico sem validação obrigatória.
 - Regressão do próprio detector.
 - Gate sem artifact de evidência.
+- Relatório executivo ausente.
 
 ## Limites atuais
 
@@ -130,4 +159,4 @@ Essa suíte protege o próprio mecanismo de governança contra regressões.
 
 ## Próximo incremento recomendado
 
-Adicionar exportação executiva do relatório do gate com resumo de maturidade, riscos e cobertura de contratos para consumo pelo dashboard operacional.
+Integrar `schema-governance-report.json` ao dashboard operacional vivo do ReqSys, permitindo drill-down por contrato, maturidade, risco e histórico de execução.
