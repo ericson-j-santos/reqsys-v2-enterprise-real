@@ -1,0 +1,59 @@
+name: Operational Governance Orchestrator
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch monitorada"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: operational-governance-orchestrator-${{ github.event.inputs.branch || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  orchestrate:
+    name: Consolidar governanca operacional
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Gerar relatorio consolidado
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ github.event.inputs.branch || 'main' }}
+        run: |
+          set -euo pipefail
+          python scripts/operational_governance_orchestrator.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --branch "${TARGET_BRANCH}" \
+            --run-limit "50" \
+            --pr-limit "30" \
+            --output-dir "artifacts/operational-governance-orchestrator"
+
+      - name: Publicar artifact executivo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-governance-orchestrator-evidence
+          path: artifacts/operational-governance-orchestrator
+          if-no-files-found: error
+          retention-days: 30
