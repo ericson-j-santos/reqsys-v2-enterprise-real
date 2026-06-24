@@ -193,13 +193,14 @@ jobs:
             }
 
             const audit = {
-              schema_version: '1.1.0',
+              schema_version: '1.2.0',
               generated_at: new Date().toISOString(),
               repository: `${owner}/${repo}`,
               branch: 'main',
               validated_sha: mainSha,
               event_name: context.eventName,
               run_id: context.runId,
+              mode: 'report_only',
               gate,
               workflow_runs: runs,
             };
@@ -213,6 +214,7 @@ jobs:
               `- Branch: main`,
               `- Validated SHA: ${mainSha}`,
               `- Status: ${gate.status}`,
+              `- Mode: ${audit.mode}`,
               `- Failures: ${gate.failures.length}`,
               `- Warnings: ${gate.warnings.length}`,
               '',
@@ -221,13 +223,17 @@ jobs:
               '',
               '## Warnings',
               gate.warnings.length ? gate.warnings.map((warning) => `- ${warning}`).join('\n') : '- None',
+              '',
+              '## Policy',
+              '- Report-only monitor: evidence gaps are surfaced in artifacts without breaking this workflow.',
+              '- Blocking remains delegated to explicit required CI and quality gates.',
             ].join('\n'));
 
             core.setOutput('validated_sha', mainSha);
             core.setOutput('status', gate.status);
 
             if (gate.status !== 'passed') {
-              core.setFailed(gate.failures.join('\n'));
+              core.warning(gate.failures.concat(gate.warnings).join('\n'));
             }
 
       - name: Upload main validation evidence
