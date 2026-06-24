@@ -8,6 +8,8 @@ GitHub Actions without adding product runtime dependencies.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
+from html import escape
 import json
 import re
 import subprocess
@@ -18,6 +20,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_PATH = ROOT / "docs" / "schema-registry.json"
 REPORT_PATH = ROOT / "schema-governance-report.md"
+REPORT_JSON_PATH = ROOT / "schema-governance-report.json"
+REPORT_HTML_PATH = ROOT / "schema-governance-report.html"
 REQUIRED_GATES = {
     "schema_contract_gate",
     "schema_version_gate",
@@ -376,24 +380,152 @@ def validate_registry(registry: dict[str, Any]) -> tuple[list[str], list[str]]:
     return errors, report
 
 
-def write_report(registry_rows: list[str], breaking_rows: list[str], errors: list[str]) -> None:
-    status = "FAILED" if errors else "PASSED"
+def percent(part: int, whole: int) -> int:
+    if whole <= 0:
+        return 100
+    return round((part / whole) * 100)
+
+
+def classify_risk(errors: list[str], runtime_coverage: int, example_coverage: int, breaking_rows: list[str]) -> str:
+    if errors:
+        return "critical"
+    if runtime_coverage < 100 or example_coverage < 100:
+        return "high"
+    if any("skipped" in row for row in breaking_rows):
+        return "medium"
+    return "low"
+
+
+def build_executive_report(
+    registry: dict[str, Any],
+    registry_rows: list[str],
+    breaking_rows: list[str],
+    errors: list[str],
+    base_ref: str | None,
+) -> dict[str, Any]:
+    schemas = registry.get("schemas", []) if isinstance(registry.get("schemas"), list) else []
+    gates = set(registry.get("governance", {}).get("required_gates", []))
+    total_contracts = len(schemas)
+    active_contracts = sum(1 for item in schemas if isinstance(item, dict) and item.get("status") == "active")
+    runtime_required = sum(1 for item in schemas if isinstance(item, dict) and item.get("runtime_validation_required") is True)
+    ci_required = sum(1 for item in schemas if isinstance(item, dict) and item.get("ci_validation_required") is True)
+    with_valid_examples = sum(1 for item in schemas if isinstance(item, dict) and item.get("valid_examples"))
+    with_invalid_examples = sum(1 for item in schemas if isinstance(item, dict) and item.get("invalid_examples"))
+    runtime_coverage = percent(runtime_required, total_contracts)
+    ci_coverage = percent(ci_required, total_contracts)
+    valid_example_coverage = percent(with_valid_examples, total_contracts)
+    invalid_example_coverage = percent(with_invalid_examples, total_contracts)
+    example_coverage = min(valid_example_coverage, invalid_example_coverage)
+    gate_coverage = percent(len(gates & REQUIRED_GATES), len(REQUIRED_GATES))
+    success = not errors
+    base_score = 100 if success else max(0, 100 - min(len(errors), 10) * 10)
+    maturity_score = round(
+        gate_coverage * 0.25
+        + runtime_coverage * 0.20
+        + ci_coverage * 0.15
+        + example_coverage * 0.20
+        + base_score * 0.20
+    )
+    risk_level = classify_risk(errors, runtime_coverage, example_coverage, breaking_rows)
+    production_readiness = min(maturity_score, 100 if risk_level == "low" else 74 if risk_level == "medium" else 49)
+
+    contract_rows = []
+    for item in schemas:
+        if not isinstance(item, dict):
+            continue
+        valid_examples = item.get("valid_examples") if isinstance(item.get("valid_examples"), list) else []
+        invalid_examples = item.get("invalid_examples") if isinstance(item.get("invalid_examples"), list) else []
+        contract_rows.append(
+            {
+                "domain": item.get("domain"),
+                "name": item.get("name"),
+                "version": item.get("version"),
+                "status": item.get("status"),
+                "schema_path": item.get("schema_path"),
+                "runtime_validation_required": item.get("runtime_validation_required") is True,
+                "ci_validation_required": item.get("ci_validation_required") is True,
+                "valid_examples": len(valid_examples),
+                "invalid_examples": len(invalid_examples),
+                "breaking_change_policy": item.get("breaking_change_policy"),
+            }
+        )
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "status": "PASSED" if success else "FAILED",
+        "base_ref": base_ref,
+        "summary": {
+            "maturity_score": maturity_score,
+            "risk_level": risk_level,
+            "production_readiness": production_readiness,
+            "total_contracts": total_contracts,
+            "active_contracts": active_contracts,
+            "required_gates": len(REQUIRED_GATES),
+            "implemented_gates": len(gates & REQUIRED_GATES),
+            "errors": len(errors),
+        },
+        "coverage": {
+            "gate_coverage": gate_coverage,
+            "runtime_validation_coverage": runtime_coverage,
+            "ci_validation_coverage": ci_coverage,
+            "valid_example_coverage": valid_example_coverage,
+            "invalid_example_coverage": invalid_example_coverage,
+            "example_coverage": example_coverage,
+        },
+        "contracts": contract_rows,
+        "registry_rows": registry_rows,
+        "breaking_rows": breaking_rows,
+        "errors": errors,
+        "limitations": [
+            "External $ref resolution is not implemented.",
+            "The validator covers the governed subset currently used by ReqSys.",
+            "Semantic-only changes still require human review.",
+        ],
+    }
+
+
+def write_markdown_report(report: dict[str, Any]) -> None:
+    summary = report["summary"]
+    coverage = report["coverage"]
+    errors = report["errors"]
     lines = [
         "# Schema Governance Gate",
         "",
-        f"Status: {status}",
+        f"Generated at: {report['generated_at']}",
+        f"Status: {report['status']}",
+        "",
+        "## Executive Summary",
+        "",
+        "| Metric | Value |",
+        "|---|---:|",
+        f"| Maturity score | {summary['maturity_score']}% |",
+        f"| Production readiness | {summary['production_readiness']}% |",
+        f"| Risk level | {summary['risk_level']} |",
+        f"| Total contracts | {summary['total_contracts']} |",
+        f"| Active contracts | {summary['active_contracts']} |",
+        f"| Errors | {summary['errors']} |",
+        "",
+        "## Coverage",
+        "",
+        "| Coverage | Value |",
+        "|---|---:|",
+        f"| Gate coverage | {coverage['gate_coverage']}% |",
+        f"| Runtime validation | {coverage['runtime_validation_coverage']}% |",
+        f"| CI validation | {coverage['ci_validation_coverage']}% |",
+        f"| Valid examples | {coverage['valid_example_coverage']}% |",
+        f"| Invalid examples | {coverage['invalid_example_coverage']}% |",
         "",
         "## Registry Validation",
         "",
         "| Domain | Schema | Version | Registry Status |",
         "|---|---|---:|---|",
-        *registry_rows,
+        *report["registry_rows"],
         "",
         "## Breaking Change Detection",
         "",
         "| Contract | Result | Detail |",
         "|---|---|---|",
-        *breaking_rows,
+        *report["breaking_rows"],
         "",
         "## Errors",
     ]
@@ -402,6 +534,109 @@ def write_report(registry_rows: list[str], breaking_rows: list[str], errors: lis
     else:
         lines.append("- None")
     REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def badge_class(value: int) -> str:
+    if value >= 90:
+        return "ok"
+    if value >= 70:
+        return "warn"
+    return "bad"
+
+
+def write_json_report(report: dict[str, Any]) -> None:
+    REPORT_JSON_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def write_html_report(report: dict[str, Any]) -> None:
+    summary = report["summary"]
+    coverage = report["coverage"]
+    contracts = report["contracts"]
+    errors = report["errors"]
+    risk_class = {"low": "ok", "medium": "warn", "high": "bad", "critical": "bad"}.get(summary["risk_level"], "warn")
+    contract_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(item.get('domain')))}</td>"
+        f"<td>{escape(str(item.get('name')))}</td>"
+        f"<td>{escape(str(item.get('version')))}</td>"
+        f"<td>{escape(str(item.get('schema_path')))}</td>"
+        f"<td>{'OK' if item.get('runtime_validation_required') else 'NOK'}</td>"
+        f"<td>{'OK' if item.get('ci_validation_required') else 'NOK'}</td>"
+        f"<td>{item.get('valid_examples')}</td>"
+        f"<td>{item.get('invalid_examples')}</td>"
+        "</tr>"
+        for item in contracts
+    )
+    error_items = "".join(f"<li>{escape(error)}</li>" for error in errors) or "<li>None</li>"
+    html = f"""<!doctype html>
+<html lang=\"pt-BR\">
+<head>
+  <meta charset=\"utf-8\" />
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+  <title>Schema Governance Executive Report</title>
+  <style>
+    :root {{ --ok:#137333; --warn:#b06000; --bad:#b3261e; --ink:#1f2937; --muted:#6b7280; --bg:#f8fafc; --card:#ffffff; --line:#e5e7eb; }}
+    body {{ margin:0; font-family: Arial, Helvetica, sans-serif; background:var(--bg); color:var(--ink); }}
+    header {{ padding:24px; background:#111827; color:white; }}
+    main {{ padding:24px; max-width:1180px; margin:0 auto; }}
+    .grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }}
+    .card {{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,.04); }}
+    .metric {{ font-size:32px; font-weight:700; margin:8px 0; }}
+    .muted {{ color:var(--muted); font-size:13px; }}
+    .ok {{ color:var(--ok); }} .warn {{ color:var(--warn); }} .bad {{ color:var(--bad); }}
+    .pill {{ display:inline-block; padding:4px 10px; border-radius:999px; font-weight:700; background:#eef2ff; }}
+    table {{ width:100%; border-collapse:collapse; background:white; border:1px solid var(--line); border-radius:12px; overflow:hidden; }}
+    th, td {{ padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; font-size:14px; }}
+    th {{ background:#f3f4f6; }}
+    section {{ margin-top:24px; }}
+    ul {{ background:white; border:1px solid var(--line); border-radius:12px; padding:16px 24px; }}
+    @media (max-width:720px) {{ main {{ padding:12px; }} th, td {{ font-size:12px; }} }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Schema Governance Executive Report</h1>
+    <div>Gerado em {escape(report['generated_at'])} • Status <strong>{escape(report['status'])}</strong></div>
+  </header>
+  <main>
+    <section class=\"grid\">
+      <div class=\"card\"><div class=\"muted\">Maturidade</div><div class=\"metric {badge_class(summary['maturity_score'])}\">{summary['maturity_score']}%</div></div>
+      <div class=\"card\"><div class=\"muted\">Readiness produção</div><div class=\"metric {badge_class(summary['production_readiness'])}\">{summary['production_readiness']}%</div></div>
+      <div class=\"card\"><div class=\"muted\">Risco</div><div class=\"metric {risk_class}\">{escape(summary['risk_level']).upper()}</div></div>
+      <div class=\"card\"><div class=\"muted\">Contratos</div><div class=\"metric\">{summary['total_contracts']}</div></div>
+    </section>
+
+    <section class=\"grid\">
+      <div class=\"card\"><div class=\"muted\">Gate coverage</div><div class=\"metric {badge_class(coverage['gate_coverage'])}\">{coverage['gate_coverage']}%</div></div>
+      <div class=\"card\"><div class=\"muted\">Runtime validation</div><div class=\"metric {badge_class(coverage['runtime_validation_coverage'])}\">{coverage['runtime_validation_coverage']}%</div></div>
+      <div class=\"card\"><div class=\"muted\">CI validation</div><div class=\"metric {badge_class(coverage['ci_validation_coverage'])}\">{coverage['ci_validation_coverage']}%</div></div>
+      <div class=\"card\"><div class=\"muted\">Examples coverage</div><div class=\"metric {badge_class(coverage['example_coverage'])}\">{coverage['example_coverage']}%</div></div>
+    </section>
+
+    <section>
+      <h2>Contratos governados</h2>
+      <table>
+        <thead><tr><th>Domínio</th><th>Nome</th><th>Versão</th><th>Schema</th><th>Runtime</th><th>CI</th><th>Valid examples</th><th>Invalid examples</th></tr></thead>
+        <tbody>{contract_rows}</tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Erros e bloqueios</h2>
+      <ul>{error_items}</ul>
+    </section>
+  </main>
+</body>
+</html>
+"""
+    REPORT_HTML_PATH.write_text(html, encoding="utf-8")
+
+
+def write_reports(registry: dict[str, Any], registry_rows: list[str], breaking_rows: list[str], errors: list[str], base_ref: str | None) -> None:
+    report = build_executive_report(registry, registry_rows, breaking_rows, errors, base_ref)
+    write_markdown_report(report)
+    write_json_report(report)
+    write_html_report(report)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -418,15 +653,17 @@ def main(argv: list[str] | None = None) -> int:
         breaking_errors, breaking_rows = validate_breaking_changes(registry, args.base_ref)
         errors = registry_errors + breaking_errors
     except ValueError as exc:
+        registry = {"schemas": []}
         errors, registry_rows, breaking_rows = [str(exc)], [], []
 
-    write_report(registry_rows, breaking_rows, errors)
+    write_reports(registry, registry_rows, breaking_rows, errors, args.base_ref)
     if errors:
         print("Schema governance validation failed:", file=sys.stderr)
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
     print("Schema governance validation passed")
+    print(f"Reports: {REPORT_PATH.name}, {REPORT_JSON_PATH.name}, {REPORT_HTML_PATH.name}")
     return 0
 
 
