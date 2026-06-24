@@ -53,23 +53,23 @@ jobs:
       - name: Validate evidence navigation UI
         run: |
           python - <<'PY'
-          import json
-          from pathlib import Path
+import json
+from pathlib import Path
 
-          report_dir = Path('reports/product-intelligence')
-          json_path = report_dir / 'product-intelligence-evidence-navigation-ui.json'
-          html_path = report_dir / 'product-intelligence-evidence-navigation-ui.html'
-          md_path = report_dir / 'product-intelligence-evidence-navigation-ui.md'
+report_dir = Path('reports/product-intelligence')
+json_path = report_dir / 'product-intelligence-evidence-navigation-ui.json'
+html_path = report_dir / 'product-intelligence-evidence-navigation-ui.html'
+md_path = report_dir / 'product-intelligence-evidence-navigation-ui.md'
 
-          payload = json.loads(json_path.read_text(encoding='utf-8'))
-          assert payload['mode'] == 'review_only', payload
-          assert payload['readiness_color'] == 'green', payload
-          assert payload['evidence_coverage_percent'] == 100.0, payload
-          assert payload['risk_percent'] <= 5, payload
-          assert payload['confidence_percent'] >= 90, payload
-          assert payload['available_count'] == payload['artifact_count'], payload
-          assert html_path.exists() and 'Product Intelligence Evidence Navigation UI' in html_path.read_text(encoding='utf-8')
-          assert md_path.exists() and 'Navigable evidence cards' in md_path.read_text(encoding='utf-8')
-          PY
+payload = json.loads(json_path.read_text(encoding='utf-8'))
+assert payload['mode'] == 'review_only', payload
+assert payload['readiness_color'] == 'green', payload
+assert payload['evidence_coverage_percent'] == 100.0, payload
+assert payload['risk_percent'] <= 5, payload
+assert payload['confidence_percent'] >= 90, payload
+assert payload['available_count'] == payload['artifact_count'], payload
+assert html_path.exists() and 'Product Intelligence Evidence Navigation UI' in html_path.read_text(encoding='utf-8')
+assert md_path.exists() and 'Navigable evidence cards' in md_path.read_text(encoding='utf-8')
+PY
       - name: Publish summary
         run: cat reports/product-intelligence/product-intelligence-evidence-navigation-ui.md >> "$GITHUB_STEP_SUMMARY"
