@@ -1,0 +1,71 @@
+name: Product Intelligence Backlog Publisher Governado
+
+on:
+  pull_request:
+    paths:
+      - "docs/product-intelligence/**"
+      - "schemas/product-intelligence/**"
+      - "examples/product-intelligence/**"
+      - "tools/product_intelligence/**"
+      - ".github/workflows/product-intelligence-backlog-publisher-governado.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/product-intelligence/**"
+      - "schemas/product-intelligence/**"
+      - "examples/product-intelligence/**"
+      - "tools/product_intelligence/**"
+      - ".github/workflows/product-intelligence-backlog-publisher-governado.yml"
+
+jobs:
+  product-intelligence-backlog-publisher-governado:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Product Intelligence event
+        run: |
+          python tools/product_intelligence/validate_product_intelligence_event.py examples/product-intelligence/product-intelligence-event.example.json
+
+      - name: Generate requirement quality score
+        run: |
+          python tools/product_intelligence/score_requirement_quality.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+
+      - name: Generate functional traceability graph
+        run: |
+          python tools/product_intelligence/build_functional_traceability_graph.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+
+      - name: Generate product intelligence dashboard
+        run: |
+          python tools/product_intelligence/generate_product_intelligence_dashboard.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+
+      - name: Generate product decision intelligence
+        run: |
+          python tools/product_intelligence/generate_product_decision_intelligence.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+
+      - name: Generate living backlog
+        run: |
+          python tools/product_intelligence/generate_living_backlog.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+
+      - name: Generate governed publication package
+        run: |
+          python tools/product_intelligence/publish_living_backlog_governed.py reports/product-intelligence
+
+      - name: Publish governed publisher summary
+        run: |
+          cat reports/product-intelligence/product-intelligence-backlog-publisher-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload governed publisher artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-intelligence-backlog-publisher-governado
+          path: reports/product-intelligence/
+          if-no-files-found: error
