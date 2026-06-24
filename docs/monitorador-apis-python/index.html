@@ -22,36 +22,52 @@
 <body>
   <header>
     <h1>Monitorador de APIs Python</h1>
-    <p>Projeto prático com async, retry, cache TTL, SQLite, logs, relatório HTML, testes e CI.</p>
+    <p>FastAPI, health check, dashboard HTML, Dockerfile, Render/Railway e CI.</p>
   </header>
   <main>
     <section class="grid">
-      <div class="card ok"><strong>Status evidenciado</strong><br>Publicado em branch/PR</div>
-      <div class="card warn"><strong>Deploy executável público</strong><br>Próximo incremento: FastAPI + Fly/Render</div>
-      <div class="card ok"><strong>CI</strong><br>Workflow incluído para pull_request e push em main</div>
-      <div class="card ok"><strong>Testes</strong><br>pytest + cobertura mínima de 85%</div>
+      <div class="card ok"><strong>FastAPI</strong><br>Endpoint web incluído</div>
+      <div class="card ok"><strong>/health</strong><br>Pronto para health check</div>
+      <div class="card ok"><strong>/dashboard</strong><br>Relatório visual runtime</div>
+      <div class="card warn"><strong>URL pública</strong><br>Pendente autenticação no provedor</div>
     </section>
 
     <h2>Fluxo operacional</h2>
-    <pre><code>APIs alvo → Async client → Retry/backoff → Cache TTL → SQLite → Logs → Relatório HTML → Testes CI</code></pre>
+    <pre><code>APIs alvo → FastAPI → Async client → Retry/backoff → Cache TTL → SQLite → Logs → Dashboard HTML → CI/Docker</code></pre>
+
+    <h2>Rotas</h2>
+    <table>
+      <thead><tr><th>Rota</th><th>Finalidade</th></tr></thead>
+      <tbody>
+        <tr><td>/</td><td>Home operacional</td></tr>
+        <tr><td>/health</td><td>Health check</td></tr>
+        <tr><td>/api/monitorar</td><td>Executa monitoramento e retorna JSON</td></tr>
+        <tr><td>/api/resultados</td><td>Lista resultados persistidos</td></tr>
+        <tr><td>/dashboard</td><td>Dashboard HTML</td></tr>
+        <tr><td>/docs</td><td>Swagger/OpenAPI</td></tr>
+      </tbody>
+    </table>
 
     <h2>Matriz de entrega</h2>
     <table>
       <thead><tr><th>Capacidade</th><th>Estado evidenciado</th><th>Estado alvo</th></tr></thead>
       <tbody>
         <tr><td>Fonte no GitHub</td><td>VERDE</td><td>VERDE</td></tr>
+        <tr><td>FastAPI</td><td>VERDE</td><td>VERDE</td></tr>
         <tr><td>Testes automatizados</td><td>VERDE</td><td>VERDE</td></tr>
-        <tr><td>CI dedicado</td><td>VERDE após execução do PR</td><td>VERDE</td></tr>
-        <tr><td>URL pública executável</td><td>AMARELO</td><td>VERDE com FastAPI + deploy</td></tr>
+        <tr><td>CI dedicado com Docker build</td><td>VERDE após execução do PR</td><td>VERDE</td></tr>
+        <tr><td>Dockerfile</td><td>VERDE</td><td>VERDE</td></tr>
+        <tr><td>Render/Railway config</td><td>VERDE</td><td>VERDE</td></tr>
+        <tr><td>URL pública executável</td><td>AMARELO</td><td>VERDE após deploy no provedor</td></tr>
       </tbody>
     </table>
 
     <h2>Comandos</h2>
     <pre><code>cd examples/monitorador_apis_python
-python -m venv .venv
 pip install -r requirements.txt
-python -m app.main
-pytest --cov=app --cov-report=term-missing --cov-fail-under=85</code></pre>
+uvicorn app.api:app --host 0.0.0.0 --port 8000
+pytest --cov=app --cov-report=term-missing --cov-fail-under=85
+docker build -t monitorador-apis-python .</code></pre>
   </main>
 </body>
 </html>
