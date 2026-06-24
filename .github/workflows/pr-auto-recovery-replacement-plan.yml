@@ -1,0 +1,53 @@
+name: PR Auto Recovery Replacement Plan
+
+on:
+  pull_request:
+    paths:
+      - "scripts/pr_auto_recovery.py"
+      - "scripts/pr_auto_recovery_replacement_plan.py"
+      - "docs/runbooks/pr-auto-recovery-replacement-plan.md"
+      - ".github/workflows/pr-auto-recovery-replacement-plan.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+jobs:
+  replacement-plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Generate diagnostics
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/pr_auto_recovery.py --repo "$GITHUB_REPOSITORY" --limit 20 --output-dir artifacts/pr-auto-recovery
+      - name: Generate replacement plan
+        run: python scripts/pr_auto_recovery_replacement_plan.py --diagnostics artifacts/pr-auto-recovery/pr-auto-recovery.json --output-dir artifacts/pr-auto-recovery
+      - name: Validate replacement plan
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('artifacts/pr-auto-recovery/replacement-plan.json').read_text(encoding='utf-8'))
+          assert payload['mode'] == 'draft-replacement-plan-review-only', payload
+          assert payload['mutating_actions_disabled'] is True, payload
+          assert payload['requires_human_review'] is True, payload
+          assert isinstance(payload['candidates'], list), payload
+          for candidate in payload['candidates']:
+              assert candidate['requires_human_review'] is True, candidate
+              assert candidate['action'] == 'PLAN_ONLY_REVIEW_REQUIRED', candidate
+              assert candidate['proposed_branch'].startswith('bot/recovery/pr-'), candidate
+          PY
+      - name: Publish summary
+        run: cat artifacts/pr-auto-recovery/replacement-plan.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-auto-recovery-replacement-plan
+          path: artifacts/pr-auto-recovery/
+          if-no-files-found: error
