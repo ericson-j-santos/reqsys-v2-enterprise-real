@@ -92,12 +92,16 @@ jobs:
         run: |
           python scripts/operational_artifact_index.py
 
+      - name: Generate Operational Published Bundle
+        run: |
+          python scripts/operational_published_bundle.py
+
       - name: Publish historical summary
         run: |
           cat artifacts/operational-history/operational-history.md >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "## Operational Artifact Index" >> "$GITHUB_STEP_SUMMARY"
-          echo "Artifact navegável consolidado disponível em operational-index/index.html" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Operational Published Bundle" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pacote navegável consolidado disponível em operational-published-bundle/index.html" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload operational history artifact
         uses: actions/upload-artifact@v4
@@ -110,4 +114,5 @@ jobs:
             artifacts/operational-ci-intelligence/
             artifacts/failure-pattern-engine/
             artifacts/operational-index/
+            artifacts/operational-published-bundle/
           retention-days: 60
