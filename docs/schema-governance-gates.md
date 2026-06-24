@@ -18,6 +18,7 @@ Este gate transforma schema version JSON em capacidade governada da plataforma, 
 | Exemplo válido obrigatório | Governado por registry |
 | Exemplo inválido obrigatório | Governado por registry |
 | Detector base/head de breaking changes | Implementado para PRs |
+| Self-validation do gate | Implementada em `tests/schema_governance/test_schema_governance_gate.py` |
 | Artifact de evidência | `schema-governance-report` |
 
 ## Gates mínimos obrigatórios
@@ -44,6 +45,30 @@ python tools/schema_governance/validate_schema_governance.py --base-ref "origin/
 ```
 
 O detector compara os schemas registrados no head do PR contra a versão existente na base do PR.
+
+## Self-validation do gate
+
+Antes da validação real dos contratos, o workflow executa:
+
+```bash
+python tests/schema_governance/test_schema_governance_gate.py
+```
+
+Essa suíte protege o próprio mecanismo de governança contra regressões.
+
+## Cenários testados
+
+| Cenário | Resultado esperado |
+|---|---|
+| SemVer válido/inválido | Detectado |
+| Campo opcional novo | Permitido |
+| Campo obrigatório novo | Bloqueado como breaking change |
+| Campo removido | Bloqueado como breaking change |
+| Tipo alterado | Bloqueado como breaking change |
+| Enum removido | Bloqueado como breaking change |
+| `additionalProperties` relaxado | Bloqueado como breaking change |
+| Breaking com MAJOR bump | Aceito pela política de versionamento |
+| `schema_version` fora de SemVer | Bloqueado |
 
 ## Quebras detectadas
 
@@ -79,6 +104,7 @@ O detector compara os schemas registrados no head do PR contra a versão existen
 6. Registrar o contrato em `docs/schema-registry.json`.
 7. Executar `python tools/schema_governance/validate_schema_governance.py`.
 8. Em PR, validar o comparativo base/head pelo workflow `Schema Governance Gate`.
+9. Preservar a self-validation do gate verde antes de alterar regras internas.
 
 ## O que não pode passar batido
 
@@ -92,6 +118,7 @@ O detector compara os schemas registrados no head do PR contra a versão existen
 - Enum removido sem versão MAJOR.
 - Tipo alterado sem versão MAJOR.
 - Runtime crítico sem validação obrigatória.
+- Regressão do próprio detector.
 - Gate sem artifact de evidência.
 
 ## Limites atuais
@@ -103,4 +130,4 @@ O detector compara os schemas registrados no head do PR contra a versão existen
 
 ## Próximo incremento recomendado
 
-Adicionar testes automatizados do próprio gate com fixtures de quebra compatível/incompatível para provar que o detector bloqueia mudanças perigosas e permite mudanças compatíveis.
+Adicionar exportação executiva do relatório do gate com resumo de maturidade, riscos e cobertura de contratos para consumo pelo dashboard operacional.
