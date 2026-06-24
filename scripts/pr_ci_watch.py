@@ -25,7 +25,8 @@ from typing import Any
 
 API_VERSION = "2022-11-28"
 DEFAULT_REPORT_DIR = Path("artifacts/pr-ci-watch")
-BLOCKING_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required"}
+BLOCKING_CONCLUSIONS = {"failure", "timed_out", "action_required"}
+CANCELLED_CONCLUSIONS = {"cancelled"}
 NON_BLOCKING_CONCLUSIONS = {"success", "neutral", "skipped"}
 FAIL_SEVERITIES = {"critical"}
 
@@ -47,6 +48,8 @@ class WorkflowRun:
             return "running"
         if self.conclusion == "success":
             return "healthy"
+        if self.conclusion in CANCELLED_CONCLUSIONS:
+            return "cancelled"
         if self.conclusion in BLOCKING_CONCLUSIONS:
             return "unhealthy"
         if self.conclusion in NON_BLOCKING_CONCLUSIONS:
@@ -108,10 +111,11 @@ def classify(runs: list[WorkflowRun]) -> dict[str, Any]:
     healthy = sum(1 for run in runs if run.health == "healthy")
     running = sum(1 for run in runs if run.health == "running")
     unhealthy = sum(1 for run in runs if run.health == "unhealthy")
+    cancelled = sum(1 for run in runs if run.health == "cancelled")
     non_blocking = sum(1 for run in runs if run.health == "non_blocking")
     unknown = sum(1 for run in runs if run.health == "unknown")
     completed = sum(1 for run in runs if run.status == "completed")
-    blocking_total = total - non_blocking
+    blocking_total = total - non_blocking - cancelled
     blocking_healthy = healthy
     score = round((blocking_healthy / blocking_total) * 100, 2) if blocking_total else 0.0
 
@@ -130,6 +134,9 @@ def classify(runs: list[WorkflowRun]) -> dict[str, Any]:
     elif healthy:
         decision = "pronto_para_revisao"
         severity = "ok"
+    elif cancelled:
+        decision = "somente_execucoes_canceladas_ou_substituidas"
+        severity = "warning"
     else:
         decision = "sem_check_bloqueante_conclusivo"
         severity = "warning"
@@ -140,6 +147,7 @@ def classify(runs: list[WorkflowRun]) -> dict[str, Any]:
         "healthy": healthy,
         "running": running,
         "unhealthy": unhealthy,
+        "cancelled": cancelled,
         "non_blocking": non_blocking,
         "unknown": unknown,
         "score": score,
@@ -164,11 +172,12 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
         "",
         "## Resumo operacional",
         "",
-        "| Total | Completed | Healthy | Running | Unhealthy | Non blocking | Unknown |",
-        "|---:|---:|---:|---:|---:|---:|---:|",
+        "| Total | Completed | Healthy | Running | Unhealthy | Cancelled | Non blocking | Unknown |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|",
         (
             f"| {summary['total']} | {summary['completed']} | {summary['healthy']} | "
-            f"{summary['running']} | {summary['unhealthy']} | {summary['non_blocking']} | {summary['unknown']} |"
+            f"{summary['running']} | {summary['unhealthy']} | {summary['cancelled']} | "
+            f"{summary['non_blocking']} | {summary['unknown']} |"
         ),
         "",
         "## Workflows",
@@ -196,6 +205,7 @@ def render_markdown(repo: str, pr_number: str, sha: str, runs: list[WorkflowRun]
             "- Não altera status de draft automaticamente nesta versão.",
             "- Exclui a própria execução do watcher quando `GITHUB_RUN_ID` está disponível, evitando falso bloqueio por auto-observação.",
             "- Diferencia workflows `pending/running` de falhas reais.",
+            "- Trata `cancelled` como execução cancelada/substituída, não como falha crítica por padrão.",
             "- Por padrão, o watcher reporta falhas sem quebrar a própria execução; use `--fail-on-unhealthy` apenas quando ele for gate bloqueante explícito.",
         ]
     )
