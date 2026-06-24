@@ -1,0 +1,107 @@
+name: Governed Auto Remediation Engine
+
+on:
+  workflow_run:
+    workflows:
+      - "Workflow Reliability Analytics"
+      - "Operational Stability Score"
+      - "CI Incident Intelligence"
+      - "Testes Monitorador APIs Python"
+    types:
+      - completed
+
+jobs:
+  governed-auto-remediation:
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate governed remediation analysis
+        env:
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          echo "# Governed Auto Remediation Engine" > governed-auto-remediation.md
+          echo "" >> governed-auto-remediation.md
+          echo "- Workflow: ${WORKFLOW_NAME}" >> governed-auto-remediation.md
+          echo "- Conclusion: ${WORKFLOW_CONCLUSION}" >> governed-auto-remediation.md
+          echo "- Branch: ${HEAD_BRANCH}" >> governed-auto-remediation.md
+          echo "- Commit: ${HEAD_SHA}" >> governed-auto-remediation.md
+          echo "- URL: ${WORKFLOW_URL}" >> governed-auto-remediation.md
+          echo "" >> governed-auto-remediation.md
+
+          python - <<'PY'
+from pathlib import Path
+import os
+
+workflow = os.getenv('WORKFLOW_NAME', '')
+conclusion = os.getenv('WORKFLOW_CONCLUSION', '')
+
+severity = 'LOW'
+action = 'NO_ACTION'
+retry_policy = 'BLOCKED'
+audit_status = 'RECORDED'
+retry_storm_risk = 'LOW'
+
+if conclusion != 'success':
+    severity = 'MEDIUM'
+    action = 'ANALYZE_AND_CONTROLLED_RERUN'
+    retry_policy = 'LIMITED_RERUN'
+
+if 'Monitorador' in workflow:
+    severity = 'HIGH'
+    retry_storm_risk = 'MEDIUM'
+
+if severity == 'HIGH':
+    retry_policy = 'MANUAL_APPROVAL_REQUIRED'
+
+lines = []
+lines.append('## Governed Remediation Analysis')
+lines.append(f'- Severity: {severity}')
+lines.append(f'- Suggested action: {action}')
+lines.append(f'- Retry policy: {retry_policy}')
+lines.append(f'- Retry storm risk: {retry_storm_risk}')
+lines.append(f'- Audit trail: {audit_status}')
+lines.append('')
+lines.append('## Governance Rules')
+lines.append('- Do not execute uncontrolled reruns.')
+lines.append('- Preserve mandatory CI gates.')
+lines.append('- Require manual approval for high severity.')
+lines.append('- Avoid infinite retry loops.')
+lines.append('- Preserve auditability and operational traceability.')
+lines.append('')
+lines.append('## Operational Recommendations')
+
+if severity == 'LOW':
+    lines.append('- Workflow stable. Monitoring only.')
+elif severity == 'MEDIUM':
+    lines.append('- Controlled rerun may be executed.')
+    lines.append('- Validate flaky indicators before escalation.')
+else:
+    lines.append('- Manual operational intervention recommended.')
+    lines.append('- Block autonomous remediation escalation.')
+
+Path('governed-remediation-analysis.md').write_text('\n'.join(lines), encoding='utf-8')
+PY
+
+          cat governed-remediation-analysis.md >> governed-auto-remediation.md
+
+      - name: Publish governed remediation summary
+        run: |
+          cat governed-auto-remediation.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload governed remediation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-auto-remediation
+          path: governed-auto-remediation.md
+          if-no-files-found: error
