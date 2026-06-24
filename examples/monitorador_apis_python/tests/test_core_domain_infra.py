@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -39,6 +38,7 @@ def test_configuracao_padrao_deve_expor_caminhos_e_retries():
 
     assert config.banco_sqlite == Path("data/monitoramento.db")
     assert config.diretorio_logs == Path("logs")
+    assert config.diretorio_relatorios == Path("reports")
     assert config.tentativas_retry == 3
     assert config.cache_ttl_segundos == 30
 
@@ -145,23 +145,59 @@ async def test_service_deve_usar_cache_e_persistir_resultados():
 
 
 @pytest.mark.asyncio
-async def test_api_client_deve_retornar_falha_quando_consulta_explodir(monkeypatch):
-    async def sleep_fake(_tempo):
-        return None
+async def test_api_client_deve_retornar_sucesso_com_client_session_mockado(monkeypatch):
+    class ResponseFake:
+        status = 204
 
-    class SessaoComErro:
         async def __aenter__(self):
-            raise RuntimeError("falha controlada")
+            return self
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
+
+        async def text(self):
+            return "ok"
 
     class ClientSessionFake:
         def __init__(self, timeout):
             self.timeout = timeout
 
-        def __aenter__(self):
-            return SessaoComErro().__aenter__()
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def get(self, url):
+            assert url == "https://api.local"
+            return ResponseFake()
+
+    monkeypatch.setattr("app.infra.api_client.aiohttp.ClientSession", ClientSessionFake)
+
+    resultado = await ApiClient().consultar(
+        ApiAlvo(nome="api", url="https://api.local", timeout_segundos=0.01),
+        tentativas=1,
+        atraso_base=0,
+    )
+
+    assert resultado.nome == "api"
+    assert resultado.status_code == 204
+    assert resultado.sucesso is True
+    assert resultado.erro is None
+    assert resultado.status_operacional == "VERDE"
+
+
+@pytest.mark.asyncio
+async def test_api_client_deve_retornar_falha_quando_consulta_explodir(monkeypatch):
+    async def sleep_fake(_tempo):
+        return None
+
+    class ClientSessionFake:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            raise RuntimeError("falha controlada")
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
