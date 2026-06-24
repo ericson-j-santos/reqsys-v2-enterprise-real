@@ -1,0 +1,38 @@
+name: Evidence Analytics Drill-down Runtime
+
+on:
+  pull_request:
+    paths:
+      - 'tools/product_intelligence/**'
+      - '.github/workflows/evidence-analytics-drilldown-runtime.yml'
+  push:
+    branches:
+      - main
+
+jobs:
+  evidence-analytics-drilldown-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate drilldown runtime
+        run: |
+          python tools/product_intelligence/generate_evidence_analytics_drilldown_runtime.py
+
+      - name: Validate outputs
+        run: |
+          python - <<'PY'
+import json
+from pathlib import Path
+
+report = Path('reports/product-intelligence/evidence-analytics-drilldown-runtime.json')
+payload = json.loads(report.read_text(encoding='utf-8'))
+
+assert payload['mode'] == 'review_only'
+assert payload['confidence_percent'] >= 90
+assert payload['risk_percent'] <= 5
+assert payload['readiness_state'] == 'DRILLDOWN_RUNTIME_READY'
+PY
