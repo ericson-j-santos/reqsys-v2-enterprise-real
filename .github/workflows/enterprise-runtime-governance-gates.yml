@@ -1,0 +1,32 @@
+name: Enterprise Runtime Governance Gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-runtime-governance-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  enterprise-runtime-governance:
+    name: Enterprise Runtime Governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Executar gates preventivos enterprise
+        run: |
+          set -euo pipefail
+          python3 scripts/governance/enterprise_runtime_governance_gates.py
