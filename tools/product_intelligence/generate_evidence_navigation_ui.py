@@ -86,7 +86,8 @@ def render_html(payload: dict[str, Any]) -> str:
     cards = payload["cards"]
     nav_items = "\n".join(
         f'<a href="#{html.escape(card["anchor"])}" class="nav-item {html.escape(card["status_color"])}">'
-        f'{html.escape(card["artifact"])}'</n+        f'</a>'
+        f'{html.escape(card["artifact"])}'
+        f'</a>'
         for card in cards
     )
     card_items = "\n".join(
