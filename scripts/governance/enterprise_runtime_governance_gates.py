@@ -10,21 +10,25 @@ Scanner preventivo para bloquear padrões incompatíveis com entrega enterprise:
 - connection strings expostas;
 - ausência de correlation_id em código operacional.
 
-Diretriz de escopo v1:
+Diretriz de escopo v2:
 - bloquear apenas violações HIGH em artefatos operacionais/configuracionais;
 - tratar achados MEDIUM como warnings;
-- evitar varrer documentação Markdown para reduzir falso positivo em runbooks/ADRs.
+- evitar varrer documentação, testes, fixtures e exemplos para reduzir falso positivo;
+- publicar evidência em artifact e GitHub Step Summary.
 """
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[2]
+REPORT_DIR = ROOT / "artifacts" / "enterprise-runtime-governance"
 
 IGNORED_DIRS = {
     ".git",
@@ -40,10 +44,36 @@ IGNORED_DIRS = {
     ".mypy_cache",
     ".ruff_cache",
     "coverage",
+    "htmlcov",
     ".next",
     ".nuxt",
     "docs",
+    "test",
+    "tests",
+    "__tests__",
+    "spec",
+    "specs",
+    "fixture",
+    "fixtures",
+    "mock",
+    "mocks",
+    "example",
+    "examples",
+    "sample",
+    "samples",
+    "demo",
+    "demos",
 }
+
+IGNORED_FILE_PATTERNS = (
+    re.compile(r"(^|/).*\.test\.", re.IGNORECASE),
+    re.compile(r"(^|/).*\.spec\.", re.IGNORECASE),
+    re.compile(r"(^|/)test_.*", re.IGNORECASE),
+    re.compile(r"(^|/).*_test\.py$", re.IGNORECASE),
+    re.compile(r"(^|/).*_spec\.py$", re.IGNORECASE),
+    re.compile(r".*\.env\.example$", re.IGNORECASE),
+    re.compile(r".*\.example$", re.IGNORECASE),
+)
 
 TEXT_EXTENSIONS = {
     ".py",
@@ -77,6 +107,7 @@ ALLOWLIST_PATTERNS = [
 
 BLOCKING_SEVERITIES = {"HIGH"}
 
+
 @dataclass(frozen=True)
 class Finding:
     severity: str
@@ -96,7 +127,7 @@ RULES: list[tuple[str, str, re.Pattern[str], str]] = [
     (
         "HIGH",
         "SEC_CORS_WILDCARD",
-        re.compile(r"(?i)(allowed[_-]?origins|cors|Access-Control-Allow-Origin).{0,80}(\*|['\"]\*['\"])"),
+        re.compile(r"(?i)(allowed[_-]?origins|cors|Access-Control-Allow-Origin).{0,80}(\*|['\"]\*['\"] )"),
         "Possível CORS wildcard.",
     ),
     (
@@ -128,9 +159,16 @@ RULES: list[tuple[str, str, re.Pattern[str], str]] = [
 OPERATIONAL_CODE_EXTENSIONS = {".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".cs", ".go"}
 
 
+def relative_path(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix()
+
+
 def is_ignored(path: Path) -> bool:
-    parts = set(path.relative_to(ROOT).parts)
-    return bool(parts & IGNORED_DIRS)
+    relative = relative_path(path)
+    parts = set(Path(relative).parts)
+    if parts & IGNORED_DIRS:
+        return True
+    return any(pattern.search(relative) for pattern in IGNORED_FILE_PATTERNS)
 
 
 def is_text_candidate(path: Path) -> bool:
@@ -157,7 +195,7 @@ def iter_files() -> Iterable[Path]:
 
 def scan_content(path: Path, content: str) -> list[Finding]:
     findings: list[Finding] = []
-    relative = path.relative_to(ROOT).as_posix()
+    relative = relative_path(path)
 
     for line_number, line in enumerate(content.splitlines(), start=1):
         if is_allowlisted(relative, line):
@@ -195,6 +233,60 @@ def scan_correlation_id_presence(files: list[Path]) -> list[Finding]:
     ]
 
 
+def write_reports(findings: list[Finding], scanned_files: int) -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    blocking = [finding for finding in findings if finding.severity in BLOCKING_SEVERITIES]
+    warnings = [finding for finding in findings if finding.severity not in BLOCKING_SEVERITIES]
+    status = "failed" if blocking else "passed"
+
+    payload = {
+        "status": status,
+        "summary": {
+            "scanned_files": scanned_files,
+            "blocking": len(blocking),
+            "warnings": len(warnings),
+            "findings": len(findings),
+        },
+        "findings": [asdict(finding) for finding in findings],
+    }
+
+    (REPORT_DIR / "enterprise-runtime-governance.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    lines = [
+        "# Enterprise Runtime Governance Gates",
+        "",
+        f"Status: **{status}**",
+        "",
+        "| Métrica | Valor |",
+        "|---|---:|",
+        f"| Arquivos escaneados | {scanned_files} |",
+        f"| Bloqueios | {len(blocking)} |",
+        f"| Warnings | {len(warnings)} |",
+        "",
+        "| Severidade | Código | Arquivo | Linha | Mensagem |",
+        "|---|---|---|---:|---|",
+    ]
+
+    if findings:
+        for finding in findings:
+            lines.append(
+                f"| {finding.severity} | `{finding.code}` | `{finding.path}` | {finding.line} | {finding.message} |"
+            )
+    else:
+        lines.append("| info | `OK` | — | — | Nenhum desvio bloqueante encontrado. |")
+
+    markdown = "\n".join(lines) + "\n"
+    (REPORT_DIR / "enterprise-runtime-governance.md").write_text(markdown, encoding="utf-8")
+
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        with open(summary_path, "a", encoding="utf-8") as summary:
+            summary.write(markdown)
+
+
 def main() -> int:
     files = list(iter_files())
     findings: list[Finding] = []
@@ -206,6 +298,7 @@ def main() -> int:
         findings.extend(scan_content(path, content))
 
     findings.extend(scan_correlation_id_presence(files))
+    write_reports(findings, len(files))
 
     blocking = [finding for finding in findings if finding.severity in BLOCKING_SEVERITIES]
     warnings = [finding for finding in findings if finding.severity not in BLOCKING_SEVERITIES]
@@ -222,6 +315,7 @@ def main() -> int:
         return 1
 
     print("[OK] Enterprise Runtime Governance Gates sem violações bloqueantes.")
+    print(f"[INFO] Relatório: {REPORT_DIR.relative_to(ROOT).as_posix()}")
     return 0
 
 
