@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/schemas/operational-health-dashboard.schema.json",
+  "title": "Operational Health Dashboard",
+  "type": "object",
+  "required": [
+    "status",
+    "mode",
+    "capabilities",
+    "guardrails"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "OPERATIONAL_HEALTH_DASHBOARD_READY"
+    },
+    "mode": {
+      "type": "string",
+      "const": "review_only"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "pr_aging",
+          "conflict_risk",
+          "stale_branch_index",
+          "ci_health_trend",
+          "merge_readiness_score",
+          "operational_pr_classification"
+        ]
+      },
+      "minItems": 6,
+      "uniqueItems": true
+    },
+    "guardrails": {
+      "type": "object",
+      "required": [
+        "deploy",
+        "production_mutation",
+        "permission_change",
+        "automatic_merge"
+      ],
+      "properties": {
+        "deploy": { "type": "boolean", "const": false },
+        "production_mutation": { "type": "boolean", "const": false },
+        "permission_change": { "type": "boolean", "const": false },
+        "automatic_merge": { "type": "boolean", "const": false }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}
