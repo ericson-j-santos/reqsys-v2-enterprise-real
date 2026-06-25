@@ -1,6 +1,13 @@
+from datetime import datetime, timezone
+
 from fastapi.testclient import TestClient
 
-from app.core.runtime_analytics import DurableRuntimeAnalyticsStore, RuntimeAnalyticsStore, build_runtime_analytics
+from app.core.runtime_analytics import (
+    DurableRuntimeAnalyticsStore,
+    RuntimeAnalyticsStore,
+    build_mttr,
+    build_runtime_analytics,
+)
 from app.main import app
 
 
@@ -18,6 +25,7 @@ def _snapshot(correlation_id: str, status: str = 'attention', risk_score: int = 
         'evidence': {
             'no_secrets': True,
             'no_pii': True,
+            'incident_key': 'runtime-health-test',
         },
     }
 
@@ -39,7 +47,7 @@ def test_build_runtime_analytics_calcula_metricas_temporais():
     build_runtime_analytics(store, _snapshot('one', status='attention', risk_score=10))
     analytics = build_runtime_analytics(store, _snapshot('two', status='degraded', risk_score=30))
 
-    assert analytics['schema_version'] == '1.1.0'
+    assert analytics['schema_version'] == '1.2.0'
     assert analytics['window']['total_snapshots'] == 2
     assert analytics['window']['mode'] == 'in_memory_rolling'
     assert analytics['summary']['failure_rate'] == 50.0
@@ -47,7 +55,52 @@ def test_build_runtime_analytics_calcula_metricas_temporais():
     assert analytics['summary']['average_risk_score'] == 20
     assert analytics['trends']['risk_score'] == 'degrading'
     assert analytics['guardrails']['durable_storage_enabled'] is False
-    assert analytics['mttr']['status'] == 'pending_incident_lifecycle_events'
+    assert analytics['guardrails']['incident_lifecycle_enabled'] is True
+    assert analytics['mttr']['status'] == 'insufficient_resolved_incidents'
+
+
+def test_incident_lifecycle_abre_reconhece_e_resolve_incidente():
+    store = RuntimeAnalyticsStore(max_snapshots=10)
+    opened = build_runtime_analytics(store, _snapshot('one', status='degraded', risk_score=80))
+    acknowledged = build_runtime_analytics(store, _snapshot('two', status='blocked', risk_score=90))
+    resolved = build_runtime_analytics(store, _snapshot('three', status='healthy', risk_score=5))
+
+    events = resolved['incident_lifecycle']['events']
+    assert [event['event_type'] for event in events] == [
+        'incident_opened',
+        'incident_acknowledged',
+        'incident_resolved',
+    ]
+    assert opened['incident_lifecycle']['last_event']['event_type'] == 'incident_opened'
+    assert acknowledged['incident_lifecycle']['last_event']['event_type'] == 'incident_acknowledged'
+    assert resolved['incident_lifecycle']['last_event']['event_type'] == 'incident_resolved'
+    assert resolved['mttr']['status'] == 'calculated'
+    assert resolved['mttr']['resolved_incidents'] == 1
+    assert resolved['mttr']['value_seconds'] >= 0
+
+
+def test_build_mttr_calcula_ciclo_resolvido():
+    opened_at = datetime(2026, 6, 25, 10, 0, 0, tzinfo=timezone.utc).isoformat()
+    resolved_at = datetime(2026, 6, 25, 10, 5, 30, tzinfo=timezone.utc).isoformat()
+    mttr = build_mttr(
+        [
+            {
+                'incident_key': 'runtime-health-test',
+                'event_type': 'incident_opened',
+                'event_at': opened_at,
+            },
+            {
+                'incident_key': 'runtime-health-test',
+                'event_type': 'incident_resolved',
+                'event_at': resolved_at,
+            },
+        ]
+    )
+
+    assert mttr['status'] == 'calculated'
+    assert mttr['value_seconds'] == 330
+    assert mttr['min_seconds'] == 330
+    assert mttr['max_seconds'] == 330
 
 
 def test_durable_runtime_analytics_store_persiste_snapshots(tmp_path):
@@ -59,7 +112,7 @@ def test_durable_runtime_analytics_store_persiste_snapshots(tmp_path):
     analytics = build_runtime_analytics(store, _snapshot('two', status='degraded', risk_score=30))
 
     assert db_path.exists()
-    assert analytics['schema_version'] == '1.1.0'
+    assert analytics['schema_version'] == '1.2.0'
     assert analytics['window']['mode'] == 'durable_sql'
     assert analytics['window']['total_snapshots'] == 2
     assert analytics['summary']['failure_rate'] == 50.0
@@ -70,6 +123,24 @@ def test_durable_runtime_analytics_store_persiste_snapshots(tmp_path):
     reloaded_store = DurableRuntimeAnalyticsStore(database_url=database_url, max_snapshots=10)
     persisted = reloaded_store.list_snapshots()
     assert [item['correlation_id'] for item in persisted] == ['one', 'two']
+
+
+def test_durable_runtime_analytics_store_persiste_incident_events(tmp_path):
+    database_url = f"sqlite:///{tmp_path / 'runtime-analytics.db'}"
+    store = DurableRuntimeAnalyticsStore(database_url=database_url, max_snapshots=10)
+
+    build_runtime_analytics(store, _snapshot('one', status='degraded', risk_score=80))
+    build_runtime_analytics(store, _snapshot('two', status='blocked', risk_score=90))
+    analytics = build_runtime_analytics(store, _snapshot('three', status='healthy', risk_score=5))
+
+    assert analytics['mttr']['status'] == 'calculated'
+    reloaded_store = DurableRuntimeAnalyticsStore(database_url=database_url, max_snapshots=10)
+    persisted_events = reloaded_store.list_incident_events()
+    assert [event['event_type'] for event in persisted_events] == [
+        'incident_opened',
+        'incident_acknowledged',
+        'incident_resolved',
+    ]
 
 
 def test_durable_runtime_analytics_store_sanitiza_payload(tmp_path):
@@ -95,7 +166,7 @@ def test_runtime_analytics_endpoint_expõe_historico_governado():
     data = body['data']
     assert body['meta']['correlation_id'] == correlation_id
     assert data['correlation_id'] == correlation_id
-    assert data['schema_version'] == '1.1.0'
+    assert data['schema_version'] == '1.2.0'
     assert data['window']['mode'] == 'durable_sql'
     assert data['window']['total_snapshots'] >= 1
     assert 0 <= data['summary']['failure_rate'] <= 100
@@ -103,6 +174,8 @@ def test_runtime_analytics_endpoint_expõe_historico_governado():
     assert data['guardrails']['no_secrets'] is True
     assert data['guardrails']['read_only'] is True
     assert data['guardrails']['durable_storage_enabled'] is True
+    assert data['guardrails']['incident_lifecycle_enabled'] is True
+    assert 'incident_lifecycle' in data
 
 
 def test_public_root_expoe_runtime_analytics_link():
