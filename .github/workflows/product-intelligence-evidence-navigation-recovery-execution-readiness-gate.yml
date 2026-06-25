@@ -1,6 +1,6 @@
 name: Product Intelligence Evidence Navigation Recovery Execution Readiness Gate
 
-on:
+"on":
   pull_request:
     paths:
       - "tools/product_intelligence/**"
