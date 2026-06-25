@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
+const backendProxyTarget = process.env.VITE_BACKEND_PROXY_TARGET || 'http://127.0.0.1:8000'
+const kbProxyTarget = process.env.VITE_KB_PROXY_TARGET || 'http://127.0.0.1:8080'
+
 export default defineConfig({
   plugins: [vue()],
   test: {
@@ -33,12 +36,12 @@ export default defineConfig({
     // Quando nginx está no ar (executar-local), o browser usa /api via nginx:8081
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: backendProxyTarget,
         rewrite: path => path.replace(/^\/api/, ''),
         changeOrigin: true,
       },
       '/kb': {
-        target: 'http://127.0.0.1:8080',
+        target: kbProxyTarget,
         rewrite: path => path.replace(/^\/kb/, ''),
         changeOrigin: true,
       },
