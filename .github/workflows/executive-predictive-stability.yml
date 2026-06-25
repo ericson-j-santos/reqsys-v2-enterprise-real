@@ -1,0 +1,45 @@
+name: Executive Predictive Stability
+
+on:
+  pull_request:
+    paths:
+      - scripts/executive_predictive_stability_layer.py
+      - data/operational/github-actions-history/**
+      - docs/runbooks/executive-predictive-stability-layer.md
+      - .github/workflows/executive-predictive-stability.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: executive-predictive-stability-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  predictive-stability:
+    name: Generate predictive stability artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run predictive stability layer
+        run: |
+          python scripts/executive_predictive_stability_layer.py \
+            --data-path data/operational/github-actions-history/runs.jsonl \
+            --output-dir artifacts/executive-predictive-stability \
+            --min-confidence 80 \
+            --max-risk 25
+
+      - name: Upload executive predictive artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-predictive-stability
+          path: artifacts/executive-predictive-stability
+          retention-days: 90
