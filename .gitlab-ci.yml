@@ -22,5 +22,6 @@ include:
   - local: gitlab/ci/governance.yml
   - local: gitlab/ci/runtime.yml
   - local: gitlab/ci/security.yml
+  - local: gitlab/ci/devsecops.yml
   - local: gitlab/ci/evidence.yml
   - local: gitlab/ci/deploy.yml
