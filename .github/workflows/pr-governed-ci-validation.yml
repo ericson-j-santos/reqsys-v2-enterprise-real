@@ -62,9 +62,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in .github/workflows/*.yml; do
-            grep -Eq '^name:' "$file" || { echo "Workflow sem name: $file"; exit 1; }
-            grep -Eq '^on:' "$file" || { echo "Workflow sem on: $file"; exit 1; }
+          shopt -s nullglob
+          workflow_files=(.github/workflows/*.yml .github/workflows/*.yaml)
+          if [[ ${#workflow_files[@]} -eq 0 ]]; then
+            echo "Nenhum workflow encontrado em .github/workflows"
+            exit 1
+          fi
+          for file in "${workflow_files[@]}"; do
+            grep -Eq '^[[:space:]]*name:[[:space:]]*[^[:space:]]+' "$file" || { echo "Workflow sem name: $file"; exit 1; }
+            grep -Eq '^[[:space:]]*on:[[:space:]]*($|#)' "$file" || { echo "Workflow sem on: $file"; exit 1; }
             echo "OK workflow header: $file"
           done
       - name: Validar seletor de testes backend
