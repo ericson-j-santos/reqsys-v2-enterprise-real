@@ -1,0 +1,63 @@
+name: PR Governed CI Self Check
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/pr-governed-ci-validation.yml'
+      - '.github/workflows/pr-governed-ci-self-check.yml'
+      - 'scripts/select_backend_tests.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-governed-ci-self-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  self-check:
+    name: Governed CI self-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/pr-governed-ci-validation.yml
+          test -f scripts/select_backend_tests.py
+
+      - name: Validate Python selector compiles
+        shell: bash
+        run: python -m py_compile scripts/select_backend_tests.py
+
+      - name: Generate self-check evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-validation-evidence
+          cat > ci-validation-evidence/pr-governed-ci-self-check.md <<EOF
+          # PR Governed CI Self Check
+
+          | Campo | Valor |
+          |---|---|
+          | Workflow | PR Governed CI Validation |
+          | Selector compile | OK |
+          | External dependency | none |
+          | Artifact | pr-governed-ci-self-check |
+          | Run ID | ${{ github.run_id }} |
+          EOF
+          cat ci-validation-evidence/pr-governed-ci-self-check.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish self-check evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-governed-ci-self-check
+          path: ci-validation-evidence/
+          if-no-files-found: error
+          retention-days: 30
