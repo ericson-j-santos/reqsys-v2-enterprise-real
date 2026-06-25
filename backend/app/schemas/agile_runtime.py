@@ -131,3 +131,18 @@ class AgileRuntimeResumo(BaseModel):
     itens_bloqueados: int
     conclusao_percentual: float
     ci_success_percentual: float
+
+
+class AgileAIRoutingRecommendationOut(BaseModel):
+    work_item_id: int
+    work_item_codigo: str
+    owner_ai: str
+    categoria: str
+    labels: list[str]
+    branch_sugerida: str
+    pipeline_sugerido: str
+    prioridade_sugerida: AgilePrioridade
+    confianca: float = Field(ge=0.0, le=1.0)
+    justificativas: list[str]
+    acoes_recomendadas: list[str]
+    modo: Literal['preview', 'aplicado'] = 'preview'
