@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/schemas/product-intelligence-final-evidence-index.schema.json",
+  "title": "Product Intelligence Final Evidence Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "scope",
+    "overall_status",
+    "progress",
+    "evidences",
+    "gates",
+    "risks"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.0\\.0$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "type": "string",
+      "minLength": 3
+    },
+    "overall_status": {
+      "type": "string",
+      "enum": ["pending", "validated", "blocked", "not_applicable"]
+    },
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["technical", "operational", "end_user", "governance", "production"],
+      "properties": {
+        "technical": {"type": "integer", "minimum": 0, "maximum": 100},
+        "operational": {"type": "integer", "minimum": 0, "maximum": 100},
+        "end_user": {"type": "integer", "minimum": 0, "maximum": 100},
+        "governance": {"type": "integer", "minimum": 0, "maximum": 100},
+        "production": {"type": "integer", "minimum": 0, "maximum": 100}
+      }
+    },
+    "evidences": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "source", "status", "owner", "reference_date", "residual_risk", "next_step"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^PI-FEI-[0-9]{3}$"},
+          "type": {"type": "string"},
+          "source": {"type": "string"},
+          "link": {"type": "string"},
+          "status": {"type": "string", "enum": ["pending", "validated", "blocked", "not_applicable"]},
+          "owner": {"type": "string"},
+          "reference_date": {"type": "string", "format": "date-time"},
+          "residual_risk": {"type": "string"},
+          "next_step": {"type": "string"}
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status", "required"],
+        "properties": {
+          "name": {"type": "string"},
+          "status": {"type": "string", "enum": ["pending", "passed", "failed", "not_applicable"]},
+          "required": {"type": "boolean"},
+          "evidence_link": {"type": "string"}
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "description", "severity", "mitigation"],
+        "properties": {
+          "id": {"type": "string"},
+          "description": {"type": "string"},
+          "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+          "mitigation": {"type": "string"}
+        }
+      }
+    }
+  }
+}
