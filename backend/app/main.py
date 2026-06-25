@@ -29,6 +29,7 @@ from app.api import (
     requisitos,
     sistema,
     specs,
+    telemetry_analytics,
     webhooks,
     wiki,
 )
@@ -86,6 +87,7 @@ app.include_router(operational_intelligence.router)
 app.include_router(actions_runtime_center.router)
 app.include_router(govbi.router)
 app.include_router(rag_governado.router)
+app.include_router(telemetry_analytics.router)
 
 
 @app.middleware('http')
