@@ -102,6 +102,24 @@ async def log_security_events(request: Request, call_next):
     return response
 
 
+@app.get('/')
+def root():
+    return ok(
+        {
+            'status': 'ok',
+            'service': 'reqsys-api',
+            'version': settings.app_version,
+            'environment': settings.normalized_environment,
+            'docs': '/docs',
+            'health': '/health',
+            'runtime_health': '/api/runtime/health',
+            'runtime_readiness': '/api/runtime/readiness',
+            'runtime_liveness': '/api/runtime/liveness',
+            'runtime_metrics': '/api/runtime/metrics',
+        }
+    )
+
+
 @app.get('/health')
 def health():
     return ok({'status': 'ok', 'service': 'reqsys-api'})
