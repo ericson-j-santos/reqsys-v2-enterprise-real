@@ -1,0 +1,38 @@
+name: Stale PR Governance Watch
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  stale-governance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark stale pull requests
+        uses: actions/stale@v9
+        with:
+          stale-pr-message: |
+            PR marcado como stale por inatividade operacional.
+
+            Critérios observados:
+            - sem atualização recente;
+            - sem progresso de mergeability;
+            - sem evidência nova de CI.
+
+            Próximo passo recomendado:
+            - rebase sobre main;
+            - validar CI;
+            - fechar se o escopo já estiver absorvido.
+          close-pr-message: |
+            PR fechado automaticamente por governança operacional.
+          days-before-pr-stale: 7
+          days-before-pr-close: 14
+          stale-pr-label: stale-governance
+          exempt-pr-labels: governed-merge-approved,security-critical
+          remove-pr-stale-when-updated: true
