@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.core.runtime_analytics import RuntimeAnalyticsStore, build_runtime_analytics
+from app.core.runtime_analytics import DurableRuntimeAnalyticsStore, RuntimeAnalyticsStore, build_runtime_analytics
 from app.main import app
 
 
@@ -39,14 +39,51 @@ def test_build_runtime_analytics_calcula_metricas_temporais():
     build_runtime_analytics(store, _snapshot('one', status='attention', risk_score=10))
     analytics = build_runtime_analytics(store, _snapshot('two', status='degraded', risk_score=30))
 
-    assert analytics['schema_version'] == '1.0.0'
+    assert analytics['schema_version'] == '1.1.0'
     assert analytics['window']['total_snapshots'] == 2
+    assert analytics['window']['mode'] == 'in_memory_rolling'
     assert analytics['summary']['failure_rate'] == 50.0
     assert analytics['summary']['availability_score'] == 50.0
     assert analytics['summary']['average_risk_score'] == 20
     assert analytics['trends']['risk_score'] == 'degrading'
     assert analytics['guardrails']['durable_storage_enabled'] is False
-    assert analytics['mttr']['status'] == 'pending_persistent_storage'
+    assert analytics['mttr']['status'] == 'pending_incident_lifecycle_events'
+
+
+def test_durable_runtime_analytics_store_persiste_snapshots(tmp_path):
+    db_path = tmp_path / 'runtime-analytics.db'
+    database_url = f'sqlite:///{db_path}'
+    store = DurableRuntimeAnalyticsStore(database_url=database_url, max_snapshots=10)
+
+    build_runtime_analytics(store, _snapshot('one', status='attention', risk_score=10))
+    analytics = build_runtime_analytics(store, _snapshot('two', status='degraded', risk_score=30))
+
+    assert db_path.exists()
+    assert analytics['schema_version'] == '1.1.0'
+    assert analytics['window']['mode'] == 'durable_sql'
+    assert analytics['window']['total_snapshots'] == 2
+    assert analytics['summary']['failure_rate'] == 50.0
+    assert analytics['summary']['availability_score'] == 50.0
+    assert analytics['guardrails']['durable_storage_enabled'] is True
+    assert analytics['guardrails']['storage_mode'] == 'durable_sql'
+
+    reloaded_store = DurableRuntimeAnalyticsStore(database_url=database_url, max_snapshots=10)
+    persisted = reloaded_store.list_snapshots()
+    assert [item['correlation_id'] for item in persisted] == ['one', 'two']
+
+
+def test_durable_runtime_analytics_store_sanitiza_payload(tmp_path):
+    store = DurableRuntimeAnalyticsStore(database_url=f"sqlite:///{tmp_path / 'runtime-analytics.db'}", max_snapshots=10)
+    snapshot = _snapshot('safe')
+    snapshot['secret_token'] = 'nao-deve-persistir'
+    snapshot['cpf'] = '00000000000'
+
+    store.record(snapshot)
+
+    persisted = store.list_snapshots()[0]
+    assert 'secret_token' not in persisted
+    assert 'cpf' not in persisted
+    assert persisted['correlation_id'] == 'safe'
 
 
 def test_runtime_analytics_endpoint_expõe_historico_governado():
@@ -58,13 +95,14 @@ def test_runtime_analytics_endpoint_expõe_historico_governado():
     data = body['data']
     assert body['meta']['correlation_id'] == correlation_id
     assert data['correlation_id'] == correlation_id
-    assert data['schema_version'] == '1.0.0'
-    assert data['window']['mode'] == 'in_memory_rolling'
+    assert data['schema_version'] == '1.1.0'
+    assert data['window']['mode'] == 'durable_sql'
     assert data['window']['total_snapshots'] >= 1
     assert 0 <= data['summary']['failure_rate'] <= 100
     assert 0 <= data['summary']['availability_score'] <= 100
     assert data['guardrails']['no_secrets'] is True
     assert data['guardrails']['read_only'] is True
+    assert data['guardrails']['durable_storage_enabled'] is True
 
 
 def test_public_root_expoe_runtime_analytics_link():
