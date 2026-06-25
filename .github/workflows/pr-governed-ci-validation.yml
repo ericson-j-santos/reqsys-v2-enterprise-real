@@ -62,22 +62,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ruby - <<'RUBY'
-          require 'yaml'
-
-          failures = []
-          Dir['.github/workflows/*.yml'].sort.each do |path|
-            begin
-              YAML.load_file(path)
-              puts "OK YAML: #{path}"
-            rescue StandardError => e
-              failures << [path, e]
-              warn "ERRO YAML: #{path}: #{e.class}: #{e.message}"
-            end
-          end
-
-          exit(failures.empty? ? 0 : 1)
-          RUBY
+          mapfile -t workflows < <(find .github/workflows -maxdepth 1 -type f -name '*.yml' | sort)
+          if [[ "${#workflows[@]}" -eq 0 ]]; then
+            echo "Nenhum workflow .yml encontrado"
+            exit 1
+          fi
+          for file in "${workflows[@]}"; do
+            if [[ ! -s "$file" ]]; then
+              echo "Workflow vazio: $file"
+              exit 1
+            fi
+            if grep -P '\t' "$file" >/dev/null; then
+              echo "Tabulação inválida em workflow: $file"
+              exit 1
+            fi
+            if ! grep -Eq '^name:' "$file"; then
+              echo "Workflow sem name: $file"
+              exit 1
+            fi
+            if ! grep -Eq '^[[:space:]]*jobs:' "$file"; then
+              echo "Workflow sem jobs: $file"
+              exit 1
+            fi
+            echo "OK workflow structure: $file"
+          done
       - name: Validar seletor de testes backend
         shell: bash
         run: python -m py_compile scripts/select_backend_tests.py
