@@ -17,7 +17,6 @@ from sqlalchemy import (
     insert,
     select,
 )
-from sqlalchemy.engine import Engine
 
 
 _ALLOWED_SNAPSHOT_FIELDS = {
@@ -97,7 +96,7 @@ class DurableRuntimeAnalyticsStore:
     database_url: str
     max_snapshots: int = 100
     table_name: str = 'runtime_operational_snapshots'
-    engine: Engine | None = None
+    engine: Any | None = None
     metadata: MetaData = field(default_factory=MetaData)
 
     def __post_init__(self) -> None:
