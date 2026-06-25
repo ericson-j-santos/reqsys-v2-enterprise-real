@@ -50,13 +50,34 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
+            async function withRetry(operation, label, attempts = 3) {
+              let lastError;
+              for (let attempt = 1; attempt <= attempts; attempt += 1) {
+                try {
+                  return await operation();
+                } catch (error) {
+                  lastError = error;
+                  const status = error.status || error.response?.status;
+                  const isRateLimit = status === 403 && String(error.message || '').toLowerCase().includes('rate limit');
+                  if (!isRateLimit || attempt === attempts) break;
+                  const retryAfter = Number(error.response?.headers?.['retry-after'] || 10);
+                  core.warning(`${label}: GitHub API rate limit; retry ${attempt}/${attempts} em ${retryAfter}s.`);
+                  await sleep(retryAfter * 1000);
+                }
+              }
+              throw lastError;
+            }
+
             async function getPullRequest() {
               if (context.payload.pull_request) return context.payload.pull_request;
               const inputNumber = core.getInput('pr_number');
               if (!inputNumber) {
                 throw new Error('pr_number is required for workflow_dispatch runs.');
               }
-              const { data } = await github.rest.pulls.get({ owner, repo, pull_number: Number(inputNumber) });
+              const { data } = await withRetry(
+                () => github.rest.pulls.get({ owner, repo, pull_number: Number(inputNumber) }),
+                'pulls.get'
+              );
               return data;
             }
 
@@ -72,42 +93,28 @@ jobs:
             }
 
             async function listRuns(headSha) {
-              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
-                owner,
-                repo,
-                head_sha: headSha,
-                per_page: 100,
-              });
-
-              const runSummaries = [];
-              for (const run of runs) {
-                const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              const runs = await withRetry(
+                () => github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
                   owner,
                   repo,
-                  run_id: run.id,
-                  per_page: 100,
-                });
+                  head_sha: headSha,
+                  per_page: 50,
+                }),
+                'actions.listWorkflowRunsForRepo'
+              );
 
-                runSummaries.push({
-                  id: run.id,
-                  name: run.name,
-                  event: run.event,
-                  status: run.status,
-                  conclusion: run.conclusion,
-                  head_sha: run.head_sha,
-                  html_url: run.html_url,
-                  created_at: run.created_at,
-                  updated_at: run.updated_at,
-                  artifacts: artifacts.map((artifact) => ({
-                    id: artifact.id,
-                    name: artifact.name,
-                    expired: artifact.expired,
-                    size_in_bytes: artifact.size_in_bytes,
-                    archive_download_url: artifact.archive_download_url,
-                  })),
-                });
-              }
-              return runSummaries;
+              return runs.map((run) => ({
+                id: run.id,
+                name: run.name,
+                event: run.event,
+                status: run.status,
+                conclusion: run.conclusion,
+                head_sha: run.head_sha,
+                html_url: run.html_url,
+                created_at: run.created_at,
+                updated_at: run.updated_at,
+                artifacts: [],
+              }));
             }
 
             function evaluate({ headSha, runSummaries, requiredWorkflowNames, optionalWorkflowNames }) {
@@ -180,7 +187,7 @@ jobs:
             }
 
             const audit = {
-              schema_version: '1.0.1',
+              schema_version: '1.0.2',
               generated_at: new Date().toISOString(),
               repository: `${owner}/${repo}`,
               pr: {
