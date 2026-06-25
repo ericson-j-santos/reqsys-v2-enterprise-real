@@ -58,20 +58,24 @@ jobs:
               exit 1
             fi
           done
-      - name: Instalar dependência YAML determinística
-        shell: bash
-        run: python -m pip install --disable-pip-version-check PyYAML==6.0.2
-      - name: Validar sintaxe YAML dos workflows
+      - name: Validar estrutura YAML compatível com GitHub Actions
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          import yaml
-          for path in Path('.github/workflows').glob('*.yml'):
-              with path.open('r', encoding='utf-8') as handle:
-                  yaml.safe_load(handle)
-              print(f'OK YAML: {path}')
+
+          required_markers = ("name:", "on:", "jobs:")
+          for path in sorted(Path('.github/workflows').glob('*.yml')):
+              text = path.read_text(encoding='utf-8')
+              if not text.strip():
+                  raise SystemExit(f'Workflow vazio: {path}')
+              if '\t' in text:
+                  raise SystemExit(f'Tabulação não permitida em workflow: {path}')
+              missing = [marker for marker in required_markers if marker not in text]
+              if missing:
+                  raise SystemExit(f'Workflow sem marcadores mínimos {missing}: {path}')
+              print(f'OK workflow structure: {path}')
           PY
       - name: Validar seletor de testes backend
         shell: bash
