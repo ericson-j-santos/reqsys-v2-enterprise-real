@@ -15,7 +15,7 @@ Garantir que os contratos governados em `docs/schema-registry.json` sejam aplica
 | Auditoria runtime | Implementada em `runtime/schema_audit.py` |
 | Fixtures válidas/inválidas | Implementadas em `examples/runtime/**` |
 | Testes runtime | Implementados em `tests/schema_runtime/test_schema_runtime_enforcer.py` |
-| Workflow CI runtime | Implementado em `.github/workflows/schema-runtime-validation.yml` |
+| Workflow CI runtime | Implementado em `.github/workflows/schema-runtime-validation.yaml` |
 
 ## Regras aplicadas em runtime
 
