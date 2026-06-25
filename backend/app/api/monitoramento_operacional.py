@@ -232,6 +232,85 @@ def _criar_runtime_observability_snapshot(correlation_id: str) -> dict:
     }
 
 
+def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
+    return {
+        'schema_version': '1.0.0',
+        'title': 'ReqSys Runtime Operational Dashboard',
+        'description': 'Schema-driven dashboard para runtime publico, health, readiness e metricas operacionais.',
+        'generated_at': snapshot['generated_at'],
+        'correlation_id': snapshot['correlation_id'],
+        'layout': {'type': 'grid', 'columns': 4, 'responsive': True},
+        'data_source': {
+            'kind': 'runtime_snapshot',
+            'endpoint': '/api/runtime/health',
+            'refresh_seconds': 60,
+        },
+        'cards': [
+            {
+                'id': 'runtime-status',
+                'title': 'Runtime Status',
+                'type': 'status',
+                'value': snapshot['status'],
+                'severity': snapshot['status'],
+                'drilldown': '/api/runtime/health',
+            },
+            {
+                'id': 'risk-score',
+                'title': 'Risk Score',
+                'type': 'metric',
+                'value': snapshot['risk_score'],
+                'unit': 'score',
+                'min': 0,
+                'max': 100,
+                'drilldown': '/api/runtime/metrics',
+            },
+            {
+                'id': 'pending-items',
+                'title': 'Pendencias Operacionais',
+                'type': 'metric',
+                'value': snapshot['critical_counts']['pending_items'],
+                'unit': 'itens',
+                'drilldown': '/monitoramento-operacional',
+            },
+            {
+                'id': 'uptime',
+                'title': 'Uptime',
+                'type': 'metric',
+                'value': snapshot['uptime_seconds'],
+                'unit': 'seconds',
+                'drilldown': '/api/runtime/liveness',
+            },
+        ],
+        'sections': [
+            {
+                'id': 'public-smoke',
+                'title': 'Public Smoke Tests',
+                'type': 'links',
+                'items': [
+                    {'label': 'Root', 'href': '/'},
+                    {'label': 'Health', 'href': '/health'},
+                    {'label': 'Runtime Health', 'href': '/api/runtime/health'},
+                    {'label': 'Readiness', 'href': '/api/runtime/readiness'},
+                    {'label': 'Liveness', 'href': '/api/runtime/liveness'},
+                    {'label': 'Metrics', 'href': '/api/runtime/metrics'},
+                ],
+            },
+            {
+                'id': 'governance-evidence',
+                'title': 'Governanca e Evidencias',
+                'type': 'key_value',
+                'items': snapshot['evidence'],
+            },
+        ],
+        'guardrails': {
+            'no_secrets': True,
+            'no_pii': True,
+            'read_only': True,
+            'deploy_gate_relaxed': False,
+        },
+    }
+
+
 def _metric_label_value(value: str) -> str:
     return str(value).replace('\\', '\\\\').replace('\n', '\\n').replace('"', '\\"')
 
@@ -260,6 +339,16 @@ def obter_api_runtime_health(
 ):
     correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
     return ok(_criar_runtime_observability_snapshot(correlation_id), correlation_id)
+
+
+@router.get('/api/runtime/dashboard')
+def obter_api_runtime_dashboard(
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+    x_request_id: str | None = Header(default=None, alias='X-Request-ID'),
+):
+    correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
+    snapshot = _criar_runtime_observability_snapshot(correlation_id)
+    return ok(_criar_runtime_dashboard_schema(snapshot), correlation_id)
 
 
 @router.get('/api/runtime/readiness')
