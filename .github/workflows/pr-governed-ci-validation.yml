@@ -62,10 +62,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python -m pip install --disable-pip-version-check --quiet pyyaml
           python - <<'PY'
           from pathlib import Path
           import yaml
-          for path in Path('.github/workflows').glob('*.yml'):
+
+          workflow_paths = sorted(
+              list(Path('.github/workflows').glob('*.yml'))
+              + list(Path('.github/workflows').glob('*.yaml'))
+          )
+          if not workflow_paths:
+              raise SystemExit('Nenhum workflow YAML encontrado para validação')
+          for path in workflow_paths:
               with path.open('r', encoding='utf-8') as handle:
                   yaml.safe_load(handle)
               print(f'OK YAML: {path}')
