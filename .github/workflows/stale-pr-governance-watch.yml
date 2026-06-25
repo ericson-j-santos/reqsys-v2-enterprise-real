@@ -4,19 +4,52 @@ on:
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Executar sem aplicar labels/fechamentos'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 permissions:
   contents: read
-  pull-requests: write
   issues: write
+  pull-requests: read
+
+concurrency:
+  group: stale-pr-governance-watch-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   stale-governance:
+    name: PR stale governance
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
       - name: Mark stale pull requests
         uses: actions/stale@v9
         with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          operations-per-run: 50
+          debug-only: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true' }}
+
+          # Escopo PR-only. Issues ficam fora deste incremento para evitar
+          # fechamento indevido de backlog funcional/documental.
+          days-before-issue-stale: -1
+          days-before-issue-close: -1
+
+          days-before-pr-stale: 7
+          days-before-pr-close: 14
+          stale-pr-label: stale-governance
+          close-pr-label: stale-governance-close
+          exempt-pr-labels: governed-merge-approved,security-critical,do-not-stale
+          remove-pr-stale-when-updated: true
+          delete-branch: false
+
           stale-pr-message: |
             PR marcado como stale por inatividade operacional.
 
@@ -29,10 +62,6 @@ jobs:
             - rebase sobre main;
             - validar CI;
             - fechar se o escopo já estiver absorvido.
+
           close-pr-message: |
-            PR fechado automaticamente por governança operacional.
-          days-before-pr-stale: 7
-          days-before-pr-close: 14
-          stale-pr-label: stale-governance
-          exempt-pr-labels: governed-merge-approved,security-critical
-          remove-pr-stale-when-updated: true
+            PR fechado automaticamente por governança operacional após janela de stale sem evolução.
