@@ -1,0 +1,38 @@
+gitlab_environments_baseline:
+  stage: evidence
+  image: python:3.12-slim
+  script:
+    - mkdir -p audit
+    - python gitlab/scripts/generate_environments_baseline.py --output audit/gitlab-environments-report.json --markdown audit/gitlab-environments-report.md
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - audit/gitlab-environments-report.json
+      - audit/gitlab-environments-report.md
+
+review_app_placeholder:
+  stage: deploy
+  image: alpine:3.20
+  environment:
+    name: review/$CI_COMMIT_REF_SLUG
+    url: https://review-$CI_COMMIT_REF_SLUG.example.com
+    on_stop: stop_review_app_placeholder
+    auto_stop_in: 3 days
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+  script:
+    - echo "Review App placeholder governado para GitLab Edition"
+
+stop_review_app_placeholder:
+  stage: deploy
+  image: alpine:3.20
+  environment:
+    name: review/$CI_COMMIT_REF_SLUG
+    action: stop
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+  script:
+    - echo "Stop Review App placeholder governado para GitLab Edition"

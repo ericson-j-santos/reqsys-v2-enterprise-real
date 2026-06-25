@@ -16,16 +16,19 @@ REQUIRED_FILES = [
     ".gitlab/merge_request_templates/default.md",
     "gitlab/docs/GITLAB_OPERATING_MODEL.md",
     "gitlab/docs/GITLAB_DEVSECOPS_BASELINE.md",
+    "gitlab/docs/GITLAB_ENVIRONMENTS_REVIEW_APPS.md",
     "gitlab/ci/classify.yml",
     "gitlab/ci/governance.yml",
     "gitlab/ci/runtime.yml",
     "gitlab/ci/security.yml",
     "gitlab/ci/devsecops.yml",
+    "gitlab/ci/environments.yml",
     "gitlab/ci/evidence.yml",
     "gitlab/ci/deploy.yml",
     "gitlab/scripts/classify_issue.py",
     "gitlab/scripts/generate_semantic_pipeline_report.py",
     "gitlab/scripts/generate_devsecops_baseline.py",
+    "gitlab/scripts/generate_environments_baseline.py",
     "gitlab/scripts/validate_gitlab_governance.py",
 ]
 
@@ -38,6 +41,7 @@ REQUIRED_CI_TERMS = [
     "gitlab/ci/runtime.yml",
     "gitlab/ci/security.yml",
     "gitlab/ci/devsecops.yml",
+    "gitlab/ci/environments.yml",
     "gitlab/ci/evidence.yml",
     "gitlab/ci/deploy.yml",
 ]
@@ -48,6 +52,7 @@ REQUIRED_INCLUDE_TERMS = {
     "gitlab/ci/runtime.yml": ["runtime_backend_smoke", "rules:", "changes:"],
     "gitlab/ci/security.yml": ["security_baseline_smoke", "artifacts:"],
     "gitlab/ci/devsecops.yml": ["gitlab_devsecops_baseline", "secret_detection_placeholder", "artifacts:"],
+    "gitlab/ci/environments.yml": ["gitlab_environments_baseline", "review_app_placeholder", "stop_review_app_placeholder", "environment:"],
     "gitlab/ci/evidence.yml": ["gitlab_evidence_summary", "artifacts:"],
     "gitlab/ci/deploy.yml": ["deploy_staging_placeholder", "environment:"],
 }
