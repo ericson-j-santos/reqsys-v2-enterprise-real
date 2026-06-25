@@ -1,0 +1,19 @@
+name: GitHub Runtime Analytics
+
+on:
+  pull_request:
+    paths:
+      - 'tools/product_intelligence/**'
+      - 'docs/operations/**'
+      - '.github/workflows/github-runtime-analytics.yml'
+
+jobs:
+  github-runtime-analytics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate analytics
+        run: python tools/product_intelligence/generate_github_runtime_analytics.py
