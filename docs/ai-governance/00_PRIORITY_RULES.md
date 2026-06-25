@@ -4,6 +4,10 @@ Codigo: AI-GOV-PRIORITY-001
 
 Regras maximas para uso da IA em projetos corporativos.
 
+## Prioridade P0
+
+Regras P0 bloqueiam merge, release ou producao quando violadas.
+
 ## Sempre aplicar
 
 - Padrao ouro.
