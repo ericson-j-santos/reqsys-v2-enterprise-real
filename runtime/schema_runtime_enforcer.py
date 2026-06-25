@@ -11,14 +11,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
+import sys
 from typing import Any
 from uuid import uuid4
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from runtime.schema_audit import DEFAULT_SCHEMA_RUNTIME_AUDIT, SchemaAuditEvent, SchemaRuntimeAuditSink
 from runtime.schema_metrics import DEFAULT_SCHEMA_RUNTIME_METRICS, SchemaRuntimeMetrics
 from tools.schema_governance.validate_schema_governance import load_json, validate_value
 
-ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "docs" / "schema-registry.json"
 
 
