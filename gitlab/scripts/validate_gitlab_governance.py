@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""GitLab Edition governance validator for ReqSys.
+
+Dependency-free validation focused on critical structure only.
+"""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+from pathlib import Path
+
+REQUIRED_FILES = [
+    ".gitlab-ci.yml",
+    ".gitlab/issue_templates/reqsys_task.md",
+    ".gitlab/merge_request_templates/default.md",
+    "gitlab/docs/GITLAB_OPERATING_MODEL.md",
+    "gitlab/scripts/classify_issue.py",
+    "gitlab/scripts/validate_gitlab_governance.py",
+]
+
+REQUIRED_CI_TERMS = [
+    "stages:",
+    "workflow:",
+    "artifacts:",
+    "classify_changes",
+    "gitlab_governance_validation",
+    "gitlab_evidence_summary",
+]
+
+FORBIDDEN_CI_TERMS = [
+    "write-all",
+    "CI_JOB_TOKEN=",
+    "PRIVATE_TOKEN=",
+    "password=",
+    "secret=",
+]
+
+
+def validate() -> tuple[bool, list[str]]:
+    issues: list[str] = []
+
+    for file_path in REQUIRED_FILES:
+        if not Path(file_path).exists():
+            issues.append(f"MISSING_FILE: {file_path}")
+
+    ci_path = Path(".gitlab-ci.yml")
+    if ci_path.exists():
+        ci_text = ci_path.read_text(encoding="utf-8")
+        for term in REQUIRED_CI_TERMS:
+            if term not in ci_text:
+                issues.append(f"MISSING_CI_TERM: {term}")
+        lowered = ci_text.lower()
+        for term in FORBIDDEN_CI_TERMS:
+            if term.lower() in lowered:
+                issues.append(f"FORBIDDEN_CI_TERM: {term}")
+
+    return not issues, issues
+
+
+def render_report(ok: bool, issues: list[str]) -> str:
+    status = "passed" if ok else "failed"
+    lines = [
+        "# GitLab Governance Report",
+        "",
+        f"Generated at: {datetime.now(timezone.utc).isoformat()}",
+        f"Status: {status}",
+        "",
+        "## Required files",
+    ]
+    lines.extend(f"- `{file_path}`" for file_path in REQUIRED_FILES)
+    lines.extend(["", "## Issues"])
+    if issues:
+        lines.extend(f"- {issue}" for issue in issues)
+    else:
+        lines.append("- None")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", default="-")
+    args = parser.parse_args()
+
+    ok, issues = validate()
+    report = render_report(ok, issues)
+
+    if args.output == "-":
+        print(report)
+    else:
+        path = Path(args.output)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(report, encoding="utf-8")
+
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
