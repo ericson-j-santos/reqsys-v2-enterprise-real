@@ -28,6 +28,7 @@ from app.api import (
     rastreabilidade,
     relatorios,
     requisitos,
+    runtime_analytics,
     sistema,
     specs,
     webhooks,
@@ -84,6 +85,7 @@ app.include_router(rastreabilidade.router)
 app.include_router(hub_lowcode.router)
 app.include_router(agents.router)
 app.include_router(monitoramento_operacional.router)
+app.include_router(runtime_analytics.router)
 app.include_router(operational_intelligence.router)
 app.include_router(actions_runtime_center.router)
 app.include_router(govbi.router)
@@ -118,6 +120,8 @@ def root():
             'runtime_readiness': '/api/runtime/readiness',
             'runtime_liveness': '/api/runtime/liveness',
             'runtime_metrics': '/api/runtime/metrics',
+            'runtime_dashboard': '/api/runtime/dashboard',
+            'runtime_analytics': '/api/runtime/analytics',
             'agile_runtime': '/v1/agile-runtime/resumo',
         }
     )
