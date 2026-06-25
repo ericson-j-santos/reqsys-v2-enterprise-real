@@ -58,24 +58,18 @@ jobs:
               exit 1
             fi
           done
-      - name: Preparar dependência YAML
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          python -m pip install "PyYAML==6.0.2"
       - name: Validar sintaxe YAML dos workflows
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          import yaml
-          for path in Path('.github/workflows').glob('*.yml'):
-              with path.open('r', encoding='utf-8') as handle:
-                  yaml.safe_load(handle)
-              print(f'OK YAML: {path}')
-          PY
+          ruby - <<'RB'
+          require 'yaml'
+
+          Dir.glob('.github/workflows/*.yml').sort.each do |path|
+            YAML.safe_load_file(path, aliases: true)
+            puts "OK YAML: #{path}"
+          end
+          RB
       - name: Validar seletor de testes backend
         shell: bash
         run: python -m py_compile scripts/select_backend_tests.py
