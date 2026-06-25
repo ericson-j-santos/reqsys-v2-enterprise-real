@@ -58,6 +58,9 @@ jobs:
               exit 1
             fi
           done
+      - name: Instalar dependência YAML determinística
+        shell: bash
+        run: python -m pip install --disable-pip-version-check PyYAML==6.0.2
       - name: Validar sintaxe YAML dos workflows
         shell: bash
         run: |
