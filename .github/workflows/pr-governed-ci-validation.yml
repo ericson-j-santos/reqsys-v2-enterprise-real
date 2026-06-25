@@ -68,7 +68,7 @@ jobs:
           failures = []
           Dir['.github/workflows/*.yml'].sort.each do |path|
             begin
-              YAML.safe_load(File.read(path, encoding: 'UTF-8'), aliases: true)
+              YAML.load_file(path)
               puts "OK YAML: #{path}"
             rescue StandardError => e
               failures << [path, e]
