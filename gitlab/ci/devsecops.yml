@@ -1,0 +1,36 @@
+gitlab_devsecops_baseline:
+  stage: security
+  image: python:3.12-slim
+  script:
+    - mkdir -p audit
+    - python gitlab/scripts/generate_devsecops_baseline.py --output audit/gitlab-devsecops-report.json --markdown audit/gitlab-devsecops-report.md
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - audit/gitlab-devsecops-report.json
+      - audit/gitlab-devsecops-report.md
+
+secret_detection_placeholder:
+  stage: security
+  image: alpine:3.20
+  script:
+    - mkdir -p audit
+    - echo "secret_detection_status=placeholder_ready" > audit/gitlab-secret-detection-baseline.txt
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - audit/gitlab-secret-detection-baseline.txt
+
+dependency_container_scanning_placeholder:
+  stage: security
+  image: alpine:3.20
+  script:
+    - mkdir -p audit
+    - echo "dependency_scanning_status=placeholder_ready" > audit/gitlab-dependency-container-baseline.txt
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - audit/gitlab-dependency-container-baseline.txt
