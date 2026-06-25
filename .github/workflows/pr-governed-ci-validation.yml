@@ -58,6 +58,18 @@ jobs:
               exit 1
             fi
           done
+      - name: Validar sintaxe YAML dos workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          for path in Path('.github/workflows').glob('*.yml'):
+              with path.open('r', encoding='utf-8') as handle:
+                  yaml.safe_load(handle)
+              print(f'OK YAML: {path}')
+          PY
       - name: Validar seletor de testes backend
         shell: bash
         run: python -m py_compile scripts/select_backend_tests.py
