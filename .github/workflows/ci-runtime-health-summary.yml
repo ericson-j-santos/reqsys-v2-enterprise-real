@@ -4,6 +4,11 @@ on:
   workflow_dispatch: {}
   schedule:
     - cron: '30 */6 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ci-runtime-health-summary.yml'
 
 permissions:
   actions: read
@@ -94,7 +99,7 @@ jobs:
             const active = workflows.filter(function(item) { return item.status !== 'completed' && item.status !== 'missing'; });
 
             const health = {
-              schema_version: '1.0.0',
+              schema_version: '1.0.1',
               generated_at: new Date().toISOString(),
               repository: owner + '/' + repo,
               branch: 'main',
