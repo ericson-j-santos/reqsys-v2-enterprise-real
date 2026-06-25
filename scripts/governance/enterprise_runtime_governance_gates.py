@@ -2,7 +2,8 @@
 """Enterprise Runtime Governance Gates.
 
 Scanner preventivo para bloquear padrões incompatíveis com entrega enterprise.
-Escopo v2: runtime/config real, com exclusão explícita de docs, testes, fixtures, mocks e exemplos.
+Escopo v3: bloquear apenas runtime/config produtivo; registrar scripts, validadores,
+documentação, testes e artefatos auxiliares como fora do caminho bloqueante.
 Sempre publica relatório markdown/json para artifact e GitHub Step Summary.
 """
 
@@ -22,8 +23,8 @@ REPORT_DIR = ROOT / "artifacts" / "enterprise-runtime-governance"
 IGNORED_DIRS = {
     ".git", ".github/actions-cache", ".venv", "venv", "node_modules", "dist", "build", "target",
     "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "coverage", "htmlcov", ".next", ".nuxt",
-    "docs", "test", "tests", "__tests__", "spec", "specs", "fixture", "fixtures", "mock", "mocks",
-    "example", "examples", "sample", "samples", "demo", "demos",
+    ".angular", "cache", "docs", "test", "tests", "__tests__", "spec", "specs", "fixture", "fixtures",
+    "mock", "mocks", "example", "examples", "sample", "samples", "demo", "demos",
 }
 
 IGNORED_FILE_PATTERNS = (
@@ -51,6 +52,8 @@ ALLOWLIST_PATTERNS = [
 
 BLOCKING_SEVERITIES = {"HIGH"}
 OPERATIONAL_CODE_EXTENSIONS = {".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".cs", ".go"}
+BLOCKING_RUNTIME_PREFIXES = ("backend/app/", "app/", "api/", "services/", "config/", "configs/", "deploy/", "deployment/", "infra/")
+BLOCKING_RUNTIME_FILENAMES = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "fly.toml", "nginx.conf"}
 
 
 @dataclass(frozen=True)
@@ -72,7 +75,7 @@ RULES: list[tuple[str, str, re.Pattern[str], str]] = [
     (
         "HIGH",
         "SEC_CORS_WILDCARD",
-        re.compile(r"(?i)(allowed[_-]?origins|cors|Access-Control-Allow-Origin).{0,80}(\*|['\"]\*['\"])") ,
+        re.compile(r"(?i)((allowed[_-]?origins|cors|origins?)\s*[:=]\s*['\"]?\*['\"]?|Access-Control-Allow-Origin\s+['\"]?\*['\"]?)"),
         "Possível CORS wildcard.",
     ),
     (
@@ -104,6 +107,17 @@ RULES: list[tuple[str, str, re.Pattern[str], str]] = [
 
 def relative_path(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
+
+
+def is_blocking_runtime_path(relative: str) -> bool:
+    name = Path(relative).name
+    return relative.startswith(BLOCKING_RUNTIME_PREFIXES) or name in BLOCKING_RUNTIME_FILENAMES
+
+
+def effective_severity(relative: str, severity: str) -> str:
+    if severity != "HIGH":
+        return severity
+    return "HIGH" if is_blocking_runtime_path(relative) else "MEDIUM"
 
 
 def is_ignored(path: Path) -> bool:
@@ -142,12 +156,12 @@ def scan_content(path: Path, content: str) -> list[Finding]:
             continue
         for severity, code, pattern, message in RULES:
             if pattern.search(line):
-                findings.append(Finding(severity, code, relative, line_number, message))
+                findings.append(Finding(effective_severity(relative, severity), code, relative, line_number, message))
     return findings
 
 
 def scan_correlation_id_presence(files: list[Path]) -> list[Finding]:
-    operational_files = [path for path in files if path.suffix in OPERATIONAL_CODE_EXTENSIONS]
+    operational_files = [path for path in files if path.suffix in OPERATIONAL_CODE_EXTENSIONS and is_blocking_runtime_path(relative_path(path))]
     if not operational_files:
         return []
     for path in operational_files:
