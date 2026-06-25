@@ -7,6 +7,7 @@
 #   FRONTEND_PORT=5173       porta do Vite
 #   DEV_DB_PATH=/tmp/...     caminho do SQLite de desenvolvimento
 #   REQSYS_USE_TRACKED_DB=1  usa backend/reqsys.db diretamente (nao recomendado)
+#   REQSYS_SKIP_BACKEND_INSTALL=1 pula instalacao/validacao de dependencias Python
 
 set -euo pipefail
 
@@ -16,6 +17,7 @@ FRONTEND_DIR="$ROOT/frontend"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 DEV_DB_PATH="${DEV_DB_PATH:-/tmp/reqsys-dev-${USER:-local}.db}"
+BACKEND_DEPS_STAMP="$BACKEND_DIR/.venv/.reqsys-dev-deps-installed"
 
 PIDS=()
 cleanup() {
@@ -34,6 +36,44 @@ require_cmd() {
   fi
 }
 
+install_backend_dependencies() {
+  if [ "${REQSYS_SKIP_BACKEND_INSTALL:-0}" = "1" ]; then
+    echo "[ReqSys dev] Pulando instalacao de dependencias Python por REQSYS_SKIP_BACKEND_INSTALL=1"
+    return
+  fi
+
+  if [ ! -f "$BACKEND_DIR/requirements.txt" ]; then
+    echo "[ReqSys dev] ERRO: backend/requirements.txt nao encontrado." >&2
+    echo "[ReqSys dev] Execute a instalacao manual das dependencias ou restaure o arquivo." >&2
+    exit 1
+  fi
+
+  local requirements_hash
+  requirements_hash="$(python3 - <<'PY' "$BACKEND_DIR/requirements.txt"
+import hashlib
+import pathlib
+import sys
+print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
+)"
+
+  if [ -f "$BACKEND_DEPS_STAMP" ] && grep -qx "$requirements_hash" "$BACKEND_DEPS_STAMP"; then
+    echo "[ReqSys dev] Dependencias Python ja validadas."
+    return
+  fi
+
+  echo "[ReqSys dev] Instalando/validando dependencias Python do backend..."
+  (
+    cd "$BACKEND_DIR"
+    # shellcheck disable=SC1091
+    . .venv/bin/activate
+    python -m pip install --upgrade pip
+    python -m pip install -r requirements.txt
+    python -m pip show uvicorn >/dev/null
+  )
+  printf '%s\n' "$requirements_hash" > "$BACKEND_DEPS_STAMP"
+}
+
 require_cmd python3
 require_cmd npm
 
@@ -41,6 +81,8 @@ if [ ! -d "$BACKEND_DIR/.venv" ]; then
   echo "[ReqSys dev] Criando venv do backend..."
   python3 -m venv "$BACKEND_DIR/.venv"
 fi
+
+install_backend_dependencies
 
 if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
   echo "[ReqSys dev] Instalando dependencias do frontend..."
@@ -77,7 +119,7 @@ echo "================================================================"
   cd "$BACKEND_DIR"
   # shellcheck disable=SC1091
   . .venv/bin/activate
-  uvicorn app.main:app --host 127.0.0.1 --port "$BACKEND_PORT"
+  python -m uvicorn app.main:app --host 127.0.0.1 --port "$BACKEND_PORT"
 ) &
 PIDS+=("$!")
 echo "[ReqSys dev] Backend PID ${PIDS[-1]}"
