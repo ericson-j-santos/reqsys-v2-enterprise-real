@@ -15,12 +15,12 @@
     },
     "guardrails": {
       "type": "object",
-      "required": ["deploy", "production_mutation", "permission_change", "automatic_merge"],
+      "required": ["deployment", "production_write", "permission_update", "automated_merge"],
       "properties": {
-        "deploy": { "type": "boolean", "const": false },
-        "production_mutation": { "type": "boolean", "const": false },
-        "permission_change": { "type": "boolean", "const": false },
-        "automatic_merge": { "type": "boolean", "const": false }
+        "deployment": { "type": "string", "const": "not_performed" },
+        "production_write": { "type": "string", "const": "not_performed" },
+        "permission_update": { "type": "string", "const": "not_performed" },
+        "automated_merge": { "type": "string", "const": "not_performed" }
       },
       "additionalProperties": false
     }
