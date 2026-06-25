@@ -185,6 +185,20 @@ def _runtime_risk_score(snapshot: MonitoramentoOperacional) -> int:
     return normalizado
 
 
+def _runtime_ready(snapshot: dict) -> bool:
+    return snapshot['status'] in {'healthy', 'attention'} and snapshot['critical_counts']['blocked_items'] == 0
+
+
+def _runtime_readiness_reason(snapshot: dict) -> str:
+    if snapshot['critical_counts']['blocked_items'] > 0:
+        return 'blocked_items_detected'
+    if snapshot['status'] == 'degraded':
+        return 'runtime_degraded'
+    if snapshot['status'] == 'attention':
+        return 'runtime_requires_attention'
+    return 'runtime_healthy'
+
+
 def _criar_runtime_observability_snapshot(correlation_id: str) -> dict:
     snapshot = criar_snapshot_minimo(correlation_id)
     health = criar_health_snapshot_base(correlation_id, settings.normalized_environment)
@@ -218,9 +232,13 @@ def _criar_runtime_observability_snapshot(correlation_id: str) -> dict:
     }
 
 
+def _metric_label_value(value: str) -> str:
+    return str(value).replace('\\', '\\\\').replace('\n', '\\n').replace('"', '\\"')
+
+
 def _metric_line(name: str, value: int | float, labels: dict[str, str] | None = None) -> str:
     if labels:
-        labels_text = ','.join(f'{key}="{value}"' for key, value in sorted(labels.items()))
+        labels_text = ','.join(f'{key}="{_metric_label_value(value)}"' for key, value in sorted(labels.items()))
         return f'{name}{{{labels_text}}} {value}'
     return f'{name} {value}'
 
@@ -251,8 +269,8 @@ def obter_api_runtime_readiness(
 ):
     correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
     snapshot = _criar_runtime_observability_snapshot(correlation_id)
-    ready = snapshot['status'] in {'healthy', 'attention', 'degraded'}
-    return ok({'ready': ready, **snapshot}, correlation_id)
+    ready = _runtime_ready(snapshot)
+    return ok({'ready': ready, 'readiness_reason': _runtime_readiness_reason(snapshot), **snapshot}, correlation_id)
 
 
 @router.get('/api/runtime/liveness')
