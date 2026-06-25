@@ -6,7 +6,10 @@ from fastapi import APIRouter, Header
 from app.api.monitoramento_operacional import _criar_runtime_observability_snapshot
 from app.core.config import settings
 from app.core.envelope import ok
-from app.core.runtime_analytics import DurableRuntimeAnalyticsStore, build_runtime_analytics
+from app.core.runtime_analytics import (
+    DurableRuntimeAnalyticsStore,
+    build_runtime_analytics,
+)
 
 router = APIRouter(tags=['Runtime Analytics'])
 logger = logging.getLogger(__name__)
