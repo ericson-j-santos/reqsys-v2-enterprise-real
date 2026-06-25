@@ -4,12 +4,13 @@ from uuid import uuid4
 from fastapi import APIRouter, Header
 
 from app.api.monitoramento_operacional import _criar_runtime_observability_snapshot
+from app.core.config import settings
 from app.core.envelope import ok
-from app.core.runtime_analytics import RuntimeAnalyticsStore, build_runtime_analytics
+from app.core.runtime_analytics import DurableRuntimeAnalyticsStore, build_runtime_analytics
 
 router = APIRouter(tags=['Runtime Analytics'])
 logger = logging.getLogger(__name__)
-STORE = RuntimeAnalyticsStore(max_snapshots=100)
+STORE = DurableRuntimeAnalyticsStore(database_url=settings.database_url, max_snapshots=100)
 
 
 def _resolver_correlation_id(x_correlation_id: str | None, x_request_id: str | None) -> str:
