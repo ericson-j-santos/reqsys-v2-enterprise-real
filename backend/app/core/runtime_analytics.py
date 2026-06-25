@@ -5,7 +5,18 @@ from datetime import datetime, timezone
 from statistics import mean
 from typing import Any, Protocol
 
-from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table, Text, create_engine, insert, select
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    create_engine,
+    insert,
+    select,
+)
 from sqlalchemy.engine import Engine
 
 
