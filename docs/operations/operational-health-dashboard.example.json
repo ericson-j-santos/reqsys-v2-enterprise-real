@@ -2,9 +2,9 @@
   "status": "OPERATIONAL_HEALTH_DASHBOARD_READY",
   "mode": "review_only",
   "guardrails": {
-    "deploy": false,
-    "production_mutation": false,
-    "permission_change": false,
-    "automatic_merge": false
+    "deployment": "not_performed",
+    "production_write": "not_performed",
+    "permission_update": "not_performed",
+    "automated_merge": "not_performed"
   }
 }
