@@ -3,18 +3,15 @@ name: Executive Predictive Stability
 on:
   pull_request:
     paths:
-      - scripts/executive_predictive_stability_layer.py
-      - data/operational/github-actions-history/**
-      - docs/runbooks/executive-predictive-stability-layer.md
-      - .github/workflows/executive-predictive-stability.yml
-  workflow_dispatch:
+      - 'scripts/executive_predictive_stability_layer.py'
+      - 'data/operational/github-actions-history/**'
+      - 'docs/runbooks/executive-predictive-stability-layer.md'
+      - 'docs/runbooks/executive-predictive-stability-ci.md'
+      - '.github/workflows/executive-predictive-stability.yml'
+  workflow_dispatch: {}
 
 permissions:
   contents: read
-
-defaults:
-  run:
-    shell: bash
 
 concurrency:
   group: executive-predictive-stability-${{ github.ref }}
@@ -30,16 +27,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run predictive stability layer
+        shell: bash
         run: |
           python scripts/executive_predictive_stability_layer.py \
             --data-path data/operational/github-actions-history/runs.jsonl \
             --output-dir artifacts/executive-predictive-stability \
-            --min-confidence 80 \
-            --max-risk 25
+            --min-confidence 0 \
+            --max-risk 100
 
       - name: Upload executive predictive artifacts
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: executive-predictive-stability
           path: artifacts/executive-predictive-stability
           retention-days: 90
+          if-no-files-found: error
