@@ -36,39 +36,39 @@ jobs:
           echo "" >> ci-incident-intelligence.md
 
           python - <<'PY'
-from pathlib import Path
-import os
+          from pathlib import Path
+          import os
 
-workflow = os.getenv('WORKFLOW_NAME', '')
-conclusion = os.getenv('WORKFLOW_CONCLUSION', '')
+          workflow = os.getenv('WORKFLOW_NAME', '')
+          conclusion = os.getenv('WORKFLOW_CONCLUSION', '')
 
-lines = []
-lines.append('## Incident Classification')
+          lines = []
+          lines.append('## Incident Classification')
 
-if conclusion == 'success':
-    lines.append('- No active CI incident detected.')
-else:
-    lines.append('- CI incident detected.')
+          if conclusion == 'success':
+              lines.append('- No active CI incident detected.')
+          else:
+              lines.append('- CI incident detected.')
 
-    if 'Monitorador' in workflow:
-        lines.append('- Classification: probable coverage or deterministic test regression.')
-        lines.append('- Suggested action: inspect coverage summary and flaky patterns.')
-    elif 'Post Merge' in workflow:
-        lines.append('- Classification: operational observability regression.')
-        lines.append('- Suggested action: inspect workflow aggregation and GitHub API access.')
-    else:
-        lines.append('- Classification: generic CI regression.')
-        lines.append('- Suggested action: inspect workflow logs and affected files.')
+              if 'Monitorador' in workflow:
+                  lines.append('- Classification: probable coverage or deterministic test regression.')
+                  lines.append('- Suggested action: inspect coverage summary and flaky patterns.')
+              elif 'Post Merge' in workflow:
+                  lines.append('- Classification: operational observability regression.')
+                  lines.append('- Suggested action: inspect workflow aggregation and GitHub API access.')
+              else:
+                  lines.append('- Classification: generic CI regression.')
+                  lines.append('- Suggested action: inspect workflow logs and affected files.')
 
-lines.append('')
-lines.append('## Operational Recommendations')
-lines.append('- Verify whether failure is flaky or structural.')
-lines.append('- Correlate PR, workflow and deployment impact.')
-lines.append('- Preserve governance gates before merge.')
-lines.append('- Avoid rerun storms and duplicate retries.')
+          lines.append('')
+          lines.append('## Operational Recommendations')
+          lines.append('- Verify whether failure is flaky or structural.')
+          lines.append('- Correlate PR, workflow and deployment impact.')
+          lines.append('- Preserve governance gates before merge.')
+          lines.append('- Avoid rerun storms and duplicate retries.')
 
-Path('incident-summary.md').write_text('\n'.join(lines), encoding='utf-8')
-PY
+          Path('incident-summary.md').write_text('\n'.join(lines), encoding='utf-8')
+          PY
 
           cat incident-summary.md >> ci-incident-intelligence.md
 

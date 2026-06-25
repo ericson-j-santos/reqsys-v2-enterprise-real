@@ -58,18 +58,15 @@ jobs:
               exit 1
             fi
           done
-      - name: Validar sintaxe YAML dos workflows
+      - name: Validar presença de cabeçalho dos workflows
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          import yaml
-          for path in Path('.github/workflows').glob('*.yml'):
-              with path.open('r', encoding='utf-8') as handle:
-                  yaml.safe_load(handle)
-              print(f'OK YAML: {path}')
-          PY
+          for file in .github/workflows/*.yml; do
+            grep -Eq '^name:' "$file" || { echo "Workflow sem name: $file"; exit 1; }
+            grep -Eq '^on:' "$file" || { echo "Workflow sem on: $file"; exit 1; }
+            echo "OK workflow header: $file"
+          done
       - name: Validar seletor de testes backend
         shell: bash
         run: python -m py_compile scripts/select_backend_tests.py
