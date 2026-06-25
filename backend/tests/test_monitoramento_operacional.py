@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.api.monitoramento_operacional import ItemMonitorado, classificar_estado_geral
+from app.api.monitoramento_operacional import ItemMonitorado, _metric_line, classificar_estado_geral
 from app.main import app
 
 
@@ -66,7 +66,8 @@ def test_runtime_observability_readiness_e_liveness():
 
     assert readiness.status_code == 200
     assert liveness.status_code == 200
-    assert readiness.json()['data']['ready'] is True
+    assert readiness.json()['data']['ready'] is False
+    assert readiness.json()['data']['readiness_reason'] == 'runtime_degraded'
     assert liveness.json()['data']['alive'] is True
 
 
@@ -82,6 +83,14 @@ def test_runtime_observability_metrics_prometheus_text_plain():
     assert 'reqsys_runtime_blocked_items' in text
     assert 'reqsys_runtime_uptime_seconds' in text
     assert '<script' not in text.lower()
+
+
+def test_runtime_observability_metric_line_escapa_labels_prometheus():
+    line = _metric_line('reqsys_runtime_up', 1, {'environment': 'prod"\nunsafe', 'service': 'reqsys\\api'})
+
+    assert 'environment="prod\\"\\nunsafe"' in line
+    assert 'service="reqsys\\\\api"' in line
+    assert '\nunsafe' not in line.replace('\\nunsafe', '')
 
 
 def test_classificar_estado_geral_prioriza_bloqueio():
