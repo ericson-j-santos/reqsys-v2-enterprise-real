@@ -1,0 +1,65 @@
+{
+  "domain": "REQSYS#003",
+  "name": "IA_OBSERVABILIDADE_TELEMETRIA_ANALYTICS",
+  "increment": "OBS-P0.1",
+  "status": "implemented_pending_ci",
+  "target_branch": "ai/observability",
+  "required_event_fields": [
+    "event_name",
+    "event_type",
+    "module",
+    "action",
+    "status",
+    "severity",
+    "correlation_id",
+    "trace_id",
+    "session_id",
+    "environment",
+    "timestamp"
+  ],
+  "evidence": [
+    {
+      "id": "OBS-EVD-001",
+      "type": "contract",
+      "path": "backend/app/core/telemetry_contract.py",
+      "status": "implemented"
+    },
+    {
+      "id": "OBS-EVD-002",
+      "type": "runtime_api",
+      "path": "backend/app/api/telemetry_analytics.py",
+      "status": "implemented"
+    },
+    {
+      "id": "OBS-EVD-003",
+      "type": "test",
+      "path": "backend/tests/test_telemetry_contract.py",
+      "status": "implemented"
+    },
+    {
+      "id": "OBS-EVD-004",
+      "type": "ci_gate",
+      "path": ".github/workflows/observability-contract.yml",
+      "status": "implemented"
+    },
+    {
+      "id": "OBS-EVD-005",
+      "type": "documentation",
+      "path": "docs/observabilidade/TELEMETRIA_ANALYTICS_CONTRATO.md",
+      "status": "implemented"
+    }
+  ],
+  "kpis": {
+    "telemetry_contract_coverage_pct": 100,
+    "runtime_visibility_pct": 65,
+    "alert_coverage_pct": 25,
+    "trace_usefulness_pct": 60,
+    "evidence_traceability_pct": 70
+  },
+  "known_gaps": [
+    "dashboard_runtime_graph",
+    "full_alert_coverage",
+    "opentelemetry_collector_integration",
+    "frontend_drilldown"
+  ]
+}
