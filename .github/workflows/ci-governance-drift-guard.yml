@@ -1,0 +1,150 @@
+name: CI Governance Drift Guard
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '15 */6 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ci-governance-drift-guard
+  cancel-in-progress: true
+
+jobs:
+  drift-guard:
+    name: Detect CI governance drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build drift report
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ci-governance-drift-guard
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          from datetime import datetime, timezone
+
+          critical = {
+              '.github/workflows/ci.yml': {
+                  'triggers_any': ['pull_request', 'push', 'workflow_dispatch'],
+                  'artifact_required': False,
+                  'write_permissions_allowed': False,
+              },
+              '.github/workflows/pr-evidence-gate.yml': {
+                  'triggers_any': ['pull_request', 'workflow_dispatch'],
+                  'artifact_required': True,
+                  'write_permissions_allowed': False,
+              },
+              '.github/workflows/pr-governed-ci-validation.yml': {
+                  'triggers_any': ['pull_request', 'workflow_dispatch'],
+                  'artifact_required': True,
+                  'write_permissions_allowed': False,
+              },
+              '.github/workflows/pr-ci-watch.yml': {
+                  'triggers_any': ['pull_request', 'workflow_dispatch', 'workflow_run'],
+                  'artifact_required': True,
+                  'write_permissions_allowed': False,
+              },
+              '.github/workflows/pr-conflict-guard.yml': {
+                  'triggers_any': ['pull_request', 'workflow_dispatch'],
+                  'artifact_required': False,
+                  'write_permissions_allowed': False,
+              },
+              '.github/workflows/ci-runtime-health-summary.yml': {
+                  'triggers_any': ['workflow_dispatch', 'schedule'],
+                  'artifact_required': True,
+                  'write_permissions_allowed': False,
+              },
+          }
+
+          failures = []
+          observations = []
+
+          for file_name, rules in critical.items():
+              path = Path(file_name)
+              if not path.exists():
+                  failures.append(f'critical workflow removed: {file_name}')
+                  observations.append({'file': file_name, 'status': 'missing'})
+                  continue
+
+              text = path.read_text(encoding='utf-8')
+              lowered = text.lower()
+              file_failures = []
+
+              if not any(trigger in lowered for trigger in rules['triggers_any']):
+                  file_failures.append('missing required trigger')
+
+              if rules['artifact_required'] and 'actions/upload-artifact' not in lowered:
+                  file_failures.append('missing required artifact upload')
+
+              if not rules['write_permissions_allowed']:
+                  risky_tokens = ['write-all', 'contents: write', 'actions: write', 'pull-requests: write']
+                  risky = [token for token in risky_tokens if token in lowered]
+                  if risky:
+                      file_failures.append('unexpected elevated permission: ' + ', '.join(risky))
+
+              for item in file_failures:
+                  failures.append(f'{file_name}: {item}')
+
+              observations.append({
+                  'file': file_name,
+                  'status': 'failed' if file_failures else 'passed',
+                  'failures': file_failures,
+              })
+
+          report = {
+              'schema_version': '1.0.0',
+              'generated_at': datetime.now(timezone.utc).isoformat(),
+              'status': 'failed' if failures else 'passed',
+              'failures': failures,
+              'observations': observations,
+          }
+
+          out = Path('artifacts/ci-governance-drift-guard')
+          (out / 'drift-report.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
+
+          lines = [
+              '# CI Governance Drift Guard',
+              '',
+              f"- Status: {report['status']}",
+              f"- Failures: {len(failures)}",
+              f"- Generated at: {report['generated_at']}",
+              '',
+              '## Failures',
+          ]
+          if failures:
+              lines.extend(f'- {failure}' for failure in failures)
+          else:
+              lines.append('- None')
+          lines.extend(['', '## Observations'])
+          for item in observations:
+              lines.append(f"- {item['file']}: {item['status']}")
+
+          (out / 'drift-report.md').write_text('\n'.join(lines), encoding='utf-8')
+          print('\n'.join(lines))
+
+          if failures:
+              raise SystemExit(1)
+          PY
+
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-governance-drift-report
+          path: artifacts/ci-governance-drift-guard/
+          if-no-files-found: error
+          retention-days: 30
