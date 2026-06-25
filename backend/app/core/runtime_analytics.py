@@ -18,7 +18,6 @@ from sqlalchemy import (
     select,
 )
 
-
 _ALLOWED_SNAPSHOT_FIELDS = {
     'correlation_id',
     'generated_at',
