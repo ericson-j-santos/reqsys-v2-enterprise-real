@@ -1,0 +1,202 @@
+name: Governed Promotion Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'Branch/tag/sha de origem para promoção'
+        required: true
+        default: 'dev'
+        type: string
+      target_environment:
+        description: 'Ambiente alvo'
+        required: true
+        default: 'homolog'
+        type: choice
+        options:
+          - homolog
+          - prod
+      dry_run:
+        description: 'Executar somente simulação, sem criar PR/tag/promoção'
+        required: true
+        default: true
+        type: boolean
+      change_ticket:
+        description: 'Ticket/issue/change request obrigatório para produção'
+        required: false
+        type: string
+      approve_prod_promotion:
+        description: 'Confirmação textual obrigatória para produção: APROVO-PROD'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: governed-promotion-${{ github.event.inputs.target_environment }}
+  cancel-in-progress: false
+
+env:
+  CORRELATION_ID: governed-promotion-${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  promotion-policy:
+    name: Promotion Policy
+    runs-on: ubuntu-latest
+    outputs:
+      approved: ${{ steps.policy.outputs.approved }}
+      target_branch: ${{ steps.policy.outputs.target_branch }}
+      blocked_reason: ${{ steps.policy.outputs.blocked_reason }}
+      risk_level: ${{ steps.policy.outputs.risk_level }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Avaliar política de promoção
+        id: policy
+        env:
+          SOURCE_REF: ${{ github.event.inputs.source_ref }}
+          TARGET_ENVIRONMENT: ${{ github.event.inputs.target_environment }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          CHANGE_TICKET: ${{ github.event.inputs.change_ticket }}
+          APPROVE_PROD_PROMOTION: ${{ github.event.inputs.approve_prod_promotion }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/governed-promotion
+
+          target_branch=""
+          blocked_reason=""
+          risk_level="medium"
+
+          case "$TARGET_ENVIRONMENT" in
+            homolog)
+              target_branch="homolog"
+              risk_level="medium"
+              ;;
+            prod)
+              target_branch="main"
+              risk_level="high"
+              ;;
+            *)
+              blocked_reason="ambiente alvo inválido"
+              ;;
+          esac
+
+          git fetch origin "$SOURCE_REF" || blocked_reason="source_ref não encontrado: $SOURCE_REF"
+          git fetch origin "$target_branch" || true
+
+          if [ "$TARGET_ENVIRONMENT" = "prod" ]; then
+            if [ -z "$CHANGE_TICKET" ]; then
+              blocked_reason="produção exige change_ticket"
+            fi
+            if [ "$APPROVE_PROD_PROMOTION" != "APROVO-PROD" ]; then
+              blocked_reason="produção exige confirmação textual APROVO-PROD"
+            fi
+            if [ "$DRY_RUN" = "false" ]; then
+              blocked_reason="promoção real para produção permanece bloqueada neste incremento inicial"
+            fi
+          fi
+
+          if [ -n "$target_branch" ] && git rev-parse --verify "origin/$target_branch" >/dev/null 2>&1; then
+            git diff --name-only "origin/$target_branch...origin/$SOURCE_REF" | tee artifacts/governed-promotion/changed-files.txt
+          else
+            touch artifacts/governed-promotion/changed-files.txt
+          fi
+
+          sensitive_count=$(grep -Eic '(^|/)(auth|security|secrets|vault|cofre|jwt|cors|deploy|fly|terraform|infra|migrations|database|db|prod|production|homolog|environments?)/|(^|/)\.env|(^|/)docker-compose\.prod\.ya?ml$|(^|/)\.github/workflows/(release|deploy|production|prod|fly).*\.ya?ml$' artifacts/governed-promotion/changed-files.txt || true)
+
+          if [ "$sensitive_count" -gt 0 ]; then
+            risk_level="high"
+            if [ "$TARGET_ENVIRONMENT" = "homolog" ]; then
+              blocked_reason="promoção para homolog com alterações sensíveis exige revisão manual fora do auto-promotion"
+            fi
+          fi
+
+          approved="false"
+          if [ -z "$blocked_reason" ]; then
+            approved="true"
+          fi
+
+          jq -n \
+            --arg schema_version "1.0.0" \
+            --arg correlation_id "$CORRELATION_ID" \
+            --arg source_ref "$SOURCE_REF" \
+            --arg target_environment "$TARGET_ENVIRONMENT" \
+            --arg target_branch "$target_branch" \
+            --arg dry_run "$DRY_RUN" \
+            --arg approved "$approved" \
+            --arg risk_level "$risk_level" \
+            --arg blocked_reason "$blocked_reason" \
+            --arg change_ticket "$CHANGE_TICKET" \
+            '{schema_version:$schema_version,correlation_id:$correlation_id,source_ref:$source_ref,target_environment:$target_environment,target_branch:$target_branch,dry_run:($dry_run=="true"),approved:($approved=="true"),risk_level:$risk_level,blocked_reason:$blocked_reason,change_ticket:$change_ticket}' \
+            > artifacts/governed-promotion/promotion-policy.json
+
+          cat artifacts/governed-promotion/promotion-policy.json
+
+          echo "approved=$approved" >> "$GITHUB_OUTPUT"
+          echo "target_branch=$target_branch" >> "$GITHUB_OUTPUT"
+          echo "blocked_reason=$blocked_reason" >> "$GITHUB_OUTPUT"
+          echo "risk_level=$risk_level" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar artifact de política
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-promotion-evidence
+          path: artifacts/governed-promotion/
+          if-no-files-found: error
+
+  create-promotion-pr:
+    name: Create Promotion PR
+    runs-on: ubuntu-latest
+    needs: promotion-policy
+    if: needs.promotion-policy.outputs.approved == 'true' && github.event.inputs.dry_run == 'false' && github.event.inputs.target_environment == 'homolog'
+    environment: homolog
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Criar PR de promoção para homolog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REF: ${{ github.event.inputs.source_ref }}
+          TARGET_BRANCH: ${{ needs.promotion-policy.outputs.target_branch }}
+          CORRELATION_ID: ${{ env.CORRELATION_ID }}
+        run: |
+          set -euo pipefail
+
+          gh pr create \
+            --base "$TARGET_BRANCH" \
+            --head "$SOURCE_REF" \
+            --title "promotion(homolog): promover $SOURCE_REF" \
+            --body "Promoção governada para homolog. Correlation ID: $CORRELATION_ID. Artifact: governed-promotion-evidence." \
+            --draft
+
+  summary:
+    name: Promotion Summary
+    runs-on: ubuntu-latest
+    needs: promotion-policy
+    if: always()
+    steps:
+      - name: Resumo operacional
+        run: |
+          set -euo pipefail
+          {
+            echo "## Governed Promotion Pipeline"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|---|---|"
+            echo "| Correlation ID | $CORRELATION_ID |"
+            echo "| Origem | ${{ github.event.inputs.source_ref }} |"
+            echo "| Ambiente alvo | ${{ github.event.inputs.target_environment }} |"
+            echo "| Dry run | ${{ github.event.inputs.dry_run }} |"
+            echo "| Aprovado | ${{ needs.promotion-policy.outputs.approved }} |"
+            echo "| Risco | ${{ needs.promotion-policy.outputs.risk_level }} |"
+            echo "| Bloqueio | ${{ needs.promotion-policy.outputs.blocked_reason }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

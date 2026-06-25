@@ -1,0 +1,171 @@
+name: Runtime Risk Scoring
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Número do PR para análise manual de risco'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: runtime-risk-scoring-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+  cancel-in-progress: true
+
+env:
+  CORRELATION_ID: runtime-risk-${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  risk-scoring:
+    name: Runtime Risk Scoring
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolver PR alvo
+        id: target
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_number=${{ github.event.inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Coletar metadados e diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.target.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/runtime-risk-scoring
+
+          gh pr view "$PR_NUMBER" \
+            --json number,title,state,isDraft,baseRefName,headRefName,mergeable,reviewDecision,changedFiles,additions,deletions,author,url \
+            > artifacts/runtime-risk-scoring/pr.json
+
+          gh pr diff "$PR_NUMBER" --name-only \
+            | tee artifacts/runtime-risk-scoring/changed-files.txt
+
+      - name: Calcular score de risco
+        run: |
+          set -euo pipefail
+
+          FILES="artifacts/runtime-risk-scoring/changed-files.txt"
+          PR_JSON="artifacts/runtime-risk-scoring/pr.json"
+
+          changed_files="$(jq -r '.changedFiles' "$PR_JSON")"
+          additions="$(jq -r '.additions' "$PR_JSON")"
+          deletions="$(jq -r '.deletions' "$PR_JSON")"
+          base_ref="$(jq -r '.baseRefName' "$PR_JSON")"
+          is_draft="$(jq -r '.isDraft' "$PR_JSON")"
+          mergeable="$(jq -r '.mergeable' "$PR_JSON")"
+          review_decision="$(jq -r '.reviewDecision // "UNKNOWN"' "$PR_JSON")"
+
+          score=0
+          reasons=()
+          blockers=()
+
+          add_reason() { reasons+=("$1"); }
+          add_blocker() { blockers+=("$1"); }
+
+          if [ "$changed_files" -gt 10 ]; then score=$((score + 10)); add_reason "mais de 10 arquivos alterados"; fi
+          if [ "$changed_files" -gt 25 ]; then score=$((score + 15)); add_reason "mais de 25 arquivos alterados"; fi
+          if [ "$additions" -gt 500 ]; then score=$((score + 10)); add_reason "mais de 500 linhas adicionadas"; fi
+          if [ "$additions" -gt 1500 ]; then score=$((score + 20)); add_reason "mais de 1500 linhas adicionadas"; fi
+          if [ "$deletions" -gt 500 ]; then score=$((score + 10)); add_reason "mais de 500 linhas removidas"; fi
+
+          if [ "$is_draft" = "true" ]; then score=$((score + 15)); add_reason "PR em draft"; fi
+          if [ "$mergeable" != "MERGEABLE" ] && [ "$mergeable" != "true" ]; then score=$((score + 20)); add_blocker "PR não mergeável"; fi
+          if [ "$review_decision" = "CHANGES_REQUESTED" ]; then score=$((score + 30)); add_blocker "review com mudanças solicitadas"; fi
+
+          if [ "$base_ref" = "main" ] || [ "$base_ref" = "prod" ] || [ "$base_ref" = "production" ]; then
+            score=$((score + 20))
+            add_reason "base de produção/main"
+          fi
+
+          declare -A patterns
+          patterns[auth]='auth|login|oauth|msal|entra|azure|jwt'
+          patterns[security]='security|secrets|vault|cofre|token|credential|password|lgpd|pii'
+          patterns[infra]='docker|fly|nginx|terraform|infra|deploy|environment|prod|production|homolog'
+          patterns[database]='migration|database|db|sql|schema'
+          patterns[workflow]='^\.github/workflows/'
+          patterns[frontend]='frontend|vite|playwright|e2e'
+          patterns[backend]='backend|api|service|router'
+          patterns[docs]='^docs/'
+
+          auth_count=$(grep -Eic "${patterns[auth]}" "$FILES" || true)
+          security_count=$(grep -Eic "${patterns[security]}" "$FILES" || true)
+          infra_count=$(grep -Eic "${patterns[infra]}" "$FILES" || true)
+          database_count=$(grep -Eic "${patterns[database]}" "$FILES" || true)
+          workflow_count=$(grep -Eic "${patterns[workflow]}" "$FILES" || true)
+          frontend_count=$(grep -Eic "${patterns[frontend]}" "$FILES" || true)
+          backend_count=$(grep -Eic "${patterns[backend]}" "$FILES" || true)
+          docs_count=$(grep -Eic "${patterns[docs]}" "$FILES" || true)
+
+          if [ "$auth_count" -gt 0 ]; then score=$((score + 25)); add_blocker "alteração em autenticação/autorização"; fi
+          if [ "$security_count" -gt 0 ]; then score=$((score + 30)); add_blocker "alteração em segurança/segredos/dados sensíveis"; fi
+          if [ "$infra_count" -gt 0 ]; then score=$((score + 25)); add_blocker "alteração em infra/deploy/ambiente"; fi
+          if [ "$database_count" -gt 0 ]; then score=$((score + 25)); add_blocker "alteração em banco/schema/migração"; fi
+          if [ "$workflow_count" -gt 0 ]; then score=$((score + 15)); add_reason "alteração em GitHub Actions"; fi
+          if [ "$frontend_count" -gt 0 ] && [ "$backend_count" -gt 0 ]; then score=$((score + 15)); add_reason "alteração full-stack"; fi
+          if [ "$docs_count" -gt 0 ] && [ "$changed_files" -eq "$docs_count" ]; then score=$((score - 10)); add_reason "alteração apenas documental"; fi
+
+          if [ "$score" -lt 0 ]; then score=0; fi
+          if [ "$score" -gt 100 ]; then score=100; fi
+
+          if [ "$score" -ge 75 ]; then risk_level="critical"; elif [ "$score" -ge 50 ]; then risk_level="high"; elif [ "$score" -ge 25 ]; then risk_level="medium"; else risk_level="low"; fi
+
+          requires_manual_approval=false
+          if [ "$risk_level" = "high" ] || [ "$risk_level" = "critical" ] || [ "${#blockers[@]}" -gt 0 ]; then
+            requires_manual_approval=true
+          fi
+
+          printf '%s\n' "${reasons[@]}" > artifacts/runtime-risk-scoring/reasons.txt
+          printf '%s\n' "${blockers[@]}" > artifacts/runtime-risk-scoring/blockers.txt
+
+          jq -n \
+            --arg correlation_id "$CORRELATION_ID" \
+            --arg pr_number "${{ steps.target.outputs.pr_number }}" \
+            --arg base_ref "$base_ref" \
+            --arg score "$score" \
+            --arg risk_level "$risk_level" \
+            --arg requires_manual_approval "$requires_manual_approval" \
+            --argjson changed_files "$changed_files" \
+            --argjson additions "$additions" \
+            --argjson deletions "$deletions" \
+            --argjson reasons "$(jq -R -s -c 'split("\n") | map(select(length > 0))' artifacts/runtime-risk-scoring/reasons.txt)" \
+            --argjson blockers "$(jq -R -s -c 'split("\n") | map(select(length > 0))' artifacts/runtime-risk-scoring/blockers.txt)" \
+            '{schema_version:"1.0.0",correlation_id:$correlation_id,pr_number:$pr_number,base_ref:$base_ref,score:($score|tonumber),risk_level:$risk_level,requires_manual_approval:($requires_manual_approval=="true"),changed_files:$changed_files,additions:$additions,deletions:$deletions,reasons:$reasons,blockers:$blockers}' \
+            > artifacts/runtime-risk-scoring/risk-score.json
+
+          cat artifacts/runtime-risk-scoring/risk-score.json
+
+          {
+            echo "## Runtime Risk Scoring"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|---|---|"
+            echo "| Correlation ID | $CORRELATION_ID |"
+            echo "| PR | #${{ steps.target.outputs.pr_number }} |"
+            echo "| Score | $score |"
+            echo "| Risco | $risk_level |"
+            echo "| Aprovação manual exigida | $requires_manual_approval |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar artifact de risco
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-risk-scoring-evidence
+          path: artifacts/runtime-risk-scoring/
+          if-no-files-found: error
