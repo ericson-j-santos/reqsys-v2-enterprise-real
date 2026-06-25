@@ -62,25 +62,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check --quiet PyYAML
-          python - <<'PY'
-          from pathlib import Path
-          import sys
-          import yaml
+          ruby - <<'RUBY'
+          require 'yaml'
 
           failures = []
-          for path in sorted(Path('.github/workflows').glob('*.yml')):
-              try:
-                  with path.open('r', encoding='utf-8') as handle:
-                      yaml.safe_load(handle)
-                  print(f'OK YAML: {path}')
-              except Exception as exc:
-                  failures.append((path, exc))
-                  print(f'ERRO YAML: {path}: {exc}', file=sys.stderr)
+          Dir['.github/workflows/*.yml'].sort.each do |path|
+            begin
+              YAML.safe_load(File.read(path, encoding: 'UTF-8'), aliases: true)
+              puts "OK YAML: #{path}"
+            rescue StandardError => e
+              failures << [path, e]
+              warn "ERRO YAML: #{path}: #{e.class}: #{e.message}"
+            end
+          end
 
-          if failures:
-              raise SystemExit(1)
-          PY
+          exit(failures.empty? ? 0 : 1)
+          RUBY
       - name: Validar seletor de testes backend
         shell: bash
         run: python -m py_compile scripts/select_backend_tests.py
