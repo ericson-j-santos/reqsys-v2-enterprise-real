@@ -86,11 +86,12 @@ def test_runtime_observability_metrics_prometheus_text_plain():
 
 
 def test_runtime_observability_metric_line_escapa_labels_prometheus():
-    line = _metric_line('reqsys_runtime_up', 1, {'environment': 'prod"\nunsafe', 'service': 'reqsys\\api'})
+    unsafe_environment = 'prod"' + chr(10) + 'unsafe'
+    line = _metric_line('reqsys_runtime_up', 1, {'environment': unsafe_environment, 'service': 'reqsys\\api'})
 
     assert 'environment="prod\\"\\nunsafe"' in line
     assert 'service="reqsys\\\\api"' in line
-    assert '\nunsafe' not in line.replace('\\nunsafe', '')
+    assert chr(10) not in line
 
 
 def test_classificar_estado_geral_prioriza_bloqueio():
