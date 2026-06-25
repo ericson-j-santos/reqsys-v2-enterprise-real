@@ -1,0 +1,32 @@
+name: Runtime Operational Correlation Timeline
+
+on:
+  pull_request:
+    paths:
+      - 'tools/product_intelligence/**'
+      - 'docs/operations/**'
+      - 'docs/evidence/**'
+      - '.github/workflows/runtime-operational-correlation-timeline.yml'
+
+jobs:
+  runtime-operational-correlation-timeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate timeline
+        run: python tools/product_intelligence/generate_runtime_operational_correlation_timeline.py
+      - name: Validate timeline
+        run: |
+          python - <<'PY'
+import json
+from pathlib import Path
+payload = json.loads(Path('reports/github-runtime-analytics/runtime-operational-correlation-timeline.json').read_text(encoding='utf-8'))
+assert payload['mode'] == 'review_only', payload
+assert payload['runtime_state'] == 'TIMELINE_READY', payload
+assert payload['timeline_event_count'] >= 3, payload
+assert payload['confidence_percent'] >= 90, payload
+assert payload['risk_percent'] <= 5, payload
+PY
