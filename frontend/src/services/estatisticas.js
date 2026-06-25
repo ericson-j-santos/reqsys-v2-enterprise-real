@@ -141,6 +141,51 @@ export function calcularResumoEstatisticas(indicadores) {
   return { total, criticos, atencao, externos, invalidos, maturidadeMedia }
 }
 
+export function criarDrilldownIndicador(indicador) {
+  const guardRails = validarIndicador(indicador)
+  const evidencias = Array.isArray(indicador?.evidencias) ? indicador.evidencias : []
+  const pendencias = Array.isArray(indicador?.pendencias) ? indicador.pendencias : []
+  const fonte = indicador?.fonte || {}
+  const possuiPendenciaOperacional = guardRails.length > 0 || pendencias.length > 0 || indicador?.estadoAtual === 'critico'
+
+  return {
+    id: indicador?.id || 'indicador-nao-identificado',
+    titulo: indicador?.nome || 'Indicador sem nome',
+    estadoAtual: indicador?.estadoAtual || 'nao_medido',
+    estadoAlvo: indicador?.estadoAlvo || 'adequado',
+    valorAtual: `${indicador?.valorAtual ?? '-'}${indicador?.unidade || ''}`,
+    categoria: indicador?.categoria || 'sem categoria',
+    tendencia: indicador?.tendencia || 'indefinida',
+    fonte: {
+      id: fonte.id || 'fonte-nao-identificada',
+      tipo: fonte.tipo || 'nao_informada',
+      nome: fonte.nome || 'Fonte não informada',
+      origem: fonte.origem || 'origem-nao-informada',
+      confiabilidade: fonte.confiabilidade || 'baixa',
+      coletadoEm: fonte.coletadoEm || null,
+      ttlMinutos: fonte.ttlMinutos || null,
+      versaoConector: fonte.versaoConector || 'nao_informada'
+    },
+    formula: indicador?.formula || 'não documentada',
+    evidencias,
+    pendencias,
+    guardRails,
+    statusNavegavel: possuiPendenciaOperacional ? 'acao_requerida' : 'operacional',
+    proximaAcao: definirProximaAcao(guardRails, pendencias),
+    trilhaAuditoria: [
+      `indicador:${indicador?.id || 'nao-identificado'}`,
+      `fonte:${fonte.id || 'nao-identificada'}`,
+      `estado:${indicador?.estadoAtual || 'nao_medido'}`
+    ]
+  }
+}
+
+function definirProximaAcao(guardRails, pendencias) {
+  if (guardRails.length) return 'Corrigir contrato do indicador antes de promover o estado operacional.'
+  if (pendencias.length) return pendencias[0]
+  return 'Manter monitoramento e registrar novas evidências antes de elevar maturidade.'
+}
+
 function normalizarValor(valor) {
   if (typeof valor === 'number') return Math.max(0, Math.min(100, valor))
   const convertido = Number(String(valor).replace('%', '').replace(',', '.'))
