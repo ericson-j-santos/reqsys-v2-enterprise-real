@@ -26,6 +26,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Resolver PR alvo
         id: context
         shell: bash
@@ -40,6 +41,11 @@ jobs:
             echo "head_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
             echo "draft=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Preparar diretório de evidência
+        shell: bash
+        run: mkdir -p ci-validation-evidence
+
       - name: Validar estrutura mínima dos workflows
         shell: bash
         run: |
@@ -58,23 +64,42 @@ jobs:
               exit 1
             fi
           done
+
       - name: Validar sintaxe YAML dos workflows
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          import yaml
-          for path in Path('.github/workflows').glob('*.yml'):
-              with path.open('r', encoding='utf-8') as handle:
-                  yaml.safe_load(handle)
-              print(f'OK YAML: {path}')
-          PY
+          ruby - <<'RUBY'
+          require 'yaml'
+          require 'fileutils'
+
+          FileUtils.mkdir_p('ci-validation-evidence')
+          failures = []
+          Dir.glob('.github/workflows/*.yml').sort.each do |path|
+            begin
+              YAML.load_file(path)
+              puts "OK YAML: #{path}"
+            rescue StandardError => e
+              failures << "#{path}: #{e.class}: #{e.message}"
+            end
+          end
+
+          if failures.any?
+            File.write('ci-validation-evidence/yaml-validation.txt', failures.join("\n") + "\n")
+            puts failures.join("\n")
+            exit 1
+          end
+
+          File.write('ci-validation-evidence/yaml-validation.txt', "Todos os workflows .yml foram validados com Ruby YAML.\n")
+          RUBY
+
       - name: Validar seletor de testes backend
         shell: bash
         run: python -m py_compile scripts/select_backend_tests.py
+
       - name: Gerar evidência
         shell: bash
+        if: always()
         run: |
           set -euo pipefail
           mkdir -p ci-validation-evidence
@@ -91,7 +116,9 @@ jobs:
           | Próximo passo | Validar CI real do PR |
           EOF
           cat ci-validation-evidence/pr-${{ steps.context.outputs.pr_number }}-validation.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publicar evidência
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pr-governed-ci-validation-${{ steps.context.outputs.pr_number }}
