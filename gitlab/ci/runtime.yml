@@ -1,0 +1,12 @@
+runtime_backend_smoke:
+  stage: test
+  image: python:3.12-slim
+  rules:
+    - changes:
+        - backend/**/*
+        - runtime/**/*
+        - infra/**/*
+        - gitlab/**/*
+        - .gitlab-ci.yml
+  script:
+    - python -m compileall gitlab/scripts

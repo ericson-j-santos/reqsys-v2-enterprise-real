@@ -17,84 +17,10 @@ variables:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PYTHONUNBUFFERED: "1"
 
-classify_changes:
-  stage: classify
-  image: python:3.12-slim
-  script:
-    - mkdir -p audit
-    - python gitlab/scripts/classify_issue.py --mode pipeline --output audit/change-classification.json
-  artifacts:
-    when: always
-    expire_in: 14 days
-    paths:
-      - audit/change-classification.json
-
-gitlab_governance_validation:
-  stage: governance
-  image: python:3.12-slim
-  script:
-    - mkdir -p audit
-    - python gitlab/scripts/validate_gitlab_governance.py --output audit/gitlab-governance-report.md
-  artifacts:
-    when: always
-    expire_in: 14 days
-    paths:
-      - audit/gitlab-governance-report.md
-
-runtime_backend_smoke:
-  stage: test
-  image: python:3.12-slim
-  rules:
-    - changes:
-        - backend/**/*
-        - runtime/**/*
-        - infra/**/*
-        - gitlab/**/*
-        - .gitlab-ci.yml
-  script:
-    - python -m compileall gitlab/scripts
-
-security_baseline_smoke:
-  stage: security
-  image: alpine:3.20
-  script:
-    - mkdir -p audit
-    - echo "security_status=passed" > audit/gitlab-security-baseline.txt
-  artifacts:
-    when: always
-    expire_in: 14 days
-    paths:
-      - audit/gitlab-security-baseline.txt
-
-gitlab_evidence_summary:
-  stage: evidence
-  image: alpine:3.20
-  script:
-    - mkdir -p audit
-    - |
-      cat > audit/gitlab-evidence-summary.md <<EOF
-      # GitLab Evidence Summary
-
-      Commit: ${CI_COMMIT_SHA}
-      Branch: ${CI_COMMIT_REF_NAME}
-      Pipeline: ${CI_PIPELINE_ID}
-      Source: ${CI_PIPELINE_SOURCE}
-      Status: evidence-generated
-      EOF
-  artifacts:
-    when: always
-    expire_in: 14 days
-    paths:
-      - audit/gitlab-evidence-summary.md
-
-deploy_staging_placeholder:
-  stage: deploy
-  image: alpine:3.20
-  environment:
-    name: staging
-    url: https://staging.example.com
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      when: manual
-  script:
-    - echo "Deploy staging placeholder governado para GitLab Edition"
+include:
+  - local: gitlab/ci/classify.yml
+  - local: gitlab/ci/governance.yml
+  - local: gitlab/ci/runtime.yml
+  - local: gitlab/ci/security.yml
+  - local: gitlab/ci/evidence.yml
+  - local: gitlab/ci/deploy.yml

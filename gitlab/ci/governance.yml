@@ -1,0 +1,11 @@
+gitlab_governance_validation:
+  stage: governance
+  image: python:3.12-slim
+  script:
+    - mkdir -p audit
+    - python gitlab/scripts/validate_gitlab_governance.py --output audit/gitlab-governance-report.md
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - audit/gitlab-governance-report.md

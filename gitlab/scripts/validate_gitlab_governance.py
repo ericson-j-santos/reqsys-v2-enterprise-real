@@ -15,18 +15,37 @@ REQUIRED_FILES = [
     ".gitlab/issue_templates/reqsys_task.md",
     ".gitlab/merge_request_templates/default.md",
     "gitlab/docs/GITLAB_OPERATING_MODEL.md",
+    "gitlab/ci/classify.yml",
+    "gitlab/ci/governance.yml",
+    "gitlab/ci/runtime.yml",
+    "gitlab/ci/security.yml",
+    "gitlab/ci/evidence.yml",
+    "gitlab/ci/deploy.yml",
     "gitlab/scripts/classify_issue.py",
+    "gitlab/scripts/generate_semantic_pipeline_report.py",
     "gitlab/scripts/validate_gitlab_governance.py",
 ]
 
 REQUIRED_CI_TERMS = [
     "stages:",
     "workflow:",
-    "artifacts:",
-    "classify_changes",
-    "gitlab_governance_validation",
-    "gitlab_evidence_summary",
+    "include:",
+    "gitlab/ci/classify.yml",
+    "gitlab/ci/governance.yml",
+    "gitlab/ci/runtime.yml",
+    "gitlab/ci/security.yml",
+    "gitlab/ci/evidence.yml",
+    "gitlab/ci/deploy.yml",
 ]
+
+REQUIRED_INCLUDE_TERMS = {
+    "gitlab/ci/classify.yml": ["classify_changes", "semantic_pipeline_routing", "artifacts:"],
+    "gitlab/ci/governance.yml": ["gitlab_governance_validation", "artifacts:"],
+    "gitlab/ci/runtime.yml": ["runtime_backend_smoke", "rules:", "changes:"],
+    "gitlab/ci/security.yml": ["security_baseline_smoke", "artifacts:"],
+    "gitlab/ci/evidence.yml": ["gitlab_evidence_summary", "artifacts:"],
+    "gitlab/ci/deploy.yml": ["deploy_staging_placeholder", "environment:"],
+}
 
 FORBIDDEN_CI_TERMS = [
     "write-all",
@@ -54,6 +73,15 @@ def validate() -> tuple[bool, list[str]]:
         for term in FORBIDDEN_CI_TERMS:
             if term.lower() in lowered:
                 issues.append(f"FORBIDDEN_CI_TERM: {term}")
+
+    for include_path, required_terms in REQUIRED_INCLUDE_TERMS.items():
+        path = Path(include_path)
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for term in required_terms:
+            if term not in text:
+                issues.append(f"MISSING_INCLUDE_TERM: {include_path}: {term}")
 
     return not issues, issues
 
