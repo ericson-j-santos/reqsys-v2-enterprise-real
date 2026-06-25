@@ -1,3 +1,8 @@
+from app.models.agile_runtime import (  # noqa: F401
+    AgileEvidence,
+    AgileSprint,
+    AgileWorkItem,
+)
 from app.models.ai_quality import QualidadeIASnapshot  # noqa: F401
 from app.models.auditoria import AuditoriaEvento  # noqa: F401
 from app.models.configuracao_lowcode import ConfiguracaoLowCode  # noqa: F401
