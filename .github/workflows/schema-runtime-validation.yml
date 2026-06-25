@@ -1,6 +1,6 @@
 name: Schema Runtime Validation
 
-on:
+"on":
   pull_request:
     paths:
       - "runtime/**"
@@ -11,7 +11,7 @@ on:
       - ".github/workflows/schema-runtime-validation.yml"
   push:
     branches:
-      - main
+      - "main"
     paths:
       - "runtime/**"
       - "tests/schema_runtime/**"
@@ -34,16 +34,28 @@ jobs:
           python-version: "3.11"
 
       - name: Run schema runtime enforcement tests
+        shell: bash
         run: |
+          set -euo pipefail
           python tests/schema_runtime/test_schema_runtime_enforcer.py
 
       - name: Validate runtime valid fixture through CLI
+        shell: bash
         run: |
-          python runtime/schema_runtime_enforcer.py product-intelligence-event examples/runtime/product-intelligence-event.runtime.valid.json --correlation-id ci-runtime-valid
+          set -euo pipefail
+          python runtime/schema_runtime_enforcer.py \
+            product-intelligence-event \
+            examples/runtime/product-intelligence-event.runtime.valid.json \
+            --correlation-id ci-runtime-valid
 
       - name: Validate runtime invalid fixture is blocked
+        shell: bash
         run: |
-          if python runtime/schema_runtime_enforcer.py product-intelligence-event examples/runtime/product-intelligence-event.runtime.invalid-extra-field.json --correlation-id ci-runtime-invalid; then
+          set -euo pipefail
+          if python runtime/schema_runtime_enforcer.py \
+            product-intelligence-event \
+            examples/runtime/product-intelligence-event.runtime.invalid-extra-field.json \
+            --correlation-id ci-runtime-invalid; then
             echo "Invalid runtime fixture unexpectedly passed"
             exit 1
           fi
