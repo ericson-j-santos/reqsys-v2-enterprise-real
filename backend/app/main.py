@@ -8,6 +8,7 @@ import app.models  # noqa: F401
 from app.api import (
     actions_runtime_center,
     agents,
+    agile_runtime,
     auditoria,
     auth,
     codex_governado,
@@ -63,6 +64,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(requisitos.router)
+app.include_router(agile_runtime.router)
 app.include_router(dashboard.router)
 app.include_router(estatisticas.router)
 app.include_router(figma_github.router)
@@ -116,6 +118,7 @@ def root():
             'runtime_readiness': '/api/runtime/readiness',
             'runtime_liveness': '/api/runtime/liveness',
             'runtime_metrics': '/api/runtime/metrics',
+            'agile_runtime': '/v1/agile-runtime/resumo',
         }
     )
 
