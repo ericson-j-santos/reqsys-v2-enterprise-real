@@ -37,8 +37,8 @@ jobs:
         Governança Padrão Ouro
       OPTIONAL_WORKFLOW_NAMES: |
         NGINX Security Profile
-      MAX_WAIT_SECONDS: '60'
-      POLL_SECONDS: '30'
+      MAX_WAIT_SECONDS: '180'
+      POLL_SECONDS: '15'
     steps:
       - name: Build audit evidence
         id: evidence
@@ -49,8 +49,6 @@ jobs:
 
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const runCache = new Map();
-            const artifactCache = new Map();
 
             async function getPullRequest() {
               if (context.payload.pull_request) return context.payload.pull_request;
@@ -58,7 +56,7 @@ jobs:
               if (!inputNumber) {
                 throw new Error('pr_number is required for workflow_dispatch runs.');
               }
-              const { data } = await withRetry(() => github.rest.pulls.get({ owner, repo, pull_number: Number(inputNumber) }));
+              const { data } = await github.rest.pulls.get({ owner, repo, pull_number: Number(inputNumber) });
               return data;
             }
 
@@ -73,81 +71,46 @@ jobs:
               return new Promise((resolve) => setTimeout(resolve, ms));
             }
 
-            function isRateLimitError(error) {
-              return error && (error.status === 403 || error.status === 429) && String(error.message || '').toLowerCase().includes('rate limit');
-            }
-
-            async function withRetry(operation, attempts = 3) {
-              let lastError;
-              for (let attempt = 1; attempt <= attempts; attempt += 1) {
-                try {
-                  return await operation();
-                } catch (error) {
-                  lastError = error;
-                  if (!isRateLimitError(error) || attempt === attempts) break;
-                  const waitMs = attempt * 15000;
-                  core.warning(`GitHub API rate limit detected. Backing off for ${waitMs / 1000}s before retry ${attempt + 1}/${attempts}.`);
-                  await sleep(waitMs);
-                }
-              }
-              throw lastError;
-            }
-
             async function listRuns(headSha) {
-              if (runCache.has(headSha)) return runCache.get(headSha);
-
-              const { data } = await withRetry(() => github.rest.actions.listWorkflowRunsForRepo({
+              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
                 owner,
                 repo,
                 head_sha: headSha,
-                per_page: 50,
-              }));
+                per_page: 100,
+              });
 
-              const runSummaries = data.workflow_runs.map((run) => ({
-                id: run.id,
-                name: run.name,
-                event: run.event,
-                status: run.status,
-                conclusion: run.conclusion,
-                head_sha: run.head_sha,
-                html_url: run.html_url,
-                created_at: run.created_at,
-                updated_at: run.updated_at,
-                artifacts: [],
-              }));
-
-              runCache.set(headSha, runSummaries);
-              return runSummaries;
-            }
-
-            async function listArtifactsForSuccessfulRequiredRuns(runSummaries, requiredWorkflowNames) {
-              const requiredSuccessfulRuns = runSummaries.filter((run) =>
-                requiredWorkflowNames.includes(run.name) && run.status === 'completed' && run.conclusion === 'success'
-              );
-
-              const cappedRuns = requiredSuccessfulRuns.slice(0, 3);
-              for (const run of cappedRuns) {
-                if (artifactCache.has(run.id)) {
-                  run.artifacts = artifactCache.get(run.id);
-                  continue;
+              const runSummaries = [];
+              for (const run of runs) {
+                let artifacts = [];
+                try {
+                  artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                    owner,
+                    repo,
+                    run_id: run.id,
+                    per_page: 100,
+                  });
+                } catch (error) {
+                  core.warning(`Could not list artifacts for run ${run.id}: ${error.message}`);
                 }
 
-                const { data } = await withRetry(() => github.rest.actions.listWorkflowRunArtifacts({
-                  owner,
-                  repo,
-                  run_id: run.id,
-                  per_page: 20,
-                }));
-
-                const artifacts = data.artifacts.map((artifact) => ({
-                  id: artifact.id,
-                  name: artifact.name,
-                  expired: artifact.expired,
-                  size_in_bytes: artifact.size_in_bytes,
-                  archive_download_url: artifact.archive_download_url,
-                }));
-                artifactCache.set(run.id, artifacts);
-                run.artifacts = artifacts;
+                runSummaries.push({
+                  id: run.id,
+                  name: run.name,
+                  event: run.event,
+                  status: run.status,
+                  conclusion: run.conclusion,
+                  head_sha: run.head_sha,
+                  html_url: run.html_url,
+                  created_at: run.created_at,
+                  updated_at: run.updated_at,
+                  artifacts: artifacts.map((artifact) => ({
+                    id: artifact.id,
+                    name: artifact.name,
+                    expired: artifact.expired,
+                    size_in_bytes: artifact.size_in_bytes,
+                    archive_download_url: artifact.archive_download_url,
+                  })),
+                });
               }
               return runSummaries;
             }
@@ -185,7 +148,7 @@ jobs:
                 return { name, matching_runs: matchingRuns.length };
               });
 
-              const allArtifacts = runSummaries.flatMap((run) => (run.artifacts || []).map((artifact) => ({ ...artifact, workflow: run.name, run_id: run.id })));
+              const allArtifacts = runSummaries.flatMap((run) => run.artifacts.map((artifact) => ({ ...artifact, workflow: run.name, run_id: run.id })));
 
               return {
                 status: failures.length === 0 && pending.length === 0 ? 'passed' : failures.length > 0 ? 'failed' : 'pending',
@@ -197,55 +160,68 @@ jobs:
               };
             }
 
-            const pr = await getPullRequest();
-            const headSha = pr.head.sha;
-            const requiredWorkflowNames = parseList(process.env.REQUIRED_WORKFLOW_NAMES);
-            const optionalWorkflowNames = parseList(process.env.OPTIONAL_WORKFLOW_NAMES);
-            const maxWaitSeconds = Number(process.env.MAX_WAIT_SECONDS || '60');
-            const pollSeconds = Number(process.env.POLL_SECONDS || '30');
-            const deadline = Date.now() + maxWaitSeconds * 1000;
-
-            let runSummaries = [];
-            let gate = null;
-
-            do {
-              runSummaries = await listRuns(headSha);
-              gate = evaluate({ headSha, runSummaries, requiredWorkflowNames, optionalWorkflowNames });
-              if (gate.status !== 'pending') break;
-              runCache.delete(headSha);
-              core.info(`Evidence still pending. Waiting ${pollSeconds}s before one lightweight recheck.`);
-              await sleep(pollSeconds * 1000);
-            } while (Date.now() < deadline);
-
-            if (gate.status === 'pending') {
-              gate.failures.push(...gate.pending);
-              gate.status = 'failed';
-            }
+            let audit;
+            let headSha = context.sha;
 
             try {
-              runSummaries = await listArtifactsForSuccessfulRequiredRuns(runSummaries, requiredWorkflowNames);
-              gate = evaluate({ headSha, runSummaries, requiredWorkflowNames, optionalWorkflowNames });
-            } catch (error) {
-              core.warning(`Artifact collection skipped due to GitHub API limitation: ${error.message}`);
-            }
+              const pr = await getPullRequest();
+              headSha = pr.head.sha;
+              const requiredWorkflowNames = parseList(process.env.REQUIRED_WORKFLOW_NAMES);
+              const optionalWorkflowNames = parseList(process.env.OPTIONAL_WORKFLOW_NAMES);
+              const maxWaitSeconds = Number(process.env.MAX_WAIT_SECONDS || '180');
+              const pollSeconds = Number(process.env.POLL_SECONDS || '15');
+              const deadline = Date.now() + maxWaitSeconds * 1000;
 
-            const audit = {
-              schema_version: '1.0.2',
-              generated_at: new Date().toISOString(),
-              repository: `${owner}/${repo}`,
-              pr: {
-                number: pr.number,
-                title: pr.title,
-                draft: pr.draft,
-                state: pr.state,
-                head_ref: pr.head.ref,
-                base_ref: pr.base.ref,
-                head_sha: headSha,
-                html_url: pr.html_url,
-              },
-              gate,
-              workflow_runs: runSummaries,
-            };
+              let runSummaries = [];
+              let gate = null;
+
+              do {
+                runSummaries = await listRuns(headSha);
+                gate = evaluate({ headSha, runSummaries, requiredWorkflowNames, optionalWorkflowNames });
+                if (gate.status !== 'pending') break;
+                core.info(`Evidence still pending. Waiting ${pollSeconds}s before rechecking.`);
+                await sleep(pollSeconds * 1000);
+              } while (Date.now() < deadline);
+
+              if (gate.status === 'pending') {
+                gate.failures.push(...gate.pending);
+                gate.status = 'failed';
+              }
+
+              audit = {
+                schema_version: '1.0.2',
+                generated_at: new Date().toISOString(),
+                repository: `${owner}/${repo}`,
+                pr: {
+                  number: pr.number,
+                  title: pr.title,
+                  draft: pr.draft,
+                  state: pr.state,
+                  head_ref: pr.head.ref,
+                  base_ref: pr.base.ref,
+                  head_sha: headSha,
+                  html_url: pr.html_url,
+                },
+                gate,
+                workflow_runs: runSummaries,
+              };
+            } catch (error) {
+              audit = {
+                schema_version: '1.0.2',
+                generated_at: new Date().toISOString(),
+                repository: `${owner}/${repo}`,
+                pr: null,
+                gate: {
+                  status: 'failed',
+                  failures: [`Evidence build error: ${error.message}`],
+                  pending: [],
+                  required_workflows: [],
+                  optional_workflows: [],
+                  observed_artifacts: [],
+                },
+                workflow_runs: [],
+              };
+            }
 
             fs.mkdirSync('audit', { recursive: true });
             fs.writeFileSync('audit/pr-evidence-gate.json', JSON.stringify(audit, null, 2));
@@ -253,8 +229,8 @@ jobs:
               `# PR Evidence Gate`,
               ``,
               `- Repository: ${owner}/${repo}`,
-              `- PR: #${pr.number}`,
-              `- Head SHA: ${headSha}`,
+              `- PR: ${audit.pr ? `#${audit.pr.number}` : 'unresolved'}`,
+              `- Head SHA: ${audit.pr ? audit.pr.head_sha : headSha}`,
               `- Status: ${audit.gate.status}`,
               `- Failures: ${audit.gate.failures.length}`,
               `- Pending after wait: ${audit.gate.pending.length}`,
@@ -264,11 +240,7 @@ jobs:
             ].join('\n'));
 
             core.setOutput('status', audit.gate.status);
-            core.setOutput('head_sha', headSha);
-
-            if (audit.gate.status !== 'passed') {
-              core.setFailed(audit.gate.failures.join('\n'));
-            }
+            core.setOutput('head_sha', audit.pr ? audit.pr.head_sha : headSha);
 
       - name: Upload audit evidence
         if: always()
@@ -278,3 +250,14 @@ jobs:
           path: audit/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Enforce evidence gate result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          status='${{ steps.evidence.outputs.status }}'
+          if [[ "$status" != "passed" ]]; then
+            echo "PR Evidence Gate failed with status: ${status:-unknown}"
+            exit 1
+          fi
