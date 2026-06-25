@@ -58,6 +58,12 @@ jobs:
               exit 1
             fi
           done
+      - name: Preparar dependência YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install "PyYAML==6.0.2"
       - name: Validar sintaxe YAML dos workflows
         shell: bash
         run: |
