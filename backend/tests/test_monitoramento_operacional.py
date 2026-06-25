@@ -58,6 +58,28 @@ def test_runtime_observability_health_expoe_snapshot_governado():
     assert data['evidence']['deploy_gate_relaxed'] is False
 
 
+def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
+    correlation_id = 'corr-runtime-dashboard-schema-test'
+    res = TestClient(app).get('/api/runtime/dashboard', headers={'X-Correlation-ID': correlation_id})
+
+    assert res.status_code == 200
+    body = res.json()
+    data = body['data']
+    card_ids = {card['id'] for card in data['cards']}
+    section_ids = {section['id'] for section in data['sections']}
+
+    assert body['meta']['correlation_id'] == correlation_id
+    assert data['schema_version'] == '1.0.0'
+    assert data['correlation_id'] == correlation_id
+    assert data['layout']['responsive'] is True
+    assert data['data_source']['endpoint'] == '/api/runtime/health'
+    assert {'runtime-status', 'risk-score', 'pending-items', 'uptime'} <= card_ids
+    assert {'public-smoke', 'governance-evidence'} <= section_ids
+    assert data['guardrails']['no_secrets'] is True
+    assert data['guardrails']['read_only'] is True
+    assert data['guardrails']['deploy_gate_relaxed'] is False
+
+
 def test_runtime_observability_readiness_e_liveness():
     client = TestClient(app)
 
