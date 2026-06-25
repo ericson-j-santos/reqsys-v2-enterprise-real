@@ -1,0 +1,152 @@
+name: CI Runtime Health Summary
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '30 */6 * * *'
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-runtime-health-summary
+  cancel-in-progress: true
+
+jobs:
+  summarize:
+    name: Summarize CI runtime health
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build health summary
+        id: summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const workflowNames = [
+              'CI — ReqSys v2 Enterprise',
+              'CI Enterprise Fast',
+              'Governance Quality Gates',
+              'Governança Padrão Ouro',
+              'Enterprise Runtime Governance Gates',
+              'Branch Protection Audit',
+              'PR Evidence Gate',
+              'PR Governed CI Validation',
+              'PR CI Watch',
+              'PR Conflict Guard',
+              'Executive Predictive Stability'
+            ];
+
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              owner: owner,
+              repo: repo,
+              branch: 'main',
+              per_page: 100
+            });
+
+            const latest = new Map();
+            for (const run of runs) {
+              if (!latest.has(run.name)) latest.set(run.name, run);
+            }
+
+            const workflows = workflowNames.map(function(name) {
+              const run = latest.get(name);
+              return {
+                name: name,
+                observed: Boolean(run),
+                status: run ? run.status : 'missing',
+                conclusion: run ? run.conclusion : 'missing',
+                run_id: run ? run.id : null,
+                html_url: run ? run.html_url : null,
+                updated_at: run ? run.updated_at : null
+              };
+            });
+
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner: owner,
+              repo: repo,
+              state: 'open',
+              per_page: 50
+            });
+
+            const blockedPrs = prs.filter(function(pr) {
+              return pr.draft || pr.mergeable === false;
+            }).map(function(pr) {
+              return {
+                number: pr.number,
+                title: pr.title,
+                draft: pr.draft,
+                mergeable: pr.mergeable,
+                html_url: pr.html_url,
+                updated_at: pr.updated_at
+              };
+            });
+
+            const failing = workflows.filter(function(item) {
+              return item.status === 'completed' && item.conclusion && !['success', 'skipped', 'neutral'].includes(item.conclusion);
+            });
+            const missing = workflows.filter(function(item) { return !item.observed; });
+            const active = workflows.filter(function(item) { return item.status !== 'completed' && item.status !== 'missing'; });
+
+            const health = {
+              schema_version: '1.0.0',
+              generated_at: new Date().toISOString(),
+              repository: owner + '/' + repo,
+              branch: 'main',
+              status: failing.length === 0 && missing.length === 0 ? 'green' : 'attention',
+              totals: {
+                critical_workflows: workflows.length,
+                failing_critical_workflows: failing.length,
+                missing_critical_workflows: missing.length,
+                active_critical_workflows: active.length,
+                open_pull_requests: prs.length,
+                blocked_pull_requests: blockedPrs.length
+              },
+              critical_workflows: workflows,
+              blocked_pull_requests: blockedPrs
+            };
+
+            fs.mkdirSync('artifacts/ci-runtime-health-summary', { recursive: true });
+            fs.writeFileSync('artifacts/ci-runtime-health-summary/summary.json', JSON.stringify(health, null, 2));
+
+            const lines = [];
+            lines.push('# CI Runtime Health Summary');
+            lines.push('');
+            lines.push('- Repository: ' + owner + '/' + repo);
+            lines.push('- Generated at: ' + health.generated_at);
+            lines.push('- Status: ' + health.status);
+            lines.push('- Failing critical workflows: ' + health.totals.failing_critical_workflows);
+            lines.push('- Missing critical workflows: ' + health.totals.missing_critical_workflows);
+            lines.push('- Blocked PRs: ' + health.totals.blocked_pull_requests);
+            lines.push('');
+            lines.push('## Critical workflows');
+            for (const item of workflows) {
+              lines.push('- ' + item.name + ': ' + item.status + ' / ' + item.conclusion + ' / ' + (item.html_url || '-'));
+            }
+            lines.push('');
+            lines.push('## Blocked PRs');
+            if (blockedPrs.length === 0) {
+              lines.push('- None');
+            } else {
+              for (const pr of blockedPrs) {
+                lines.push('- #' + pr.number + ': draft=' + pr.draft + ', mergeable=' + pr.mergeable + ', url=' + pr.html_url);
+              }
+            }
+
+            const markdown = lines.join('\n');
+            fs.writeFileSync('artifacts/ci-runtime-health-summary/summary.md', markdown);
+            core.summary.addRaw(markdown).write();
+            core.setOutput('status', health.status);
+
+      - name: Upload CI runtime health summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-runtime-health-summary
+          path: artifacts/ci-runtime-health-summary/
+          if-no-files-found: error
+          retention-days: 30
