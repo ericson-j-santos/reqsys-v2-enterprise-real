@@ -208,7 +208,18 @@ Configurado via `SSRS_BASE_URL=https://NOTERI:443/ReportServer` no `.env`.
 
 ### Execução sem Docker (modo local)
 
-**Linux / WSL:**
+#### Fluxo rápido de desenvolvimento
+
+Use este modo para iterar no dia a dia sem Docker e sem nginx. O Vite faz proxy de `/api` para o backend e o script usa uma cópia temporária do SQLite por padrão, evitando sujar `backend/reqsys.db` no git.
+
+```bash
+bash scripts/dev-local.sh
+# Acesse: http://127.0.0.1:5173
+```
+
+Se precisar usar o banco versionado diretamente, execute com `REQSYS_USE_TRACKED_DB=1`, mas restaure o arquivo antes de commitar caso ele seja alterado.
+
+**Linux / WSL (stack local completa com nginx opcional):**
 ```bash
 bash scripts/executar-local.sh
 # Acesse: http://localhost:8081
