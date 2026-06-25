@@ -26,6 +26,8 @@ _ALLOWED_SNAPSHOT_FIELDS = {
     'critical_counts',
     'evidence',
 }
+_INCIDENT_OPEN_STATUSES = {'degraded', 'blocked', 'vermelho', 'bloqueado'}
+_INCIDENT_RESOLVED_STATUSES = {'healthy', 'ok', 'green', 'verde', 'attention'}
 
 
 def _utc_now() -> datetime:
@@ -36,6 +38,19 @@ def _to_iso(value: Any) -> str:
     if isinstance(value, datetime):
         return value.astimezone(timezone.utc).isoformat()
     return str(value)
+
+
+def _parse_dt(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace('Z', '+00:00')).astimezone(timezone.utc)
+        except ValueError:
+            return None
+    return None
 
 
 def _sanitize_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -52,6 +67,14 @@ def _sanitize_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _incident_key(snapshot: dict[str, Any]) -> str:
+    evidence = snapshot.get('evidence') or {}
+    explicit_key = evidence.get('incident_key') or evidence.get('runtime_component')
+    if explicit_key:
+        return str(explicit_key)[:128]
+    return 'runtime-health'
+
+
 class RuntimeAnalyticsStoreProtocol(Protocol):
     max_snapshots: int
 
@@ -63,16 +86,22 @@ class RuntimeAnalyticsStoreProtocol(Protocol):
 
     def durable_storage_enabled(self) -> bool: ...
 
+    def record_incident_event(self, snapshot: dict[str, Any]) -> dict[str, Any] | None: ...
+
+    def list_incident_events(self) -> list[dict[str, Any]]: ...
+
 
 @dataclass
 class RuntimeAnalyticsStore:
     max_snapshots: int = 100
     snapshots: deque[dict[str, Any]] = field(default_factory=deque)
+    incident_events: deque[dict[str, Any]] = field(default_factory=deque)
 
     def __post_init__(self) -> None:
         if self.max_snapshots < 1:
             raise ValueError('max_snapshots must be greater than zero')
         self.snapshots = deque(self.snapshots, maxlen=self.max_snapshots)
+        self.incident_events = deque(self.incident_events, maxlen=self.max_snapshots)
 
     def record(self, snapshot: dict[str, Any]) -> dict[str, Any]:
         payload = _sanitize_snapshot(snapshot)
@@ -82,6 +111,16 @@ class RuntimeAnalyticsStore:
 
     def list_snapshots(self) -> list[dict[str, Any]]:
         return list(self.snapshots)
+
+    def record_incident_event(self, snapshot: dict[str, Any]) -> dict[str, Any] | None:
+        event = build_incident_event(snapshot, self.list_incident_events())
+        if event is None:
+            return None
+        self.incident_events.append(event)
+        return event
+
+    def list_incident_events(self) -> list[dict[str, Any]]:
+        return list(self.incident_events)
 
     def storage_mode(self) -> str:
         return 'in_memory_rolling'
@@ -95,6 +134,7 @@ class DurableRuntimeAnalyticsStore:
     database_url: str
     max_snapshots: int = 100
     table_name: str = 'runtime_operational_snapshots'
+    incident_table_name: str = 'runtime_incident_events'
     engine: Any | None = None
     metadata: MetaData = field(default_factory=MetaData)
 
@@ -111,6 +151,17 @@ class DurableRuntimeAnalyticsStore:
             Column('correlation_id', String(128), nullable=True, index=True),
             Column('status', String(32), nullable=False, index=True),
             Column('risk_score', Integer, nullable=False),
+            Column('payload_json', Text, nullable=False),
+        )
+        self.incident_table = Table(
+            self.incident_table_name,
+            self.metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('event_at', DateTime(timezone=True), nullable=False, index=True),
+            Column('incident_key', String(128), nullable=False, index=True),
+            Column('event_type', String(32), nullable=False, index=True),
+            Column('status', String(32), nullable=False, index=True),
+            Column('correlation_id', String(128), nullable=True, index=True),
             Column('payload_json', Text, nullable=False),
         )
         self.metadata.create_all(self.engine)
@@ -148,6 +199,38 @@ class DurableRuntimeAnalyticsStore:
             rows = conn.execute(stmt).scalars().all()
         return [json.loads(item) for item in reversed(rows)]
 
+    def record_incident_event(self, snapshot: dict[str, Any]) -> dict[str, Any] | None:
+        if self.engine is None:
+            raise RuntimeError('runtime analytics engine not initialized')
+
+        event = build_incident_event(snapshot, self.list_incident_events())
+        if event is None:
+            return None
+        event_at = _parse_dt(event.get('event_at')) or _utc_now()
+        payload_json = json.dumps(event, ensure_ascii=False, sort_keys=True)
+
+        with self.engine.begin() as conn:
+            conn.execute(
+                insert(self.incident_table).values(
+                    event_at=event_at,
+                    incident_key=event['incident_key'],
+                    event_type=event['event_type'],
+                    status=event['status'],
+                    correlation_id=event.get('correlation_id'),
+                    payload_json=payload_json,
+                )
+            )
+        return event
+
+    def list_incident_events(self) -> list[dict[str, Any]]:
+        if self.engine is None:
+            raise RuntimeError('runtime analytics engine not initialized')
+
+        stmt = select(self.incident_table.c.payload_json).order_by(self.incident_table.c.event_at.desc(), self.incident_table.c.id.desc()).limit(self.max_snapshots)
+        with self.engine.connect() as conn:
+            rows = conn.execute(stmt).scalars().all()
+        return [json.loads(item) for item in reversed(rows)]
+
     def storage_mode(self) -> str:
         return 'durable_sql'
 
@@ -156,7 +239,7 @@ class DurableRuntimeAnalyticsStore:
 
 
 def _status_is_degraded(status: str) -> bool:
-    return status in {'degraded', 'blocked', 'vermelho', 'bloqueado'}
+    return status in _INCIDENT_OPEN_STATUSES
 
 
 def _trend(values: list[int | float]) -> str:
@@ -170,9 +253,85 @@ def _trend(values: list[int | float]) -> str:
     return 'stable'
 
 
+def _last_event_for_key(events: list[dict[str, Any]], incident_key: str) -> dict[str, Any] | None:
+    for event in reversed(events):
+        if event.get('incident_key') == incident_key:
+            return event
+    return None
+
+
+def build_incident_event(snapshot: dict[str, Any], previous_events: list[dict[str, Any]]) -> dict[str, Any] | None:
+    payload = _sanitize_snapshot(snapshot)
+    status = str(payload.get('status', 'unknown'))
+    incident_key = _incident_key(payload)
+    last_event = _last_event_for_key(previous_events, incident_key)
+    last_event_type = str(last_event.get('event_type')) if last_event else None
+
+    event_type: str | None = None
+    if status in _INCIDENT_OPEN_STATUSES and last_event_type not in {'incident_opened', 'incident_acknowledged'}:
+        event_type = 'incident_opened'
+    elif status in _INCIDENT_OPEN_STATUSES and last_event_type == 'incident_opened':
+        event_type = 'incident_acknowledged'
+    elif status in _INCIDENT_RESOLVED_STATUSES and last_event_type in {'incident_opened', 'incident_acknowledged'}:
+        event_type = 'incident_resolved'
+
+    if event_type is None:
+        return None
+
+    event_at = _utc_now().isoformat()
+    return {
+        'event_type': event_type,
+        'event_at': event_at,
+        'incident_key': incident_key,
+        'status': status,
+        'risk_score': int(payload.get('risk_score', 0) or 0),
+        'correlation_id': payload.get('correlation_id'),
+        'critical_counts': payload.get('critical_counts') or {},
+    }
+
+
+def build_mttr(events: list[dict[str, Any]]) -> dict[str, Any]:
+    opened_by_key: dict[str, datetime] = {}
+    durations: list[int] = []
+    resolved_count = 0
+
+    for event in events:
+        incident_key = str(event.get('incident_key', 'runtime-health'))
+        event_type = str(event.get('event_type'))
+        event_at = _parse_dt(event.get('event_at'))
+        if event_at is None:
+            continue
+        if event_type == 'incident_opened':
+            opened_by_key[incident_key] = event_at
+        elif event_type == 'incident_resolved' and incident_key in opened_by_key:
+            resolved_count += 1
+            durations.append(max(0, int((event_at - opened_by_key[incident_key]).total_seconds())))
+            opened_by_key.pop(incident_key, None)
+
+    if not durations:
+        return {
+            'status': 'insufficient_resolved_incidents',
+            'value_seconds': None,
+            'resolved_incidents': resolved_count,
+            'open_incidents': len(opened_by_key),
+            'reason': 'requires at least one opened and resolved incident lifecycle',
+        }
+
+    return {
+        'status': 'calculated',
+        'value_seconds': round(mean(durations), 2),
+        'resolved_incidents': resolved_count,
+        'open_incidents': len(opened_by_key),
+        'min_seconds': min(durations),
+        'max_seconds': max(durations),
+    }
+
+
 def build_runtime_analytics(store: RuntimeAnalyticsStoreProtocol, current_snapshot: dict[str, Any]) -> dict[str, Any]:
     recorded = store.record(current_snapshot)
+    incident_event = store.record_incident_event(recorded)
     snapshots = store.list_snapshots()
+    incident_events = store.list_incident_events()
     total = len(snapshots)
     degraded = [item for item in snapshots if _status_is_degraded(str(item.get('status', 'unknown')))]
     healthy = total - len(degraded)
@@ -182,14 +341,16 @@ def build_runtime_analytics(store: RuntimeAnalyticsStoreProtocol, current_snapsh
     availability_score = round((healthy / total) * 100, 2) if total else 0
     failure_rate = round((len(degraded) / total) * 100, 2) if total else 0
     durable_enabled = store.durable_storage_enabled()
+    mttr = build_mttr(incident_events)
     return {
-        'schema_version': '1.1.0',
+        'schema_version': '1.2.0',
         'generated_at': _utc_now().isoformat(),
         'correlation_id': recorded.get('correlation_id'),
         'window': {
             'mode': store.storage_mode(),
             'max_snapshots': store.max_snapshots,
             'total_snapshots': total,
+            'total_incident_events': len(incident_events),
         },
         'summary': {
             'current_status': recorded.get('status'),
@@ -206,11 +367,12 @@ def build_runtime_analytics(store: RuntimeAnalyticsStoreProtocol, current_snapsh
             'pending_items': _trend(pending_items),
             'blocked_items': _trend(blocked_items),
         },
-        'mttr': {
-            'status': 'pending_incident_lifecycle_events',
-            'value_seconds': None,
-            'reason': 'requires durable incident lifecycle events',
+        'incident_lifecycle': {
+            'last_event': incident_event,
+            'events': incident_events[-10:],
+            'supported_events': ['incident_opened', 'incident_acknowledged', 'incident_resolved'],
         },
+        'mttr': mttr,
         'lead_time': {
             'status': 'pending_ci_deploy_integration',
             'value_seconds': None,
@@ -223,5 +385,6 @@ def build_runtime_analytics(store: RuntimeAnalyticsStoreProtocol, current_snapsh
             'read_only': True,
             'durable_storage_enabled': durable_enabled,
             'storage_mode': store.storage_mode(),
+            'incident_lifecycle_enabled': True,
         },
     }
