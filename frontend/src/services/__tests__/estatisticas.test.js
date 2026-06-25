@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   calcularResumoEstatisticas,
   carregarEstatisticas,
+  criarDrilldownIndicador,
   estatisticasExternasIniciais,
   estatisticasInternasIniciais,
   validarIndicador
@@ -44,6 +45,36 @@ describe('estatisticas', () => {
     expect(resumo.externos).toBe(1)
     expect(resumo.invalidos).toBe(0)
     expect(resumo.atencao).toBeGreaterThanOrEqual(1)
+  })
+
+  it('cria drill-down navegavel preservando fonte, evidencias e proxima acao', () => {
+    const indicador = estatisticasExternasIniciais[0]
+    const drilldown = criarDrilldownIndicador(indicador)
+
+    expect(drilldown.id).toBe(indicador.id)
+    expect(drilldown.fonte.id).toBe(indicador.fonte.id)
+    expect(drilldown.evidencias).toEqual(indicador.evidencias)
+    expect(drilldown.pendencias).toEqual(indicador.pendencias)
+    expect(drilldown.guardRails).toEqual([])
+    expect(drilldown.statusNavegavel).toBe('acao_requerida')
+    expect(drilldown.proximaAcao).toBe(indicador.pendencias[0])
+    expect(drilldown.trilhaAuditoria).toContain(`indicador:${indicador.id}`)
+  })
+
+  it('bloqueia drill-down sem contrato minimo antes de promover estado operacional', () => {
+    const drilldown = criarDrilldownIndicador({
+      id: 'ux-invalido',
+      nome: 'UX inválido',
+      estadoAtual: 'avancado',
+      estadoAlvo: 'avancado',
+      tendencia: 'subindo',
+      evidencias: ['uma evidencia']
+    })
+
+    expect(drilldown.statusNavegavel).toBe('acao_requerida')
+    expect(drilldown.guardRails).toContain('Indicador sem fórmula documentada.')
+    expect(drilldown.guardRails).toContain('Indicador sem fonte.')
+    expect(drilldown.proximaAcao).toBe('Corrigir contrato do indicador antes de promover o estado operacional.')
   })
 
   it('carrega indicadores reais via API quando disponiveis', async () => {
