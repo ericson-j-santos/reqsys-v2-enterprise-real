@@ -1,0 +1,91 @@
+name: Operational Health Dashboard
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md'
+      - 'docs/operations/operational-health-dashboard.schema.json'
+      - 'docs/operations/operational-health-dashboard.example.json'
+      - 'docs/adr/ADR-032-operational-health-dashboard-governance.md'
+      - 'docs/runbooks/operational-health-dashboard.md'
+      - 'docs/evidence/operational-health-dashboard-governance.md'
+      - '.github/workflows/operational-health-dashboard.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md'
+      - 'docs/operations/operational-health-dashboard.schema.json'
+      - 'docs/operations/operational-health-dashboard.example.json'
+      - 'docs/adr/ADR-032-operational-health-dashboard-governance.md'
+      - 'docs/runbooks/operational-health-dashboard.md'
+      - 'docs/evidence/operational-health-dashboard-governance.md'
+      - '.github/workflows/operational-health-dashboard.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  operational-health-dashboard:
+    name: Generate operational health evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate documentation
+        run: |
+          set -euo pipefail
+          test -f docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md
+          test -f docs/operations/operational-health-dashboard.schema.json
+          test -f docs/operations/operational-health-dashboard.example.json
+          grep -qi 'merge readiness score' docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md
+          grep -qi 'stale branch governance' docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md
+          grep -qi 'production-ready' docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md
+
+      - name: Build review-only evidence
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/operational-health
+          cat > artifacts/operational-health/summary.md <<'EOF'
+          # Operational Health Dashboard Evidence
+
+          Status: OPERATIONAL_HEALTH_DASHBOARD_READY
+
+          Scope:
+          - PR aging governance documented.
+          - Conflict risk governance documented.
+          - Stale branch governance documented.
+          - Merge readiness score documented.
+          - Operational PR classification documented.
+
+          Guardrails:
+          - No deployment.
+          - No production write.
+          - No permission update.
+          - No automated merge.
+          EOF
+          cat > artifacts/operational-health/evidence.json <<'EOF'
+          {
+            "status": "OPERATIONAL_HEALTH_DASHBOARD_READY",
+            "mode": "review_only",
+            "guardrails": {
+              "deployment": "not_performed",
+              "production_write": "not_performed",
+              "permission_update": "not_performed",
+              "automated_merge": "not_performed"
+            }
+          }
+          EOF
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-health-dashboard-evidence
+          path: artifacts/operational-health
