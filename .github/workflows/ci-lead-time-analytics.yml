@@ -1,0 +1,222 @@
+name: CI Lead Time Analytics
+
+on:
+  workflow_dispatch:
+    inputs:
+      window_runs:
+        description: 'Quantidade maxima de workflow runs recentes para analisar.'
+        required: false
+        default: '100'
+        type: string
+  schedule:
+    - cron: '45 * * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ci-lead-time-analytics.yml'
+      - 'docs/runbooks/ci-lead-time-analytics.md'
+
+concurrency:
+  group: ci-lead-time-analytics-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  lead-time-report:
+    name: Build CI lead time analytics
+    runs-on: ubuntu-latest
+    env:
+      WINDOW_RUNS: ${{ github.event.inputs.window_runs || '100' }}
+      LEAD_TIME_ALERT_SECONDS: '3600'
+      LEAD_TIME_WARNING_SECONDS: '900'
+      BASELINE_INCIDENT_MINUTES: '143'
+    steps:
+      - name: Build analytics artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import math
+          import os
+          import statistics
+          import urllib.request
+          from collections import defaultdict
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          repo = os.environ['REPOSITORY']
+          token = os.environ['GITHUB_TOKEN']
+          owner, name = repo.split('/', 1)
+          window_runs = max(1, min(int(os.environ.get('WINDOW_RUNS') or '100'), 100))
+          warning_seconds = int(os.environ.get('LEAD_TIME_WARNING_SECONDS') or '900')
+          alert_seconds = int(os.environ.get('LEAD_TIME_ALERT_SECONDS') or '3600')
+          baseline_incident_minutes = int(os.environ.get('BASELINE_INCIDENT_MINUTES') or '143')
+
+          def api(path):
+              url = f'https://api.github.com{path}'
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      'Authorization': f'Bearer {token}',
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'reqsys-ci-lead-time-analytics',
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  return json.loads(response.read().decode('utf-8'))
+
+          def parse_dt(value):
+              return datetime.fromisoformat(value.replace('Z', '+00:00'))
+
+          def percentile(values, pct):
+              if not values:
+                  return 0
+              ordered = sorted(values)
+              index = (len(ordered) - 1) * pct
+              lower = math.floor(index)
+              upper = math.ceil(index)
+              if lower == upper:
+                  return ordered[int(index)]
+              return ordered[lower] + (ordered[upper] - ordered[lower]) * (index - lower)
+
+          payload = api(f'/repos/{owner}/{name}/actions/runs?per_page={window_runs}')
+          runs = payload.get('workflow_runs', [])[:window_runs]
+
+          completed = []
+          by_workflow = defaultdict(list)
+          for run in runs:
+              created_at = parse_dt(run['created_at'])
+              updated_at = parse_dt(run['updated_at'])
+              duration_seconds = max(0, round((updated_at - created_at).total_seconds(), 3))
+              normalized = {
+                  'id': run['id'],
+                  'name': run['name'],
+                  'event': run['event'],
+                  'status': run['status'],
+                  'conclusion': run.get('conclusion'),
+                  'head_branch': run.get('head_branch'),
+                  'head_sha': run.get('head_sha'),
+                  'html_url': run.get('html_url'),
+                  'created_at': run['created_at'],
+                  'updated_at': run['updated_at'],
+                  'duration_seconds': duration_seconds,
+                  'duration_minutes': round(duration_seconds / 60, 2),
+              }
+              if run['status'] == 'completed':
+                  completed.append(normalized)
+                  by_workflow[run['name']].append(normalized)
+
+          durations = [run['duration_seconds'] for run in completed]
+          success_count = sum(1 for run in completed if run['conclusion'] == 'success')
+          failure_count = sum(1 for run in completed if run['conclusion'] == 'failure')
+          cancelled_count = sum(1 for run in completed if run['conclusion'] == 'cancelled')
+          skipped_count = sum(1 for run in completed if run['conclusion'] == 'skipped')
+          total_completed = len(completed)
+
+          workflow_stats = []
+          for workflow_name, workflow_runs in by_workflow.items():
+              workflow_durations = [run['duration_seconds'] for run in workflow_runs]
+              workflow_success = sum(1 for run in workflow_runs if run['conclusion'] == 'success')
+              workflow_stats.append({
+                  'name': workflow_name,
+                  'runs': len(workflow_runs),
+                  'success_rate_percent': round((workflow_success / len(workflow_runs)) * 100, 2) if workflow_runs else 0,
+                  'avg_seconds': round(statistics.mean(workflow_durations), 2) if workflow_durations else 0,
+                  'p50_seconds': round(percentile(workflow_durations, 0.50), 2),
+                  'p95_seconds': round(percentile(workflow_durations, 0.95), 2),
+                  'max_seconds': round(max(workflow_durations), 2) if workflow_durations else 0,
+              })
+
+          workflow_stats = sorted(workflow_stats, key=lambda item: item['p95_seconds'], reverse=True)
+          bottlenecks = workflow_stats[:10]
+
+          p95_seconds = round(percentile(durations, 0.95), 2)
+          max_seconds = round(max(durations), 2) if durations else 0
+          status = 'passed'
+          warnings = []
+          if p95_seconds >= warning_seconds:
+              warnings.append(f'P95 lead time acima do warning: {p95_seconds}s >= {warning_seconds}s')
+              status = 'warning'
+          if max_seconds >= alert_seconds:
+              warnings.append(f'Max lead time acima do alerta: {max_seconds}s >= {alert_seconds}s')
+              status = 'warning'
+
+          summary = {
+              'schema_version': '1.0.0',
+              'generated_at': datetime.now(timezone.utc).isoformat(),
+              'repository': repo,
+              'event_name': os.environ.get('EVENT_NAME'),
+              'run_id': os.environ.get('RUN_ID'),
+              'window_runs': window_runs,
+              'completed_runs': total_completed,
+              'success_count': success_count,
+              'failure_count': failure_count,
+              'cancelled_count': cancelled_count,
+              'skipped_count': skipped_count,
+              'success_rate_percent': round((success_count / total_completed) * 100, 2) if total_completed else 0,
+              'failure_rate_percent': round((failure_count / total_completed) * 100, 2) if total_completed else 0,
+              'avg_seconds': round(statistics.mean(durations), 2) if durations else 0,
+              'p50_seconds': round(percentile(durations, 0.50), 2),
+              'p95_seconds': p95_seconds,
+              'max_seconds': max_seconds,
+              'baseline_incident_minutes': baseline_incident_minutes,
+              'baseline_incident_seconds': baseline_incident_minutes * 60,
+              'status': status,
+              'warnings': warnings,
+              'bottlenecks': bottlenecks,
+              'workflow_stats': workflow_stats,
+              'recent_completed_runs': completed[:25],
+          }
+
+          Path('audit').mkdir(exist_ok=True)
+          Path('audit/ci-lead-time-analytics.json').write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding='utf-8')
+
+          lines = [
+              '# CI Lead Time Analytics',
+              '',
+              f"- Repository: {repo}",
+              f"- Status: {summary['status']}",
+              f"- Window runs: {window_runs}",
+              f"- Completed runs: {total_completed}",
+              f"- Success rate: {summary['success_rate_percent']}%",
+              f"- Failure rate: {summary['failure_rate_percent']}%",
+              f"- Average lead time: {summary['avg_seconds']}s",
+              f"- P50 lead time: {summary['p50_seconds']}s",
+              f"- P95 lead time: {summary['p95_seconds']}s",
+              f"- Max lead time: {summary['max_seconds']}s",
+              f"- Baseline incident: {baseline_incident_minutes}min",
+              '',
+              '## Warnings',
+              *(f"- {warning}" for warning in warnings) if warnings else ['- None'],
+              '',
+              '## Top bottlenecks by P95',
+          ]
+          if bottlenecks:
+              lines.extend(
+                  f"- {item['name']}: runs={item['runs']}, success={item['success_rate_percent']}%, p95={item['p95_seconds']}s, max={item['max_seconds']}s"
+                  for item in bottlenecks
+              )
+          else:
+              lines.append('- None')
+
+          Path('audit/ci-lead-time-analytics.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print(json.dumps(summary, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Upload CI lead time analytics evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-lead-time-analytics-${{ github.run_id }}
+          path: audit/
+          if-no-files-found: error
+          retention-days: 30
