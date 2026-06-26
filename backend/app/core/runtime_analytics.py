@@ -28,6 +28,8 @@ _ALLOWED_SNAPSHOT_FIELDS = {
 }
 _INCIDENT_OPEN_STATUSES = {'degraded', 'blocked', 'vermelho', 'bloqueado'}
 _INCIDENT_RESOLVED_STATUSES = {'healthy', 'ok', 'green', 'verde', 'attention'}
+_DEPLOY_STARTED_EVENTS = {'deploy_started', 'deployment_started'}
+_DEPLOY_FINISHED_EVENTS = {'deploy_finished', 'deployment_finished', 'deploy_succeeded', 'deployment_succeeded'}
 
 
 def _utc_now() -> datetime:
@@ -75,6 +77,17 @@ def _incident_key(snapshot: dict[str, Any]) -> str:
     return 'runtime-health'
 
 
+def _deploy_key(payload: dict[str, Any]) -> str:
+    explicit_key = payload.get('deploy_key') or payload.get('deployment_key') or payload.get('version')
+    if explicit_key:
+        return str(explicit_key)[:128]
+    return 'runtime-deploy'
+
+
+def _deployment_environment(payload: dict[str, Any]) -> str:
+    return str(payload.get('environment') or payload.get('target_environment') or 'unknown')[:64]
+
+
 class RuntimeAnalyticsStoreProtocol(Protocol):
     max_snapshots: int
 
@@ -90,18 +103,24 @@ class RuntimeAnalyticsStoreProtocol(Protocol):
 
     def list_incident_events(self) -> list[dict[str, Any]]: ...
 
+    def record_deploy_event(self, deploy_event: dict[str, Any]) -> dict[str, Any] | None: ...
+
+    def list_deploy_events(self) -> list[dict[str, Any]]: ...
+
 
 @dataclass
 class RuntimeAnalyticsStore:
     max_snapshots: int = 100
     snapshots: deque[dict[str, Any]] = field(default_factory=deque)
     incident_events: deque[dict[str, Any]] = field(default_factory=deque)
+    deploy_events: deque[dict[str, Any]] = field(default_factory=deque)
 
     def __post_init__(self) -> None:
         if self.max_snapshots < 1:
             raise ValueError('max_snapshots must be greater than zero')
         self.snapshots = deque(self.snapshots, maxlen=self.max_snapshots)
         self.incident_events = deque(self.incident_events, maxlen=self.max_snapshots)
+        self.deploy_events = deque(self.deploy_events, maxlen=self.max_snapshots)
 
     def record(self, snapshot: dict[str, Any]) -> dict[str, Any]:
         payload = _sanitize_snapshot(snapshot)
@@ -122,6 +141,16 @@ class RuntimeAnalyticsStore:
     def list_incident_events(self) -> list[dict[str, Any]]:
         return list(self.incident_events)
 
+    def record_deploy_event(self, deploy_event: dict[str, Any]) -> dict[str, Any] | None:
+        event = sanitize_deploy_event(deploy_event)
+        if event is None:
+            return None
+        self.deploy_events.append(event)
+        return event
+
+    def list_deploy_events(self) -> list[dict[str, Any]]:
+        return list(self.deploy_events)
+
     def storage_mode(self) -> str:
         return 'in_memory_rolling'
 
@@ -135,6 +164,7 @@ class DurableRuntimeAnalyticsStore:
     max_snapshots: int = 100
     table_name: str = 'runtime_operational_snapshots'
     incident_table_name: str = 'runtime_incident_events'
+    deploy_table_name: str = 'runtime_deploy_events'
     engine: Any | None = None
     metadata: MetaData = field(default_factory=MetaData)
 
@@ -161,6 +191,17 @@ class DurableRuntimeAnalyticsStore:
             Column('incident_key', String(128), nullable=False, index=True),
             Column('event_type', String(32), nullable=False, index=True),
             Column('status', String(32), nullable=False, index=True),
+            Column('correlation_id', String(128), nullable=True, index=True),
+            Column('payload_json', Text, nullable=False),
+        )
+        self.deploy_table = Table(
+            self.deploy_table_name,
+            self.metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('event_at', DateTime(timezone=True), nullable=False, index=True),
+            Column('deploy_key', String(128), nullable=False, index=True),
+            Column('event_type', String(32), nullable=False, index=True),
+            Column('environment', String(64), nullable=False, index=True),
             Column('correlation_id', String(128), nullable=True, index=True),
             Column('payload_json', Text, nullable=False),
         )
@@ -231,6 +272,38 @@ class DurableRuntimeAnalyticsStore:
             rows = conn.execute(stmt).scalars().all()
         return [json.loads(item) for item in reversed(rows)]
 
+    def record_deploy_event(self, deploy_event: dict[str, Any]) -> dict[str, Any] | None:
+        if self.engine is None:
+            raise RuntimeError('runtime analytics engine not initialized')
+
+        event = sanitize_deploy_event(deploy_event)
+        if event is None:
+            return None
+        event_at = _parse_dt(event.get('event_at')) or _utc_now()
+        payload_json = json.dumps(event, ensure_ascii=False, sort_keys=True)
+
+        with self.engine.begin() as conn:
+            conn.execute(
+                insert(self.deploy_table).values(
+                    event_at=event_at,
+                    deploy_key=event['deploy_key'],
+                    event_type=event['event_type'],
+                    environment=event['environment'],
+                    correlation_id=event.get('correlation_id'),
+                    payload_json=payload_json,
+                )
+            )
+        return event
+
+    def list_deploy_events(self) -> list[dict[str, Any]]:
+        if self.engine is None:
+            raise RuntimeError('runtime analytics engine not initialized')
+
+        stmt = select(self.deploy_table.c.payload_json).order_by(self.deploy_table.c.event_at.desc(), self.deploy_table.c.id.desc()).limit(self.max_snapshots)
+        with self.engine.connect() as conn:
+            rows = conn.execute(stmt).scalars().all()
+        return [json.loads(item) for item in reversed(rows)]
+
     def storage_mode(self) -> str:
         return 'durable_sql'
 
@@ -290,6 +363,23 @@ def build_incident_event(snapshot: dict[str, Any], previous_events: list[dict[st
     }
 
 
+def sanitize_deploy_event(deploy_event: dict[str, Any]) -> dict[str, Any] | None:
+    event_type = str(deploy_event.get('event_type') or '')
+    if event_type not in _DEPLOY_STARTED_EVENTS | _DEPLOY_FINISHED_EVENTS:
+        return None
+
+    event_at = _parse_dt(deploy_event.get('event_at')) or _utc_now()
+    return {
+        'event_type': 'deploy_started' if event_type in _DEPLOY_STARTED_EVENTS else 'deploy_finished',
+        'event_at': event_at.isoformat(),
+        'deploy_key': _deploy_key(deploy_event),
+        'environment': _deployment_environment(deploy_event),
+        'correlation_id': deploy_event.get('correlation_id'),
+        'commit_sha': str(deploy_event.get('commit_sha') or '')[:64] or None,
+        'source': str(deploy_event.get('source') or 'runtime')[:64],
+    }
+
+
 def build_mttr(events: list[dict[str, Any]]) -> dict[str, Any]:
     opened_by_key: dict[str, datetime] = {}
     durations: list[int] = []
@@ -327,11 +417,62 @@ def build_mttr(events: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def build_lead_time(events: list[dict[str, Any]]) -> dict[str, Any]:
+    started_by_key: dict[str, datetime] = {}
+    durations: list[int] = []
+    finished_count = 0
+
+    for event in events:
+        deploy_key = str(event.get('deploy_key', 'runtime-deploy'))
+        event_type = str(event.get('event_type'))
+        event_at = _parse_dt(event.get('event_at'))
+        if event_at is None:
+            continue
+        if event_type == 'deploy_started':
+            started_by_key[deploy_key] = event_at
+        elif event_type == 'deploy_finished' and deploy_key in started_by_key:
+            finished_count += 1
+            durations.append(max(0, int((event_at - started_by_key[deploy_key]).total_seconds())))
+            started_by_key.pop(deploy_key, None)
+
+    if not durations:
+        return {
+            'status': 'insufficient_deploy_events',
+            'value_seconds': None,
+            'finished_deploys': finished_count,
+            'open_deploys': len(started_by_key),
+            'reason': 'requires at least one deploy_started and deploy_finished event pair',
+        }
+
+    return {
+        'status': 'calculated',
+        'value_seconds': round(mean(durations), 2),
+        'finished_deploys': finished_count,
+        'open_deploys': len(started_by_key),
+        'min_seconds': min(durations),
+        'max_seconds': max(durations),
+    }
+
+
+def extract_deploy_event(snapshot: dict[str, Any]) -> dict[str, Any] | None:
+    evidence = snapshot.get('evidence') or {}
+    deploy_payload = evidence.get('deploy_event') or evidence.get('deployment_event')
+    if isinstance(deploy_payload, dict):
+        return deploy_payload
+    return None
+
+
 def build_runtime_analytics(store: RuntimeAnalyticsStoreProtocol, current_snapshot: dict[str, Any]) -> dict[str, Any]:
     recorded = store.record(current_snapshot)
     incident_event = store.record_incident_event(recorded)
+    deploy_event = None
+    extracted_deploy_event = extract_deploy_event(recorded)
+    if extracted_deploy_event is not None:
+        deploy_event = store.record_deploy_event(extracted_deploy_event)
+
     snapshots = store.list_snapshots()
     incident_events = store.list_incident_events()
+    deploy_events = store.list_deploy_events()
     total = len(snapshots)
     degraded = [item for item in snapshots if _status_is_degraded(str(item.get('status', 'unknown')))]
     healthy = total - len(degraded)
@@ -342,8 +483,9 @@ def build_runtime_analytics(store: RuntimeAnalyticsStoreProtocol, current_snapsh
     failure_rate = round((len(degraded) / total) * 100, 2) if total else 0
     durable_enabled = store.durable_storage_enabled()
     mttr = build_mttr(incident_events)
+    lead_time = build_lead_time(deploy_events)
     return {
-        'schema_version': '1.2.0',
+        'schema_version': '1.3.0',
         'generated_at': _utc_now().isoformat(),
         'correlation_id': recorded.get('correlation_id'),
         'window': {
@@ -351,6 +493,7 @@ def build_runtime_analytics(store: RuntimeAnalyticsStoreProtocol, current_snapsh
             'max_snapshots': store.max_snapshots,
             'total_snapshots': total,
             'total_incident_events': len(incident_events),
+            'total_deploy_events': len(deploy_events),
         },
         'summary': {
             'current_status': recorded.get('status'),
@@ -372,12 +515,13 @@ def build_runtime_analytics(store: RuntimeAnalyticsStoreProtocol, current_snapsh
             'events': incident_events[-10:],
             'supported_events': ['incident_opened', 'incident_acknowledged', 'incident_resolved'],
         },
-        'mttr': mttr,
-        'lead_time': {
-            'status': 'pending_ci_deploy_integration',
-            'value_seconds': None,
-            'reason': 'requires deployment event timestamps',
+        'deploy_lifecycle': {
+            'last_event': deploy_event,
+            'events': deploy_events[-10:],
+            'supported_events': ['deploy_started', 'deploy_finished'],
         },
+        'mttr': mttr,
+        'lead_time': lead_time,
         'latest': snapshots[-10:],
         'guardrails': {
             'no_secrets': True,
@@ -386,5 +530,6 @@ def build_runtime_analytics(store: RuntimeAnalyticsStoreProtocol, current_snapsh
             'durable_storage_enabled': durable_enabled,
             'storage_mode': store.storage_mode(),
             'incident_lifecycle_enabled': True,
+            'deploy_lifecycle_enabled': True,
         },
     }
