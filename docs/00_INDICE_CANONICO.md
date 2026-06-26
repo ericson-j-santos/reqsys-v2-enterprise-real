@@ -1,6 +1,6 @@
 # Índice Canônico — ReqSys
 
-Data de referência: 2026-06-22
+Data de referência: 2026-06-26
 
 Este índice consolida os documentos canônicos do ReqSys para orientar humanos, agentes, automações e futuras evoluções do repositório.
 
@@ -19,6 +19,7 @@ Este índice consolida os documentos canônicos do ReqSys para orientar humanos,
 | `docs/governance/CODERABBIT_FAST_REVIEW_GUARDRAILS.md` | Guardrails operacionais para reduzir tempo de CodeRabbit sem reduzir governança. |
 | `docs/ci/CI_ACCELERATION_STRATEGY.md` | Estratégia de aceleração de CI, fast path e validações profundas condicionais. |
 | `docs/devops/PLANO_EVOLUTIVO_DEVOPS_CORPORATIVO.md` | Plano estratégico para evolução DevOps corporativa, Platform Engineering, DevSecOps, observabilidade e IA operacional. |
+| `docs/strategy/REQSYS_ATUALIZACAO_CONSOLIDADA_2026-06-26.md` | Atualização estratégica consolidada de 26/06/2026, com foco em runtime operacional, observabilidade, ambientes e operação autônoma. |
 
 ## Regra de precedência
 
