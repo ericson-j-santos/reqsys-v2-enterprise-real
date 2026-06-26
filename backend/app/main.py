@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from datetime import UTC, datetime
 
@@ -118,6 +119,33 @@ def _runtime_payload(status: str, check: str) -> dict[str, str]:
     }
 
 
+def _build_sha() -> str:
+    return os.getenv('GITHUB_SHA') or os.getenv('FLY_IMAGE_REF') or 'unknown'
+
+
+def _runtime_contracts() -> dict:
+    return {
+        'schema_version': '1.0.0',
+        'contract': 'reqsys-public-runtime-contract',
+        'service': 'reqsys-api',
+        'environment': settings.normalized_environment,
+        'version': settings.app_version,
+        'required_public_endpoints': [
+            {'method': 'GET', 'path': '/health', 'expected_http': 200, 'purpose': 'basic_health'},
+            {'method': 'GET', 'path': '/api/runtime/health', 'expected_http': 200, 'purpose': 'runtime_health'},
+            {'method': 'GET', 'path': '/api/runtime/readiness', 'expected_http': 200, 'purpose': 'traffic_readiness'},
+            {'method': 'GET', 'path': '/api/runtime/liveness', 'expected_http': 200, 'purpose': 'process_liveness'},
+        ],
+        'optional_public_evidence': [
+            {'method': 'GET', 'path': '/', 'purpose': 'public_landing'},
+            {'method': 'GET', 'path': '/api/runtime/contracts', 'purpose': 'runtime_contract'},
+            {'method': 'GET', 'path': '/api/runtime/version', 'purpose': 'runtime_version'},
+            {'method': 'GET', 'path': '/api/runtime/build-info', 'purpose': 'runtime_build'},
+            {'method': 'GET', 'path': '/api/runtime/dependencies', 'purpose': 'runtime_dependencies'},
+        ],
+    }
+
+
 @app.get('/')
 def root():
     return ok(
@@ -134,6 +162,10 @@ def root():
             'runtime_metrics': '/api/runtime/metrics',
             'runtime_dashboard': '/api/runtime/dashboard',
             'runtime_analytics': '/api/runtime/analytics',
+            'runtime_contracts': '/api/runtime/contracts',
+            'runtime_version': '/api/runtime/version',
+            'runtime_build_info': '/api/runtime/build-info',
+            'runtime_dependencies': '/api/runtime/dependencies',
             'agile_runtime': '/v1/agile-runtime/resumo',
         }
     )
@@ -157,3 +189,48 @@ def runtime_readiness():
 @app.get('/api/runtime/liveness')
 def runtime_liveness():
     return ok(_runtime_payload('alive', 'liveness'))
+
+
+@app.get('/api/runtime/contracts')
+def runtime_contracts():
+    return ok(_runtime_contracts())
+
+
+@app.get('/api/runtime/version')
+def runtime_version():
+    return ok(
+        {
+            'service': 'reqsys-api',
+            'version': settings.app_version,
+            'environment': settings.normalized_environment,
+            'schema_version': '1.0.0',
+        }
+    )
+
+
+@app.get('/api/runtime/build-info')
+def runtime_build_info():
+    return ok(
+        {
+            'service': 'reqsys-api',
+            'version': settings.app_version,
+            'environment': settings.normalized_environment,
+            'build_sha': _build_sha(),
+            'generated_at': datetime.now(UTC).isoformat(),
+        }
+    )
+
+
+@app.get('/api/runtime/dependencies')
+def runtime_dependencies():
+    return ok(
+        {
+            'service': 'reqsys-api',
+            'status': 'ok',
+            'dependencies': [
+                {'name': 'api', 'type': 'process', 'status': 'ok', 'required': True},
+                {'name': 'database', 'type': 'storage', 'status': 'not_checked', 'required': True},
+                {'name': 'identity', 'type': 'external', 'status': 'not_checked', 'required': False},
+            ],
+        }
+    )
