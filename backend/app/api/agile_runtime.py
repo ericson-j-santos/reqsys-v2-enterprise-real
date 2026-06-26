@@ -1,3 +1,4 @@
+from typing import Literal
 from time import time_ns
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -17,9 +18,11 @@ from app.schemas.agile_runtime import (
     AgileWorkflowTransicao,
     AgileWorkItemCriar,
     AgileWorkItemOut,
+    GitProviderGovernedPlanOut,
 )
 from app.services.agile_ai_router import recomendar_roteamento_multi_ia
 from app.services.auditoria import registrar_evento
+from app.services.git_provider_governed_adapter import gerar_plano_git_governado
 
 router = APIRouter(prefix='/v1/agile-runtime', tags=['Agile Runtime'])
 
@@ -68,6 +71,29 @@ def _routing_out(item: AgileWorkItem, modo: str = 'preview') -> AgileAIRoutingRe
         confianca=recomendacao.confianca,
         justificativas=recomendacao.justificativas,
         acoes_recomendadas=recomendacao.acoes_recomendadas,
+        modo=modo,
+    )
+
+
+def _git_plan_out(item: AgileWorkItem, provider: Literal['github', 'gitlab'], modo: str = 'preview') -> GitProviderGovernedPlanOut:
+    plan = gerar_plano_git_governado(item, provider)
+    return GitProviderGovernedPlanOut(
+        work_item_id=item.id,
+        work_item_codigo=item.codigo,
+        provider=plan.provider,
+        repository=plan.repository,
+        issue_title=plan.issue_title,
+        issue_body=plan.issue_body,
+        labels=plan.labels,
+        branch_name=plan.branch_name,
+        pipeline_name=plan.pipeline_name,
+        change_kind=plan.change_kind,
+        governance_mode=plan.governance_mode,
+        risk_level=plan.risk_level,
+        requires_human_approval=plan.requires_human_approval,
+        evidence_title=plan.evidence_title,
+        evidence_summary=plan.evidence_summary,
+        next_actions=plan.next_actions,
         modo=modo,
     )
 
@@ -194,6 +220,48 @@ def aplicar_roteamento_multi_ia(
         '{"campos":"minimizados"}',
     )
     return ok(routing.model_dump(), x_correlation_id)
+
+
+@router.get('/work-items/{work_item_id}/git-provider/{provider}/plan')
+def preview_plano_git_provider(
+    work_item_id: int,
+    provider: Literal['github', 'gitlab'],
+    db: Session = Depends(get_db),
+):
+    item = _get_work_item(db, work_item_id)
+    return ok(_git_plan_out(item, provider, 'preview').model_dump())
+
+
+@router.post('/work-items/{work_item_id}/git-provider/{provider}/register-plan')
+def registrar_plano_git_provider(
+    work_item_id: int,
+    provider: Literal['github', 'gitlab'],
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    item = _get_work_item(db, work_item_id)
+    plan = _git_plan_out(item, provider, 'registrado')
+    evidencia = AgileEvidence(
+        work_item_id=item.id,
+        tipo='auditoria',
+        titulo=plan.evidence_title,
+        status='planejado',
+        observacao=plan.evidence_summary,
+        correlation_id=x_correlation_id or 'sem-correlation-id',
+        criado_por='git-provider-governed-adapter',
+    )
+    db.add(evidencia)
+    db.commit()
+    registrar_evento(
+        db,
+        x_correlation_id or 'sem-correlation-id',
+        'git-provider-governed-adapter',
+        'AGILE_GIT_PROVIDER_PLAN_REGISTRADO',
+        'agile_work_item',
+        item.id,
+        '{"campos":"minimizados"}',
+    )
+    return ok(plan.model_dump(), x_correlation_id)
 
 
 @router.patch('/work-items/{work_item_id}/workflow')
