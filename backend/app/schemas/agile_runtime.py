@@ -146,3 +146,23 @@ class AgileAIRoutingRecommendationOut(BaseModel):
     justificativas: list[str]
     acoes_recomendadas: list[str]
     modo: Literal['preview', 'aplicado'] = 'preview'
+
+
+class GitProviderGovernedPlanOut(BaseModel):
+    work_item_id: int
+    work_item_codigo: str
+    provider: Literal['github', 'gitlab']
+    repository: str
+    issue_title: str
+    issue_body: str
+    labels: list[str]
+    branch_name: str
+    pipeline_name: str
+    change_kind: Literal['issue', 'branch', 'merge_request', 'pull_request']
+    governance_mode: Literal['plan_only', 'manual_approval_required']
+    risk_level: Literal['baixo', 'medio', 'alto']
+    requires_human_approval: bool
+    evidence_title: str
+    evidence_summary: str
+    next_actions: list[str]
+    modo: Literal['preview', 'registrado'] = 'preview'
