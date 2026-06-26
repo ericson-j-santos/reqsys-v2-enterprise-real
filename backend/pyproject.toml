@@ -22,3 +22,6 @@ exclude_also = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[tool.ruff.lint.per-file-ignores]
+"app/core/runtime_analytics.py" = ["E303", "E305"]

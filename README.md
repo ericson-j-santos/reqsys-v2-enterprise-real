@@ -42,6 +42,10 @@ cd backend
 pip install -r requirements.txt
 ```
 
+## Observabilidade runtime e correlation analytics
+
+O incremento REQSYS#326 adiciona a fundação de observabilidade runtime com `correlation_id` unificado, topology preview e artifacts lógicos `runtime-correlation-report.json` e `runtime-observability-report.json` via `/api/runtime/analytics`. O dashboard runtime (`/api/runtime/dashboard`) também passa a expor correlation analytics, incident correlation, operational trace chains e grafo de dependências de ambientes sem dependência externa obrigatória.
+
 ## Runtime público e readiness operacional
 
 O incremento REQSYS#325 adiciona validação read-only dos ambientes públicos Fly.io/DuckDNS. O comando abaixo gera `public-runtime-validation.json` e `ops-readiness-report.json` sem acessar secrets e sem alterar produção:

@@ -9,6 +9,11 @@ from pydantic import BaseModel, Field
 from app.core.autonomous_operations import gerar_snapshot_operacao_autonoma
 from app.core.config import settings
 from app.core.envelope import ok
+from app.core.runtime_analytics import (
+    build_correlation_report,
+    build_observability_report,
+    build_runtime_topology,
+)
 from app.core.runtime_remediation import (
     RemediationRequest,
     avaliar_remediacao,
@@ -233,13 +238,23 @@ def _criar_runtime_observability_snapshot(correlation_id: str) -> dict:
 
 
 def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
+    topology = build_runtime_topology(snapshot, [snapshot], [], [])
+    correlation_report = build_correlation_report(snapshot, [snapshot], [], [])
+    observability_report = build_observability_report(snapshot, {'failure_rate': 0, 'availability_score': 100}, topology, correlation_report)
     return {
-        'schema_version': '1.1.0',
+        'schema_version': '1.2.0',
         'title': 'ReqSys Runtime Operational Dashboard',
         'description': 'Schema-driven dashboard para runtime publico, health, readiness e metricas operacionais.',
         'generated_at': snapshot['generated_at'],
         'correlation_id': snapshot['correlation_id'],
         'layout': {'type': 'grid', 'columns': 4, 'responsive': True},
+        'correlation_analytics': correlation_report,
+        'runtime_topology': topology,
+        'observability_readiness': observability_report,
+        'artifacts': {
+            'runtime-correlation-report.json': '/api/runtime/analytics',
+            'runtime-observability-report.json': '/api/runtime/analytics',
+        },
         'data_source': {
             'kind': 'runtime_snapshot',
             'endpoint': '/api/runtime/health',
@@ -389,6 +404,24 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'title': 'Governanca e Evidencias',
                 'type': 'key_value',
                 'items': snapshot['evidence'],
+            },
+            {
+                'id': 'correlation-analytics',
+                'title': 'Correlation Analytics',
+                'type': 'summary',
+                'items': correlation_report,
+            },
+            {
+                'id': 'runtime-topology-preview',
+                'title': 'Runtime Topology Preview',
+                'type': 'graph_preview',
+                'items': topology,
+            },
+            {
+                'id': 'observability-readiness',
+                'title': 'Observability Readiness',
+                'type': 'summary',
+                'items': observability_report,
             },
         ],
         'guardrails': {

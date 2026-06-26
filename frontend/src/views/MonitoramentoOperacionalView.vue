@@ -39,6 +39,13 @@
         </article>
       </div>
 
+      <div class="cards" aria-label="Readiness de observabilidade">
+        <article class="card"><span>Observabilidade</span><strong>{{ observabilityReadiness.observability_percent ?? 'n/a' }}%</strong></article>
+        <article class="card"><span>Cobertura topologia</span><strong>{{ observabilityReadiness.topology_coverage ?? 'n/a' }}%</strong></article>
+        <article class="card"><span>Profundidade correlação</span><strong>{{ observabilityReadiness.correlation_depth ?? 'n/a' }}</strong></article>
+        <article class="card"><span>Traceabilidade</span><strong>{{ observabilityReadiness.operational_traceability ?? 'n/a' }}%</strong></article>
+      </div>
+
       <ol class="timeline" aria-label="Topologia operacional">
         <li v-for="item in workflowTopology" :key="item.step">
           <span class="timeline-step">{{ item.label }}</span>
@@ -46,6 +53,33 @@
           <a :href="item.href">Detalhar</a>
         </li>
       </ol>
+
+      <div class="analitico" aria-label="Correlation analytics">
+        <table>
+          <thead><tr><th>Artefato</th><th>Correlation ID</th><th>Cadeia operacional</th><th>Incidentes correlacionados</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>{{ correlationAnalytics.artifact_name || 'runtime-correlation-report.json' }}</td>
+              <td>{{ correlationAnalytics.correlation_id || runtimeDashboard?.correlation_id }}</td>
+              <td>{{ traceChain }}</td>
+              <td>{{ correlationAnalytics.incident_correlation?.total_related_events ?? 0 }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="analitico" aria-label="Environment dependency graph">
+        <table>
+          <thead><tr><th>Ambiente</th><th>Dependências</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr v-for="env in environmentDependencies" :key="env.environment">
+              <td>{{ env.environment }}</td>
+              <td>{{ env.depends_on?.join(', ') }}</td>
+              <td><span :class="['badge', classeRuntime(env.status)]">{{ env.status }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="filtros" aria-label="Filtros do analítico">
@@ -149,6 +183,11 @@ const estadoGeralCalculado = computed(() => {
 })
 const runtimeCards = computed(() => runtimeDashboard.value?.cards || [])
 const workflowTopology = computed(() => runtimeDashboard.value?.sections?.find((section) => section.id === 'workflow-topology')?.items || [])
+const correlationAnalytics = computed(() => runtimeDashboard.value?.correlation_analytics || {})
+const observabilityReadiness = computed(() => runtimeDashboard.value?.observability_readiness || {})
+const runtimeTopologyPreview = computed(() => runtimeDashboard.value?.runtime_topology || {})
+const environmentDependencies = computed(() => runtimeTopologyPreview.value?.environment_dependencies || [])
+const traceChain = computed(() => correlationAnalytics.value?.operational_trace_chains?.[0]?.chain?.join(' → ') || runtimeTopologyPreview.value?.trace_chain?.join(' → ') || 'n/a')
 
 const totalPorStatus = computed(() => conectores.value.reduce((acc, item) => {
   acc[item.status] = (acc[item.status] || 0) + 1
