@@ -1,0 +1,70 @@
+name: Runtime Health Center
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/runtime_health_center.py'
+      - 'tests/test_runtime_health_center.py'
+      - 'docs/operations/runtime-ops-governance-p1.md'
+      - '.github/workflows/runtime-health-center.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  aggregate-runtime-health:
+    name: Aggregate local operational status
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run Runtime Health Center unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests/test_runtime_health_center.py
+
+      - name: Generate Runtime Health Center report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/runtime_health_center.py --output artifacts/runtime-health-center/runtime-health-report.json
+          python -m json.tool artifacts/runtime-health-center/runtime-health-report.json > /tmp/runtime-health-report.pretty.json
+          mv /tmp/runtime-health-report.pretty.json artifacts/runtime-health-center/runtime-health-report.json
+
+      - name: Publish report summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path('artifacts/runtime-health-center/runtime-health-report.json').read_text())
+          print('# Runtime Health Center')
+          print('')
+          print(f"- Maturity: {report['maturity_percent']}%")
+          print(f"- Operational risk: {report['operational_risk']}")
+          print(f"- Confidence: {report['confidence_level']}")
+          print('')
+          print('| Domain | Status | Score | Signals |')
+          print('|---|---|---:|---:|')
+          for name, domain in report['domains'].items():
+              print(f"| {name} | {domain['status']} | {domain['score']} | {domain['signals_available']}/{domain['signals_total']} |")
+          PY
+
+      - name: Upload runtime health report
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-health-report
+          path: artifacts/runtime-health-center/runtime-health-report.json
+          if-no-files-found: error
+          retention-days: 30
