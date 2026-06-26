@@ -7,6 +7,7 @@ from app.core.envelope import ok
 from app.db import get_db
 from app.models.agile_runtime import AgileEvidence, AgileSprint, AgileWorkItem
 from app.schemas.agile_runtime import (
+    AgileAIRoutingRecommendationOut,
     AgileEvidenceCriar,
     AgileEvidenceOut,
     AgileRuntimeResumo,
@@ -17,6 +18,7 @@ from app.schemas.agile_runtime import (
     AgileWorkItemCriar,
     AgileWorkItemOut,
 )
+from app.services.agile_ai_router import recomendar_roteamento_multi_ia
 from app.services.auditoria import registrar_evento
 
 router = APIRouter(prefix='/v1/agile-runtime', tags=['Agile Runtime'])
@@ -50,6 +52,24 @@ def _get_work_item(db: Session, work_item_id: int) -> AgileWorkItem:
     if not item:
         raise HTTPException(status_code=404, detail='Work item agile nao encontrado')
     return item
+
+
+def _routing_out(item: AgileWorkItem, modo: str = 'preview') -> AgileAIRoutingRecommendationOut:
+    recomendacao = recomendar_roteamento_multi_ia(item)
+    return AgileAIRoutingRecommendationOut(
+        work_item_id=item.id,
+        work_item_codigo=item.codigo,
+        owner_ai=recomendacao.owner_ai,
+        categoria=recomendacao.categoria,
+        labels=recomendacao.labels,
+        branch_sugerida=recomendacao.branch_sugerida,
+        pipeline_sugerido=recomendacao.pipeline_sugerido,
+        prioridade_sugerida=recomendacao.prioridade_sugerida,
+        confianca=recomendacao.confianca,
+        justificativas=recomendacao.justificativas,
+        acoes_recomendadas=recomendacao.acoes_recomendadas,
+        modo=modo,
+    )
 
 
 @router.get('/resumo')
@@ -125,6 +145,55 @@ def criar_work_item(payload: AgileWorkItemCriar, db: Session = Depends(get_db), 
         '{"campos":"minimizados"}',
     )
     return ok(AgileWorkItemOut.model_validate(item).model_dump(), x_correlation_id)
+
+
+@router.get('/work-items/{work_item_id}/ai-routing/preview')
+def preview_roteamento_multi_ia(work_item_id: int, db: Session = Depends(get_db)):
+    item = _get_work_item(db, work_item_id)
+    return ok(_routing_out(item, 'preview').model_dump())
+
+
+@router.post('/work-items/{work_item_id}/ai-routing/apply')
+def aplicar_roteamento_multi_ia(
+    work_item_id: int,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    item = _get_work_item(db, work_item_id)
+    routing = _routing_out(item, 'aplicado')
+    item.owner_ai = routing.owner_ai
+    item.prioridade = routing.prioridade_sugerida
+    if not item.branch:
+        item.branch = routing.branch_sugerida
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+
+    evidencia = AgileEvidence(
+        work_item_id=item.id,
+        tipo='auditoria',
+        titulo='Roteamento Multi-IA aplicado',
+        status='aplicado',
+        observacao=(
+            f'owner_ai={routing.owner_ai}; categoria={routing.categoria}; '
+            f'pipeline={routing.pipeline_sugerido}; confianca={routing.confianca}'
+        ),
+        correlation_id=x_correlation_id or 'sem-correlation-id',
+        criado_por='multi-ia-sprint-router',
+    )
+    db.add(evidencia)
+    db.commit()
+
+    registrar_evento(
+        db,
+        x_correlation_id or 'sem-correlation-id',
+        'multi-ia-sprint-router',
+        'AGILE_MULTI_IA_ROUTING_APLICADO',
+        'agile_work_item',
+        item.id,
+        '{"campos":"minimizados"}',
+    )
+    return ok(routing.model_dump(), x_correlation_id)
 
 
 @router.patch('/work-items/{work_item_id}/workflow')
