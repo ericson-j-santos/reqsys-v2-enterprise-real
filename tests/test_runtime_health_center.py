@@ -49,6 +49,8 @@ class RuntimeHealthCenterTests(unittest.TestCase):
         self.assertIn(report["gold_standard_depth"]["overall_status"], {"passed", "warning", "partial"})
         self.assertIn("runtime_operational_evidence_graph", report)
         self.assertIn("runtime_risk_scoring", report)
+        self.assertIn("public_access_validation", report)
+        self.assertIn(report["public_access_validation"]["status"], {"missing", "warning", "passed"})
         self.assertFalse(report["pr_evidence_gate"]["duplicated"])
         self.assertLessEqual(report["maturity_percent"], report["base_maturity_percent"])
 
@@ -63,6 +65,7 @@ class RuntimeHealthCenterTests(unittest.TestCase):
         self.assertEqual(report["operational_risk"], "high")
         self.assertEqual(report["confidence_level"], "low")
         self.assertEqual(report["environment_drift"]["drift_level"], "high")
+        self.assertEqual(report["public_access_validation"]["status"], "missing")
         self.assertEqual(report["gold_standard_depth"]["overall_status"], "partial")
         self.assertIn("runtime", report["gold_standard_depth"]["blockers"])
 
@@ -110,6 +113,36 @@ class RuntimeHealthCenterTests(unittest.TestCase):
         self.assertEqual(report["environment_drift"]["drift_level"], "low")
         self.assertEqual(report["environment_drift"]["status"], "passed")
         self.assertEqual(report["operational_risk"], "high")
+
+
+    def test_public_access_artifact_updates_environment_status(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            (root / "artifacts/public-access-validation").mkdir(parents=True)
+            (root / "artifacts/public-access-validation/public-access-validation.json").write_text(json.dumps({
+                "analytics": {
+                    "total": 9,
+                    "reachable": 6,
+                    "expected": 6,
+                    "unavailable": 3,
+                    "unexpectedStatus": 3,
+                    "reachablePercent": 66.67,
+                    "expectedPercent": 66.67,
+                    "byEnvironment": {
+                        "dev": {"total": 3, "reachable": 3, "expected": 3},
+                        "staging": {"total": 3, "reachable": 3, "expected": 3},
+                        "prod": {"total": 3, "reachable": 0, "expected": 0},
+                    },
+                }
+            }), encoding="utf-8")
+
+            report = build_report(root)
+
+        self.assertEqual(report["public_access_validation"]["status"], "warning")
+        self.assertEqual(report["public_access_validation"]["environments"]["prod"]["status"], "missing")
+        self.assertEqual(report["public_access_validation"]["environments"]["dev"]["status"], "passed")
 
     def test_cli_writes_versioned_json(self):
         import tempfile

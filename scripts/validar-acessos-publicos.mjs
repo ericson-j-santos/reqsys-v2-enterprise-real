@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { mkdir, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
+
 const DEFAULT_TARGETS = [
   { name: 'prod-app-fly', environment: 'prod', type: 'app', provider: 'fly', url: 'https://reqsys-app.fly.dev/', expectedStatus: [200, 301, 302, 401, 403] },
   { name: 'prod-app-duckdns', environment: 'prod', type: 'app', provider: 'duckdns', url: 'https://tieriprod.duckdns.org/', expectedStatus: [200, 301, 302, 401, 403] },
@@ -13,6 +16,7 @@ const DEFAULT_TARGETS = [
 ]
 
 const timeoutMs = Number.parseInt(process.env.ACCESS_VALIDATION_TIMEOUT_MS || '15000', 10)
+const outputPath = process.env.ACCESS_VALIDATION_OUTPUT || 'artifacts/public-access-validation/public-access-validation.json'
 const failOnUnavailable = (process.env.ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE || 'true').toLowerCase() !== 'false'
 
 function nowIso() {
@@ -122,14 +126,21 @@ for (const target of DEFAULT_TARGETS) {
 
 const analytics = buildAnalytics(results)
 const payload = {
+  schemaVersion: '1.0.0',
+  artifact: 'public-access-validation',
+  issue: 'REQSYS#323',
   generatedAt: nowIso(),
   timeoutMs,
   failOnUnavailable,
   analytics,
+  environments: analytics.byEnvironment,
   results,
 }
 
-console.log(JSON.stringify(payload, null, 2))
+await mkdir(dirname(outputPath), { recursive: true })
+await writeFile(outputPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
+
+console.log(JSON.stringify({ ...payload, outputPath }, null, 2))
 
 const hasFailure = results.some((item) => !item.reachable || !item.statusExpected)
 if (failOnUnavailable && hasFailure) {

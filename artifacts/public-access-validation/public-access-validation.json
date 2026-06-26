@@ -1,0 +1,232 @@
+{
+  "schemaVersion": "1.0.0",
+  "artifact": "public-access-validation",
+  "issue": "REQSYS#323",
+  "generatedAt": "2026-06-26T22:18:22.656Z",
+  "timeoutMs": 15000,
+  "failOnUnavailable": false,
+  "analytics": {
+    "total": 9,
+    "reachable": 0,
+    "expected": 0,
+    "unavailable": 9,
+    "unexpectedStatus": 9,
+    "reachablePercent": 0,
+    "expectedPercent": 0,
+    "avgDurationMs": null,
+    "maxDurationMs": null,
+    "byEnvironment": {
+      "prod": {
+        "total": 3,
+        "reachable": 0,
+        "expected": 0
+      },
+      "staging": {
+        "total": 3,
+        "reachable": 0,
+        "expected": 0
+      },
+      "dev": {
+        "total": 3,
+        "reachable": 0,
+        "expected": 0
+      }
+    }
+  },
+  "environments": {
+    "prod": {
+      "total": 3,
+      "reachable": 0,
+      "expected": 0
+    },
+    "staging": {
+      "total": 3,
+      "reachable": 0,
+      "expected": 0
+    },
+    "dev": {
+      "total": 3,
+      "reachable": 0,
+      "expected": 0
+    }
+  },
+  "results": [
+    {
+      "name": "prod-app-fly",
+      "environment": "prod",
+      "type": "app",
+      "provider": "fly",
+      "url": "https://reqsys-app.fly.dev/",
+      "expectedStatus": [
+        200,
+        301,
+        302,
+        401,
+        403
+      ],
+      "checkedAt": "2026-06-26T22:18:02.413Z",
+      "reachable": false,
+      "status": null,
+      "statusExpected": false,
+      "durationMs": null,
+      "contentType": null,
+      "error": "fetch failed"
+    },
+    {
+      "name": "prod-app-duckdns",
+      "environment": "prod",
+      "type": "app",
+      "provider": "duckdns",
+      "url": "https://tieriprod.duckdns.org/",
+      "expectedStatus": [
+        200,
+        301,
+        302,
+        401,
+        403
+      ],
+      "checkedAt": "2026-06-26T22:18:02.574Z",
+      "reachable": false,
+      "status": null,
+      "statusExpected": false,
+      "durationMs": null,
+      "contentType": null,
+      "error": "fetch failed"
+    },
+    {
+      "name": "prod-api-health",
+      "environment": "prod",
+      "type": "api",
+      "provider": "fly",
+      "url": "https://reqsys-api.fly.dev/health",
+      "expectedStatus": [
+        200
+      ],
+      "checkedAt": "2026-06-26T22:18:07.585Z",
+      "reachable": false,
+      "status": null,
+      "statusExpected": false,
+      "durationMs": null,
+      "contentType": null,
+      "error": "fetch failed"
+    },
+    {
+      "name": "stg-app-fly",
+      "environment": "staging",
+      "type": "app",
+      "provider": "fly",
+      "url": "https://reqsys-app-stg.fly.dev/",
+      "expectedStatus": [
+        200,
+        301,
+        302,
+        401,
+        403
+      ],
+      "checkedAt": "2026-06-26T22:18:07.596Z",
+      "reachable": false,
+      "status": null,
+      "statusExpected": false,
+      "durationMs": null,
+      "contentType": null,
+      "error": "fetch failed"
+    },
+    {
+      "name": "stg-app-duckdns",
+      "environment": "staging",
+      "type": "app",
+      "provider": "duckdns",
+      "url": "https://tierin.duckdns.org/",
+      "expectedStatus": [
+        200,
+        301,
+        302,
+        401,
+        403
+      ],
+      "checkedAt": "2026-06-26T22:18:12.610Z",
+      "reachable": false,
+      "status": null,
+      "statusExpected": false,
+      "durationMs": null,
+      "contentType": null,
+      "error": "fetch failed"
+    },
+    {
+      "name": "stg-api-health",
+      "environment": "staging",
+      "type": "api",
+      "provider": "fly",
+      "url": "https://reqsys-api-stg.fly.dev/health",
+      "expectedStatus": [
+        200
+      ],
+      "checkedAt": "2026-06-26T22:18:12.619Z",
+      "reachable": false,
+      "status": null,
+      "statusExpected": false,
+      "durationMs": null,
+      "contentType": null,
+      "error": "fetch failed"
+    },
+    {
+      "name": "dev-app-fly",
+      "environment": "dev",
+      "type": "app",
+      "provider": "fly",
+      "url": "https://reqsys-app-dev.fly.dev/",
+      "expectedStatus": [
+        200,
+        301,
+        302,
+        401,
+        403
+      ],
+      "checkedAt": "2026-06-26T22:18:17.631Z",
+      "reachable": false,
+      "status": null,
+      "statusExpected": false,
+      "durationMs": null,
+      "contentType": null,
+      "error": "fetch failed"
+    },
+    {
+      "name": "dev-app-duckdns",
+      "environment": "dev",
+      "type": "app",
+      "provider": "duckdns",
+      "url": "https://tieridev.duckdns.org/",
+      "expectedStatus": [
+        200,
+        301,
+        302,
+        401,
+        403
+      ],
+      "checkedAt": "2026-06-26T22:18:17.637Z",
+      "reachable": false,
+      "status": null,
+      "statusExpected": false,
+      "durationMs": null,
+      "contentType": null,
+      "error": "fetch failed"
+    },
+    {
+      "name": "dev-api-health",
+      "environment": "dev",
+      "type": "api",
+      "provider": "fly",
+      "url": "https://reqsys-api-dev.fly.dev/health",
+      "expectedStatus": [
+        200
+      ],
+      "checkedAt": "2026-06-26T22:18:22.648Z",
+      "reachable": false,
+      "status": null,
+      "statusExpected": false,
+      "durationMs": null,
+      "contentType": null,
+      "error": "fetch failed"
+    }
+  ]
+}
