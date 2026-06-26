@@ -18,6 +18,7 @@ Este índice consolida os documentos canônicos do ReqSys para orientar humanos,
 | `docs/adr/ADR-0021-coderabbit-fast-review-governance.md` | Governança de revisão IA/CodeRabbit com fast path, PRs pequenos e deep review condicional. |
 | `docs/governance/CODERABBIT_FAST_REVIEW_GUARDRAILS.md` | Guardrails operacionais para reduzir tempo de CodeRabbit sem reduzir governança. |
 | `docs/ci/CI_ACCELERATION_STRATEGY.md` | Estratégia de aceleração de CI, fast path e validações profundas condicionais. |
+| `docs/devops/PLANO_EVOLUTIVO_DEVOPS_CORPORATIVO.md` | Plano estratégico para evolução DevOps corporativa, Platform Engineering, DevSecOps, observabilidade e IA operacional. |
 
 ## Regra de precedência
 
