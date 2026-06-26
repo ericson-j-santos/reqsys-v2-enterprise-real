@@ -42,6 +42,21 @@ cd backend
 pip install -r requirements.txt
 ```
 
+## Runtime público e readiness operacional
+
+O incremento REQSYS#325 adiciona validação read-only dos ambientes públicos Fly.io/DuckDNS. O comando abaixo gera `public-runtime-validation.json` e `ops-readiness-report.json` sem acessar secrets e sem alterar produção:
+
+```bash
+python scripts/validate_public_runtime.py \
+  --base-url https://reqsys-api.fly.dev \
+  --environment prod \
+  --include-optional-evidence \
+  --output artifacts/runtime/public-runtime-validation.json \
+  --readiness-output artifacts/runtime/ops-readiness-report.json
+```
+
+Os artifacts consolidam status HTTP, tempo de resposta, CORS básico, API `/health`, runtime dashboard, sinais de login, Incident Timeline e classificação `unavailable`, `degraded`, `partial` ou `healthy`.
+
 ## Execução rápida
 
 ### Backend

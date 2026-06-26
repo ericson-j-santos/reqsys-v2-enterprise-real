@@ -42,6 +42,9 @@
     .kpi-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
     .kpi-value { font-size: 30px; font-weight: 700; margin-top: 8px; }
     .status { display: inline-block; padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+    .healthy { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
+    .partial, .degraded { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
+    .unavailable { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
     .passed { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
     .warning { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
     .failed, .critical { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
@@ -74,6 +77,20 @@
       <div class="card"><div class="kpi-label">Falhas críticas</div><div id="critical" class="kpi-value">-</div></div>
       <div class="card"><div class="kpi-label">Alertas</div><div id="warnings" class="kpi-value">-</div></div>
     </div>
+
+    <section class="card">
+      <h2>Runtime público — readiness Fly/DuckDNS</h2>
+      <div class="grid">
+        <div><div class="kpi-label">Status operacional</div><div id="public-runtime-status" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Readiness</div><div id="public-runtime-readiness" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Tempo resposta</div><div id="public-runtime-response" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">API/Dashboard/Login</div><div id="public-runtime-flags" class="small">-</div></div>
+      </div>
+      <details class="details">
+        <summary>Blocking issues e checks</summary>
+        <pre id="public-runtime-details">{}</pre>
+      </details>
+    </section>
 
     <section class="card">
       <h2>Links operacionais</h2>
@@ -123,7 +140,7 @@
   </main>
 
   <script>
-    const statusClass = (value) => ['passed','warning','failed','critical','unknown'].includes(value) ? value : 'unknown';
+    const statusClass = (value) => ['passed','warning','failed','critical','unknown','healthy','partial','degraded','unavailable','attention'].includes(value) ? value : 'unknown';
     const formatDate = (epoch) => epoch ? new Date(epoch * 1000).toLocaleString('pt-BR') : 'Não informado';
     const uniqueValues = (items, key) => [...new Set(items.map((item) => item[key]).filter(Boolean))].sort();
     const shortJson = (value) => JSON.stringify(value || {}, null, 2);
@@ -196,6 +213,13 @@
       document.getElementById('critical').textContent = data.critical_failure_count ?? '-';
       document.getElementById('warnings').textContent = data.warning_count ?? '-';
       document.getElementById('generated').textContent = `Gerado em: ${formatDate(data.generated_at_epoch)} | Repositório: ${data.repo}`;
+
+      const publicRuntime = data.public_runtime_readiness || {};
+      document.getElementById('public-runtime-status').innerHTML = `<span class="status ${statusClass(publicRuntime.operational_status)}">${publicRuntime.operational_status || 'unknown'}</span>`;
+      document.getElementById('public-runtime-readiness').textContent = publicRuntime.readiness_percent == null ? '-' : `${publicRuntime.readiness_percent}%`;
+      document.getElementById('public-runtime-response').textContent = publicRuntime.response_time == null ? '-' : `${publicRuntime.response_time} ms`;
+      document.getElementById('public-runtime-flags').textContent = `API: ${publicRuntime.api_ready ? 'OK' : 'pendente'} | Dashboard: ${publicRuntime.dashboard_ready ? 'OK' : 'pendente'} | Login: ${publicRuntime.login_ready ? 'OK' : 'pendente'} | Runtime: ${publicRuntime.runtime_ready ? 'OK' : 'pendente'}`;
+      document.getElementById('public-runtime-details').textContent = shortJson({ base_url: publicRuntime.base_url, evidence_ready: publicRuntime.evidence_ready, checks: publicRuntime.checks, blocking_issues: publicRuntime.blocking_issues });
 
       const links = document.getElementById('links');
       links.innerHTML = '';

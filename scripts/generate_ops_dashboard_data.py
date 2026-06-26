@@ -177,15 +177,36 @@ def _incident_timeline(report: dict[str, Any], runtime_report: dict[str, Any], e
     return events
 
 
+def _public_runtime_summary(public_runtime: dict[str, Any]) -> dict[str, Any]:
+    readiness = public_runtime.get("readiness") or {}
+    return {
+        "available": bool(public_runtime),
+        "environment": readiness.get("environment") or public_runtime.get("environment") or "prod",
+        "base_url": public_runtime.get("base_url", ""),
+        "operational_status": readiness.get("operational_status", "unknown"),
+        "readiness_percent": readiness.get("readiness_percent"),
+        "response_time": readiness.get("response_time"),
+        "dashboard_ready": readiness.get("dashboard_ready", False),
+        "login_ready": readiness.get("login_ready", False),
+        "api_ready": readiness.get("api_ready", False),
+        "runtime_ready": readiness.get("runtime_ready", False),
+        "evidence_ready": readiness.get("evidence_ready", False),
+        "blocking_issues": readiness.get("blocking_issues", []),
+        "checks": public_runtime.get("checks", {}),
+    }
+
+
 def build_dashboard_payload(
     report: dict[str, Any],
     repo: str,
     runtime_report: dict[str, Any] | None = None,
     evidence_graph: dict[str, Any] | None = None,
+    public_runtime: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     results = report.get("results", []) or []
     runtime_report = runtime_report or {}
     evidence_graph = evidence_graph or {}
+    public_runtime = public_runtime or {}
     return {
         "schema_version": "1.1.0",
         "repo": repo or report.get("repo") or "unknown",
@@ -201,12 +222,14 @@ def build_dashboard_payload(
             "pulls": f"https://github.com/{repo}/pulls" if repo else "",
             "main": f"https://github.com/{repo}/tree/main" if repo else "",
         },
+        "public_runtime_readiness": _public_runtime_summary(public_runtime),
         "runtime_gold_standard_depth": _runtime_depth(runtime_report),
         "runtime_domain_drilldowns": _domain_drilldowns(runtime_report),
         "incident_timeline": _incident_timeline(report, runtime_report, evidence_graph),
         "runtime_sources": {
             "runtime_health_report_available": bool(runtime_report),
             "runtime_operational_evidence_graph_available": bool(evidence_graph),
+            "public_runtime_validation_available": bool(public_runtime),
         },
     }
 
@@ -218,12 +241,14 @@ def main() -> int:
     parser.add_argument("--output", default="docs/ops-dashboard/data/health.json")
     parser.add_argument("--runtime-health-report", default="artifacts/runtime-health-center/runtime-health-report.json")
     parser.add_argument("--evidence-graph", default="artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json")
+    parser.add_argument("--public-runtime-validation", default="artifacts/runtime/public-runtime-validation.json")
     args = parser.parse_args()
 
     report = _load_watchdog_report(Path(args.watchdog_report))
     runtime_report = _load_optional_json(Path(args.runtime_health_report))
     evidence_graph = _load_optional_json(Path(args.evidence_graph))
-    payload = build_dashboard_payload(report, args.repo, runtime_report, evidence_graph)
+    public_runtime = _load_optional_json(Path(args.public_runtime_validation))
+    payload = build_dashboard_payload(report, args.repo, runtime_report, evidence_graph, public_runtime)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
