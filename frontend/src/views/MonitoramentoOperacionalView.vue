@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">ReqSys Operacional</p>
         <h1 id="titulo-monitoramento">Monitoramento Operacional</h1>
-        <p>Visão mínima de estado, bloqueios, pendências, conectores e itens monitorados.</p>
+        <p>Runtime navegável com health, readiness, métricas, topologia operacional e drill-downs conectados.</p>
       </div>
       <button type="button" :disabled="carregando" @click="carregarTudo">
         {{ carregando ? 'Atualizando...' : 'Atualizar' }}
@@ -20,6 +20,32 @@
       <article class="card"><span>Itens</span><strong>{{ resumo.total_itens ?? itens.length }}</strong></article>
       <article class="card"><span>Conectores</span><strong>{{ conectores.length }}</strong></article>
       <article class="card"><span>Conectores críticos</span><strong>{{ conectoresCriticos.length }}</strong></article>
+    </section>
+
+    <section class="painel runtime" aria-labelledby="titulo-runtime">
+      <div class="subcabecalho">
+        <div>
+          <h2 id="titulo-runtime">Runtime Operacional Navegável</h2>
+          <p>Health map, readiness gate e topologia de workflow expostos pelo backend runtime.</p>
+        </div>
+        <span class="correlation">Runtime: {{ runtimeDashboard?.correlation_id || 'carregando' }}</span>
+      </div>
+
+      <div class="cards" aria-label="Cards do runtime">
+        <article v-for="card in runtimeCards" :key="card.id" class="card">
+          <span>{{ card.title }}</span>
+          <strong>{{ formatarValorCard(card) }}</strong>
+          <a v-if="card.drilldown" :href="card.drilldown">Abrir drill-down</a>
+        </article>
+      </div>
+
+      <ol class="timeline" aria-label="Topologia operacional">
+        <li v-for="item in workflowTopology" :key="item.step">
+          <span class="timeline-step">{{ item.label }}</span>
+          <span :class="['badge', classeRuntime(item.status)]">{{ item.status }}</span>
+          <a :href="item.href">Detalhar</a>
+        </li>
+      </ol>
     </section>
 
     <section class="filtros" aria-label="Filtros do analítico">
@@ -99,6 +125,7 @@ const router = useRouter()
 const resumo = ref({})
 const itens = ref([])
 const conectores = ref([])
+const runtimeDashboard = ref(null)
 const correlationId = ref('local-fallback')
 const filtroEstado = ref(route.query.estado || '')
 const carregando = ref(false)
@@ -120,6 +147,9 @@ const estadoGeralCalculado = computed(() => {
   if (pendenciasCalculadas.value > 0) return 'amarelo'
   return 'verde'
 })
+const runtimeCards = computed(() => runtimeDashboard.value?.cards || [])
+const workflowTopology = computed(() => runtimeDashboard.value?.sections?.find((section) => section.id === 'workflow-topology')?.items || [])
+
 const totalPorStatus = computed(() => conectores.value.reduce((acc, item) => {
   acc[item.status] = (acc[item.status] || 0) + 1
   return acc
@@ -129,6 +159,25 @@ function classeStatus(status) {
   if (status === 'ready') return 'badge-ok'
   if (['blocked', 'unavailable', 'misconfigured'].includes(status)) return 'badge-erro'
   return 'badge-alerta'
+}
+
+function classeRuntime(status) {
+  if (['healthy', 'available', 'verde', 'runtime_healthy'].includes(status)) return 'badge-ok'
+  if (['degraded', 'runtime_degraded', 'bloqueado', 'vermelho'].includes(status)) return 'badge-erro'
+  return 'badge-alerta'
+}
+
+function formatarValorCard(card) {
+  if (card.unit === 'seconds') return `${Math.round(card.value)}s`
+  if (card.unit) return `${card.value} ${card.unit}`
+  return card.value
+}
+
+async function carregarRuntimeDashboard() {
+  const resposta = await fetch('/api/runtime/dashboard', { headers: { Accept: 'application/json' } })
+  if (!resposta.ok) throw new Error('Falha ao carregar runtime dashboard')
+  const payload = await resposta.json()
+  runtimeDashboard.value = payload.data || null
 }
 
 async function carregarMonitoramento() {
@@ -156,7 +205,7 @@ async function carregarTudo() {
   carregando.value = true
   erro.value = ''
   try {
-    await Promise.all([carregarMonitoramento(), carregarConectores()])
+    await Promise.all([carregarMonitoramento(), carregarConectores(), carregarRuntimeDashboard()])
   } catch (e) {
     erro.value = e?.message || 'Erro inesperado ao carregar monitoramento operacional'
     await carregarConectores()
@@ -187,6 +236,11 @@ onMounted(carregarTudo)
 .filtros label { display: grid; gap: 0.25rem; }
 .erro { border: 1px solid #d1242f; border-radius: 8px; color: #d1242f; padding: 0.75rem; }
 .painel { border: 1px solid #d0d7de; border-radius: 16px; display: grid; gap: 1rem; padding: 1rem; }
+.runtime { background: linear-gradient(135deg, #f6f8fa, #ffffff); }
+.card a, .timeline a { color: #0969da; display: inline-block; font-size: 0.85rem; margin-top: 0.5rem; }
+.timeline { display: grid; gap: 0.75rem; list-style: none; margin: 0; padding: 0; }
+.timeline li { align-items: center; border: 1px solid #d0d7de; border-radius: 12px; display: grid; gap: 0.5rem; grid-template-columns: minmax(140px, 1fr) auto auto; padding: 0.75rem; }
+.timeline-step { font-weight: 700; }
 .correlation { color: #57606a; font-size: 0.85rem; }
 .analitico { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; }

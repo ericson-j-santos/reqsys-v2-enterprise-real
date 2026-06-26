@@ -74,7 +74,10 @@ def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
     assert data['layout']['responsive'] is True
     assert data['data_source']['endpoint'] == '/api/runtime/health'
     assert {'runtime-status', 'risk-score', 'pending-items', 'uptime'} <= card_ids
-    assert {'public-smoke', 'governance-evidence'} <= section_ids
+    assert {'workflow-topology', 'public-smoke', 'governance-evidence'} <= section_ids
+    topology = next(section for section in data['sections'] if section['id'] == 'workflow-topology')
+    assert topology['type'] == 'timeline'
+    assert {item['step'] for item in topology['items']} == {'health', 'readiness', 'metrics', 'monitoring'}
     assert data['guardrails']['no_secrets'] is True
     assert data['guardrails']['read_only'] is True
     assert data['guardrails']['deploy_gate_relaxed'] is False

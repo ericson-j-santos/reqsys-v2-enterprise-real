@@ -283,6 +283,37 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
         ],
         'sections': [
             {
+                'id': 'workflow-topology',
+                'title': 'Topology Operacional',
+                'type': 'timeline',
+                'items': [
+                    {
+                        'step': 'health',
+                        'label': 'Runtime Health',
+                        'status': snapshot['status'],
+                        'href': '/api/runtime/health',
+                    },
+                    {
+                        'step': 'readiness',
+                        'label': 'Readiness Gate',
+                        'status': _runtime_readiness_reason(snapshot),
+                        'href': '/api/runtime/readiness',
+                    },
+                    {
+                        'step': 'metrics',
+                        'label': 'Prometheus Metrics',
+                        'status': 'available',
+                        'href': '/api/runtime/metrics',
+                    },
+                    {
+                        'step': 'monitoring',
+                        'label': 'Analitico Operacional',
+                        'status': snapshot['operational_summary']['estado_geral'],
+                        'href': '/monitoramento-operacional',
+                    },
+                ],
+            },
+            {
                 'id': 'public-smoke',
                 'title': 'Public Smoke Tests',
                 'type': 'links',
