@@ -484,6 +484,17 @@ npm run test:e2e:stable
 - Exportação PDF/Excel
 - Pipeline de CI/CD (GitHub Actions)
 
+
+## Ops Dashboard Drill-down + Incident Timeline
+
+O Ops Dashboard estatico aprofunda o runtime operacional com drill-down por dominio e uma Incident Timeline local. A geracao continua read-only e sem rede externa: usa o relatorio do Repository Health Watchdog quando existir, integra `artifacts/runtime-health-center/runtime-health-report.json` e consome `artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json` quando disponivel.
+
+```bash
+python scripts/generate_ops_dashboard_data.py --repo ericson-j-santos/reqsys-v2-enterprise-real --output docs/ops-dashboard/data/health.json
+```
+
+O contrato `docs/ops-dashboard/data/health.json` esta em `schema_version=1.1.0` e publica `runtime_domain_drilldowns`, `incident_timeline` e `runtime_sources` para filtros locais por severidade, dominio e status.
+
 ## Runtime Health Center
 
 O ReqSys possui um agregador local de status operacional para o incremento Runtime Ops Governance P1. Ele consolida sinais locais de CI/CD, Evidence Gate, governança, runtime risk scoring, documentação viva, ambientes e remediação sem acessar rede externa, ler secrets ou alterar produção.

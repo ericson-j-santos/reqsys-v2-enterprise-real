@@ -54,6 +54,9 @@
     .links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
     .link-btn { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: #0b1220; }
     .small { color: var(--muted); font-size: 13px; }
+    .filters { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+    select { background: #020617; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 8px; }
+    .details { margin-top: 8px; }
     pre { white-space: pre-wrap; word-break: break-word; background: #020617; padding: 12px; border-radius: 10px; border: 1px solid var(--border); }
     @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 600px) { main, header { padding: 16px; } .grid { grid-template-columns: 1fr; } table { font-size: 13px; } }
@@ -88,6 +91,29 @@
     </section>
 
     <section class="card">
+      <h2>Drill-down por domínio</h2>
+      <p class="small">Detalhes locais de health, evidências, risco, drift de ambiente e governança a partir do Runtime Health Center.</p>
+      <table>
+        <thead><tr><th>Domínio</th><th>Status</th><th>Score</th><th>Evidências</th><th>Detalhes</th></tr></thead>
+        <tbody id="domains"><tr><td colspan="5">Carregando...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Incident Timeline</h2>
+      <p class="small">Eventos consolidados por workflow, PR e domínio. Use filtros locais; nenhum dado externo é acessado.</p>
+      <div class="filters">
+        <label>Severidade <select id="filter-severity"><option value="">Todas</option></select></label>
+        <label>Domínio <select id="filter-domain"><option value="">Todos</option></select></label>
+        <label>Status <select id="filter-status"><option value="">Todos</option></select></label>
+      </div>
+      <table>
+        <thead><tr><th>Evento</th><th>Severidade</th><th>Domínio</th><th>Status</th><th>Workflow/PR</th></tr></thead>
+        <tbody id="timeline"><tr><td colspan="5">Carregando...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
       <h2>Checks</h2>
       <table>
         <thead><tr><th>Check</th><th>Status</th><th>Severidade</th><th>Recomendação</th><th>Evidência</th></tr></thead>
@@ -99,6 +125,67 @@
   <script>
     const statusClass = (value) => ['passed','warning','failed','critical','unknown'].includes(value) ? value : 'unknown';
     const formatDate = (epoch) => epoch ? new Date(epoch * 1000).toLocaleString('pt-BR') : 'Não informado';
+    const uniqueValues = (items, key) => [...new Set(items.map((item) => item[key]).filter(Boolean))].sort();
+    const shortJson = (value) => JSON.stringify(value || {}, null, 2);
+
+    function renderDomains(domains) {
+      const tbody = document.getElementById('domains');
+      tbody.innerHTML = '';
+      if (!domains.length) {
+        tbody.innerHTML = '<tr><td colspan="5">Runtime Health Center ainda não disponível.</td></tr>';
+        return;
+      }
+      domains.forEach((domain) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${domain.id}</td>
+          <td><span class="status ${statusClass(domain.status)}">${domain.status}</span></td>
+          <td>${domain.score ?? '-'}</td>
+          <td>${domain.signals_available ?? 0}/${domain.signals_total ?? 0}</td>
+          <td>
+            <details class="details">
+              <summary>Ver health/evidence/risk/drift/governance</summary>
+              <pre>${shortJson({ health: domain.health, evidence: domain.evidence, missing_evidence: domain.missing_evidence, risk: domain.risk, environment_drift: domain.environment_drift, governance: domain.governance })}</pre>
+            </details>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function fillFilter(id, values) {
+      const select = document.getElementById(id);
+      values.forEach((value) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      });
+    }
+
+    function renderTimeline(events) {
+      const severity = document.getElementById('filter-severity').value;
+      const domain = document.getElementById('filter-domain').value;
+      const status = document.getElementById('filter-status').value;
+      const tbody = document.getElementById('timeline');
+      const filtered = events.filter((event) => (!severity || event.severity === severity) && (!domain || event.domain === domain) && (!status || event.status === status));
+      tbody.innerHTML = '';
+      if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="5">Nenhum evento para os filtros selecionados.</td></tr>';
+        return;
+      }
+      filtered.forEach((event) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${event.title || '-'}<div class="small">${event.source || '-'}</div></td>
+          <td><span class="status ${statusClass(event.severity)}">${event.severity || '-'}</span></td>
+          <td>${event.domain || '-'}</td>
+          <td><span class="status ${statusClass(event.status)}">${event.status || '-'}</span></td>
+          <td>${event.workflow || '-'}${event.pr ? ` / PR #${event.pr}` : ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
 
     async function loadDashboard() {
       const response = await fetch('./data/health.json', { cache: 'no-store' });
@@ -122,6 +209,14 @@
         a.textContent = label;
         links.appendChild(a);
       });
+
+      renderDomains(data.runtime_domain_drilldowns || []);
+      const timelineEvents = data.incident_timeline || [];
+      fillFilter('filter-severity', uniqueValues(timelineEvents, 'severity'));
+      fillFilter('filter-domain', uniqueValues(timelineEvents, 'domain'));
+      fillFilter('filter-status', uniqueValues(timelineEvents, 'status'));
+      ['filter-severity', 'filter-domain', 'filter-status'].forEach((id) => document.getElementById(id).addEventListener('change', () => renderTimeline(timelineEvents)));
+      renderTimeline(timelineEvents);
 
       const gold = data.runtime_gold_standard_depth || {};
       document.getElementById('gold-strategy').textContent = gold.available
@@ -168,6 +263,8 @@
     loadDashboard().catch((error) => {
       document.getElementById('overall').innerHTML = '<span class="status failed">erro</span>';
       document.getElementById('checks').innerHTML = `<tr><td colspan="5">Falha ao carregar data/health.json: ${error.message}</td></tr>`;
+      document.getElementById('domains').innerHTML = `<tr><td colspan="5">Falha ao carregar runtime drill-down.</td></tr>`;
+      document.getElementById('timeline').innerHTML = `<tr><td colspan="5">Falha ao carregar incident timeline.</td></tr>`;
     });
   </script>
 </body>
