@@ -12,7 +12,7 @@ Contrato público canônico strict:
     - /api/runtime/readiness
     - /api/runtime/liveness
 
-Endpoints de UX, métricas e dashboard não fazem parte do contrato strict público.
+Endpoints de UX, contratos JSON, métricas e dashboard não fazem parte do contrato strict público.
 Devem ser validados por gates próprios, opcionais, internos ou protegidos.
 """
 
@@ -37,6 +37,11 @@ DEFAULT_ENDPOINTS = (
 
 OPTIONAL_PUBLIC_EVIDENCE_ENDPOINTS = (
     "/",
+    "/runtime",
+    "/api/runtime/contracts",
+    "/api/runtime/version",
+    "/api/runtime/build-info",
+    "/api/runtime/dependencies",
     "/api/runtime/metrics",
     "/api/runtime/dashboard",
 )
@@ -74,7 +79,7 @@ def _ler_json_seguro(raw: bytes) -> tuple[dict[str, Any] | None, list[str] | Non
 def validar_endpoint(base_url: str, endpoint: str, timeout: float) -> EndpointResult:
     url = f"{base_url}{endpoint}"
     started = time.perf_counter()
-    request = Request(url, headers={"Accept": "application/json", "User-Agent": "reqsys-runtime-smoke/1.0"})
+    request = Request(url, headers={"Accept": "application/json, text/html", "User-Agent": "reqsys-runtime-smoke/1.0"})
     try:
         with urlopen(request, timeout=timeout) as response:  # noqa: S310 - URL fornecida explicitamente pelo operador
             raw = response.read(512_000)
@@ -121,7 +126,7 @@ def main() -> int:
     parser.add_argument(
         "--include-optional-evidence",
         action="store_true",
-        help="Inclui /, metrics e dashboard somente como evidência opcional; não altera o exit code strict",
+        help="Inclui UX, contratos JSON, metrics e dashboard somente como evidência opcional; não altera o exit code strict",
     )
     parser.add_argument("--output", default="public-runtime-validation.json", help="Arquivo JSON de evidência")
     args = parser.parse_args()
@@ -135,7 +140,7 @@ def main() -> int:
     required_ok_count = sum(1 for result in required_results if result.ok)
     optional_ok_count = sum(1 for result in optional_results if result.ok)
     payload = {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "contract": "public-runtime-canonical-strict",
         "base_url": base_url,
         "validated_at_epoch": int(time.time()),
@@ -146,6 +151,7 @@ def main() -> int:
         "optional_total": len(optional_results),
         "optional_ok": optional_ok_count,
         "optional_failed": len(optional_results) - optional_ok_count,
+        "optional_success_percentual": round((optional_ok_count / len(optional_results) * 100), 2) if optional_results else None,
         "required_endpoints": list(required_endpoints),
         "optional_evidence_endpoints": list(OPTIONAL_PUBLIC_EVIDENCE_ENDPOINTS if args.include_optional_evidence else ()),
         "results": [asdict(result) for result in results],

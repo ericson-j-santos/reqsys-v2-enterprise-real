@@ -10,7 +10,7 @@ Este gate complementa o runtime Fly P0 já versionado e transforma a URL públic
 
 O contrato `strict` público deve validar somente endpoints de disponibilidade operacional canônica.
 
-Endpoints de UX pública, métricas e dashboard operacional não são critérios obrigatórios do gate público `strict`; devem ser tratados por gates próprios, opcionais, internos ou protegidos.
+Endpoints de UX pública, contratos JSON, métricas e dashboard operacional não são critérios obrigatórios do gate público `strict`; devem ser tratados como evidência opcional, gates próprios, internos ou protegidos.
 
 ## Escopo
 
@@ -32,12 +32,17 @@ GET /api/runtime/readiness
 GET /api/runtime/liveness
 ```
 
-## Endpoints fora do contrato strict público
+## Evidência pública opcional
 
-Os endpoints abaixo não são requisitos obrigatórios do gate público `strict`:
+Quando `--include-optional-evidence` está ativo, os endpoints abaixo também são coletados no artifact, mas não bloqueiam o `strict gate`:
 
 ```text
 GET /
+GET /runtime
+GET /api/runtime/contracts
+GET /api/runtime/version
+GET /api/runtime/build-info
+GET /api/runtime/dependencies
 GET /api/runtime/metrics
 GET /api/runtime/dashboard
 ```
@@ -45,6 +50,11 @@ GET /api/runtime/dashboard
 Tratamento recomendado:
 
 - `/`: evidência opcional de UX ou landing pública;
+- `/runtime`: página operacional navegável;
+- `/api/runtime/contracts`: contrato JSON versionado;
+- `/api/runtime/version`: versão pública do runtime;
+- `/api/runtime/build-info`: evidência de build/deploy;
+- `/api/runtime/dependencies`: matriz pública simplificada de dependências;
 - `/api/runtime/metrics`: endpoint interno, protegido ou validado por gate de observabilidade;
 - `/api/runtime/dashboard`: endpoint interno, protegido ou validado por gate operacional autenticado.
 
