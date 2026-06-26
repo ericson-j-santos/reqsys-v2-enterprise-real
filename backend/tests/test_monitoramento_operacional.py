@@ -69,7 +69,7 @@ def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
     section_ids = {section['id'] for section in data['sections']}
 
     assert body['meta']['correlation_id'] == correlation_id
-    assert data['schema_version'] == '1.1.0'
+    assert data['schema_version'] == '1.2.0'
     assert data['correlation_id'] == correlation_id
     assert data['layout']['responsive'] is True
     assert data['data_source']['endpoint'] == '/api/runtime/health'
