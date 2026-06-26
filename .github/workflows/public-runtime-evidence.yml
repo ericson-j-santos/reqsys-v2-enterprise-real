@@ -12,11 +12,21 @@ on:
         required: true
         type: boolean
         default: true
+      publish_comment:
+        description: "Publicar resumo como comentário em issue/PR"
+        required: true
+        type: boolean
+        default: false
+      issue_number:
+        description: "Número da issue/PR para receber o comentário quando publish_comment=true"
+        required: false
+        default: ""
   schedule:
     - cron: "17 */6 * * *"
 
 permissions:
   contents: read
+  issues: write
 
 defaults:
   run:
@@ -40,12 +50,18 @@ jobs:
         env:
           INPUT_PUBLIC_URL: ${{ inputs.public_url }}
           INPUT_STRICT: ${{ inputs.strict }}
+          INPUT_PUBLISH_COMMENT: ${{ inputs.publish_comment }}
+          INPUT_ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
           public_url="${INPUT_PUBLIC_URL:-https://reqsys-api.fly.dev}"
           strict="${INPUT_STRICT:-true}"
+          publish_comment="${INPUT_PUBLISH_COMMENT:-false}"
+          issue_number="${INPUT_ISSUE_NUMBER:-}"
           mkdir -p artifacts/runtime
           echo "public_url=${public_url}" >> "$GITHUB_OUTPUT"
           echo "strict=${strict}" >> "$GITHUB_OUTPUT"
+          echo "publish_comment=${publish_comment}" >> "$GITHUB_OUTPUT"
+          echo "issue_number=${issue_number}" >> "$GITHUB_OUTPUT"
 
       - name: Validate public runtime endpoints
         id: smoke
@@ -107,6 +123,14 @@ jobs:
           name: public-runtime-evidence
           path: artifacts/runtime/
           if-no-files-found: error
+
+      - name: Publish evidence comment
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && steps.inputs.outputs.publish_comment == 'true' && steps.inputs.outputs.issue_number != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ steps.inputs.outputs.issue_number }}" \
+            --body-file artifacts/runtime/public-runtime-summary.md
 
       - name: Enforce strict gate
         if: ${{ always() && steps.inputs.outputs.strict == 'true' && steps.smoke.outcome != 'success' }}
