@@ -489,3 +489,27 @@ python scripts/runtime_health_center.py --output artifacts/runtime-health-center
 ```
 
 O workflow `Runtime Health Center` publica o artifact `runtime-health-report` com `maturity_percent`, `operational_risk`, `confidence_level`, status por domínio, matriz de padrão ouro e próximas ações obrigatórias.
+## Runtime Health Center P2 — Environment Drift + Evidence Ingestion
+
+O Runtime Health Center passa a emitir contrato `schema_version=1.1.0` com ingestão local e read-only de artifacts operacionais já produzidos por workflows. A coleta não acessa rede externa, não lê arquivos `.env`, não materializa valores sensíveis e não executa deploy.
+
+Novos blocos do `runtime-health-report.json`:
+
+- `ingested_artifacts`: inventário dos artifacts conhecidos e disponíveis localmente, incluindo status normalizado e erro de parse quando aplicável.
+- `runtime_operational_evidence_graph`: consolidação mínima do grafo de evidências a partir dos artifacts ingeridos.
+- `runtime_risk_scoring`: visão consolidada do domínio de risco runtime combinada ao nível de drift.
+- `pr_evidence_gate`: referência ao gate existente, com `duplicated=false` para preservar a arquitetura atual.
+- `environment_drift`: detector local que compara `docker-compose.dev.yml`, `docker-compose.test.yml` e `docker-compose.prod.yml` por estrutura operacional, sem ler segredos.
+- `base_maturity_percent`: maturidade antes da penalidade de drift.
+- `maturity_percent`: maturidade final após penalidade de drift (`none`, `low`, `medium`, `high`).
+
+Classificação de drift:
+
+| Nível | Critério operacional |
+| --- | --- |
+| `none` | Nenhuma divergência relevante detectada. |
+| `low` | Divergência esperada e governada, como chaves operacionais extras de produção sem exposição de segredo. |
+| `medium` | Divergência que exige revisão, como ausência de healthcheck produtivo ou desalinhamento de serviços base. |
+| `high` | Bloqueio de segurança ou produção, como arquivo ausente, porta direta do backend em produção ou gates produtivos ausentes. |
+
+O drift reduz a maturidade final e pode elevar `operational_risk`. Drift `high` força risco `high`; drift `medium` mantém risco alto quando a maturidade final ainda não atinge patamar robusto; drift `low` impede classificação `low` quando todos os demais sinais estiverem verdes.
