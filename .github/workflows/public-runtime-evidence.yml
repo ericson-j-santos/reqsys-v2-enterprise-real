@@ -1,0 +1,115 @@
+name: Public Runtime Evidence Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      public_url:
+        description: "URL pública da API ReqSys"
+        required: true
+        default: "https://reqsys-api.fly.dev"
+      strict:
+        description: "Falhar o workflow se algum endpoint público falhar"
+        required: true
+        type: boolean
+        default: true
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  public-runtime-evidence:
+    name: Public runtime evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve inputs
+        id: inputs
+        env:
+          INPUT_PUBLIC_URL: ${{ inputs.public_url }}
+          INPUT_STRICT: ${{ inputs.strict }}
+        run: |
+          public_url="${INPUT_PUBLIC_URL:-https://reqsys-api.fly.dev}"
+          strict="${INPUT_STRICT:-true}"
+          mkdir -p artifacts/runtime
+          echo "public_url=${public_url}" >> "$GITHUB_OUTPUT"
+          echo "strict=${strict}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate public runtime endpoints
+        id: smoke
+        continue-on-error: true
+        run: |
+          python scripts/validate_public_runtime.py \
+            --base-url "${{ steps.inputs.outputs.public_url }}" \
+            --output artifacts/runtime/public-runtime-validation.json
+
+      - name: Build executive summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          evidence_path = Path("artifacts/runtime/public-runtime-validation.json")
+          summary_path = Path("artifacts/runtime/public-runtime-summary.md")
+          if not evidence_path.exists():
+              payload = {
+                  "base_url": "${{ steps.inputs.outputs.public_url }}",
+                  "success_percentual": 0,
+                  "ok": 0,
+                  "total": 0,
+                  "failed": 0,
+                  "results": [],
+              }
+          else:
+              payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+
+          rows = []
+          for result in payload.get("results", []):
+              status = "OK" if result.get("ok") else "FAIL"
+              rows.append(
+                  f"| {result.get('endpoint')} | {status} | {result.get('status_code')} | {result.get('elapsed_ms')} | {result.get('error') or ''} |"
+              )
+
+          summary = [
+              "# Public Runtime Evidence Gate",
+              "",
+              f"- Base URL: `{payload.get('base_url')}`",
+              f"- Success: `{payload.get('success_percentual', 0)}%`",
+              f"- OK: `{payload.get('ok', 0)}/{payload.get('total', 0)}`",
+              f"- Failed: `{payload.get('failed', 0)}`",
+              "",
+              "| Endpoint | Status | HTTP | ms | Error |",
+              "|---|---:|---:|---:|---|",
+              *rows,
+              "",
+          ]
+          summary_path.write_text("\n".join(summary), encoding="utf-8")
+          print("\n".join(summary))
+          PY
+
+      - name: Upload public runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-runtime-evidence
+          path: artifacts/runtime/
+          if-no-files-found: error
+
+      - name: Enforce strict gate
+        if: ${{ always() && steps.inputs.outputs.strict == 'true' && steps.smoke.outcome != 'success' }}
+        run: |
+          echo "Public runtime evidence gate failed in strict mode."
+          exit 1
