@@ -54,7 +54,7 @@ def test_build_runtime_analytics_calcula_metricas_temporais():
     build_runtime_analytics(store, _snapshot('one', status='attention', risk_score=10))
     analytics = build_runtime_analytics(store, _snapshot('two', status='degraded', risk_score=30))
 
-    assert analytics['schema_version'] == '1.3.0'
+    assert analytics['schema_version'] == '1.4.0'
     assert analytics['window']['total_snapshots'] == 2
     assert analytics['window']['mode'] == 'in_memory_rolling'
     assert analytics['summary']['failure_rate'] == 50.0
@@ -66,6 +66,10 @@ def test_build_runtime_analytics_calcula_metricas_temporais():
     assert analytics['guardrails']['deploy_lifecycle_enabled'] is True
     assert analytics['mttr']['status'] == 'insufficient_resolved_incidents'
     assert analytics['lead_time']['status'] == 'insufficient_deploy_events'
+    assert analytics['correlation_analytics']['artifact_name'] == 'runtime-correlation-report.json'
+    assert analytics['observability_readiness']['artifact_name'] == 'runtime-observability-report.json'
+    assert analytics['runtime_topology']['workflow_dependencies']
+    assert analytics['observability_readiness']['observability_percent'] >= 0
 
 
 def test_incident_lifecycle_abre_reconhece_e_resolve_incidente():
@@ -187,7 +191,7 @@ def test_durable_runtime_analytics_store_persiste_snapshots(tmp_path):
     analytics = build_runtime_analytics(store, _snapshot('two', status='degraded', risk_score=30))
 
     assert db_path.exists()
-    assert analytics['schema_version'] == '1.3.0'
+    assert analytics['schema_version'] == '1.4.0'
     assert analytics['window']['mode'] == 'durable_sql'
     assert analytics['window']['total_snapshots'] == 2
     assert analytics['summary']['failure_rate'] == 50.0
@@ -270,7 +274,7 @@ def test_runtime_analytics_endpoint_expõe_historico_governado():
     data = body['data']
     assert body['meta']['correlation_id'] == correlation_id
     assert data['correlation_id'] == correlation_id
-    assert data['schema_version'] == '1.3.0'
+    assert data['schema_version'] == '1.4.0'
     assert data['window']['mode'] == 'durable_sql'
     assert data['window']['total_snapshots'] >= 1
     assert data['window']['total_deploy_events'] >= 0
@@ -283,6 +287,9 @@ def test_runtime_analytics_endpoint_expõe_historico_governado():
     assert data['guardrails']['deploy_lifecycle_enabled'] is True
     assert 'incident_lifecycle' in data
     assert 'deploy_lifecycle' in data
+    assert data['correlation_analytics']['correlation_id'] == correlation_id
+    assert data['observability_readiness']['topology_coverage'] >= 75
+    assert 'runtime-correlation-report.json' in data['artifacts']
 
 
 def test_public_root_expoe_runtime_analytics_link():

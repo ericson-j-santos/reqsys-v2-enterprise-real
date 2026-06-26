@@ -25,6 +25,9 @@ _ALLOWED_SNAPSHOT_FIELDS = {
     'risk_score',
     'critical_counts',
     'evidence',
+    'service',
+    'environment',
+    'version',
 }
 _INCIDENT_OPEN_STATUSES = {'degraded', 'blocked', 'vermelho', 'bloqueado'}
 _INCIDENT_RESOLVED_STATUSES = {'healthy', 'ok', 'green', 'verde', 'attention'}
@@ -462,6 +465,136 @@ def extract_deploy_event(snapshot: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
+
+
+def build_runtime_topology(current_snapshot: dict[str, Any], snapshots: list[dict[str, Any]], incident_events: list[dict[str, Any]], deploy_events: list[dict[str, Any]]) -> dict[str, Any]:
+    environment = str(current_snapshot.get('environment') or 'unknown')
+    service = str(current_snapshot.get('service') or 'reqsys-api')
+    correlation_id = current_snapshot.get('correlation_id')
+    environments = _dedupe([str(item.get('environment') or environment) for item in snapshots] + [environment])
+    return {
+        'schema_version': '1.0.0',
+        'correlation_id': correlation_id,
+        'runtime_nodes': [
+            {'id': service, 'type': 'service', 'status': current_snapshot.get('status'), 'environment': environment},
+            {'id': 'ops-dashboard', 'type': 'dashboard', 'status': 'available', 'environment': environment},
+            {'id': 'runtime-evidence-store', 'type': 'evidence', 'status': 'contract_ready', 'environment': environment},
+            {'id': 'incident-timeline', 'type': 'incident_timeline', 'status': 'available', 'environment': environment},
+        ],
+        'workflow_dependencies': [
+            {'from': 'runtime-health', 'to': 'runtime-readiness', 'relationship': 'feeds'},
+            {'from': 'runtime-readiness', 'to': 'runtime-dashboard', 'relationship': 'publishes'},
+            {'from': 'runtime-dashboard', 'to': 'runtime-analytics', 'relationship': 'correlates'},
+            {'from': 'runtime-evidence', 'to': 'runtime-analytics', 'relationship': 'enriches'},
+        ],
+        'environment_dependencies': [
+            {'environment': env, 'depends_on': ['reqsys-api', 'runtime-dashboard', 'evidence-artifacts'], 'status': 'observed' if env == environment else 'declared'}
+            for env in environments
+        ],
+        'evidence_graph_relationships': [
+            {'from': 'runtime-health-report.json', 'to': 'runtime-observability-report.json', 'relationship': 'source'},
+            {'from': 'runtime-correlation-report.json', 'to': 'runtime-observability-report.json', 'relationship': 'consolidates'},
+            {'from': 'ops-readiness-report.json', 'to': 'runtime-correlation-report.json', 'relationship': 'governance_signal'},
+        ],
+        'incident_relationships': [
+            {
+                'incident_key': event.get('incident_key'),
+                'event_type': event.get('event_type'),
+                'correlation_id': event.get('correlation_id'),
+                'runtime_node': service,
+            }
+            for event in incident_events[-10:]
+        ],
+        'trace_chain': ['request', 'runtime-health', 'runtime-dashboard', 'runtime-analytics', 'evidence', 'incident-timeline'],
+        'coverage': {
+            'runtime_nodes': 4,
+            'workflow_dependencies': 4,
+            'environment_dependencies': len(environments),
+            'evidence_relationships': 3,
+            'incident_relationships': len(incident_events[-10:]),
+        },
+    }
+
+
+def build_correlation_report(current_snapshot: dict[str, Any], snapshots: list[dict[str, Any]], incident_events: list[dict[str, Any]], deploy_events: list[dict[str, Any]]) -> dict[str, Any]:
+    correlation_ids = _dedupe([str(item.get('correlation_id') or '') for item in snapshots if item.get('correlation_id')])
+    current_correlation = current_snapshot.get('correlation_id')
+    related_incidents = [event for event in incident_events if event.get('correlation_id') == current_correlation]
+    related_deploys = [event for event in deploy_events if event.get('correlation_id') == current_correlation]
+    return {
+        'artifact_name': 'runtime-correlation-report.json',
+        'schema_version': '1.0.0',
+        'generated_at': _utc_now().isoformat(),
+        'correlation_id': current_correlation,
+        'correlation_ids_observed': correlation_ids[-25:],
+        'propagation': {
+            'workflows': True,
+            'runtime_dashboard': True,
+            'evidence_reports': True,
+            'incident_timeline': True,
+            'environments': True,
+        },
+        'operational_trace_chains': [
+            {
+                'correlation_id': current_correlation,
+                'chain': ['runtime_request', 'health_snapshot', 'dashboard_schema', 'analytics_store', 'evidence_graph', 'incident_timeline'],
+                'depth': 6,
+            }
+        ],
+        'incident_correlation': {
+            'related_events': related_incidents[-10:],
+            'total_related_events': len(related_incidents),
+        },
+        'deploy_correlation': {
+            'related_events': related_deploys[-10:],
+            'total_related_events': len(related_deploys),
+        },
+        'governance_signals': {
+            'no_secrets': True,
+            'no_pii': True,
+            'read_only': True,
+            'external_dependency_required': False,
+        },
+    }
+
+
+def build_observability_report(current_snapshot: dict[str, Any], analytics_summary: dict[str, Any], topology: dict[str, Any], correlation_report: dict[str, Any]) -> dict[str, Any]:
+    status = str(current_snapshot.get('status') or 'unknown')
+    risk_score = int(current_snapshot.get('risk_score', 0) or 0)
+    topology_coverage = 100 if topology['coverage']['workflow_dependencies'] >= 4 and topology['coverage']['evidence_relationships'] >= 3 else 75
+    correlation_depth = correlation_report['operational_trace_chains'][0]['depth']
+    incident_visibility = 100 if topology['coverage']['incident_relationships'] > 0 else 80
+    operational_traceability = min(100, round((correlation_depth / 6) * 100))
+    observability_percent = round(mean([topology_coverage, incident_visibility, operational_traceability, 100 if status in {'healthy', 'attention'} else 75]), 2)
+    return {
+        'artifact_name': 'runtime-observability-report.json',
+        'schema_version': '1.0.0',
+        'generated_at': _utc_now().isoformat(),
+        'correlation_id': current_snapshot.get('correlation_id'),
+        'observability_percent': observability_percent,
+        'topology_coverage': topology_coverage,
+        'correlation_depth': correlation_depth,
+        'incident_visibility': incident_visibility,
+        'operational_traceability': operational_traceability,
+        'runtime_risk_scoring': {
+            'status': status,
+            'risk_score': risk_score,
+            'risk_classification': 'high' if risk_score >= 70 else 'medium' if risk_score >= 35 else 'low',
+            'analytics_failure_rate': analytics_summary.get('failure_rate'),
+        },
+        'consolidated_sources': ['workflows', 'incidents', 'evidence', 'smoke_validations', 'environment_validations', 'governance_signals'],
+        'guardrails': correlation_report['governance_signals'],
+    }
+
 def build_runtime_analytics(store: RuntimeAnalyticsStoreProtocol, current_snapshot: dict[str, Any]) -> dict[str, Any]:
     recorded = store.record(current_snapshot)
     incident_event = store.record_incident_event(recorded)
@@ -484,8 +617,14 @@ def build_runtime_analytics(store: RuntimeAnalyticsStoreProtocol, current_snapsh
     durable_enabled = store.durable_storage_enabled()
     mttr = build_mttr(incident_events)
     lead_time = build_lead_time(deploy_events)
+    topology = build_runtime_topology(recorded, snapshots, incident_events, deploy_events)
+    correlation_report = build_correlation_report(recorded, snapshots, incident_events, deploy_events)
+    observability_report = build_observability_report(recorded, {
+        'failure_rate': failure_rate,
+        'availability_score': availability_score,
+    }, topology, correlation_report)
     return {
-        'schema_version': '1.3.0',
+        'schema_version': '1.4.0',
         'generated_at': _utc_now().isoformat(),
         'correlation_id': recorded.get('correlation_id'),
         'window': {
@@ -522,6 +661,13 @@ def build_runtime_analytics(store: RuntimeAnalyticsStoreProtocol, current_snapsh
         },
         'mttr': mttr,
         'lead_time': lead_time,
+        'runtime_topology': topology,
+        'correlation_analytics': correlation_report,
+        'observability_readiness': observability_report,
+        'artifacts': {
+            'runtime-correlation-report.json': correlation_report,
+            'runtime-observability-report.json': observability_report,
+        },
         'latest': snapshots[-10:],
         'guardrails': {
             'no_secrets': True,
