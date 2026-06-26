@@ -37,8 +37,9 @@ jobs:
         Governança Padrão Ouro
       OPTIONAL_WORKFLOW_NAMES: |
         NGINX Security Profile
-      MAX_WAIT_SECONDS: '180'
-      POLL_SECONDS: '15'
+      # Fail fast: this gate should audit already-produced evidence, not become a long CI waiter.
+      MAX_WAIT_SECONDS: '45'
+      POLL_SECONDS: '5'
     steps:
       - name: Build audit evidence
         id: evidence
@@ -71,7 +72,7 @@ jobs:
               return new Promise((resolve) => setTimeout(resolve, ms));
             }
 
-            async function listRuns(headSha) {
+            async function listRuns(headSha, includeArtifacts = false) {
               const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
                 owner,
                 repo,
@@ -82,15 +83,17 @@ jobs:
               const runSummaries = [];
               for (const run of runs) {
                 let artifacts = [];
-                try {
-                  artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-                    owner,
-                    repo,
-                    run_id: run.id,
-                    per_page: 100,
-                  });
-                } catch (error) {
-                  core.warning(`Could not list artifacts for run ${run.id}: ${error.message}`);
+                if (includeArtifacts && run.status === 'completed') {
+                  try {
+                    artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                      owner,
+                      repo,
+                      run_id: run.id,
+                      per_page: 100,
+                    });
+                  } catch (error) {
+                    core.warning(`Could not list artifacts for run ${run.id}: ${error.message}`);
+                  }
                 }
 
                 runSummaries.push({
@@ -176,7 +179,7 @@ jobs:
               let gate = null;
 
               do {
-                runSummaries = await listRuns(headSha);
+                runSummaries = await listRuns(headSha, false);
                 gate = evaluate({ headSha, runSummaries, requiredWorkflowNames, optionalWorkflowNames });
                 if (gate.status !== 'pending') break;
                 core.info(`Evidence still pending. Waiting ${pollSeconds}s before rechecking.`);
@@ -186,6 +189,11 @@ jobs:
               if (gate.status === 'pending') {
                 gate.failures.push(...gate.pending);
                 gate.status = 'failed';
+              }
+
+              if (gate.status === 'passed') {
+                runSummaries = await listRuns(headSha, true);
+                gate = evaluate({ headSha, runSummaries, requiredWorkflowNames, optionalWorkflowNames });
               }
 
               audit = {
