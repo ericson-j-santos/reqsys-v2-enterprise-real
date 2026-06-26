@@ -36,6 +36,7 @@ ARTIFACT_CATALOG = {
     "operational_stability_score": Path("artifacts/operational-stability-score/operational-stability-score.json"),
     "pr_evidence_gate": Path("artifacts/pr-evidence-gate/pr-evidence-gate.json"),
     "public_runtime_evidence": Path("artifacts/public-runtime-evidence/public-runtime-evidence.json"),
+    "public_access_validation": Path("artifacts/public-access-validation/public-access-validation.json"),
 }
 
 SENSITIVE_ENV_MARKERS = ("SECRET", "TOKEN", "PASSWORD", "PASS", "KEY")
@@ -148,6 +149,48 @@ def detect_environment_drift(root: Path) -> dict[str, Any]:
         "findings": findings,
     }
 
+
+
+def evaluate_public_access(root: Path) -> dict[str, Any]:
+    relative = Path("artifacts/public-access-validation/public-access-validation.json")
+    data = load_json(root / relative)
+    if not data:
+        return {"status": "missing", "path": relative.as_posix(), "available": False, "summary": None, "environments": {}}
+    if data.get("_parse_error"):
+        return {"status": "warning", "path": relative.as_posix(), "available": True, "summary": None, "environments": {}, "parse_error": True}
+    analytics = data.get("analytics", {}) if isinstance(data.get("analytics"), dict) else {}
+    by_env = analytics.get("byEnvironment", {}) if isinstance(analytics.get("byEnvironment"), dict) else {}
+    envs: dict[str, Any] = {}
+    for env, summary in by_env.items():
+        total = int(summary.get("total") or 0)
+        reachable = int(summary.get("reachable") or 0)
+        expected = int(summary.get("expected") or 0)
+        envs[env] = {
+            "total": total,
+            "reachable": reachable,
+            "expected": expected,
+            "status": "passed" if total and reachable == total and expected == total else "warning" if reachable else "missing",
+        }
+    total = int(analytics.get("total") or 0)
+    reachable = int(analytics.get("reachable") or 0)
+    expected = int(analytics.get("expected") or 0)
+    status = "passed" if total and reachable == total and expected == total else "warning" if reachable else "missing"
+    return {
+        "status": status,
+        "path": relative.as_posix(),
+        "available": True,
+        "generated_at": data.get("generatedAt"),
+        "summary": {
+            "total": total,
+            "reachable": reachable,
+            "expected": expected,
+            "reachablePercent": analytics.get("reachablePercent"),
+            "expectedPercent": analytics.get("expectedPercent"),
+            "unavailable": analytics.get("unavailable"),
+            "unexpectedStatus": analytics.get("unexpectedStatus"),
+        },
+        "environments": envs,
+    }
 
 def apply_drift_penalty(maturity: int, drift_level: str) -> int:
     penalties = {"none": 0, "low": 3, "medium": 10, "high": 20}
@@ -406,7 +449,10 @@ def build_report(root: Path) -> dict[str, Any]:
     domains = {name: evaluate_domain(name, signals, root) for name, signals in signal_catalog().items()}
     ingested_artifacts = ingest_artifacts(root)
     environment_drift = detect_environment_drift(root)
+    public_access = evaluate_public_access(root)
     domains["environment"]["status"] = environment_drift["status"] if domains["environment"]["status"] == "passed" else domains["environment"]["status"]
+    if public_access["status"] != "missing":
+        domains["environment"]["status"] = public_access["status"] if domains["environment"]["status"] == "passed" else domains["environment"]["status"]
     domains["environment"]["score"] = min(domains["environment"]["score"], STATUS_SCORE[domains["environment"]["status"]])
     base_maturity = round(sum(domains[name]["score"] * DOMAIN_WEIGHTS[name] for name in DOMAIN_WEIGHTS))
     maturity = apply_drift_penalty(base_maturity, environment_drift["drift_level"])
@@ -433,6 +479,7 @@ def build_report(root: Path) -> dict[str, Any]:
         "runtime_risk_scoring": {"status": domains["runtime_risk"]["status"], "drift_level": environment_drift["drift_level"]},
         "pr_evidence_gate": {"status": domains["evidence_gate"]["status"], "duplicated": False},
         "environment_drift": environment_drift,
+        "public_access_validation": public_access,
         "gold_standard_status": gold_standard,
         "gold_standard_depth": gold_standard_depth,
         "base_maturity_percent": base_maturity,

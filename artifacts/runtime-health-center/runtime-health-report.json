@@ -1,7 +1,7 @@
 {
   "schema_version": "1.1.0",
   "report_type": "runtime_health_center",
-  "generated_at_utc": "2026-06-26T20:27:27.942252+00:00",
+  "generated_at_utc": "2026-06-26T22:18:27.199526+00:00",
   "mode": "local_ci_read_only",
   "guardrails": [
     "no_network",
@@ -292,9 +292,9 @@
     }
   },
   "ingested_artifacts": {
-    "status": "missing",
-    "artifacts_total": 6,
-    "artifacts_available": 0,
+    "status": "passed",
+    "artifacts_total": 7,
+    "artifacts_available": 1,
     "artifacts": [
       {
         "id": "runtime_health_validator",
@@ -337,13 +337,20 @@
         "available": false,
         "status": "missing",
         "parse_error": false
+      },
+      {
+        "id": "public_access_validation",
+        "path": "artifacts/public-access-validation/public-access-validation.json",
+        "available": true,
+        "status": "passed",
+        "parse_error": false
       }
     ]
   },
   "runtime_operational_evidence_graph": {
-    "status": "missing",
+    "status": "passed",
     "source": "local_artifacts",
-    "nodes": 0
+    "nodes": 1
   },
   "runtime_risk_scoring": {
     "status": "partial",
@@ -431,6 +438,41 @@
       }
     ]
   },
+  "public_access_validation": {
+    "status": "missing",
+    "path": "artifacts/public-access-validation/public-access-validation.json",
+    "available": true,
+    "generated_at": "2026-06-26T22:18:22.656Z",
+    "summary": {
+      "total": 9,
+      "reachable": 0,
+      "expected": 0,
+      "reachablePercent": 0,
+      "expectedPercent": 0,
+      "unavailable": 9,
+      "unexpectedStatus": 9
+    },
+    "environments": {
+      "prod": {
+        "total": 3,
+        "reachable": 0,
+        "expected": 0,
+        "status": "missing"
+      },
+      "staging": {
+        "total": 3,
+        "reachable": 0,
+        "expected": 0,
+        "status": "missing"
+      },
+      "dev": {
+        "total": 3,
+        "reachable": 0,
+        "expected": 0,
+        "status": "missing"
+      }
+    }
+  },
   "gold_standard_status": {
     "Runtime Health Center": "passed",
     "Operational Status Aggregator": "passed",
@@ -438,6 +480,78 @@
     "Score consolidado de maturidade": "passed",
     "Environment Drift Detector": "passed",
     "Remediation Executor governado": "partial"
+  },
+  "gold_standard_depth": {
+    "strategy": "parar_expansao_horizontal_e_aprofundar_capacidades_existentes",
+    "overall_score": 63,
+    "overall_status": "warning",
+    "axes": {
+      "runtime": {
+        "status": "partial",
+        "score": 45,
+        "evidence": [
+          "runtime_risk",
+          "runtime_health_validator_report"
+        ],
+        "operator_action": "Priorizar estabilizacao dos sinais runtime antes de ampliar novas frentes."
+      },
+      "observability": {
+        "status": "passed",
+        "score": 100,
+        "evidence": [
+          "public_access_validation"
+        ],
+        "operator_action": "Publicar artifacts faltantes para reduzir diagnostico manual e manter trilha auditavel."
+      },
+      "operational_ux": {
+        "status": "partial",
+        "score": 45,
+        "evidence": [
+          "next_required_actions",
+          "gold_standard_status",
+          "pr_evidence_gate"
+        ],
+        "operator_action": "Consumir next_required_actions como fila unica de operacao, evitando criar novos paineis paralelos."
+      },
+      "live_analytics": {
+        "status": "partial",
+        "score": 45,
+        "evidence": [
+          "ingested_artifacts",
+          "runtime_operational_evidence_graph"
+        ],
+        "operator_action": "Evoluir serie historica a partir dos artifacts existentes, sem duplicar motores de analytics."
+      },
+      "environments": {
+        "status": "passed",
+        "score": 100,
+        "evidence": [
+          "dev",
+          "prod",
+          "test"
+        ],
+        "operator_action": "Corrigir drift medio/alto antes de promover dev -> hml -> prod."
+      },
+      "autonomous_operation": {
+        "status": "partial",
+        "score": 45,
+        "evidence": [
+          "remediation",
+          "guardrails",
+          "no_production_runtime_change"
+        ],
+        "operator_action": "Manter automacao assistida e allowlisted ate evidenciar baixa recorrencia de falhas."
+      }
+    },
+    "blockers": [],
+    "operational_focus_order": [
+      "runtime",
+      "observability",
+      "operational_ux",
+      "live_analytics",
+      "environments",
+      "autonomous_operation"
+    ]
   },
   "base_maturity_percent": 53,
   "maturity_percent": 50,
