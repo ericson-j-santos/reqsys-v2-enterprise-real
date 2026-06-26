@@ -97,3 +97,20 @@ Classificação de drift:
 | `high` | Bloqueio de segurança ou produção, como arquivo ausente, porta direta do backend em produção ou gates produtivos ausentes. |
 
 O drift reduz a maturidade final e pode elevar `operational_risk`. Drift `high` força risco `high`; drift `medium` mantém risco alto quando a maturidade final ainda não atinge patamar robusto; drift `low` impede classificação `low` quando todos os demais sinais estiverem verdes.
+
+## Padrão ouro — parada de expansão horizontal e aprofundamento
+
+A ação operacional padrão ouro passa a ser consolidar capacidades existentes em vez de criar novas frentes paralelas. O contrato `runtime-health-report.json` expõe `gold_standard_depth` com seis eixos de aprofundamento:
+
+| Eixo | Objetivo | Sinal canônico |
+|---|---|---|
+| `runtime` | Estabilizar execução real, risco e maturidade operacional. | Domínio `runtime_risk`. |
+| `observability` | Reutilizar artifacts existentes como fonte de diagnóstico. | `ingested_artifacts`. |
+| `operational_ux` | Transformar o relatório em fila de decisão para operadores. | `next_required_actions` e `gold_standard_status`. |
+| `live_analytics` | Usar analytics vivos derivados de artifacts já publicados. | Disponibilidade de artifacts operacionais. |
+| `environments` | Bloquear promoção quando houver drift médio/alto. | `environment_drift`. |
+| `autonomous_operation` | Manter automação governada, assistida e com guardrails. | Domínio `remediation` e lista `guardrails`. |
+
+A regra de operação é: quando `gold_standard_depth.overall_status` não estiver `passed`, corrigir primeiro os eixos em `blockers`, seguindo `operational_focus_order`, antes de adicionar novos dashboards, workflows ou serviços.
+
+O dashboard estático também pode consumir `runtime_gold_standard_depth`, gerado por `scripts/generate_ops_dashboard_data.py` quando o artifact do Runtime Health Center estiver disponível. Isso aprofunda a UX operacional sem criar outra superfície horizontal.

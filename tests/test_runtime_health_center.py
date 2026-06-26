@@ -38,6 +38,15 @@ class RuntimeHealthCenterTests(unittest.TestCase):
         self.assertEqual(report["gold_standard_status"]["Runtime Health Center"], "passed")
         self.assertIn(report["gold_standard_status"]["Environment Drift Detector"], {"missing", "partial", "warning", "passed"})
         self.assertIn(report["environment_drift"]["drift_level"], {"none", "low", "medium", "high"})
+        self.assertEqual(
+            report["gold_standard_depth"]["strategy"],
+            "parar_expansao_horizontal_e_aprofundar_capacidades_existentes",
+        )
+        self.assertEqual(
+            set(report["gold_standard_depth"]["axes"]),
+            {"runtime", "observability", "operational_ux", "live_analytics", "environments", "autonomous_operation"},
+        )
+        self.assertIn(report["gold_standard_depth"]["overall_status"], {"passed", "warning", "partial"})
         self.assertIn("runtime_operational_evidence_graph", report)
         self.assertIn("runtime_risk_scoring", report)
         self.assertFalse(report["pr_evidence_gate"]["duplicated"])
@@ -54,6 +63,8 @@ class RuntimeHealthCenterTests(unittest.TestCase):
         self.assertEqual(report["operational_risk"], "high")
         self.assertEqual(report["confidence_level"], "low")
         self.assertEqual(report["environment_drift"]["drift_level"], "high")
+        self.assertEqual(report["gold_standard_depth"]["overall_status"], "partial")
+        self.assertIn("runtime", report["gold_standard_depth"]["blockers"])
 
     def test_environment_drift_detector_classifies_low_for_expected_prod_delta(self):
         import tempfile
@@ -112,6 +123,7 @@ class RuntimeHealthCenterTests(unittest.TestCase):
             data = json.loads(output.read_text(encoding="utf-8"))
 
         self.assertEqual(data["schema_version"], "1.1.0")
+        self.assertIn("gold_standard_depth", data)
         self.assertEqual(data["guardrails"], ["no_network", "no_secrets", "no_deploy", "no_production_runtime_change"])
 
 

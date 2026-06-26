@@ -79,6 +79,15 @@
     </section>
 
     <section class="card">
+      <h2>Padrão ouro — aprofundamento operacional</h2>
+      <p class="small" id="gold-strategy">Carregando estratégia...</p>
+      <table>
+        <thead><tr><th>Eixo</th><th>Status</th><th>Score</th><th>Ação operacional</th></tr></thead>
+        <tbody id="gold-depth"><tr><td colspan="4">Carregando...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
       <h2>Checks</h2>
       <table>
         <thead><tr><th>Check</th><th>Status</th><th>Severidade</th><th>Recomendação</th><th>Evidência</th></tr></thead>
@@ -113,6 +122,28 @@
         a.textContent = label;
         links.appendChild(a);
       });
+
+      const gold = data.runtime_gold_standard_depth || {};
+      document.getElementById('gold-strategy').textContent = gold.available
+        ? `${gold.strategy} | Status: ${gold.overall_status} | Score: ${gold.overall_score ?? '-'}`
+        : 'Relatório Runtime Health Center ainda não disponível para este artifact.';
+      const goldBody = document.getElementById('gold-depth');
+      goldBody.innerHTML = '';
+      const axes = gold.axes || [];
+      if (!axes.length) {
+        goldBody.innerHTML = '<tr><td colspan="4">Nenhum eixo publicado.</td></tr>';
+      } else {
+        axes.forEach((axis) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${axis.id || '-'}</td>
+            <td><span class="status ${statusClass(axis.status)}">${axis.status || '-'}</span></td>
+            <td>${axis.score ?? '-'}</td>
+            <td>${axis.operator_action || '-'}</td>
+          `;
+          goldBody.appendChild(tr);
+        });
+      }
 
       const tbody = document.getElementById('checks');
       tbody.innerHTML = '';

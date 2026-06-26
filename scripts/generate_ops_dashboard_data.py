@@ -41,8 +41,36 @@ def _score(report: dict[str, Any]) -> int:
     return 40
 
 
-def build_dashboard_payload(report: dict[str, Any], repo: str) -> dict[str, Any]:
+def _load_optional_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _runtime_depth(runtime_report: dict[str, Any]) -> dict[str, Any]:
+    depth = runtime_report.get("gold_standard_depth") or {}
+    axes = depth.get("axes") or {}
+    return {
+        "available": bool(depth),
+        "strategy": depth.get("strategy", ""),
+        "overall_status": depth.get("overall_status", "unknown"),
+        "overall_score": depth.get("overall_score"),
+        "focus_order": depth.get("operational_focus_order", []),
+        "axes": [
+            {
+                "id": axis_id,
+                "status": axis.get("status"),
+                "score": axis.get("score"),
+                "operator_action": axis.get("operator_action"),
+            }
+            for axis_id, axis in axes.items()
+        ],
+    }
+
+
+def build_dashboard_payload(report: dict[str, Any], repo: str, runtime_report: dict[str, Any] | None = None) -> dict[str, Any]:
     results = report.get("results", []) or []
+    runtime_report = runtime_report or {}
     return {
         "schema_version": "1.0.0",
         "repo": repo or report.get("repo") or "unknown",
@@ -58,6 +86,7 @@ def build_dashboard_payload(report: dict[str, Any], repo: str) -> dict[str, Any]
             "pulls": f"https://github.com/{repo}/pulls" if repo else "",
             "main": f"https://github.com/{repo}/tree/main" if repo else "",
         },
+        "runtime_gold_standard_depth": _runtime_depth(runtime_report),
     }
 
 
@@ -66,10 +95,12 @@ def main() -> int:
     parser.add_argument("--watchdog-report", default="artifacts/repository-health-watchdog/repository-health-report.json")
     parser.add_argument("--repo", default="")
     parser.add_argument("--output", default="docs/ops-dashboard/data/health.json")
+    parser.add_argument("--runtime-health-report", default="artifacts/runtime-health-center/runtime-health-report.json")
     args = parser.parse_args()
 
     report = _load_watchdog_report(Path(args.watchdog_report))
-    payload = build_dashboard_payload(report, args.repo)
+    runtime_report = _load_optional_json(Path(args.runtime_health_report))
+    payload = build_dashboard_payload(report, args.repo, runtime_report)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
