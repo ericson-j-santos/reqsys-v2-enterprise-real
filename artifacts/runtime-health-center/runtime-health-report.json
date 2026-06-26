@@ -1,0 +1,264 @@
+{
+  "schema_version": "1.0.0",
+  "report_type": "runtime_health_center",
+  "generated_at_utc": "2026-06-26T19:16:59.079703+00:00",
+  "mode": "local_ci_read_only",
+  "guardrails": [
+    "no_network",
+    "no_secrets",
+    "no_deploy",
+    "no_production_runtime_change"
+  ],
+  "domains": {
+    "ci_cd": {
+      "status": "partial",
+      "score": 45,
+      "signals_total": 4,
+      "signals_available": 3,
+      "signals": [
+        {
+          "id": "enterprise_fast_ci",
+          "path": ".github/workflows/ci-enterprise-fast.yml",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "governed_ci_validation",
+          "path": ".github/workflows/pr-governed-ci-validation.yml",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "runtime_health_workflow",
+          "path": ".github/workflows/runtime-operational-health.yml",
+          "available": true,
+          "required": false,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "runtime_health_validator_report",
+          "path": "artifacts/runtime-health-validator/runtime-health-validator.json",
+          "available": false,
+          "required": false,
+          "status": "missing",
+          "parse_error": false
+        }
+      ]
+    },
+    "living_architecture": {
+      "status": "partial",
+      "score": 45,
+      "signals_total": 4,
+      "signals_available": 3,
+      "signals": [
+        {
+          "id": "runtime_ops_governance_p1_doc",
+          "path": "docs/operations/runtime-ops-governance-p1.md",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "adr_directory",
+          "path": "docs/adr",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "runbooks_directory",
+          "path": "docs/runbooks",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "living_architecture_drift_artifact",
+          "path": "artifacts/living-architecture-doc-drift/living-architecture-doc-drift.json",
+          "available": false,
+          "required": false,
+          "status": "missing",
+          "parse_error": false
+        }
+      ]
+    },
+    "evidence": {
+      "status": "partial",
+      "score": 45,
+      "signals_total": 4,
+      "signals_available": 2,
+      "signals": [
+        {
+          "id": "runtime_evidence_runbook",
+          "path": "docs/runbooks/runtime-evidence-analytics.md",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "public_runtime_evidence_workflow",
+          "path": ".github/workflows/public-runtime-evidence.yml",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "operational_intelligence_hub_artifact",
+          "path": "artifacts/operational-intelligence-hub/operational-intelligence-hub.json",
+          "available": false,
+          "required": false,
+          "status": "missing",
+          "parse_error": false
+        },
+        {
+          "id": "runtime_operational_evidence_graph",
+          "path": "artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json",
+          "available": false,
+          "required": false,
+          "status": "missing",
+          "parse_error": false
+        }
+      ]
+    },
+    "environment": {
+      "status": "passed",
+      "score": 100,
+      "signals_total": 4,
+      "signals_available": 4,
+      "signals": [
+        {
+          "id": "dev_compose",
+          "path": "docker-compose.dev.yml",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "test_compose",
+          "path": "docker-compose.test.yml",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "prod_compose",
+          "path": "docker-compose.prod.yml",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "production_gate_tests",
+          "path": "backend/tests/test_security_production_gates.py",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        }
+      ]
+    },
+    "governance": {
+      "status": "partial",
+      "score": 45,
+      "signals_total": 4,
+      "signals_available": 3,
+      "signals": [
+        {
+          "id": "agents_operational_rules",
+          "path": "AGENTS.md",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "runtime_ops_p1_doc",
+          "path": "docs/operations/runtime-ops-governance-p1.md",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "governance_gate_workflow",
+          "path": ".github/workflows/operational-governance-gate.yml",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "governance_gate_report",
+          "path": "artifacts/operational-governance-gate/operational-governance-gate.json",
+          "available": false,
+          "required": false,
+          "status": "missing",
+          "parse_error": false
+        }
+      ]
+    },
+    "remediation": {
+      "status": "partial",
+      "score": 45,
+      "signals_total": 4,
+      "signals_available": 3,
+      "signals": [
+        {
+          "id": "runtime_remediation_core",
+          "path": "backend/app/core/runtime_remediation.py",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "workflow_auto_remediation_runbook",
+          "path": "docs/runbooks/workflow-auto-remediation.md",
+          "available": true,
+          "required": true,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "actions_auto_operator_workflow",
+          "path": ".github/workflows/actions-auto-operator.yml",
+          "available": true,
+          "required": false,
+          "status": "passed",
+          "parse_error": false
+        },
+        {
+          "id": "failure_pattern_report",
+          "path": "artifacts/failure-pattern-engine/failure-pattern-report.json",
+          "available": false,
+          "required": false,
+          "status": "missing",
+          "parse_error": false
+        }
+      ]
+    }
+  },
+  "maturity_percent": 53,
+  "operational_risk": "high",
+  "confidence_level": "low",
+  "next_required_actions": [
+    "Completar sinais obrigatorios e revisar alertas do dominio ci_cd.",
+    "Completar sinais obrigatorios e revisar alertas do dominio living_architecture.",
+    "Completar sinais obrigatorios e revisar alertas do dominio evidence.",
+    "Completar sinais obrigatorios e revisar alertas do dominio governance.",
+    "Completar sinais obrigatorios e revisar alertas do dominio remediation."
+  ]
+}
