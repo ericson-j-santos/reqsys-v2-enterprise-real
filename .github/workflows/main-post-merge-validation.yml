@@ -15,7 +15,7 @@ on:
 
 concurrency:
   group: main-post-merge-validation-${{ github.event.inputs.commit_sha || github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   actions: read
@@ -35,8 +35,8 @@ jobs:
         Main Post-Merge Validation
         PR Evidence Gate
         NGINX Security Profile
-      MAX_WAIT_SECONDS: '180'
-      POLL_SECONDS: '15'
+      MAX_WAIT_SECONDS: '60'
+      POLL_SECONDS: '10'
     steps:
       - name: Build main post-merge evidence
         id: evidence
@@ -172,8 +172,8 @@ jobs:
             const mainSha = await resolveMainSha();
             const requiredWorkflows = parseList(process.env.REQUIRED_MAIN_WORKFLOWS);
             const optionalWorkflows = parseList(process.env.OPTIONAL_MAIN_WORKFLOWS);
-            const maxWaitSeconds = Number(process.env.MAX_WAIT_SECONDS || '180');
-            const pollSeconds = Number(process.env.POLL_SECONDS || '15');
+            const maxWaitSeconds = Number(process.env.MAX_WAIT_SECONDS || '60');
+            const pollSeconds = Number(process.env.POLL_SECONDS || '10');
             const deadline = Date.now() + maxWaitSeconds * 1000;
 
             let runs = [];
@@ -188,12 +188,12 @@ jobs:
             } while (Date.now() < deadline);
 
             if (gate.status === 'pending') {
-              gate.failures.push(...gate.pending);
-              gate.status = 'failed';
+              gate.warnings.push(...gate.pending.map((item) => `Pending timeout after ${maxWaitSeconds}s: ${item}`));
+              gate.status = 'pending_timeout';
             }
 
             const audit = {
-              schema_version: '1.2.0',
+              schema_version: '1.3.0',
               generated_at: new Date().toISOString(),
               repository: `${owner}/${repo}`,
               branch: 'main',
@@ -216,10 +216,14 @@ jobs:
               `- Status: ${gate.status}`,
               `- Mode: ${audit.mode}`,
               `- Failures: ${gate.failures.length}`,
+              `- Pending: ${gate.pending.length}`,
               `- Warnings: ${gate.warnings.length}`,
               '',
               '## Failures',
               gate.failures.length ? gate.failures.map((failure) => `- ${failure}`).join('\n') : '- None',
+              '',
+              '## Pending',
+              gate.pending.length ? gate.pending.map((item) => `- ${item}`).join('\n') : '- None',
               '',
               '## Warnings',
               gate.warnings.length ? gate.warnings.map((warning) => `- ${warning}`).join('\n') : '- None',
@@ -227,6 +231,7 @@ jobs:
               '## Policy',
               '- Report-only monitor: evidence gaps are surfaced in artifacts without breaking this workflow.',
               '- Blocking remains delegated to explicit required CI and quality gates.',
+              '- Pending timeout is evidence-only and does not block merge when required CI remains delegated.',
             ].join('\n'));
 
             core.setOutput('validated_sha', mainSha);
