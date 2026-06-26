@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
-"""Valida endpoints públicos mínimos do ReqSys no Fly.
+"""Valida endpoints públicos canônicos do ReqSys no Fly.
 
 Uso:
     python scripts/validate_public_runtime.py --base-url https://reqsys-api.fly.dev
 
 A validação é read-only, não envia credenciais e não depende de bibliotecas externas.
+
+Contrato público canônico strict:
+    - /health
+    - /api/runtime/health
+    - /api/runtime/readiness
+    - /api/runtime/liveness
+
+Endpoints de UX, métricas e dashboard não fazem parte do contrato strict público.
+Devem ser validados por gates próprios, opcionais, internos ou protegidos.
 """
 
 from __future__ import annotations
@@ -20,11 +29,14 @@ from urllib.request import Request, urlopen
 
 
 DEFAULT_ENDPOINTS = (
-    "/",
     "/health",
     "/api/runtime/health",
     "/api/runtime/readiness",
     "/api/runtime/liveness",
+)
+
+OPTIONAL_PUBLIC_EVIDENCE_ENDPOINTS = (
+    "/",
     "/api/runtime/metrics",
     "/api/runtime/dashboard",
 )
@@ -106,21 +118,36 @@ def main() -> int:
     parser.add_argument("--base-url", default="https://reqsys-api.fly.dev", help="URL base pública da API")
     parser.add_argument("--timeout", type=float, default=10.0, help="Timeout por endpoint em segundos")
     parser.add_argument("--endpoint", action="append", dest="endpoints", help="Endpoint adicional ou substituto; pode repetir")
+    parser.add_argument(
+        "--include-optional-evidence",
+        action="store_true",
+        help="Inclui /, metrics e dashboard somente como evidência opcional; não altera o exit code strict",
+    )
     parser.add_argument("--output", default="public-runtime-validation.json", help="Arquivo JSON de evidência")
     args = parser.parse_args()
 
     base_url = _normalizar_base_url(args.base_url)
-    endpoints = tuple(args.endpoints) if args.endpoints else DEFAULT_ENDPOINTS
-    results = [validar_endpoint(base_url, endpoint, args.timeout) for endpoint in endpoints]
-    ok_count = sum(1 for result in results if result.ok)
+    required_endpoints = tuple(args.endpoints) if args.endpoints else DEFAULT_ENDPOINTS
+    evidence_endpoints = required_endpoints + (OPTIONAL_PUBLIC_EVIDENCE_ENDPOINTS if args.include_optional_evidence else ())
+    results = [validar_endpoint(base_url, endpoint, args.timeout) for endpoint in evidence_endpoints]
+    required_results = [result for result in results if result.endpoint in required_endpoints]
+    optional_results = [result for result in results if result.endpoint not in required_endpoints]
+    required_ok_count = sum(1 for result in required_results if result.ok)
+    optional_ok_count = sum(1 for result in optional_results if result.ok)
     payload = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
+        "contract": "public-runtime-canonical-strict",
         "base_url": base_url,
         "validated_at_epoch": int(time.time()),
-        "total": len(results),
-        "ok": ok_count,
-        "failed": len(results) - ok_count,
-        "success_percentual": round((ok_count / len(results) * 100), 2) if results else 0.0,
+        "total": len(required_results),
+        "ok": required_ok_count,
+        "failed": len(required_results) - required_ok_count,
+        "success_percentual": round((required_ok_count / len(required_results) * 100), 2) if required_results else 0.0,
+        "optional_total": len(optional_results),
+        "optional_ok": optional_ok_count,
+        "optional_failed": len(optional_results) - optional_ok_count,
+        "required_endpoints": list(required_endpoints),
+        "optional_evidence_endpoints": list(OPTIONAL_PUBLIC_EVIDENCE_ENDPOINTS if args.include_optional_evidence else ()),
         "results": [asdict(result) for result in results],
     }
 
@@ -129,7 +156,7 @@ def main() -> int:
         file.write("\n")
 
     print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 0 if ok_count == len(results) else 1
+    return 0 if required_ok_count == len(required_results) else 1
 
 
 if __name__ == "__main__":
