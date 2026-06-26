@@ -299,6 +299,82 @@ def signal_catalog() -> dict[str, list[LocalSignal]]:
     }
 
 
+def live_analytics_status(ingested_artifacts: dict[str, Any]) -> str:
+    available = ingested_artifacts["artifacts_available"]
+    if available >= 3:
+        return "passed"
+    if available:
+        return "partial"
+    return "missing"
+
+
+def build_gold_standard_depth(
+    domains: dict[str, dict[str, Any]],
+    environment_drift: dict[str, Any],
+    ingested_artifacts: dict[str, Any],
+) -> dict[str, Any]:
+    """Map existing signals to the six gold-standard deepening axes.
+
+    This intentionally reuses the Runtime Health Center contract instead of
+    creating another horizontal platform. All statuses are evidence-based and
+    read-only.
+    """
+    axes = {
+        "runtime": {
+            "status": domains["runtime_risk"]["status"],
+            "score": domains["runtime_risk"]["score"],
+            "evidence": ["runtime_risk", "runtime_health_validator_report"],
+            "operator_action": "Priorizar estabilizacao dos sinais runtime antes de ampliar novas frentes.",
+        },
+        "observability": {
+            "status": ingested_artifacts["status"],
+            "score": STATUS_SCORE[ingested_artifacts["status"]],
+            "evidence": [artifact["id"] for artifact in ingested_artifacts["artifacts"] if artifact["available"]],
+            "operator_action": "Publicar artifacts faltantes para reduzir diagnostico manual e manter trilha auditavel.",
+        },
+        "operational_ux": {
+            "status": domains["governance"]["status"],
+            "score": min(domains["governance"]["score"], domains["evidence_gate"]["score"]),
+            "evidence": ["next_required_actions", "gold_standard_status", "pr_evidence_gate"],
+            "operator_action": "Consumir next_required_actions como fila unica de operacao, evitando criar novos paineis paralelos.",
+        },
+        "live_analytics": {
+            "status": live_analytics_status(ingested_artifacts),
+            "score": STATUS_SCORE[live_analytics_status(ingested_artifacts)],
+            "evidence": ["ingested_artifacts", "runtime_operational_evidence_graph"],
+            "operator_action": "Evoluir serie historica a partir dos artifacts existentes, sem duplicar motores de analytics.",
+        },
+        "environments": {
+            "status": environment_drift["status"],
+            "score": STATUS_SCORE[environment_drift["status"]],
+            "evidence": environment_drift["compared_environments"],
+            "operator_action": "Corrigir drift medio/alto antes de promover dev -> hml -> prod.",
+        },
+        "autonomous_operation": {
+            "status": domains["remediation"]["status"],
+            "score": domains["remediation"]["score"],
+            "evidence": ["remediation", "guardrails", "no_production_runtime_change"],
+            "operator_action": "Manter automacao assistida e allowlisted ate evidenciar baixa recorrencia de falhas.",
+        },
+    }
+    overall_score = round(sum(axis["score"] for axis in axes.values()) / len(axes))
+    blockers = [name for name, axis in axes.items() if axis["status"] in {"missing", "warning"}]
+    return {
+        "strategy": "parar_expansao_horizontal_e_aprofundar_capacidades_existentes",
+        "overall_score": overall_score,
+        "overall_status": "passed" if overall_score >= 85 and not blockers else "warning" if overall_score >= 60 else "partial",
+        "axes": axes,
+        "blockers": blockers,
+        "operational_focus_order": [
+            "runtime",
+            "observability",
+            "operational_ux",
+            "live_analytics",
+            "environments",
+            "autonomous_operation",
+        ],
+    }
+
 def risk_from_maturity(maturity: int, warnings: int, missing: int) -> str:
     if maturity >= 85 and warnings == 0 and missing == 0:
         return "low"
@@ -344,6 +420,7 @@ def build_report(root: Path) -> dict[str, Any]:
         "Environment Drift Detector": domains["environment"]["status"],
         "Remediation Executor governado": domains["remediation"]["status"],
     }
+    gold_standard_depth = build_gold_standard_depth(domains, environment_drift, ingested_artifacts)
     return {
         "schema_version": "1.1.0",
         "report_type": "runtime_health_center",
@@ -357,6 +434,7 @@ def build_report(root: Path) -> dict[str, Any]:
         "pr_evidence_gate": {"status": domains["evidence_gate"]["status"], "duplicated": False},
         "environment_drift": environment_drift,
         "gold_standard_status": gold_standard,
+        "gold_standard_depth": gold_standard_depth,
         "base_maturity_percent": base_maturity,
         "maturity_percent": maturity,
         "operational_risk": risk_with_drift(maturity, warnings, missing, environment_drift["drift_level"]),
