@@ -15,7 +15,7 @@ class RuntimeHealthCenterTests(unittest.TestCase):
     def test_contract_contains_required_domains(self):
         report = build_report(ROOT)
 
-        self.assertEqual(report["schema_version"], "1.0.0")
+        self.assertEqual(report["schema_version"], "1.1.0")
         self.assertEqual(report["report_type"], "runtime_health_center")
         self.assertEqual(report["mode"], "local_ci_read_only")
         self.assertEqual(
@@ -37,6 +37,11 @@ class RuntimeHealthCenterTests(unittest.TestCase):
         self.assertTrue(report["next_required_actions"])
         self.assertEqual(report["gold_standard_status"]["Runtime Health Center"], "passed")
         self.assertIn(report["gold_standard_status"]["Environment Drift Detector"], {"missing", "partial", "warning", "passed"})
+        self.assertIn(report["environment_drift"]["drift_level"], {"none", "low", "medium", "high"})
+        self.assertIn("runtime_operational_evidence_graph", report)
+        self.assertIn("runtime_risk_scoring", report)
+        self.assertFalse(report["pr_evidence_gate"]["duplicated"])
+        self.assertLessEqual(report["maturity_percent"], report["base_maturity_percent"])
 
     def test_marks_missing_artifacts_without_network(self):
         import tempfile
@@ -48,6 +53,52 @@ class RuntimeHealthCenterTests(unittest.TestCase):
         self.assertEqual(report["maturity_percent"], 0)
         self.assertEqual(report["operational_risk"], "high")
         self.assertEqual(report["confidence_level"], "low")
+        self.assertEqual(report["environment_drift"]["drift_level"], "high")
+
+    def test_environment_drift_detector_classifies_low_for_expected_prod_delta(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            (root / "docker-compose.dev.yml").write_text("""services:
+  api:
+    ports:
+      - "${BACKEND_PORT:-8210}:8000"
+    environment:
+      - SDD_SPECS_PATH=/sdd
+  frontend:
+  nginx:
+""", encoding="utf-8")
+            (root / "docker-compose.test.yml").write_text("""services:
+  api:
+    ports:
+      - "${BACKEND_PORT:-8212}:8000"
+    environment:
+      - DATABASE_URL=sqlite:////data/test.db
+  frontend:
+  nginx:
+""", encoding="utf-8")
+            (root / "docker-compose.prod.yml").write_text("""services:
+  api:
+    environment:
+      - APP_ENV=production
+      - ALLOW_DEMO_LOGIN=false
+      - DATABASE_URL=sqlite:////data/reqsys.db
+    healthcheck:
+      test: ["CMD", "true"]
+  frontend:
+    healthcheck:
+      test: ["CMD", "true"]
+  nginx:
+    healthcheck:
+      test: ["CMD", "true"]
+""", encoding="utf-8")
+
+            report = build_report(root)
+
+        self.assertEqual(report["environment_drift"]["drift_level"], "low")
+        self.assertEqual(report["environment_drift"]["status"], "passed")
+        self.assertEqual(report["operational_risk"], "high")
 
     def test_cli_writes_versioned_json(self):
         import tempfile
@@ -60,7 +111,7 @@ class RuntimeHealthCenterTests(unittest.TestCase):
 
             data = json.loads(output.read_text(encoding="utf-8"))
 
-        self.assertEqual(data["schema_version"], "1.0.0")
+        self.assertEqual(data["schema_version"], "1.1.0")
         self.assertEqual(data["guardrails"], ["no_network", "no_secrets", "no_deploy", "no_production_runtime_change"])
 
 

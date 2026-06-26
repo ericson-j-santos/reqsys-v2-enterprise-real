@@ -29,6 +29,141 @@ DOMAIN_WEIGHTS = {
 DEFAULT_OUTPUT = Path("artifacts/runtime-health-center/runtime-health-report.json")
 
 
+ARTIFACT_CATALOG = {
+    "runtime_health_validator": Path("artifacts/runtime-health-validator/runtime-health-validator.json"),
+    "runtime_operational_evidence_graph": Path("artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json"),
+    "operational_risk_engine": Path("artifacts/operational-risk-engine/operational-risk-engine.json"),
+    "operational_stability_score": Path("artifacts/operational-stability-score/operational-stability-score.json"),
+    "pr_evidence_gate": Path("artifacts/pr-evidence-gate/pr-evidence-gate.json"),
+    "public_runtime_evidence": Path("artifacts/public-runtime-evidence/public-runtime-evidence.json"),
+}
+
+SENSITIVE_ENV_MARKERS = ("SECRET", "TOKEN", "PASSWORD", "PASS", "KEY")
+
+
+def artifact_status(data: dict[str, Any] | None, exists: bool) -> str:
+    if data and data.get("_parse_error"):
+        return "warning"
+    candidates = (
+        ("status",),
+        ("conclusion",),
+        ("summary", "status"),
+        ("summary", "risk", "status"),
+        ("gate", "status"),
+    )
+    for path in candidates:
+        value = nested_value(data, path)
+        if value is not None:
+            return normalize_status(value, exists)
+    return normalize_status(None, exists)
+
+
+def ingest_artifacts(root: Path) -> dict[str, Any]:
+    artifacts = []
+    for artifact_id, relative in ARTIFACT_CATALOG.items():
+        absolute = root / relative
+        data = load_json(absolute)
+        exists = absolute.exists()
+        artifacts.append({
+            "id": artifact_id,
+            "path": relative.as_posix(),
+            "available": exists,
+            "status": artifact_status(data, exists),
+            "parse_error": bool(data and data.get("_parse_error")),
+        })
+    available = sum(1 for item in artifacts if item["available"])
+    warnings = sum(1 for item in artifacts if item["status"] == "warning")
+    return {
+        "status": "passed" if available and warnings == 0 else "warning" if available else "missing",
+        "artifacts_total": len(artifacts),
+        "artifacts_available": available,
+        "artifacts": artifacts,
+    }
+
+
+def extract_compose_signature(path: Path) -> dict[str, Any]:
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    env_keys: set[str] = set()
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("-") or "=" not in stripped:
+            continue
+        key = stripped[1:].strip().split("=", 1)[0].strip()
+        if key and not any(marker in key.upper() for marker in SENSITIVE_ENV_MARKERS):
+            env_keys.add(key)
+    return {
+        "exists": path.exists(),
+        "services": sorted({name for name in ("api", "frontend", "nginx") if f"  {name}:" in text}),
+        "has_healthcheck": "healthcheck:" in text,
+        "direct_api_ports": "${BACKEND_PORT" in text,
+        "env_keys": sorted(env_keys),
+        "uses_prod_env": "APP_ENV=production" in text,
+        "uses_demo_login_false": "ALLOW_DEMO_LOGIN=false" in text,
+    }
+
+
+def classify_drift(issue_count: int, high_count: int, medium_count: int) -> str:
+    if issue_count == 0:
+        return "none"
+    if high_count:
+        return "high"
+    if medium_count or issue_count >= 3:
+        return "medium"
+    return "low"
+
+
+def detect_environment_drift(root: Path) -> dict[str, Any]:
+    files = {
+        "dev": Path("docker-compose.dev.yml"),
+        "test": Path("docker-compose.test.yml"),
+        "prod": Path("docker-compose.prod.yml"),
+    }
+    signatures = {env: extract_compose_signature(root / rel) for env, rel in files.items()}
+    findings: list[dict[str, str]] = []
+    for env, signature in signatures.items():
+        if not signature["exists"]:
+            findings.append({"severity": "high", "environment": env, "message": "arquivo de configuração ausente"})
+    common_services = set(signatures["dev"]["services"]) & set(signatures["test"]["services"]) & set(signatures["prod"]["services"])
+    if common_services != {"api", "frontend", "nginx"}:
+        findings.append({"severity": "medium", "environment": "all", "message": "serviços base não estão alinhados entre dev/test/prod"})
+    if signatures["prod"]["direct_api_ports"]:
+        findings.append({"severity": "high", "environment": "prod", "message": "produção expõe porta direta do backend"})
+    if not signatures["prod"]["has_healthcheck"]:
+        findings.append({"severity": "medium", "environment": "prod", "message": "produção sem healthcheck local"})
+    if not signatures["prod"]["uses_prod_env"] or not signatures["prod"]["uses_demo_login_false"]:
+        findings.append({"severity": "high", "environment": "prod", "message": "gates produtivos APP_ENV/ALLOW_DEMO_LOGIN não detectados"})
+    env_key_sets = {env: set(sig["env_keys"]) for env, sig in signatures.items()}
+    prod_extra = sorted(env_key_sets["prod"] - env_key_sets["dev"] - env_key_sets["test"])
+    if prod_extra:
+        findings.append({"severity": "low", "environment": "prod", "message": "produção possui chaves operacionais extras esperadas", "keys": ",".join(prod_extra)})
+    high = sum(1 for item in findings if item["severity"] == "high")
+    medium = sum(1 for item in findings if item["severity"] == "medium")
+    level = classify_drift(len(findings), high, medium)
+    return {
+        "status": "passed" if level in {"none", "low"} else "warning",
+        "drift_level": level,
+        "compared_environments": sorted(files),
+        "files": {env: rel.as_posix() for env, rel in files.items()},
+        "signatures": signatures,
+        "findings": findings,
+    }
+
+
+def apply_drift_penalty(maturity: int, drift_level: str) -> int:
+    penalties = {"none": 0, "low": 3, "medium": 10, "high": 20}
+    return max(0, maturity - penalties.get(drift_level, 20))
+
+
+def risk_with_drift(maturity: int, warnings: int, missing: int, drift_level: str) -> str:
+    if drift_level == "high":
+        return "high"
+    if drift_level == "medium" and maturity < 85:
+        return "high"
+    if drift_level == "low" and maturity >= 85 and warnings == 0 and missing == 0:
+        return "medium"
+    return risk_from_maturity(maturity, warnings, missing)
+
+
 @dataclass(frozen=True)
 class LocalSignal:
     id: str
@@ -193,7 +328,12 @@ def next_actions(domains: dict[str, dict[str, Any]]) -> list[str]:
 
 def build_report(root: Path) -> dict[str, Any]:
     domains = {name: evaluate_domain(name, signals, root) for name, signals in signal_catalog().items()}
-    maturity = round(sum(domains[name]["score"] * DOMAIN_WEIGHTS[name] for name in DOMAIN_WEIGHTS))
+    ingested_artifacts = ingest_artifacts(root)
+    environment_drift = detect_environment_drift(root)
+    domains["environment"]["status"] = environment_drift["status"] if domains["environment"]["status"] == "passed" else domains["environment"]["status"]
+    domains["environment"]["score"] = min(domains["environment"]["score"], STATUS_SCORE[domains["environment"]["status"]])
+    base_maturity = round(sum(domains[name]["score"] * DOMAIN_WEIGHTS[name] for name in DOMAIN_WEIGHTS))
+    maturity = apply_drift_penalty(base_maturity, environment_drift["drift_level"])
     missing = sum(1 for item in domains.values() if item["status"] == "missing")
     warnings = sum(1 for item in domains.values() if item["status"] == "warning")
     gold_standard = {
@@ -205,15 +345,21 @@ def build_report(root: Path) -> dict[str, Any]:
         "Remediation Executor governado": domains["remediation"]["status"],
     }
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "report_type": "runtime_health_center",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "mode": "local_ci_read_only",
         "guardrails": ["no_network", "no_secrets", "no_deploy", "no_production_runtime_change"],
         "domains": domains,
+        "ingested_artifacts": ingested_artifacts,
+        "runtime_operational_evidence_graph": {"status": ingested_artifacts["status"], "source": "local_artifacts", "nodes": ingested_artifacts["artifacts_available"]},
+        "runtime_risk_scoring": {"status": domains["runtime_risk"]["status"], "drift_level": environment_drift["drift_level"]},
+        "pr_evidence_gate": {"status": domains["evidence_gate"]["status"], "duplicated": False},
+        "environment_drift": environment_drift,
         "gold_standard_status": gold_standard,
+        "base_maturity_percent": base_maturity,
         "maturity_percent": maturity,
-        "operational_risk": risk_from_maturity(maturity, warnings, missing),
+        "operational_risk": risk_with_drift(maturity, warnings, missing, environment_drift["drift_level"]),
         "confidence_level": confidence_from_domains(domains),
         "next_required_actions": next_actions(domains),
     }
