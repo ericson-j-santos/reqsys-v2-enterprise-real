@@ -15,6 +15,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import secrets
+import shutil
 import subprocess
 import sys
 import time
@@ -119,11 +121,27 @@ def resolver_configuracao(args: argparse.Namespace) -> ConfiguracaoAuth:
 
 
 def executar(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
-    safe_cmd = ["***" if "AZURE_" in part else part for part in cmd]
+    safe_cmd = [
+        "***" if part.startswith(("AZURE_", "JWT_SECRET=")) else part
+        for part in cmd
+    ]
     print("Executando:", " ".join(safe_cmd))
     completed = subprocess.run(cmd, check=False, text=True, env=env or os.environ.copy())
     if completed.returncode != 0:
         raise ConfigError(f"Comando falhou com exit code {completed.returncode}")
+
+
+def _resolver_fly_bin() -> str:
+    fly_bin = shutil.which("flyctl") or shutil.which("fly")
+    if not fly_bin:
+        raise ConfigError("Fly CLI não encontrado. Instale flyctl/fly antes de configurar secrets.")
+    return fly_bin
+
+
+def _resolver_jwt_secret(explicit_value: str) -> tuple[str, str]:
+    if explicit_value.strip():
+        return explicit_value.strip(), "workflow_input"
+    return secrets.token_urlsafe(48), "generated"
 
 
 def aplicar_fly(args: argparse.Namespace, config: ConfiguracaoAuth) -> None:
@@ -131,13 +149,20 @@ def aplicar_fly(args: argparse.Namespace, config: ConfiguracaoAuth) -> None:
     if not fly_token.strip():
         raise ConfigError("FLY_API_TOKEN não configurado")
 
+    fly_bin = _resolver_fly_bin()
+    jwt_secret, jwt_source = _resolver_jwt_secret(args.jwt_secret or "")
+    _mask(jwt_secret)
+
     env = os.environ.copy()
     env["FLY_API_TOKEN"] = fly_token
 
     comando = [
-        "flyctl",
+        fly_bin,
         "secrets",
         "set",
+        f"JWT_SECRET={jwt_secret}",
+        f"JWT_ISSUER={args.jwt_issuer}",
+        f"JWT_AUDIENCE={args.jwt_audience}",
         f"APP_ENV={args.app_env}",
         "ALLOW_DEMO_LOGIN=false",
         f"APP_PUBLIC_URL={args.app_public_url}",
@@ -147,6 +172,7 @@ def aplicar_fly(args: argparse.Namespace, config: ConfiguracaoAuth) -> None:
         "-a",
         args.fly_app,
     ]
+    print(json.dumps({"jwt_secret_source": jwt_source}, ensure_ascii=False))
     executar(comando, env=env)
 
 
@@ -209,6 +235,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--app-env", default="production")
     parser.add_argument("--app-public-url", required=True)
     parser.add_argument("--api-public-url", required=True)
+    parser.add_argument("--jwt-secret", default=os.getenv("JWT_SECRET", ""))
+    parser.add_argument("--jwt-issuer", default=os.getenv("JWT_ISSUER", "reqsys-api"))
+    parser.add_argument("--jwt-audience", default=os.getenv("JWT_AUDIENCE", "reqsys-users"))
     parser.add_argument("--azure-tenant-id", default="")
     parser.add_argument("--azure-client-id", default="")
     parser.add_argument("--cofre-api-url", default=os.getenv("COFRE_API_URL", ""))
