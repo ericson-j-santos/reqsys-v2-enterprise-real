@@ -27,3 +27,27 @@ def test_public_health_route_remains_available():
     assert body['success'] is True
     assert body['data']['status'] == 'ok'
     assert body['data']['service'] == 'reqsys-api'
+
+
+def test_public_runtime_canonical_routes_are_available():
+    client = TestClient(app)
+
+    expected = {
+        '/api/runtime/health': ('ok', 'health'),
+        '/api/runtime/readiness': ('ready', 'readiness'),
+        '/api/runtime/liveness': ('alive', 'liveness'),
+    }
+
+    for endpoint, (status, check) in expected.items():
+        res = client.get(endpoint)
+
+        assert res.status_code == 200
+        body = res.json()
+        assert body['success'] is True
+        data = body['data']
+        assert data['status'] == status
+        assert data['check'] == check
+        assert data['service'] == 'reqsys-api'
+        assert data['environment']
+        assert data['version']
+        assert data['timestamp']
