@@ -28,3 +28,26 @@ def test_pr_evidence_gate_lists_artifacts_only_after_gate_passes():
     polling_index = text.index('runSummaries = await listRuns(headSha, false);')
     artifact_index = text.index('runSummaries = await listRuns(headSha, true);')
     assert polling_index < artifact_index
+
+
+def test_pr_evidence_gate_reruns_after_required_workflows_complete():
+    text = read_workflow()
+
+    assert 'workflow_run:' in text
+    assert 'workflows:' in text
+    for workflow_name in (
+        'CI — ReqSys v2 Enterprise',
+        'Governance Quality Gates',
+        'Governança Padrão Ouro',
+    ):
+        assert workflow_name in text
+    assert 'types:\n      - completed' in text
+
+
+def test_pr_evidence_gate_resolves_pr_from_workflow_run_payload():
+    text = read_workflow()
+
+    assert 'const workflowRunPullRequest = context.payload.workflow_run?.pull_requests?.[0];' in text
+    assert 'if (workflowRunPullRequest?.number)' in text
+    assert 'pull_number: Number(workflowRunPullRequest.number)' in text
+    assert 'github.event.workflow_run.head_sha' in text

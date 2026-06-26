@@ -9,6 +9,13 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+  workflow_run:
+    workflows:
+      - CI — ReqSys v2 Enterprise
+      - Governance Quality Gates
+      - Governança Padrão Ouro
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       pr_number:
@@ -17,7 +24,7 @@ on:
         type: string
 
 concurrency:
-  group: pr-evidence-gate-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}
+  group: pr-evidence-gate-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -52,6 +59,11 @@ jobs:
 
             async function getPullRequest() {
               if (context.payload.pull_request) return context.payload.pull_request;
+              const workflowRunPullRequest = context.payload.workflow_run?.pull_requests?.[0];
+              if (workflowRunPullRequest?.number) {
+                const { data } = await github.rest.pulls.get({ owner, repo, pull_number: Number(workflowRunPullRequest.number) });
+                return data;
+              }
               const inputNumber = core.getInput('pr_number');
               if (!inputNumber) {
                 throw new Error('pr_number is required for workflow_dispatch runs.');
