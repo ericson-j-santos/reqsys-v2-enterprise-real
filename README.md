@@ -160,6 +160,10 @@ powershell -ExecutionPolicy Bypass -File .\agendar-subida-stack-docker.ps1 -Desa
 
 Todos os três domínios estão no `server_name` do `infra/nginx/default.prod.conf` e no `CORS_ORIGINS` do `.env`.
 
+### Padrão ouro Fly.io + DuckDNS
+
+A matriz canônica de ambientes Fly.io, aliases DuckDNS, arquivos `fly*.toml`, volumes persistentes, promoção e rollback está em [`docs/PADRAO_OURO_FLYIO_DUCKDNS.md`](docs/PADRAO_OURO_FLYIO_DUCKDNS.md). Use esse runbook como referência antes de publicar `dev`, `staging` ou `prod`.
+
 ### Domínios locais — requerem entrada no `hosts`
 
 | Domínio | Uso | Porta |
