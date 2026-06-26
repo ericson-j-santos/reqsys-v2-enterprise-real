@@ -53,13 +53,14 @@ python scripts/runtime_health_center.py --output artifacts/runtime-health-center
 | Domínio | Objetivo |
 |---|---|
 | `ci_cd` | Detectar presença de workflows e artifacts locais de CI/health quando disponíveis. |
-| `living_architecture` | Reutilizar documentação viva e artifacts locais de drift sem duplicar o drift check. |
-| `evidence` | Consolidar runbooks, workflows e artifacts locais de evidência operacional. |
-| `environment` | Verificar base declarativa local de ambientes e gates de produção. |
+| `evidence_gate` | Reaproveitar o PR Evidence Gate e evidências operacionais sem duplicar sua lógica. |
 | `governance` | Validar presença de regras operacionais, gate de governança e documentação P1. |
+| `runtime_risk` | Consolidar sinais locais de scoring de risco e estabilidade runtime. |
+| `living_architecture` | Reutilizar documentação viva e artifacts locais de drift sem duplicar o drift check. |
+| `environment` | Verificar base declarativa local de ambientes e gates de produção. |
 | `remediation` | Verificar base governada para remediação segura e análise de falhas. |
 
-Cada domínio é classificado como `missing`, `partial`, `warning` ou `passed`. O relatório também calcula `maturity_percent`, `operational_risk`, `confidence_level` e `next_required_actions`.
+Cada domínio é classificado como `missing`, `partial`, `warning` ou `passed`. O relatório também calcula `maturity_percent`, `operational_risk`, `confidence_level`, `next_required_actions` e `gold_standard_status` para acompanhar Runtime Health Center, Operational Status Aggregator, artifact JSON, score consolidado, Environment Drift Detector e Remediation Executor governado.
 
 ### CI dedicado
 

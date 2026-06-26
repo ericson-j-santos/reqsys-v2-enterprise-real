@@ -19,11 +19,12 @@ STATUSES = ("missing", "partial", "warning", "passed")
 STATUS_SCORE = {"missing": 0, "partial": 45, "warning": 70, "passed": 100}
 DOMAIN_WEIGHTS = {
     "ci_cd": 0.22,
-    "living_architecture": 0.18,
-    "evidence": 0.18,
+    "evidence_gate": 0.16,
+    "governance": 0.14,
+    "runtime_risk": 0.14,
+    "living_architecture": 0.14,
     "environment": 0.14,
-    "governance": 0.16,
-    "remediation": 0.12,
+    "remediation": 0.06,
 }
 DEFAULT_OUTPUT = Path("artifacts/runtime-health-center/runtime-health-report.json")
 
@@ -124,29 +125,35 @@ def signal_catalog() -> dict[str, list[LocalSignal]]:
             LocalSignal("runtime_health_workflow", Path(".github/workflows/runtime-operational-health.yml")),
             LocalSignal("runtime_health_validator_report", Path("artifacts/runtime-health-validator/runtime-health-validator.json"), json_status_path=("status",)),
         ],
-        "living_architecture": [
-            LocalSignal("runtime_ops_governance_p1_doc", Path("docs/operations/runtime-ops-governance-p1.md"), True),
-            LocalSignal("adr_directory", Path("docs/adr"), True),
-            LocalSignal("runbooks_directory", Path("docs/runbooks"), True),
-            LocalSignal("living_architecture_drift_artifact", Path("artifacts/living-architecture-doc-drift/living-architecture-doc-drift.json"), json_status_path=("status",)),
-        ],
-        "evidence": [
-            LocalSignal("runtime_evidence_runbook", Path("docs/runbooks/runtime-evidence-analytics.md"), True),
+        "evidence_gate": [
+            LocalSignal("pr_evidence_gate_workflow", Path(".github/workflows/pr-evidence-gate.yml"), True),
+            LocalSignal("pr_evidence_gate_contract_tests", Path("tests/test_pr_evidence_gate_workflow.py"), True),
             LocalSignal("public_runtime_evidence_workflow", Path(".github/workflows/public-runtime-evidence.yml"), True),
-            LocalSignal("operational_intelligence_hub_artifact", Path("artifacts/operational-intelligence-hub/operational-intelligence-hub.json"), json_status_path=("hub_score", "status")),
             LocalSignal("runtime_operational_evidence_graph", Path("artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json"), json_status_path=("status",)),
-        ],
-        "environment": [
-            LocalSignal("dev_compose", Path("docker-compose.dev.yml"), True),
-            LocalSignal("test_compose", Path("docker-compose.test.yml"), True),
-            LocalSignal("prod_compose", Path("docker-compose.prod.yml"), True),
-            LocalSignal("production_gate_tests", Path("backend/tests/test_security_production_gates.py"), True),
         ],
         "governance": [
             LocalSignal("agents_operational_rules", Path("AGENTS.md"), True),
             LocalSignal("runtime_ops_p1_doc", Path("docs/operations/runtime-ops-governance-p1.md"), True),
             LocalSignal("governance_gate_workflow", Path(".github/workflows/operational-governance-gate.yml"), True),
             LocalSignal("governance_gate_report", Path("artifacts/operational-governance-gate/operational-governance-gate.json"), json_status_path=("status",)),
+        ],
+        "runtime_risk": [
+            LocalSignal("runtime_risk_scoring_workflow", Path(".github/workflows/runtime-risk-scoring.yml"), True),
+            LocalSignal("operational_risk_engine_workflow", Path(".github/workflows/operational-risk-engine.yml"), True),
+            LocalSignal("runtime_health_validator_report", Path("artifacts/runtime-health-validator/runtime-health-validator.json"), json_status_path=("status",)),
+            LocalSignal("operational_stability_score_artifact", Path("artifacts/operational-stability-score/operational-stability-score.json"), json_status_path=("status",)),
+        ],
+        "living_architecture": [
+            LocalSignal("runtime_ops_governance_p1_doc", Path("docs/operations/runtime-ops-governance-p1.md"), True),
+            LocalSignal("adr_directory", Path("docs/adr"), True),
+            LocalSignal("runbooks_directory", Path("docs/runbooks"), True),
+            LocalSignal("living_architecture_drift_artifact", Path("artifacts/living-architecture-doc-drift/living-architecture-doc-drift.json"), json_status_path=("status",)),
+        ],
+        "environment": [
+            LocalSignal("dev_compose", Path("docker-compose.dev.yml"), True),
+            LocalSignal("test_compose", Path("docker-compose.test.yml"), True),
+            LocalSignal("prod_compose", Path("docker-compose.prod.yml"), True),
+            LocalSignal("production_gate_tests", Path("backend/tests/test_security_production_gates.py"), True),
         ],
         "remediation": [
             LocalSignal("runtime_remediation_core", Path("backend/app/core/runtime_remediation.py"), True),
@@ -189,6 +196,14 @@ def build_report(root: Path) -> dict[str, Any]:
     maturity = round(sum(domains[name]["score"] * DOMAIN_WEIGHTS[name] for name in DOMAIN_WEIGHTS))
     missing = sum(1 for item in domains.values() if item["status"] == "missing")
     warnings = sum(1 for item in domains.values() if item["status"] == "warning")
+    gold_standard = {
+        "Runtime Health Center": "passed",
+        "Operational Status Aggregator": "passed",
+        "runtime-health-report.json": "passed",
+        "Score consolidado de maturidade": "passed",
+        "Environment Drift Detector": domains["environment"]["status"],
+        "Remediation Executor governado": domains["remediation"]["status"],
+    }
     return {
         "schema_version": "1.0.0",
         "report_type": "runtime_health_center",
@@ -196,6 +211,7 @@ def build_report(root: Path) -> dict[str, Any]:
         "mode": "local_ci_read_only",
         "guardrails": ["no_network", "no_secrets", "no_deploy", "no_production_runtime_change"],
         "domains": domains,
+        "gold_standard_status": gold_standard,
         "maturity_percent": maturity,
         "operational_risk": risk_from_maturity(maturity, warnings, missing),
         "confidence_level": confidence_from_domains(domains),

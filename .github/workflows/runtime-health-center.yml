@@ -6,6 +6,8 @@ on:
       - 'scripts/runtime_health_center.py'
       - 'tests/test_runtime_health_center.py'
       - 'docs/operations/runtime-ops-governance-p1.md'
+      - 'README.md'
+      - 'CHANGELOG.md'
       - '.github/workflows/runtime-health-center.yml'
   workflow_dispatch:
 
@@ -59,6 +61,12 @@ jobs:
           print('|---|---|---:|---:|')
           for name, domain in report['domains'].items():
               print(f"| {name} | {domain['status']} | {domain['score']} | {domain['signals_available']}/{domain['signals_total']} |")
+          print('')
+          print('## Gold standard')
+          print('| Frente | Status |')
+          print('|---|---|')
+          for name, status in report['gold_standard_status'].items():
+              print(f'| {name} | {status} |')
           PY
 
       - name: Upload runtime health report

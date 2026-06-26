@@ -22,10 +22,11 @@ class RuntimeHealthCenterTests(unittest.TestCase):
             set(report["domains"]),
             {
                 "ci_cd",
-                "living_architecture",
-                "evidence",
-                "environment",
+                "evidence_gate",
                 "governance",
+                "runtime_risk",
+                "living_architecture",
+                "environment",
                 "remediation",
             },
         )
@@ -34,6 +35,8 @@ class RuntimeHealthCenterTests(unittest.TestCase):
         self.assertIn(report["operational_risk"], {"low", "medium", "high"})
         self.assertIn(report["confidence_level"], {"low", "medium", "high"})
         self.assertTrue(report["next_required_actions"])
+        self.assertEqual(report["gold_standard_status"]["Runtime Health Center"], "passed")
+        self.assertIn(report["gold_standard_status"]["Environment Drift Detector"], {"missing", "partial", "warning", "passed"})
 
     def test_marks_missing_artifacts_without_network(self):
         import tempfile

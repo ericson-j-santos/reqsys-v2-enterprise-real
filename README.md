@@ -482,10 +482,10 @@ npm run test:e2e:stable
 
 ## Runtime Health Center
 
-O ReqSys possui um agregador local de status operacional para o incremento Runtime Ops Governance P1. Ele consolida sinais locais de CI/CD, documentação viva, evidências, ambientes, governança e remediação sem acessar rede externa, ler secrets ou alterar produção.
+O ReqSys possui um agregador local de status operacional para o incremento Runtime Ops Governance P1. Ele consolida sinais locais de CI/CD, Evidence Gate, governança, runtime risk scoring, documentação viva, ambientes e remediação sem acessar rede externa, ler secrets ou alterar produção.
 
 ```bash
 python scripts/runtime_health_center.py --output artifacts/runtime-health-center/runtime-health-report.json
 ```
 
-O workflow `Runtime Health Center` publica o artifact `runtime-health-report` com `maturity_percent`, `operational_risk`, `confidence_level`, status por domínio e próximas ações obrigatórias.
+O workflow `Runtime Health Center` publica o artifact `runtime-health-report` com `maturity_percent`, `operational_risk`, `confidence_level`, status por domínio, matriz de padrão ouro e próximas ações obrigatórias.
