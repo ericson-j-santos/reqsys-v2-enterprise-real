@@ -8,7 +8,7 @@ primary_region = "gru"
   APP_ENV = "development"
   PUBLIC_ENVIRONMENT = "development"
   DATABASE_URL = "sqlite:////data/reqsys.db"
-  CORS_ORIGINS = "https://reqsys-app-dev.fly.dev,http://localhost:5173,http://localhost:8081"
+  CORS_ORIGINS = "https://reqsys-app-dev.fly.dev,https://tieridev.duckdns.org,http://localhost:5173,http://localhost:8081"
 
 [[mounts]]
   source = "reqsys_data_dev"

@@ -14,6 +14,11 @@ $apiConfig = switch ($Env) {
     "dev"     { "fly.dev.toml" }
     "staging" { "fly.staging.toml" }
 }
+$frontendConfig = switch ($Env) {
+    "prod"    { "fly.toml" }
+    "dev"     { "fly.dev.toml" }
+    "staging" { "fly.staging.toml" }
+}
 
 $apiApp = switch ($Env) {
     "prod"    { "reqsys-api" }
@@ -68,7 +73,12 @@ $appExists = & $fly apps list 2>&1 | Select-String $apiApp
 if (-not $appExists) {
     Write-Host "Criando app $apiApp..." -ForegroundColor Yellow
     & $fly apps create $apiApp
-    & $fly volumes create reqsys_data --region gru --size 1 --app $apiApp
+    $volumeName = switch ($Env) {
+        "prod"    { "reqsys_data" }
+        "dev"     { "reqsys_data_dev" }
+        "staging" { "reqsys_data_stg" }
+    }
+    & $fly volumes create $volumeName --region gru --size 1 --app $apiApp
     Set-BackendSecrets $apiApp
 }
 
@@ -90,7 +100,7 @@ if (-not $appExists) {
     & $fly apps create $frontendApp
 }
 
-& $fly deploy --config $apiConfig --remote-only
+& $fly deploy --config $frontendConfig --remote-only
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERRO no deploy do frontend!" -ForegroundColor Red
     Pop-Location; exit 1

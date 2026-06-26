@@ -6,6 +6,8 @@ primary_region = "gru"
 
   [build.args]
     VITE_API_URL = "https://reqsys-api-stg.fly.dev"
+    VITE_PUBLIC_URL = "https://reqsys-app-stg.fly.dev"
+    VITE_PUBLIC_DUCKDNS_URL = "https://tierin.duckdns.org"
 
 [http_service]
   internal_port = 80
