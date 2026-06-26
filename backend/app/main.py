@@ -1,5 +1,6 @@
 import logging
 import sys
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -106,6 +107,17 @@ async def log_security_events(request: Request, call_next):
     return response
 
 
+def _runtime_payload(status: str, check: str) -> dict[str, str]:
+    return {
+        'status': status,
+        'check': check,
+        'service': 'reqsys-api',
+        'version': settings.app_version,
+        'environment': settings.normalized_environment,
+        'timestamp': datetime.now(UTC).isoformat(),
+    }
+
+
 @app.get('/')
 def root():
     return ok(
@@ -130,3 +142,18 @@ def root():
 @app.get('/health')
 def health():
     return ok({'status': 'ok', 'service': 'reqsys-api'})
+
+
+@app.get('/api/runtime/health')
+def runtime_health():
+    return ok(_runtime_payload('ok', 'health'))
+
+
+@app.get('/api/runtime/readiness')
+def runtime_readiness():
+    return ok(_runtime_payload('ready', 'readiness'))
+
+
+@app.get('/api/runtime/liveness')
+def runtime_liveness():
+    return ok(_runtime_payload('alive', 'liveness'))
