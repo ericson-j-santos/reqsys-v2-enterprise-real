@@ -234,7 +234,7 @@ def _criar_runtime_observability_snapshot(correlation_id: str) -> dict:
 
 def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
     return {
-        'schema_version': '1.0.0',
+        'schema_version': '1.1.0',
         'title': 'ReqSys Runtime Operational Dashboard',
         'description': 'Schema-driven dashboard para runtime publico, health, readiness e metricas operacionais.',
         'generated_at': snapshot['generated_at'],
@@ -279,6 +279,24 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'value': snapshot['uptime_seconds'],
                 'unit': 'seconds',
                 'drilldown': '/api/runtime/liveness',
+            },
+            {
+                'id': 'readiness-percent',
+                'title': 'Readiness Operacional',
+                'type': 'metric',
+                'value': 100 if _runtime_ready(snapshot) else 75,
+                'unit': 'percent',
+                'min': 0,
+                'max': 100,
+                'drilldown': '/api/runtime/readiness',
+            },
+            {
+                'id': 'fly-duckdns-status',
+                'title': 'Fly/DuckDNS',
+                'type': 'status',
+                'value': 'pending_public_evidence',
+                'severity': 'attention',
+                'drilldown': '/api/runtime/contracts',
             },
         ],
         'sections': [
@@ -325,6 +343,46 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                     {'label': 'Liveness', 'href': '/api/runtime/liveness'},
                     {'label': 'Metrics', 'href': '/api/runtime/metrics'},
                 ],
+            },
+            {
+                'id': 'operational-timeline',
+                'title': 'Timeline Operacional',
+                'type': 'timeline',
+                'items': [
+                    {'step': 'smoke', 'label': 'Smoke público', 'status': 'artifact_required', 'href': '/api/runtime/health'},
+                    {'step': 'readiness', 'label': 'Readiness consolidado', 'status': _runtime_readiness_reason(snapshot), 'href': '/api/runtime/readiness'},
+                    {'step': 'incident-summary', 'label': 'Resumo de incidentes', 'status': 'no_open_runtime_incident_in_snapshot', 'href': '/api/runtime/analytics'},
+                    {'step': 'risk-summary', 'label': 'Resumo de risco', 'status': snapshot['status'], 'href': '/api/runtime/metrics'},
+                    {'step': 'environment-drift', 'label': 'Drift de ambientes', 'status': 'requires_public_artifacts', 'href': '/api/runtime/dashboard'},
+                ],
+            },
+            {
+                'id': 'environment-evidence',
+                'title': 'Runtime Environment Evidence',
+                'type': 'environment_status',
+                'items': [
+                    {'environment': 'dev', 'status': 'partial', 'source': 'local_runtime_contract'},
+                    {'environment': 'staging', 'status': 'unavailable', 'source': 'public_artifact_pending'},
+                    {'environment': 'prod', 'status': 'degraded' if snapshot['status'] == 'degraded' else 'partial', 'source': 'runtime_health_snapshot'},
+                ],
+            },
+            {
+                'id': 'incident-summary',
+                'title': 'Incident Summary',
+                'type': 'summary',
+                'items': {'open_incidents': 0, 'runtime_status': snapshot['status'], 'risk_score': snapshot['risk_score']},
+            },
+            {
+                'id': 'risk-summary',
+                'title': 'Risk Summary',
+                'type': 'summary',
+                'items': {'risk_score': snapshot['risk_score'], 'pending_items': snapshot['critical_counts']['pending_items'], 'blocked_items': snapshot['critical_counts']['blocked_items']},
+            },
+            {
+                'id': 'environment-drift-summary',
+                'title': 'Environment Drift Summary',
+                'type': 'summary',
+                'items': {'classification': 'requires_public_artifacts', 'environments': ['dev', 'staging', 'prod']},
             },
             {
                 'id': 'governance-evidence',

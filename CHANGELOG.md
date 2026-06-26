@@ -10,6 +10,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ### Adicionado
 
+- REQSYS#325: Smoke validator público com `ops-readiness-report.json`, validação opcional de frontend/runtime dashboard/incidentes/CORS, readiness consolidado e integração do status Fly/DuckDNS ao Ops Dashboard.
 - REQSYS#323: Ops Dashboard com drill-down por domínio, detalhes de health/evidence/risk/environment drift/governance, Incident Timeline local filtrável e integração opcional de `runtime-health-report.json` e `runtime-operational-evidence-graph.json`.
 - Runtime Health Center P2 (`schema_version=1.1.0`) com ingestão local de artifacts, consolidação de evidence graph/risk scoring/PR Evidence Gate e detector de drift entre dev/test/prod refletido em `maturity_percent` e `operational_risk`.
 - Consolidação do Runtime Operacional Autônomo Governado no `scripts/runtime_health_validator.py`, com status executivo, maturidade operacional, backlog automático, detecção de regressão, rollback governado, sincronização Fly.io e evidência navegável.

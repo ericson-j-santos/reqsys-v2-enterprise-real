@@ -46,11 +46,31 @@ class OpsDashboardDataTests(unittest.TestCase):
         }
         evidence_graph = {"nodes": [{"id": "pr-323", "domain": "governance", "status": "passed", "workflow": "ops-dashboard", "pr": 323}]}
 
-        payload = build_dashboard_payload(watchdog, "example/repo", runtime, evidence_graph)
+        public_runtime = {
+            "base_url": "https://reqsys-api.fly.dev",
+            "readiness": {
+                "environment": "prod",
+                "operational_status": "partial",
+                "readiness_percent": 75,
+                "response_time": 321,
+                "dashboard_ready": True,
+                "login_ready": False,
+                "api_ready": True,
+                "runtime_ready": True,
+                "evidence_ready": True,
+                "blocking_issues": ["/api/runtime/readiness: 503"],
+            },
+            "checks": {"frontend_loading": True, "assets": True},
+        }
+
+        payload = build_dashboard_payload(watchdog, "example/repo", runtime, evidence_graph, public_runtime)
 
         self.assertEqual(payload["schema_version"], "1.1.0")
         self.assertTrue(payload["runtime_sources"]["runtime_health_report_available"])
         self.assertTrue(payload["runtime_sources"]["runtime_operational_evidence_graph_available"])
+        self.assertTrue(payload["runtime_sources"]["public_runtime_validation_available"])
+        self.assertEqual(payload["public_runtime_readiness"]["operational_status"], "partial")
+        self.assertEqual(payload["public_runtime_readiness"]["readiness_percent"], 75)
         self.assertEqual({item["id"] for item in payload["runtime_domain_drilldowns"]}, {"ci_cd", "governance"})
         ci_domain = next(item for item in payload["runtime_domain_drilldowns"] if item["id"] == "ci_cd")
         self.assertEqual(ci_domain["health"]["maturity_percent"], 82)
