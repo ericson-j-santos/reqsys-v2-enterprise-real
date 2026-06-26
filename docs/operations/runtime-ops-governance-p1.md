@@ -35,3 +35,40 @@ python tools/product_intelligence/generate_runtime_ops_governance_p1.py
 - Não captura valores de segredos.
 - Não faz merge automático.
 - Exige revisão humana antes de promoção de ambiente.
+
+## Incremento: Runtime Health Center + Operational Status Aggregator
+
+O Runtime Health Center adiciona um agregador local e read-only para consolidar sinais operacionais existentes sem acessar rede externa, secrets ou ambientes produtivos.
+
+### Artifact
+
+O comando abaixo gera o relatório versionado `runtime-health-report.json`:
+
+```bash
+python scripts/runtime_health_center.py --output artifacts/runtime-health-center/runtime-health-report.json
+```
+
+### Domínios consolidados
+
+| Domínio | Objetivo |
+|---|---|
+| `ci_cd` | Detectar presença de workflows e artifacts locais de CI/health quando disponíveis. |
+| `living_architecture` | Reutilizar documentação viva e artifacts locais de drift sem duplicar o drift check. |
+| `evidence` | Consolidar runbooks, workflows e artifacts locais de evidência operacional. |
+| `environment` | Verificar base declarativa local de ambientes e gates de produção. |
+| `governance` | Validar presença de regras operacionais, gate de governança e documentação P1. |
+| `remediation` | Verificar base governada para remediação segura e análise de falhas. |
+
+Cada domínio é classificado como `missing`, `partial`, `warning` ou `passed`. O relatório também calcula `maturity_percent`, `operational_risk`, `confidence_level` e `next_required_actions`.
+
+### CI dedicado
+
+O workflow `Runtime Health Center` executa o agregador em pull requests e publicação manual, validando o JSON e publicando o artifact `runtime-health-report`.
+
+### Guardrails
+
+- Execução local/CI, sem rede externa.
+- Não lê secrets nem arquivos `.env`.
+- Não executa deploy, rerun, merge ou remediação automática.
+- Não altera runtime produtivo.
+- Usa somente presença/status de arquivos e artifacts locais existentes.
