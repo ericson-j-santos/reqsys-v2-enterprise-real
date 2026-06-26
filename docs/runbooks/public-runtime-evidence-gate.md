@@ -6,6 +6,12 @@ Criar uma evidência operacional recorrente e acionável da disponibilidade púb
 
 Este gate complementa o runtime Fly P0 já versionado e transforma a URL pública em sinal objetivo para o Estado Único ReqSys.
 
+## Decisão arquitetural vigente
+
+O contrato `strict` público deve validar somente endpoints de disponibilidade operacional canônica.
+
+Endpoints de UX pública, métricas e dashboard operacional não são critérios obrigatórios do gate público `strict`; devem ser tratados por gates próprios, opcionais, internos ou protegidos.
+
 ## Escopo
 
 O workflow `.github/workflows/public-runtime-evidence.yml` executa validação read-only contra a API pública e publica artifact com:
@@ -15,19 +21,32 @@ O workflow `.github/workflows/public-runtime-evidence.yml` executa validação r
 
 Opcionalmente, em execução manual, o workflow também pode publicar o resumo como comentário em uma issue ou PR informado pelo operador.
 
-## Endpoints mínimos validados
+## Endpoints mínimos validados em strict
 
-Por padrão, o workflow reaproveita `scripts/validate_public_runtime.py` e valida:
+Por padrão, o workflow reaproveita `scripts/validate_public_runtime.py` e valida somente:
 
 ```text
-GET /
 GET /health
 GET /api/runtime/health
 GET /api/runtime/readiness
 GET /api/runtime/liveness
+```
+
+## Endpoints fora do contrato strict público
+
+Os endpoints abaixo não são requisitos obrigatórios do gate público `strict`:
+
+```text
+GET /
 GET /api/runtime/metrics
 GET /api/runtime/dashboard
 ```
+
+Tratamento recomendado:
+
+- `/`: evidência opcional de UX ou landing pública;
+- `/api/runtime/metrics`: endpoint interno, protegido ou validado por gate de observabilidade;
+- `/api/runtime/dashboard`: endpoint interno, protegido ou validado por gate operacional autenticado.
 
 ## Execução manual sem comentário
 
@@ -62,15 +81,16 @@ A execução recorrente não publica comentários automaticamente para evitar ru
 |---|---|
 | Workflow | `success` |
 | Artifact | `public-runtime-evidence` publicado |
-| `success_percentual` | `100.0` |
-| Endpoints mínimos | Todos HTTP 2xx |
+| `success_percentual` | `100.0` para endpoints strict |
+| Endpoints mínimos strict | Todos HTTP 2xx |
+| Endpoints opcionais | Não bloqueiam o gate público |
 | Secrets | Nenhum valor exposto |
 | Deploy | Não executado |
 | Comentário | Apenas quando `publish_comment=true` e `issue_number` preenchido |
 
 ## Modo strict
 
-Com `strict=true`, qualquer endpoint público com erro faz o workflow falhar.
+Com `strict=true`, qualquer endpoint canônico público obrigatório com erro faz o workflow falhar.
 
 Com `strict=false`, o artifact ainda é publicado para diagnóstico sem travar o workflow.
 
@@ -79,6 +99,8 @@ Com `strict=false`, o artifact ainda é publicado para diagnóstico sem travar o
 A publicação de comentário é controlada por input explícito e usa somente `GITHUB_TOKEN` com permissão mínima `issues: write`.
 
 O comentário publica apenas `public-runtime-summary.md`, sem tokens, secrets, JWT, client secret ou PII.
+
+Caso a política do repositório bloqueie `addComment` para o `GITHUB_TOKEN`, a evidência permanece disponível no artifact e a publicação governada deve ser reavaliada com GitHub App/token apropriado.
 
 ## Uso no Estado Único ReqSys
 
@@ -101,7 +123,8 @@ Este gate não:
 - corrige DNS;
 - altera autenticação;
 - substitui validação E2E de login Microsoft;
-- comenta automaticamente em execuções agendadas.
+- comenta automaticamente em execuções agendadas;
+- substitui gates internos de métricas, dashboard ou observabilidade autenticada.
 
 ## Próxima evolução recomendada
 
