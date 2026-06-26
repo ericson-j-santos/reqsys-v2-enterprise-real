@@ -151,7 +151,7 @@ jobs:
               status = 'warning'
 
           summary = {
-              'schema_version': '1.0.0',
+              'schema_version': '1.0.1',
               'generated_at': datetime.now(timezone.utc).isoformat(),
               'repository': repo,
               'event_name': os.environ.get('EVENT_NAME'),
@@ -196,10 +196,9 @@ jobs:
               f"- Baseline incident: {baseline_incident_minutes}min",
               '',
               '## Warnings',
-              *(f"- {warning}" for warning in warnings) if warnings else ['- None'],
-              '',
-              '## Top bottlenecks by P95',
           ]
+          lines.extend((f"- {warning}" for warning in warnings) if warnings else ['- None'])
+          lines.extend(['', '## Top bottlenecks by P95'])
           if bottlenecks:
               lines.extend(
                   f"- {item['name']}: runs={item['runs']}, success={item['success_rate_percent']}%, p95={item['p95_seconds']}s, max={item['max_seconds']}s"
