@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -68,11 +69,125 @@ def _runtime_depth(runtime_report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_dashboard_payload(report: dict[str, Any], repo: str, runtime_report: dict[str, Any] | None = None) -> dict[str, Any]:
+def _severity_from_status(status: Any) -> str:
+    normalized = str(status or "unknown").lower()
+    if normalized in {"failed", "failure", "critical", "unhealthy", "high"}:
+        return "critical"
+    if normalized in {"warning", "warn", "medium", "degraded"}:
+        return "warning"
+    if normalized in {"partial", "pending", "unknown", "missing"}:
+        return "info"
+    return "normal"
+
+
+def _domain_drilldowns(runtime_report: dict[str, Any]) -> list[dict[str, Any]]:
+    domains = runtime_report.get("domains") or {}
+    environment_drift = runtime_report.get("environment_drift") or {}
+    risk = runtime_report.get("runtime_risk_scoring") or {}
+    rows: list[dict[str, Any]] = []
+    for domain_id, domain in domains.items():
+        signals = domain.get("signals") or []
+        domain_findings = environment_drift.get("findings") if domain_id == "environment" else []
+        rows.append({
+            "id": domain_id,
+            "status": domain.get("status", "unknown"),
+            "severity": _severity_from_status(domain.get("status")),
+            "score": domain.get("score"),
+            "signals_available": domain.get("signals_available", 0),
+            "signals_total": domain.get("signals_total", 0),
+            "health": {
+                "maturity_percent": runtime_report.get("maturity_percent"),
+                "confidence_level": runtime_report.get("confidence_level"),
+                "operational_risk": runtime_report.get("operational_risk"),
+            },
+            "evidence": [signal for signal in signals if signal.get("available")],
+            "missing_evidence": [signal for signal in signals if not signal.get("available")],
+            "risk": risk if domain_id == "runtime_risk" else {"status": domain.get("status"), "severity": _severity_from_status(domain.get("status"))},
+            "environment_drift": environment_drift if domain_id == "environment" else {"findings": domain_findings},
+            "governance": {
+                "guardrails": runtime_report.get("guardrails", []),
+                "next_required_actions": runtime_report.get("next_required_actions", []),
+                "gold_standard_status": runtime_report.get("gold_standard_status", {}),
+            } if domain_id == "governance" else {},
+        })
+    return rows
+
+
+def _extract_pr(value: Any) -> str:
+    text = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
+    match = re.search(r"#(\d+)|pull/(\d+)|PR[-_ ]?(\d+)", text, re.IGNORECASE)
+    if not match:
+        return ""
+    return next(group for group in match.groups() if group)
+
+
+def _incident_timeline(report: dict[str, Any], runtime_report: dict[str, Any], evidence_graph: dict[str, Any]) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for check in report.get("results", []) or []:
+        events.append({
+            "source": "repository_health_watchdog",
+            "title": check.get("name", "check operacional"),
+            "domain": check.get("domain") or check.get("category") or "ci_cd",
+            "workflow": check.get("workflow") or check.get("name", ""),
+            "pr": _extract_pr(check),
+            "status": check.get("status", "unknown"),
+            "severity": check.get("severity") or _severity_from_status(check.get("status")),
+            "evidence": check.get("evidence", {}),
+        })
+    for domain_id, domain in (runtime_report.get("domains") or {}).items():
+        events.append({
+            "source": "runtime_health_report",
+            "title": f"Domínio {domain_id}",
+            "domain": domain_id,
+            "workflow": "runtime-health-center",
+            "pr": "",
+            "status": domain.get("status", "unknown"),
+            "severity": _severity_from_status(domain.get("status")),
+            "evidence": {"score": domain.get("score"), "signals_available": domain.get("signals_available"), "signals_total": domain.get("signals_total")},
+        })
+    for artifact in ((runtime_report.get("ingested_artifacts") or {}).get("artifacts") or []):
+        events.append({
+            "source": "runtime_artifact_catalog",
+            "title": artifact.get("id", "artifact"),
+            "domain": "evidence_gate",
+            "workflow": artifact.get("id", ""),
+            "pr": _extract_pr(artifact),
+            "status": artifact.get("status", "unknown"),
+            "severity": _severity_from_status(artifact.get("status")),
+            "evidence": artifact,
+        })
+    graph_items = []
+    for key in ("events", "nodes", "edges"):
+        value = evidence_graph.get(key)
+        if isinstance(value, list):
+            graph_items.extend(value)
+    for item in graph_items:
+        if not isinstance(item, dict):
+            continue
+        events.append({
+            "source": "runtime_operational_evidence_graph",
+            "title": item.get("title") or item.get("id") or item.get("name") or "evidência correlacionada",
+            "domain": item.get("domain") or item.get("type") or "evidence_gate",
+            "workflow": item.get("workflow") or item.get("workflow_name") or "",
+            "pr": str(item.get("pr") or item.get("pull_request") or _extract_pr(item)),
+            "status": item.get("status", "unknown"),
+            "severity": item.get("severity") or _severity_from_status(item.get("status")),
+            "evidence": item,
+        })
+    return events
+
+
+def build_dashboard_payload(
+    report: dict[str, Any],
+    repo: str,
+    runtime_report: dict[str, Any] | None = None,
+    evidence_graph: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     results = report.get("results", []) or []
     runtime_report = runtime_report or {}
+    evidence_graph = evidence_graph or {}
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "repo": repo or report.get("repo") or "unknown",
         "generated_at_epoch": int(time.time()),
         "overall_status": report.get("overall_status", "unknown"),
@@ -87,6 +202,12 @@ def build_dashboard_payload(report: dict[str, Any], repo: str, runtime_report: d
             "main": f"https://github.com/{repo}/tree/main" if repo else "",
         },
         "runtime_gold_standard_depth": _runtime_depth(runtime_report),
+        "runtime_domain_drilldowns": _domain_drilldowns(runtime_report),
+        "incident_timeline": _incident_timeline(report, runtime_report, evidence_graph),
+        "runtime_sources": {
+            "runtime_health_report_available": bool(runtime_report),
+            "runtime_operational_evidence_graph_available": bool(evidence_graph),
+        },
     }
 
 
@@ -96,11 +217,13 @@ def main() -> int:
     parser.add_argument("--repo", default="")
     parser.add_argument("--output", default="docs/ops-dashboard/data/health.json")
     parser.add_argument("--runtime-health-report", default="artifacts/runtime-health-center/runtime-health-report.json")
+    parser.add_argument("--evidence-graph", default="artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json")
     args = parser.parse_args()
 
     report = _load_watchdog_report(Path(args.watchdog_report))
     runtime_report = _load_optional_json(Path(args.runtime_health_report))
-    payload = build_dashboard_payload(report, args.repo, runtime_report)
+    evidence_graph = _load_optional_json(Path(args.evidence_graph))
+    payload = build_dashboard_payload(report, args.repo, runtime_report, evidence_graph)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
