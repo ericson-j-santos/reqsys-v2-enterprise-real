@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/ci-lead-time-analytics.schema.json",
+  "title": "ReqSys CI Lead Time Analytics Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "repository",
+    "window_runs",
+    "completed_runs",
+    "success_rate_percent",
+    "failure_rate_percent",
+    "avg_seconds",
+    "p50_seconds",
+    "p95_seconds",
+    "max_seconds",
+    "baseline_incident_minutes",
+    "status",
+    "warnings",
+    "bottlenecks",
+    "workflow_stats"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.0\\.[0-9]+$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[^/]+/[^/]+$"
+    },
+    "event_name": {
+      "type": ["string", "null"]
+    },
+    "run_id": {
+      "type": ["string", "null"]
+    },
+    "window_runs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "completed_runs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "success_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "failure_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cancelled_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "skipped_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "success_rate_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "failure_rate_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "avg_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "p50_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "p95_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "max_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "baseline_incident_minutes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "baseline_incident_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": ["passed", "warning"]
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "bottlenecks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/workflow_stat"
+      }
+    },
+    "workflow_stats": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/workflow_stat"
+      }
+    },
+    "recent_completed_runs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/run_summary"
+      }
+    }
+  },
+  "$defs": {
+    "workflow_stat": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name", "runs", "success_rate_percent", "avg_seconds", "p50_seconds", "p95_seconds", "max_seconds"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "success_rate_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "avg_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p50_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p95_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_seconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "run_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "name", "event", "status", "duration_seconds", "duration_minutes"],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": ["string", "null"]
+        },
+        "head_branch": {
+          "type": ["string", "null"]
+        },
+        "head_sha": {
+          "type": ["string", "null"]
+        },
+        "html_url": {
+          "type": ["string", "null"]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "duration_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration_minutes": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}
