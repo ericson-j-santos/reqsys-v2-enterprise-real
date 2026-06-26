@@ -1,0 +1,101 @@
+name: Auto Public Runtime Evidence
+
+on:
+  workflow_run:
+    workflows:
+      - ReqSys Fly Runtime P0
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      public_url:
+        description: "URL pública da API ReqSys"
+        required: true
+        default: "https://reqsys-api.fly.dev"
+      strict:
+        description: "Executar gate strict"
+        required: true
+        type: boolean
+        default: true
+      publish_comment:
+        description: "Publicar comentário governado"
+        required: true
+        type: boolean
+        default: false
+      issue_number:
+        description: "Issue/PR para comentário opcional"
+        required: false
+        default: ""
+      ref:
+        description: "Ref alvo"
+        required: true
+        default: "main"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  auto-dispatch-public-runtime-evidence:
+    name: Auto dispatch public runtime evidence
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    steps:
+      - name: Resolve inputs
+        id: inputs
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "public_url=${{ inputs.public_url }}" >> "$GITHUB_OUTPUT"
+            echo "strict=${{ inputs.strict }}" >> "$GITHUB_OUTPUT"
+            echo "publish_comment=${{ inputs.publish_comment }}" >> "$GITHUB_OUTPUT"
+            echo "issue_number=${{ inputs.issue_number }}" >> "$GITHUB_OUTPUT"
+            echo "ref=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "public_url=https://reqsys-api.fly.dev" >> "$GITHUB_OUTPUT"
+            echo "strict=true" >> "$GITHUB_OUTPUT"
+            echo "publish_comment=false" >> "$GITHUB_OUTPUT"
+            echo "issue_number=" >> "$GITHUB_OUTPUT"
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate governed token
+        env:
+          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
+        run: |
+          if [ -z "${GH_PAT_ACTIONS}" ]; then
+            echo "Secret GH_PAT_ACTIONS não configurado."
+            exit 1
+          fi
+
+      - name: Dispatch Public Runtime Evidence Gate
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          REPOSITORY: ${{ github.repository }}
+          PUBLIC_URL: ${{ steps.inputs.outputs.public_url }}
+          STRICT: ${{ steps.inputs.outputs.strict }}
+          PUBLISH_COMMENT: ${{ steps.inputs.outputs.publish_comment }}
+          ISSUE_NUMBER: ${{ steps.inputs.outputs.issue_number }}
+          TARGET_REF: ${{ steps.inputs.outputs.ref }}
+        run: |
+          gh workflow run public-runtime-evidence.yml \
+            -R "${REPOSITORY}" \
+            --ref "${TARGET_REF}" \
+            -f "public_url=${PUBLIC_URL}" \
+            -f "strict=${STRICT}" \
+            -f "publish_comment=${PUBLISH_COMMENT}" \
+            -f "issue_number=${ISSUE_NUMBER}"
+
+      - name: Show latest public runtime evidence runs
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          gh run list \
+            -R "${REPOSITORY}" \
+            --workflow="public-runtime-evidence.yml" \
+            -L 5
