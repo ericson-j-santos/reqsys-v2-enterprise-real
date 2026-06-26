@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0.0",
+  "strategy": "fly-enterprise-sync",
+  "canonical_environments": ["dev", "hml", "prod"],
+  "promotion_order": ["dev", "hml", "prod"],
+  "environments": {
+    "dev": {
+      "fly_config": "infra/dev/fly.toml",
+      "api_app": "reqsys-api-dev",
+      "frontend_app": "reqsys-dev",
+      "api_url": "https://reqsys-api-dev.fly.dev",
+      "frontend_url": "https://reqsys-dev.fly.dev",
+      "app_env": "development",
+      "volume": "reqsys_data_dev",
+      "approval_required": false,
+      "min_machines_running": 1,
+      "smoke_endpoints": ["/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness"],
+      "required_secret_names": ["JWT_SECRET", "JWT_ISSUER", "JWT_AUDIENCE"]
+    },
+    "hml": {
+      "fly_config": "infra/hml/fly.toml",
+      "api_app": "reqsys-api-hml",
+      "frontend_app": "reqsys-hml",
+      "api_url": "https://reqsys-api-hml.fly.dev",
+      "frontend_url": "https://reqsys-hml.fly.dev",
+      "app_env": "homolog",
+      "volume": "reqsys_data_hml",
+      "approval_required": true,
+      "min_machines_running": 1,
+      "smoke_endpoints": ["/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness"],
+      "required_secret_names": ["JWT_SECRET", "JWT_ISSUER", "JWT_AUDIENCE", "AZURE_TENANT_ID", "AZURE_CLIENT_ID"]
+    },
+    "prod": {
+      "fly_config": "infra/prod/fly.toml",
+      "api_app": "reqsys-api-prod",
+      "frontend_app": "reqsys-prod",
+      "api_url": "https://reqsys-api-prod.fly.dev",
+      "frontend_url": "https://reqsys-prod.fly.dev",
+      "app_env": "production",
+      "volume": "reqsys_data_prod",
+      "approval_required": true,
+      "min_machines_running": 1,
+      "smoke_endpoints": ["/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness", "/api/runtime/metrics"],
+      "required_secret_names": ["JWT_SECRET", "JWT_ISSUER", "JWT_AUDIENCE", "AZURE_TENANT_ID", "AZURE_CLIENT_ID"]
+    }
+  },
+  "forbidden_versioned_secret_patterns": ["JWT_SECRET", "AZURE_CLIENT_SECRET", "PASSWORD", "TOKEN", "PRIVATE_KEY"],
+  "drift_evidence": {
+    "required_runtime_fields": ["commit_sha", "version", "environment", "correlation_id"],
+    "artifact_name": "fly-enterprise-sync-evidence"
+  }
+}

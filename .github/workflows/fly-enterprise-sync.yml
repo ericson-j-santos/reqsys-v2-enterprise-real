@@ -1,0 +1,130 @@
+name: Fly Enterprise Sync
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - "scripts/validate_fly_enterprise_sync.py"
+      - "scripts/validate_public_runtime.py"
+      - ".github/workflows/fly-enterprise-sync.yml"
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Ambiente alvo para validação/smoke"
+        required: true
+        default: "dev"
+        type: choice
+        options: [dev, hml, prod]
+      deploy:
+        description: "Executar deploy governado no Fly após validação"
+        required: true
+        type: boolean
+        default: false
+      approve_prod_deploy:
+        description: "Confirmação textual obrigatória para produção: APROVO-PROD"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CORRELATION_ID: fly-enterprise-sync-${{ github.run_id }}-${{ github.run_attempt }}
+
+concurrency:
+  group: fly-enterprise-sync-${{ github.event.inputs.target_environment || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-iac:
+    name: Validate Fly IaC matrix
+    runs-on: ubuntu-latest
+    outputs:
+      api_url: ${{ steps.env.outputs.api_url }}
+      fly_config: ${{ steps.env.outputs.fly_config }}
+      fly_app: ${{ steps.env.outputs.fly_app }}
+      deploy_allowed: ${{ steps.policy.outputs.deploy_allowed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate enterprise Fly sync manifest
+        run: python scripts/validate_fly_enterprise_sync.py --output fly-enterprise-sync-validation.json
+
+      - name: Resolve target environment
+        id: env
+        env:
+          TARGET_ENVIRONMENT: ${{ github.event.inputs.target_environment || 'dev' }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          data = json.load(open('infra/fly-environments.json', encoding='utf-8'))
+          env = os.environ['TARGET_ENVIRONMENT']
+          cfg = data['environments'][env]
+          print(f"api_url={cfg['api_url']}")
+          print(f"fly_config={cfg['fly_config']}")
+          print(f"fly_app={cfg['api_app']}")
+          PY
+
+      - name: Enforce deployment policy
+        id: policy
+        env:
+          TARGET_ENVIRONMENT: ${{ github.event.inputs.target_environment || 'dev' }}
+          DEPLOY: ${{ github.event.inputs.deploy || 'false' }}
+          APPROVE_PROD_DEPLOY: ${{ github.event.inputs.approve_prod_deploy }}
+        run: |
+          set -euo pipefail
+          deploy_allowed=false
+          if [ "$DEPLOY" = "true" ]; then
+            deploy_allowed=true
+            if [ "$TARGET_ENVIRONMENT" = "prod" ] && [ "$APPROVE_PROD_DEPLOY" != "APROVO-PROD" ]; then
+              echo "Produção exige approve_prod_deploy=APROVO-PROD" >&2
+              exit 1
+            fi
+          fi
+          echo "deploy_allowed=$deploy_allowed" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fly-enterprise-sync-evidence
+          path: fly-enterprise-sync-validation.json
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy selected Fly app
+    runs-on: ubuntu-latest
+    needs: validate-iac
+    if: ${{ github.event_name == 'workflow_dispatch' && needs.validate-iac.outputs.deploy_allowed == 'true' }}
+    environment: ${{ github.event.inputs.target_environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy with canonical config
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_CONFIG: ${{ needs.validate-iac.outputs.fly_config }}
+          FLY_APP: ${{ needs.validate-iac.outputs.fly_app }}
+        run: flyctl deploy --remote-only --config "$FLY_CONFIG" --app "$FLY_APP"
+
+  runtime-smoke:
+    name: Runtime smoke evidence
+    runs-on: ubuntu-latest
+    needs: [validate-iac, deploy]
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && (github.event.inputs.deploy == false || needs.deploy.result == 'success') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate public runtime endpoints
+        run: python scripts/validate_public_runtime.py --base-url "${{ needs.validate-iac.outputs.api_url }}" --include-optional-evidence --output public-runtime-validation.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fly-runtime-smoke-${{ github.event.inputs.target_environment }}
+          path: public-runtime-validation.json
