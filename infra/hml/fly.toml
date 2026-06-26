@@ -1,0 +1,35 @@
+app = "reqsys-api-hml"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_ENV = "homolog"
+  PUBLIC_ENVIRONMENT = "homolog"
+  DATABASE_URL = "sqlite:////data/reqsys.db"
+  CORS_ORIGINS = "https://reqsys-app-hml.fly.dev,http://localhost:5173,http://localhost:8081"
+
+[[mounts]]
+  source = "reqsys_data_hml"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

@@ -1,0 +1,45 @@
+app = "reqsys-api-prod"
+primary_region = "gru"
+kill_signal = "SIGINT"
+kill_timeout = "5s"
+
+[build]
+  dockerfile = "Dockerfile.fly"
+
+[env]
+  APP_ENV = "production"
+  ALLOW_DEMO_LOGIN = "false"
+  DATABASE_URL = "sqlite:////data/reqsys.db"
+  JWT_EXP_MINUTES = "60"
+  CORS_ORIGINS = "https://reqsys-prod.fly.dev,https://reqsys-api-prod.fly.dev"
+  SDD_SPECS_PATH = "/app/specs"
+
+[[mounts]]
+  source = "reqsys_data_prod"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 40
+    hard_limit = 80
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
