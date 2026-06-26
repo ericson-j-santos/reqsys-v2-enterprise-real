@@ -1,10 +1,12 @@
 from io import BytesIO
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Depends, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
+from app.db import get_db
 from app.schemas.agents import AgentGenerateRequest, AgentProvisionRequest
 from app.services.agent_generator import (
     PACKAGE_NAME,
@@ -16,8 +18,12 @@ from app.services.agent_generator import (
 from app.services.copilot_studio_provisioner import provisionar_copilot_studio
 from app.services.reqsys_orchestrator import (
     OrchestratorDemand,
-    classificar_demanda,
-    classificar_lote,
+    analytics_coordinators,
+    analytics_risk,
+    analytics_summary,
+    analytics_themes,
+    classificar_e_persistir_demanda,
+    classificar_e_persistir_lote,
     listar_coordenadores,
 )
 
@@ -92,6 +98,7 @@ def listar_coordenadores_orquestrador():
 def rotear_demanda_orquestrador(
     payload: DemandaOrquestradorIn,
     x_correlation_id: str | None = Header(default=None),
+    db: Session = Depends(get_db),
 ):
     """Classifica uma demanda e sugere o coordenador IA, backlog, labels e automacoes assistidas."""
     demanda = OrchestratorDemand(
@@ -102,13 +109,14 @@ def rotear_demanda_orquestrador(
         ambiente=payload.ambiente,
         correlation_id=x_correlation_id,
     )
-    return ok(classificar_demanda(demanda), x_correlation_id)
+    return ok(classificar_e_persistir_demanda(db, demanda), x_correlation_id)
 
 
 @router.post('/orchestrator/route/batch')
 def rotear_lote_orquestrador(
     payload: LoteDemandasOrquestradorIn,
     x_correlation_id: str | None = Header(default=None),
+    db: Session = Depends(get_db),
 ):
     """Classifica um lote de demandas para alimentar filas tematicas e dashboards operacionais."""
     demandas = [
@@ -122,4 +130,28 @@ def rotear_lote_orquestrador(
         )
         for item in payload.demandas
     ]
-    return ok(classificar_lote(demandas), x_correlation_id)
+    return ok(classificar_e_persistir_lote(db, demandas), x_correlation_id)
+
+
+@router.get('/orchestrator/analytics/summary')
+def resumo_analytics_orquestrador(db: Session = Depends(get_db)):
+    """Resume volume, score medio e confianca media do historico operacional do orquestrador."""
+    return ok(analytics_summary(db))
+
+
+@router.get('/orchestrator/analytics/themes')
+def analytics_temas_orquestrador(db: Session = Depends(get_db)):
+    """Agrupa eventos persistidos por tema classificado."""
+    return ok(analytics_themes(db))
+
+
+@router.get('/orchestrator/analytics/coordinators')
+def analytics_coordenadores_orquestrador(db: Session = Depends(get_db)):
+    """Agrupa eventos persistidos por coordenador IA acionado."""
+    return ok(analytics_coordinators(db))
+
+
+@router.get('/orchestrator/analytics/risk')
+def analytics_risco_orquestrador(db: Session = Depends(get_db)):
+    """Calcula indicadores iniciais de risco operacional do roteamento IA."""
+    return ok(analytics_risk(db))

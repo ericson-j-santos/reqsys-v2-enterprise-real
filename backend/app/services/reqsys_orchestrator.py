@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Iterable
+
+from sqlalchemy import desc, func
+from sqlalchemy.orm import Session
+
+from app.models.orchestrator import OrchestratorRoutingEvent
 
 
 @dataclass(frozen=True)
@@ -249,3 +256,96 @@ def _proximo_passo(rule: CoordinatorRule, score: int) -> str:
     if rule == DEFAULT_COORDINATOR or score == 0:
         return 'Refinar demanda no intake central antes de automatizar execução.'
     return f'Encaminhar para {rule.nome} e executar automação assistida: {rule.automacoes[0]}.'
+
+
+
+def _payload_hash(demanda: OrchestratorDemand) -> str:
+    payload = {
+        'titulo': demanda.titulo,
+        'descricao': demanda.descricao,
+        'origem': demanda.origem,
+        'prioridade_informada': demanda.prioridade_informada,
+        'ambiente': demanda.ambiente,
+    }
+    serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
+
+
+def registrar_evento_roteamento(db: Session, demanda: OrchestratorDemand, rota: dict) -> OrchestratorRoutingEvent:
+    evento = OrchestratorRoutingEvent(
+        correlation_id=demanda.correlation_id,
+        tema=rota['tema'],
+        coordinator_id=rota['coordinator']['id'],
+        prioridade=rota['prioridade_sugerida'],
+        score=rota['score'],
+        confianca=rota['confianca'],
+        origem=rota['origem'],
+        ambiente=rota['ambiente'],
+        payload_hash=_payload_hash(demanda),
+    )
+    db.add(evento)
+    db.commit()
+    db.refresh(evento)
+    return evento
+
+
+def classificar_e_persistir_demanda(db: Session, demanda: OrchestratorDemand) -> dict:
+    rota = classificar_demanda(demanda)
+    evento = registrar_evento_roteamento(db, demanda, rota)
+    rota['routing_event_id'] = evento.id
+    return rota
+
+
+def classificar_e_persistir_lote(db: Session, demandas: Iterable[OrchestratorDemand]) -> dict:
+    demandas_materializadas = list(demandas)
+    rotas = [classificar_e_persistir_demanda(db, demanda) for demanda in demandas_materializadas]
+    por_tema: dict[str, int] = {}
+    for rota in rotas:
+        por_tema[rota['tema']] = por_tema.get(rota['tema'], 0) + 1
+    return {
+        'schema_version': '1.1.0',
+        'total': len(rotas),
+        'por_tema': por_tema,
+        'rotas': rotas,
+    }
+
+
+def analytics_summary(db: Session) -> dict:
+    total = db.query(func.count(OrchestratorRoutingEvent.id)).scalar() or 0
+    avg_score = db.query(func.avg(OrchestratorRoutingEvent.score)).scalar() or 0
+    avg_confianca = db.query(func.avg(OrchestratorRoutingEvent.confianca)).scalar() or 0
+    ultimo = db.query(OrchestratorRoutingEvent).order_by(desc(OrchestratorRoutingEvent.created_at), desc(OrchestratorRoutingEvent.id)).first()
+    return {
+        'schema_version': '1.1.0',
+        'total_eventos': total,
+        'score_medio': round(float(avg_score), 2),
+        'confianca_media': round(float(avg_confianca), 2),
+        'ultimo_evento_em': ultimo.created_at.isoformat() if ultimo and ultimo.created_at else None,
+    }
+
+
+def _counter(db: Session, column) -> list[dict]:
+    rows = db.query(column, func.count(OrchestratorRoutingEvent.id)).group_by(column).order_by(desc(func.count(OrchestratorRoutingEvent.id)), column).all()
+    return [{'valor': value, 'total': total} for value, total in rows]
+
+
+def analytics_themes(db: Session) -> dict:
+    return {'schema_version': '1.1.0', 'themes': _counter(db, OrchestratorRoutingEvent.tema)}
+
+
+def analytics_coordinators(db: Session) -> dict:
+    return {'schema_version': '1.1.0', 'coordinators': _counter(db, OrchestratorRoutingEvent.coordinator_id)}
+
+
+def analytics_risk(db: Session) -> dict:
+    alta_prioridade = db.query(func.count(OrchestratorRoutingEvent.id)).filter(OrchestratorRoutingEvent.prioridade.in_(('alta', 'critica', 'crítica'))).scalar() or 0
+    baixa_confianca = db.query(func.count(OrchestratorRoutingEvent.id)).filter(OrchestratorRoutingEvent.confianca < 0.6).scalar() or 0
+    alto_score = db.query(func.count(OrchestratorRoutingEvent.id)).filter(OrchestratorRoutingEvent.score >= 3).scalar() or 0
+    return {
+        'schema_version': '1.1.0',
+        'risk': {
+            'prioridade_alta': alta_prioridade,
+            'baixa_confianca': baixa_confianca,
+            'alto_score': alto_score,
+        },
+    }
