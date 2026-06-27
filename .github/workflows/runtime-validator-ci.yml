@@ -24,6 +24,11 @@ jobs:
       - name: Install backend dependencies
         working-directory: backend
         run: pip install -r requirements.txt
+      - name: Install backend validation tools
+        run: pip install ruff
+      - name: Run backend lint
+        working-directory: backend
+        run: ruff check app/ --select E,F,W,I --ignore E501
       - name: Run runtime validator tests
         working-directory: backend
         run: python -m pytest tests/test_runtime_validator.py -v --tb=short
@@ -40,6 +45,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+      - name: Run frontend unit tests
+        working-directory: frontend
+        run: npm run test:unit
       - name: Build frontend
         working-directory: frontend
         run: npm run build
