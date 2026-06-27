@@ -15,6 +15,7 @@ permissions:
   actions: read
   checks: read
   pull-requests: write
+  issues: write
 
 concurrency:
   group: governed-merge-queue-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}
@@ -258,7 +259,7 @@ jobs:
               merge_path: $merge_path,
               runtime_merge_queue_gate: $runtime_gate[0],
               preview_environment_contract: "progressive-required-via-workflow",
-              stages: {
+              validation_results: {
                 isolated_validation: $isolated_result,
                 temporary_integration: $integration_result
               },
