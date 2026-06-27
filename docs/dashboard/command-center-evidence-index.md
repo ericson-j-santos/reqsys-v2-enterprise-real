@@ -16,6 +16,14 @@ Catalogar as evidencias operacionais usadas pelo command center do ReqSys, mante
 | Readiness de release | `audit/release-readiness/golden-release-readiness.json` | Dashboard dinamico |
 | Readiness do command center | `audit/command-center/command-center-readiness.json` | Dashboard dinamico |
 | Validacao de contratos | `audit/extended-contract-validation/extended-operational-contract-validation.json` | Dashboard dinamico |
+| Delivery readiness | `audit/delivery-readiness/delivery-readiness-report.json` | Operational Evidence Hub |
+| Delivery completion | `audit/delivery-completion/delivery-completion-snapshot.json` | Operational Evidence Hub |
+| Delivery finalization | `audit/delivery-finalization/delivery-finalization-report.json` | Operational Evidence Hub |
+| Maturity snapshot | `audit/delivery-maturity/delivery-maturity-snapshot.json` | Operational Evidence Hub |
+| Observability correlation | `artifacts/observability-correlation-report/observability-correlation-report.json` | Operational Evidence Hub |
+| Artifact contract validation | `audit/artifact-contract-validation/artifact-contract-validation-report.json` | Operational Evidence Hub |
+| Dashboard regression | `docs/dashboard/dashboard-regression-report.json` | Operational Evidence Hub |
+| Living architecture traceability | `audit/living-architecture/living-architecture-traceability-report.json` | Operational Evidence Hub |
 
 ## Contratos associados
 

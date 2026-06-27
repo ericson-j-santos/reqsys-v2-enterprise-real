@@ -32,6 +32,10 @@ Os checks cobrem:
 | Ausência de secrets | Padrões comuns de token, chave privada, JWT e credenciais inline são reportados como gaps. |
 | Chamadas externas não governadas | URLs `http(s)`, CDN, scripts remotos, links remotos e imports remotos são reportados como gaps. |
 | Execução local básica | Cada HTML deve manter `doctype`, `lang="pt-BR"` e viewport para abertura local simples. |
+| Evidence Hub cards executivos | `operational-evidence-hub.html` deve preservar cards de consolidação dos 8 domínios. |
+| Evidence Hub fontes JSON | O hub deve referenciar artifacts de readiness, completion, finalization, maturidade, observabilidade, contratos, regressão e rastreabilidade. |
+| Evidence Hub drill-down | Seções navegáveis por âncora para cada domínio consolidado. |
+| Evidence Hub fallback | Mesmo padrão de `loadJson` + `fallback[domain.key]` do dashboard dinâmico. |
 
 ## Como interpretar o relatório
 

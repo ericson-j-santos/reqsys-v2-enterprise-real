@@ -43,6 +43,7 @@ Manter um índice vivo e navegável que conecte workflows, artifacts, contratos,
 - [`docs/dashboard/command-center-evidence-index.md`](../dashboard/command-center-evidence-index.md)
 - [`docs/dashboard/command-center-navigation-map.md`](../dashboard/command-center-navigation-map.md)
 - [`docs/ops-dashboard/index.html`](../ops-dashboard/index.html)
+- [`docs/dashboard/operational-evidence-hub.html`](../dashboard/operational-evidence-hub.html)
 
 ### Runbooks relacionados
 

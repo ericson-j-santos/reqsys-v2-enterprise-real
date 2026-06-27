@@ -15,6 +15,30 @@ const requiredCards = [
   'Artifacts catalogados', 'Schema coverage', 'Baseline incidente'
 ];
 
+const evidenceHubRequiredCards = [
+  'Delivery readiness', 'Delivery completion', 'Delivery finalization', 'Maturity snapshot',
+  'Observability mapped', 'Contract artifacts', 'Dashboard regression',
+  'Traceability domains', 'Risco operacional consolidado'
+];
+
+const evidenceHubJsonSources = [
+  '../audit/delivery-readiness/delivery-readiness-report.json',
+  '../audit/delivery-completion/delivery-completion-snapshot.json',
+  '../audit/delivery-finalization/delivery-finalization-report.json',
+  '../audit/delivery-maturity/delivery-maturity-snapshot.json',
+  '../artifacts/observability-correlation-report/observability-correlation-report.json',
+  '../audit/artifact-contract-validation/artifact-contract-validation-report.json',
+  'dashboard-regression-report.json',
+  '../audit/living-architecture/living-architecture-traceability-report.json',
+  '../traceability/living-architecture-map.json'
+];
+
+const evidenceHubSections = [
+  'delivery-readiness', 'delivery-completion', 'delivery-finalization', 'maturity-snapshot',
+  'observability-correlation', 'artifact-contract-validation', 'dashboard-regression',
+  'living-architecture-traceability'
+];
+
 const expectedJsonSources = [
   '../audit/ci-lead-time-analytics.json',
   '../audit/history/operational-history-snapshot.json',
@@ -69,6 +93,8 @@ checks.push(htmlFiles.length > 0
 const files = Object.fromEntries(htmlFiles.map((file) => [path.relative(root, file), readText(file)]));
 const dynamicPath = path.join('docs', 'dashboard', 'live-operational-dashboard.dynamic.html');
 const dynamicHtml = files[dynamicPath] ?? '';
+const evidenceHubPath = path.join('docs', 'dashboard', 'operational-evidence-hub.html');
+const evidenceHubHtml = files[evidenceHubPath] ?? '';
 
 const missingCards = requiredCards.filter((label) => !dynamicHtml.includes(`card('${label}'`) && !dynamicHtml.includes(`card("${label}"`) && !dynamicHtml.includes(label));
 checks.push(missingCards.length === 0
@@ -85,6 +111,37 @@ const missingFallbackSignals = fallbackSignals.filter((signal) => !dynamicHtml.i
 checks.push(missingFallbackSignals.length === 0
   ? pass('fallback_seguro_para_artifact_ausente')
   : gap('fallback_seguro_para_artifact_ausente', { missingSignals: missingFallbackSignals }));
+
+if (evidenceHubHtml) {
+  const missingHubCards = evidenceHubRequiredCards.filter((label) => !evidenceHubHtml.includes(label));
+  checks.push(missingHubCards.length === 0
+    ? pass('evidence_hub_cards_executivos_presentes', { expected: evidenceHubRequiredCards.length })
+    : gap('evidence_hub_cards_executivos_presentes', { missing: missingHubCards }));
+
+  const missingHubSources = evidenceHubJsonSources.filter((href) => !evidenceHubHtml.includes(href));
+  checks.push(missingHubSources.length === 0
+    ? pass('evidence_hub_fontes_json_referenciadas', { expected: evidenceHubJsonSources.length })
+    : gap('evidence_hub_fontes_json_referenciadas', { missing: missingHubSources }));
+
+  const missingHubSections = evidenceHubSections.filter((section) => !evidenceHubHtml.includes('id="' + section + '"'));
+  checks.push(missingHubSections.length === 0
+    ? pass('evidence_hub_drill_down_navegavel', { expected: evidenceHubSections.length })
+    : gap('evidence_hub_drill_down_navegavel', { missing: missingHubSections }));
+
+  const hubFallbackSignals = ['const fallback', 'async function loadJson', 'try {', 'catch (error)', 'response.ok', 'fallback[domain.key]'];
+  const missingHubFallback = hubFallbackSignals.filter((signal) => !evidenceHubHtml.includes(signal));
+  checks.push(missingHubFallback.length === 0
+    ? pass('evidence_hub_fallback_seguro')
+    : gap('evidence_hub_fallback_seguro', { missingSignals: missingHubFallback }));
+
+  const hubGovernanceSignals = ['confidence_level', 'operational_risk', 'semaforo', 'runbook', 'contract'];
+  const missingHubGovernance = hubGovernanceSignals.filter((signal) => !evidenceHubHtml.includes(signal));
+  checks.push(missingHubGovernance.length === 0
+    ? pass('evidence_hub_indicadores_governanca_presentes')
+    : gap('evidence_hub_indicadores_governanca_presentes', { missing: missingHubGovernance }));
+} else {
+  checks.push(gap('evidence_hub_html_presente', { message: 'operational-evidence-hub.html não encontrado em docs/dashboard/.' }));
+}
 
 for (const [file, content] of Object.entries(files)) {
   const secrets = secretPatterns.filter((pattern) => pattern.regex.test(content)).map((pattern) => pattern.name);
@@ -115,7 +172,17 @@ const summary = {
   }
 };
 
-const report = { summary, required_cards: requiredCards, expected_json_sources: expectedJsonSources, checks };
+const report = {
+  summary,
+  required_cards: requiredCards,
+  expected_json_sources: expectedJsonSources,
+  evidence_hub: {
+    required_cards: evidenceHubRequiredCards,
+    expected_json_sources: evidenceHubJsonSources,
+    drill_down_sections: evidenceHubSections
+  },
+  checks
+};
 fs.writeFileSync(reportJson, `${JSON.stringify(report, null, 2)}\n`);
 
 const statusIcon = (status) => status === 'passed' ? '✅' : '⚠️';

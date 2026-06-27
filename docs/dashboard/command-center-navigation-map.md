@@ -29,6 +29,7 @@ flowchart TD
 | Release Readiness | Dynamic Dashboard | Prontidao de release |
 | Contracts | Validation Workflows | Validacao |
 | Dashboard | Runbooks | Drill-down documental |
+| Operational Evidence Hub | Todos os dominios acima | Consolidacao executiva report-only |
 
 ## Indicadores de maturidade
 

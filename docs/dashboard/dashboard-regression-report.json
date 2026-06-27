@@ -1,11 +1,11 @@
 {
   "summary": {
-    "generated_at": "2026-06-27T14:06:29.581Z",
+    "generated_at": "2026-06-27T15:06:28.064Z",
     "mode": "report-only",
     "dashboard_dir": "docs/dashboard",
     "totals": {
-      "checks": 13,
-      "passed": 13,
+      "checks": 21,
+      "passed": 21,
       "gaps": 0
     }
   },
@@ -47,6 +47,40 @@
     "../audit/delivery-readiness/delivery-readiness-report.json",
     "../audit/delivery-completion/delivery-completion-snapshot.json"
   ],
+  "evidence_hub": {
+    "required_cards": [
+      "Delivery readiness",
+      "Delivery completion",
+      "Delivery finalization",
+      "Maturity snapshot",
+      "Observability mapped",
+      "Contract artifacts",
+      "Dashboard regression",
+      "Traceability domains",
+      "Risco operacional consolidado"
+    ],
+    "expected_json_sources": [
+      "../audit/delivery-readiness/delivery-readiness-report.json",
+      "../audit/delivery-completion/delivery-completion-snapshot.json",
+      "../audit/delivery-finalization/delivery-finalization-report.json",
+      "../audit/delivery-maturity/delivery-maturity-snapshot.json",
+      "../artifacts/observability-correlation-report/observability-correlation-report.json",
+      "../audit/artifact-contract-validation/artifact-contract-validation-report.json",
+      "dashboard-regression-report.json",
+      "../audit/living-architecture/living-architecture-traceability-report.json",
+      "../traceability/living-architecture-map.json"
+    ],
+    "drill_down_sections": [
+      "delivery-readiness",
+      "delivery-completion",
+      "delivery-finalization",
+      "maturity-snapshot",
+      "observability-correlation",
+      "artifact-contract-validation",
+      "dashboard-regression",
+      "living-architecture-traceability"
+    ]
+  },
   "checks": [
     {
       "name": "dashboards_html_identificados",
@@ -55,7 +89,8 @@
       "files": [
         "docs/dashboard/delivery-finalization-panel.html",
         "docs/dashboard/live-operational-dashboard.dynamic.html",
-        "docs/dashboard/live-operational-dashboard.html"
+        "docs/dashboard/live-operational-dashboard.html",
+        "docs/dashboard/operational-evidence-hub.html"
       ]
     },
     {
@@ -72,6 +107,34 @@
     },
     {
       "name": "fallback_seguro_para_artifact_ausente",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "evidence_hub_cards_executivos_presentes",
+      "status": "passed",
+      "severity": "report-only",
+      "expected": 9
+    },
+    {
+      "name": "evidence_hub_fontes_json_referenciadas",
+      "status": "passed",
+      "severity": "report-only",
+      "expected": 9
+    },
+    {
+      "name": "evidence_hub_drill_down_navegavel",
+      "status": "passed",
+      "severity": "report-only",
+      "expected": 8
+    },
+    {
+      "name": "evidence_hub_fallback_seguro",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "evidence_hub_indicadores_governanca_presentes",
       "status": "passed",
       "severity": "report-only"
     },
@@ -117,6 +180,21 @@
     },
     {
       "name": "compatibilidade_basica_execucao_local:docs/dashboard/live-operational-dashboard.html",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "ausencia_de_secrets:docs/dashboard/operational-evidence-hub.html",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "ausencia_de_chamadas_externas_nao_governadas:docs/dashboard/operational-evidence-hub.html",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "compatibilidade_basica_execucao_local:docs/dashboard/operational-evidence-hub.html",
       "status": "passed",
       "severity": "report-only"
     }

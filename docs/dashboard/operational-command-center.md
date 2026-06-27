@@ -7,6 +7,7 @@ Centralizar a navegacao operacional do ReqSys em torno do dashboard dinamico, ar
 ## Entrada principal
 
 - `docs/dashboard/live-operational-dashboard.dynamic.html`
+- `docs/dashboard/operational-evidence-hub.html` — consolidação executiva de readiness, completion, finalization, maturidade, observabilidade, contratos, regressão e rastreabilidade viva
 
 ## Artifacts consumidos
 
