@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T20:15:00-03:00",
+  "domain": "parallel_pr_governance",
+  "metric_group": "historical_lead_time_metrics",
+  "known_samples": [
+    {"batch": "parallel_pr_governance_v1", "prs": [412, 413, 414, 415, 416, 417], "result": "merged", "conflicts": 0},
+    {"batch": "parallel_pr_governance_v2", "prs": [429, 430, 431, 432, 434, 435], "result": "merged", "conflicts": 0}
+  ],
+  "target_measurements": ["created_at", "first_green_at", "merged_at", "lead_time_minutes", "queue_wait_minutes"],
+  "current_assessment": {
+    "sample_count": 12,
+    "green_merge_rate": "12/12",
+    "conflict_count": 0,
+    "confidence_level": "medium"
+  }
+}
