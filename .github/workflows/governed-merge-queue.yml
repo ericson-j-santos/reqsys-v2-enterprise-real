@@ -298,6 +298,7 @@ jobs:
 
       - name: Sincronizar label de elegibilidade
         if: always()
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
