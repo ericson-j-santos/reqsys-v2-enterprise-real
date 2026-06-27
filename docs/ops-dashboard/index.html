@@ -45,9 +45,9 @@
     .healthy { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
     .partial, .degraded { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
     .unavailable { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
-    .passed, .low { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
-    .warning, .medium { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
-    .failed, .critical, .high { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
+    .passed, .low, .safe, .merge_imediato { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
+    .warning, .medium, .serial, .merge_serializado, .aguardar_estabilizacao, .rerun_recomendado { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
+    .failed, .critical, .high, .blocked, .isolamento_obrigatorio { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
     .unknown { background: rgba(148,163,184,.16); color: var(--muted); border: 1px solid rgba(148,163,184,.45); }
     section { margin-top: 20px; }
     table { width: 100%; border-collapse: collapse; margin-top: 12px; }
@@ -68,7 +68,7 @@
 <body>
   <header>
     <h1>ReqSys Ops Dashboard</h1>
-    <p class="subtitle">Painel operacional estático para CI, evidências, PRs de risco e saúde da main.</p>
+    <p class="subtitle">Painel operacional estático para CI, evidências, PRs de risco, saúde da main e inteligência governada de merge.</p>
   </header>
   <main>
     <div class="grid">
@@ -89,6 +89,26 @@
       <details class="details">
         <summary>Blocking issues e checks</summary>
         <pre id="public-runtime-details">{}</pre>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>Merge Intelligence — runtime center</h2>
+      <p class="small">Visão executiva consumindo <code>merge-intelligence-index.json</code> e <code>merge-lane-priority.json</code>. Fallback local mantém o dashboard funcional quando artifacts ainda não foram publicados.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Mergeability score</div><div id="merge-score" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Recomendação</div><div id="merge-recommendation" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Saturação fila</div><div id="merge-queue" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Lane / confiança</div><div id="merge-lane-confidence" class="small">-</div></div>
+      </div>
+      <div class="links" id="merge-links"></div>
+      <table>
+        <thead><tr><th>Lane</th><th>Score</th><th>Paralelismo</th><th>Atual</th></tr></thead>
+        <tbody id="merge-lanes"><tr><td colspan="4">Carregando...</td></tr></tbody>
+      </table>
+      <details class="details">
+        <summary>Drill-down de artifacts e hotspots</summary>
+        <pre id="merge-details">{}</pre>
       </details>
     </section>
 
@@ -171,10 +191,32 @@
   </main>
 
   <script>
-    const statusClass = (value) => ['passed','warning','failed','critical','unknown','healthy','partial','degraded','unavailable','attention','low','medium','high'].includes(value) ? value : 'unknown';
+    const statusClass = (value) => ['passed','warning','failed','critical','unknown','healthy','partial','degraded','unavailable','attention','low','medium','high','blocked','safe','serial','merge_imediato','merge_serializado','aguardar_estabilizacao','rerun_recomendado','isolamento_obrigatorio'].includes(value) ? value : 'unknown';
     const formatDate = (epoch) => epoch ? new Date(epoch * 1000).toLocaleString('pt-BR') : 'Não informado';
     const uniqueValues = (items, key) => [...new Set(items.map((item) => item[key]).filter(Boolean))].sort();
     const shortJson = (value) => JSON.stringify(value || {}, null, 2);
+
+    async function fetchOptionalJson(path, fallback) {
+      try {
+        const response = await fetch(path, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return { available: true, data: await response.json(), source: path, error: null };
+      } catch (error) {
+        return { available: false, data: fallback, source: path, error: error.message };
+      }
+    }
+
+    function addLink(container, label, url, external = false) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.className = 'link-btn';
+      if (external) {
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+      }
+      a.textContent = label;
+      container.appendChild(a);
+    }
 
     function renderDomains(domains) {
       const tbody = document.getElementById('domains');
@@ -235,6 +277,77 @@
       });
     }
 
+    async function renderMergeIntelligence() {
+      const fallbackIndex = {
+        source_available: false,
+        merge_intelligence: {
+          risk: 'unknown',
+          lane: 'unknown',
+          parallel_safe: false,
+          mergeability_score: 0,
+          recommendation: 'aguardar_estabilizacao',
+          queue_saturation: 'unknown',
+          queue_pressure: 0,
+          confidence: 'low',
+          blocking_reasons: ['merge_intelligence_missing'],
+        },
+        trend: { serial_merge_required: true },
+        hotspot_heatmap: [],
+      };
+      const fallbackLane = { ranking: [] };
+      const index = await fetchOptionalJson('./data/merge-intelligence-index.json', fallbackIndex);
+      const lane = await fetchOptionalJson('./data/merge-lane-priority.json', fallbackLane);
+      const intelligence = index.data.merge_intelligence || {};
+      const ranking = lane.data.ranking || index.data.lane_priority?.ranking || [];
+
+      document.getElementById('merge-score').textContent = `${intelligence.mergeability_score ?? 0}%`;
+      document.getElementById('merge-recommendation').innerHTML = `<span class="status ${statusClass(intelligence.recommendation)}">${intelligence.recommendation || 'unknown'}</span>`;
+      document.getElementById('merge-queue').innerHTML = `<span class="status ${statusClass(intelligence.queue_saturation)}">${intelligence.queue_saturation || 'unknown'}</span><div class="small">pressão: ${intelligence.queue_pressure ?? 0}</div>`;
+      document.getElementById('merge-lane-confidence').innerHTML = `Lane: <span class="status ${statusClass(intelligence.lane)}">${intelligence.lane || 'unknown'}</span><br>Confiança: <span class="status ${statusClass(intelligence.confidence)}">${intelligence.confidence || 'low'}</span>`;
+
+      const mergeLinks = document.getElementById('merge-links');
+      mergeLinks.innerHTML = '';
+      addLink(mergeLinks, 'Operational Evidence Hub', '../dashboard/operational-evidence-hub.html');
+      addLink(mergeLinks, 'merge-intelligence-index.json', './data/merge-intelligence-index.json');
+      addLink(mergeLinks, 'merge-lane-priority.json', './data/merge-lane-priority.json');
+      addLink(mergeLinks, 'PR Conflict Guard artifacts', 'https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/pr-conflict-guard.yml', true);
+      addLink(mergeLinks, 'Governed Merge Queue artifacts', 'https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/governed-merge-queue.yml', true);
+
+      const lanesBody = document.getElementById('merge-lanes');
+      lanesBody.innerHTML = '';
+      if (!ranking.length) {
+        lanesBody.innerHTML = '<tr><td colspan="4">Ranking de lanes não disponível; fallback governado ativo.</td></tr>';
+      } else {
+        ranking.slice(0, 8).forEach((item) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${item.lane || '-'}</td>
+            <td>${item.priority_score ?? '-'}</td>
+            <td><span class="status ${statusClass(item.parallelism)}">${item.parallelism || '-'}</span></td>
+            <td>${item.current_pr_lane ? '<span class="status passed">sim</span>' : '-'}</td>
+          `;
+          lanesBody.appendChild(tr);
+        });
+      }
+
+      document.getElementById('merge-details').textContent = shortJson({
+        index_available: index.available,
+        lane_priority_available: lane.available,
+        source: { index: index.source, lane_priority: lane.source },
+        fallback_errors: { index: index.error, lane_priority: lane.error },
+        blocking_reasons: intelligence.blocking_reasons || [],
+        trend: index.data.trend || {},
+        hotspot_heatmap: index.data.hotspot_heatmap || [],
+        artifact_drilldown: {
+          operational_evidence_hub: '../dashboard/operational-evidence-hub.html',
+          merge_intelligence_index: './data/merge-intelligence-index.json',
+          merge_lane_priority: './data/merge-lane-priority.json',
+          pr_conflict_guard_workflow: '.github/workflows/pr-conflict-guard.yml',
+          governed_merge_queue_workflow: '.github/workflows/governed-merge-queue.yml',
+        },
+      });
+    }
+
     async function loadDashboard() {
       const response = await fetch('./data/health.json', { cache: 'no-store' });
       const data = await response.json();
@@ -256,15 +369,13 @@
       links.innerHTML = '';
       Object.entries(data.links || {}).forEach(([label, url]) => {
         if (!url) return;
-        const a = document.createElement('a');
-        a.href = url;
-        a.className = 'link-btn';
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.textContent = label;
-        links.appendChild(a);
+        addLink(links, label, url, true);
       });
+      addLink(links, 'Operational Evidence Hub', '../dashboard/operational-evidence-hub.html');
+      addLink(links, 'Merge Intelligence JSON', './data/merge-intelligence-index.json');
+      addLink(links, 'Lane Priority JSON', './data/merge-lane-priority.json');
 
+      await renderMergeIntelligence();
       renderDomains(data.runtime_domain_drilldowns || []);
       const obs = data.observability_correlation_report || {};
       const obsSummary = obs.summary || {};
@@ -363,6 +474,8 @@
       document.getElementById('domains').innerHTML = `<tr><td colspan="5">Falha ao carregar runtime drill-down.</td></tr>`;
       document.getElementById('timeline').innerHTML = `<tr><td colspan="5">Falha ao carregar incident timeline.</td></tr>`;
       document.getElementById('delivery-indicator-drilldown').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar delivery finalization.</td></tr>`;
+      document.getElementById('merge-lanes').innerHTML = `<tr><td colspan="4">Fallback seguro: falha ao carregar merge intelligence.</td></tr>`;
+      document.getElementById('merge-details').textContent = shortJson({ error: error.message });
     });
   </script>
 </body>
