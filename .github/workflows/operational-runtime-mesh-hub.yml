@@ -1,0 +1,150 @@
+name: Operational Runtime Mesh Hub
+
+# Hub central consolidado da runtime intelligence mesh.
+# Substitui cascatas entre: Operational Realtime Event Mesh, Realtime Operational Mesh,
+# Realtime Operational Streaming Layer e Live Operational Control Center.
+
+on:
+  workflow_run:
+    workflows:
+      - "Post Merge Operational Summary"
+      - "Testes Monitorador APIs Python"
+      - "CI Incident Intelligence"
+      - "Governed Auto Remediation Engine"
+      - "Operational Data Lake & Historical Intelligence"
+      - "Operational Executive Dashboard Generator"
+      - "Operational Stability Score"
+      - "Workflow Reliability Analytics"
+    types:
+      - completed
+  schedule:
+    - cron: "23 11 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      source_workflow:
+        description: "Nome do workflow fonte (opcional, para simulação)"
+        required: false
+        default: "manual"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: operational-runtime-mesh-hub
+  cancel-in-progress: true
+
+jobs:
+  governance-gate:
+    name: Validar fonte e suprimir cascata mesh
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.govern.outputs.should_run }}
+      source_workflow: ${{ steps.govern.outputs.source_workflow }}
+      source_conclusion: ${{ steps.govern.outputs.source_conclusion }}
+      noise_suppressed: ${{ steps.govern.outputs.noise_suppressed }}
+    steps:
+      - name: Avaliar fonte do evento
+        id: govern
+        env:
+          INPUT_SOURCE: ${{ inputs.source_workflow }}
+          RUN_NAME: ${{ github.event.workflow_run.name }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+          MESH_NOISE=(
+            "Operational Realtime Event Mesh"
+            "Realtime Operational Mesh"
+            "Realtime Operational Streaming Layer"
+            "Live Operational Control Center"
+            "Unified Operational Event Bus"
+            "Operational Alert Intelligence"
+            "Operational Runtime Mesh Hub"
+          )
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            source="${INPUT_SOURCE:-manual}"
+            conclusion="success"
+            branch="${GITHUB_REF_NAME}"
+            sha="${GITHUB_SHA}"
+            url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            should_run=true
+            noise_suppressed=false
+          else
+            source="${RUN_NAME}"
+            conclusion="${RUN_CONCLUSION}"
+            branch="${RUN_BRANCH}"
+            sha="${RUN_SHA}"
+            url="${RUN_URL}"
+            should_run=true
+            noise_suppressed=false
+            for item in "${MESH_NOISE[@]}"; do
+              if [ "$source" = "$item" ]; then
+                should_run=false
+                noise_suppressed=true
+                break
+              fi
+            done
+          fi
+
+          {
+            echo "should_run=${should_run}"
+            echo "source_workflow=${source}"
+            echo "source_conclusion=${conclusion}"
+            echo "source_branch=${branch}"
+            echo "source_sha=${sha}"
+            echo "source_url=${url}"
+            echo "noise_suppressed=${noise_suppressed}"
+          } >> "$GITHUB_OUTPUT"
+
+  consolidate-mesh:
+    name: Consolidar runtime intelligence mesh
+    runs-on: ubuntu-latest
+    needs: governance-gate
+    if: needs.governance-gate.outputs.should_run == 'true'
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Gerar artifact consolidado da mesh
+        env:
+          SOURCE_WORKFLOW: ${{ needs.governance-gate.outputs.source_workflow }}
+          SOURCE_CONCLUSION: ${{ needs.governance-gate.outputs.source_conclusion }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/operational-runtime-mesh-hub
+
+          python scripts/operational_runtime_mesh_hub.py \
+            --source-workflow "${SOURCE_WORKFLOW}" \
+            --source-conclusion "${SOURCE_CONCLUSION}" \
+            --out-dir artifacts/operational-runtime-mesh-hub
+
+      - name: Publicar resumo executivo
+        run: |
+          cat artifacts/operational-runtime-mesh-hub/operational-runtime-mesh-hub.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact consolidado
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-runtime-mesh-hub
+          path: artifacts/operational-runtime-mesh-hub
+          if-no-files-found: error
+          retention-days: 30
+
+  skip-cascade:
+    name: Skip governado (cascata mesh suprimida)
+    runs-on: ubuntu-latest
+    needs: governance-gate
+    if: needs.governance-gate.outputs.should_run != 'true'
+    steps:
+      - name: Registrar skip esperado
+        run: |
+          echo "## Operational Runtime Mesh Hub — skip governado" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Fonte: \`${{ needs.governance-gate.outputs.source_workflow }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Motivo: cascata mesh suprimida para evitar notificações falsas" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Classificação: \`governed_skip\`" >> "$GITHUB_STEP_SUMMARY"

@@ -1,13 +1,21 @@
 name: Operational Realtime Event Mesh
 
+# DEPRECATED: workflow_run removido — consolidado em Operational Runtime Mesh Hub.
+# Mantido apenas para workflow_dispatch manual/auditoria retroativa.
+
 on:
-  workflow_run:
-    workflows:
-      - "Live Operational Control Center"
-      - "Operational Executive Dashboard Generator"
-      - "Operational Data Lake & Historical Intelligence"
-    types:
-      - completed
+  workflow_dispatch:
+    inputs:
+      source_workflow:
+        description: "Workflow fonte simulado"
+        required: false
+        default: "manual-audit"
+        type: string
+      source_conclusion:
+        description: "Conclusão simulada"
+        required: false
+        default: "success"
+        type: string
 
 jobs:
   operational-realtime-event-mesh:
@@ -19,11 +27,11 @@ jobs:
 
       - name: Generate realtime operational event mesh
         env:
-          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_NAME: ${{ inputs.source_workflow || 'manual-audit' }}
+          WORKFLOW_CONCLUSION: ${{ inputs.source_conclusion || 'success' }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_BRANCH: ${{ github.ref_name }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           cat <<'JSON' > operational-event-stream.json
 {

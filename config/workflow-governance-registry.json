@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Registry governado de classificação de workflows ReqSys para consolidação, supressão de ruído e prevenção de cascatas.",
+  "classifications": {
+    "critical": "Falha bloqueia merge ou indica regressão real",
+    "informative": "Gera evidência/relatório; falha não bloqueia entrega",
+    "mesh_central": "Hub central consolidado da runtime intelligence mesh",
+    "mesh_redundant": "Supersedido pelo hub central; workflow_run desativado",
+    "mesh_legacy_dispatch": "Mantido apenas para workflow_dispatch manual/auditoria",
+    "governed_skip": "Skip esperado por roteamento (paths, if, draft PR)",
+    "experimental": "Escopo experimental; fora do menu operacional diário",
+    "orphan": "Sem trigger efetivo ou sem consumidor no ciclo atual"
+  },
+  "mesh_central_workflow": "Operational Runtime Mesh Hub",
+  "mesh_central_file": ".github/workflows/operational-runtime-mesh-hub.yml",
+  "mesh_redundant_workflows": [
+    "Operational Realtime Event Mesh",
+    "Realtime Operational Mesh",
+    "Realtime Operational Streaming Layer",
+    "Live Operational Control Center"
+  ],
+  "mesh_primary_sources": [
+    "Post Merge Operational Summary",
+    "Testes Monitorador APIs Python",
+    "CI Incident Intelligence",
+    "Governed Auto Remediation Engine",
+    "Operational Data Lake & Historical Intelligence",
+    "Operational Executive Dashboard Generator",
+    "Operational Stability Score",
+    "Workflow Reliability Analytics"
+  ],
+  "mesh_noise_suppression": [
+    "Operational Realtime Event Mesh",
+    "Realtime Operational Mesh",
+    "Realtime Operational Streaming Layer",
+    "Live Operational Control Center",
+    "Unified Operational Event Bus",
+    "Operational Alert Intelligence",
+    "Operational Runtime Mesh Hub"
+  ],
+  "critical_workflows": [
+    "CI — ReqSys v2 Enterprise",
+    "CI Enterprise Fast",
+    "Fast CI - Operational Guardrails",
+    "Governance Quality Gates",
+    "Governança Padrão Ouro",
+    "PR CI Watch",
+    "PR Evidence Gate",
+    "PR Conflict Guard",
+    "Branch Protection Audit",
+    "Main Post-Merge Validation",
+    "Main Smoke CI",
+    "Main Operational Health",
+    "Governed Merge Queue"
+  ],
+  "informative_workflows": [
+    "Operational Intelligence Hub",
+    "Operational Governance Orchestrator",
+    "Coordenador Status Consolidator",
+    "Runtime Health Validator",
+    "Workflow Command Center",
+    "Workflow Governance Consolidator",
+    "Operational Runtime Mesh Hub",
+    "Operational Runtime Mesh Hub",
+    "Workflow Reliability Analytics",
+    "Operational Stability Score",
+    "CI Incident Intelligence",
+    "Post Merge Operational Summary",
+    "CI Observability",
+    "CI Lead Time Analytics",
+    "CI Runtime Health Summary"
+  ],
+  "no_jobs_risk_patterns": {
+    "all_jobs_conditional": "Todos os jobs possuem if: restritivo — risco de 'No jobs were run' em certos eventos",
+    "workflow_run_only_mesh": "Dispara apenas via workflow_run de outro mesh — cascata/órfão",
+    "paths_only_pr": "pull_request com paths: — pode não rodar em PRs fora do escopo",
+    "dispatch_only_optional_jobs": "Jobs opcionais só em workflow_dispatch — PR/push pode ficar vazio"
+  },
+  "consolidation_targets": {
+    "runtime_intelligence_mesh": {
+      "hub": "operational-runtime-mesh-hub.yml",
+      "deprecated_triggers": [
+        "operational-realtime-event-mesh.yml",
+        "realtime-operational-mesh.yml",
+        "realtime-operational-streaming-layer.yml",
+        "live-operational-control-center.yml"
+      ],
+      "retained_aggregators": [
+        "unified-operational-event-bus.yml",
+        "operational-alert-intelligence.yml"
+      ]
+    }
+  }
+}

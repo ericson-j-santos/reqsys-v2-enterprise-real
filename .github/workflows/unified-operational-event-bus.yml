@@ -3,9 +3,8 @@ name: Unified Operational Event Bus
 on:
   workflow_run:
     workflows:
+      - "Operational Runtime Mesh Hub"
       - "Operational Alert Intelligence"
-      - "Operational Realtime Event Mesh"
-      - "Live Operational Control Center"
       - "Operational Executive Dashboard Generator"
       - "Operational Data Lake & Historical Intelligence"
       - "Governed Auto Remediation Engine"
@@ -15,10 +14,87 @@ on:
       - "Post Merge Operational Summary"
     types:
       - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unified-operational-event-bus
+  cancel-in-progress: true
 
 jobs:
+  governance-gate:
+    name: Suprimir ruído de mesh/informativos
+    runs-on: ubuntu-latest
+    outputs:
+      should_emit: ${{ steps.govern.outputs.should_emit }}
+      event_class: ${{ steps.govern.outputs.event_class }}
+      severity: ${{ steps.govern.outputs.severity }}
+      action_policy: ${{ steps.govern.outputs.action_policy }}
+    steps:
+      - name: Classificar evento
+        id: govern
+        env:
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name || inputs.source_workflow || 'manual' }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'success' }}
+        run: |
+          set -euo pipefail
+          INFORMATIVE=(
+            "Operational Runtime Mesh Hub"
+            "Workflow Governance Consolidator"
+            "Operational Intelligence Hub"
+            "Operational Governance Orchestrator"
+            "Coordenador Status Consolidator"
+            "Runtime Health Validator"
+            "Workflow Command Center"
+            "Workflow Reliability Analytics"
+            "Operational Stability Score"
+            "CI Incident Intelligence"
+            "Post Merge Operational Summary"
+            "CI Observability"
+          )
+
+          event_class="OPERATIONAL_SIGNAL"
+          severity="INFO"
+          action_policy="OBSERVE"
+          should_emit=true
+
+          for item in "${INFORMATIVE[@]}"; do
+            if [ "$WORKFLOW_NAME" = "$item" ]; then
+              event_class="INFORMATIVE_EVIDENCE"
+              severity="INFO"
+              action_policy="OBSERVE"
+              if [ "$WORKFLOW_CONCLUSION" = "success" ] || [ "$WORKFLOW_CONCLUSION" = "skipped" ]; then
+                should_emit=false
+              fi
+              break
+            fi
+          done
+
+          if [ "$WORKFLOW_CONCLUSION" != "success" ] && [ "$event_class" != "INFORMATIVE_EVIDENCE" ]; then
+            event_class="OPERATIONAL_INCIDENT"
+            severity="HIGH"
+            action_policy="MANUAL_REVIEW_REQUIRED"
+          fi
+
+          if [ "$WORKFLOW_CONCLUSION" = "cancelled" ]; then
+            event_class="OPERATIONAL_INTERRUPTION"
+            severity="MEDIUM"
+            action_policy="VERIFY_CONTEXT"
+          fi
+
+          {
+            echo "should_emit=${should_emit}"
+            echo "event_class=${event_class}"
+            echo "severity=${severity}"
+            echo "action_policy=${action_policy}"
+          } >> "$GITHUB_OUTPUT"
+
   unified-operational-event-bus:
     runs-on: ubuntu-latest
+    needs: governance-gate
+    if: needs.governance-gate.outputs.should_emit == 'true' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout
@@ -26,34 +102,28 @@ jobs:
 
       - name: Generate unified operational event payload
         env:
-          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
-          EVENT_NAME: ${{ github.event.workflow_run.event }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name || 'manual' }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'success' }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          RUN_ID: ${{ github.event.workflow_run.id || github.run_id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt || github.run_attempt }}
+          EVENT_NAME: ${{ github.event.workflow_run.event || github.event_name }}
+          EVENT_CLASS: ${{ needs.governance-gate.outputs.event_class }}
+          SEVERITY: ${{ needs.governance-gate.outputs.severity }}
+          ACTION_POLICY: ${{ needs.governance-gate.outputs.action_policy }}
         run: |
           BUS_STATUS="ACTIVE"
-          EVENT_CLASS="OPERATIONAL_SIGNAL"
-          SEVERITY="INFO"
           ROUTING_KEY="ops.signal"
-          ACTION_POLICY="OBSERVE"
           GOVERNANCE_GATE="PRESERVED"
 
-          if [ "${WORKFLOW_CONCLUSION}" != "success" ]; then
-            EVENT_CLASS="OPERATIONAL_INCIDENT"
-            SEVERITY="HIGH"
+          if [ "${EVENT_CLASS}" = "OPERATIONAL_INCIDENT" ]; then
             ROUTING_KEY="ops.incident"
-            ACTION_POLICY="MANUAL_REVIEW_REQUIRED"
-          fi
-
-          if [ "${WORKFLOW_CONCLUSION}" = "cancelled" ]; then
-            EVENT_CLASS="OPERATIONAL_INTERRUPTION"
-            SEVERITY="MEDIUM"
+          elif [ "${EVENT_CLASS}" = "OPERATIONAL_INTERRUPTION" ]; then
             ROUTING_KEY="ops.interruption"
-            ACTION_POLICY="VERIFY_CONTEXT"
+          elif [ "${EVENT_CLASS}" = "INFORMATIVE_EVIDENCE" ]; then
+            ROUTING_KEY="ops.informative"
           fi
 
           cat > unified-operational-event.json <<JSON
@@ -158,3 +228,15 @@ HTML
             unified-operational-event-bus.md
             unified-operational-event-bus.html
           if-no-files-found: error
+
+  skip-noise:
+    name: Evento informativo suprimido
+    runs-on: ubuntu-latest
+    needs: governance-gate
+    if: needs.governance-gate.outputs.should_emit != 'true' && github.event_name != 'workflow_dispatch'
+    steps:
+      - name: Registrar supressão governada
+        run: |
+          echo "## Unified Operational Event Bus — supressão governada" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Fonte informativa sem falha real; evento não emitido" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Classificação: \`governed_skip\`" >> "$GITHUB_STEP_SUMMARY"
