@@ -1,0 +1,163 @@
+name: CI — Detecção de Drift entre Ambientes
+
+on:
+  schedule:
+    - cron: "0 6 * * 1-5"  # Segunda a sexta, 06:00 UTC
+  push:
+    paths:
+      - "infra/**"
+      - "docker-compose*.yml"
+      - ".github/workflows/environment-drift-detection.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift-detection:
+    name: Detecção de Drift de Infraestrutura
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Validar matriz de ambientes Fly (IaC)
+        id: fly_matrix
+        continue-on-error: true
+        run: |
+          python scripts/validate_fly_enterprise_sync.py 2>&1 | tee /tmp/fly-matrix-report.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Validar consistência dos fly.toml
+        id: fly_toml
+        shell: python
+        run: |
+          import json, sys, pathlib, re
+
+          manifest = json.loads(pathlib.Path('infra/fly-environments.json').read_text())
+          environments = manifest.get('environments', {})
+          issues = []
+          required_keys = ['app', 'primary_region']
+
+          for env_name, env_config in environments.items():
+              fly_config_path = env_config.get('fly_config', '')
+              p = pathlib.Path(fly_config_path)
+              if not p.exists():
+                  issues.append(f"[{env_name}] fly.toml não encontrado: {fly_config_path}")
+                  continue
+              content = p.read_text()
+              for key in required_keys:
+                  if key not in content:
+                      issues.append(f"[{env_name}] Campo obrigatório ausente no fly.toml: {key}")
+              if env_config.get('app_env') == 'production':
+                  if 'ALLOW_DEMO_LOGIN' not in content and 'allow_demo_login' not in content.lower():
+                      pass  # não é obrigatório no TOML, pode ser via secret
+              if re.search(r'CORS_ORIGINS\s*=\s*["\']?\*["\']?', content):
+                  issues.append(f"[{env_name}] CORS wildcard (*) detectado no fly.toml")
+
+          if issues:
+              print("DRIFT DETECTADO:")
+              for issue in issues:
+                  print(f"  - {issue}")
+              sys.exit(1)
+          else:
+              print("OK: Nenhum drift crítico detectado nos fly.toml")
+
+      - name: Validar consistência do docker-compose
+        id: compose_check
+        shell: python
+        continue-on-error: true
+        run: |
+          import pathlib, re, sys
+
+          issues = []
+          compose_files = {
+              'base': 'docker-compose.yml',
+              'dev': 'docker-compose.dev.yml',
+              'prod': 'docker-compose.prod.yml',
+              'test': 'docker-compose.test.yml',
+          }
+
+          for env_name, compose_file in compose_files.items():
+              p = pathlib.Path(compose_file)
+              if not p.exists():
+                  issues.append(f"[{env_name}] {compose_file} não encontrado")
+                  continue
+              content = p.read_text()
+              if env_name == 'base' and 'healthcheck' not in content:
+                  issues.append(f"[{env_name}] Healthcheck ausente no compose base")
+              if env_name == 'prod':
+                  if 'APP_ENV' not in content:
+                      issues.append(f"[{env_name}] APP_ENV não definido no docker-compose.prod.yml")
+                  if 'ALLOW_DEMO_LOGIN' not in content:
+                      issues.append(f"[{env_name}] ALLOW_DEMO_LOGIN não definido no docker-compose.prod.yml")
+
+          if issues:
+              print("DRIFT DETECTADO no docker-compose:")
+              for issue in issues:
+                  print(f"  - {issue}")
+              # Avisos mas não bloqueiam
+          else:
+              print("OK: docker-compose consistente")
+
+      - name: Verificar endpoints smoke no manifesto
+        id: smoke_endpoints
+        shell: python
+        run: |
+          import json, sys, pathlib
+
+          manifest = json.loads(pathlib.Path('infra/fly-environments.json').read_text())
+          environments = manifest.get('environments', {})
+          required_smoke = ['/health', '/api/runtime/health', '/api/runtime/readiness', '/api/runtime/liveness']
+          issues = []
+
+          for env_name, env_config in environments.items():
+              smoke = env_config.get('smoke_endpoints', [])
+              for endpoint in required_smoke:
+                  if endpoint not in smoke:
+                      issues.append(f"[{env_name}] Endpoint smoke obrigatório ausente: {endpoint}")
+
+          if issues:
+              print("SMOKE ENDPOINTS FALTANDO:")
+              for issue in issues:
+                  print(f"  - {issue}")
+              sys.exit(1)
+          else:
+              print("OK: Todos os smoke endpoints obrigatórios presentes no manifesto")
+
+      - name: Gerar sumário de drift
+        if: always()
+        shell: bash
+        run: |
+          FLY_MATRIX="${{ steps.fly_matrix.outcome }}"
+          FLY_TOML="${{ steps.fly_toml.outcome }}"
+          COMPOSE="${{ steps.compose_check.outcome }}"
+          SMOKE="${{ steps.smoke_endpoints.outcome }}"
+
+          {
+            echo "## Detecção de Drift — ReqSys Ambientes"
+            echo ""
+            echo "| Check | Status |"
+            echo "|---|---|"
+            [[ "$FLY_MATRIX" == "success" ]] && echo "| Fly IaC Matrix | ✅ OK |" || echo "| Fly IaC Matrix | ❌ Drift Detectado |"
+            [[ "$FLY_TOML" == "success" ]] && echo "| fly.toml Consistência | ✅ OK |" || echo "| fly.toml Consistência | ❌ Drift Detectado |"
+            [[ "$COMPOSE" == "success" ]] && echo "| Docker Compose | ✅ OK |" || echo "| Docker Compose | ⚠️ Aviso |"
+            [[ "$SMOKE" == "success" ]] && echo "| Smoke Endpoints | ✅ OK |" || echo "| Smoke Endpoints | ❌ Incompleto |"
+            echo ""
+            echo "**Ordem de promoção:** dev → hml → prod"
+            echo ""
+            echo "Consulte \`infra/fly-environments.json\` para a matriz canônica de ambientes."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar relatório de drift
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: environment-drift-report
+          path: /tmp/fly-matrix-report.txt
+          if-no-files-found: ignore
+          retention-days: 14

@@ -38,8 +38,9 @@ from app.api import (
     wiki,
 )
 from app.core.config import settings
+from app.core.correlation import definir_correlation_id
 from app.core.envelope import ok
-from app.db import Base, engine
+from app.db import Base, engine, get_db
 
 logging.basicConfig(
     level=logging.INFO,
@@ -93,6 +94,21 @@ app.include_router(operational_intelligence.router)
 app.include_router(actions_runtime_center.router)
 app.include_router(govbi.router)
 app.include_router(rag_governado.router)
+
+
+@app.middleware('http')
+async def correlation_id_middleware(request: Request, call_next):
+    """Injeta X-Correlation-Id em todo request/response para rastreabilidade fim-a-fim."""
+    incoming = (
+        request.headers.get('X-Correlation-Id')
+        or request.headers.get('X-Correlation-ID')
+        or request.headers.get('X-Request-ID')
+        or request.headers.get('X-Request-Id')
+    )
+    correlation_id = definir_correlation_id(incoming)
+    response = await call_next(request)
+    response.headers['X-Correlation-Id'] = correlation_id
+    return response
 
 
 @app.middleware('http')
@@ -333,7 +349,83 @@ def root():
 
 @app.get('/health')
 def health():
-    return ok({'status': 'ok', 'service': 'reqsys-api'})
+    """Health check rápido com verificação de conectividade ao banco."""
+    db_status = 'ok'
+    db_detail: str | None = None
+    try:
+        db = next(get_db())
+        db.execute(__import__('sqlalchemy').text('SELECT 1'))
+        db.close()
+    except Exception as exc:
+        db_status = 'error'
+        db_detail = type(exc).__name__
+    overall = 'ok' if db_status == 'ok' else 'degraded'
+    return ok({
+        'status': overall,
+        'service': 'reqsys-api',
+        'version': settings.app_version,
+        'environment': settings.normalized_environment,
+        'checks': {
+            'database': {'status': db_status, **(({'detail': db_detail}) if db_detail else {})},
+        },
+    })
+
+
+@app.get('/api/runtime/production-readiness')
+def runtime_production_readiness():
+    """Agrega em tempo real todos os gates de produção e retorna scorecard consolidado."""
+    gates: list[dict] = []
+
+    def _gate(name: str, passed: bool, detail: str = '') -> dict:
+        return {'gate': name, 'passed': passed, 'detail': detail}
+
+    gates.append(_gate('jwt_secret_strong', not settings.is_jwt_secret_weak,
+                        'JWT_SECRET fraco ou padrão detectado' if settings.is_jwt_secret_weak else ''))
+    gates.append(_gate('jwt_exp_minutes_positive', settings.jwt_exp_minutes > 0,
+                        f'JWT_EXP_MINUTES={settings.jwt_exp_minutes}'))
+    cors_wildcard = any(o == '*' for o in settings.cors_origins_list)
+    gates.append(_gate('cors_no_wildcard', not cors_wildcard,
+                        'CORS_ORIGINS contém * (inseguro)' if cors_wildcard else ''))
+    gates.append(_gate('jwt_issuer_set', bool(settings.jwt_issuer.strip()),
+                        'JWT_ISSUER ausente' if not settings.jwt_issuer.strip() else ''))
+    gates.append(_gate('jwt_audience_set', bool(settings.jwt_audience.strip()),
+                        'JWT_AUDIENCE ausente' if not settings.jwt_audience.strip() else ''))
+    gates.append(_gate('demo_login_disabled', not settings.allow_demo_login,
+                        'ALLOW_DEMO_LOGIN=true (inseguro em produção)' if settings.allow_demo_login else ''))
+    gates.append(_gate('azure_ad_configured', settings.azure_configured,
+                        f'Azure AD não configurado: {settings.azure_missing_fields}' if not settings.azure_configured else ''))
+
+    db_ok = True
+    try:
+        db = next(get_db())
+        db.execute(__import__('sqlalchemy').text('SELECT 1'))
+        db.close()
+    except Exception as exc:
+        db_ok = False
+        gates.append(_gate('database_reachable', False, type(exc).__name__))
+    if db_ok:
+        gates.append(_gate('database_reachable', True))
+
+    passed = sum(1 for g in gates if g['passed'])
+    total = len(gates)
+    score = round(passed / total * 100) if total else 0
+    all_critical_passed = all(
+        g['passed'] for g in gates
+        if g['gate'] in {'jwt_secret_strong', 'cors_no_wildcard', 'database_reachable'}
+    )
+    readiness_level = 'production_ready' if score == 100 else ('acceptable' if all_critical_passed else 'not_ready')
+
+    return ok({
+        'schema_version': '1.0.0',
+        'service': 'reqsys-api',
+        'environment': settings.normalized_environment,
+        'evaluated_at': datetime.now(UTC).isoformat(),
+        'score': score,
+        'passed': passed,
+        'total': total,
+        'readiness_level': readiness_level,
+        'gates': gates,
+    })
 
 
 @app.get('/api/runtime/health')

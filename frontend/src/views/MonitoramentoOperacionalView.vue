@@ -22,6 +22,40 @@
       <article class="card"><span>Conectores críticos</span><strong>{{ conectoresCriticos.length }}</strong></article>
     </section>
 
+    <section class="painel producao" aria-labelledby="titulo-producao">
+      <div class="subcabecalho">
+        <div>
+          <h2 id="titulo-producao">Production Readiness Score</h2>
+          <p>Scorecard consolidado dos gates de produção — avaliados em tempo real pelo backend.</p>
+        </div>
+        <span :class="['badge', classeProntidao(producaoReadiness?.readiness_level)]">
+          {{ producaoReadiness?.readiness_level || 'carregando' }}
+        </span>
+      </div>
+
+      <div class="score-bar" v-if="producaoReadiness">
+        <div class="score-track">
+          <div class="score-fill" :style="{ width: producaoReadiness.score + '%', background: corScore(producaoReadiness.score) }"></div>
+        </div>
+        <span class="score-label">{{ producaoReadiness.score }}% ({{ producaoReadiness.passed }}/{{ producaoReadiness.total }} gates)</span>
+      </div>
+
+      <div class="analitico" v-if="producaoReadiness?.gates?.length">
+        <table>
+          <thead><tr><th>Gate</th><th>Status</th><th>Detalhe</th></tr></thead>
+          <tbody>
+            <tr v-for="gate in producaoReadiness.gates" :key="gate.gate">
+              <td>{{ gate.gate }}</td>
+              <td><span :class="['badge', gate.passed ? 'badge-ok' : 'badge-erro']">{{ gate.passed ? '✓ OK' : '✗ Falhou' }}</span></td>
+              <td>{{ gate.detail || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p v-if="erroProducao" class="erro" role="alert">{{ erroProducao }}</p>
+    </section>
+
     <section class="painel runtime" aria-labelledby="titulo-runtime">
       <div class="subcabecalho">
         <div>
@@ -160,10 +194,12 @@ const resumo = ref({})
 const itens = ref([])
 const conectores = ref([])
 const runtimeDashboard = ref(null)
+const producaoReadiness = ref(null)
 const correlationId = ref('local-fallback')
 const filtroEstado = ref(route.query.estado || '')
 const carregando = ref(false)
 const erro = ref('')
+const erroProducao = ref('')
 
 const fallbackConectores = [
   { ambiente: 'dev', conector: 'repository_provider', capability: 'repository.read', status: 'ready', criticidade: 'high', acao_sugerida: 'Executar com auditoria.' },
@@ -198,6 +234,18 @@ function classeStatus(status) {
   if (status === 'ready') return 'badge-ok'
   if (['blocked', 'unavailable', 'misconfigured'].includes(status)) return 'badge-erro'
   return 'badge-alerta'
+}
+
+function classeProntidao(level) {
+  if (level === 'production_ready') return 'badge-ok'
+  if (level === 'not_ready') return 'badge-erro'
+  return 'badge-alerta'
+}
+
+function corScore(score) {
+  if (score >= 85) return '#1a7f37'
+  if (score >= 60) return '#9a6700'
+  return '#d1242f'
 }
 
 function classeRuntime(status) {
@@ -240,11 +288,28 @@ async function carregarConectores() {
   }
 }
 
+async function carregarProducaoReadiness() {
+  try {
+    const resposta = await fetch('/api/runtime/production-readiness', { headers: { Accept: 'application/json' } })
+    if (!resposta.ok) throw new Error('Production readiness indisponível')
+    const payload = await resposta.json()
+    producaoReadiness.value = payload.data || null
+    erroProducao.value = ''
+  } catch (e) {
+    erroProducao.value = e?.message || 'Erro ao carregar production readiness'
+  }
+}
+
 async function carregarTudo() {
   carregando.value = true
   erro.value = ''
   try {
-    await Promise.all([carregarMonitoramento(), carregarConectores(), carregarRuntimeDashboard()])
+    await Promise.all([
+      carregarMonitoramento(),
+      carregarConectores(),
+      carregarRuntimeDashboard(),
+      carregarProducaoReadiness(),
+    ])
   } catch (e) {
     erro.value = e?.message || 'Erro inesperado ao carregar monitoramento operacional'
     await carregarConectores()
@@ -288,5 +353,10 @@ th, td { border-bottom: 1px solid #d0d7de; padding: 0.75rem; text-align: left; }
 .badge-ok { background: #dafbe1; color: #116329; }
 .badge-alerta { background: #fff8c5; color: #7d4e00; }
 .badge-erro { background: #ffebe9; color: #a40e26; }
+.producao { background: linear-gradient(135deg, #f0fff4, #ffffff); }
+.score-bar { align-items: center; display: flex; gap: 1rem; }
+.score-track { background: #d0d7de; border-radius: 999px; flex: 1; height: 12px; overflow: hidden; }
+.score-fill { border-radius: 999px; height: 100%; transition: width 0.4s ease; }
+.score-label { font-size: 0.9rem; font-weight: 700; min-width: 10ch; }
 @media (min-width: 768px) { .cabecalho, .subcabecalho { grid-template-columns: 1fr auto; } }
 </style>

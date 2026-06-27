@@ -510,10 +510,25 @@ def obter_api_runtime_metrics(
     correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
     snapshot = _criar_runtime_observability_snapshot(correlation_id)
     labels = {'environment': snapshot['environment'], 'service': snapshot['service']}
+
+    status_value = 1 if snapshot['status'] == 'healthy' else (0 if snapshot['status'] == 'degraded' else 0.5)
+    ready_value = 1 if _runtime_ready(snapshot) else 0
+
+    demo_login_enabled = 1 if settings.allow_demo_login else 0
+    jwt_secret_weak = 1 if settings.is_jwt_secret_weak else 0
+    cors_wildcard = 1 if any(o == '*' for o in settings.cors_origins_list) else 0
+    production_gates_ok = 0 if (demo_login_enabled or jwt_secret_weak or cors_wildcard) else 1
+
     lines = [
-        '# HELP reqsys_runtime_up Runtime liveness status.',
+        '# HELP reqsys_runtime_up Runtime liveness status (1=up).',
         '# TYPE reqsys_runtime_up gauge',
         _metric_line('reqsys_runtime_up', 1, labels),
+        '# HELP reqsys_runtime_status Runtime health status (1=healthy, 0.5=attention, 0=degraded).',
+        '# TYPE reqsys_runtime_status gauge',
+        _metric_line('reqsys_runtime_status', status_value, labels),
+        '# HELP reqsys_runtime_ready Traffic readiness (1=ready, 0=not_ready).',
+        '# TYPE reqsys_runtime_ready gauge',
+        _metric_line('reqsys_runtime_ready', ready_value, labels),
         '# HELP reqsys_runtime_risk_score Runtime risk score from 0 to 100.',
         '# TYPE reqsys_runtime_risk_score gauge',
         _metric_line('reqsys_runtime_risk_score', snapshot['risk_score'], labels),
@@ -523,9 +538,24 @@ def obter_api_runtime_metrics(
         '# HELP reqsys_runtime_blocked_items Blocked operational items.',
         '# TYPE reqsys_runtime_blocked_items gauge',
         _metric_line('reqsys_runtime_blocked_items', snapshot['critical_counts']['blocked_items'], labels),
+        '# HELP reqsys_runtime_total_items Total monitored operational items.',
+        '# TYPE reqsys_runtime_total_items gauge',
+        _metric_line('reqsys_runtime_total_items', snapshot['critical_counts']['total_items'], labels),
         '# HELP reqsys_runtime_uptime_seconds Runtime uptime in seconds.',
         '# TYPE reqsys_runtime_uptime_seconds counter',
         _metric_line('reqsys_runtime_uptime_seconds', snapshot['uptime_seconds'], labels),
+        '# HELP reqsys_security_demo_login_enabled Demo login enabled (1=true, production gate violation).',
+        '# TYPE reqsys_security_demo_login_enabled gauge',
+        _metric_line('reqsys_security_demo_login_enabled', demo_login_enabled, labels),
+        '# HELP reqsys_security_jwt_secret_weak JWT secret is weak or default (1=weak, production risk).',
+        '# TYPE reqsys_security_jwt_secret_weak gauge',
+        _metric_line('reqsys_security_jwt_secret_weak', jwt_secret_weak, labels),
+        '# HELP reqsys_security_cors_wildcard CORS wildcard enabled (1=true, production gate violation).',
+        '# TYPE reqsys_security_cors_wildcard gauge',
+        _metric_line('reqsys_security_cors_wildcard', cors_wildcard, labels),
+        '# HELP reqsys_security_production_gates_ok All critical production security gates passed (1=ok, 0=violation).',
+        '# TYPE reqsys_security_production_gates_ok gauge',
+        _metric_line('reqsys_security_production_gates_ok', production_gates_ok, labels),
     ]
     return Response('\n'.join(lines) + '\n', media_type='text/plain; version=0.0.4; charset=utf-8')
 
