@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys — Dynamic Runtime Dashboard</title>
+  <style>
+    :root { --blue:#005CA9; --orange:#F39200; --teal:#00B3AD; --green:#198754; --yellow:#B7791F; --red:#B00020; --bg:#f6f8fb; --card:#fff; --text:#1f2937; --muted:#6b7280; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+    header { background:linear-gradient(135deg,var(--blue),#083a6b); color:white; padding:24px; }
+    main { max-width:1280px; margin:0 auto; padding:20px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
+    .card { background:var(--card); border-radius:14px; padding:16px; box-shadow:0 2px 10px rgba(15,23,42,.08); border-left:5px solid var(--blue); }
+    .good { border-left-color:var(--green); } .warn { border-left-color:var(--yellow); } .risk { border-left-color:var(--orange); } .bad { border-left-color:var(--red); }
+    .label { color:var(--muted); font-size:.82rem; text-transform:uppercase; letter-spacing:.05em; }
+    .value { font-size:2rem; font-weight:700; margin-top:6px; }
+    .unit { color:var(--muted); font-size:.9rem; }
+    section { margin-top:22px; }
+    table { width:100%; border-collapse:collapse; background:white; border-radius:14px; overflow:hidden; box-shadow:0 2px 10px rgba(15,23,42,.08); }
+    th, td { padding:12px; border-bottom:1px solid #e5e7eb; text-align:left; vertical-align:top; }
+    th { background:#eef4fb; color:#0f3557; }
+    .badge { display:inline-block; padding:4px 9px; border-radius:999px; font-size:.78rem; font-weight:700; }
+    .green { background:#e8f5ee; color:var(--green); } .yellow { background:#fff7e6; color:var(--yellow); } .red { background:#fdecec; color:var(--red); } .blue { background:#e7f1fb; color:var(--blue); }
+    .bar { height:10px; background:#e5e7eb; border-radius:999px; overflow:hidden; }
+    .bar span { display:block; height:100%; background:var(--blue); }
+    code { background:#eef2f7; padding:2px 5px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ReqSys — Dynamic Runtime Dashboard</h1>
+    <p>Dashboard dinâmico local-first para artifacts operacionais JSON, sem CDN, sem secrets e com fallback governado.</p>
+  </header>
+  <main>
+    <section class="grid" id="cards"></section>
+    <section>
+      <h2>Top gargalos por P95</h2>
+      <table><thead><tr><th>Workflow</th><th>Runs</th><th>Success</th><th>P95</th><th>Max</th></tr></thead><tbody id="bottlenecks"></tbody></table>
+    </section>
+    <section>
+      <h2>Fontes de dados</h2>
+      <table><thead><tr><th>Fonte</th><th>Status</th><th>Observação</th></tr></thead><tbody id="sources"></tbody></table>
+    </section>
+  </main>
+  <script>
+    const sources = [
+      { key: 'leadTime', label: 'CI Lead Time Analytics', href: '../audit/ci-lead-time-analytics.json' },
+      { key: 'history', label: 'Operational History Snapshot', href: '../audit/history/operational-history-snapshot.json' }
+    ];
+
+    const fallback = {
+      leadTime: { schema_version:'fallback', success_rate_percent: 0, failure_rate_percent: 0, avg_seconds: 0, p50_seconds: 0, p95_seconds: 0, max_seconds: 0, bottlenecks: [], status: 'unavailable' },
+      history: { schema_version:'fallback', risk:'unknown', baseline:{ incident_lead_time_minutes:143, dashboard_live_percent:88, analytics_operational_percent:92 }, gaps:{} }
+    };
+
+    async function loadJson(source) {
+      try {
+        const response = await fetch(source.href, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return { ok: true, data: await response.json(), error: null };
+      } catch (error) {
+        return { ok: false, data: fallback[source.key], error: error.message };
+      }
+    }
+
+    function secondsToMinutes(value) { return Math.round((Number(value || 0) / 60) * 10) / 10; }
+    function badge(status) {
+      if (status === 'passed' || status === 'low' || status === 'medium_low') return '<span class="badge green">verde</span>';
+      if (status === 'warning' || status === 'unknown') return '<span class="badge yellow">atenção</span>';
+      return '<span class="badge red">risco</span>';
+    }
+    function card(label, value, unit, status) {
+      const cls = status === 'bad' ? 'bad' : status === 'warn' ? 'warn' : 'good';
+      return `<div class="card ${cls}"><div class="label">${label}</div><div class="value">${value}<span class="unit">${unit}</span></div>${badge(status === 'warn' ? 'warning' : 'passed')}</div>`;
+    }
+
+    async function render() {
+      const loaded = {};
+      const statuses = [];
+      for (const source of sources) {
+        loaded[source.key] = await loadJson(source);
+        statuses.push(`<tr><td>${source.label}</td><td>${loaded[source.key].ok ? '<span class="badge green">carregado</span>' : '<span class="badge yellow">fallback</span>'}</td><td>${loaded[source.key].error || 'OK'} — <code>${source.href}</code></td></tr>`);
+      }
+      const lead = loaded.leadTime.data;
+      const hist = loaded.history.data;
+      document.getElementById('cards').innerHTML = [
+        card('Success rate', lead.success_rate_percent || 0, '%', (lead.success_rate_percent || 0) >= 95 ? 'good' : 'warn'),
+        card('Failure rate', lead.failure_rate_percent || 0, '%', (lead.failure_rate_percent || 0) <= 5 ? 'good' : 'warn'),
+        card('P50 lead time', secondsToMinutes(lead.p50_seconds), 'min', 'good'),
+        card('P95 lead time', secondsToMinutes(lead.p95_seconds), 'min', (lead.p95_seconds || 0) < 900 ? 'good' : 'warn'),
+        card('Max lead time', secondsToMinutes(lead.max_seconds), 'min', (lead.max_seconds || 0) < 3600 ? 'good' : 'warn'),
+        card('Baseline incidente', hist.baseline?.incident_lead_time_minutes || 143, 'min', 'warn')
+      ].join('');
+      document.getElementById('bottlenecks').innerHTML = (lead.bottlenecks || []).slice(0, 10).map(item => `<tr><td>${item.name}</td><td>${item.runs}</td><td>${item.success_rate_percent}%</td><td>${secondsToMinutes(item.p95_seconds)}min</td><td>${secondsToMinutes(item.max_seconds)}min</td></tr>`).join('') || '<tr><td colspan="5">Sem dados carregados; usando fallback governado.</td></tr>';
+      document.getElementById('sources').innerHTML = statuses.join('');
+    }
+    render();
+  </script>
+</body>
+</html>
