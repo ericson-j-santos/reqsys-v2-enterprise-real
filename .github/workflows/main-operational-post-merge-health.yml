@@ -1,0 +1,148 @@
+name: Main Operational Post-Merge Health
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '35 */6 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/main-operational-post-merge-health.yml'
+      - 'docs/runbooks/main-operational-post-merge-health.md'
+
+concurrency:
+  group: main-operational-post-merge-health-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  health-report:
+    name: Build main operational health report
+    runs-on: ubuntu-latest
+    env:
+      REQUIRED_WORKFLOWS: 'CI — ReqSys v2 Enterprise|Governance Quality Gates|Governança Padrão Ouro'
+      OBSERVED_WORKFLOWS: 'CI Lead Time Analytics|Operational History Snapshot|Runtime Predictive Analytics|Main Post-Merge Validation'
+      WINDOW_RUNS: '100'
+    steps:
+      - name: Build post-merge health artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from collections import defaultdict
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          repo = os.environ['REPOSITORY']
+          owner, name = repo.split('/', 1)
+          token = os.environ['GITHUB_TOKEN']
+          window_runs = int(os.environ.get('WINDOW_RUNS') or '100')
+          required = [item.strip() for item in os.environ['REQUIRED_WORKFLOWS'].split('|') if item.strip()]
+          observed = [item.strip() for item in os.environ['OBSERVED_WORKFLOWS'].split('|') if item.strip()]
+
+          def api(path):
+              req = urllib.request.Request(
+                  f'https://api.github.com{path}',
+                  headers={
+                      'Authorization': f'Bearer {token}',
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'reqsys-main-operational-post-merge-health',
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  return json.loads(response.read().decode('utf-8'))
+
+          payload = api(f'/repos/{owner}/{name}/actions/runs?branch=main&per_page={window_runs}')
+          runs = payload.get('workflow_runs', [])
+          by_name = defaultdict(list)
+          for run in runs:
+              by_name[run.get('name')].append({
+                  'id': run.get('id'),
+                  'name': run.get('name'),
+                  'status': run.get('status'),
+                  'conclusion': run.get('conclusion'),
+                  'event': run.get('event'),
+                  'created_at': run.get('created_at'),
+                  'updated_at': run.get('updated_at'),
+                  'html_url': run.get('html_url'),
+              })
+
+          def latest_status(workflow_name):
+              items = by_name.get(workflow_name, [])
+              if not items:
+                  return {'name': workflow_name, 'found': False, 'status': 'missing', 'conclusion': None, 'html_url': None}
+              latest = items[0]
+              return {'name': workflow_name, 'found': True, **latest}
+
+          required_status = [latest_status(name) for name in required]
+          observed_status = [latest_status(name) for name in observed]
+          required_green = sum(1 for item in required_status if item.get('conclusion') == 'success')
+          required_total = len(required_status)
+          observed_green = sum(1 for item in observed_status if item.get('conclusion') == 'success')
+          observed_total = len(observed_status)
+          missing_observed = [item['name'] for item in observed_status if not item.get('found')]
+          failing_required = [item['name'] for item in required_status if item.get('found') and item.get('conclusion') not in ('success', None)]
+
+          status = 'passed'
+          warnings = []
+          if missing_observed:
+              status = 'warning'
+              warnings.append('Observed workflows missing from recent main window: ' + ', '.join(missing_observed))
+          if failing_required:
+              status = 'warning'
+              warnings.append('Required workflows not green in latest main window: ' + ', '.join(failing_required))
+
+          report = {
+              'schema_version': '1.0.0',
+              'generated_at': datetime.now(timezone.utc).isoformat(),
+              'repository': repo,
+              'run_id': os.environ['RUN_ID'],
+              'event_name': os.environ['EVENT_NAME'],
+              'branch': 'main',
+              'window_runs': window_runs,
+              'status': status,
+              'required_green_percent': round((required_green / required_total) * 100, 2) if required_total else 0,
+              'observed_green_percent': round((observed_green / observed_total) * 100, 2) if observed_total else 0,
+              'required_workflows': required_status,
+              'observed_workflows': observed_status,
+              'warnings': warnings,
+              'mode': 'report_only',
+          }
+
+          Path('audit/main-health').mkdir(parents=True, exist_ok=True)
+          Path('audit/main-health/main-operational-post-merge-health.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
+          lines = [
+              '# Main Operational Post-Merge Health',
+              '',
+              f"- Repository: {repo}",
+              f"- Status: {status}",
+              f"- Required green: {report['required_green_percent']}%",
+              f"- Observed green: {report['observed_green_percent']}%",
+              f"- Mode: {report['mode']}",
+              '',
+              '## Warnings',
+          ]
+          lines.extend([f'- {warning}' for warning in warnings] if warnings else ['- None'])
+          Path('audit/main-health/main-operational-post-merge-health.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print(json.dumps(report, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Upload main health artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-operational-post-merge-health-${{ github.run_id }}
+          path: audit/main-health/
+          if-no-files-found: error
+          retention-days: 30
