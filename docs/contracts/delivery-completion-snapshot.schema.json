@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/delivery-completion-snapshot.schema.json",
+  "title": "ReqSys Delivery Completion Snapshot Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "completion_percent", "target_percent", "remaining_gap_pp", "status", "milestones", "mode"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "completion_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "target_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "remaining_gap_pp": { "type": "number" },
+    "status": { "type": "string" },
+    "milestones": { "type": "array", "items": { "type": "object" } },
+    "mode": { "type": "string", "enum": ["report_only"] }
+  }
+}
