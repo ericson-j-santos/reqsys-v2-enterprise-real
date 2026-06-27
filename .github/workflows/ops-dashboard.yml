@@ -60,6 +60,9 @@ jobs:
             --health docs/ops-dashboard/data/health.json \
             --merge-intelligence docs/ops-dashboard/data/merge-intelligence-index.json \
             --lane-priority docs/ops-dashboard/data/merge-lane-priority.json \
+            --evidence-gate audit/pr-evidence-gate.json \
+            --delivery-finalization artifacts/delivery-finalization/delivery-finalization-report.json \
+            --conflict-risk-report docs/ops-dashboard/data/conflict-risk-report.json \
             --output docs/ops-dashboard/data/runtime-executive-index.json
 
       - name: Prepare dashboard artifact
@@ -71,6 +74,7 @@ jobs:
           test -f artifacts/ops-dashboard/index.html
           test -f artifacts/ops-dashboard/data/health.json
           test -f artifacts/ops-dashboard/data/runtime-executive-index.json
+          test -f artifacts/ops-dashboard/data/conflict-risk-report.json
 
       - name: Publish ops dashboard artifact
         uses: actions/upload-artifact@v4
@@ -90,6 +94,7 @@ jobs:
             echo "Artifact publicado: ops-dashboard-static"
             echo ""
             echo "Runtime executive index publicado em data/runtime-executive-index.json."
+            echo "Conflict risk report publicado em data/conflict-risk-report.json."
             echo ""
             echo "Escopo: painel estatico e report-only."
           } >> "$GITHUB_STEP_SUMMARY"
