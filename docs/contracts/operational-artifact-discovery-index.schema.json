@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/operational-artifact-discovery-index.schema.json",
+  "title": "ReqSys Operational Artifact Discovery Index Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "repository", "run_id", "event_name", "artifact_count", "schema_coverage_percent", "dashboard_consumer_coverage_percent", "artifacts", "mode"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string" },
+    "run_id": { "type": "string" },
+    "event_name": { "type": "string" },
+    "artifact_count": { "type": "integer", "minimum": 0 },
+    "schema_coverage_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "dashboard_consumer_coverage_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "artifacts": { "type": "array", "items": { "type": "object" } },
+    "mode": { "type": "string", "enum": ["report_only"] }
+  }
+}
