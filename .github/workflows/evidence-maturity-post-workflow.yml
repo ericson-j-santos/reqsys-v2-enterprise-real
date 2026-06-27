@@ -1,0 +1,111 @@
+name: Evidence Maturity Post-Workflow
+
+on:
+  workflow_run:
+    workflows:
+      - CI — ReqSys v2 Enterprise
+      - Operational CI Intelligence
+      - PR Evidence Gate
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      head_sha:
+        description: "SHA para gerar snapshot de maturidade"
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: evidence-maturity-post-workflow-${{ github.event.workflow_run.head_sha || inputs.head_sha || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  evidence-maturity-snapshot:
+    name: Post-workflow maturity snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve head SHA
+        id: sha
+        shell: bash
+        run: |
+          HEAD_SHA="${{ github.event.workflow_run.head_sha || inputs.head_sha || github.sha }}"
+          echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Collect workflow runs for head SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.sha.outputs.head_sha }}
+        run: |
+          mkdir -p artifacts/operational-ci-intelligence/input
+          gh run list \
+            --repo "${{ github.repository }}" \
+            --commit "$HEAD_SHA" \
+            --limit 30 \
+            --json databaseId,name,workflowName,status,conclusion,event,headBranch,headSha,url,createdAt,updatedAt \
+            > artifacts/operational-ci-intelligence/input/runs.json
+
+      - name: Generate CI intelligence report
+        run: |
+          python scripts/operational_ci_intelligence.py \
+            --runs artifacts/operational-ci-intelligence/input/runs.json \
+            --knowledge-base config/ci-failure-knowledge-base.json \
+            --failure-patterns config/failure-patterns.json \
+            --history data/operational-ci-history/instability-history.json \
+            --out-dir artifacts/operational-ci-intelligence
+
+      - name: Download PR evidence artifact when available
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.sha.outputs.head_sha }}
+        run: |
+          mkdir -p audit audit-download
+          RUN_ID="$(gh run list \
+            --repo "${{ github.repository }}" \
+            --workflow "PR Evidence Gate" \
+            --commit "$HEAD_SHA" \
+            --limit 1 \
+            --json databaseId \
+            -q '.[0].databaseId')"
+          if [[ -n "$RUN_ID" && "$RUN_ID" != "null" ]]; then
+            gh run download "$RUN_ID" -n "pr-evidence-gate-${HEAD_SHA}" -D audit-download || true
+            if [[ -f audit-download/pr-evidence-gate.json ]]; then
+              cp audit-download/pr-evidence-gate.json audit/pr-evidence-gate.json
+            fi
+          fi
+
+      - name: Generate delivery maturity snapshot
+        env:
+          HEAD_SHA: ${{ steps.sha.outputs.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          ARGS="--ci-report artifacts/operational-ci-intelligence/operational-ci-intelligence.json --head-sha ${HEAD_SHA}"
+          if [[ -f audit/pr-evidence-gate.json ]]; then
+            ARGS="${ARGS} --pr-evidence audit/pr-evidence-gate.json"
+          fi
+          python scripts/delivery_maturity_snapshot.py ${ARGS}
+
+      - name: Publish summary
+        run: cat audit/delivery-maturity/delivery-maturity-snapshot.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload maturity snapshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-maturity-snapshot-${{ steps.sha.outputs.head_sha }}
+          path: |
+            audit/delivery-maturity/
+            data/delivery-maturity-history/maturity-history.json
+          if-no-files-found: error
+          retention-days: 30

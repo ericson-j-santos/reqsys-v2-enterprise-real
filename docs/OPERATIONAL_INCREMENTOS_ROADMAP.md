@@ -1,7 +1,7 @@
 # Roadmap de Incrementos Operacionais
 
 Atualizado em: 2026-06-27  
-Estado: camada 1 (CI Intelligence Layer) em evolução ativa
+Estado: camada 2 (Evidence Automation) em evolução ativa
 
 ## Ordem recomendada
 
@@ -14,8 +14,8 @@ flowchart LR
 
 | # | Camada | Objetivo | Estado atual | Próximo entregável |
 |---|---|---|---|---|
-| 1 | **CI Intelligence Layer** | Classificar falhas, Pareto e histórico de instabilidade | P0 com KB + engine; P1 com FPE integrado | Pareto de causas, histórico persistente, tendência |
-| 2 | **Evidence Automation** | Evidência pós-workflow, snapshots, score de maturidade contínuo | PR Evidence Gate, consolidadores, hubs estáticos | Snapshot automático pós-workflow + score contínuo |
+| 1 | **CI Intelligence Layer** | Classificar falhas, Pareto e histórico de instabilidade | Entregue (Pareto, KB+FPE, histórico) | Manutenção contínua |
+| 2 | **Evidence Automation** | Evidência pós-workflow, snapshots, score de maturidade contínuo | P1 em evolução (hook + score dinâmico) | Integração coordenador + UI |
 | 3 | **Operational Analytics UI** | Cards clicáveis, timeline viva, drill-down de incidentes | Dashboards HTML + `MonitoramentoOperacionalView` | SPA unificada consumindo artifacts + APIs |
 | 4 | **Observabilidade unificada** | Tracing ponta a ponta, correlação visual | Event bus, correlation reports, runtime endpoints | Plano único com `correlation_id` visual |
 
@@ -64,6 +64,23 @@ Transformar runs do GitHub Actions em inteligência acionável: classificação 
 ### Objetivo
 
 Gerar evidência auditável automaticamente após cada workflow relevante, com snapshots de maturidade contínuos.
+
+### Componentes (P1)
+
+| Componente | Caminho | Função |
+|---|---|---|
+| Maturity signals | `scripts/ci_intelligence_lib.py` | `derive_maturity_signals()` mapeia CI/PR/coordenador → dimensões |
+| Snapshot engine | `scripts/delivery_maturity_snapshot.py` | Score contínuo, histórico, fontes dinâmicas |
+| Post-workflow hook | `.github/workflows/evidence-maturity-post-workflow.yml` | Dispara após CI / OCI / PR Evidence Gate |
+| Histórico | `data/delivery-maturity-history/maturity-history.json` | Série temporal de maturidade |
+| Schema | `docs/contracts/delivery-maturity-snapshot.schema.json` | Versão 1.1.0 com `continuous_score` e `maturity_history` |
+
+### Capacidades P1 (esta entrega)
+
+- Hook `workflow_run` pós-workflow com geração inline de CI Intelligence.
+- Score de maturidade contínuo alimentado por CI + PR Evidence Gate.
+- Histórico persistente com tendência (melhorando / estável / piorando).
+- Artifact versionado por SHA: `delivery-maturity-snapshot-<head_sha>`.
 
 ### Base existente
 

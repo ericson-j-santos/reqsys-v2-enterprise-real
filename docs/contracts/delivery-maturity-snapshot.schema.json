@@ -20,19 +20,35 @@
     "dimensions"
   ],
   "properties": {
-    "schema_version": { "type": "string", "const": "1.0.0" },
+    "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0"] },
     "generated_at": { "type": "string", "format": "date-time" },
     "repository": { "type": "string", "minLength": 1 },
     "run_id": { "type": "string", "minLength": 1 },
     "event_name": { "type": "string", "minLength": 1 },
+    "head_sha": { "type": ["string", "null"] },
+    "correlation_id": { "type": "string" },
     "mode": { "type": "string", "const": "report_only" },
     "runtime_impact": { "type": "string", "const": "none" },
     "consolidation_policy": { "type": "string", "minLength": 1 },
+    "continuous_score": { "type": "number", "minimum": 0, "maximum": 100 },
     "average_current_percent": { "type": "number", "minimum": 0, "maximum": 100 },
     "average_target_percent": { "type": "number", "minimum": 0, "maximum": 100 },
     "average_gap_percent": { "type": "number" },
     "lowest_dimension": { "type": "string", "minLength": 1 },
     "highest_gap_dimension": { "type": "string", "minLength": 1 },
+    "sources": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "maturity_history": {
+      "type": "object",
+      "properties": {
+        "snapshot": { "type": "object" },
+        "trend": { "type": "object" },
+        "points": { "type": "integer", "minimum": 0 },
+        "history": { "type": "array", "items": { "type": "object" } }
+      }
+    },
     "dimensions": {
       "type": "array",
       "minItems": 8,
