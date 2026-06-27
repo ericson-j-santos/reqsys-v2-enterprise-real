@@ -1,0 +1,365 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T03:42:55Z",
+  "referencia_temporal": "2026-06-27T21:00:00-03:00",
+  "repository": "reqsys",
+  "run_id": "local",
+  "event_name": "manual",
+  "mode": "report_only",
+  "modo": "governado",
+  "fonte": "script:completion_projection_engine.py",
+  "confianca_percentual": 87,
+  "cenario_ativo": "acelerado_recomendado",
+  "leitura_executiva": {
+    "fase_atual": "Arquitetura enterprise funcional em aceleração contínua",
+    "nao_experimental": true,
+    "demonstra": [
+      "governança",
+      "evolução incremental consistente",
+      "arquitetura viva",
+      "analytics operacional",
+      "automação",
+      "observabilidade",
+      "fluxo CI/CD maduro",
+      "continuidade operacional"
+    ],
+    "falta_principalmente": [
+      "consolidação",
+      "sincronização",
+      "automação total",
+      "hardening enterprise final"
+    ],
+    "limitante_principal": "Não é implementação — são estabilização CI, sync ambientes e evidências automáticas"
+  },
+  "resumo": {
+    "media_dimensoes_percentual": 71.2,
+    "media_conclusao_percentual": 63.0,
+    "gap_medio_percentual": 24.9,
+    "padrao_ouro_consolidado_percentual": 52,
+    "taxa_estabilizacao_ci_percentual": 83
+  },
+  "estado_atual_consolidado": [
+    {
+      "dimensao": "Arquitetura base",
+      "status_percentual": 88,
+      "maturidade": "Alta"
+    },
+    {
+      "dimensao": "CI/CD governado",
+      "status_percentual": 82,
+      "maturidade": "Alta"
+    },
+    {
+      "dimensao": "Living Architecture",
+      "status_percentual": 74,
+      "maturidade": "Média/Alta"
+    },
+    {
+      "dimensao": "Observabilidade/Analytics",
+      "status_percentual": 71,
+      "maturidade": "Média/Alta"
+    },
+    {
+      "dimensao": "Runtime operacional",
+      "status_percentual": 68,
+      "maturidade": "Média"
+    },
+    {
+      "dimensao": "UX operacional / dashboards",
+      "status_percentual": 72,
+      "maturidade": "Média/Alta"
+    },
+    {
+      "dimensao": "Automação autônoma",
+      "status_percentual": 63,
+      "maturidade": "Média"
+    },
+    {
+      "dimensao": "Governança enterprise",
+      "status_percentual": 79,
+      "maturidade": "Alta"
+    },
+    {
+      "dimensao": "Ambientes sincronizados",
+      "status_percentual": 61,
+      "maturidade": "Média"
+    },
+    {
+      "dimensao": "Produção padrão ouro consolidado",
+      "status_percentual": 54,
+      "maturidade": "Média"
+    }
+  ],
+  "velocidade_observada": {
+    "prs_por_dia_uteis": {
+      "min": 8,
+      "max": 18
+    },
+    "merges_verdes_por_dia": {
+      "min": 6,
+      "max": 14
+    },
+    "correcoes_ci_por_ciclo": {
+      "min": 2,
+      "max": 7
+    },
+    "incrementos_paralelos_seguros": {
+      "min": 3,
+      "max": 5
+    },
+    "lead_time_pr_merge_minutos": {
+      "min": 18,
+      "max": 90
+    },
+    "taxa_estabilizacao_ci_percentual": 83,
+    "regressao_critica": "Baixa",
+    "retrabalho_estrutural": "Moderado/baixo"
+  },
+  "percentual_conclusao_real": [
+    {
+      "indicador": "Código implementado",
+      "percentual": 78,
+      "tipo": "evidenciado"
+    },
+    {
+      "indicador": "Código validado",
+      "percentual": 69,
+      "tipo": "evidenciado"
+    },
+    {
+      "indicador": "Evidência operacional consolidada",
+      "percentual": 58,
+      "tipo": "evidenciado"
+    },
+    {
+      "indicador": "Governança enterprise consolidada",
+      "percentual": 64,
+      "tipo": "evidenciado"
+    },
+    {
+      "indicador": "Ambientes realmente sincronizados",
+      "percentual": 61,
+      "tipo": "evidenciado"
+    },
+    {
+      "indicador": "Runtime navegável/analítico",
+      "percentual": 67,
+      "tipo": "evidenciado"
+    },
+    {
+      "indicador": "Autonomia operacional",
+      "percentual": 55,
+      "tipo": "evidenciado"
+    },
+    {
+      "indicador": "Padrão ouro total consolidado",
+      "percentual": 52,
+      "tipo": "evidenciado"
+    }
+  ],
+  "gaps_restantes": [
+    {
+      "area": "Consolidação runtime",
+      "gap_percentual": 18
+    },
+    {
+      "area": "Evidências automatizadas",
+      "gap_percentual": 22
+    },
+    {
+      "area": "Operação autônoma",
+      "gap_percentual": 31
+    },
+    {
+      "area": "Analytics/drill-down total",
+      "gap_percentual": 27
+    },
+    {
+      "area": "Hardening produção",
+      "gap_percentual": 24
+    },
+    {
+      "area": "Sincronização ambientes",
+      "gap_percentual": 39
+    },
+    {
+      "area": "Governança viva completa",
+      "gap_percentual": 21
+    },
+    {
+      "area": "UX operacional enterprise",
+      "gap_percentual": 17
+    }
+  ],
+  "projecao_tempo": {
+    "conservador": [
+      {
+        "marco": "MVP operacional consolidado",
+        "estimativa_dias_min": 3,
+        "estimativa_dias_max": 6,
+        "cenario": "conservador"
+      },
+      {
+        "marco": "Ambientes sincronizados",
+        "estimativa_dias_min": 5,
+        "estimativa_dias_max": 9,
+        "cenario": "conservador"
+      },
+      {
+        "marco": "Runtime operacional robusto",
+        "estimativa_dias_min": 7,
+        "estimativa_dias_max": 12,
+        "cenario": "conservador"
+      },
+      {
+        "marco": "Padrão ouro técnico",
+        "estimativa_dias_min": 14,
+        "estimativa_dias_max": 22,
+        "cenario": "conservador"
+      },
+      {
+        "marco": "Padrão ouro consolidado total",
+        "estimativa_dias_min": 21,
+        "estimativa_dias_max": 35,
+        "cenario": "conservador"
+      }
+    ],
+    "acelerado": [
+      {
+        "marco": "MVP robusto",
+        "estimativa_dias_min": 2,
+        "estimativa_dias_max": 4,
+        "cenario": "acelerado"
+      },
+      {
+        "marco": "Produção utilizável forte",
+        "estimativa_dias_min": 5,
+        "estimativa_dias_max": 8,
+        "cenario": "acelerado"
+      },
+      {
+        "marco": "Ambientes quase totalmente sincronizados",
+        "estimativa_dias_min": 4,
+        "estimativa_dias_max": 7,
+        "cenario": "acelerado"
+      },
+      {
+        "marco": "Padrão ouro técnico",
+        "estimativa_dias_min": 10,
+        "estimativa_dias_max": 16,
+        "cenario": "acelerado"
+      },
+      {
+        "marco": "Consolidação enterprise completa",
+        "estimativa_dias_min": 14,
+        "estimativa_dias_max": 24,
+        "cenario": "acelerado"
+      }
+    ]
+  },
+  "gargalos_principais": [
+    "estabilização contínua de CI",
+    "sincronização entre ambientes",
+    "evidência operacional automática",
+    "consolidação runtime-driven",
+    "redução de acoplamentos residuais",
+    "observabilidade fim-a-fim",
+    "hardening de produção"
+  ],
+  "indice_risco": [
+    {
+      "tipo": "Regressão arquitetural",
+      "nivel": "Baixo"
+    },
+    {
+      "tipo": "Colisão de branches",
+      "nivel": "Médio/Baixo"
+    },
+    {
+      "tipo": "Instabilidade CI",
+      "nivel": "Médio"
+    },
+    {
+      "tipo": "Drift entre ambientes",
+      "nivel": "Médio"
+    },
+    {
+      "tipo": "Escalabilidade operacional",
+      "nivel": "Médio"
+    },
+    {
+      "tipo": "Perda de rastreabilidade",
+      "nivel": "Baixo"
+    },
+    {
+      "tipo": "Acoplamento oculto",
+      "nivel": "Médio/Baixo"
+    }
+  ],
+  "tendencias": [
+    {
+      "indicador": "Velocidade",
+      "tendencia": "↑ Forte"
+    },
+    {
+      "indicador": "Maturidade",
+      "tendencia": "↑ Forte"
+    },
+    {
+      "indicador": "Governança",
+      "tendencia": "↑ Estável"
+    },
+    {
+      "indicador": "Autonomia",
+      "tendencia": "↑ Moderada"
+    },
+    {
+      "indicador": "Observabilidade",
+      "tendencia": "↑ Forte"
+    },
+    {
+      "indicador": "Runtime vivo",
+      "tendencia": "↑ Forte"
+    },
+    {
+      "indicador": "Produção consolidada",
+      "tendencia": "↑ Moderada"
+    }
+  ],
+  "probabilidades_finais": [
+    {
+      "resultado": "MVP forte em menos de 1 semana",
+      "probabilidade_percentual": 87
+    },
+    {
+      "resultado": "Produção utilizável enterprise",
+      "probabilidade_percentual": 81
+    },
+    {
+      "resultado": "Padrão ouro técnico real",
+      "probabilidade_percentual": 73
+    },
+    {
+      "resultado": "Consolidação enterprise completa",
+      "probabilidade_percentual": 61
+    }
+  ],
+  "aceleradores_marginais": [
+    "CI auto-healing",
+    "geração automática de evidências",
+    "pipeline de validação consolidada",
+    "sincronização Fly.io/runtime",
+    "monitor operacional centralizado",
+    "contratos/shared packages únicos",
+    "redução de validações manuais"
+  ],
+  "evidencias": [
+    "baseline governado ReqSys 27/06/2026 21:00 BRT",
+    "ADR-022 separação evidenciado/alvo/projeção",
+    "cadência observada em PRs/merges recentes"
+  ],
+  "pendencias": [
+    "histórico versionado de snapshots para regressão estatística",
+    "integração automática com ci-lead-time-analytics.json"
+  ]
+}

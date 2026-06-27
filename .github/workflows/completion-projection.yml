@@ -1,0 +1,44 @@
+name: Completion Projection
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 0 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/completion-projection.yml'
+      - 'scripts/completion_projection_engine.py'
+      - 'docs/contracts/completion-projection.schema.json'
+      - 'docs/statistics/COMPLETION_PROJECTION_SPEC.md'
+
+concurrency:
+  group: completion-projection-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  completion-projection-report:
+    name: Build completion projection artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate artifact
+        run: |
+          python scripts/completion_projection_engine.py \
+            --output artifacts/completion-projection/completion-projection.json \
+            --repository "${{ github.repository }}" \
+            --run-id "${{ github.run_id }}" \
+            --event-name "${{ github.event_name }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: completion-projection-json
+          path: artifacts/completion-projection/completion-projection.json
+          retention-days: 30

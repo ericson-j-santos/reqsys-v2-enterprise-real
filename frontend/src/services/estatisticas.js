@@ -160,3 +160,67 @@ export async function carregarEstatisticas() {
 
   return [...estatisticasInternasIniciais, ...estatisticasExternasIniciais]
 }
+
+export const projecaoConclusaoFallback = {
+  schema_version: '1.0.0',
+  referencia_temporal: '2026-06-27T21:00:00-03:00',
+  modo: 'governado',
+  confianca_percentual: 87,
+  cenario_ativo: 'acelerado_recomendado',
+  leitura_executiva: {
+    fase_atual: 'Arquitetura enterprise funcional em aceleração contínua',
+    nao_experimental: true,
+    demonstra: ['governança', 'evolução incremental consistente', 'arquitetura viva', 'analytics operacional'],
+    falta_principalmente: ['consolidação', 'sincronização', 'automação total', 'hardening enterprise final'],
+    limitante_principal: 'Não é implementação — são estabilização CI, sync ambientes e evidências automáticas'
+  },
+  resumo: {
+    media_dimensoes_percentual: 71.1,
+    media_conclusao_percentual: 63,
+    gap_medio_percentual: 24.9,
+    padrao_ouro_consolidado_percentual: 52,
+    taxa_estabilizacao_ci_percentual: 83
+  },
+  estado_atual_consolidado: [
+    { dimensao: 'Arquitetura base', status_percentual: 88, maturidade: 'Alta' },
+    { dimensao: 'CI/CD governado', status_percentual: 82, maturidade: 'Alta' },
+    { dimensao: 'Produção padrão ouro consolidado', status_percentual: 54, maturidade: 'Média' }
+  ],
+  velocidade_observada: {
+    prs_por_dia_uteis: { min: 8, max: 18 },
+    merges_verdes_por_dia: { min: 6, max: 14 },
+    taxa_estabilizacao_ci_percentual: 83
+  },
+  percentual_conclusao_real: [
+    { indicador: 'Código implementado', percentual: 78, tipo: 'evidenciado' },
+    { indicador: 'Padrão ouro total consolidado', percentual: 52, tipo: 'evidenciado' }
+  ],
+  gaps_restantes: [
+    { area: 'Sincronização ambientes', gap_percentual: 39 },
+    { area: 'Operação autônoma', gap_percentual: 31 }
+  ],
+  projecao_tempo: {
+    conservador: [{ marco: 'MVP operacional consolidado', estimativa_dias_min: 3, estimativa_dias_max: 6, cenario: 'conservador' }],
+    acelerado: [{ marco: 'MVP robusto', estimativa_dias_min: 2, estimativa_dias_max: 4, cenario: 'acelerado' }]
+  },
+  gargalos_principais: ['estabilização contínua de CI', 'sincronização entre ambientes'],
+  indice_risco: [{ tipo: 'Instabilidade CI', nivel: 'Médio' }],
+  tendencias: [{ indicador: 'Velocidade', tendencia: '↑ Forte' }],
+  probabilidades_finais: [{ resultado: 'MVP forte em menos de 1 semana', probabilidade_percentual: 87 }],
+  aceleradores_marginais: ['CI auto-healing', 'geração automática de evidências'],
+  evidencias: ['fallback local controlado'],
+  pendencias: ['API /v1/estatisticas/projecao-conclusao indisponível no momento da carga']
+}
+
+export async function carregarProjecaoConclusao() {
+  try {
+    const resposta = await api.get('/v1/estatisticas/projecao-conclusao')
+    const payload = resposta.data?.data
+    if (payload?.schema_version) {
+      return payload
+    }
+  } catch (erro) {
+    console.warn('Falha ao carregar /v1/estatisticas/projecao-conclusao; usando fallback local.', erro)
+  }
+  return { ...projecaoConclusaoFallback, coletado_em: new Date().toISOString() }
+}

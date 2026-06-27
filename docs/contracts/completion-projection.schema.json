@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/completion-projection.schema.json",
+  "title": "ReqSys Completion Projection Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "referencia_temporal",
+    "modo",
+    "resumo",
+    "estado_atual_consolidado",
+    "percentual_conclusao_real",
+    "gaps_restantes",
+    "projecao_tempo",
+    "gargalos_principais",
+    "indice_risco",
+    "tendencias",
+    "probabilidades_finais"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "coletado_em": { "type": "string", "format": "date-time" },
+    "referencia_temporal": { "type": "string" },
+    "correlation_id": { "type": "string" },
+    "repository": { "type": "string" },
+    "run_id": { "type": "string" },
+    "event_name": { "type": "string" },
+    "mode": { "type": "string", "enum": ["report_only"] },
+    "modo": { "type": "string", "enum": ["governado"] },
+    "fonte": { "type": "string" },
+    "confianca_percentual": { "type": "number", "minimum": 0, "maximum": 100 },
+    "cenario_ativo": { "type": "string", "enum": ["conservador", "acelerado_recomendado"] },
+    "leitura_executiva": { "type": "object" },
+    "resumo": {
+      "type": "object",
+      "required": [
+        "media_dimensoes_percentual",
+        "media_conclusao_percentual",
+        "gap_medio_percentual",
+        "padrao_ouro_consolidado_percentual"
+      ],
+      "properties": {
+        "media_dimensoes_percentual": { "type": "number", "minimum": 0, "maximum": 100 },
+        "media_conclusao_percentual": { "type": "number", "minimum": 0, "maximum": 100 },
+        "gap_medio_percentual": { "type": "number", "minimum": 0, "maximum": 100 },
+        "padrao_ouro_consolidado_percentual": { "type": "number", "minimum": 0, "maximum": 100 },
+        "taxa_estabilizacao_ci_percentual": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "estado_atual_consolidado": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dimensao", "status_percentual", "maturidade"],
+        "properties": {
+          "dimensao": { "type": "string" },
+          "status_percentual": { "type": "number", "minimum": 0, "maximum": 100 },
+          "maturidade": { "type": "string" }
+        }
+      }
+    },
+    "velocidade_observada": { "type": "object" },
+    "percentual_conclusao_real": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["indicador", "percentual", "tipo"],
+        "properties": {
+          "indicador": { "type": "string" },
+          "percentual": { "type": "number", "minimum": 0, "maximum": 100 },
+          "tipo": { "type": "string", "enum": ["evidenciado", "projeção"] }
+        }
+      }
+    },
+    "gaps_restantes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["area", "gap_percentual"],
+        "properties": {
+          "area": { "type": "string" },
+          "gap_percentual": { "type": "number", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "projecao_tempo": {
+      "type": "object",
+      "required": ["conservador", "acelerado"],
+      "properties": {
+        "conservador": { "$ref": "#/$defs/marcos" },
+        "acelerado": { "$ref": "#/$defs/marcos" }
+      }
+    },
+    "gargalos_principais": { "type": "array", "items": { "type": "string" } },
+    "indice_risco": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tipo", "nivel"],
+        "properties": {
+          "tipo": { "type": "string" },
+          "nivel": { "type": "string" }
+        }
+      }
+    },
+    "tendencias": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["indicador", "tendencia"],
+        "properties": {
+          "indicador": { "type": "string" },
+          "tendencia": { "type": "string" }
+        }
+      }
+    },
+    "probabilidades_finais": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["resultado", "probabilidade_percentual"],
+        "properties": {
+          "resultado": { "type": "string" },
+          "probabilidade_percentual": { "type": "number", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "aceleradores_marginais": { "type": "array", "items": { "type": "string" } },
+    "evidencias": { "type": "array", "items": { "type": "string" } },
+    "pendencias": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "marcos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["marco", "estimativa_dias_min", "estimativa_dias_max", "cenario"],
+        "properties": {
+          "marco": { "type": "string" },
+          "estimativa_dias_min": { "type": "integer", "minimum": 0 },
+          "estimativa_dias_max": { "type": "integer", "minimum": 0 },
+          "cenario": { "type": "string", "enum": ["conservador", "acelerado"] }
+        }
+      }
+    }
+  }
+}
