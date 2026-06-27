@@ -52,6 +52,22 @@ jobs:
             --public-runtime-evidence-index audit/runtime/public-runtime-evidence-index.json \
             --output docs/ops-dashboard/data/health.json
 
+      - name: Hydrate conflict risk report
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/ops-dashboard/data
+          if [ -f artifacts/pr-conflict-guard/conflict-risk-report.json ]; then
+            cp artifacts/pr-conflict-guard/conflict-risk-report.json docs/ops-dashboard/data/conflict-risk-report.json
+          elif [ -f artifacts/conflict-risk-report/conflict-risk-report.json ]; then
+            cp artifacts/conflict-risk-report/conflict-risk-report.json docs/ops-dashboard/data/conflict-risk-report.json
+          elif [ -f audit/conflict-risk-report.json ]; then
+            cp audit/conflict-risk-report.json docs/ops-dashboard/data/conflict-risk-report.json
+          else
+            test -f docs/ops-dashboard/data/conflict-risk-report.json
+          fi
+          python -m json.tool docs/ops-dashboard/data/conflict-risk-report.json >/tmp/conflict-risk-report.validated.json
+
       - name: Generate runtime executive index
         shell: bash
         run: |
