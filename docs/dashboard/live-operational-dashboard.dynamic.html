@@ -38,6 +38,7 @@
     <section><h2>Artifacts catalogados</h2><table><thead><tr><th>Artifact</th><th>Workflow</th><th>Consumer</th><th>Risco</th></tr></thead><tbody id="artifacts"></tbody></table></section>
     <section><h2>Checks do command center</h2><table><thead><tr><th>Check</th><th>Status</th><th>Score/Cobertura</th></tr></thead><tbody id="commandChecks"></tbody></table></section>
     <section><h2>Status de entrega</h2><table><thead><tr><th>Grupo</th><th>PRs</th><th>Estado</th><th>Foco</th></tr></thead><tbody id="delivery"></tbody></table></section>
+    <section><h2>Burndown de entrega</h2><table><thead><tr><th>Dimensão</th><th>Atual</th><th>Alvo</th><th>Gap</th><th>Status</th></tr></thead><tbody id="deliveryBurndown"></tbody></table></section>
     <section><h2>Fontes de dados</h2><table><thead><tr><th>Fonte</th><th>Status</th><th>Observação</th></tr></thead><tbody id="sources"></tbody></table></section>
   </main>
   <script>
@@ -50,7 +51,8 @@
       { key: 'release', label: 'Golden Release Readiness', href: '../audit/release-readiness/golden-release-readiness.json' },
       { key: 'commandCenter', label: 'Command Center Readiness', href: '../audit/command-center/command-center-readiness.json' },
       { key: 'extendedContracts', label: 'Extended Operational Contract Validation', href: '../audit/extended-contract-validation/extended-operational-contract-validation.json' },
-      { key: 'delivery', label: 'Delivery Status Report', href: '../audit/delivery/delivery-status-report.json' }
+      { key: 'delivery', label: 'Delivery Status Report', href: '../audit/delivery/delivery-status-report.json' },
+      { key: 'deliveryBurndown', label: 'Delivery Burndown Snapshot', href: '../audit/delivery-burndown/delivery-burndown-snapshot.json' }
     ];
 
     const fallback = {
@@ -62,7 +64,8 @@
       release: { score_percent: 0, readiness: 'unknown', risk: 'unknown', checks: [] },
       commandCenter: { score_percent: 0, status: 'unknown', source_coverage_percent: 0, checks: [] },
       extendedContracts: { status: 'unknown', contracts: [] },
-      delivery: { tracked_prs: 0, merged_prs: 0, merge_rate_percent: 0, current_maturity_percent: 0, remaining_gap_pp: 0, groups: [] }
+      delivery: { tracked_prs: 0, merged_prs: 0, merge_rate_percent: 0, current_maturity_percent: 0, remaining_gap_pp: 0, groups: [] },
+      deliveryBurndown: { total_gap_pp: 0, largest_gap: { name: 'unknown' }, dimensions: [] }
     };
 
     async function loadJson(source) {
@@ -77,13 +80,13 @@
 
     function secondsToMinutes(value) { return Math.round((Number(value || 0) / 60) * 10) / 10; }
     function badge(status) {
-      if (status === 'passed' || status === true || status === 'low' || status === 'medium_low' || status === 'ready_with_observation' || status === 'consolidado' || status === 'stable') return '<span class="badge green">verde</span>';
-      if (status === 'warning' || status === 'unknown' || status === 'medium' || status === 'em_consolidacao') return '<span class="badge yellow">atenção</span>';
+      if (status === 'passed' || status === true || status === 'low' || status === 'medium_low' || status === 'ready_with_observation' || status === 'consolidado' || status === 'stable' || status === 'closed') return '<span class="badge green">verde</span>';
+      if (status === 'warning' || status === 'unknown' || status === 'medium' || status === 'em_consolidacao' || status === 'open') return '<span class="badge yellow">atenção</span>';
       return '<span class="badge red">risco</span>';
     }
     function riskClass(level) {
       if (level === 'high') return 'bad';
-      if (level === 'medium' || level === 'unknown') return 'warn';
+      if (level === 'medium' || level === 'unknown' || level === 'open') return 'warn';
       return 'good';
     }
     function card(label, value, unit, status) {
@@ -106,6 +109,7 @@
       const commandCenter = loaded.commandCenter.data;
       const extendedContracts = loaded.extendedContracts.data;
       const delivery = loaded.delivery.data;
+      const burndown = loaded.deliveryBurndown.data;
       document.getElementById('cards').innerHTML = [
         card('Success rate', lead.success_rate_percent || 0, '%', (lead.success_rate_percent || 0) >= 95 ? 'low' : 'medium'),
         card('P95 lead time', secondsToMinutes(lead.p95_seconds), 'min', (lead.p95_seconds || 0) < 900 ? 'low' : 'medium'),
@@ -117,7 +121,8 @@
         card('Tracked PRs', delivery.tracked_prs || 0, '', delivery.status || 'stable'),
         card('Merge rate', delivery.merge_rate_percent || 0, '%', delivery.status || 'stable'),
         card('Delivery maturity', delivery.current_maturity_percent || 0, '%', delivery.status || 'stable'),
-        card('Remaining gap', delivery.remaining_gap_pp || 0, 'p.p.', delivery.status || 'stable'),
+        card('Delivery total gap', burndown.total_gap_pp || 0, 'p.p.', (burndown.total_gap_pp || 0) <= 1 ? 'low' : 'open'),
+        card('Largest delivery gap', burndown.largest_gap?.name || 'unknown', '', (burndown.total_gap_pp || 0) <= 1 ? 'low' : 'open'),
         card('Artifacts catalogados', discovery.artifact_count || 0, '', 'low'),
         card('Schema coverage', discovery.schema_coverage_percent || 0, '%', (discovery.schema_coverage_percent || 0) >= 60 ? 'low' : 'medium'),
         card('Baseline incidente', hist.baseline?.incident_lead_time_minutes || 143, 'min', 'medium_low')
@@ -129,6 +134,7 @@
       document.getElementById('artifacts').innerHTML = (discovery.artifacts || []).map(item => `<tr><td>${item.name}</td><td>${item.workflow}</td><td><code>${item.consumer}</code></td><td>${badge(item.risk)}</td></tr>`).join('') || '<tr><td colspan="4">Sem índice de artifacts carregado.</td></tr>';
       document.getElementById('commandChecks').innerHTML = (commandCenter.checks || []).map(item => `<tr><td>${item.name}</td><td>${badge(item.passed)}</td><td>${item.coverage_percent || item.score || '-'}</td></tr>`).join('') || '<tr><td colspan="3">Sem readiness do command center carregado.</td></tr>';
       document.getElementById('delivery').innerHTML = (delivery.groups || []).map(item => `<tr><td>${item.range}</td><td>${item.prs}</td><td>${badge(item.state)}</td><td>${item.focus}</td></tr>`).join('') || '<tr><td colspan="4">Sem status de entrega carregado.</td></tr>';
+      document.getElementById('deliveryBurndown').innerHTML = (burndown.dimensions || []).map(item => `<tr><td>${item.name}</td><td>${item.current_percent}%</td><td>${item.target_percent}%</td><td>${item.gap_pp} p.p.</td><td>${badge(item.status)}</td></tr>`).join('') || '<tr><td colspan="5">Sem burndown de entrega carregado.</td></tr>';
       document.getElementById('sources').innerHTML = statuses.join('');
     }
     render();
