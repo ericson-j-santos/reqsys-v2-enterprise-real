@@ -1,6 +1,6 @@
 from time import time_ns
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
@@ -10,6 +10,7 @@ from app.schemas.agile_runtime import (
     AgileAIRoutingRecommendationOut,
     AgileEvidenceCriar,
     AgileEvidenceOut,
+    AgileGithubLaunchpadOut,
     AgileRuntimeResumo,
     AgileSprintCriar,
     AgileSprintOut,
@@ -17,9 +18,16 @@ from app.schemas.agile_runtime import (
     AgileWorkflowTransicao,
     AgileWorkItemCriar,
     AgileWorkItemOut,
+    GithubBranchCriarIn,
+    GithubBranchCriarOut,
 )
 from app.services.agile_ai_router import recomendar_roteamento_multi_ia
 from app.services.auditoria import registrar_evento
+from app.services.github_branch_service import GithubBranchError, criar_branch_work_item
+from app.services.github_launchpad import (
+    montar_github_launchpad,
+    normalizar_ambiente_launchpad,
+)
 
 router = APIRouter(prefix='/v1/agile-runtime', tags=['Agile Runtime'])
 
@@ -145,6 +153,46 @@ def criar_work_item(payload: AgileWorkItemCriar, db: Session = Depends(get_db), 
         '{"campos":"minimizados"}',
     )
     return ok(AgileWorkItemOut.model_validate(item).model_dump(), x_correlation_id)
+
+
+@router.get('/work-items/{work_item_id}/github-launchpad')
+def github_launchpad_work_item(
+    work_item_id: int,
+    ambiente: str = Query(default='dev', description='Ambiente alvo: dev, test, homolog ou prod'),
+    db: Session = Depends(get_db),
+):
+    item = _get_work_item(db, work_item_id)
+    try:
+        normalizar_ambiente_launchpad(ambiente)
+        payload = montar_github_launchpad(item, ambiente, db)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return ok(AgileGithubLaunchpadOut.model_validate(payload).model_dump())
+
+
+@router.post('/work-items/{work_item_id}/github/branch')
+def criar_branch_github_work_item(
+    work_item_id: int,
+    payload: GithubBranchCriarIn,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    item = _get_work_item(db, work_item_id)
+    try:
+        normalizar_ambiente_launchpad(payload.ambiente)
+        resultado = criar_branch_work_item(
+            db,
+            item,
+            payload.ambiente,
+            correlation_id=x_correlation_id or 'sem-correlation-id',
+            criar_se_ausente=payload.criar_se_ausente,
+            aplicar_branch_no_item=payload.aplicar_branch_no_item,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except GithubBranchError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return ok(GithubBranchCriarOut.model_validate(resultado).model_dump(), x_correlation_id)
 
 
 @router.get('/work-items/{work_item_id}/ai-routing/preview')

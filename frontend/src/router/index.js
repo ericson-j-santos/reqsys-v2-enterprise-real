@@ -11,6 +11,7 @@ import QualidadeIAView from '../views/QualidadeIAView.vue'
 import RecomendacoesIAView from '../views/RecomendacoesIAView.vue'
 import SpecsView from '../views/SpecsView.vue'
 import TaskConsoleView from '../views/TaskConsoleView.vue'
+import AgileRuntimeView from '../views/AgileRuntimeView.vue'
 import ArquiteturaView from '../views/ArquiteturaView.vue'
 import GovernancaEnterpriseView from '../views/GovernancaEnterpriseView.vue'
 import HubLowCodeView from '../views/HubLowCodeView.vue'
@@ -39,6 +40,7 @@ const routes = [
   { path: '/qualidade-ia', component: QualidadeIAView, meta: { recurso: 'dashboard:read' } },
   { path: '/recomendacoes-ia', component: RecomendacoesIAView, meta: { recurso: 'dashboard:read' } },
   { path: '/task-console', component: TaskConsoleView, meta: { recurso: 'dashboard:read' } },
+  { path: '/agile-runtime', component: AgileRuntimeView, meta: { recurso: 'dashboard:read' } },
   { path: '/specs',        component: SpecsView,       meta: { recurso: 'dashboard:read' } },
   { path: '/hub-lowcode', component: HubLowCodeView,  meta: { recurso: 'dashboard:read' } },
   { path: '/painel-integracao', component: PainelIntegracaoView, meta: { recurso: 'dashboard:read' } },

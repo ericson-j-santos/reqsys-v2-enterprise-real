@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
 from app.db import get_db
+from app.models.agile_runtime import AgileWorkItem
 from app.models.requisito import Requisito
 from app.models.vinculo_git import VinculoGit
 
@@ -81,6 +82,60 @@ def vinculos_recentes(
         q = q.filter(VinculoGit.tipo == tipo)
     vinculos = q.limit(limit).all()
     return ok({'total': len(vinculos), 'vinculos': [_serializar(v) for v in vinculos]})
+
+
+@router.get('/matriz')
+def matriz_rastreabilidade(
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """Matriz consolidada requisito → work item → entrega Git para a UI."""
+    vinculos = (
+        db.query(VinculoGit)
+        .order_by(desc(VinculoGit.criado_em))
+        .limit(limit)
+        .all()
+    )
+
+    requisito_ids = {v.requisito_id for v in vinculos if v.requisito_id}
+    work_items_por_requisito: dict[int, list] = {}
+    if requisito_ids:
+        itens = db.query(AgileWorkItem).filter(AgileWorkItem.requisito_id.in_(requisito_ids)).all()
+        for item in itens:
+            work_items_por_requisito.setdefault(item.requisito_id, []).append(item)
+
+    linhas = []
+    for vinculo in vinculos:
+        work_item = None
+        if vinculo.requisito_id:
+            candidatos = work_items_por_requisito.get(vinculo.requisito_id, [])
+            work_item = candidatos[0] if candidatos else None
+
+        entrega = vinculo.referencia
+        if vinculo.tipo == 'pr':
+            entrega = f"PR #{vinculo.referencia}"
+        elif vinculo.tipo == 'merge_request':
+            entrega = f"MR #{vinculo.referencia}"
+
+        linhas.append(
+            {
+                'requisito': vinculo.requisito_codigo,
+                'historia': work_item.codigo if work_item else '—',
+                'redmine': '—',
+                'planner': '—',
+                'entrega': entrega,
+                'entrega_tipo': vinculo.tipo,
+                'entrega_url': vinculo.url,
+                'ambiente': vinculo.ambiente or '—',
+                'status': 'rastreado' if vinculo.url else 'parcial',
+                'work_item_id': work_item.id if work_item else None,
+                'change_url': work_item.change_url if work_item else None,
+                'repositorio': vinculo.repo,
+                'criado_em': vinculo.criado_em.isoformat() if hasattr(vinculo.criado_em, 'isoformat') else str(vinculo.criado_em),
+            }
+        )
+
+    return ok({'total': len(linhas), 'linhas': linhas})
 
 
 @router.post('/requisitos/{requisito_id}/vinculos')

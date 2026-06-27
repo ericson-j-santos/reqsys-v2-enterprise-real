@@ -4,64 +4,73 @@
       <div>
         <h1>Matriz de Rastreabilidade</h1>
         <p class="muted trace-subtitle">
-          Visualize o vínculo entre requisito, história, gestão operacional e entrega técnica.
+          Vínculo entre requisito, work item agile e entrega Git detectada por webhooks ou registro manual.
         </p>
       </div>
       <div class="header-actions">
-        <v-tooltip text="Visão de demonstração da cadeia ponta a ponta" location="top">
-          <template #activator="{ props }">
-            <v-chip v-bind="props" color="amber" variant="tonal">Visão guiada</v-chip>
-          </template>
-        </v-tooltip>
+        <button type="button" :disabled="carregando" @click="carregarMatriz">
+          {{ carregando ? 'Atualizando...' : 'Atualizar' }}
+        </button>
       </div>
     </div>
 
+    <p v-if="erro" class="alerta erro" role="alert">{{ erro }}</p>
+
     <v-alert type="info" variant="tonal" class="mb-4">
-      Cada linha mostra o encadeamento completo entre necessidade, implementação e evidência técnica.
+      Dados carregados de <code>/v1/rastreabilidade/matriz</code>. Redmine e Planner entram em fase posterior.
     </v-alert>
 
     <v-card class="table-card">
-      <v-card-title class="py-3 px-4">Encadeamento de artefatos</v-card-title>
+      <v-card-title class="py-3 px-4">
+        Encadeamento de artefatos
+        <span v-if="total" class="muted text-caption">({{ total }} registros)</span>
+      </v-card-title>
       <v-divider />
-      <v-table>
+      <p v-if="!linhas.length && !carregando" class="pa-4 muted">Nenhum vínculo Git registrado ainda.</p>
+      <v-table v-else>
         <thead>
           <tr>
             <th>Requisito</th>
             <th>História</th>
             <th>Redmine</th>
             <th>Planner</th>
-            <th>Commit</th>
+            <th>Entrega</th>
+            <th>Ambiente</th>
             <th>Status</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in linhas" :key="r.req">
+          <tr v-for="(r, idx) in linhas" :key="`${r.requisito}-${r.entrega}-${idx}`">
             <td>
-              <strong>{{ r.req }}</strong>
-              <div class="muted text-caption">Origem formal</div>
+              <strong>{{ r.requisito }}</strong>
+              <div class="muted text-caption">{{ r.repositorio }}</div>
             </td>
-            <td>{{ r.historia }}</td>
             <td>
-              <v-tooltip text="Item sincronizado com a gestão operacional no Redmine" location="top">
-                <template #activator="{ props }">
-                  <span v-bind="props">{{ r.redmine }}</span>
-                </template>
-              </v-tooltip>
+              <router-link v-if="r.work_item_id" :to="`/agile-runtime`" class="link-interno">
+                {{ r.historia }}
+              </router-link>
+              <span v-else>{{ r.historia }}</span>
             </td>
+            <td>{{ r.redmine }}</td>
             <td>{{ r.planner }}</td>
             <td>
-              <v-tooltip text="Referência do commit que materializou a entrega" location="top">
-                <template #activator="{ props }">
-                  <code v-bind="props">{{ r.commit }}</code>
-                </template>
-              </v-tooltip>
+              <a
+                v-if="r.entrega_url"
+                :href="r.entrega_url"
+                target="_blank"
+                rel="noopener noreferrer"
+              >{{ r.entrega }}</a>
+              <a
+                v-else-if="r.change_url"
+                :href="r.change_url"
+                target="_blank"
+                rel="noopener noreferrer"
+              >PR vinculado</a>
+              <code v-else>{{ r.entrega }}</code>
             </td>
+            <td>{{ r.ambiente }}</td>
             <td>
-              <v-tooltip text="Status consolidado de rastreabilidade" location="top">
-                <template #activator="{ props }">
-                  <v-chip v-bind="props" size="small" color="green">{{ r.status }}</v-chip>
-                </template>
-              </v-tooltip>
+              <v-chip size="small" :color="r.status === 'rastreado' ? 'green' : 'amber'">{{ r.status }}</v-chip>
             </td>
           </tr>
         </tbody>
@@ -71,7 +80,30 @@
 </template>
 
 <script setup>
-const linhas = [{ req: 'REQ-0001', historia: 'US-0001', redmine: '#42', planner: 'PLN-104', commit: 'abc1234', status: 'rastreado' }]
+import { onMounted, ref } from 'vue'
+import { api } from '../services/api'
+
+const linhas = ref([])
+const total = ref(0)
+const carregando = ref(false)
+const erro = ref('')
+
+async function carregarMatriz() {
+  carregando.value = true
+  erro.value = ''
+  try {
+    const { data } = await api.get('/v1/rastreabilidade/matriz', { params: { limit: 100 } })
+    const payload = data.data ?? data
+    linhas.value = payload.linhas ?? []
+    total.value = payload.total ?? linhas.value.length
+  } catch (error) {
+    erro.value = error.response?.data?.detail || 'Erro ao carregar matriz de rastreabilidade.'
+  } finally {
+    carregando.value = false
+  }
+}
+
+onMounted(carregarMatriz)
 </script>
 
 <style scoped>
@@ -83,5 +115,13 @@ const linhas = [{ req: 'REQ-0001', historia: 'US-0001', redmine: '#42', planner:
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.alerta.erro {
+  color: #b00020;
+}
+
+.link-interno {
+  color: inherit;
 }
 </style>

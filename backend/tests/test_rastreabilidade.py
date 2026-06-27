@@ -134,3 +134,11 @@ def test_webhook_evento_nao_suportado():
     )
     assert resp.status_code == 200
     assert resp.json()["data"]["processado"] is False
+
+
+def test_matriz_rastreabilidade_endpoint():
+    resp = client.get("/v1/rastreabilidade/matriz")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    assert "linhas" in body["data"]

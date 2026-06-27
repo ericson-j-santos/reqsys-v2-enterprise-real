@@ -133,6 +133,62 @@ class AgileRuntimeResumo(BaseModel):
     ci_success_percentual: float
 
 
+AgileLaunchpadAmbiente = Literal['dev', 'test', 'homolog', 'prod']
+
+
+class AgileGithubLaunchpadLinks(BaseModel):
+    branch: str
+    criar_branch: str
+    novo_pr: str
+    actions: str
+    app_ambiente: str | None = None
+    repositorio: str
+    change_request: str | None = None
+    ci: str | None = None
+    deploy: str | None = None
+
+
+class AgileGithubLaunchpadOut(BaseModel):
+    work_item_id: int
+    work_item_codigo: str
+    requisito_codigo: str | None = None
+    ambiente: AgileLaunchpadAmbiente
+    ambiente_branch_inferido: str | None = None
+    repositorio: str
+    branch_trabalho: str
+    branch_base: str
+    branch_existe: bool | None = None
+    links: AgileGithubLaunchpadLinks
+    acoes_disponiveis: list[str]
+    somente_leitura: bool = False
+    increment_gate: dict | None = None
+    mensagem_commit_sugerida: str
+    notas: list[str] = Field(default_factory=list)
+
+
+class IncrementGateResumo(BaseModel):
+    permitido: bool
+    motivo: str
+    detalhe: str
+
+
+class GithubBranchCriarIn(BaseModel):
+    ambiente: str = 'dev'
+    criar_se_ausente: bool = True
+    aplicar_branch_no_item: bool = True
+
+
+class GithubBranchCriarOut(BaseModel):
+    criada: bool
+    branch: str
+    repositorio: str
+    branch_base: str
+    branch_existe: bool
+    motivo: str
+    increment_gate: IncrementGateResumo
+    links: AgileGithubLaunchpadLinks
+
+
 class AgileAIRoutingRecommendationOut(BaseModel):
     work_item_id: int
     work_item_codigo: str
