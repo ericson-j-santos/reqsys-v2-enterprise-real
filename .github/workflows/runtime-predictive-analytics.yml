@@ -1,0 +1,152 @@
+name: Runtime Predictive Analytics
+
+on:
+  workflow_dispatch:
+    inputs:
+      success_rate_percent:
+        description: 'Success rate observado para simulação manual.'
+        required: false
+        default: '95'
+        type: string
+      failure_rate_percent:
+        description: 'Failure rate observado para simulação manual.'
+        required: false
+        default: '5'
+        type: string
+      p95_seconds:
+        description: 'P95 lead time em segundos.'
+        required: false
+        default: '900'
+        type: string
+      max_seconds:
+        description: 'Max lead time em segundos.'
+        required: false
+        default: '3600'
+        type: string
+  schedule:
+    - cron: '25 */6 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/runtime-predictive-analytics.yml'
+      - 'docs/runbooks/runtime-predictive-analytics.md'
+
+concurrency:
+  group: runtime-predictive-analytics-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  predictive-report:
+    name: Build runtime predictive analytics report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build predictive analytics artifact
+        env:
+          REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
+          SUCCESS_RATE_PERCENT: ${{ github.event.inputs.success_rate_percent || '95' }}
+          FAILURE_RATE_PERCENT: ${{ github.event.inputs.failure_rate_percent || '5' }}
+          P95_SECONDS: ${{ github.event.inputs.p95_seconds || '900' }}
+          MAX_SECONDS: ${{ github.event.inputs.max_seconds || '3600' }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          success_rate = float(os.environ.get('SUCCESS_RATE_PERCENT') or 95)
+          failure_rate = float(os.environ.get('FAILURE_RATE_PERCENT') or 5)
+          p95_seconds = float(os.environ.get('P95_SECONDS') or 900)
+          max_seconds = float(os.environ.get('MAX_SECONDS') or 3600)
+
+          risk_score = 0
+          risk_score += max(0, 95 - success_rate) * 2
+          risk_score += max(0, failure_rate - 5) * 4
+          risk_score += max(0, p95_seconds - 900) / 60
+          risk_score += max(0, max_seconds - 3600) / 120
+          risk_score = min(100, round(risk_score, 2))
+
+          if risk_score >= 70:
+              risk_level = 'high'
+          elif risk_score >= 35:
+              risk_level = 'medium'
+          elif risk_score >= 15:
+              risk_level = 'medium_low'
+          else:
+              risk_level = 'low'
+
+          predictions = []
+          if success_rate < 95:
+              predictions.append('probable_ci_instability')
+          if failure_rate > 5:
+              predictions.append('failure_rate_above_target')
+          if p95_seconds >= 900:
+              predictions.append('lead_time_p95_attention')
+          if max_seconds >= 3600:
+              predictions.append('max_lead_time_high_risk')
+          if not predictions:
+              predictions.append('stable_operational_trend')
+
+          report = {
+              'schema_version': '1.0.0',
+              'generated_at': datetime.now(timezone.utc).isoformat(),
+              'repository': os.environ['REPOSITORY'],
+              'event_name': os.environ['EVENT_NAME'],
+              'run_id': os.environ['RUN_ID'],
+              'inputs': {
+                  'success_rate_percent': success_rate,
+                  'failure_rate_percent': failure_rate,
+                  'p95_seconds': p95_seconds,
+                  'max_seconds': max_seconds,
+              },
+              'risk_score': risk_score,
+              'risk_level': risk_level,
+              'predictions': predictions,
+              'recommendations': [
+                  'investigate_workflows_with_high_p95',
+                  'compare_against_143_minutes_baseline',
+                  'keep_report_only_until_historical_series_is_stable',
+              ],
+              'mode': 'report_only',
+              'guardrails': {
+                  'no_secrets': True,
+                  'no_pii': True,
+                  'no_deploy_change': True,
+                  'does_not_relax_required_gates': True,
+              },
+          }
+
+          Path('audit/predictive').mkdir(parents=True, exist_ok=True)
+          Path('audit/predictive/runtime-predictive-analytics.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
+          Path('audit/predictive/runtime-predictive-analytics.md').write_text('\n'.join([
+              '# Runtime Predictive Analytics',
+              '',
+              f"- Repository: {report['repository']}",
+              f"- Risk score: {report['risk_score']}",
+              f"- Risk level: {report['risk_level']}",
+              f"- Mode: {report['mode']}",
+              '',
+              '## Predictions',
+              *[f"- {item}" for item in predictions],
+              '',
+              '## Guardrails',
+              *[f"- {key}: {value}" for key, value in report['guardrails'].items()],
+          ]) + '\n', encoding='utf-8')
+          print(json.dumps(report, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Upload predictive analytics artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-predictive-analytics-${{ github.run_id }}
+          path: audit/predictive/
+          if-no-files-found: error
+          retention-days: 30
