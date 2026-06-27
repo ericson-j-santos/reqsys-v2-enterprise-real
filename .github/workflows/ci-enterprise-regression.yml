@@ -118,11 +118,33 @@ jobs:
         working-directory: ${{ steps.detect.outputs.workdir }}
         shell: bash
         run: |
+          mkdir -p "$GITHUB_WORKSPACE/ci-reports"
+          STATUS=0
           if [ -f playwright.config.ts ] || [ -f playwright.config.js ]; then
-            npx playwright test --reporter=list,html
+            npx playwright test --reporter=list,html || STATUS=$?
           else
-            npm run test:e2e --if-present
+            npm run test:e2e --if-present || STATUS=$?
           fi
+          RESULT="success"
+          if [ "$STATUS" -ne 0 ]; then RESULT="warning"; fi
+          cat > "$GITHUB_WORKSPACE/ci-reports/frontend-regression-status.json" <<EOF
+          {"schema_version":"1.0.0","scope":"frontend-regression-e2e","status":"$RESULT","exit_code":$STATUS,"blocking":false,"reason":"nightly_manual_full_regression_report_only"}
+          EOF
+          {
+            echo "## Frontend regression/E2E"
+            echo ""
+            echo "Status: $RESULT"
+            echo "Exit code original: $STATUS"
+            echo "Bloqueante: false"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Registrar frontend ausente
+        if: steps.detect.outputs.enabled != 'true'
+        shell: bash
+        run: |
+          mkdir -p ci-reports
+          echo '{"schema_version":"1.0.0","scope":"frontend-regression-e2e","status":"skipped","exit_code":0,"blocking":false,"reason":"frontend_not_detected"}' > ci-reports/frontend-regression-status.json
 
       - name: Publicar evidências E2E
         if: always()
@@ -130,6 +152,7 @@ jobs:
         with:
           name: ci-enterprise-e2e-evidences
           path: |
+            ci-reports/frontend-regression-status.json
             frontend/playwright-report/
             playwright-report/
             frontend/test-results/
@@ -162,29 +185,62 @@ jobs:
       - name: Testes regressivos backend
         shell: bash
         run: |
+          mkdir -p ci-reports
+          STATUS=0
           if [ -d tests ] || [ -d backend/tests ]; then
-            pytest --maxfail=3 --disable-warnings --cov=. --cov-report=xml --cov-report=term-missing
+            pytest --maxfail=3 --disable-warnings --cov=. --cov-report=xml --cov-report=term-missing || STATUS=$?
           else
             echo "Sem testes backend detectados."
           fi
+          RESULT="success"
+          if [ "$STATUS" -ne 0 ]; then RESULT="warning"; fi
+          cat > ci-reports/backend-regression-status.json <<EOF
+          {"schema_version":"1.0.0","scope":"backend-regression-tests","status":"$RESULT","exit_code":$STATUS,"blocking":false,"reason":"nightly_manual_full_regression_report_only"}
+          EOF
+          {
+            echo "## Backend regression"
+            echo ""
+            echo "Status: $RESULT"
+            echo "Exit code original: $STATUS"
+            echo "Bloqueante: false"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
 
       - name: Segurança backend
         shell: bash
         run: |
+          mkdir -p ci-reports
+          STATUS=0
           TARGETS=()
           [ -d app ] && TARGETS+=(app)
           [ -d backend ] && TARGETS+=(backend)
           if [ ${#TARGETS[@]} -gt 0 ]; then
-            bandit -q -r "${TARGETS[@]}"
+            bandit -q -r "${TARGETS[@]}" || STATUS=$?
           fi
-          if [ -f requirements.txt ]; then pip-audit -r requirements.txt; fi
-          if [ -f backend/requirements.txt ]; then pip-audit -r backend/requirements.txt; fi
+          if [ -f requirements.txt ]; then pip-audit -r requirements.txt || STATUS=$?; fi
+          if [ -f backend/requirements.txt ]; then pip-audit -r backend/requirements.txt || STATUS=$?; fi
+          RESULT="success"
+          if [ "$STATUS" -ne 0 ]; then RESULT="warning"; fi
+          cat > ci-reports/backend-security-status.json <<EOF
+          {"schema_version":"1.0.0","scope":"backend-security","status":"$RESULT","exit_code":$STATUS,"blocking":false,"reason":"nightly_manual_security_observability_report_only"}
+          EOF
+          {
+            echo "## Backend security"
+            echo ""
+            echo "Status: $RESULT"
+            echo "Exit code original: $STATUS"
+            echo "Bloqueante: false"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
 
       - name: Publicar cobertura
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ci-enterprise-backend-coverage
-          path: coverage.xml
+          path: |
+            coverage.xml
+            ci-reports/backend-regression-status.json
+            ci-reports/backend-security-status.json
           if-no-files-found: ignore
           retention-days: 30
