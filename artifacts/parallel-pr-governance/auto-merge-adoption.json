@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T19:52:00-03:00",
+  "domain": "parallel_pr_governance",
+  "metric_group": "auto_merge_adoption",
+  "repository_policy": {
+    "allow_auto_merge": true,
+    "merge_requires_green_checks": true,
+    "manual_merge_still_allowed": true
+  },
+  "adoption_metrics": {
+    "prs_ready_for_auto_merge": null,
+    "prs_auto_merge_enabled": null,
+    "prs_merged_manually": null,
+    "blocked_by_unstable_status": null
+  },
+  "recommended_actions": [
+    "enable auto-merge only after mergeability is stable",
+    "do not force merge when required checks are pending",
+    "record manual merges separately from native auto-merge"
+  ]
+}
