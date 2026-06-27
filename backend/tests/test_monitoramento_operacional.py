@@ -81,6 +81,9 @@ def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
     assert data['guardrails']['no_secrets'] is True
     assert data['guardrails']['read_only'] is True
     assert data['guardrails']['deploy_gate_relaxed'] is False
+    runtime_card = next(card for card in data['cards'] if card['id'] == 'runtime-status')
+    assert runtime_card['spa_drilldown']['path'] == '/monitoramento-operacional'
+    assert runtime_card['spa_drilldown']['query']['secao'] == 'runtime'
 
 
 def test_runtime_observability_readiness_e_liveness():
