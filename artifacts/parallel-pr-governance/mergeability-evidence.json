@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T20:09:00-03:00",
+  "domain": "parallel_pr_governance",
+  "metric_group": "mergeability_evidence",
+  "evidence_requirements": [
+    "branch created from current main",
+    "ahead_by equals 1 for low-risk artifact PRs",
+    "behind_by equals 0 before opening PR",
+    "changed_files equals 1",
+    "changed path is exclusive",
+    "PR Conflict Guard success",
+    "Governed Merge Queue success"
+  ],
+  "mergeability_states": {
+    "clean": "ready for merge or auto-merge",
+    "unstable": "wait for checks or mergeability calculation",
+    "dirty": "do not merge; recreate or resolve conflict",
+    "unknown": "recheck before action"
+  },
+  "operator_rule": "merge only clean or green-governed PRs with expected head SHA when manual merge is needed"
+}
