@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/completion-projection-report.schema.json",
+  "title": "ReqSys Completion Projection Report Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "repository", "run_id", "event_name", "reference_time", "overall_completion_percent", "average_maturity_percent", "average_gap_pp", "remaining_to_gold_pp", "status", "current_state", "velocity", "completion", "gaps", "time_projection_conservative", "time_projection_accelerated", "bottlenecks", "risk_index", "trend", "probabilities", "accelerators", "executive_reading", "mode"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string" },
+    "run_id": { "type": "string" },
+    "event_name": { "type": "string" },
+    "reference_time": { "type": "string" },
+    "overall_completion_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "average_maturity_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "average_gap_pp": { "type": "number", "minimum": 0, "maximum": 100 },
+    "remaining_to_gold_pp": { "type": "number", "minimum": 0, "maximum": 100 },
+    "status": { "type": "string", "enum": ["consolidado", "em_aceleracao", "em_consolidacao", "em_evolucao"] },
+    "current_state": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dimension", "status_percent", "maturity"],
+        "properties": {
+          "dimension": { "type": "string" },
+          "status_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+          "maturity": { "type": "string" }
+        }
+      }
+    },
+    "velocity": { "type": "object" },
+    "completion": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["indicator", "percent"],
+        "properties": {
+          "indicator": { "type": "string" },
+          "percent": { "type": "number", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["area", "gap_percent"],
+        "properties": {
+          "area": { "type": "string" },
+          "gap_percent": { "type": "number", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "time_projection_conservative": { "type": "array", "items": { "type": "object" } },
+    "time_projection_accelerated": { "type": "array", "items": { "type": "object" } },
+    "bottlenecks": { "type": "array", "items": { "type": "string" } },
+    "risk_index": { "type": "array", "items": { "type": "object" } },
+    "trend": { "type": "array", "items": { "type": "object" } },
+    "probabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["outcome", "probability_percent"],
+        "properties": {
+          "outcome": { "type": "string" },
+          "probability_percent": { "type": "number", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "accelerators": { "type": "array", "items": { "type": "string" } },
+    "executive_reading": { "type": "string" },
+    "mode": { "type": "string", "enum": ["report_only"] }
+  }
+}
