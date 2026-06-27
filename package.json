@@ -9,7 +9,8 @@
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
     "validate:access": "node scripts/validar-acessos-publicos.mjs",
-    "validate:pipeline": "node scripts/validar-pipeline-governanca.mjs"
+    "validate:pipeline": "node scripts/validar-pipeline-governanca.mjs",
+    "validate:dashboard-regression": "node scripts/validate-dashboard-regression.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0"
