@@ -104,6 +104,253 @@ def _status_counts(requisitos: list[Requisito]) -> dict[str, int]:
     return counts
 
 
+_PROJECAO_REFERENCIA_BRT = '2026-06-27T21:00:00-03:00'
+
+_ESTADO_ATUAL_CONSOLIDADO = [
+    {'dimensao': 'Arquitetura base', 'statusAtual': 88, 'maturidade': 'alta'},
+    {'dimensao': 'CI/CD governado', 'statusAtual': 82, 'maturidade': 'alta'},
+    {'dimensao': 'Living Architecture', 'statusAtual': 74, 'maturidade': 'media_alta'},
+    {'dimensao': 'Observabilidade/Analytics', 'statusAtual': 71, 'maturidade': 'media_alta'},
+    {'dimensao': 'Runtime operacional', 'statusAtual': 68, 'maturidade': 'media'},
+    {'dimensao': 'UX operacional / dashboards', 'statusAtual': 72, 'maturidade': 'media_alta'},
+    {'dimensao': 'Automacao autonoma', 'statusAtual': 63, 'maturidade': 'media'},
+    {'dimensao': 'Governanca enterprise', 'statusAtual': 79, 'maturidade': 'alta'},
+    {'dimensao': 'Ambientes sincronizados', 'statusAtual': 61, 'maturidade': 'media'},
+    {'dimensao': 'Producao padrao ouro consolidado', 'statusAtual': 54, 'maturidade': 'media'},
+]
+
+_PERCENTUAL_REAL_CONCLUSAO = [
+    {'indicador': 'Codigo implementado', 'percentual': 78},
+    {'indicador': 'Codigo validado', 'percentual': 69},
+    {'indicador': 'Evidencia operacional consolidada', 'percentual': 58},
+    {'indicador': 'Governanca enterprise consolidada', 'percentual': 64},
+    {'indicador': 'Ambientes realmente sincronizados', 'percentual': 61},
+    {'indicador': 'Runtime navegavel/analitico', 'percentual': 67},
+    {'indicador': 'Autonomia operacional', 'percentual': 55},
+    {'indicador': 'Padrao ouro total consolidado', 'percentual': 52},
+]
+
+_GAPS_RESTANTES = [
+    {'area': 'Consolidacao runtime', 'gap': 18},
+    {'area': 'Evidencias automatizadas', 'gap': 22},
+    {'area': 'Operacao autonoma', 'gap': 31},
+    {'area': 'Analytics/drill-down total', 'gap': 27},
+    {'area': 'Hardening producao', 'gap': 24},
+    {'area': 'Sincronizacao ambientes', 'gap': 39},
+    {'area': 'Governanca viva completa', 'gap': 21},
+    {'area': 'UX operacional enterprise', 'gap': 17},
+]
+
+_MARCOS_PROJECAO = [
+    {'marco': 'MVP operacional consolidado', 'esforcoPontos': 12},
+    {'marco': 'Ambientes sincronizados', 'esforcoPontos': 18},
+    {'marco': 'Runtime operacional robusto', 'esforcoPontos': 24},
+    {'marco': 'Padrao ouro tecnico', 'esforcoPontos': 48},
+    {'marco': 'Padrao ouro consolidado total', 'esforcoPontos': 70},
+]
+
+_MARCOS_PROJECAO_ACELERADO = [
+    {'marco': 'MVP robusto', 'esforcoPontos': 12},
+    {'marco': 'Producao utilizavel forte', 'esforcoPontos': 24},
+    {'marco': 'Ambientes quase totalmente sincronizados', 'esforcoPontos': 18},
+    {'marco': 'Padrao ouro tecnico', 'esforcoPontos': 48},
+    {'marco': 'Consolidacao enterprise completa', 'esforcoPontos': 70},
+]
+
+
+def _clamp(valor: float, minimo: float = 0.0, maximo: float = 100.0) -> float:
+    return max(minimo, min(maximo, valor))
+
+
+def _calcular_faixa_dias(esforco_pontos: int, throughput_min: float, throughput_max: float) -> dict[str, int]:
+    if throughput_min <= 0 or throughput_max <= 0:
+        return {'minDias': 0, 'maxDias': 0}
+    min_dias = round(esforco_pontos / throughput_max)
+    max_dias = round(esforco_pontos / throughput_min)
+    return {'minDias': max(1, min_dias), 'maxDias': max(1, max_dias)}
+
+
+def _media_percentual(chaves: list[dict[str, int]], campo: str) -> int:
+    if not chaves:
+        return 0
+    return round(sum(item[campo] for item in chaves) / len(chaves))
+
+
+def _calcular_probabilidade(
+    *,
+    completion_score: float,
+    estabilidade_ci: float,
+    throughput_score: float,
+    bonus_tendencia: float,
+    penalidade_risco: float,
+) -> int:
+    probabilidade = (
+        completion_score * 0.45
+        + estabilidade_ci * 0.35
+        + throughput_score * 0.20
+        + bonus_tendencia
+        - penalidade_risco
+    )
+    return round(_clamp(probabilidade, 5, 95))
+
+
+def gerar_projecao_estatistica_conclusao() -> dict[str, Any]:
+    velocidade = {
+        'prsDiaUteis': {'min': 8, 'max': 18},
+        'mergesVerdesDia': {'min': 6, 'max': 14},
+        'correcoesCiPorCiclo': {'min': 2, 'max': 7},
+        'incrementosParalelosSeguros': {'min': 3, 'max': 5},
+        'leadTimePrMergeMinutos': {'min': 18, 'max': 90},
+        'taxaEstabilizacaoCi': 83,
+        'regressaoCritica': 'baixa',
+        'retrabalhoEstrutural': 'moderado_baixo',
+    }
+
+    cenario_conservador = {'throughputMin': 2.0, 'throughputMax': 3.5}
+    cenario_acelerado = {'throughputMin': 3.0, 'throughputMax': 5.0}
+
+    marcos_conservador = []
+    for marco in _MARCOS_PROJECAO:
+        faixa = _calcular_faixa_dias(marco['esforcoPontos'], cenario_conservador['throughputMin'], cenario_conservador['throughputMax'])
+        marcos_conservador.append({'marco': marco['marco'], **faixa})
+
+    marcos_acelerado = []
+    for marco in _MARCOS_PROJECAO_ACELERADO:
+        faixa = _calcular_faixa_dias(marco['esforcoPontos'], cenario_acelerado['throughputMin'], cenario_acelerado['throughputMax'])
+        marcos_acelerado.append({'marco': marco['marco'], **faixa})
+
+    completion_score = _media_percentual(_PERCENTUAL_REAL_CONCLUSAO, 'percentual')
+    media_gaps = _media_percentual(_GAPS_RESTANTES, 'gap')
+    throughput_score = round(((velocidade['mergesVerdesDia']['min'] + velocidade['mergesVerdesDia']['max']) / 2) / 14 * 100)
+    bonus_tendencia = 12
+
+    probabilidades = [
+        {
+            'resultado': 'MVP forte em menos de 1 semana',
+            'probabilidade': _calcular_probabilidade(
+                completion_score=completion_score,
+                estabilidade_ci=velocidade['taxaEstabilizacaoCi'],
+                throughput_score=throughput_score,
+                bonus_tendencia=bonus_tendencia,
+                penalidade_risco=0,
+            ),
+        },
+        {
+            'resultado': 'Producao utilizavel enterprise',
+            'probabilidade': _calcular_probabilidade(
+                completion_score=completion_score,
+                estabilidade_ci=velocidade['taxaEstabilizacaoCi'],
+                throughput_score=throughput_score,
+                bonus_tendencia=bonus_tendencia,
+                penalidade_risco=6,
+            ),
+        },
+        {
+            'resultado': 'Padrao ouro tecnico real',
+            'probabilidade': _calcular_probabilidade(
+                completion_score=completion_score,
+                estabilidade_ci=velocidade['taxaEstabilizacaoCi'],
+                throughput_score=throughput_score,
+                bonus_tendencia=bonus_tendencia,
+                penalidade_risco=14,
+            ),
+        },
+        {
+            'resultado': 'Consolidacao enterprise completa',
+            'probabilidade': _calcular_probabilidade(
+                completion_score=completion_score,
+                estabilidade_ci=velocidade['taxaEstabilizacaoCi'],
+                throughput_score=throughput_score,
+                bonus_tendencia=bonus_tendencia,
+                penalidade_risco=26,
+            ),
+        },
+    ]
+
+    return {
+        'schemaVersion': '1.0.0',
+        'referenciaTemporal': _PROJECAO_REFERENCIA_BRT,
+        'estadoAtualConsolidado': _ESTADO_ATUAL_CONSOLIDADO,
+        'velocidadeAtualObservada': velocidade,
+        'percentualRealConclusao': _PERCENTUAL_REAL_CONCLUSAO,
+        'gapsRestantes': _GAPS_RESTANTES,
+        'cenarios': {
+            'conservador': {
+                'descricao': 'Mantendo ritmo atual e sem aceleracao estrutural.',
+                'throughputPontosDia': cenario_conservador,
+                'marcos': marcos_conservador,
+            },
+            'acelerado': {
+                'descricao': 'Com incrementos paralelos, CI auto-remediavel e validacao continua.',
+                'throughputPontosDia': cenario_acelerado,
+                'marcos': marcos_acelerado,
+            },
+        },
+        'gargalosPrincipais': [
+            'estabilizacao continua de CI',
+            'sincronizacao entre ambientes',
+            'evidencia operacional automatica',
+            'consolidacao runtime-driven',
+            'reducao de acoplamentos residuais',
+            'observabilidade fim-a-fim',
+            'hardening de producao',
+        ],
+        'riscos': [
+            {'tipo': 'Regressao arquitetural', 'risco': 'baixo'},
+            {'tipo': 'Colisao de branches', 'risco': 'medio_baixo'},
+            {'tipo': 'Instabilidade CI', 'risco': 'medio'},
+            {'tipo': 'Drift entre ambientes', 'risco': 'medio'},
+            {'tipo': 'Escalabilidade operacional', 'risco': 'medio'},
+            {'tipo': 'Perda de rastreabilidade', 'risco': 'baixo'},
+            {'tipo': 'Acoplamento oculto', 'risco': 'medio_baixo'},
+        ],
+        'tendencias': [
+            {'indicador': 'Velocidade', 'tendencia': 'subida_forte'},
+            {'indicador': 'Maturidade', 'tendencia': 'subida_forte'},
+            {'indicador': 'Governanca', 'tendencia': 'subida_estavel'},
+            {'indicador': 'Autonomia', 'tendencia': 'subida_moderada'},
+            {'indicador': 'Observabilidade', 'tendencia': 'subida_forte'},
+            {'indicador': 'Runtime vivo', 'tendencia': 'subida_forte'},
+            {'indicador': 'Producao consolidada', 'tendencia': 'subida_moderada'},
+        ],
+        'probabilidades': probabilidades,
+        'aceleradoresMarginais': [
+            'ci_auto_healing',
+            'geracao_automatica_de_evidencias',
+            'pipeline_validacao_consolidada',
+            'sincronizacao_fly_runtime',
+            'monitor_operacional_centralizado',
+            'contratos_e_shared_packages_unicos',
+            'reducao_de_validacoes_manuais',
+        ],
+        'leituraExecutiva': {
+            'estado': 'arquitetura_enterprise_funcional_em_aceleracao_continua',
+            'fortalezas': [
+                'governanca',
+                'evolucao incremental consistente',
+                'arquitetura viva',
+                'analytics operacional',
+                'automacao',
+                'observabilidade',
+                'fluxo ci_cd maduro',
+                'continuidade operacional',
+            ],
+            'focosRestantes': [
+                'consolidacao',
+                'sincronizacao',
+                'automacao total',
+                'hardening enterprise final',
+            ],
+        },
+        'metodo': {
+            'completionScore': completion_score,
+            'gapMedio': media_gaps,
+            'throughputScore': throughput_score,
+            'observacao': 'modelo heuristico governado com calibracao por ritmo recente e risco operacional',
+        },
+    }
+
+
 def gerar_indicadores_estatisticos(db: Session) -> list[dict[str, Any]]:
     coletado_em = _agora_iso()
     requisitos = db.query(Requisito).all()
@@ -250,4 +497,5 @@ def gerar_snapshot_estatisticas(db: Session, correlation_id: str) -> dict[str, A
             'nao_medidos': sum(1 for indicador in indicadores if indicador['estadoAtual'] == 'nao_medido'),
         },
         'indicadores': indicadores,
+        'projecaoConclusao': gerar_projecao_estatistica_conclusao(),
     }

@@ -53,3 +53,41 @@ def test_estatisticas_fonte_externa_permanece_nao_medida_sem_registry_real():
     assert externo['fonte']['tipo'] == 'externa'
     assert externo['estadoAtual'] == 'nao_medido'
     assert externo['fonte']['ttlMinutos'] > 0
+
+
+def test_estatisticas_retorna_projecao_conclusao_com_cenarios_e_probabilidades():
+    res = TestClient(app).get('/v1/estatisticas')
+    projecao = res.json()['data']['projecaoConclusao']
+
+    assert projecao['schemaVersion'] == '1.0.0'
+    assert projecao['referenciaTemporal'] == '2026-06-27T21:00:00-03:00'
+    assert len(projecao['estadoAtualConsolidado']) == 10
+    assert len(projecao['gargalosPrincipais']) == 7
+    assert len(projecao['aceleradoresMarginais']) == 7
+    assert len(projecao['probabilidades']) == 4
+
+    probabilidades = [item['probabilidade'] for item in projecao['probabilidades']]
+    assert probabilidades[0] >= probabilidades[1] >= probabilidades[2] >= probabilidades[3]
+    assert all(0 <= item <= 100 for item in probabilidades)
+
+
+def test_estatisticas_projecao_tem_faixas_coerentes_por_marco():
+    res = TestClient(app).get('/v1/estatisticas')
+    cenarios = res.json()['data']['projecaoConclusao']['cenarios']
+
+    conservador = cenarios['conservador']['marcos']
+    acelerado = cenarios['acelerado']['marcos']
+
+    assert len(conservador) == 5
+    assert len(acelerado) == 5
+
+    for marco in conservador + acelerado:
+        assert marco['minDias'] > 0
+        assert marco['maxDias'] > 0
+        assert marco['minDias'] <= marco['maxDias']
+
+    mvp_conservador = next(item for item in conservador if item['marco'] == 'MVP operacional consolidado')
+    mvp_acelerado = next(item for item in acelerado if item['marco'] == 'MVP robusto')
+
+    assert mvp_conservador == {'marco': 'MVP operacional consolidado', 'minDias': 3, 'maxDias': 6}
+    assert mvp_acelerado == {'marco': 'MVP robusto', 'minDias': 2, 'maxDias': 4}
