@@ -1,11 +1,11 @@
 {
   "summary": {
-    "generated_at": "2026-06-27T13:28:32.654Z",
+    "generated_at": "2026-06-27T14:06:29.581Z",
     "mode": "report-only",
     "dashboard_dir": "docs/dashboard",
     "totals": {
-      "checks": 10,
-      "passed": 10,
+      "checks": 13,
+      "passed": 13,
       "gaps": 0
     }
   },
@@ -53,6 +53,7 @@
       "status": "passed",
       "severity": "report-only",
       "files": [
+        "docs/dashboard/delivery-finalization-panel.html",
         "docs/dashboard/live-operational-dashboard.dynamic.html",
         "docs/dashboard/live-operational-dashboard.html"
       ]
@@ -71,6 +72,21 @@
     },
     {
       "name": "fallback_seguro_para_artifact_ausente",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "ausencia_de_secrets:docs/dashboard/delivery-finalization-panel.html",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "ausencia_de_chamadas_externas_nao_governadas:docs/dashboard/delivery-finalization-panel.html",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "compatibilidade_basica_execucao_local:docs/dashboard/delivery-finalization-panel.html",
       "status": "passed",
       "severity": "report-only"
     },
