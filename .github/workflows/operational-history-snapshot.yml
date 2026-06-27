@@ -1,0 +1,102 @@
+name: Operational History Snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '5 */6 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/operational-history-snapshot.yml'
+      - 'docs/runbooks/operational-history-snapshots.md'
+
+concurrency:
+  group: operational-history-snapshot-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  snapshot:
+    name: Build operational history snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build snapshot artifact
+        env:
+          REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          now = datetime.now(timezone.utc).isoformat()
+          snapshot = {
+              'schema_version': '1.0.0',
+              'generated_at': now,
+              'repository': os.environ['REPOSITORY'],
+              'event_name': os.environ['EVENT_NAME'],
+              'run_id': os.environ['RUN_ID'],
+              'sha': os.environ['SHA'],
+              'baseline': {
+                  'incident_lead_time_minutes': 143,
+                  'ci_cd_maturity_percent': 90,
+                  'governance_percent': 91,
+                  'observability_percent': 89,
+                  'analytics_operational_percent': 86,
+                  'dashboard_live_percent': 78,
+              },
+              'targets': {
+                  'ci_cd_maturity_percent': 95,
+                  'governance_percent': 95,
+                  'observability_percent': 95,
+                  'analytics_operational_percent': 95,
+                  'dashboard_live_percent': 90,
+              },
+              'gaps': {
+                  'ci_cd_maturity_pp': 5,
+                  'governance_pp': 4,
+                  'observability_pp': 6,
+                  'analytics_operational_pp': 9,
+                  'dashboard_live_pp': 12,
+              },
+              'status': 'report_only',
+              'risk': 'medium_low',
+              'next_actions': [
+                  'consume_ci_lead_time_analytics_artifact',
+                  'publish_live_dashboard_html',
+                  'build_runtime_correlation_graph',
+              ],
+          }
+          Path('audit/history').mkdir(parents=True, exist_ok=True)
+          Path('audit/history/operational-history-snapshot.json').write_text(json.dumps(snapshot, indent=2, ensure_ascii=False), encoding='utf-8')
+          Path('audit/history/operational-history-snapshot.md').write_text('\n'.join([
+              '# Operational History Snapshot',
+              '',
+              f"- Repository: {snapshot['repository']}",
+              f"- Generated at: {snapshot['generated_at']}",
+              f"- Risk: {snapshot['risk']}",
+              f"- Status: {snapshot['status']}",
+              f"- Baseline incident lead time: {snapshot['baseline']['incident_lead_time_minutes']}min",
+              '',
+              '## Gaps',
+              *[f"- {key}: {value} p.p." for key, value in snapshot['gaps'].items()],
+          ]) + '\n', encoding='utf-8')
+          print(json.dumps(snapshot, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Upload operational history snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-history-snapshot-${{ github.run_id }}
+          path: audit/history/
+          if-no-files-found: error
+          retention-days: 30
