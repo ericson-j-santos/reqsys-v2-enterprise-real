@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T20:10:00-03:00",
+  "domain": "parallel_pr_governance",
+  "metric_group": "batch_summary_index",
+  "batches": [
+    {
+      "id": "parallel_pr_governance_v1",
+      "prs": [412, 413, 414, 415, 416, 417],
+      "status": "merged",
+      "conflicts": 0
+    },
+    {
+      "id": "parallel_pr_governance_v2",
+      "prs": [429, 430, 431, 432, 434, 435],
+      "status": "merged",
+      "conflicts": 0
+    },
+    {
+      "id": "parallel_pr_governance_v3",
+      "prs_target": ["lead_time_metrics", "rerun_analytics", "conflict_avoidance_score", "green_rate_tracker", "mergeability_evidence", "batch_summary_index"],
+      "status": "opened_after_artifact_creation",
+      "conflicts": null
+    }
+  ],
+  "usage": "single executive index for parallel PR governance batches"
+}
