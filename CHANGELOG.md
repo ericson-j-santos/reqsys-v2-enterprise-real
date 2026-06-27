@@ -19,6 +19,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - REQSYS#323: Ops Dashboard com drill-down por domínio, detalhes de health/evidence/risk/environment drift/governance, Incident Timeline local filtrável e integração opcional de `runtime-health-report.json` e `runtime-operational-evidence-graph.json`.
 - Runtime Health Center P2 (`schema_version=1.1.0`) com ingestão local de artifacts, consolidação de evidence graph/risk scoring/PR Evidence Gate e detector de drift entre dev/test/prod refletido em `maturity_percent` e `operational_risk`.
 - Consolidação do Runtime Operacional Autônomo Governado no `scripts/runtime_health_validator.py`, com status executivo, maturidade operacional, backlog automático, detecção de regressão, rollback governado, sincronização Fly.io e evidência navegável.
+- Runtime Health Validator `schema_version=1.2.0`: health matrix, runtime score canônico, quarantine (`AOP-SEC-QUARANTINE-001`), retry policy governada (`AOP-CI-RETRY-001`), fallback progressivo (API → cache → baseline) e propagação de `runtime_score` no Coordenador Status Consolidator.
 - ADR e documentação operacional do runtime em `docs/adr/ADR-034-autonomous-operational-runtime-consolidation.md` e `docs/ci/AUTONOMOUS_OPERATIONAL_RUNTIME.md`.
 - Diretriz transversal de padrão ouro em `docs/REQSYS_PADRAO_OURO_TRANSVERSAL.md`.
 - Varredura técnica inicial em `docs/varreduras/REQSYS_VARREDURA_PADRAO_OURO_2026-06-20.md`.
