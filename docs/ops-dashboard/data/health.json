@@ -1,7 +1,7 @@
 {
   "schema_version": "1.1.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at_epoch": 1782511327,
+  "generated_at_epoch": 1782566968,
   "overall_status": "unknown",
   "health_score": 40,
   "critical_failure_count": null,
@@ -13,13 +13,72 @@
     "pulls": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pulls",
     "main": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/tree/main"
   },
-  "runtime_gold_standard_depth": {
+  "public_runtime_readiness": {
     "available": false,
-    "strategy": "",
-    "overall_status": "unknown",
-    "overall_score": null,
-    "focus_order": [],
-    "axes": []
+    "environment": "prod",
+    "base_url": "",
+    "operational_status": "unknown",
+    "readiness_percent": null,
+    "response_time": null,
+    "dashboard_ready": false,
+    "login_ready": false,
+    "api_ready": false,
+    "runtime_ready": false,
+    "evidence_ready": false,
+    "blocking_issues": [],
+    "checks": {}
+  },
+  "runtime_gold_standard_depth": {
+    "available": true,
+    "strategy": "parar_expansao_horizontal_e_aprofundar_capacidades_existentes",
+    "overall_status": "warning",
+    "overall_score": 63,
+    "focus_order": [
+      "runtime",
+      "observability",
+      "operational_ux",
+      "live_analytics",
+      "environments",
+      "autonomous_operation"
+    ],
+    "axes": [
+      {
+        "id": "runtime",
+        "status": "partial",
+        "score": 45,
+        "operator_action": "Priorizar estabilizacao dos sinais runtime antes de ampliar novas frentes."
+      },
+      {
+        "id": "observability",
+        "status": "passed",
+        "score": 100,
+        "operator_action": "Publicar artifacts faltantes para reduzir diagnostico manual e manter trilha auditavel."
+      },
+      {
+        "id": "operational_ux",
+        "status": "partial",
+        "score": 45,
+        "operator_action": "Consumir next_required_actions como fila unica de operacao, evitando criar novos paineis paralelos."
+      },
+      {
+        "id": "live_analytics",
+        "status": "partial",
+        "score": 45,
+        "operator_action": "Evoluir serie historica a partir dos artifacts existentes, sem duplicar motores de analytics."
+      },
+      {
+        "id": "environments",
+        "status": "passed",
+        "score": 100,
+        "operator_action": "Corrigir drift medio/alto antes de promover dev -> hml -> prod."
+      },
+      {
+        "id": "autonomous_operation",
+        "status": "partial",
+        "score": 45,
+        "operator_action": "Manter automacao assistida e allowlisted ate evidenciar baixa recorrencia de falhas."
+      }
+    ]
   },
   "runtime_domain_drilldowns": [
     {
@@ -713,10 +772,6335 @@
         "status": "missing",
         "parse_error": false
       }
+    },
+    {
+      "source": "runtime_artifact_catalog",
+      "title": "public_access_validation",
+      "domain": "evidence_gate",
+      "workflow": "public_access_validation",
+      "pr": "",
+      "status": "passed",
+      "severity": "normal",
+      "evidence": {
+        "id": "public_access_validation",
+        "path": "artifacts/public-access-validation/public-access-validation.json",
+        "available": true,
+        "status": "passed",
+        "parse_error": false
+      }
     }
   ],
+  "observability_correlation_report": {
+    "schema_version": "1.0.0",
+    "report_mode": "report-only",
+    "generated_at": "2026-06-27T13:27:57.132033+00:00",
+    "repository": "local",
+    "branch": "work",
+    "commit_sha": "abac13d12e95c76c184f06d540460456e458f465",
+    "scope": [
+      "runtime_health",
+      "delivery_evidence",
+      "readiness",
+      "completion",
+      "burndown"
+    ],
+    "summary": {
+      "mapped_sources": 545,
+      "mapped_artifacts": 4,
+      "category_coverage": {
+        "runtime_health": 325,
+        "delivery_evidence": 466,
+        "readiness": 197,
+        "completion": 242,
+        "burndown": 72
+      },
+      "maturity_percent": 50,
+      "operational_risk": "low",
+      "confidence_level": "high"
+    },
+    "correlations": [
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/actions-auto-operator.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/actions-deep-diagnostic.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/actions-dispatcher.yml",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ai-assisted-product-decision-intelligence.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/auth-azure-operational-gate.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/auto-public-runtime-evidence.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/auto-rerun-governed.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/branch-protection-audit.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ci-e2e.yml",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ci-enterprise-fast.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ci-enterprise-regression.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ci-fast-operational.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ci-governance-drift-guard.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ci-incident-intelligence.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ci-lead-time-analytics.yml",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ci-observability.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ci-runtime-health-summary.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ci-security.yml",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ci.yml",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/codex-local-online.yml",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/command-center-readiness.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/configurar-fly-auth-azure.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/deep-governance-review.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/delivery-burndown-snapshot.yml",
+        "categories": [
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/delivery-completion-snapshot.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/delivery-evidence-report.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/delivery-readiness-report.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/delivery-status-report.yml",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/deploy-reqsys-showcase-pages.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/dispatch-public-runtime-evidence.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/enterprise-runtime-governance-gates.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/evidence-analytics-drilldown-runtime.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/executive-predictive-stability.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/extended-operational-contract-validation.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/failure-pattern-engine.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/fly-enterprise-sync.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/fly-governed-command-center.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/fly-runtime-p0.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/functional-traceability-graph.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/github-runtime-analytics.yml",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/golden-release-readiness.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/governanca-padrao-ouro.yml",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/governance-quality-gates.yml",
+        "categories": [
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/governed-auto-remediation-engine.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/governed-dev-automerge.yml",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/governed-pr-automation.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/governed-promotion-pipeline.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/live-operational-control-center.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/main-operational-health.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/main-operational-post-merge-health.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/main-post-merge-validation.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/main-smoke-ci.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/manual-gate-guardrail.yml",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-alert-intelligence.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-analytics-engine.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-artifact-discovery-index.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-artifact-schema-validation.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-center-history.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-center-html.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-ci-intelligence.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-data-lake-historical-intelligence.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-drift-analyzer.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-executive-dashboard-generator.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-executive-dashboard.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-governance-gate.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-governance-orchestrator.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-health-dashboard.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-history-snapshot.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-intelligence-hub.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-maturity-score.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-realtime-event-mesh.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-risk-engine.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/operational-stability-score.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/ops-dashboard.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/post-merge-operational-summary.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/pr-auto-recovery-controlled.yml",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/pr-auto-recovery-replacement-plan.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/pr-auto-recovery.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/pr-ci-watch.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/pr-conflict-guard.yml",
+        "categories": [
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/pr-evidence-gate.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/pr-fast-classifier.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/pr-governed-ci-self-check.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/pr-governed-ci-validation.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/pr-quality-review.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/pr-scope-labeler.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-backlog-governance-gate.yml",
+        "categories": [
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-backlog-publisher-governado.yml",
+        "categories": [
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-consolidated-governance-report.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-continuous-governance-snapshot.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-event-validator.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-evidence-navigation-artifact-publisher.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-evidence-navigation-autonomous-governance-recovery-index.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-evidence-navigation-compliance-drift-index.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-evidence-navigation-governance-lifecycle-index.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-evidence-navigation-recovery-execution-readiness-gate.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-evidence-navigation-retention-index.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-evidence-navigation-ui.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-executive-control-tower.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-executive-release-board.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-executive-summary-trendline.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-final-evidence-index.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-functional-roadmap-generator.yml",
+        "categories": [
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-governance-closure-pack.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-governance-drift-detector.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-governance-stability-index.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-governance-stabilization-gate.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-release-evidence-pack.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-release-governance-gate.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-runtime-planning-package.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/product-intelligence-runtime-readiness-gate.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/public-runtime-evidence.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/realtime-operational-mesh.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/realtime-operational-streaming-layer.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/repository-health-watchdog.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/reqsys-operational-health.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/reqsys-product-intelligence-dashboard.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/reqsys-product-intelligence-living-backlog.yml",
+        "categories": [
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/requirement-quality-scoring-engine.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/runtime-health-center.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/runtime-health-validator.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/runtime-operational-correlation-timeline.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/runtime-operational-evidence-graph.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/runtime-operational-health.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/runtime-predictive-analytics.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/runtime-risk-scoring.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/scheduled-operational-watch.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/schema-governance-gate.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/schema-runtime-validation.yaml",
+        "categories": [
+          "runtime_health",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/stale-pr-governance-watch.yml",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/testes-monitorador-apis-python.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/unified-operational-event-bus.yml",
+        "categories": [
+          "runtime_health",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/validacao-acessos.yml",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/validar-painel-ciclo.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/workflow-auto-remediation.yml",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/workflow-command-center.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "workflow",
+        "path": ".github/workflows/workflow-reliability-analytics.yml",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/00_INDICE_CANONICO.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/01_REQSYS_REFERENCIA_CONSOLIDADA.md",
+        "categories": [
+          "delivery_evidence",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ADR/ADR-0001-padrao-ouro-enterprise.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/COFRE_UNIFICACOES_DASHBOARD_REQSYS.md",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ENDPOINTS_VERIFICATION_SUMMARY.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ENDPOINT_TESTING.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/FAILURE_PATTERN_ENGINE_P01.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/GITFLOW.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/IMPLEMENTATION_COMPLETE.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/OPERATIONAL_CENTER_HISTORY_P0.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/OPERATIONAL_CENTER_HTML_P0.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/OPERATIONAL_CI_INTELLIGENCE_P0.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/OPERATIONAL_INTELLIGENCE_HUB_P0.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/PADRAO_OURO_FLYIO_DUCKDNS.md",
+        "categories": [
+          "runtime_health",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/POST_MERGE_CI_FIX_2026_06_23.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/PR18_POST_MERGE_EVIDENCE.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/REGISTRO_MUDANCA_DOMINIOS_2026-05-01.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/REQSYS_PADRAO_OURO_TRANSVERSAL.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/REQSYS_RUNTIME_PLATFORM_P0.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/RUNBOOK_PUBLICACAO_1PAGINA.md",
+        "categories": [
+          "runtime_health",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/SECURITY_GATES_TEST_MATRIX.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/SUMMARY_IMPLEMENTATION.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/VALIDACAO_ANALITICA_ACESSOS.md",
+        "categories": [
+          "runtime_health",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-0002-seguranca-gates-producao.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-0003-ambientes-dev-hml-prod.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-0004-ci-cd-qualidade.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-0005-observabilidade-auditoria.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-0021-coderabbit-fast-review-governance.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-0024-substituicao-coderabbit-pr-quality-review.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-0024-validation-note.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-020-connection-broker-permission-on-demand.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-021-figma-github-retorno-em-tela.md",
+        "categories": [
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-022-autonomous-operations-platform-p0-1.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-023-aop-runtime-health-validator-remediation-executor.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-030-governed-dev-automerge.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-031-runtime-risk-and-promotion-pipeline.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-032-operational-health-dashboard-governance.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-033-product-intelligence-final-evidence-index.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-034-autonomous-operational-runtime-consolidation.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-ESTATISTICAS-INTERNAS-EXTERNAS.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-PR-AUTO-RECOVERY-V2.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-PR-AUTO-RECOVERY-V3.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-REQSYS-OPER-005-monitoramento-operacional.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adr/ADR-USER-FINAL-SHELL-001.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adrs/ADR-023-codex-backend-governado.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adrs/ADR-023-nginx-secure-profile.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adrs/ADR-024-ci-router-trunk-based.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/adrs/ADR-024-codex-operational-audit-layer.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/agile-multi-ia-sprint-router.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/agile-runtime-core.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/agile-runtime-workflow.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ai-governance/00-CORE/AI_EXECUTION_POLICY.md",
+        "categories": [
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ai-governance/00-CORE/AI_SYSTEM_RULES.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ai-governance/00_PRIORITY_RULES.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ai-governance/01-ARQUITETURA/LIVING_ARCHITECTURE.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ai-governance/02-SEGURANCA/SECURITY_BASELINE.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ai-governance/03-FRONTEND/ANALYTICS_DRILLDOWN.md",
+        "categories": [
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ai-governance/08-IA/AGENT_GOVERNANCE.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ai-governance/08-IA/MULTIAGENT_STANDARD.md",
+        "categories": [
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ai-governance/09-CHECKLISTS/PADRAO_OURO.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/analytics/ANALYTICS_DRILLDOWN_PADRAO.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/api/connection-broker-runtime-contract.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/architecture/adr/ADR-025-operational-actions-center.md",
+        "categories": [
+          "runtime_health",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/architecture/live-operational-dashboard-foundation.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/architecture/runtime-correlation-graph.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/audit/pr145-clean-replacement-audit.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/auth/AZURE_AD_LOGIN_OPERACIONAL.md",
+        "categories": [
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/auth/WORKFLOW_CONFIGURAR_FLY_AUTH_AZURE.md",
+        "categories": [
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/changelog/monitorador-apis-python-ci-stabilization.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/changelog/pr-auto-recovery-v3-controlled.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/changelog/user-final-shell-visual-v1.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/AUTONOMOUS_OPERATIONAL_RUNTIME.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/CI_ACCELERATION_STRATEGY.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/GOVERNED_DEV_AUTOMERGE.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/PR_AUTO_RECOVERY_V3_VALIDATION.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/PR_GOVERNED_CI_VALIDATION_FIX.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/RAG_PYTHON_PR143_CI_REVALIDATION.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/RUNTIME_RISK_AND_PROMOTION_PIPELINE.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/WORKFLOW_STABILITY_EXECUTION_PLAN.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/WORKFLOW_STABILITY_VALIDATION.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/monitorador-apis-python-ci-stabilization.md",
+        "categories": [
+          "runtime_health",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/monitorador-apis-python-coverage-fix-extra.md",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/monitorador-apis-python-coverage-fix-validation.md",
+        "categories": [
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/monitorador-apis-python-coverage-fix.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/monitorador-apis-python-post-merge-incident.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/monitorador-apis-python-safe-decision.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/monitorador-apis-python-safe-fix-summary.md",
+        "categories": [
+          "runtime_health",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr-quality-review-artifact-contract.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr-quality-review-decision.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr-quality-review-faq.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr-quality-review-flow.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr-quality-review-index.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr-quality-review-manual-gates.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr-quality-review-rollout.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr145-clean-replacement-summary.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr145-replacement-acceptance.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr145-replacement-dod.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr145-replacement-final-note.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr145-replacement-risk.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr145-replacement-rollback.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr145-replacement-status.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr145-replacement-summary-final.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ci/pr145-replacement-trace.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ciclo-completo/ADR-REQSYS-CYCLE-TRACKER.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ciclo-completo/CHANGELOG.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ciclo-completo/README.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ciclo-completo/RUNBOOK_VERSIONAMENTO.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ciclo-completo/TEST_REPORT.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ciclo-completo/estado-ciclo-reqsys.json",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/codex-local/DECISAO_MODELOS_CODIFICACAO.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/codex-local/RUNBOOK_PUBLICAR_REPOSITORIO_OLLAMA_GATEWAY.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/ci-lead-time-analytics.schema.json",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/command-center-readiness.schema.json",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/contract-validation-report.schema.json",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/delivery-burndown-snapshot.schema.json",
+        "categories": [
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/delivery-evidence-report.schema.json",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/delivery-readiness-report.schema.json",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/delivery-status-report.schema.json",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/observability-correlation-report.schema.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/operational-artifact-discovery-index.schema.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/operational-history-index.schema.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/operational-history-snapshot.schema.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/operational-maturity-score.schema.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/release-readiness.schema.json",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/contracts/runtime-predictive-analytics.schema.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/dashboard/command-center-evidence-index.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/dashboard/command-center-navigation-map.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/dashboard/live-operational-dashboard.dynamic.html",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/dashboard/live-operational-dashboard.html",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/dashboard/operational-command-center.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/devops/PLANO_EVOLUTIVO_DEVOPS_CORPORATIVO.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/diagrama-dependencias.md",
+        "categories": [
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/github-runtime-analytics.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/monitorador-apis-python-ci-stabilization-final-2.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/monitorador-apis-python-ci-stabilization-final-3.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/monitorador-apis-python-ci-stabilization-final-4.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/monitorador-apis-python-ci-stabilization-final-5.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/monitorador-apis-python-ci-stabilization-final-6.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/monitorador-apis-python-ci-stabilization-final-7.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/monitorador-apis-python-ci-stabilization-final.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/monitorador-apis-python-ci-stabilization-v2.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/monitorador-apis-python-ci-stabilization-v3.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/monitorador-apis-python-ci-stabilization.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/monitorador-apis-python-ci-stabilization.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/operational-health-dashboard-governance.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/pr-quality-review-validation.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/pr145-clean-replacement-evidence.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/pr145-clean-replacement-links.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidence/pr225-evidence-navigation-ui-sync.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidencias/PR7_READINESS_PADRAO_OURO.md",
+        "categories": [
+          "runtime_health",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/evidencias-operacionais/templates/auth-azure-login-evidence.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/governanca/CONNECTION_BROKER_PERMISSION_ON_DEMAND.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/governanca/PADRAO_OURO_ENTERPRISE.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/governance/CODERABBIT_FAST_REVIEW_GUARDRAILS.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/governance/branch-protection-enterprise-baseline.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/governance/enterprise-runtime-governance-gates.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/governance/governance-quality-gates-fix.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/governance/pr-quality-review-policy.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/index.html",
+        "categories": [
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/monitorador-apis-python/index.html",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/monitoramento-operacional/connection-broker-dashboard.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/monitoramento-operacional-reqsys.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/observabilidade/OBSERVABILIDADE_PADRAO.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ollama-local-gateway/BOOTSTRAP_REPOSITORY.md",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ollama-local-gateway/bootstrap-files/README.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ollama-local-gateway/bootstrap-files/SECURITY.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ollama-local-gateway/bootstrap-files/src/reqsys_ollama_gateway/app.py",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ollama-local-gateway/bootstrap-files/src/reqsys_ollama_gateway/config.py",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ollama-local-gateway/bootstrap-files/tests/test_health.py",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operacao/fly-enterprise-sync.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operacional/email-mime-html-report-v1.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operational-runtime-governance-platform/README.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operational-runtime-governance-platform/relatorio-operational-runtime-governance-platform-v1.html",
+        "categories": [
+          "runtime_health",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/GITHUB_RUNTIME_ANALYTICS.md",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/OPERATIONAL_HEALTH_DASHBOARD.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/RUNTIME_OPERATIONAL_CORRELATION_TIMELINE.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/RUNTIME_OPERATIONAL_EVIDENCE_GRAPH.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/ci-evidence-refresh-2026-06-25.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/ci-incident-intelligence.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/governed-auto-remediation-engine.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/live-operational-control-center.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/operational-alert-intelligence.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/operational-data-lake-historical-intelligence.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/operational-executive-dashboard-generator.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/operational-health-dashboard.example.json",
+        "categories": [
+          "runtime_health",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/operational-health-dashboard.schema.json",
+        "categories": [
+          "runtime_health",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/operational-stability-score.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/post-merge-operational-summary.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/realtime-operational-mesh.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/realtime-operational-streaming-layer.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/runtime-ops-governance-p1.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/unified-operational-event-bus.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/operations/workflow-reliability-analytics.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ops/pr-quality-review-operational-status.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ops/pr145-clean-replacement-next-steps.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ops-dashboard/data/health.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/ops-dashboard/index.html",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/painel-ciclo-completo-reqsys.html",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/pipeline-governanca.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product/PRODUCT_INTELLIGENCE_FINAL_EVIDENCE_INDEX.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product/product-intelligence-final-evidence-index.example.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product/product-intelligence-final-evidence-index.schema.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product/user-final-shell-contract.json",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/EVIDENCE_NAVIGATION_ARTIFACT_PUBLISHER.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/EVIDENCE_NAVIGATION_AUTONOMOUS_GOVERNANCE_RECOVERY_INDEX.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/EVIDENCE_NAVIGATION_COMPLIANCE_DRIFT_INDEX.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/EVIDENCE_NAVIGATION_GOVERNANCE_LIFECYCLE_INDEX.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/EVIDENCE_NAVIGATION_RECOVERY_EXECUTION_READINESS_GATE.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/EVIDENCE_NAVIGATION_RETENTION_INDEX.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/EVIDENCE_NAVIGATION_UI.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/FINAL_EVIDENCE_INDEX_PLAN.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/PR225_SUPERSEDED_BY_MAIN.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/ai-assisted-product-decision-intelligence.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/evidence-navigation-ui.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/functional-traceability-graph.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-backlog-governance-gate.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-backlog-publisher-governado.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-consolidated-governance-report.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-continuous-governance-snapshot.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-event-model.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-event-validator.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-executive-control-tower.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-executive-release-board.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-executive-summary-trendline.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-functional-roadmap-generator.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-governance-closure-pack.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-governance-drift-detector.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-governance-stability-index.md",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-governance-stabilization-gate.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-release-evidence-pack.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-release-governance-gate.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-runtime-planning-package.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/product-intelligence-runtime-readiness-gate.md",
+        "categories": [
+          "runtime_health",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/reqsys-product-intelligence-dashboard.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/reqsys-product-intelligence-living-backlog.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/product-intelligence/requirement-quality-scoring-engine.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/public-showcase/GITHUB_PAGES_FIX.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/public-showcase/post-linkedin-url.md",
+        "categories": [
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/public-showcase/reqsys-linkedin/index.html",
+        "categories": [
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/public-showcase/roteiro-carrossel-linkedin.md",
+        "categories": [
+          "runtime_health",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/publicacao/PUBLICACAO_GOVERNANCA_PORTAL_2026-06-20.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/quality/pr-quality-review-checklist.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/relatorios/email-relatorio-operacional-visual-v1.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/release-notes/pr145-clean-replacement.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/2026-06-18-pr18-production-security-gates.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/2026-06-18-req021-validacao-acessos-main.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/2026-06-20-coderabbit-config-governanca-evidencia.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/2026-06-20-coderabbit-config-governanca.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/2026-06-20-monitoramento-operacional-reqsys.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/2026-06-20-pr35-revalidacao-ci.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/2026-06-20-reqsys-oper-004-pipeline-governanca.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/2026-06-20-reqsys-oper-005-monitoramento-operacional-v2.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/2026-06-20-reqsys-oper-005-ready-for-pr.md",
+        "categories": [
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/RELEASE-AOP-P0-1-operacao-autonoma.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/RELEASE-AOP-P0-2-runtime-health-remediation.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/ci-router-v1.0.0.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/codex-backend-governado-v1.1.0.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/codex-local-online-v1.0.0.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/codex-operational-audit-p1.2.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/governed-dev-automerge-v0.1.0.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/governed-pr-automation-v1.0.0.md",
+        "categories": [
+          "runtime_health",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/operational-actions-center-v1.0.0.md",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/pr-ci-watch-v1.0.0.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/releases/runtime-risk-promotion-pipeline-v0.1.0.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/reports/monitorador-apis-python-ci-stabilization-compact.html",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/reports/monitorador-apis-python-ci-stabilization.html",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/reports/nginx-secure-profile.html",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/RUNBOOK-aop-operacao-autonoma-p0-1.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/RUNBOOK-aop-p0-2-runtime-health-remediation.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/actions-auto-operator.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/auto-public-runtime-evidence.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/ci-fast-deep-review.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/ci-lead-time-analytics.md",
+        "categories": [
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/ci-lead-time-kpi-contract.md",
+        "categories": [
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/ci-router.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/codex-local-online.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/codex-operational-audit-layer.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/delivery-burndown-snapshot.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/delivery-evidence-index.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/delivery-status-report.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/executive-predictive-stability-ci.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/executive-predictive-stability-layer.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/fly-governed-command-center.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/fly-runtime-p0.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/github-actions-history-lake.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/github-runtime-analytics.md",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/golden-release-operational-checklist.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/governed-operational-history-storage.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/governed-pr-automation.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/main-operational-health.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/main-operational-post-merge-health.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/main-post-merge-validation.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/main-smoke-ci.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/manual-gate-guardrail.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/monitorador-apis-python-ci.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/nginx-secure-profile.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/observability-correlation-report.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/operational-actions-center.md",
+        "categories": [
+          "runtime_health",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/operational-analytics-engine.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/operational-analytics-persistence-v1.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/operational-artifact-discovery-index.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/operational-artifact-schema-validation.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/operational-burndown-executive.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/operational-governance-dashboard.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/operational-governance-orchestrator.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/operational-health-dashboard.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/operational-history-snapshots.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/ops-dashboard.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/post-merge-operational-maturity-matrix.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/pr-auto-recovery-pipeline.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/pr-auto-recovery-replacement-plan.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/pr-auto-recovery-v2-assisted.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/pr-auto-recovery-v3-controlled.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/pr-auto-recovery-v4-controlled-dispatch.md",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/pr-ci-watch.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/pr-evidence-gate.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/pr-quality-review.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/pr145-conflict-resolution.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/product-intelligence-final-evidence-index.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/public-runtime-evidence-gate.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/public-runtime-smoke-test.md",
+        "categories": [
+          "runtime_health",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/rag-python-llamaindex-governado.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/repository-health-watchdog.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/reqsys-verificacao-real-antes-de-pronto.md",
+        "categories": [
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/runtime-correlation-analytics-foundation.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/runtime-dashboard-schema-v1.md",
+        "categories": [
+          "runtime_health",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/runtime-evidence-analytics.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/runtime-evidence-ingestion-contract.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/runtime-health-validator.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/runtime-operational-health.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/runtime-operational-observability-v1.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/runtime-predictive-analytics.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/runtime-public-access-readiness.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/runtime-public-json-contracts.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/workflow-auto-remediation.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/runbooks/workflow-command-center.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/schema-governance-gates.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/schema-registry.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/schema-runtime-enforcement.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/sdd-dashboard.html",
+        "categories": [
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/ADR_LINKS.md",
+        "categories": [
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/APPROVAL_GATE.md",
+        "categories": [
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/CHANGELOG.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/CHANGE_CONTROL.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/CI_EXPECTATIONS.md",
+        "categories": [
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/DATA_GOVERNANCE.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/DECISION_LOG.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/EXECUTION_SUMMARY.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/FINAL_PRE_PR_CHECK.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/IMPLEMENTATION_NOTES.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/INTEGRATION_CHECKLIST.md",
+        "categories": [
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/KNOWN_LIMITATIONS.md",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/MERGE_POLICY.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/NEXT_INCREMENT.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/PR_BODY.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/PR_READY_NOTE.md",
+        "categories": [
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/PULL_REQUEST_SUMMARY.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/README.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/RELEASE_NOTE.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/REQSYS_STATISTICS_TAB_SPEC.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/RISK_REGISTER.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/STATUS.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/TRACEABILITY_MATRIX.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/V2_IMPLEMENTATION.md",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/V2_RELEASE_NOTE.md",
+        "categories": [
+          "runtime_health",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/V2_TEST_PLAN.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/statistics/VALIDATION_REPORT.md",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/strategy/REQSYS_ATUALIZACAO_CONSOLIDADA_2026-06-26.md",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "dashboard_or_doc",
+        "path": "docs/varreduras/REQSYS_VARREDURA_PADRAO_OURO_2026-06-20.md",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/actions_auto_operator.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/auto_rerun_governed.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/ci_enterprise_guardrails.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/configurar_fly_auth_azure.py",
+        "categories": [
+          "runtime_health",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/executive_predictive_stability_layer.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/failure_pattern_engine.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/generate_ops_dashboard_data.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/github_actions_deep_diagnostic.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/github_actions_history_lake.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/governance/enterprise_runtime_governance_gates.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/observability_correlation_report.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/operational_analytics_engine.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/operational_center_html.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/operational_ci_intelligence.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/operational_drift_analyzer.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/operational_executive_dashboard.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/operational_governance_dashboard.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/operational_governance_gate.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/operational_governance_orchestrator.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/operational_history.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/operational_intelligence_hub.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/operational_risk_engine.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/pr_auto_recovery.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/pr_auto_recovery_replacement_plan.py",
+        "categories": [
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/pr_ci_watch.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/pr_quality_review.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/repository_health_watchdog.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/reqsys_operational_health.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/runtime_health_center.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/runtime_health_validator.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/validar-acessos-publicos.mjs",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/validar-pipeline-governanca.mjs",
+        "categories": [
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/validar_login_azure_operacional.py",
+        "categories": [
+          "runtime_health",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/validate_fly_enterprise_sync.py",
+        "categories": [
+          "runtime_health",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/validate_fly_runtime_config.py",
+        "categories": [
+          "runtime_health",
+          "readiness",
+          "burndown"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/validate_public_runtime.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/vault_setup.py",
+        "categories": [
+          "runtime_health"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/workflow_auto_remediation.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "script",
+        "path": "scripts/workflow_command_center.py",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness",
+          "completion"
+        ],
+        "status": "mapped",
+        "operational_risk": "low",
+        "confidence_level": "medium"
+      },
+      {
+        "source_type": "artifact",
+        "artifact_name": "examples",
+        "path": "artifacts/examples/controlled-draft-pr-plan.example.json",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "correlation_id": null,
+        "workflow_run_id": null,
+        "commit_sha": null,
+        "branch": null,
+        "pr": "129",
+        "status": "available",
+        "maturity_percent": null,
+        "operational_risk": "medium",
+        "confidence_level": "low"
+      },
+      {
+        "source_type": "artifact",
+        "artifact_name": "examples",
+        "path": "artifacts/examples/recovery-plan.example.json",
+        "categories": [
+          "delivery_evidence",
+          "completion"
+        ],
+        "correlation_id": null,
+        "workflow_run_id": null,
+        "commit_sha": null,
+        "branch": null,
+        "pr": "129",
+        "status": "available",
+        "maturity_percent": null,
+        "operational_risk": "medium",
+        "confidence_level": "low"
+      },
+      {
+        "source_type": "artifact",
+        "artifact_name": "public-access-validation",
+        "path": "artifacts/public-access-validation/public-access-validation.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "correlation_id": null,
+        "workflow_run_id": null,
+        "commit_sha": null,
+        "branch": null,
+        "pr": "323",
+        "status": "available",
+        "maturity_percent": null,
+        "operational_risk": "medium",
+        "confidence_level": "low"
+      },
+      {
+        "source_type": "artifact",
+        "artifact_name": "runtime-health-center",
+        "path": "artifacts/runtime-health-center/runtime-health-report.json",
+        "categories": [
+          "runtime_health",
+          "delivery_evidence",
+          "readiness"
+        ],
+        "correlation_id": null,
+        "workflow_run_id": null,
+        "commit_sha": null,
+        "branch": null,
+        "pr": "",
+        "status": "available",
+        "maturity_percent": 50,
+        "operational_risk": "high",
+        "confidence_level": "low"
+      }
+    ],
+    "guardrails": [
+      "report-only: nenhum runtime produtivo, autenticação, deploy Fly.io ou contrato existente é alterado",
+      "sem secrets: leitura local de metadados e artifacts versionáveis/gerados",
+      "compatível com artifacts existentes: campos ausentes permanecem null"
+    ]
+  },
   "runtime_sources": {
     "runtime_health_report_available": true,
-    "runtime_operational_evidence_graph_available": false
+    "runtime_operational_evidence_graph_available": false,
+    "public_runtime_validation_available": false,
+    "observability_correlation_report_available": true
   }
 }

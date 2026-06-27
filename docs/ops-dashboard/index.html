@@ -45,9 +45,9 @@
     .healthy { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
     .partial, .degraded { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
     .unavailable { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
-    .passed { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
-    .warning { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
-    .failed, .critical { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
+    .passed, .low { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
+    .warning, .medium { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
+    .failed, .critical, .high { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
     .unknown { background: rgba(148,163,184,.16); color: var(--muted); border: 1px solid rgba(148,163,184,.45); }
     section { margin-top: 20px; }
     table { width: 100%; border-collapse: collapse; margin-top: 12px; }
@@ -116,6 +116,22 @@
       </table>
     </section>
 
+
+    <section class="card">
+      <h2>Observability Correlation — report-only</h2>
+      <p class="small">Correlação local de runtime health, delivery evidence, readiness, completion e burndown. Esta seção é somente leitura e não altera gates existentes.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Fontes</div><div id="obs-sources" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Artifacts</div><div id="obs-artifacts" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Maturidade</div><div id="obs-maturity" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Risco / confiança</div><div id="obs-risk" class="small">-</div></div>
+      </div>
+      <details class="details">
+        <summary>Ver cobertura e amostra de correlações</summary>
+        <pre id="obs-details">{}</pre>
+      </details>
+    </section>
+
     <section class="card">
       <h2>Incident Timeline</h2>
       <p class="small">Eventos consolidados por workflow, PR e domínio. Use filtros locais; nenhum dado externo é acessado.</p>
@@ -140,7 +156,7 @@
   </main>
 
   <script>
-    const statusClass = (value) => ['passed','warning','failed','critical','unknown','healthy','partial','degraded','unavailable','attention'].includes(value) ? value : 'unknown';
+    const statusClass = (value) => ['passed','warning','failed','critical','unknown','healthy','partial','degraded','unavailable','attention','low','medium','high'].includes(value) ? value : 'unknown';
     const formatDate = (epoch) => epoch ? new Date(epoch * 1000).toLocaleString('pt-BR') : 'Não informado';
     const uniqueValues = (items, key) => [...new Set(items.map((item) => item[key]).filter(Boolean))].sort();
     const shortJson = (value) => JSON.stringify(value || {}, null, 2);
@@ -235,6 +251,22 @@
       });
 
       renderDomains(data.runtime_domain_drilldowns || []);
+      const obs = data.observability_correlation_report || {};
+      const obsSummary = obs.summary || {};
+      document.getElementById('obs-sources').textContent = obsSummary.mapped_sources ?? '-';
+      document.getElementById('obs-artifacts').textContent = obsSummary.mapped_artifacts ?? '-';
+      document.getElementById('obs-maturity').textContent = obsSummary.maturity_percent == null ? '-' : `${obsSummary.maturity_percent}%`;
+      document.getElementById('obs-risk').innerHTML = obs.summary
+        ? `<span class="status ${statusClass(obsSummary.operational_risk)}">${obsSummary.operational_risk}</span> / <span class="status ${statusClass(obsSummary.confidence_level)}">${obsSummary.confidence_level}</span>`
+        : 'Relatório não disponível';
+      document.getElementById('obs-details').textContent = shortJson({
+        report_mode: obs.report_mode,
+        scope: obs.scope,
+        category_coverage: obsSummary.category_coverage,
+        correlations_sample: (obs.correlations || []).slice(0, 10),
+        guardrails: obs.guardrails,
+      });
+
       const timelineEvents = data.incident_timeline || [];
       fillFilter('filter-severity', uniqueValues(timelineEvents, 'severity'));
       fillFilter('filter-domain', uniqueValues(timelineEvents, 'domain'));
