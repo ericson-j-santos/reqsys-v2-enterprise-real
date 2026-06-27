@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T19:02:00-03:00",
+  "safe_lanes": [
+    {"id": "docs", "status": "open", "max_parallel_prs": 3},
+    {"id": "artifacts", "status": "open", "max_parallel_prs": 3},
+    {"id": "dashboard_contracts", "status": "open", "max_parallel_prs": 2},
+    {"id": "runbooks", "status": "open", "max_parallel_prs": 2}
+  ],
+  "blocked_lanes": [
+    {"id": "backend_runtime", "reason": "runtime validator PRs open"},
+    {"id": "frontend_dashboard", "reason": "runtime dashboard PRs open"},
+    {"id": "github_workflows", "reason": "CI PRs open"},
+    {"id": "shared_contracts", "reason": "high conflict radius"}
+  ]
+}
