@@ -14,6 +14,7 @@ export const ROTAS_RESPONSIVAS = [
   { path: '/qualidade-ia', testId: 'route-qualidade-ia', titulo: 'Qualidade IA' },
   { path: '/recomendacoes-ia', testId: 'route-recomendacoes-ia', titulo: 'Recomendações IA' },
   { path: '/task-console', testId: 'route-task-console', titulo: 'Task Console' },
+  { path: '/agile-runtime', testId: 'route-agile-runtime', titulo: 'Agile Runtime' },
   { path: '/specs', testId: 'route-specs', titulo: 'Specs' },
   { path: '/hub-lowcode', testId: 'route-hub-lowcode', titulo: 'Hub Low-Code' },
   { path: '/painel-integracao', testId: 'route-painel-integracao', titulo: 'Painel de Integração' },

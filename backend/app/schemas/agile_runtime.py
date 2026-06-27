@@ -133,6 +133,38 @@ class AgileRuntimeResumo(BaseModel):
     ci_success_percentual: float
 
 
+AgileLaunchpadAmbiente = Literal['dev', 'test', 'homolog', 'prod']
+
+
+class AgileGithubLaunchpadLinks(BaseModel):
+    branch: str
+    criar_branch: str
+    novo_pr: str
+    actions: str
+    app_ambiente: str | None = None
+    repositorio: str
+    change_request: str | None = None
+    ci: str | None = None
+    deploy: str | None = None
+
+
+class AgileGithubLaunchpadOut(BaseModel):
+    work_item_id: int
+    work_item_codigo: str
+    requisito_codigo: str | None = None
+    ambiente: AgileLaunchpadAmbiente
+    ambiente_branch_inferido: str | None = None
+    repositorio: str
+    branch_trabalho: str
+    branch_base: str
+    branch_existe: bool | None = None
+    links: AgileGithubLaunchpadLinks
+    acoes_disponiveis: list[str]
+    somente_leitura: bool = False
+    mensagem_commit_sugerida: str
+    notas: list[str] = Field(default_factory=list)
+
+
 class AgileAIRoutingRecommendationOut(BaseModel):
     work_item_id: int
     work_item_codigo: str

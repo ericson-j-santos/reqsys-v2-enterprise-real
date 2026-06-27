@@ -16,8 +16,13 @@ def extrair_codigos_requisito(texto: str) -> list[str]:
     return list({m.upper() for m in _REQ_PATTERN.findall(texto or '')})
 
 
-def _inferir_ambiente(branch: str) -> str | None:
+def inferir_ambiente_branch(branch: str) -> str | None:
+    """Infere ambiente de deploy a partir do nome da branch (dev/staging/prod)."""
     return _BRANCH_AMBIENTES.get((branch or '').lower())
+
+
+def _inferir_ambiente(branch: str) -> str | None:
+    return inferir_ambiente_branch(branch)
 
 
 def processar_push_github(payload: dict[str, Any]) -> list[dict[str, Any]]:
