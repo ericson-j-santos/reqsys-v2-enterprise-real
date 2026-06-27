@@ -1,8 +1,20 @@
 # Índice Canônico — ReqSys
 
-Data de referência: 2026-06-26
+Data de referência: 2026-06-27
 
 Este índice consolida os documentos canônicos do ReqSys para orientar humanos, agentes, automações e futuras evoluções do repositório.
+
+## Hub Padrão Ouro Tier 1 (máximo ROI documentação viva)
+
+| Documento | Finalidade |
+| --- | --- |
+| [`docs/padrao-ouro/README.md`](padrao-ouro/README.md) | Hub central — infraestrutura de documentação operacional viva. |
+| [`docs/padrao-ouro/LIVING_ARCHITECTURE_INDEX.md`](padrao-ouro/LIVING_ARCHITECTURE_INDEX.md) | Mapa navegável de módulos, fluxos, ownership e dashboards. |
+| [`docs/padrao-ouro/ADR_INDEX.md`](padrao-ouro/ADR_INDEX.md) | Catálogo de decisões arquiteturais. |
+| [`docs/padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md`](padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md) | Grafo workflows → PRs → artifacts → métricas → dashboards. |
+| [`docs/padrao-ouro/CONTRACT_CATALOG.md`](padrao-ouro/CONTRACT_CATALOG.md) | Inventário de schemas, eventos, APIs e contratos. |
+| [`docs/padrao-ouro/ENGINEERING_PLAYBOOKS.md`](padrao-ouro/ENGINEERING_PLAYBOOKS.md) | Fluxos operacionais para incrementos, CI, merge e evidências. |
+| [`docs/padrao-ouro/living-architecture-index.json`](padrao-ouro/living-architecture-index.json) | Índice machine-readable para agentes/IA. |
 
 ## Documentos obrigatórios
 

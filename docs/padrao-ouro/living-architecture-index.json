@@ -1,0 +1,191 @@
+{
+  "schema_version": "1.0.0",
+  "updated_at": "2026-06-27T20:00:00Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "hub": "docs/padrao-ouro/README.md",
+  "canonical_traceability_map": "docs/traceability/living-architecture-map.json",
+  "governance": {
+    "owner": "ReqSys Architecture Governance",
+    "mode": "report_only",
+    "tier": 1,
+    "maintenance_policy": "atualizar a cada incremento transversal ou novo módulo/workflow"
+  },
+  "modules": {
+    "backend": [
+      {
+        "id": "api",
+        "path": "backend/app/api/",
+        "purpose": "Routers FastAPI — superfície HTTP (auth, requisitos, agile, dashboard, integrações, IA, governança).",
+        "ownership": "Backend Core",
+        "extension_points": ["novo router em api/ + include_router em main.py"],
+        "key_routes": ["auth.py", "requisitos.py", "agile_runtime.py", "dashboard.py", "monitoramento_operacional.py", "runtime_analytics.py"]
+      },
+      {
+        "id": "core",
+        "path": "backend/app/core/",
+        "purpose": "Infraestrutura transversal: config, security, correlation, telemetria, boot, métricas.",
+        "ownership": "Platform Engineering",
+        "extension_points": ["config.py", "correlation.py", "telemetry/"]
+      },
+      {
+        "id": "services",
+        "path": "backend/app/services/",
+        "purpose": "Lógica de negócio e integrações (GitHub, Redmine, Figma, RAG, IA, auditoria, RBAC).",
+        "ownership": "Backend Core",
+        "extension_points": ["novo service + injeção via router"]
+      },
+      {
+        "id": "models",
+        "path": "backend/app/models/",
+        "purpose": "Entidades SQLAlchemy ORM.",
+        "ownership": "Backend Core",
+        "extension_points": ["nova model + migration"]
+      },
+      {
+        "id": "schemas",
+        "path": "backend/app/schemas/",
+        "purpose": "DTOs Pydantic para validação de entrada/saída.",
+        "ownership": "Backend Core",
+        "extension_points": ["novo schema Pydantic"]
+      }
+    ],
+    "frontend": [
+      {
+        "id": "views",
+        "path": "frontend/src/views/",
+        "purpose": "Páginas SPA: login, dashboard, requisitos, pipeline, auditoria, IA, governança.",
+        "ownership": "Frontend Core",
+        "extension_points": ["nova view + rota em router/"]
+      },
+      {
+        "id": "router",
+        "path": "frontend/src/router/",
+        "purpose": "Vue Router com guards de auth/RBAC.",
+        "ownership": "Frontend Core",
+        "extension_points": ["meta.recurso para RBAC"]
+      },
+      {
+        "id": "services",
+        "path": "frontend/src/services/",
+        "purpose": "Cliente HTTP e serviços de domínio.",
+        "ownership": "Frontend Core",
+        "extension_points": ["api.js — export nomeado { api }"]
+      },
+      {
+        "id": "stores",
+        "path": "frontend/src/stores/",
+        "purpose": "Estado Pinia (auth, requisitos).",
+        "ownership": "Frontend Core",
+        "extension_points": ["nova store Pinia"]
+      }
+    ],
+    "automation": [
+      {
+        "id": "workflows",
+        "path": ".github/workflows/",
+        "purpose": "155 workflows: CI, governança PR, operacional, product intelligence, trilhas.",
+        "ownership": "DevOps / Platform",
+        "extension_points": ["novo .yml + registro em living-architecture-map.json"]
+      },
+      {
+        "id": "scripts",
+        "path": "scripts/",
+        "purpose": "Automação local, validação, coordenador, gates.",
+        "ownership": "Platform Engineering",
+        "extension_points": ["scripts/agent_increment_gate.py", "scripts/coordenador_status_consolidator.py"]
+      }
+    ]
+  },
+  "pipelines": [
+    {
+      "id": "ci-main",
+      "name": "CI — ReqSys v2 Enterprise",
+      "path": ".github/workflows/ci.yml",
+      "gates": ["ruff", "pytest", "npm build", "npm audit", "playwright responsivo"],
+      "evidence": "ci-evidence"
+    },
+    {
+      "id": "agent-increment",
+      "name": "Agent Increment Gate",
+      "path": "scripts/agent_increment_gate.py",
+      "gates": ["new_front_allowed", "no_critical_gaps", "no_duplicate_prs"],
+      "evidence": "agent-increment-gate-evidence"
+    },
+    {
+      "id": "living-architecture",
+      "name": "Living Architecture Traceability",
+      "path": ".github/workflows/living-architecture-traceability.yml",
+      "gates": ["json_loadable", "internal_paths_exist", "artifact_contracts_exist"],
+      "evidence": "living-architecture-traceability-report"
+    },
+    {
+      "id": "runtime-evidence-graph",
+      "name": "Runtime Operational Evidence Graph",
+      "path": ".github/workflows/runtime-operational-evidence-graph.yml",
+      "gates": ["timeline_generated", "graph_json_valid"],
+      "evidence": "reports/github-runtime-analytics/runtime-operational-evidence-graph.json"
+    },
+    {
+      "id": "trilhas-padrao-ouro",
+      "name": "Trilhas — Padrão Ouro Consolidado",
+      "path": ".github/workflows/trilhas-padrao-ouro.yml",
+      "gates": ["trilha-a", "trilha-b", "trilha-c", "trilha-d", "trilha-e"],
+      "evidence": "trilhas-padrao-ouro-evidence"
+    }
+  ],
+  "events": [
+    {
+      "id": "product-intelligence-event",
+      "schema": "schemas/product-intelligence/product-intelligence-event.schema.json",
+      "domain": "product-intelligence",
+      "producers": ["product-intelligence-* workflows"],
+      "consumers": ["evidence-navigation", "executive-control-tower"]
+    },
+    {
+      "id": "unified-operational-event",
+      "schema": "docs/contracts/operational-json-artifact.schema.json",
+      "domain": "operations",
+      "producers": ["unified-operational-event-bus.yml"],
+      "consumers": ["operational-intelligence-hub", "operational-governance-orchestrator"]
+    },
+    {
+      "id": "coordenador-status",
+      "schema": "docs/contracts/coordenador-status.schema.json",
+      "domain": "governance",
+      "producers": ["coordenador-status-consolidator.yml"],
+      "consumers": ["agent-increment-gate", "AGENTS.md"]
+    }
+  ],
+  "dependencies": [
+    { "from": "frontend", "to": "backend", "type": "http", "contract": "frontend/vite.config.js proxy /api → :8000" },
+    { "from": "backend", "to": "sqlite", "type": "database", "contract": "DATABASE_URL=sqlite:///./reqsys.db" },
+    { "from": "workflows", "to": "docs/contracts", "type": "schema-validation", "contract": "operational-artifact-schema-validation.yml" },
+    { "from": "agents", "to": "living-architecture-index.json", "type": "context", "contract": "docs/padrao-ouro/living-architecture-index.json" },
+    { "from": "ci", "to": "evidence-graph", "type": "analytics", "contract": "runtime-operational-evidence-graph.yml" }
+  ],
+  "dashboards": [
+    { "id": "operational-command-center", "path": "docs/dashboard/operational-command-center.md" },
+    { "id": "operational-evidence-hub", "path": "docs/dashboard/operational-evidence-hub.html" },
+    { "id": "ops-dashboard", "path": "docs/ops-dashboard/index.html" },
+    { "id": "trilhas-hub", "path": "docs/architecture/trilhas/index.html" },
+    { "id": "trilha-e-hub", "path": "docs/architecture/trilha-e/index.html" },
+    { "id": "live-operational-dashboard", "path": "docs/dashboard/live-operational-dashboard.dynamic.html" }
+  ],
+  "ownership_matrix": [
+    { "area": "Backend API", "owner": "Backend Core", "adr": "ADR-0001" },
+    { "area": "Segurança / JWT / CORS", "owner": "Security", "adr": "ADR-0002" },
+    { "area": "CI/CD", "owner": "DevOps", "adr": "ADR-0004" },
+    { "area": "Observabilidade", "owner": "Platform Engineering", "adr": "ADR-0005" },
+    { "area": "Arquitetura Viva", "owner": "Architecture Governance", "adr": "ADR-035" },
+    { "area": "Trilhas Padrão Ouro", "owner": "Architecture Governance", "adr": "ADR-040" },
+    { "area": "Product Intelligence", "owner": "Product Intelligence", "adr": "ADR-033" },
+    { "area": "Governança PR/Agentes", "owner": "Platform Engineering", "adr": "ADR-030" }
+  ],
+  "tier1_docs": {
+    "living_architecture_index": "docs/padrao-ouro/LIVING_ARCHITECTURE_INDEX.md",
+    "adr_index": "docs/padrao-ouro/ADR_INDEX.md",
+    "runtime_evidence_graph": "docs/padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md",
+    "contract_catalog": "docs/padrao-ouro/CONTRACT_CATALOG.md",
+    "engineering_playbooks": "docs/padrao-ouro/ENGINEERING_PLAYBOOKS.md"
+  }
+}
