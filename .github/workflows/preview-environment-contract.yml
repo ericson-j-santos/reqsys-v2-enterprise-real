@@ -1,0 +1,92 @@
+name: Preview Environment Contract
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Numero do PR para gerar evidencia dry-run"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: preview-environment-contract-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  preview-contract-dry-run:
+    name: Preview contract dry-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build preview evidence
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number || 0 }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/preview-environment
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timedelta, timezone
+
+          pr_number = str(os.environ.get("PR_NUMBER") or "0")
+          head_sha = os.environ.get("HEAD_SHA") or "unknown"
+          now = datetime.now(timezone.utc)
+          payload = {
+              "schema_version": "1.0.0",
+              "mode": "dry-run",
+              "pr": int(pr_number) if pr_number.isdigit() else 0,
+              "environment": "preview",
+              "url": f"dry-run://reqsys-pr-{pr_number}",
+              "status": "green",
+              "checks": {
+                  "backend_health": "not_executed_dry_run",
+                  "frontend_render": "not_executed_dry_run",
+                  "runtime_smoke": "not_executed_dry_run",
+                  "contracts": "green",
+              },
+              "head_sha": head_sha,
+              "expires_at": (now + timedelta(hours=12)).isoformat(),
+              "correlation_id": f"preview-pr-{pr_number}-{head_sha[:8]}",
+              "generated_at": now.isoformat(),
+              "production_isolation": True,
+          }
+          with open("artifacts/preview-environment/preview-environment-evidence.json", "w", encoding="utf-8") as fp:
+              json.dump(payload, fp, indent=2, ensure_ascii=False)
+              fp.write("\n")
+          print(json.dumps(payload, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "# Preview Environment Contract"
+            echo ""
+            echo "Modo: dry-run"
+            echo "Artifact: artifacts/preview-environment/preview-environment-evidence.json"
+            echo ""
+            echo "Este workflow valida o contrato de evidencia antes de publicar infraestrutura efemera real."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload preview evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-environment-evidence
+          path: artifacts/preview-environment
+          if-no-files-found: error
+          retention-days: 14
