@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T20:08:00-03:00",
+  "domain": "parallel_pr_governance",
+  "metric_group": "green_rate_tracker",
+  "tracked_batches": [
+    {"batch": "parallel_pr_governance_v1", "prs": [412, 413, 414, 415, 416, 417], "merged": 6, "failed": 0, "conflicts": 0},
+    {"batch": "parallel_pr_governance_v2", "prs": [429, 430, 431, 432, 434, 435], "merged": 6, "failed": 0, "conflicts": 0}
+  ],
+  "computed_snapshot": {
+    "total_prs": 12,
+    "merged_prs": 12,
+    "failed_prs": 0,
+    "conflict_count": 0,
+    "green_rate_percent": 100
+  },
+  "target_green_rate_percent": 95,
+  "status": "above_target"
+}
