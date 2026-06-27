@@ -140,14 +140,16 @@ def criar_indicadores_base() -> list[IndicadorMaturidade]:
         ),
         IndicadorMaturidade(
             pilar='Observabilidade',
-            atual_percentual=72,
+            atual_percentual=88,
             alvo_percentual=95,
-            nivel_atual_evidenciado='intermediario',
+            nivel_atual_evidenciado='intermediario_avancado',
             tendencia_evidenciada='expansao_estruturada',
             impacto_operacional='alta',
-            evidencias=['Middleware de correlation_id, métricas por feature e analytics operacional ativos.'],
-            gaps=['Alertas inteligentes pendentes.', 'Dashboards unificados externos pendentes.'],
-            proximas_acoes=['Ativar OTEL_ENABLED em ambientes com coletor.', 'Conectar telemetria ao OCC.'],
+            evidencias=[
+                'Trilha B — Observabilidade Enterprise em padrão ouro: middleware, métricas por feature e analytics operacional.',
+            ],
+            gaps=['OTEL end-to-end em produção depende de coletor externo.', 'Alertas inteligentes pendentes.'],
+            proximas_acoes=['Ativar OTEL_ENABLED em ambientes com coletor.', 'Conectar alertas ao OCC.'],
         ),
         IndicadorMaturidade(
             pilar='Segurança Enterprise',

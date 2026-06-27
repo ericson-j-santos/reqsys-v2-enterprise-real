@@ -1,5 +1,7 @@
 # Observabilidade — Padrão Enterprise
 
+> **Padrão ouro canônico:** Trilha B — ver `docs/observabilidade/TRILHA_B_PADRAO_OURO.md` e `ADR-0039`.
+
 ## Objetivo
 
 Padronizar logs, métricas, tracing, auditoria e analytics operacional no ReqSys.

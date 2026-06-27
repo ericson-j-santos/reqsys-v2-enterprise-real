@@ -25,6 +25,18 @@ Nenhuma alteração deve avançar para produção sem evidência mínima de requ
 9. Ambientes `dev`, `homologação` e `produção` devem ser explícitos.
 10. Mudanças devem ser pequenas, revisáveis e testáveis.
 
+## Observabilidade — Trilha B (padrão ouro)
+
+Toda evolução que toque runtime, APIs, integrações ou analytics deve seguir a **Trilha B — Observabilidade Enterprise**:
+
+- OpenTelemetry (opt-in);
+- tracing distribuído;
+- `correlation_id` ponta a ponta;
+- analytics operacional;
+- métricas por feature.
+
+Documento canônico: `docs/observabilidade/TRILHA_B_PADRAO_OURO.md`.
+
 ## Gates bloqueantes de produção
 
 Produção deve ser bloqueada quando existir qualquer condição abaixo:

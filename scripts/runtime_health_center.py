@@ -351,10 +351,38 @@ def live_analytics_status(ingested_artifacts: dict[str, Any]) -> str:
     return "missing"
 
 
+def trilha_b_observability_status(root: Path) -> dict[str, Any]:
+    """Avalia presença dos artefatos canônicos da Trilha B (padrão ouro)."""
+    required = [
+        Path("backend/app/middleware/observability.py"),
+        Path("backend/app/core/otel.py"),
+        Path("backend/app/core/feature_metrics.py"),
+        Path("backend/app/core/observability_gold_standard.py"),
+        Path("docs/observabilidade/TRILHA_B_PADRAO_OURO.md"),
+        Path("backend/tests/test_observability_enterprise.py"),
+    ]
+    present = sum(1 for rel in required if (root / rel).is_file())
+    ratio = present / len(required)
+    if ratio >= 1.0:
+        status = "passed"
+    elif ratio >= 0.7:
+        status = "partial"
+    else:
+        status = "missing"
+    return {
+        "status": status,
+        "score": round(ratio * 100),
+        "artifacts_present": present,
+        "artifacts_total": len(required),
+        "canonical_doc": "docs/observabilidade/TRILHA_B_PADRAO_OURO.md",
+    }
+
+
 def build_gold_standard_depth(
     domains: dict[str, dict[str, Any]],
     environment_drift: dict[str, Any],
     ingested_artifacts: dict[str, Any],
+    trilha_b: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Map existing signals to the six gold-standard deepening axes.
 
@@ -370,10 +398,14 @@ def build_gold_standard_depth(
             "operator_action": "Priorizar estabilizacao dos sinais runtime antes de ampliar novas frentes.",
         },
         "observability": {
-            "status": ingested_artifacts["status"],
-            "score": STATUS_SCORE[ingested_artifacts["status"]],
-            "evidence": [artifact["id"] for artifact in ingested_artifacts["artifacts"] if artifact["available"]],
-            "operator_action": "Publicar artifacts faltantes para reduzir diagnostico manual e manter trilha auditavel.",
+            "status": trilha_b["status"] if trilha_b and trilha_b["status"] != "missing" else ingested_artifacts["status"],
+            "score": max(trilha_b["score"] if trilha_b else 0, STATUS_SCORE[ingested_artifacts["status"]]),
+            "evidence": (
+                ["trilha_b_gold_standard", trilha_b["canonical_doc"]]
+                if trilha_b
+                else [artifact["id"] for artifact in ingested_artifacts["artifacts"] if artifact["available"]]
+            ),
+            "operator_action": "Manter Trilha B em padrão ouro antes de criar novas frentes de observabilidade.",
         },
         "operational_ux": {
             "status": domains["governance"]["status"],
@@ -466,7 +498,8 @@ def build_report(root: Path) -> dict[str, Any]:
         "Environment Drift Detector": domains["environment"]["status"],
         "Remediation Executor governado": domains["remediation"]["status"],
     }
-    gold_standard_depth = build_gold_standard_depth(domains, environment_drift, ingested_artifacts)
+    trilha_b = trilha_b_observability_status(root)
+    gold_standard_depth = build_gold_standard_depth(domains, environment_drift, ingested_artifacts, trilha_b)
     return {
         "schema_version": "1.1.0",
         "report_type": "runtime_health_center",
@@ -482,6 +515,7 @@ def build_report(root: Path) -> dict[str, Any]:
         "public_access_validation": public_access,
         "gold_standard_status": gold_standard,
         "gold_standard_depth": gold_standard_depth,
+        "trilha_b_gold_standard": trilha_b,
         "base_maturity_percent": base_maturity,
         "maturity_percent": maturity,
         "operational_risk": risk_with_drift(maturity, warnings, missing, environment_drift["drift_level"]),

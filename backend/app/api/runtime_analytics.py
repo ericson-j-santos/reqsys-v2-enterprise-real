@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.feature_metrics import REGISTRY
+from app.core.observability_gold_standard import avaliar_trilha_b
 from app.core.otel import otel_ativo
 from app.core.runtime_analytics import (
     DurableRuntimeAnalyticsStore,
@@ -94,8 +95,18 @@ def obter_runtime_analytics(
             'correlation_propagation': 'x-correlation-id',
         },
         'feature_metrics': REGISTRY.operational_analytics(),
+        'trilha_b_gold_standard': avaliar_trilha_b(),
     }
     return ok(analytics, correlation_id)
+
+
+@router.get('/api/runtime/observability/gold-standard')
+def obter_trilha_b_gold_standard(
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+    x_request_id: str | None = Header(default=None, alias='X-Request-ID'),
+):
+    correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
+    return ok(avaliar_trilha_b(), correlation_id)
 
 
 @router.get('/api/runtime/evidence/artifacts')

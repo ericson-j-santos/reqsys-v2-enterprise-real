@@ -76,3 +76,37 @@ def test_opentelemetry_desabilitado_por_padrao():
     assert otel_ativo() is False
     configurar_opentelemetry(app)
     assert otel_ativo() is False
+
+
+def test_avaliar_trilha_b_retorna_padrao_ouro():
+    from app.core.observability_gold_standard import avaliar_trilha_b
+
+    resultado = avaliar_trilha_b()
+    assert resultado['trilha'] == 'B'
+    assert resultado['padrao_ouro'] is True
+    assert resultado['status'] in {'passed', 'partial'}
+    assert resultado['score'] >= 75
+    assert len(resultado['pillars']) == 5
+
+
+def test_endpoint_gold_standard_trilha_b():
+    client = TestClient(app)
+    correlation_id = 'corr-gold-standard-trilha-b'
+
+    res = client.get('/api/runtime/observability/gold-standard', headers={'X-Correlation-ID': correlation_id})
+    body = res.json()
+
+    assert res.status_code == 200
+    assert body['meta']['correlation_id'] == correlation_id
+    assert body['data']['trilha'] == 'B'
+    assert body['data']['padrao_ouro'] is True
+    assert res.headers.get('X-Correlation-Id') == correlation_id
+
+
+def test_runtime_analytics_inclui_trilha_b_gold_standard():
+    client = TestClient(app)
+    res = client.get('/api/runtime/analytics')
+    telemetry = res.json()['data']['operational_telemetry']
+
+    assert 'trilha_b_gold_standard' in telemetry
+    assert telemetry['trilha_b_gold_standard']['padrao_ouro'] is True

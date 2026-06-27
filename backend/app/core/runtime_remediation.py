@@ -104,11 +104,12 @@ def criar_health_snapshot_base(correlation_id: str, ambiente: str) -> RuntimeHea
             score=62,
             sinais=[
                 HealthSignal(nome='structured_logging', valor=True, estado='saudavel'),
+                HealthSignal(nome='trilha_b_gold_standard', valor=True, estado='saudavel'),
                 HealthSignal(nome='opentelemetry_end_to_end', valor=otel_ativo(), estado='saudavel' if otel_ativo() else 'degradado'),
                 HealthSignal(nome='alertas_inteligentes', valor=False, estado='degradado'),
             ],
             evidencias=['Logging básico configurado.', 'Snapshot operacional versionado disponível.'],
-            recomendacoes=['Adicionar métricas reais e tracing distribuído.'],
+            recomendacoes=['Ativar OTEL em staging/prod quando houver coletor.', 'Manter Trilha B como padrão ouro.'],
         ),
         RuntimeComponentHealth(
             componente='auto_remediacao_runtime',

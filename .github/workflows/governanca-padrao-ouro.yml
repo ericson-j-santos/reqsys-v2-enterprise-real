@@ -30,6 +30,8 @@ jobs:
           arquivos_obrigatorios=(
             "docs/governanca/PADRAO_OURO_ENTERPRISE.md"
             "docs/ADR/ADR-0001-padrao-ouro-enterprise.md"
+            "docs/observabilidade/TRILHA_B_PADRAO_OURO.md"
+            "docs/adr/ADR-0039-trilha-b-observabilidade-padrao-ouro.md"
             ".github/PULL_REQUEST_TEMPLATE.md"
           )
 
@@ -55,6 +57,7 @@ jobs:
             "Schema-Driven UI"
             "IA corporativa auditável"
             "Gates bloqueantes"
+            "Trilha B"
           )
 
           for termo in "${termos[@]}"; do

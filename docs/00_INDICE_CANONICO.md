@@ -14,6 +14,8 @@ Este índice consolida os documentos canônicos do ReqSys para orientar humanos,
 | `docs/adr/ADR-0003-ambientes-dev-hml-prod.md` | Separação e governança de ambientes. |
 | `docs/adr/ADR-0004-ci-cd-qualidade.md` | CI/CD, testes, quality gates e política de merge. |
 | `docs/adr/ADR-0005-observabilidade-auditoria.md` | Observabilidade, logs, auditoria e correlação. |
+| `docs/observabilidade/TRILHA_B_PADRAO_OURO.md` | Padrão ouro canônico — Trilha B Observabilidade Enterprise. |
+| `docs/adr/ADR-0039-trilha-b-observabilidade-padrao-ouro.md` | ADR da Trilha B como padrão ouro de observabilidade. |
 | `docs/adr/ADR-0006-analytics-drilldown-schema-driven-ui.md` | Analíticos, drill-down e UI orientada a schema. |
 | `docs/adr/ADR-0021-coderabbit-fast-review-governance.md` | Governança de revisão IA/CodeRabbit com fast path, PRs pequenos e deep review condicional. |
 | `docs/governance/CODERABBIT_FAST_REVIEW_GUARDRAILS.md` | Guardrails operacionais para reduzir tempo de CodeRabbit sem reduzir governança. |

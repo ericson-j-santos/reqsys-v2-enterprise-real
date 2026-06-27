@@ -10,6 +10,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ### Adicionado
 
+- **Trilha B — Observabilidade Enterprise (padrão ouro)**: middleware global, OpenTelemetry opt-in, métricas por feature, analytics operacional, validador `avaliar_trilha_b()` e endpoint `/api/runtime/observability/gold-standard`.
+- Documentação canônica em `docs/observabilidade/TRILHA_B_PADRAO_OURO.md` e `docs/adr/ADR-0039-trilha-b-observabilidade-padrao-ouro.md`.
+
 - Operational Evidence Hub em `docs/dashboard/operational-evidence-hub.html` consolidando delivery readiness, completion, finalization, maturity snapshot, observability correlation, artifact contract validation, dashboard regression validation e living architecture traceability com cards executivos, drill-down navegável, semáforo, confidence level, operational risk e fallback governado para artifacts ausentes.
 - Runbook `docs/runbooks/operational-evidence-hub.md` e atualização dos índices de rastreabilidade (`living-architecture-map.json`, `command-center-evidence-index.md`, `command-center-navigation-map.md`, `operational-command-center.md`).
 - Validação estática ampliada em `scripts/validate-dashboard-regression.mjs` para o Evidence Hub (cards, fontes JSON, drill-down, fallback e indicadores de governança).
