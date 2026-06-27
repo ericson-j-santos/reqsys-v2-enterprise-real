@@ -1,0 +1,70 @@
+name: Extended Operational Contract Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/extended-operational-contract-validation.yml'
+      - 'docs/contracts/*.schema.json'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/extended-operational-contract-validation.yml'
+      - 'docs/contracts/*.schema.json'
+
+concurrency:
+  group: extended-operational-contract-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-extended-contracts:
+    name: Validate extended operational contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate contract catalog
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          contracts = [
+              'docs/contracts/operational-maturity-score.schema.json',
+              'docs/contracts/operational-artifact-discovery-index.schema.json',
+              'docs/contracts/release-readiness.schema.json',
+          ]
+          report = []
+          for path_text in contracts:
+              path = Path(path_text)
+              if not path.exists():
+                  raise FileNotFoundError(path_text)
+              schema = json.loads(path.read_text(encoding='utf-8'))
+              required = schema.get('required', [])
+              if not required:
+                  raise AssertionError(f'{path_text} must define required keys')
+              for key in ('$schema', '$id', 'title', 'type', 'properties'):
+                  if key not in schema:
+                      raise AssertionError(f'{path_text} missing {key}')
+              if schema.get('type') != 'object':
+                  raise AssertionError(f'{path_text} must be object schema')
+              report.append({'contract': path_text, 'status': 'passed', 'required_keys': len(required)})
+
+          Path('audit/extended-contract-validation').mkdir(parents=True, exist_ok=True)
+          Path('audit/extended-contract-validation/extended-operational-contract-validation.json').write_text(json.dumps({'schema_version': '1.0.0', 'status': 'passed', 'contracts': report}, indent=2), encoding='utf-8')
+          print(json.dumps(report, indent=2))
+          PY
+
+      - name: Upload extended contract validation artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: extended-operational-contract-validation-${{ github.run_id }}
+          path: audit/extended-contract-validation/
+          if-no-files-found: error
+          retention-days: 30
