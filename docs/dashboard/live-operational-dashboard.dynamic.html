@@ -36,6 +36,7 @@
     <section><h2>Predições operacionais</h2><table><thead><tr><th>Predição</th><th>Recomendação</th><th>Risco</th></tr></thead><tbody id="predictions"></tbody></table></section>
     <section><h2>Maturidade operacional</h2><table><thead><tr><th>Dimensão</th><th>Atual</th><th>Alvo</th><th>Gap</th><th>Status</th></tr></thead><tbody id="maturity"></tbody></table></section>
     <section><h2>Artifacts catalogados</h2><table><thead><tr><th>Artifact</th><th>Workflow</th><th>Consumer</th><th>Risco</th></tr></thead><tbody id="artifacts"></tbody></table></section>
+    <section><h2>Checks do command center</h2><table><thead><tr><th>Check</th><th>Status</th><th>Score/Cobertura</th></tr></thead><tbody id="commandChecks"></tbody></table></section>
     <section><h2>Fontes de dados</h2><table><thead><tr><th>Fonte</th><th>Status</th><th>Observação</th></tr></thead><tbody id="sources"></tbody></table></section>
   </main>
   <script>
@@ -45,7 +46,9 @@
       { key: 'predictive', label: 'Runtime Predictive Analytics', href: '../audit/predictive/runtime-predictive-analytics.json' },
       { key: 'maturity', label: 'Operational Maturity Score', href: '../audit/maturity/operational-maturity-score.json' },
       { key: 'discovery', label: 'Operational Artifact Discovery Index', href: '../audit/artifact-discovery/operational-artifact-discovery-index.json' },
-      { key: 'release', label: 'Golden Release Readiness', href: '../audit/release-readiness/golden-release-readiness.json' }
+      { key: 'release', label: 'Golden Release Readiness', href: '../audit/release-readiness/golden-release-readiness.json' },
+      { key: 'commandCenter', label: 'Command Center Readiness', href: '../audit/command-center/command-center-readiness.json' },
+      { key: 'extendedContracts', label: 'Extended Operational Contract Validation', href: '../audit/extended-contract-validation/extended-operational-contract-validation.json' }
     ];
 
     const fallback = {
@@ -54,7 +57,9 @@
       predictive: { risk_score: 0, risk_level: 'unknown', predictions: ['predictive_artifact_unavailable'], recommendations: ['execute_runtime_predictive_analytics_workflow'] },
       maturity: { average_percent: 0, average_gap_pp: 0, risk: 'unknown', dimensions: [] },
       discovery: { artifact_count: 0, schema_coverage_percent: 0, dashboard_consumer_coverage_percent: 0, artifacts: [] },
-      release: { score_percent: 0, readiness: 'unknown', risk: 'unknown', checks: [] }
+      release: { score_percent: 0, readiness: 'unknown', risk: 'unknown', checks: [] },
+      commandCenter: { score_percent: 0, status: 'unknown', source_coverage_percent: 0, checks: [] },
+      extendedContracts: { status: 'unknown', contracts: [] }
     };
 
     async function loadJson(source) {
@@ -69,7 +74,7 @@
 
     function secondsToMinutes(value) { return Math.round((Number(value || 0) / 60) * 10) / 10; }
     function badge(status) {
-      if (status === 'passed' || status === 'low' || status === 'medium_low' || status === 'ready_with_observation' || status === 'consolidado') return '<span class="badge green">verde</span>';
+      if (status === 'passed' || status === true || status === 'low' || status === 'medium_low' || status === 'ready_with_observation' || status === 'consolidado') return '<span class="badge green">verde</span>';
       if (status === 'warning' || status === 'unknown' || status === 'medium' || status === 'em_consolidacao') return '<span class="badge yellow">atenção</span>';
       return '<span class="badge red">risco</span>';
     }
@@ -95,12 +100,16 @@
       const maturity = loaded.maturity.data;
       const discovery = loaded.discovery.data;
       const release = loaded.release.data;
+      const commandCenter = loaded.commandCenter.data;
+      const extendedContracts = loaded.extendedContracts.data;
       document.getElementById('cards').innerHTML = [
         card('Success rate', lead.success_rate_percent || 0, '%', (lead.success_rate_percent || 0) >= 95 ? 'low' : 'medium'),
         card('P95 lead time', secondsToMinutes(lead.p95_seconds), 'min', (lead.p95_seconds || 0) < 900 ? 'low' : 'medium'),
         card('Predictive risk score', predictive.risk_score || 0, '/100', predictive.risk_level),
         card('Maturity score', maturity.average_percent || 0, '%', maturity.risk),
         card('Release readiness', release.score_percent || 0, '%', release.risk),
+        card('Command center', commandCenter.score_percent || 0, '%', commandCenter.status),
+        card('Contracts validation', extendedContracts.status || 'unknown', '', extendedContracts.status),
         card('Artifacts catalogados', discovery.artifact_count || 0, '', 'low'),
         card('Schema coverage', discovery.schema_coverage_percent || 0, '%', (discovery.schema_coverage_percent || 0) >= 60 ? 'low' : 'medium'),
         card('Baseline incidente', hist.baseline?.incident_lead_time_minutes || 143, 'min', 'medium_low')
@@ -110,6 +119,7 @@
       document.getElementById('predictions').innerHTML = (predictive.predictions || []).map((item, index) => `<tr><td>${item}</td><td>${recommendations[index] || recommendations[0] || 'monitorar'}</td><td>${badge(predictive.risk_level)}</td></tr>`).join('') || '<tr><td colspan="3">Sem predições carregadas.</td></tr>';
       document.getElementById('maturity').innerHTML = (maturity.dimensions || []).map(item => `<tr><td>${item.name}</td><td>${item.current_percent}%</td><td>${item.target_percent}%</td><td>${item.gap_pp} p.p.</td><td>${badge(item.status)}</td></tr>`).join('') || '<tr><td colspan="5">Sem score de maturidade carregado.</td></tr>';
       document.getElementById('artifacts').innerHTML = (discovery.artifacts || []).map(item => `<tr><td>${item.name}</td><td>${item.workflow}</td><td><code>${item.consumer}</code></td><td>${badge(item.risk)}</td></tr>`).join('') || '<tr><td colspan="4">Sem índice de artifacts carregado.</td></tr>';
+      document.getElementById('commandChecks').innerHTML = (commandCenter.checks || []).map(item => `<tr><td>${item.name}</td><td>${badge(item.passed)}</td><td>${item.coverage_percent || item.score || '-'}</td></tr>`).join('') || '<tr><td colspan="3">Sem readiness do command center carregado.</td></tr>';
       document.getElementById('sources').innerHTML = statuses.join('');
     }
     render();
