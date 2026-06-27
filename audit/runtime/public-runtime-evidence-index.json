@@ -1,11 +1,11 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "contract": "public-runtime-evidence-index",
-  "generated_at": "2026-06-27T16:56:21.915174+00:00",
+  "generated_at": "2026-06-27T17:04:56.958349+00:00",
   "repository": "reqsys-v2-enterprise-real",
   "run_id": "local-baseline",
   "event_name": "local",
-  "sha": "4ed9c9416f4ff6dc5f244eaa1035ff3100c445c5",
+  "sha": "ce8b49523d69eac7b2c89b3daf9705b9d62e813c",
   "workflow": "public-runtime-evidence",
   "strict_gate_passed": false,
   "source_artifact": "public-runtime-evidence",
@@ -28,6 +28,23 @@
       "/api/runtime/liveness: 404 HTTP Error 404: Not Found"
     ]
   },
+  "operational_notes": [
+    {
+      "id": "fly_runtime_deploy_lag",
+      "severity": "blocker",
+      "scope": "fly_runtime_deploy",
+      "wire_scope": false,
+      "message": "Os 404 nos endpoints strict do Fly indicam deploy anterior ao Runtime Operational Observability v1 — bloqueio evidenciado, fora do escopo wire-only (sem deploy). Corrigir exige incremento separado via ReqSys Fly Runtime P0 (workflow_dispatch deploy=true) antes de declarar produção healthy.",
+      "affected_endpoints": [
+        "/api/runtime/health",
+        "/api/runtime/readiness",
+        "/api/runtime/liveness"
+      ],
+      "next_increment": "fly-runtime-p0-deploy",
+      "blocks_increment": "evidence-automation-observability-e2e",
+      "reference": "docs/runbooks/public-runtime-smoke-test.md"
+    }
+  ],
   "consumers": [
     "docs/ops-dashboard/index.html",
     "scripts/generate_ops_dashboard_data.py",

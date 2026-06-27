@@ -14,11 +14,73 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+RUNTIME_STRICT_ENDPOINTS = ("/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness")
+FLY_DEPLOY_LAG_NOTE = (
+    "Os 404 nos endpoints strict do Fly indicam deploy anterior ao Runtime Operational "
+    "Observability v1 — bloqueio evidenciado, fora do escopo wire-only (sem deploy). "
+    "Corrigir exige incremento separado via ReqSys Fly Runtime P0 "
+    "(workflow_dispatch deploy=true) antes de declarar produção healthy."
+)
+
 
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _results_by_endpoint(validation: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        result.get("endpoint", ""): result
+        for result in validation.get("results", [])
+        if isinstance(result, dict) and result.get("endpoint")
+    }
+
+
+def infer_operational_notes(
+    validation: dict[str, Any],
+    readiness: dict[str, Any],
+    *,
+    strict_gate_passed: bool,
+) -> list[dict[str, Any]]:
+    readiness = readiness or validation.get("readiness") or {}
+    blocking = readiness.get("blocking_issues") or []
+    by_endpoint = _results_by_endpoint(validation)
+    health_ok = bool(by_endpoint.get("/health", {}).get("ok"))
+    runtime_404s = [
+        endpoint
+        for endpoint in RUNTIME_STRICT_ENDPOINTS
+        if by_endpoint.get(endpoint, {}).get("status_code") == 404
+    ]
+    has_runtime_404_blocking = any("404" in issue and "/api/runtime/" in issue for issue in blocking)
+
+    if health_ok and runtime_404s and has_runtime_404_blocking:
+        return [
+            {
+                "id": "fly_runtime_deploy_lag",
+                "severity": "blocker",
+                "scope": "fly_runtime_deploy",
+                "wire_scope": False,
+                "message": FLY_DEPLOY_LAG_NOTE,
+                "affected_endpoints": runtime_404s,
+                "next_increment": "fly-runtime-p0-deploy",
+                "blocks_increment": "evidence-automation-observability-e2e",
+                "reference": "docs/runbooks/public-runtime-smoke-test.md",
+            }
+        ]
+
+    if not strict_gate_passed and blocking:
+        return [
+            {
+                "id": "strict_gate_failed",
+                "severity": "warning",
+                "scope": "public_runtime_evidence",
+                "wire_scope": None,
+                "message": "Strict gate falhou; revisar blocking_issues antes de promover ambiente.",
+                "reference": "docs/runbooks/public-runtime-evidence-gate.md",
+            }
+        ]
+    return []
 
 
 def build_evidence_index(
@@ -32,8 +94,13 @@ def build_evidence_index(
     strict_gate_passed: bool,
 ) -> dict[str, Any]:
     readiness = readiness or validation.get("readiness") or {}
+    operational_notes = infer_operational_notes(
+        validation,
+        readiness,
+        strict_gate_passed=strict_gate_passed,
+    )
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "contract": "public-runtime-evidence-index",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "repository": repository,
@@ -58,6 +125,7 @@ def build_evidence_index(
             "strict_total": validation.get("total"),
             "blocking_issues": readiness.get("blocking_issues", []),
         },
+        "operational_notes": operational_notes,
         "consumers": [
             "docs/ops-dashboard/index.html",
             "scripts/generate_ops_dashboard_data.py",
@@ -85,10 +153,24 @@ def build_markdown(index: dict[str, Any]) -> str:
         "## Blocking issues",
         *blocking_lines,
         "",
+    ]
+    notes = index.get("operational_notes") or []
+    if notes:
+        lines.extend(["## Nota operacional", ""])
+        for note in notes:
+            lines.append(f"- **{note.get('id', 'nota')}**: {note.get('message', '')}")
+            if note.get("next_increment"):
+                lines.append(f"  - Próximo incremento: `{note['next_increment']}`")
+            if note.get("blocks_increment"):
+                lines.append(f"  - Bloqueia: `{note['blocks_increment']}`")
+        lines.append("")
+    lines.extend(
+        [
         "## Consumers",
         *(f"- `{consumer}`" for consumer in index.get("consumers", [])),
         "",
-    ]
+        ]
+    )
     return "\n".join(lines)
 
 
