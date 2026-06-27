@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys — Live Operational Dashboard</title>
+  <style>
+    :root { --blue:#005CA9; --orange:#F39200; --teal:#00B3AD; --green:#198754; --yellow:#B7791F; --red:#B00020; --bg:#f6f8fb; --card:#fff; --text:#1f2937; --muted:#6b7280; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+    header { background:linear-gradient(135deg,var(--blue),#083a6b); color:white; padding:24px; }
+    header h1 { margin:0 0 8px; font-size:1.8rem; }
+    header p { margin:0; opacity:.92; }
+    main { padding:20px; max-width:1280px; margin:0 auto; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
+    .card { background:var(--card); border-radius:14px; padding:16px; box-shadow:0 2px 10px rgba(15,23,42,.08); border-left:5px solid var(--blue); }
+    .card.good { border-left-color:var(--green); }
+    .card.warn { border-left-color:var(--yellow); }
+    .card.info { border-left-color:var(--teal); }
+    .card.risk { border-left-color:var(--orange); }
+    .label { color:var(--muted); font-size:.82rem; text-transform:uppercase; letter-spacing:.05em; }
+    .value { font-size:2rem; font-weight:700; margin-top:6px; }
+    .unit { color:var(--muted); font-size:.9rem; }
+    section { margin-top:22px; }
+    h2 { font-size:1.2rem; margin:0 0 12px; }
+    table { width:100%; border-collapse:collapse; background:white; border-radius:14px; overflow:hidden; box-shadow:0 2px 10px rgba(15,23,42,.08); }
+    th, td { padding:12px; border-bottom:1px solid #e5e7eb; text-align:left; vertical-align:top; }
+    th { background:#eef4fb; color:#0f3557; }
+    .badge { display:inline-block; padding:4px 9px; border-radius:999px; font-size:.78rem; font-weight:700; }
+    .green { background:#e8f5ee; color:var(--green); }
+    .yellow { background:#fff7e6; color:var(--yellow); }
+    .red { background:#fdecec; color:var(--red); }
+    .blue { background:#e7f1fb; color:var(--blue); }
+    .flow { display:flex; gap:10px; flex-wrap:wrap; }
+    .node { background:white; border:1px solid #dbe3ef; border-radius:12px; padding:12px; min-width:170px; box-shadow:0 1px 6px rgba(15,23,42,.06); }
+    .arrow { align-self:center; color:var(--muted); font-weight:700; }
+    a { color:var(--blue); font-weight:700; text-decoration:none; }
+    footer { color:var(--muted); padding:20px; text-align:center; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ReqSys — Live Operational Dashboard</h1>
+    <p>Dashboard navegável para CI/CD, runtime, governança, lead time, riscos e burndown executivo.</p>
+  </header>
+  <main>
+    <div class="grid">
+      <div class="card good"><div class="label">CI/CD</div><div class="value">90<span class="unit">%</span></div><span class="badge green">verde</span></div>
+      <div class="card good"><div class="label">Governança</div><div class="value">91<span class="unit">%</span></div><span class="badge green">verde</span></div>
+      <div class="card info"><div class="label">Observabilidade</div><div class="value">89<span class="unit">%</span></div><span class="badge blue">monitorado</span></div>
+      <div class="card warn"><div class="label">Dashboard Vivo</div><div class="value">78<span class="unit">%</span></div><span class="badge yellow">em evolução</span></div>
+      <div class="card risk"><div class="label">Baseline incidente</div><div class="value">143<span class="unit">min</span></div><span class="badge yellow">lead time</span></div>
+    </div>
+
+    <section>
+      <h2>Drill-down operacional</h2>
+      <table>
+        <thead><tr><th>Domínio</th><th>KPI</th><th>Origem</th><th>Ação navegável</th></tr></thead>
+        <tbody>
+          <tr><td>CI/CD</td><td>Success rate, failure rate, P50, P95</td><td>ci-lead-time-analytics.json</td><td><a href="../runbooks/ci-lead-time-analytics.md">Abrir runbook</a></td></tr>
+          <tr><td>Governança</td><td>Gates, evidências e contratos</td><td>PR Evidence Gate</td><td><a href="../runbooks/ci-lead-time-kpi-contract.md">Abrir contrato KPI</a></td></tr>
+          <tr><td>Burndown</td><td>Gaps, maturidade e risco</td><td>operational-burndown-executive.md</td><td><a href="../runbooks/operational-burndown-executive.md">Abrir burndown</a></td></tr>
+          <tr><td>Arquitetura viva</td><td>Fontes, relações e timeline</td><td>live-operational-dashboard-foundation.md</td><td><a href="../architecture/live-operational-dashboard-foundation.md">Abrir arquitetura</a></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Fluxo vivo</h2>
+      <div class="flow">
+        <div class="node">Workflow</div><div class="arrow">→</div>
+        <div class="node">Artifact</div><div class="arrow">→</div>
+        <div class="node">Contrato</div><div class="arrow">→</div>
+        <div class="node">Risco</div><div class="arrow">→</div>
+        <div class="node">Dashboard</div><div class="arrow">→</div>
+        <div class="node">Burndown</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Critérios padrão ouro</h2>
+      <table>
+        <thead><tr><th>Critério</th><th>Meta</th><th>Status atual</th></tr></thead>
+        <tbody>
+          <tr><td>Success rate</td><td>&gt;= 95%</td><td><span class="badge yellow">em medição</span></td></tr>
+          <tr><td>P95 lead time</td><td>&lt; 15min</td><td><span class="badge yellow">baseline criado</span></td></tr>
+          <tr><td>Artifact publicado</td><td>100%</td><td><span class="badge blue">report-only</span></td></tr>
+          <tr><td>Drill-down por domínio</td><td>100%</td><td><span class="badge yellow">fundação</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+  <footer>ReqSys Live Operational Dashboard — artifact HTML estático, sem secrets, sem CDN e sem dependência externa.</footer>
+</body>
+</html>
