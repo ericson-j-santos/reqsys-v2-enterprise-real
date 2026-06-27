@@ -1,0 +1,405 @@
+{
+  "schema_version": "1.0.0",
+  "projection": "reqsys-statistical-completion-projection",
+  "mode": "review_only",
+  "reference_time_brt": "2026-06-27T21:00:00-03:00",
+  "executive_reading": "Arquitetura enterprise funcional em aceleracao continua; o gargalo principal e consolidacao operacional.",
+  "scores": {
+    "current_maturity_score": 71.67,
+    "real_completion_score": 64.0,
+    "average_remaining_gap_percent": 24.88,
+    "completion_state": "ENTERPRISE_ACCELERATING_WITH_GAPS",
+    "risk_score": 38.9,
+    "risk_band": "MEDIUM_LOW"
+  },
+  "current_maturity": [
+    {
+      "id": "base_architecture",
+      "label": "Arquitetura base",
+      "percent": 88,
+      "maturity": "Alta",
+      "weight": 0.12
+    },
+    {
+      "id": "governed_ci_cd",
+      "label": "CI/CD governado",
+      "percent": 82,
+      "maturity": "Alta",
+      "weight": 0.12
+    },
+    {
+      "id": "living_architecture",
+      "label": "Living Architecture",
+      "percent": 74,
+      "maturity": "Media/Alta",
+      "weight": 0.1
+    },
+    {
+      "id": "observability_analytics",
+      "label": "Observabilidade/Analytics",
+      "percent": 71,
+      "maturity": "Media/Alta",
+      "weight": 0.1
+    },
+    {
+      "id": "operational_runtime",
+      "label": "Runtime operacional",
+      "percent": 68,
+      "maturity": "Media",
+      "weight": 0.1
+    },
+    {
+      "id": "operational_ux_dashboards",
+      "label": "UX operacional / dashboards",
+      "percent": 72,
+      "maturity": "Media/Alta",
+      "weight": 0.1
+    },
+    {
+      "id": "autonomous_automation",
+      "label": "Automacao autonoma",
+      "percent": 63,
+      "maturity": "Media",
+      "weight": 0.1
+    },
+    {
+      "id": "enterprise_governance",
+      "label": "Governanca enterprise",
+      "percent": 79,
+      "maturity": "Alta",
+      "weight": 0.12
+    },
+    {
+      "id": "environment_sync",
+      "label": "Ambientes sincronizados",
+      "percent": 61,
+      "maturity": "Media",
+      "weight": 0.12
+    },
+    {
+      "id": "gold_standard_production",
+      "label": "Producao padrao ouro consolidado",
+      "percent": 54,
+      "maturity": "Media",
+      "weight": 0.1
+    }
+  ],
+  "real_completion": [
+    {
+      "id": "implemented_code",
+      "label": "Codigo implementado",
+      "percent": 78,
+      "weight": 0.16
+    },
+    {
+      "id": "validated_code",
+      "label": "Codigo validado",
+      "percent": 69,
+      "weight": 0.14
+    },
+    {
+      "id": "operational_evidence",
+      "label": "Evidencia operacional consolidada",
+      "percent": 58,
+      "weight": 0.14
+    },
+    {
+      "id": "enterprise_governance",
+      "label": "Governanca enterprise consolidada",
+      "percent": 64,
+      "weight": 0.12
+    },
+    {
+      "id": "environment_sync",
+      "label": "Ambientes realmente sincronizados",
+      "percent": 61,
+      "weight": 0.12
+    },
+    {
+      "id": "navigable_runtime",
+      "label": "Runtime navegavel/analitico",
+      "percent": 67,
+      "weight": 0.12
+    },
+    {
+      "id": "operational_autonomy",
+      "label": "Autonomia operacional",
+      "percent": 55,
+      "weight": 0.1
+    },
+    {
+      "id": "total_gold_standard",
+      "label": "Padrao ouro total consolidado",
+      "percent": 52,
+      "weight": 0.1
+    }
+  ],
+  "remaining_gaps": [
+    {
+      "id": "runtime_consolidation",
+      "label": "Consolidacao runtime",
+      "gap_percent": 18
+    },
+    {
+      "id": "automated_evidence",
+      "label": "Evidencias automatizadas",
+      "gap_percent": 22
+    },
+    {
+      "id": "autonomous_operation",
+      "label": "Operacao autonoma",
+      "gap_percent": 31
+    },
+    {
+      "id": "total_analytics_drilldown",
+      "label": "Analytics/drill-down total",
+      "gap_percent": 27
+    },
+    {
+      "id": "production_hardening",
+      "label": "Hardening producao",
+      "gap_percent": 24
+    },
+    {
+      "id": "environment_sync",
+      "label": "Sincronizacao ambientes",
+      "gap_percent": 39
+    },
+    {
+      "id": "living_governance",
+      "label": "Governanca viva completa",
+      "gap_percent": 21
+    },
+    {
+      "id": "enterprise_operational_ux",
+      "label": "UX operacional enterprise",
+      "gap_percent": 17
+    }
+  ],
+  "velocity": {
+    "useful_prs_per_day": {
+      "min": 8,
+      "max": 18
+    },
+    "green_merges_per_day": {
+      "min": 6,
+      "max": 14
+    },
+    "ci_fixes_per_cycle": {
+      "min": 2,
+      "max": 7
+    },
+    "safe_parallel_increments": {
+      "min": 3,
+      "max": 5
+    },
+    "pr_to_merge_lead_time_minutes": {
+      "min": 18,
+      "max": 90
+    },
+    "ci_stabilization_rate_percent": 83,
+    "critical_regression": "Baixa",
+    "structural_rework": "Moderado/baixo",
+    "useful_prs_per_day_midpoint": 13.0,
+    "green_merges_per_day_midpoint": 10.0,
+    "ci_fixes_per_cycle_midpoint": 4.5,
+    "safe_parallel_increments_midpoint": 4.0
+  },
+  "bottleneck_priorities": [
+    {
+      "id": "environment_sync",
+      "label": "Sincronizacao ambientes",
+      "gap_percent": 39
+    },
+    {
+      "id": "autonomous_operation",
+      "label": "Operacao autonoma",
+      "gap_percent": 31
+    },
+    {
+      "id": "total_analytics_drilldown",
+      "label": "Analytics/drill-down total",
+      "gap_percent": 27
+    },
+    {
+      "id": "production_hardening",
+      "label": "Hardening producao",
+      "gap_percent": 24
+    },
+    {
+      "id": "automated_evidence",
+      "label": "Evidencias automatizadas",
+      "gap_percent": 22
+    },
+    {
+      "id": "living_governance",
+      "label": "Governanca viva completa",
+      "gap_percent": 21
+    },
+    {
+      "id": "runtime_consolidation",
+      "label": "Consolidacao runtime",
+      "gap_percent": 18
+    },
+    {
+      "id": "enterprise_operational_ux",
+      "label": "UX operacional enterprise",
+      "gap_percent": 17
+    }
+  ],
+  "projection_windows": {
+    "current_velocity": [
+      {
+        "milestone": "MVP operacional consolidado",
+        "min_days": 3,
+        "max_days": 6
+      },
+      {
+        "milestone": "Ambientes sincronizados",
+        "min_days": 5,
+        "max_days": 9
+      },
+      {
+        "milestone": "Runtime operacional robusto",
+        "min_days": 7,
+        "max_days": 12
+      },
+      {
+        "milestone": "Padrao ouro tecnico",
+        "min_days": 14,
+        "max_days": 22
+      },
+      {
+        "milestone": "Padrao ouro consolidado total",
+        "min_days": 21,
+        "max_days": 35
+      }
+    ],
+    "accelerated": [
+      {
+        "milestone": "MVP robusto",
+        "min_days": 2,
+        "max_days": 4
+      },
+      {
+        "milestone": "Producao utilizavel forte",
+        "min_days": 5,
+        "max_days": 8
+      },
+      {
+        "milestone": "Ambientes quase totalmente sincronizados",
+        "min_days": 4,
+        "max_days": 7
+      },
+      {
+        "milestone": "Padrao ouro tecnico",
+        "min_days": 10,
+        "max_days": 16
+      },
+      {
+        "milestone": "Consolidacao enterprise completa",
+        "min_days": 14,
+        "max_days": 24
+      }
+    ]
+  },
+  "risk_index": [
+    {
+      "id": "architectural_regression",
+      "label": "Regressao arquitetural",
+      "risk": "Baixo",
+      "weight": 0.12
+    },
+    {
+      "id": "branch_collision",
+      "label": "Colisao de branches",
+      "risk": "Medio/Baixo",
+      "weight": 0.1
+    },
+    {
+      "id": "ci_instability",
+      "label": "Instabilidade CI",
+      "risk": "Medio",
+      "weight": 0.18
+    },
+    {
+      "id": "environment_drift",
+      "label": "Drift entre ambientes",
+      "risk": "Medio",
+      "weight": 0.18
+    },
+    {
+      "id": "operational_scalability",
+      "label": "Escalabilidade operacional",
+      "risk": "Medio",
+      "weight": 0.14
+    },
+    {
+      "id": "traceability_loss",
+      "label": "Perda de rastreabilidade",
+      "risk": "Baixo",
+      "weight": 0.12
+    },
+    {
+      "id": "hidden_coupling",
+      "label": "Acoplamento oculto",
+      "risk": "Medio/Baixo",
+      "weight": 0.16
+    }
+  ],
+  "outcome_probabilities": [
+    {
+      "outcome": "MVP forte em menos de 1 semana",
+      "probability_percent": 87
+    },
+    {
+      "outcome": "Producao utilizavel enterprise",
+      "probability_percent": 81
+    },
+    {
+      "outcome": "Padrao ouro tecnico real",
+      "probability_percent": 73
+    },
+    {
+      "outcome": "Consolidacao enterprise completa",
+      "probability_percent": 61
+    }
+  ],
+  "trend": {
+    "velocity": "up_strong",
+    "maturity": "up_strong",
+    "governance": "up_stable",
+    "autonomy": "up_moderate",
+    "observability": "up_strong",
+    "live_runtime": "up_strong",
+    "consolidated_production": "up_moderate"
+  },
+  "accelerators": [
+    "ci_auto_healing",
+    "automatic_evidence_generation",
+    "consolidated_validation_pipeline",
+    "flyio_runtime_sync",
+    "central_operational_monitor",
+    "single_shared_contracts",
+    "manual_validation_reduction"
+  ],
+  "bottlenecks": [
+    "estabilizacao_continua_ci",
+    "sincronizacao_entre_ambientes",
+    "evidencia_operacional_automatica",
+    "consolidacao_runtime_driven",
+    "reducao_acoplamentos_residuais",
+    "observabilidade_fim_a_fim",
+    "hardening_producao"
+  ],
+  "recommended_next_increment": "pipeline-validacao-consolidada-e-evidencias-automaticas",
+  "guardrails": {
+    "deployment": "disabled",
+    "production_mutation": "disabled",
+    "external_write": "disabled",
+    "agent_execution": "disabled",
+    "external_ai_call": "disabled",
+    "secret_capture": "disabled",
+    "human_review_required": true
+  }
+}

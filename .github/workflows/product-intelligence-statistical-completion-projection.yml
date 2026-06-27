@@ -1,0 +1,32 @@
+name: Product Intelligence Statistical Completion Projection
+
+on:
+  pull_request:
+    paths:
+      - "tools/product_intelligence/generate_statistical_completion_projection.py"
+      - "tests/test_statistical_completion_projection.py"
+      - "docs/product-intelligence/reqsys-statistical-completion-projection.md"
+      - ".github/workflows/product-intelligence-statistical-completion-projection.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "tools/product_intelligence/generate_statistical_completion_projection.py"
+      - "tests/test_statistical_completion_projection.py"
+      - "docs/product-intelligence/reqsys-statistical-completion-projection.md"
+      - ".github/workflows/product-intelligence-statistical-completion-projection.yml"
+
+jobs:
+  statistical-completion-projection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run focused tests
+        run: python3 -m unittest tests.test_statistical_completion_projection -v
+      - name: Build statistical completion projection
+        run: python3 tools/product_intelligence/generate_statistical_completion_projection.py reports/product-intelligence
+      - name: Publish summary
+        run: cat reports/product-intelligence/reqsys-statistical-completion-projection.md >> "$GITHUB_STEP_SUMMARY"
