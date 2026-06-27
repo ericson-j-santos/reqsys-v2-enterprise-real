@@ -148,10 +148,14 @@ import { useRouter } from 'vue-router'
 import { useRequisitosStore } from '../stores/requisitos'
 import { api } from '../services/api'
 import { contarIntegracoesPorStatus } from '../utils/filtrosIntegracao'
+import { carregarHistoricoGovbi, contarConsultasGovbi } from '../utils/filtrosGovbi'
+import { achatarHistoricoPipeline, carregarHistoricoPipeline, contarEtapasPipeline } from '../utils/filtrosPipeline'
 
 const store = useRequisitosStore()
 const router = useRouter()
 const integracaoErros = ref(0)
+const govbiDegradado = ref(0)
+const pipelineErros = ref(0)
 
 onMounted(async () => {
   await Promise.all([
@@ -159,8 +163,16 @@ onMounted(async () => {
     store.carregarDashboardInfo(),
     store.carregarQualidadeIA(),
     carregarIntegracaoErros(),
+    carregarMetricasAnaliticas(),
   ])
 })
+
+function carregarMetricasAnaliticas() {
+  const consultasGovbi = carregarHistoricoGovbi()
+  govbiDegradado.value = contarConsultasGovbi(consultasGovbi).erros
+  const etapasPipeline = achatarHistoricoPipeline(carregarHistoricoPipeline())
+  pipelineErros.value = contarEtapasPipeline(etapasPipeline).erros
+}
 
 async function carregarIntegracaoErros() {
   try {
@@ -226,6 +238,33 @@ const cards = computed(() => [
     tooltip: 'Falhas recentes em envios Planner ou Teams.',
     resumo: 'Abre o painel de integrações filtrado por erros, com origem, data e correlation_id.',
     rota: { path: '/painel-integracao', query: { status: 'erro' } },
+  },
+  {
+    id: 'govbi-degradado',
+    titulo: 'GovBI degradado',
+    valor: govbiDegradado.value,
+    icone: 'mdi-robot-outline',
+    tooltip: 'Consultas GovBI com erro ou modo degradado na sessão.',
+    resumo: 'Abre o histórico analítico GovBI filtrado por status degradado.',
+    rota: { path: '/govbi-ia', query: { status: 'MODO_DEGRADADO' } },
+  },
+  {
+    id: 'pipeline-erros',
+    titulo: 'Pipeline com erro',
+    valor: pipelineErros.value,
+    icone: 'mdi-pipe',
+    tooltip: 'Etapas de pipeline com falha registradas na sessão.',
+    resumo: 'Abre o analítico de execuções do pipeline filtrado por etapas com erro.',
+    rota: { path: '/pipeline', query: { status: 'error' } },
+  },
+  {
+    id: 'task-console',
+    titulo: 'Task Console',
+    valor: store.metricas.pendentes ?? 0,
+    icone: 'mdi-console',
+    tooltip: 'Tarefas pendentes de envio ao Planner.',
+    resumo: 'Abre o Task Console com filtro de tarefas pendentes.',
+    rota: { path: '/task-console', query: { status: 'pendente' } },
   },
 ])
 

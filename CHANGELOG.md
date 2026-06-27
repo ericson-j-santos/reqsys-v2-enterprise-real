@@ -20,6 +20,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - Varredura técnica inicial em `docs/varreduras/REQSYS_VARREDURA_PADRAO_OURO_2026-06-20.md`.
 - Helper puro `frontend/src/utils/filtrosRequisitos.js` para normalização, query string e filtragem analítica de requisitos.
 - Helper puro `frontend/src/utils/filtrosIntegracao.js` para drill-down analítico do Painel de Integrações (origem, status, data, correlation_id e busca).
+- Helpers `filtrosGovbi.js`, `filtrosPipeline.js` e `filtrosTaskConsole.js` com testes unitários para drill-down analítico.
 - Teste unitário `frontend/src/utils/filtrosIntegracao.test.js` para filtros analíticos de integrações.
 - Teste unitário `frontend/src/utils/filtrosRequisitos.test.js` para filtros analíticos de requisitos.
 - Script `npm run test:unit` no frontend.
@@ -40,6 +41,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - `DashboardView.vue`: card de erros de integração com drill-down para `/painel-integracao?status=erro`.
 - `DashboardView.vue`: melhoria de acessibilidade por teclado nos cards interativos.
 - `PainelIntegracaoView.vue`: analítico filtrável por origem, status, data, correlation_id e busca textual, com cards clicáveis e sincronização de query string.
+- `GovBIView.vue`: histórico analítico de consultas com latência, fonte, fallback e correlation_id filtráveis via URL.
+- `PipelineView.vue`: histórico de execuções com analítico por etapa, duração, status e correlation_id.
+- `TaskConsoleView.vue`: filtros analíticos de tarefas e histórico de envios ao Planner com query string.
+- `DashboardView.vue`: cards de drill-down para GovBI degradado, pipeline com erro e Task Console pendente.
 - `MonitoramentoOperacionalView.vue`: expansão para incluir indicadores de conectores, criticidade, ações sugeridas e `correlation_id`.
 - `ReqSysEndpoints.cs`: módulo `connection-broker` passa a constar em `/v1/sistema/info`.
 - `ReqSysEndpoints.cs`: endpoints do Connection Broker deixam de usar payload estático local e passam a consumir o registry do `ReqSysStore`.

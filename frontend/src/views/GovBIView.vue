@@ -217,13 +217,144 @@
         </v-card-text>
       </v-card>
     </template>
+
+    <v-card v-if="historicoConsultas.length" class="table-card mt-4">
+      <v-card-title class="d-flex align-center flex-wrap gap-2">
+        <span>Histórico analítico de consultas</span>
+        <v-chip size="x-small" variant="tonal">{{ consultasFiltradas.length }} de {{ historicoConsultas.length }}</v-chip>
+        <v-spacer />
+        <v-chip v-if="temFiltroHistorico" size="x-small" color="blue" variant="tonal">Filtro ativo</v-chip>
+      </v-card-title>
+      <v-divider />
+      <v-card-text>
+        <v-row class="mb-2" dense>
+          <v-col cols="12" sm="6" md="2">
+            <v-select
+              v-model="filtrosHistorico.status"
+              :items="statusHistoricoOptions"
+              item-title="label"
+              item-value="value"
+              label="Status"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              @update:model-value="sincronizarQueryHistorico"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="2">
+            <v-select
+              v-model="filtrosHistorico.fonte"
+              :items="fonteHistoricoOptions"
+              item-title="label"
+              item-value="value"
+              label="Fonte"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              @update:model-value="sincronizarQueryHistorico"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="2">
+            <v-text-field
+              v-model="filtrosHistorico.data"
+              label="Data"
+              type="date"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              @update:model-value="sincronizarQueryHistorico"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <v-text-field
+              v-model="filtrosHistorico.correlation_id"
+              label="Correlation ID"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              @update:model-value="sincronizarQueryHistorico"
+            />
+          </v-col>
+          <v-col cols="12" md="3">
+            <v-text-field
+              v-model="filtrosHistorico.busca"
+              label="Busca"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              prepend-inner-icon="mdi-magnify"
+              @update:model-value="sincronizarQueryHistorico"
+            />
+          </v-col>
+        </v-row>
+        <div class="d-flex justify-end mb-3">
+          <v-btn variant="text" size="small" prepend-icon="mdi-filter-off" :disabled="!temFiltroHistorico" @click="limparFiltrosHistorico">
+            Limpar filtros
+          </v-btn>
+        </div>
+        <v-data-table
+          :headers="historicoHeaders"
+          :items="consultasFiltradas"
+          density="compact"
+          :items-per-page="10"
+        >
+          <template #item.consultadoEm="{ item }">
+            <span class="text-caption">{{ formatarDataHistorico(item.consultadoEm) }}</span>
+          </template>
+          <template #item.latenciaMs="{ item }">
+            <span>{{ item.latenciaMs }} ms</span>
+          </template>
+          <template #item.statusFluxo="{ item }">
+            <v-chip size="x-small" :color="corStatusHistorico(item.statusFluxo)" variant="tonal">
+              {{ item.statusFluxo }}
+            </v-chip>
+          </template>
+          <template #item.fallback="{ item }">
+            <v-chip size="x-small" :color="item.fallback ? 'orange' : 'green'" variant="tonal">
+              {{ item.fallback ? 'Sim' : 'Não' }}
+            </v-chip>
+          </template>
+          <template #item.correlationId="{ item }">
+            <span
+              v-if="item.correlationId"
+              class="correlation-link"
+              role="button"
+              tabindex="0"
+              @click="filtrarHistoricoPorCorrelation(item.correlationId)"
+            >
+              {{ item.correlationId.slice(0, 14) }}…
+            </span>
+            <span v-else>—</span>
+          </template>
+        </v-data-table>
+      </v-card-text>
+    </v-card>
   </section>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import PageHeader from '../components/PageHeader.vue'
+import {
+  carregarHistoricoGovbi,
+  contarConsultasGovbi,
+  criarQueryFiltrosGovbi,
+  criarRegistroConsultaGovbi,
+  filtrarConsultasGovbi,
+  normalizarFiltrosGovbi,
+  possuiFiltroAtivo,
+  salvarHistoricoGovbi,
+} from '../utils/filtrosGovbi'
+
+const route = useRoute()
+const router = useRouter()
 
 const REQSYS_API_URL = import.meta.env.VITE_API_URL || window.location.origin
 const GOVBI_TIMEOUT_MS = Number(import.meta.env.VITE_GOVBI_TIMEOUT_MS || 15000)
@@ -239,6 +370,41 @@ const carregando = ref(false)
 const erro = ref('')
 const resposta = ref(null)
 const diagnosticoOperacional = ref(null)
+const historicoConsultas = ref([])
+const filtrosHistorico = reactive(normalizarFiltrosGovbi(route.query))
+
+const statusHistoricoOptions = [
+  { label: 'Concluído', value: 'CONCLUIDO' },
+  { label: 'Modo degradado', value: 'MODO_DEGRADADO' },
+  { label: 'Pendente aprovação', value: 'PENDENTE_APROVACAO' },
+  { label: 'Erro', value: 'ERRO' },
+]
+const fonteHistoricoOptions = [
+  { label: 'Backend', value: 'backend' },
+  { label: 'Fallback', value: 'fallback' },
+  { label: 'Proxy', value: 'proxy' },
+]
+const historicoHeaders = [
+  { title: 'Data', key: 'consultadoEm', width: '140px' },
+  { title: 'Pergunta', key: 'pergunta' },
+  { title: 'Status', key: 'statusFluxo', width: '130px' },
+  { title: 'Fonte', key: 'fonte', width: '90px' },
+  { title: 'Latência', key: 'latenciaMs', width: '90px' },
+  { title: 'Fallback', key: 'fallback', width: '90px' },
+  { title: 'Correlation ID', key: 'correlationId', width: '150px' },
+]
+
+const consultasFiltradas = computed(() => filtrarConsultasGovbi(historicoConsultas.value, filtrosHistorico))
+const temFiltroHistorico = computed(() => possuiFiltroAtivo(filtrosHistorico))
+
+watch(
+  () => route.query,
+  (query) => Object.assign(filtrosHistorico, normalizarFiltrosGovbi(query)),
+)
+
+onMounted(() => {
+  historicoConsultas.value = carregarHistoricoGovbi()
+})
 
 const exemplos = [
   'Quantas propostas por mês em 2024?',
@@ -273,6 +439,7 @@ async function perguntar() {
   erro.value = ''
   resposta.value = null
   diagnosticoOperacional.value = null
+  const inicio = Date.now()
 
   try {
     const correlationId = criarCorrelationId()
@@ -292,6 +459,15 @@ async function perguntar() {
 
     resposta.value = normalizarRespostaGovBI(data, perguntaNormalizada)
     diagnosticoOperacional.value = montarDiagnosticoSucesso(resposta.value)
+    registrarConsultaHistorico({
+      pergunta: perguntaNormalizada,
+      statusFluxo: resposta.value.statusFluxo,
+      fonte: resposta.value.statusFluxo === 'MODO_DEGRADADO' ? 'fallback' : 'backend',
+      latenciaMs: Date.now() - inicio,
+      correlationId: resposta.value.correlationId,
+      fallback: resposta.value.statusFluxo === 'MODO_DEGRADADO',
+      explicacao: resposta.value.explicacao,
+    })
   } catch (e) {
     const detalhe = extrairDetalheErro(e)
     resposta.value = gerarRespostaFallback(perguntaNormalizada, detalhe)
@@ -300,9 +476,51 @@ async function perguntar() {
       titulo: 'GovBI IA em modo degradado local',
       mensagem: `O proxy backend não respondeu corretamente. A tela exibiu um plano governado local. Detalhe: ${detalhe}`,
     }
+    registrarConsultaHistorico({
+      pergunta: perguntaNormalizada,
+      statusFluxo: 'MODO_DEGRADADO',
+      fonte: 'fallback',
+      latenciaMs: Date.now() - inicio,
+      correlationId: resposta.value.correlationId,
+      fallback: true,
+      erro: detalhe,
+      explicacao: resposta.value.explicacao,
+    })
   } finally {
     carregando.value = false
   }
+}
+
+function registrarConsultaHistorico(dados) {
+  const registro = criarRegistroConsultaGovbi(dados)
+  historicoConsultas.value = [registro, ...historicoConsultas.value].slice(0, 50)
+  salvarHistoricoGovbi(historicoConsultas.value)
+}
+
+function sincronizarQueryHistorico() {
+  router.replace({ path: route.path, query: criarQueryFiltrosGovbi(filtrosHistorico) })
+}
+
+function limparFiltrosHistorico() {
+  Object.assign(filtrosHistorico, { status: '', fonte: '', correlation_id: '', data: '', busca: '', fallback: '' })
+  sincronizarQueryHistorico()
+}
+
+function filtrarHistoricoPorCorrelation(correlationId) {
+  filtrosHistorico.correlation_id = correlationId
+  sincronizarQueryHistorico()
+}
+
+function formatarDataHistorico(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function corStatusHistorico(status) {
+  if (status === 'CONCLUIDO') return 'green'
+  if (status === 'MODO_DEGRADADO') return 'orange'
+  if (status === 'ERRO') return 'red'
+  return 'grey'
 }
 
 function montarDiagnosticoSucesso(respostaNormalizada) {
@@ -475,5 +693,12 @@ function copiarSql() {
 }
 .cursor-pointer {
   cursor: pointer;
+}
+.correlation-link {
+  color: rgb(var(--v-theme-primary));
+  cursor: pointer;
+  text-decoration: underline dotted;
+  font-family: monospace;
+  font-size: 0.78rem;
 }
 </style>
