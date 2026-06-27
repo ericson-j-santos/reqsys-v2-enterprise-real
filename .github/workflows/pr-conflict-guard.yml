@@ -46,6 +46,23 @@ jobs:
           esac
           git fetch origin "${BASE_SHA}" --depth=1
 
+      - name: Coletar arquivos alterados
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/conflict-prediction
+          git diff --name-only "${BASE_SHA}"...HEAD | sort > artifacts/conflict-prediction/changed-files.txt
+          cat artifacts/conflict-prediction/changed-files.txt
+
+      - name: Executar conflict prediction gate
+        run: |
+          set -euo pipefail
+          python scripts/conflict_prediction_gate.py \
+            --paths-file artifacts/conflict-prediction/changed-files.txt \
+            --output artifacts/conflict-prediction/conflict-prediction-gate.json \
+            --json
+
       - name: Validar merge limpo com a base do evento
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -74,3 +91,12 @@ jobs:
             git status --short
             exit 1
           fi
+
+      - name: Publicar evidencia de conflict prediction
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conflict-prediction-gate-evidence
+          path: artifacts/conflict-prediction
+          if-no-files-found: warn
+          retention-days: 14
