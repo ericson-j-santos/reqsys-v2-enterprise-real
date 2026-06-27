@@ -1,0 +1,121 @@
+name: Close Duplicate PRs
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_numbers:
+        description: "Numeros dos PRs duplicados a fechar (separados por virgula)"
+        required: true
+        type: string
+      canonical_pr:
+        description: "PR canônico a manter aberto"
+        required: true
+        type: string
+      reason:
+        description: "Motivo operacional curto"
+        required: false
+        default: "close_duplicate — consolidacao coordenador-status"
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: close-duplicate-prs-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  close-duplicates:
+    name: Fechar PRs duplicados
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Fechar PRs e registrar comentario
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const canonical = Number(core.getInput('canonical_pr'));
+            const reason = core.getInput('reason');
+            const numbers = core
+              .getInput('pr_numbers')
+              .split(',')
+              .map((item) => Number(item.trim()))
+              .filter((item) => Number.isInteger(item) && item > 0);
+
+            if (!Number.isInteger(canonical) || canonical <= 0) {
+              core.setFailed('canonical_pr invalido');
+              return;
+            }
+            if (numbers.length === 0) {
+              core.setFailed('Informe ao menos um PR em pr_numbers');
+              return;
+            }
+            if (numbers.includes(canonical)) {
+              core.setFailed('canonical_pr nao pode estar em pr_numbers');
+              return;
+            }
+
+            const results = [];
+            const body = [
+              'Fechado como duplicado na consolidacao operacional (`close_duplicate`).',
+              '',
+              `**PR canonico:** #${canonical}`,
+              '',
+              `**Motivo:** ${reason}`,
+              '',
+              'increment-type: close_duplicate',
+            ].join('\n');
+
+            for (const pull_number of numbers) {
+              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+              if (pr.state !== 'open') {
+                results.push({ pull_number, status: 'skipped', detail: `state=${pr.state}` });
+                continue;
+              }
+
+              await github.rest.issues.createComment({ owner, repo, issue_number: pull_number, body });
+              await github.rest.pulls.update({
+                owner,
+                repo,
+                pull_number,
+                state: 'closed',
+              });
+              results.push({ pull_number, status: 'closed', detail: pr.title });
+            }
+
+            core.summary.addHeading('Close Duplicate PRs');
+            core.summary.addTable([
+              [{ data: 'PR', header: true }, { data: 'Status', header: true }, { data: 'Detalhe', header: true }],
+              ...results.map((item) => [String(item.pull_number), item.status, item.detail]),
+            ]);
+            await core.summary.write();
+
+            fs.mkdirSync('artifacts/close-duplicate-prs', { recursive: true });
+            fs.writeFileSync(
+              'artifacts/close-duplicate-prs/close-duplicate-prs.json',
+              JSON.stringify(
+                {
+                  schema_version: '1.0.0',
+                  generated_at: new Date().toISOString(),
+                  canonical_pr: canonical,
+                  reason,
+                  results,
+                },
+                null,
+                2,
+              ),
+            );
+
+      - name: Publicar artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: close-duplicate-prs-evidence
+          path: artifacts/close-duplicate-prs
+          if-no-files-found: error
+          retention-days: 30
