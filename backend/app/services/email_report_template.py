@@ -9,7 +9,7 @@ Objetivo:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from html import escape
 from typing import Iterable, Literal
 
@@ -59,7 +59,7 @@ class RelatorioEmail:
     processos: list[LinhaProcessoEmail] = field(default_factory=list)
     correlation_id: str = "nao-informado"
     versao: str = "v1"
-    gerado_em: datetime = field(default_factory=datetime.utcnow)
+    gerado_em: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 def _badge(status: Status, texto: str | None = None) -> str:

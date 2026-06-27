@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from pydantic import BaseModel, Field
@@ -35,4 +35,4 @@ class EventoOperacional(BaseModel):
     status: StatusOperacional
     score: int = Field(ge=0, le=100)
     mensagem: str
-    criado_em: datetime = Field(default_factory=datetime.utcnow)
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
