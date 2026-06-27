@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0.0",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "generated_at": "2026-06-27T20:10:00+00:00",
+  "source_available": false,
+  "source_paths": {
+    "conflict_risk_report": "artifacts/pr-conflict-guard/conflict-risk-report.json",
+    "open_pr_overlap": "artifacts/pr-conflict-guard/open-pr-overlap.json"
+  },
+  "merge_intelligence": {
+    "risk": "unknown",
+    "lane": "unknown",
+    "parallel_safe": false,
+    "mergeability_score": 19,
+    "recommendation": "isolamento_obrigatorio",
+    "blocking_reasons": [
+      "conflict_risk_report_missing"
+    ],
+    "changed_path_count": 0,
+    "critical_file_count": 0,
+    "queue_saturation": "low",
+    "queue_pressure": 0,
+    "confidence": "low"
+  },
+  "trend": {
+    "conflict_tendency": "low",
+    "rerun_recommended": false,
+    "serial_merge_required": true
+  },
+  "hotspot_heatmap": [],
+  "overlapping_prs": [],
+  "links": {
+    "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
+    "pulls": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pulls",
+    "conflict_guard": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/pr-conflict-guard.yml",
+    "merge_queue": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/governed-merge-queue.yml"
+  }
+}
