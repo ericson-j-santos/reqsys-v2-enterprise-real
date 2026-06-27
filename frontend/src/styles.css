@@ -81,6 +81,44 @@ body,
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
+  min-width: 0;
+}
+
+.hub-page,
+.painel-page,
+.ai-rec-page,
+.task-console-page,
+.login-page {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.hub-page,
+.ai-rec-page {
+  padding: 24px;
+}
+
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.responsive-table-shell {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
 }
 .page-header {
   display: flex;
@@ -185,6 +223,11 @@ h1 {
     padding: 12px;
   }
 
+  .hub-page,
+  .ai-rec-page {
+    padding: 12px;
+  }
+
   .page-header {
     margin-bottom: 12px;
     flex-direction: column;
@@ -193,8 +236,18 @@ h1 {
 
   .page-header .v-btn,
   .page-header .v-btn-group,
-  .page-header .v-input {
+  .page-header .v-input,
+  .page-actions .v-btn,
+  .page-actions .v-btn-toggle {
     width: 100%;
+  }
+
+  .page-actions {
+    width: 100%;
+  }
+
+  .filter-grid {
+    grid-template-columns: 1fr;
   }
 
   .v-btn {

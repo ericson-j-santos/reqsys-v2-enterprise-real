@@ -1,5 +1,5 @@
 <template>
-  <div class="page">
+  <div class="page" data-testid="route-pipeline">
     <!-- Toast container -->
     <div class="toast-container">
       <transition-group name="toast">
@@ -616,14 +616,147 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <v-card v-if="historicoExecucoes.length" class="mt-4 pa-4" style="background:var(--card)!important;border:1px solid var(--border)!important">
+      <div class="d-flex align-center flex-wrap gap-2 mb-3">
+        <strong>Analítico de execuções do pipeline</strong>
+        <v-chip size="x-small" variant="tonal">{{ etapasHistoricoFiltradas.length }} etapas</v-chip>
+        <v-spacer />
+        <v-chip v-if="temFiltroHistoricoPipeline" size="x-small" color="amber" variant="tonal">Filtro ativo</v-chip>
+      </div>
+      <v-row dense class="mb-2">
+        <v-col cols="12" sm="6" md="2">
+          <v-select
+            v-model="filtrosHistoricoPipeline.etapa"
+            :items="etapaOptions"
+            item-title="label"
+            item-value="value"
+            label="Etapa"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistoricoPipeline"
+          />
+        </v-col>
+        <v-col cols="12" sm="6" md="2">
+          <v-select
+            v-model="filtrosHistoricoPipeline.status"
+            :items="statusEtapaOptions"
+            item-title="label"
+            item-value="value"
+            label="Status"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistoricoPipeline"
+          />
+        </v-col>
+        <v-col cols="12" sm="6" md="2">
+          <v-select
+            v-model="filtrosHistoricoPipeline.categoria"
+            :items="logCategorias"
+            item-title="label"
+            item-value="value"
+            label="Categoria"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistoricoPipeline"
+          />
+        </v-col>
+        <v-col cols="12" sm="6" md="2">
+          <v-text-field
+            v-model="filtrosHistoricoPipeline.data"
+            label="Data"
+            type="date"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistoricoPipeline"
+          />
+        </v-col>
+        <v-col cols="12" sm="6" md="2">
+          <v-text-field
+            v-model="filtrosHistoricoPipeline.correlation_id"
+            label="Correlation ID"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistoricoPipeline"
+          />
+        </v-col>
+        <v-col cols="12" sm="6" md="2">
+          <v-text-field
+            v-model="filtrosHistoricoPipeline.duracao_min"
+            label="Duração mín. (ms)"
+            type="number"
+            min="0"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistoricoPipeline"
+          />
+        </v-col>
+      </v-row>
+      <div class="d-flex justify-end mb-2">
+        <v-btn variant="text" size="small" prepend-icon="mdi-filter-off" :disabled="!temFiltroHistoricoPipeline" @click="limparFiltrosHistoricoPipeline">
+          Limpar filtros
+        </v-btn>
+      </div>
+      <v-data-table
+        :headers="historicoPipelineHeaders"
+        :items="etapasHistoricoFiltradas"
+        density="compact"
+        :items-per-page="10"
+      >
+        <template #item.executadoEm="{ item }">
+          <span style="font-size:11px">{{ formatarDataPipeline(item.executadoEm) }}</span>
+        </template>
+        <template #item.duration="{ item }">
+          <span>{{ item.duration ?? '—' }} ms</span>
+        </template>
+        <template #item.status="{ item }">
+          <v-chip size="x-small" :color="stepColor(item.status)" variant="tonal">{{ item.status }}</v-chip>
+        </template>
+        <template #item.correlationId="{ item }">
+          <span
+            v-if="item.correlationId"
+            class="correlation-link"
+            role="button"
+            tabindex="0"
+            @click="filtrarPipelinePorCorrelation(item.correlationId)"
+          >{{ item.correlationId.slice(0, 12) }}…</span>
+          <span v-else>—</span>
+        </template>
+      </v-data-table>
+    </v-card>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useToast } from '../composables/useToast'
 import { api } from '../services/api'
+import {
+  achatarHistoricoPipeline,
+  carregarHistoricoPipeline,
+  criarQueryFiltrosPipeline,
+  criarRegistroExecucaoPipeline,
+  filtrarEtapasPipeline,
+  normalizarFiltrosPipeline,
+  possuiFiltroAtivo,
+  salvarHistoricoPipeline,
+} from '../utils/filtrosPipeline'
 
+const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 const formRef = ref(null)
 const formValido = ref(false)
@@ -648,6 +781,42 @@ const refSolicitante = ref(null)
 const refIdExterno = ref(null)
 const githubLoading = ref(false)
 const githubIssues = ref([])
+const historicoExecucoes = ref([])
+const filtrosHistoricoPipeline = reactive(normalizarFiltrosPipeline(route.query))
+
+const etapaOptions = [
+  { label: 'Normalização', value: 'normalizar' },
+  { label: 'Solicitação', value: 'solicitacao' },
+  { label: 'Validação', value: 'validar' },
+  { label: 'Estruturação', value: 'estruturar' },
+  { label: 'Publicar', value: 'publicar' },
+]
+const statusEtapaOptions = [
+  { label: 'OK', value: 'ok' },
+  { label: 'Aviso', value: 'warn' },
+  { label: 'Erro', value: 'error' },
+  { label: 'Executando', value: 'running' },
+]
+const historicoPipelineHeaders = [
+  { title: 'Data', key: 'executadoEm', width: '130px' },
+  { title: 'Etapa', key: 'label' },
+  { title: 'Status', key: 'status', width: '90px' },
+  { title: 'Duração', key: 'duration', width: '90px' },
+  { title: 'Responsável', key: 'solicitante', width: '120px' },
+  { title: 'Correlation ID', key: 'correlationId', width: '130px' },
+  { title: 'Log', key: 'log' },
+]
+
+const etapasHistoricoFiltradas = computed(() => filtrarEtapasPipeline(
+  achatarHistoricoPipeline(historicoExecucoes.value),
+  filtrosHistoricoPipeline,
+))
+const temFiltroHistoricoPipeline = computed(() => possuiFiltroAtivo(filtrosHistoricoPipeline))
+
+watch(
+  () => route.query,
+  (query) => Object.assign(filtrosHistoricoPipeline, normalizarFiltrosPipeline(query)),
+)
 
 const githubForm = reactive({
   enabled: false,
@@ -731,6 +900,8 @@ watch([form, githubForm], () => {
 }, { deep: true })
 
 onMounted(() => {
+  historicoExecucoes.value = carregarHistoricoPipeline()
+
   const saved = localStorage.getItem(DRAFT_KEY)
   if (saved) {
     try {
@@ -958,8 +1129,43 @@ async function executarPipeline() {
     registrarErroNoStepAtual(mensagem)
     toast.error(mensagem)
   } finally {
+    registrarHistoricoExecucao()
     executando.value = false
   }
+}
+
+function registrarHistoricoExecucao() {
+  if (!correlatioId.value) return
+  const registro = criarRegistroExecucaoPipeline({
+    correlationId: correlatioId.value,
+    steps: steps.map((step) => ({ ...step })),
+    solicitante: form.solicitante,
+    modoDemo: demoMode.value,
+    statusGeral: resultadoStatus.value === 'CONCLUÍDO' ? 'CONCLUIDO' : 'ERRO',
+  })
+  historicoExecucoes.value = [registro, ...historicoExecucoes.value].slice(0, 30)
+  salvarHistoricoPipeline(historicoExecucoes.value)
+}
+
+function sincronizarQueryHistoricoPipeline() {
+  router.replace({ path: route.path, query: criarQueryFiltrosPipeline(filtrosHistoricoPipeline) })
+}
+
+function limparFiltrosHistoricoPipeline() {
+  Object.assign(filtrosHistoricoPipeline, {
+    etapa: '', status: '', categoria: '', correlation_id: '', data: '', busca: '', duracao_min: 0,
+  })
+  sincronizarQueryHistoricoPipeline()
+}
+
+function filtrarPipelinePorCorrelation(correlationId) {
+  filtrosHistoricoPipeline.correlation_id = correlationId
+  sincronizarQueryHistoricoPipeline()
+}
+
+function formatarDataPipeline(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 async function executarReal() {
@@ -1320,4 +1526,5 @@ function toastIcon(type) {
 .toast-info     { background: #1e3a5f; border: 1px solid #60a5fa; color: #bfdbfe; }
 .toast-enter-active, .toast-leave-active { transition: all .25s ease; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(40px); }
+.correlation-link { color: var(--accent); cursor: pointer; text-decoration: underline dotted; font-size: 11px; }
 </style>

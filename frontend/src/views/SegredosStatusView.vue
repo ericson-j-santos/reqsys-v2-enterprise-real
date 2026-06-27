@@ -1,5 +1,5 @@
 ﻿<template>
-  <section class="page">
+  <section class="page" data-testid="route-segredos-status">
     <PageHeader
       title="Status de Segredos"
       subtitle="Diagnóstico da origem dos segredos do backend, sem exposição de valores."

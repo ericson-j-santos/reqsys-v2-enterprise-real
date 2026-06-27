@@ -1,5 +1,5 @@
 <template>
-  <section class="page">
+  <section class="page" data-testid="route-specs">
 
     <!-- Cabeçalho -->
     <div class="page-header">
