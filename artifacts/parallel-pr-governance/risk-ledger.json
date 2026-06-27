@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T19:03:00-03:00",
+  "items": [
+    {"id": "runtime_overlap", "severity": "high", "action": "pause new backend and frontend runtime changes"},
+    {"id": "workflow_overlap", "severity": "medium", "action": "pause workflow edits while CI PRs are open"},
+    {"id": "main_drift", "severity": "medium", "action": "branch from current main and keep one file group per PR"},
+    {"id": "artifact_sprawl", "severity": "low", "action": "use schema_version and domain folders"}
+  ],
+  "decision": "use only docs, artifacts, runbooks and dashboard contracts for parallel PRs"
+}
