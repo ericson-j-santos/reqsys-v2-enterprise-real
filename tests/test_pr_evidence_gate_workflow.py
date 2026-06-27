@@ -51,3 +51,15 @@ def test_pr_evidence_gate_resolves_pr_from_workflow_run_payload():
     assert 'if (workflowRunPullRequest?.number)' in text
     assert 'pull_number: Number(workflowRunPullRequest.number)' in text
     assert 'github.event.workflow_run.head_sha' in text
+
+
+def test_pr_evidence_gate_skips_workflow_run_without_pull_request():
+    text = read_workflow()
+
+    assert 'name: Resolver contexto' in text
+    assert 'workflow_run_without_pull_request' in text
+    assert 'name: Registrar skip seguro sem PR' in text
+    assert 'if: steps.ctx.outputs.enabled == \'false\'' in text
+    assert 'if: steps.ctx.outputs.enabled == \'true\'' in text
+    assert '"status": "skipped"' in text
+    assert 'PR Evidence Gate skipped safely' in text

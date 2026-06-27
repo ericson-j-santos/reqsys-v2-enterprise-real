@@ -47,8 +47,72 @@ jobs:
       MAX_WAIT_SECONDS: '180'
       POLL_SECONDS: '15'
     steps:
+      - name: Resolver contexto
+        id: ctx
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
+            SHA="${{ github.event.workflow_run.head_sha }}"
+
+            if [ -z "${PR_NUMBER}" ] || [ "${PR_NUMBER}" = "null" ]; then
+              echo "enabled=false" >> "$GITHUB_OUTPUT"
+              echo "reason=workflow_run_without_pull_request" >> "$GITHUB_OUTPUT"
+              echo "head_sha=${SHA}" >> "$GITHUB_OUTPUT"
+            else
+              echo "enabled=true" >> "$GITHUB_OUTPUT"
+              echo "reason=workflow_run_with_pull_request" >> "$GITHUB_OUTPUT"
+              echo "head_sha=${SHA}" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "reason=${{ github.event_name }}" >> "$GITHUB_OUTPUT"
+            echo "head_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Registrar skip seguro sem PR
+        if: steps.ctx.outputs.enabled == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+
+          cat > audit/pr-evidence-gate.json << JSON
+          {
+            "schema_version": "1.0.3",
+            "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "repository": "${{ github.repository }}",
+            "pr": null,
+            "gate": {
+              "status": "skipped",
+              "reason": "${{ steps.ctx.outputs.reason }}",
+              "failures": [],
+              "pending": [],
+              "required_workflows": [],
+              "optional_workflows": [],
+              "observed_artifacts": []
+            },
+            "workflow_runs": []
+          }
+          JSON
+
+          cat > audit/pr-evidence-gate.md << MD
+          # PR Evidence Gate
+
+          - Repository: ${{ github.repository }}
+          - PR: unresolved
+          - Head SHA: ${{ steps.ctx.outputs.head_sha }}
+          - Status: skipped
+          - Reason: ${{ steps.ctx.outputs.reason }}
+
+          Execução ignorada de forma segura porque o workflow_run não está associado a um PR.
+          MD
+
       - name: Build audit evidence
         id: evidence
+        if: steps.ctx.outputs.enabled == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -288,7 +352,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr-evidence-gate-${{ steps.evidence.outputs.head_sha || github.sha }}
+          name: pr-evidence-gate-${{ steps.evidence.outputs.head_sha || steps.ctx.outputs.head_sha || github.sha }}
           path: audit/
           if-no-files-found: error
           retention-days: 30
@@ -298,6 +362,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "${{ steps.ctx.outputs.enabled }}" == "false" ]]; then
+            echo "PR Evidence Gate skipped safely: ${{ steps.ctx.outputs.reason }}"
+            exit 0
+          fi
           status='${{ steps.evidence.outputs.status }}'
           if [[ "$status" != "passed" ]]; then
             echo "PR Evidence Gate failed with status: ${status:-unknown}"
