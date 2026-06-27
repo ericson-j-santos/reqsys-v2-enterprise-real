@@ -76,3 +76,40 @@ def test_endpoint_orchestrator_batch(client):
     assert data['total'] == 2
     assert data['por_tema']['agile_scrum'] == 1
     assert data['por_tema']['seguranca_governanca'] == 1
+
+
+def test_endpoint_orchestrator_persiste_evento_e_expõe_analytics(client, correlation_id):
+    resp = client.post(
+        '/v1/agents/orchestrator/route',
+        json={
+            'titulo': 'Pipeline CI com falha critica',
+            'descricao': 'Workflow GitHub Actions com pytest, coverage e gate de merge bloqueado.',
+            'origem': 'pytest-analytics',
+            'prioridade_informada': 'alta',
+            'ambiente': 'dev',
+        },
+        headers={'X-Correlation-ID': correlation_id},
+    )
+
+    assert resp.status_code == 200
+    rota = resp.json()['data']
+    assert rota['routing_event_id'] > 0
+    assert rota['correlation_id'] == correlation_id
+
+    summary = client.get('/v1/agents/orchestrator/analytics/summary')
+    assert summary.status_code == 200
+    summary_data = summary.json()['data']
+    assert summary_data['total_eventos'] >= 1
+    assert summary_data['confianca_media'] > 0
+
+    themes = client.get('/v1/agents/orchestrator/analytics/themes')
+    assert themes.status_code == 200
+    assert any(item['valor'] == 'ci_cd' for item in themes.json()['data']['themes'])
+
+    coordinators = client.get('/v1/agents/orchestrator/analytics/coordinators')
+    assert coordinators.status_code == 200
+    assert any(item['valor'] == 'reqsys-ci-coordinator' for item in coordinators.json()['data']['coordinators'])
+
+    risk = client.get('/v1/agents/orchestrator/analytics/risk')
+    assert risk.status_code == 200
+    assert risk.json()['data']['risk']['prioridade_alta'] >= 1
