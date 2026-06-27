@@ -1,0 +1,61 @@
+name: Completion Projection Report
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '25 */6 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/completion-projection-report.yml'
+      - 'scripts/generate_completion_projection.py'
+      - 'docs/contracts/completion-projection-report.schema.json'
+      - 'docs/runbooks/completion-projection-report.md'
+
+concurrency:
+  group: completion-projection-report-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  completion-projection:
+    name: Build completion projection report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build completion projection artifact
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: python scripts/generate_completion_projection.py
+
+      - name: Validate artifact against contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          schema = json.loads(Path('docs/contracts/completion-projection-report.schema.json').read_text(encoding='utf-8'))
+          report = json.loads(Path('audit/projection/completion-projection-report.json').read_text(encoding='utf-8'))
+          missing = [key for key in schema['required'] if key not in report]
+          if missing:
+              raise AssertionError(f'completion projection report missing keys: {missing}')
+          if report['mode'] != 'report_only':
+              raise AssertionError('completion projection report must be report_only')
+          print('completion projection report valid:', len(schema['required']), 'required keys present')
+          PY
+
+      - name: Upload completion projection artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: completion-projection-report-${{ github.run_id }}
+          path: audit/projection/
+          if-no-files-found: error
+          retention-days: 30
