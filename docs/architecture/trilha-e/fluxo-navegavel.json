@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0.0",
+  "updated_at": "2026-06-27T18:00:00Z",
+  "trail_id": "trilha-e",
+  "trail_name": "Arquitetura Viva",
+  "entry_points": [
+    { "id": "hub", "label": "Hub Trilha E", "href": "docs/architecture/trilha-e/index.html" },
+    { "id": "aac", "label": "Architecture-as-Code", "href": "docs/architecture/trilha-e/architecture-as-code.json" },
+    { "id": "runtime-dashboard", "label": "Runtime Dashboard", "href": "/api/runtime/dashboard", "type": "api" }
+  ],
+  "nodes": [
+    { "id": "diagramas-vivos", "label": "Diagramas Vivos", "type": "capability", "href": "docs/architecture/trilha-e/diagrams.json", "icon": "diagram" },
+    { "id": "adrs", "label": "ADRs", "type": "capability", "href": "docs/architecture/trilha-e/inventory.json#adrs", "icon": "decision" },
+    { "id": "runtime-topology", "label": "Runtime Topology", "type": "capability", "href": "docs/architecture/trilha-e/runtime-topology.json", "icon": "topology" },
+    { "id": "inventory", "label": "Inventory", "type": "capability", "href": "docs/architecture/trilha-e/inventory.json", "icon": "inventory" },
+    { "id": "architecture-as-code", "label": "Architecture-as-Code", "type": "capability", "href": "docs/architecture/trilha-e/architecture-as-code.json", "icon": "code" },
+    { "id": "hub-html", "label": "Hub Navegável", "type": "dashboard", "href": "docs/architecture/trilha-e/index.html", "icon": "hub" },
+    { "id": "legacy-diagrams", "label": "Viewer Legado", "type": "dashboard", "href": "docs/arquitetura/index.html", "icon": "legacy" },
+    { "id": "living-traceability", "label": "Living Architecture Map", "type": "traceability", "href": "docs/traceability/living-architecture-map.json", "icon": "map" },
+    { "id": "runtime-health", "label": "Runtime Health", "type": "api", "href": "/api/runtime/health", "icon": "health" },
+    { "id": "runtime-analytics", "label": "Runtime Analytics", "type": "api", "href": "/api/runtime/analytics", "icon": "analytics" },
+    { "id": "adr-035", "label": "ADR-035 Trilha E", "type": "adr", "href": "docs/adr/ADR-035-trilha-e-arquitetura-viva.md", "icon": "adr" },
+    { "id": "runbook", "label": "Runbook Trilha E", "type": "runbook", "href": "docs/runbooks/trilha-e-arquitetura-viva.md", "icon": "runbook" },
+    { "id": "workflow", "label": "Workflow Validação", "type": "workflow", "href": ".github/workflows/trilha-e-arquitetura-viva.yml", "icon": "ci" },
+    { "id": "evidence-hub", "label": "Operational Evidence Hub", "type": "dashboard", "href": "docs/dashboard/operational-evidence-hub.html", "icon": "evidence" },
+    { "id": "correlation-graph", "label": "Correlation Graph", "type": "doc", "href": "docs/architecture/runtime-correlation-graph.md", "icon": "graph" }
+  ],
+  "edges": [
+    { "from": "architecture-as-code", "to": "diagramas-vivos", "relationship": "declares", "navigable": true },
+    { "from": "architecture-as-code", "to": "adrs", "relationship": "declares", "navigable": true },
+    { "from": "architecture-as-code", "to": "runtime-topology", "relationship": "declares", "navigable": true },
+    { "from": "architecture-as-code", "to": "inventory", "relationship": "declares", "navigable": true },
+    { "from": "architecture-as-code", "to": "hub-html", "relationship": "renders", "navigable": true },
+    { "from": "diagramas-vivos", "to": "legacy-diagrams", "relationship": "extends", "navigable": true },
+    { "from": "diagramas-vivos", "to": "hub-html", "relationship": "visualizes", "navigable": true },
+    { "from": "adrs", "to": "adr-035", "relationship": "includes", "navigable": true },
+    { "from": "runtime-topology", "to": "runtime-health", "relationship": "observes", "navigable": true },
+    { "from": "runtime-topology", "to": "runtime-analytics", "relationship": "correlates", "navigable": true },
+    { "from": "runtime-topology", "to": "correlation-graph", "relationship": "documents", "navigable": true },
+    { "from": "hub-html", "to": "runbook", "relationship": "documents", "navigable": true },
+    { "from": "hub-html", "to": "workflow", "relationship": "validates", "navigable": true },
+    { "from": "living-traceability", "to": "architecture-as-code", "relationship": "indexes", "navigable": true },
+    { "from": "evidence-hub", "to": "living-traceability", "relationship": "consumes", "navigable": true },
+    { "from": "workflow", "to": "architecture-as-code", "relationship": "validates", "navigable": true }
+  ],
+  "drill_down": [
+    { "origin": "hub-html", "target": "diagramas-vivos", "action": "Abrir diagramas Mermaid" },
+    { "origin": "hub-html", "target": "adrs", "action": "Listar ADRs versionados" },
+    { "origin": "hub-html", "target": "runtime-topology", "action": "Explorar nós runtime" },
+    { "origin": "hub-html", "target": "inventory", "action": "Consultar inventário de componentes" },
+    { "origin": "runtime-health", "target": "runtime-analytics", "action": "Correlacionar health com analytics" }
+  ]
+}
