@@ -1,5 +1,5 @@
 <template>
-  <section class="page">
+  <section class="page" data-testid="route-govbi-ia">
     <PageHeader
       title="GovBI IA"
       subtitle="Consultas analíticas em linguagem natural com BI governado por inteligência artificial."

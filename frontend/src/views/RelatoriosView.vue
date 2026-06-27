@@ -1,6 +1,6 @@
 ﻿<!-- Dashboard de Relatórios SSRS — ReqSys Enterprise -->
 <template>
-  <section class="page">
+  <section class="page" data-testid="route-relatorios">
     <!-- ─── Cabeçalho ────────────────────────────────────────────────── -->
     <div class="page-header">
       <div>

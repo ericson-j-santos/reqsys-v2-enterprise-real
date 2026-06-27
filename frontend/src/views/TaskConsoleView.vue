@@ -1,5 +1,5 @@
 <template>
-  <section class="page task-console-page">
+  <section class="page task-console-page" data-testid="route-task-console">
     <PageHeader
       title="Task Console"
       subtitle="Operacao ReqSys para revisar tarefas e preparar envio ao Planner."

@@ -1,5 +1,5 @@
 <template>
-  <main class="login-page">
+  <main class="login-page" data-testid="route-login">
     <v-card class="login-card" :width="cardWidth">
       <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
         <span>ReqSys Enterprise</span>

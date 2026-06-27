@@ -1,5 +1,5 @@
 <template>
-  <div class="ai-rec-page">
+  <div class="ai-rec-page" data-testid="route-recomendacoes-ia">
     <div class="page-header">
       <div>
         <h1>Recomendações IA</h1>

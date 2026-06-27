@@ -1,5 +1,5 @@
 <template>
-  <div class="page">
+  <div class="page" data-testid="route-pipeline">
     <!-- Toast container -->
     <div class="toast-container">
       <transition-group name="toast">
