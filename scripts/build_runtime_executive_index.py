@@ -44,9 +44,9 @@ def normalize_status(value: Any, default: str = "unknown") -> str:
 
 def status_to_risk(status: Any) -> str:
     normalized = normalize_status(status)
-    if normalized in {"passed", "success", "healthy", "stable", "low", "merge_imediato"}:
+    if normalized in {"passed", "success", "healthy", "stable", "low", "merge_imediato", "true", "ok"}:
         return "low"
-    if normalized in {"failed", "failure", "critical", "high", "blocked", "isolamento_obrigatorio"}:
+    if normalized in {"failed", "failure", "critical", "high", "blocked", "isolamento_obrigatorio", "false"}:
         return "high"
     return "medium"
 
@@ -93,44 +93,100 @@ def summarize_readiness(health: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def summarize_merge_intelligence(merge_index: dict[str, Any], lane_priority: dict[str, Any]) -> dict[str, Any]:
+def summarize_merge_intelligence(
+    merge_index: dict[str, Any],
+    lane_priority: dict[str, Any],
+    conflict_risk_report: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    conflict_risk_report = conflict_risk_report or {}
     intelligence = merge_index.get("merge_intelligence") or {}
     ranking = lane_priority.get("ranking") or merge_index.get("lane_priority", {}).get("ranking") or []
-    recommendation = normalize_status(intelligence.get("recommendation"), "aguardar_estabilizacao")
+    risk = normalize_status(conflict_risk_report.get("risk"), normalize_status(intelligence.get("risk")))
+    lane = normalize_status(conflict_risk_report.get("lane"), normalize_status(intelligence.get("lane")))
+    parallel_safe = bool(conflict_risk_report.get("parallel_safe", intelligence.get("parallel_safe", False)))
+    recommendation = normalize_status(
+        conflict_risk_report.get("recommendation"),
+        normalize_status(intelligence.get("recommendation"), "aguardar_estabilizacao"),
+    )
     queue_saturation = normalize_status(intelligence.get("queue_saturation"), "unknown")
-    blocking_reasons = intelligence.get("blocking_reasons") or []
+    blocking_reasons = conflict_risk_report.get("blocking_reasons") or intelligence.get("blocking_reasons") or []
+    critical_files = conflict_risk_report.get("critical_files") or []
+    available = bool(conflict_risk_report) or (bool(merge_index) and bool(merge_index.get("source_available", True)))
+    score = safe_number(intelligence.get("mergeability_score"), default=0)
+    if conflict_risk_report and not intelligence.get("mergeability_score"):
+        score = 92 if risk == "low" and parallel_safe else 75 if risk in {"medium", "high"} else 30
+
     return {
-        "available": bool(merge_index) and bool(merge_index.get("source_available", True)),
-        "risk": normalize_status(intelligence.get("risk")),
-        "lane": normalize_status(intelligence.get("lane")),
-        "parallel_safe": bool(intelligence.get("parallel_safe")),
-        "mergeability_score": safe_number(intelligence.get("mergeability_score"), default=0),
+        "available": available,
+        "risk": risk,
+        "lane": lane,
+        "parallel_safe": parallel_safe,
+        "mergeability_score": score,
         "recommendation": recommendation,
         "queue_saturation": queue_saturation,
         "queue_pressure": safe_number(intelligence.get("queue_pressure"), default=0),
-        "confidence": normalize_status(intelligence.get("confidence"), "low"),
+        "confidence": normalize_status(intelligence.get("confidence"), "medium" if conflict_risk_report else "low"),
         "blocking_reasons": blocking_reasons,
+        "critical_file_count": len(critical_files),
         "hotspot_count": len(merge_index.get("hotspot_heatmap") or []),
         "safe_lane_count": sum(1 for item in ranking if normalize_status(item.get("parallelism")) == "safe"),
-        "risk_level": status_to_risk(recommendation if blocking_reasons else queue_saturation),
+        "risk_level": status_to_risk(recommendation if blocking_reasons else risk or queue_saturation),
+        "source_artifacts": {
+            "merge_intelligence_index": bool(merge_index),
+            "lane_priority": bool(lane_priority),
+            "conflict_risk_report": bool(conflict_risk_report),
+        },
     }
 
 
-def summarize_finalization(health: dict[str, Any]) -> dict[str, Any]:
-    finalization = health.get("delivery_finalization") or {}
-    status = normalize_status(finalization.get("status"))
+def summarize_finalization(health: dict[str, Any], finalization_report: dict[str, Any] | None = None) -> dict[str, Any]:
+    finalization_report = finalization_report or {}
+    finalization = finalization_report or health.get("delivery_finalization") or {}
+    status = normalize_status(finalization.get("status") or finalization.get("overall_status"))
+    indicators = finalization.get("indicators") or finalization.get("checks") or []
+    passed_indicators = [
+        item for item in indicators
+        if normalize_status(item.get("status")) in {"passed", "success", "ok", "healthy"}
+    ]
+    indicator_count = int(finalization.get("indicator_count") or len(indicators) or 0)
+    passed_indicator_count = int(finalization.get("passed_indicator_count") or len(passed_indicators) or 0)
     return {
-        "available": bool(finalization.get("available")),
+        "available": bool(finalization_report) or bool(finalization.get("available")),
         "status": status,
-        "final_score": safe_number(finalization.get("final_score"), default=0),
-        "residual_gap": safe_number(finalization.get("residual_gap"), default=0),
-        "indicator_count": int(finalization.get("indicator_count") or 0),
-        "passed_indicator_count": int(finalization.get("passed_indicator_count") or 0),
+        "final_score": safe_number(
+            finalization.get("final_score"),
+            finalization.get("score"),
+            finalization.get("finalization_percent"),
+            default=0,
+        ),
+        "residual_gap": safe_number(finalization.get("residual_gap"), finalization.get("remaining_gap_pp"), default=0),
+        "indicator_count": indicator_count,
+        "passed_indicator_count": passed_indicator_count,
         "risk": status_to_risk(status),
+        "source_artifact": "delivery-finalization-report" if finalization_report else "health.delivery_finalization",
     }
 
 
-def summarize_evidence_gate(health: dict[str, Any]) -> dict[str, Any]:
+def summarize_evidence_gate(health: dict[str, Any], evidence_gate_report: dict[str, Any] | None = None) -> dict[str, Any]:
+    evidence_gate_report = evidence_gate_report or {}
+    if evidence_gate_report:
+        gate = evidence_gate_report.get("gate") or evidence_gate_report
+        status = normalize_status(gate.get("status"))
+        failures = gate.get("failures") or []
+        required = gate.get("required_workflows") or []
+        passed_count = sum(1 for item in required if int(item.get("successful_runs") or 0) > 0)
+        failed_count = len(failures)
+        return {
+            "available": True,
+            "status": status,
+            "passed_count": passed_count,
+            "failed_count": failed_count,
+            "required_workflow_count": len(required),
+            "observed_artifact_count": len(gate.get("observed_artifacts") or []),
+            "risk": "high" if failed_count else status_to_risk(status),
+            "source_artifact": "pr-evidence-gate",
+        }
+
     checks = health.get("checks") or []
     gate_checks = [
         item for item in checks
@@ -145,6 +201,7 @@ def summarize_evidence_gate(health: dict[str, Any]) -> dict[str, Any]:
             "passed_count": 0,
             "failed_count": 0,
             "risk": "medium",
+            "source_artifact": "fallback",
         }
     failed = [item for item in gate_checks if status_to_risk(item.get("status")) == "high"]
     passed = [item for item in gate_checks if normalize_status(item.get("status")) in {"passed", "success"}]
@@ -154,6 +211,7 @@ def summarize_evidence_gate(health: dict[str, Any]) -> dict[str, Any]:
         "passed_count": len(passed),
         "failed_count": len(failed),
         "risk": "high" if failed else "low" if len(passed) == len(gate_checks) else "medium",
+        "source_artifact": "health.checks",
     }
 
 
@@ -162,6 +220,9 @@ def build_runtime_executive_index(
     merge_index: dict[str, Any] | None = None,
     lane_priority: dict[str, Any] | None = None,
     repo: str | None = None,
+    evidence_gate_report: dict[str, Any] | None = None,
+    finalization_report: dict[str, Any] | None = None,
+    conflict_risk_report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     merge_index = merge_index or {}
     lane_priority = lane_priority or {}
@@ -169,9 +230,9 @@ def build_runtime_executive_index(
 
     health_summary = summarize_health(health)
     readiness_summary = summarize_readiness(health)
-    merge_summary = summarize_merge_intelligence(merge_index, lane_priority)
-    evidence_summary = summarize_evidence_gate(health)
-    finalization_summary = summarize_finalization(health)
+    merge_summary = summarize_merge_intelligence(merge_index, lane_priority, conflict_risk_report)
+    evidence_summary = summarize_evidence_gate(health, evidence_gate_report)
+    finalization_summary = summarize_finalization(health, finalization_report)
 
     consolidated_risk = worst_risk(
         health_summary["risk"],
@@ -191,7 +252,7 @@ def build_runtime_executive_index(
     executive_score = round(sum(score_values) / len(score_values), 2)
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "repo": repo_name,
         "generated_at_epoch": int(time.time()),
         "summary": {
@@ -215,6 +276,9 @@ def build_runtime_executive_index(
             "merge_intelligence_index": "docs/ops-dashboard/data/merge-intelligence-index.json",
             "merge_lane_priority": "docs/ops-dashboard/data/merge-lane-priority.json",
             "runtime_executive_index": "docs/ops-dashboard/data/runtime-executive-index.json",
+            "conflict_risk_report": "docs/ops-dashboard/data/conflict-risk-report.json",
+            "pr_evidence_gate": "audit/pr-evidence-gate.json",
+            "delivery_finalization_report": "artifacts/delivery-finalization/delivery-finalization-report.json",
             "actions": f"https://github.com/{repo_name}/actions" if repo_name != "unknown" else "",
             "pulls": f"https://github.com/{repo_name}/pulls" if repo_name != "unknown" else "",
         },
@@ -223,6 +287,7 @@ def build_runtime_executive_index(
             "no_runtime_github_api_call",
             "safe_fallback_when_source_artifact_missing",
             "report_only_contract_for_public_dashboard",
+            "real_artifact_precedence_when_available",
         ],
     }
 
@@ -232,6 +297,9 @@ def main() -> int:
     parser.add_argument("--health", default="docs/ops-dashboard/data/health.json")
     parser.add_argument("--merge-intelligence", default="docs/ops-dashboard/data/merge-intelligence-index.json")
     parser.add_argument("--lane-priority", default="docs/ops-dashboard/data/merge-lane-priority.json")
+    parser.add_argument("--evidence-gate", default="audit/pr-evidence-gate.json")
+    parser.add_argument("--delivery-finalization", default="artifacts/delivery-finalization/delivery-finalization-report.json")
+    parser.add_argument("--conflict-risk-report", default="docs/ops-dashboard/data/conflict-risk-report.json")
     parser.add_argument("--repo", default="")
     parser.add_argument("--output", default="docs/ops-dashboard/data/runtime-executive-index.json")
     args = parser.parse_args()
@@ -241,6 +309,9 @@ def main() -> int:
         load_json(args.merge_intelligence),
         load_json(args.lane_priority),
         args.repo or None,
+        load_json(args.evidence_gate),
+        load_json(args.delivery_finalization),
+        load_json(args.conflict_risk_report),
     )
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
