@@ -1,0 +1,107 @@
+{
+  "schema_version": "1.0.0",
+  "updated_at": "2026-06-27T00:00:00Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "governance": {
+    "owner": "ReqSys Architecture Governance",
+    "mode": "report_only",
+    "canonical_runbook": "docs/runbooks/living-architecture-traceability.md"
+  },
+  "workflows": [
+    {
+      "id": "ci",
+      "name": "CI — ReqSys v2 Enterprise",
+      "path": ".github/workflows/ci.yml",
+      "purpose": "Gate principal de backend, frontend, segurança e evidências mínimas de CI.",
+      "artifacts": ["ci-evidence"],
+      "runbooks": ["docs/runbooks/main-smoke-ci.md", "docs/runbooks/pr-evidence-gate.md"]
+    },
+    {
+      "id": "operational-artifact-schema-validation",
+      "name": "Operational Artifact Schema Validation",
+      "path": ".github/workflows/operational-artifact-schema-validation.yml",
+      "purpose": "Validação report-only dos contratos dos artifacts operacionais.",
+      "artifacts": ["operational-artifact-schema-validation"],
+      "runbooks": ["docs/runbooks/operational-artifact-schema-validation.md"]
+    },
+    {
+      "id": "operational-artifact-discovery-index",
+      "name": "Operational Artifact Discovery Index",
+      "path": ".github/workflows/operational-artifact-discovery-index.yml",
+      "purpose": "Descoberta e indexação de artifacts operacionais publicados pelos workflows.",
+      "artifacts": ["operational-artifact-discovery-index"],
+      "runbooks": ["docs/runbooks/operational-artifact-discovery-index.md"]
+    },
+    {
+      "id": "living-architecture-traceability",
+      "name": "Living Architecture Traceability",
+      "path": ".github/workflows/living-architecture-traceability.yml",
+      "purpose": "Validação report-only de links internos principais e artifacts declarados sem contrato.",
+      "artifacts": ["living-architecture-traceability-report"],
+      "runbooks": ["docs/runbooks/living-architecture-traceability.md"]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "operational-artifact-schema-validation",
+      "name": "operational-artifact-schema-validation-${{ github.run_id }}",
+      "producer_workflow": "operational-artifact-schema-validation",
+      "contract": "docs/contracts/contract-validation-report.schema.json",
+      "consumer_dashboards": ["operational-command-center"],
+      "retention_days": 30
+    },
+    {
+      "id": "operational-artifact-discovery-index",
+      "name": "operational-artifact-discovery-index-${{ github.run_id }}",
+      "producer_workflow": "operational-artifact-discovery-index",
+      "contract": "docs/contracts/operational-artifact-discovery-index.schema.json",
+      "consumer_dashboards": ["operational-command-center"],
+      "retention_days": 30
+    },
+    {
+      "id": "ci-evidence",
+      "name": "ci-evidence-${{ github.run_id }}",
+      "producer_workflow": "ci",
+      "contract": "docs/contracts/delivery-evidence-report.schema.json",
+      "consumer_dashboards": ["command-center-evidence-index"],
+      "retention_days": 30
+    },
+    {
+      "id": "living-architecture-traceability-report",
+      "name": "living-architecture-traceability-${{ github.run_id }}",
+      "producer_workflow": "living-architecture-traceability",
+      "contract": "docs/contracts/living-architecture-map.schema.json",
+      "consumer_dashboards": ["command-center-navigation-map"],
+      "retention_days": 30
+    }
+  ],
+  "schemas": [
+    { "id": "living-architecture-map", "path": "docs/contracts/living-architecture-map.schema.json", "domain": "traceability", "version": "1.0.0" },
+    { "id": "product-intelligence-event", "path": "schemas/product-intelligence/product-intelligence-event.schema.json", "domain": "product-intelligence", "version": "1.0.0" },
+    { "id": "operational-health-dashboard", "path": "docs/operations/operational-health-dashboard.schema.json", "domain": "operations", "version": "1.0.0" }
+  ],
+  "dashboards": [
+    { "id": "operational-command-center", "path": "docs/dashboard/operational-command-center.md", "data_sources": ["operational-artifact-schema-validation", "operational-artifact-discovery-index"], "runbooks": ["docs/runbooks/operational-governance-dashboard.md"] },
+    { "id": "command-center-evidence-index", "path": "docs/dashboard/command-center-evidence-index.md", "data_sources": ["ci-evidence"], "runbooks": ["docs/runbooks/delivery-evidence-index.md"] },
+    { "id": "command-center-navigation-map", "path": "docs/dashboard/command-center-navigation-map.md", "data_sources": ["living-architecture-traceability-report"], "runbooks": ["docs/runbooks/living-architecture-traceability.md"] },
+    { "id": "ops-dashboard", "path": "docs/ops-dashboard/index.html", "data_sources": ["docs/ops-dashboard/data/health.json"], "runbooks": ["docs/runbooks/ops-dashboard.md"] }
+  ],
+  "runbooks": [
+    { "id": "living-architecture-traceability", "path": "docs/runbooks/living-architecture-traceability.md", "covers": ["workflows", "artifacts", "schemas", "dashboards", "runbooks", "recent_prs", "ci_evidence"] },
+    { "id": "operational-artifact-schema-validation", "path": "docs/runbooks/operational-artifact-schema-validation.md", "covers": ["artifacts", "schemas"] },
+    { "id": "operational-artifact-discovery-index", "path": "docs/runbooks/operational-artifact-discovery-index.md", "covers": ["artifacts"] }
+  ],
+  "recent_prs": [
+    { "id": "PR145", "url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/145", "evidence": ["docs/evidence/pr145-clean-replacement-evidence.md", "docs/audit/pr145-clean-replacement-audit.md"] },
+    { "id": "PR225", "url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/225", "evidence": ["docs/evidence/pr225-evidence-navigation-ui-sync.md", "docs/product-intelligence/PR225_SUPERSEDED_BY_MAIN.md"] }
+  ],
+  "ci_evidence": [
+    { "id": "ci-evidence-refresh-2026-06-25", "path": "docs/operations/ci-evidence-refresh-2026-06-25.md", "source_workflow": "ci" },
+    { "id": "post-merge-ci-fix-2026-06-23", "path": "docs/POST_MERGE_CI_FIX_2026_06_23.md", "source_workflow": "ci" }
+  ],
+  "validation": {
+    "workflow": ".github/workflows/living-architecture-traceability.yml",
+    "mode": "report_only",
+    "checks": ["json_loadable", "required_top_level_sections", "internal_paths_exist", "artifact_contracts_exist", "declared_workflow_paths_exist"]
+  }
+}
