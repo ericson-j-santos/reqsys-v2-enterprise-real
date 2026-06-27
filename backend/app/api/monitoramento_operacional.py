@@ -241,7 +241,28 @@ def _spa_drilldown(path: str, query: dict | None = None) -> dict:
     return {'path': path, 'query': query or {}}
 
 
-def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
+def _incident_timeline_items(events: list[dict] | None) -> list[dict]:
+    items: list[dict] = []
+    for index, event in enumerate((events or [])[-20:]):
+        correlation_id = event.get('correlation_id')
+        query = {'secao': 'timeline'}
+        if correlation_id:
+            query['correlation_id'] = correlation_id
+        items.append(
+            {
+                'id': f"{event.get('event_type', 'event')}-{event.get('event_at', index)}",
+                'event_type': event.get('event_type'),
+                'status': event.get('status'),
+                'severity': 'high' if str(event.get('status')) in {'degraded', 'blocked', 'vermelho'} else 'medium',
+                'correlation_id': correlation_id,
+                'occurred_at': event.get('event_at'),
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', query),
+            }
+        )
+    return items
+
+
+def _criar_runtime_dashboard_schema(snapshot: dict, incident_events: list[dict] | None = None) -> dict:
     topology = build_runtime_topology(snapshot, [snapshot], [], [])
     correlation_report = build_correlation_report(snapshot, [snapshot], [], [])
     observability_report = build_observability_report(snapshot, {'failure_rate': 0, 'availability_score': 100}, topology, correlation_report)
@@ -414,6 +435,12 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'items': {'classification': 'requires_public_artifacts', 'environments': ['dev', 'staging', 'prod']},
             },
             {
+                'id': 'incident-timeline',
+                'title': 'Incident Timeline',
+                'type': 'incident_timeline',
+                'items': _incident_timeline_items(incident_events),
+            },
+            {
                 'id': 'governance-evidence',
                 'title': 'Governanca e Evidencias',
                 'type': 'key_value',
@@ -482,9 +509,14 @@ def obter_api_runtime_dashboard(
     x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
     x_request_id: str | None = Header(default=None, alias='X-Request-ID'),
 ):
+    from app.api.runtime_analytics import STORE
+    from app.core.runtime_analytics import build_runtime_analytics
+
     correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
     snapshot = _criar_runtime_observability_snapshot(correlation_id)
-    return ok(_criar_runtime_dashboard_schema(snapshot), correlation_id)
+    build_runtime_analytics(STORE, snapshot)
+    incident_events = STORE.list_incident_events()
+    return ok(_criar_runtime_dashboard_schema(snapshot, incident_events), correlation_id)
 
 
 @router.get('/api/runtime/readiness')

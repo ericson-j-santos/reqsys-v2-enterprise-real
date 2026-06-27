@@ -14,6 +14,16 @@
       </div>
     </div>
 
+    <OperationalDrilldownBar
+      :breadcrumbs="breadcrumbs"
+      :filtros-ativos="filtrosAtivosBar"
+      :possui-filtros="possuiFiltrosBar"
+      :correlation-id="runtimeDashboard?.correlation_id || correlationId"
+      @navigate="navegarTrilha"
+      @remove-filter="removerFiltroBar"
+      @clear-filters="limparFiltrosBar"
+    />
+
     <p v-if="erro" class="erro" role="alert">{{ erro }}</p>
 
     <v-row dense>
@@ -106,6 +116,7 @@
           <v-select v-model="filtroEstado" :items="opcoesEstado" label="Estado (semáforo)" clearable variant="outlined" density="comfortable" />
           <v-select v-model="filtroSecao" :items="opcoesSecao" label="Seção" clearable variant="outlined" density="comfortable" />
           <v-text-field v-model="filtroBusca" label="Busca" clearable variant="outlined" density="comfortable" />
+          <v-text-field v-model="filtroCorrelationId" label="Correlation ID" clearable variant="outlined" density="comfortable" />
         </div>
       </v-card-text>
     </v-card>
@@ -153,6 +164,13 @@
       </v-card-text>
     </v-card>
 
+    <IncidentTimelinePanel
+      class="mt-4"
+      :eventos="incidentTimeline"
+      data-section="timeline"
+      @drilldown="abrirIncidente"
+    />
+
     <v-card class="analitico mt-4" elevation="0" :data-section="secaoAtiva === 'itens' ? 'active' : undefined" aria-label="Itens monitorados">
       <v-card-title>Itens monitorados</v-card-title>
       <v-card-text>
@@ -180,24 +198,38 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import OperationalMetricCard from '../components/OperationalMetricCard.vue'
 import SemaforoChip from '../components/SemaforoChip.vue'
+import OperationalDrilldownBar from '../components/OperationalDrilldownBar.vue'
+import IncidentTimelinePanel from '../components/IncidentTimelinePanel.vue'
+import { useOperationalDrilldown } from '../composables/useOperationalDrilldown'
 import {
   criarQueryFiltrosMonitoramento,
   filtrarItensMonitoramento,
   normalizarFiltrosMonitoramento,
 } from '../utils/filtrosMonitoramento'
 import { resolverDrilldownSpa } from '../utils/runtimeDrilldown'
-import { carregarRuntimeDashboard, formatarValorRuntimeCard, semaforoRuntimeCard } from '../services/runtimeDashboard'
+import { carregarPainelOperacional, formatarValorRuntimeCard, semaforoRuntimeCard } from '../services/runtimeDashboard'
 
 const route = useRoute()
 const router = useRouter()
+const {
+  breadcrumbs,
+  filtrosAtivos: filtrosAtivosBar,
+  possuiFiltros: possuiFiltrosBar,
+  aplicarFiltros: aplicarFiltrosDrilldown,
+  removerFiltro: removerFiltroBar,
+  limparFiltros: limparFiltrosBar,
+  irPara: irParaDrilldown,
+} = useOperationalDrilldown({ rotaBase: '/monitoramento-operacional' })
 const resumo = ref({})
 const itens = ref([])
 const conectores = ref([])
 const runtimeDashboard = ref(null)
+const incidentTimeline = ref([])
 const correlationId = ref('local-fallback')
 const filtroEstado = ref(route.query.estado || '')
 const filtroSecao = ref(route.query.secao || '')
 const filtroBusca = ref(route.query.busca || '')
+const filtroCorrelationId = ref(route.query.correlation_id || '')
 const carregando = ref(false)
 const erro = ref('')
 
@@ -228,6 +260,7 @@ const filtrosAtivos = computed(() => normalizarFiltrosMonitoramento({
   estado: filtroEstado.value,
   secao: filtroSecao.value,
   busca: filtroBusca.value,
+  correlation_id: filtroCorrelationId.value,
 }))
 
 const secaoAtiva = computed(() => filtrosAtivos.value.secao)
@@ -282,12 +315,30 @@ function irPara(rota) {
 }
 
 function aplicarDrilldown(filtros = {}) {
-  const query = criarQueryFiltrosMonitoramento({
+  const merged = {
     estado: filtros.estado ?? filtroEstado.value,
     secao: filtros.secao ?? filtroSecao.value,
     busca: filtros.busca ?? filtroBusca.value,
+    correlation_id: filtros.correlation_id ?? filtroCorrelationId.value,
+  }
+  aplicarFiltrosDrilldown(merged)
+  filtroEstado.value = merged.estado || ''
+  filtroSecao.value = merged.secao || ''
+  filtroBusca.value = merged.busca || ''
+  filtroCorrelationId.value = merged.correlation_id || ''
+}
+
+function navegarTrilha(crumb) {
+  irParaDrilldown({ path: crumb.path, query: route.path === crumb.path ? route.query : {} })
+}
+
+function abrirIncidente(evento) {
+  const rota = resolverDrilldownSpa(evento.spa_drilldown?.path || '/monitoramento-operacional', evento)
+  aplicarDrilldown({
+    secao: 'timeline',
+    correlation_id: evento.correlation_id,
+    ...rota.query,
   })
-  router.replace({ path: '/monitoramento-operacional', query })
 }
 
 function abrirTopologia(item) {
@@ -299,6 +350,7 @@ function sincronizarFiltrosDaUrl() {
   filtroEstado.value = filtros.estado
   filtroSecao.value = filtros.secao
   filtroBusca.value = filtros.busca
+  filtroCorrelationId.value = filtros.correlation_id
 }
 
 function sincronizarUrlDosFiltros() {
@@ -306,6 +358,7 @@ function sincronizarUrlDosFiltros() {
     estado: filtroEstado.value,
     secao: filtroSecao.value,
     busca: filtroBusca.value,
+    correlation_id: filtroCorrelationId.value,
   })
   router.replace({ path: '/monitoramento-operacional', query })
 }
@@ -335,21 +388,20 @@ async function carregarTudo() {
   carregando.value = true
   erro.value = ''
   try {
-    const [dashboard] = await Promise.all([
-      carregarRuntimeDashboard(),
-      carregarMonitoramento(),
-      carregarConectores(),
-    ])
-    runtimeDashboard.value = dashboard
+    const painel = await carregarPainelOperacional()
+    runtimeDashboard.value = painel.dashboard
+    incidentTimeline.value = painel.incident_timeline || []
+    await Promise.all([carregarMonitoramento(), carregarConectores()])
+    if (painel.correlation_id) correlationId.value = painel.correlation_id
   } catch (e) {
     erro.value = e?.message || 'Erro inesperado ao carregar monitoramento operacional'
-    await carregarConectores()
+    await Promise.all([carregarMonitoramento(), carregarConectores()])
   } finally {
     carregando.value = false
   }
 }
 
-watch([filtroEstado, filtroSecao, filtroBusca], sincronizarUrlDosFiltros)
+watch([filtroEstado, filtroSecao, filtroBusca, filtroCorrelationId], sincronizarUrlDosFiltros)
 watch(() => route.query, sincronizarFiltrosDaUrl, { deep: true })
 
 watch(secaoAtiva, async (secao) => {

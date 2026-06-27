@@ -54,10 +54,18 @@ const handlers = [
   { pattern: /\/api\/runtime\/dashboard$/, body: {
     schema_version: '1.2.0',
     correlation_id: 'corr-e2e',
-    cards: [{ id: 'runtime-status', title: 'Runtime Status', value: 'healthy', severity: 'healthy', drilldown: '/api/runtime/health' }],
-    sections: [{ id: 'workflow-topology', items: [{ step: 'health', label: 'Runtime Health', status: 'healthy', href: '/api/runtime/health' }] }],
+    cards: [{ id: 'runtime-status', title: 'Runtime Status', value: 'healthy', severity: 'healthy', drilldown: '/api/runtime/health', spa_drilldown: { path: '/monitoramento-operacional', query: { secao: 'runtime' } } }],
+    sections: [
+      { id: 'workflow-topology', items: [{ step: 'health', label: 'Runtime Health', status: 'healthy', href: '/api/runtime/health' }] },
+      { id: 'incident-timeline', items: [] },
+    ],
     observability_readiness: { observability_percent: 80, topology_coverage: 70, correlation_depth: 2, operational_traceability: 75 },
     correlation_analytics: { artifact_name: 'runtime-correlation-report.json', correlation_id: 'corr-e2e' },
+  } },
+  { pattern: /\/api\/runtime\/analytics$/, body: {
+    schema_version: '1.4.0',
+    correlation_id: 'corr-e2e',
+    incident_lifecycle: { events: [] },
   } },
   { pattern: /\/api\/connectors\/health$/, body: { conectores: [{ ambiente: 'dev', conector: 'repository_provider', capability: 'repository.read', status: 'ready', criticidade: 'high', acao_sugerida: 'OK' }] } },
   { pattern: /\/api\/v1\/estatisticas$/, body: [] },

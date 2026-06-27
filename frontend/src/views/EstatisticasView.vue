@@ -14,7 +14,16 @@
       </v-chip>
     </div>
 
-    <v-row class="mt-4" dense>
+    <OperationalDrilldownBar
+      :breadcrumbs="breadcrumbsEstatisticas"
+      :filtros-ativos="filtrosEstatisticasAtivos"
+      :possui-filtros="filtrosEstatisticasAtivos.length > 0"
+      @navigate="navegarTrilha"
+      @remove-filter="removerFiltroEstatistica"
+      @clear-filters="limparFiltrosEstatisticas"
+    />
+
+    <v-row class="mt-2" dense>
       <v-col v-for="card in cardsResumo" :key="card.id" cols="12" sm="6" lg="2">
         <OperationalMetricCard
           :label="card.label"
@@ -70,7 +79,21 @@
             <v-expansion-panels variant="accordion" class="mt-3">
               <v-expansion-panel title="Analítico e guard rails">
                 <v-expansion-panel-text>
-                  <h3>Evidências</h3>
+                  <h3>Ações operacionais</h3>
+                  <div class="acoes-operacionais">
+                    <v-btn
+                      v-for="acao in acoesIndicador(indicador)"
+                      :key="acao.label"
+                      size="small"
+                      variant="tonal"
+                      color="amber"
+                      :prepend-icon="acao.icon"
+                      @click.stop="irParaAcao(acao)"
+                    >
+                      {{ acao.label }}
+                    </v-btn>
+                  </div>
+                  <h3 class="mt-3">Evidências</h3>
                   <ul><li v-for="evidencia in indicador.evidencias" :key="evidencia">{{ evidencia }}</li></ul>
                   <h3>Pendências</h3>
                   <ul><li v-for="pendencia in indicador.pendencias" :key="pendencia">{{ pendencia }}</li></ul>
@@ -117,6 +140,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import OperationalMetricCard from '../components/OperationalMetricCard.vue'
 import SemaforoChip from '../components/SemaforoChip.vue'
+import OperationalDrilldownBar from '../components/OperationalDrilldownBar.vue'
 import { estadoParaSemaforo } from '../utils/filtrosMonitoramento'
 import { calcularResumoEstatisticas, carregarEstatisticas, validarIndicador } from '../services/estatisticas'
 
@@ -141,6 +165,55 @@ const indicadoresFiltrados = computed(() => indicadores.value.filter((item) => {
 
 function validar(indicador) {
   return validarIndicador(indicador)
+}
+
+const breadcrumbsEstatisticas = [
+  { label: 'Analytics', path: '/analytics' },
+  { label: 'Estatísticas', path: '/estatisticas' },
+]
+
+const filtrosEstatisticasAtivos = computed(() => {
+  const itens = []
+  if (filtroCategoria.value) itens.push({ key: 'categoria', label: 'Categoria', value: filtroCategoria.value })
+  if (filtroTipoFonte.value) itens.push({ key: 'fonte', label: 'Fonte', value: filtroTipoFonte.value })
+  if (filtroEstado.value) itens.push({ key: 'estado', label: 'Estado', value: filtroEstado.value })
+  return itens
+})
+
+function acoesIndicador(indicador) {
+  const acoes = [
+    { label: 'Ver analítico filtrado', icon: 'mdi-filter', rota: { path: '/estatisticas', query: { estado: indicador.estadoAtual } } },
+    { label: 'Abrir monitoramento', icon: 'mdi-monitor-dashboard', rota: { path: '/monitoramento-operacional', query: { secao: 'itens' } } },
+  ]
+  if (indicador.categoria === 'Requisitos') {
+    acoes.push({ label: 'Abrir requisitos', icon: 'mdi-file-document-edit', rota: { path: '/requisitos' } })
+  }
+  if (indicador.categoria === 'Segurança') {
+    acoes.push({ label: 'Abrir auditoria', icon: 'mdi-shield-search', rota: { path: '/auditoria' } })
+  }
+  return acoes
+}
+
+function irParaAcao(acao) {
+  router.push(acao.rota)
+}
+
+function navegarTrilha(crumb) {
+  router.push({ path: crumb.path })
+}
+
+function removerFiltroEstatistica(chave) {
+  if (chave === 'categoria') filtroCategoria.value = null
+  if (chave === 'fonte') filtroTipoFonte.value = null
+  if (chave === 'estado') filtroEstado.value = null
+  sincronizarUrl()
+}
+
+function limparFiltrosEstatisticas() {
+  filtroCategoria.value = null
+  filtroTipoFonte.value = null
+  filtroEstado.value = null
+  sincronizarUrl()
 }
 
 const cardsResumo = computed(() => [
@@ -201,6 +274,7 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; }
   outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
   outline-offset: 2px;
 }
+.acoes-operacionais { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .indicator-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .indicator-value { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }

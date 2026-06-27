@@ -74,7 +74,7 @@ def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
     assert data['layout']['responsive'] is True
     assert data['data_source']['endpoint'] == '/api/runtime/health'
     assert {'runtime-status', 'risk-score', 'pending-items', 'uptime', 'readiness-percent', 'fly-duckdns-status'} <= card_ids
-    assert {'workflow-topology', 'public-smoke', 'operational-timeline', 'environment-evidence', 'incident-summary', 'risk-summary', 'environment-drift-summary', 'governance-evidence'} <= section_ids
+    assert {'workflow-topology', 'public-smoke', 'operational-timeline', 'incident-timeline', 'environment-evidence', 'incident-summary', 'risk-summary', 'environment-drift-summary', 'governance-evidence'} <= section_ids
     topology = next(section for section in data['sections'] if section['id'] == 'workflow-topology')
     assert topology['type'] == 'timeline'
     assert {item['step'] for item in topology['items']} == {'health', 'readiness', 'metrics', 'monitoring'}

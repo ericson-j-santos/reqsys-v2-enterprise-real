@@ -2,7 +2,7 @@
   <section class="analytics-hub" data-testid="route-analytics" aria-labelledby="titulo-analytics">
     <div class="analytics-header">
       <div>
-        <p class="eyebrow">Trilha C · UX Operacional</p>
+        <p class="eyebrow">Trilha C · UX Operacional · Padrão Ouro</p>
         <h1 id="titulo-analytics">Analytics Navegável</h1>
         <p class="muted">
           Hub executivo com semáforo operacional, cards clicáveis e drill-down filtrado para monitoramento,
@@ -16,6 +16,14 @@
         </v-btn>
       </div>
     </div>
+
+    <OperationalDrilldownBar
+      :breadcrumbs="breadcrumbs"
+      :filtros-ativos="[]"
+      :possui-filtros="false"
+      :correlation-id="runtimeDashboard?.correlation_id || ''"
+      @navigate="navegarTrilha"
+    />
 
     <p v-if="erro" class="erro" role="alert">{{ erro }}</p>
 
@@ -52,6 +60,8 @@
         </v-row>
       </v-card-text>
     </v-card>
+
+    <IncidentTimelinePanel class="mt-4" :eventos="incidentTimeline" @drilldown="abrirIncidente" />
 
     <v-row class="mt-2" dense>
       <v-col cols="12" lg="7">
@@ -109,12 +119,17 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import OperationalMetricCard from '../components/OperationalMetricCard.vue'
 import SemaforoChip from '../components/SemaforoChip.vue'
+import OperationalDrilldownBar from '../components/OperationalDrilldownBar.vue'
+import IncidentTimelinePanel from '../components/IncidentTimelinePanel.vue'
+import { useOperationalDrilldown } from '../composables/useOperationalDrilldown'
 import { calcularResumoSemaforo, semaforoGeral } from '../utils/filtrosMonitoramento'
 import { resolverDrilldownSpa } from '../utils/runtimeDrilldown'
-import { carregarRuntimeDashboard, formatarValorRuntimeCard, semaforoRuntimeCard } from '../services/runtimeDashboard'
+import { carregarPainelOperacional, formatarValorRuntimeCard, semaforoRuntimeCard } from '../services/runtimeDashboard'
 
 const router = useRouter()
+const { breadcrumbs, irPara: irParaDrilldown } = useOperationalDrilldown({ rotaBase: '/analytics' })
 const runtimeDashboard = ref(null)
+const incidentTimeline = ref([])
 const resumoMonitoramento = ref({ verde: 0, amarelo: 0, vermelho: 0, bloqueados: 0 })
 const carregando = ref(false)
 const erro = ref('')
@@ -196,6 +211,15 @@ function irPara(rota) {
   router.push(rota)
 }
 
+function navegarTrilha(crumb) {
+  irParaDrilldown({ path: crumb.path, query: {} })
+}
+
+function abrirIncidente(evento) {
+  const rota = resolverDrilldownSpa(evento.spa_drilldown?.path || '/monitoramento-operacional', evento)
+  irPara(rota)
+}
+
 function abrirTopologia(item) {
   const rota = resolverDrilldownSpa(item.href || item.spa_drilldown?.path || '/monitoramento-operacional', item)
   irPara(rota)
@@ -219,11 +243,12 @@ async function carregarTudo() {
   carregando.value = true
   erro.value = ''
   try {
-    const [dashboard] = await Promise.all([
-      carregarRuntimeDashboard(),
+    const [painel] = await Promise.all([
+      carregarPainelOperacional(),
       carregarMonitoramento(),
     ])
-    runtimeDashboard.value = dashboard
+    runtimeDashboard.value = painel.dashboard
+    incidentTimeline.value = painel.incident_timeline || []
   } catch (e) {
     erro.value = e?.message || 'Erro ao carregar analytics operacional'
   } finally {
