@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { api } from '../api'
+import { api, definirCorrelationIdSessao, obterCorrelationIdSessao } from '../api'
 
 // Executa manualmente o interceptor de request configurado em services/api.js,
 // validando os headers que ele injeta.
@@ -11,6 +11,7 @@ function runRequestInterceptor(config) {
 describe('services/api — interceptor de request', () => {
   beforeEach(() => {
     localStorage.clear()
+    sessionStorage.clear()
   })
 
   it('usa /api como baseURL padrão', () => {
@@ -22,10 +23,17 @@ describe('services/api — interceptor de request', () => {
     expect(config.headers['X-Correlation-Id']).toBeTruthy()
   })
 
-  it('gera correlation ids distintos a cada requisição', () => {
+  it('reutiliza correlation id da sessão entre requisições', () => {
     const a = runRequestInterceptor({ headers: {} })
     const b = runRequestInterceptor({ headers: {} })
-    expect(a.headers['X-Correlation-Id']).not.toBe(b.headers['X-Correlation-Id'])
+    expect(a.headers['X-Correlation-Id']).toBe(b.headers['X-Correlation-Id'])
+  })
+
+  it('permite sobrescrever correlation id da sessão', () => {
+    definirCorrelationIdSessao('corr-sessao-fixa')
+    const config = runRequestInterceptor({ headers: {} })
+    expect(config.headers['X-Correlation-Id']).toBe('corr-sessao-fixa')
+    expect(obterCorrelationIdSessao()).toBe('corr-sessao-fixa')
   })
 
   it('anexa Authorization quando há token no localStorage', () => {

@@ -39,7 +39,9 @@ from app.api import (
 )
 from app.core.config import settings
 from app.core.envelope import ok
+from app.core.otel import configurar_opentelemetry
 from app.db import Base, engine
+from app.middleware.observability import observability_middleware
 
 logging.basicConfig(
     level=logging.INFO,
@@ -56,6 +58,7 @@ settings.validate_production_gates()
 
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title='ReqSys Enterprise API', version=settings.app_version)
+configurar_opentelemetry(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -93,6 +96,11 @@ app.include_router(operational_intelligence.router)
 app.include_router(actions_runtime_center.router)
 app.include_router(govbi.router)
 app.include_router(rag_governado.router)
+
+
+@app.middleware('http')
+async def observability(request: Request, call_next):
+    return await observability_middleware(request, call_next)
 
 
 @app.middleware('http')

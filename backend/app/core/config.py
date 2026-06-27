@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     database_url: str = Field(default_factory=lambda: get_secret('DATABASE_URL', 'sqlite:///./reqsys.db') or 'sqlite:///./reqsys.db')
     cors_origins: str = Field(default_factory=lambda: get_secret('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:8081,http://localhost:8083,http://localhost:8084,http://reqsys.localtest.me:8081,http://reqsys.localtest.me:8083,http://reqsys-test.localtest.me:8084') or 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:8081,http://localhost:8083,http://localhost:8084,http://reqsys.localtest.me:8081,http://reqsys.localtest.me:8083,http://reqsys-test.localtest.me:8084')
 
+    # Observabilidade enterprise (Trilha B)
+    otel_enabled: bool = Field(default_factory=lambda: _bool_secret('OTEL_ENABLED', 'false'))
+    otel_service_name: str = Field(default_factory=lambda: get_secret('OTEL_SERVICE_NAME', 'reqsys-api') or 'reqsys-api')
+    otel_exporter_endpoint: str = Field(default_factory=lambda: get_secret('OTEL_EXPORTER_OTLP_ENDPOINT', '') or '')
+    log_format: str = Field(default_factory=lambda: get_secret('LOG_FORMAT', 'text') or 'text')
+
     # Integração GovBI IA — proxy governado backend
     govbi_base_url: str = Field(default_factory=lambda: get_secret('GOVBI_BASE_URL', 'https://govbi-ia-hom.fly.dev') or 'https://govbi-ia-hom.fly.dev')
     govbi_timeout_seconds: float = Field(default_factory=lambda: float(get_secret('GOVBI_TIMEOUT_SECONDS', '15') or '15'))
