@@ -79,6 +79,26 @@
     </div>
 
     <section class="card">
+      <h2>Runtime Executive Index — visão pública consolidada</h2>
+      <p class="small">Cards renderizados diretamente de <code>./data/runtime-executive-index.json</code>. Este contrato consolida health, readiness, merge intelligence, evidence gate e finalization para consumo público sem chamada de API em runtime.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Score executivo</div><div id="exec-score" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Risco consolidado</div><div id="exec-risk" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Readiness público</div><div id="exec-readiness" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Mergeability</div><div id="exec-mergeability" class="kpi-value">-</div></div>
+      </div>
+      <table>
+        <thead><tr><th>Card</th><th>Status/Risco</th><th>Valor</th><th>Detalhe</th></tr></thead>
+        <tbody id="runtime-executive-cards"><tr><td colspan="4">Carregando...</td></tr></tbody>
+      </table>
+      <div class="links" id="runtime-executive-links"></div>
+      <details class="details">
+        <summary>Contrato executivo bruto</summary>
+        <pre id="runtime-executive-details">{}</pre>
+      </details>
+    </section>
+
+    <section class="card">
       <h2>Runtime público — readiness Fly/DuckDNS</h2>
       <div class="grid">
         <div><div class="kpi-label">Status operacional</div><div id="public-runtime-status" class="kpi-value">-</div></div>
@@ -277,6 +297,67 @@
       });
     }
 
+    async function renderRuntimeExecutiveIndex() {
+      const fallback = {
+        summary: { status: 'warning', executive_score: 0, risk: 'medium', confidence: 'low' },
+        cards: {
+          health: { status: 'unknown', score: 0, risk: 'medium' },
+          readiness: { status: 'unknown', readiness_percent: 0, blocking_issue_count: 0, risk: 'medium' },
+          merge_intelligence: { mergeability_score: 0, recommendation: 'aguardar_estabilizacao', risk_level: 'medium' },
+          evidence_gate: { status: 'unknown', passed_count: 0, failed_count: 0, risk: 'medium' },
+          finalization: { status: 'unknown', final_score: 0, residual_gap: 0, risk: 'medium' },
+        },
+        links: {},
+        guardrails: ['fallback_local'],
+      };
+      const response = await fetchOptionalJson('./data/runtime-executive-index.json', fallback);
+      const payload = response.data || fallback;
+      const cards = payload.cards || fallback.cards;
+      const summary = payload.summary || fallback.summary;
+
+      document.getElementById('exec-score').textContent = `${summary.executive_score ?? 0}%`;
+      document.getElementById('exec-risk').innerHTML = `<span class="status ${statusClass(summary.risk)}">${summary.risk || 'unknown'}</span>`;
+      document.getElementById('exec-readiness').textContent = `${cards.readiness?.readiness_percent ?? 0}%`;
+      document.getElementById('exec-mergeability').textContent = `${cards.merge_intelligence?.mergeability_score ?? 0}%`;
+
+      const rows = [
+        { name: 'Health', status: cards.health?.risk || cards.health?.status, value: `${cards.health?.score ?? 0}%`, detail: `status=${cards.health?.status || 'unknown'}; falhas=${cards.health?.critical_failure_count ?? '-'}` },
+        { name: 'Readiness público', status: cards.readiness?.risk || cards.readiness?.status, value: `${cards.readiness?.readiness_percent ?? 0}%`, detail: `base=${cards.readiness?.base_url || '-'}; blockers=${cards.readiness?.blocking_issue_count ?? 0}` },
+        { name: 'Merge intelligence', status: cards.merge_intelligence?.risk_level || cards.merge_intelligence?.recommendation, value: `${cards.merge_intelligence?.mergeability_score ?? 0}%`, detail: `recomendação=${cards.merge_intelligence?.recommendation || 'unknown'}; safe_lanes=${cards.merge_intelligence?.safe_lane_count ?? 0}` },
+        { name: 'Evidence gate', status: cards.evidence_gate?.risk || cards.evidence_gate?.status, value: cards.evidence_gate?.status || 'unknown', detail: `passed=${cards.evidence_gate?.passed_count ?? 0}; failed=${cards.evidence_gate?.failed_count ?? 0}` },
+        { name: 'Finalization', status: cards.finalization?.risk || cards.finalization?.status, value: `${cards.finalization?.final_score ?? 0}%`, detail: `gap=${cards.finalization?.residual_gap ?? 0}; indicadores=${cards.finalization?.passed_indicator_count ?? 0}/${cards.finalization?.indicator_count ?? 0}` },
+      ];
+
+      document.getElementById('runtime-executive-cards').innerHTML = rows.map((row) => `
+        <tr>
+          <td>${row.name}</td>
+          <td><span class="status ${statusClass(row.status)}">${row.status || 'unknown'}</span></td>
+          <td>${row.value}</td>
+          <td>${row.detail}</td>
+        </tr>
+      `).join('');
+
+      const linkContainer = document.getElementById('runtime-executive-links');
+      linkContainer.innerHTML = '';
+      addLink(linkContainer, 'runtime-executive-index.json', './data/runtime-executive-index.json');
+      addLink(linkContainer, 'health.json', './data/health.json');
+      addLink(linkContainer, 'Operational Evidence Hub', '../dashboard/operational-evidence-hub.html');
+      Object.entries(payload.links || {}).forEach(([label, url]) => {
+        if (!url || ['runtime_executive_index', 'health_json', 'operational_evidence_hub'].includes(label)) return;
+        addLink(linkContainer, label, url, String(url).startsWith('http'));
+      });
+
+      document.getElementById('runtime-executive-details').textContent = shortJson({
+        available: response.available,
+        source: response.source,
+        fallback_error: response.error,
+        generated_at_epoch: payload.generated_at_epoch,
+        summary,
+        cards,
+        guardrails: payload.guardrails || [],
+      });
+    }
+
     async function renderMergeIntelligence() {
       const fallbackIndex = {
         source_available: false,
@@ -358,6 +439,8 @@
       document.getElementById('warnings').textContent = data.warning_count ?? '-';
       document.getElementById('generated').textContent = `Gerado em: ${formatDate(data.generated_at_epoch)} | Repositório: ${data.repo}`;
 
+      await renderRuntimeExecutiveIndex();
+
       const publicRuntime = data.public_runtime_readiness || {};
       document.getElementById('public-runtime-status').innerHTML = `<span class="status ${statusClass(publicRuntime.operational_status)}">${publicRuntime.operational_status || 'unknown'}</span>`;
       document.getElementById('public-runtime-readiness').textContent = publicRuntime.readiness_percent == null ? '-' : `${publicRuntime.readiness_percent}%`;
@@ -372,6 +455,7 @@
         addLink(links, label, url, true);
       });
       addLink(links, 'Operational Evidence Hub', '../dashboard/operational-evidence-hub.html');
+      addLink(links, 'Runtime Executive Index', './data/runtime-executive-index.json');
       addLink(links, 'Merge Intelligence JSON', './data/merge-intelligence-index.json');
       addLink(links, 'Lane Priority JSON', './data/merge-lane-priority.json');
 
@@ -476,6 +560,8 @@
       document.getElementById('delivery-indicator-drilldown').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar delivery finalization.</td></tr>`;
       document.getElementById('merge-lanes').innerHTML = `<tr><td colspan="4">Fallback seguro: falha ao carregar merge intelligence.</td></tr>`;
       document.getElementById('merge-details').textContent = shortJson({ error: error.message });
+      document.getElementById('runtime-executive-cards').innerHTML = `<tr><td colspan="4">Fallback seguro: falha ao carregar runtime executive index.</td></tr>`;
+      document.getElementById('runtime-executive-details').textContent = shortJson({ error: error.message });
     });
   </script>
 </body>
