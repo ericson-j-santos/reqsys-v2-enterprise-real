@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/statistical-completion-projection.schema.json",
+  "title": "ReqSys Statistical Completion Projection Artifact",
+  "description": "Contrato governado da projecao estatistica de conclusao do ReqSys. Report-only, sem efeito sobre gates obrigatorios.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "reference_time",
+    "mode",
+    "status",
+    "current_state",
+    "velocity",
+    "completion_percent",
+    "remaining_gaps_percent",
+    "timelines",
+    "bottlenecks",
+    "risks",
+    "trends",
+    "final_probability_percent",
+    "acceleration_levers",
+    "executive_summary"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "reference_time": { "type": "string" },
+    "mode": { "type": "string", "enum": ["report_only"] },
+    "status": {
+      "type": "string",
+      "enum": ["stable", "em_consolidacao", "atencao", "risco"]
+    },
+    "headline": { "type": "string" },
+    "executive_summary": { "type": "string" },
+    "current_state": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["dimension", "status_percent", "maturity"],
+        "properties": {
+          "dimension": { "type": "string" },
+          "status_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+          "maturity": {
+            "type": "string",
+            "enum": ["baixa", "media", "media_alta", "alta", "muito_alta"]
+          }
+        }
+      }
+    },
+    "velocity": {
+      "type": "object",
+      "required": [
+        "prs_per_business_day",
+        "green_merges_per_day",
+        "ci_fixes_per_cycle",
+        "safe_parallel_increments",
+        "lead_time_minutes",
+        "ci_stabilization_rate_percent",
+        "critical_regression",
+        "structural_rework"
+      ],
+      "properties": {
+        "prs_per_business_day": {
+          "type": "object",
+          "required": ["min", "max"],
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "green_merges_per_day": {
+          "type": "object",
+          "required": ["min", "max"],
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "ci_fixes_per_cycle": {
+          "type": "object",
+          "required": ["min", "max"],
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "safe_parallel_increments": {
+          "type": "object",
+          "required": ["min", "max"],
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "lead_time_minutes": {
+          "type": "object",
+          "required": ["min", "max"],
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "ci_stabilization_rate_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "critical_regression": { "type": "string" },
+        "structural_rework": { "type": "string" }
+      }
+    },
+    "completion_percent": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["indicator", "percent"],
+        "properties": {
+          "indicator": { "type": "string" },
+          "percent": { "type": "number", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "remaining_gaps_percent": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["area", "gap_percent"],
+        "properties": {
+          "area": { "type": "string" },
+          "gap_percent": { "type": "number", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "timelines": {
+      "type": "object",
+      "required": ["conservative", "accelerated"],
+      "properties": {
+        "conservative": {
+          "type": "object",
+          "required": ["assumption", "milestones"],
+          "properties": {
+            "assumption": { "type": "string" },
+            "milestones": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["milestone", "min_days", "max_days"],
+                "properties": {
+                  "milestone": { "type": "string" },
+                  "min_days": { "type": "number", "minimum": 0 },
+                  "max_days": { "type": "number", "minimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        "accelerated": {
+          "type": "object",
+          "required": ["assumption", "preconditions", "milestones"],
+          "properties": {
+            "assumption": { "type": "string" },
+            "preconditions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1
+            },
+            "milestones": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["milestone", "min_days", "max_days"],
+                "properties": {
+                  "milestone": { "type": "string" },
+                  "min_days": { "type": "number", "minimum": 0 },
+                  "max_days": { "type": "number", "minimum": 0 }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "bottlenecks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["rank", "description"],
+        "properties": {
+          "rank": { "type": "integer", "minimum": 1 },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["category", "level"],
+        "properties": {
+          "category": { "type": "string" },
+          "level": {
+            "type": "string",
+            "enum": ["baixo", "medio_baixo", "medio", "medio_alto", "alto"]
+          }
+        }
+      }
+    },
+    "trends": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["indicator", "direction", "intensity"],
+        "properties": {
+          "indicator": { "type": "string" },
+          "direction": { "type": "string", "enum": ["up", "down", "flat"] },
+          "intensity": {
+            "type": "string",
+            "enum": ["estavel", "moderada", "forte"]
+          }
+        }
+      }
+    },
+    "final_probability_percent": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["outcome", "probability_percent"],
+        "properties": {
+          "outcome": { "type": "string" },
+          "probability_percent": { "type": "number", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "acceleration_levers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["rank", "lever"],
+        "properties": {
+          "rank": { "type": "integer", "minimum": 1 },
+          "lever": { "type": "string" }
+        }
+      }
+    }
+  }
+}

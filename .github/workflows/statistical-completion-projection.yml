@@ -1,0 +1,83 @@
+name: Statistical Completion Projection
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '35 */6 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/statistical-completion-projection.yml'
+      - 'scripts/statistical_completion_projection.py'
+      - 'docs/contracts/statistical-completion-projection.schema.json'
+      - 'docs/runbooks/statistical-completion-projection.md'
+      - 'tests/test_statistical_completion_projection.py'
+
+concurrency:
+  group: statistical-completion-projection-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  statistical-completion-projection:
+    name: Build statistical completion projection artifact
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install jsonschema pytest
+
+      - name: Run projection builder tests
+        run: |
+          python -m pytest tests/test_statistical_completion_projection.py -q
+
+      - name: Build projection artifact
+        env:
+          REQSYS_PROJECTION_GENERATED_AT: ${{ github.event.head_commit.timestamp || '' }}
+        run: |
+          python scripts/statistical_completion_projection.py --output-dir audit/projection
+
+      - name: Validate projection artifact against contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from jsonschema import Draft202012Validator
+
+          schema = json.loads(Path('docs/contracts/statistical-completion-projection.schema.json').read_text(encoding='utf-8'))
+          payload = json.loads(Path('audit/projection/statistical-completion-projection.json').read_text(encoding='utf-8'))
+          Draft202012Validator.check_schema(schema)
+          errors = sorted(Draft202012Validator(schema).iter_errors(payload), key=lambda e: list(e.path))
+          if errors:
+              for error in errors:
+                  print(f"contract_error path={list(error.path)} message={error.message}")
+              raise SystemExit(1)
+          print(f"contract_ok schema_version={payload['schema_version']} status={payload['status']}")
+          PY
+
+      - name: Show projection summary
+        run: |
+          echo "## Statistical Completion Projection" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          python -c "import json; p=json.load(open('audit/projection/statistical-completion-projection.json')); print(json.dumps({k:p[k] for k in ('schema_version','generated_at','reference_time','mode','status','headline')}, indent=2, ensure_ascii=False))" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload projection artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: statistical-completion-projection-${{ github.run_id }}
+          path: audit/projection/
+          if-no-files-found: error
+          retention-days: 30

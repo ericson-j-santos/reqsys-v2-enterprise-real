@@ -38,6 +38,9 @@
     <section><h2>Artifacts catalogados</h2><table><thead><tr><th>Artifact</th><th>Workflow</th><th>Consumer</th><th>Risco</th></tr></thead><tbody id="artifacts"></tbody></table></section>
     <section><h2>Checks do command center</h2><table><thead><tr><th>Check</th><th>Status</th><th>Score/Cobertura</th></tr></thead><tbody id="commandChecks"></tbody></table></section>
     <section><h2>Status de entrega</h2><table><thead><tr><th>Grupo</th><th>PRs</th><th>Estado</th><th>Foco</th></tr></thead><tbody id="delivery"></tbody></table></section>
+    <section><h2>Projeção estatística de conclusão</h2><table><thead><tr><th>Resultado</th><th>Probabilidade</th></tr></thead><tbody id="projectionProbabilities"></tbody></table></section>
+    <section><h2>Gaps residuais (projeção)</h2><table><thead><tr><th>Área</th><th>Gap</th></tr></thead><tbody id="projectionGaps"></tbody></table></section>
+    <section><h2>Gargalos e alavancas (projeção)</h2><table><thead><tr><th>#</th><th>Gargalo</th><th>Alavanca</th></tr></thead><tbody id="projectionBottlenecks"></tbody></table></section>
     <section><h2>Fontes de dados</h2><table><thead><tr><th>Fonte</th><th>Status</th><th>Observação</th></tr></thead><tbody id="sources"></tbody></table></section>
   </main>
   <script>
@@ -50,7 +53,8 @@
       { key: 'release', label: 'Golden Release Readiness', href: '../audit/release-readiness/golden-release-readiness.json' },
       { key: 'commandCenter', label: 'Command Center Readiness', href: '../audit/command-center/command-center-readiness.json' },
       { key: 'extendedContracts', label: 'Extended Operational Contract Validation', href: '../audit/extended-contract-validation/extended-operational-contract-validation.json' },
-      { key: 'delivery', label: 'Delivery Status Report', href: '../audit/delivery/delivery-status-report.json' }
+      { key: 'delivery', label: 'Delivery Status Report', href: '../audit/delivery/delivery-status-report.json' },
+      { key: 'projection', label: 'Statistical Completion Projection', href: '../audit/projection/statistical-completion-projection.json' }
     ];
 
     const fallback = {
@@ -62,7 +66,8 @@
       release: { score_percent: 0, readiness: 'unknown', risk: 'unknown', checks: [] },
       commandCenter: { score_percent: 0, status: 'unknown', source_coverage_percent: 0, checks: [] },
       extendedContracts: { status: 'unknown', contracts: [] },
-      delivery: { tracked_prs: 0, merged_prs: 0, merge_rate_percent: 0, current_maturity_percent: 0, remaining_gap_pp: 0, groups: [] }
+      delivery: { tracked_prs: 0, merged_prs: 0, merge_rate_percent: 0, current_maturity_percent: 0, remaining_gap_pp: 0, groups: [] },
+      projection: { status: 'unknown', headline: 'projection_artifact_unavailable', executive_summary: '', completion_percent: [], remaining_gaps_percent: [], final_probability_percent: [], bottlenecks: [], acceleration_levers: [] }
     };
 
     async function loadJson(source) {
@@ -106,6 +111,7 @@
       const commandCenter = loaded.commandCenter.data;
       const extendedContracts = loaded.extendedContracts.data;
       const delivery = loaded.delivery.data;
+      const projection = loaded.projection.data;
       document.getElementById('cards').innerHTML = [
         card('Success rate', lead.success_rate_percent || 0, '%', (lead.success_rate_percent || 0) >= 95 ? 'low' : 'medium'),
         card('P95 lead time', secondsToMinutes(lead.p95_seconds), 'min', (lead.p95_seconds || 0) < 900 ? 'low' : 'medium'),
@@ -120,7 +126,9 @@
         card('Remaining gap', delivery.remaining_gap_pp || 0, 'p.p.', delivery.status || 'stable'),
         card('Artifacts catalogados', discovery.artifact_count || 0, '', 'low'),
         card('Schema coverage', discovery.schema_coverage_percent || 0, '%', (discovery.schema_coverage_percent || 0) >= 60 ? 'low' : 'medium'),
-        card('Baseline incidente', hist.baseline?.incident_lead_time_minutes || 143, 'min', 'medium_low')
+        card('Baseline incidente', hist.baseline?.incident_lead_time_minutes || 143, 'min', 'medium_low'),
+        card('Projeção: status', projection.status || 'unknown', '', projection.status || 'unknown'),
+        card('Projeção: MVP <1 semana', (projection.final_probability_percent || []).find(item => /MVP/i.test(item.outcome))?.probability_percent ?? 0, '%', projection.status || 'unknown')
       ].join('');
       document.getElementById('bottlenecks').innerHTML = (lead.bottlenecks || []).slice(0, 10).map(item => `<tr><td>${item.name}</td><td>${item.runs}</td><td>${item.success_rate_percent}%</td><td>${secondsToMinutes(item.p95_seconds)}min</td><td>${secondsToMinutes(item.max_seconds)}min</td></tr>`).join('') || '<tr><td colspan="5">Sem dados carregados; usando fallback governado.</td></tr>';
       const recommendations = predictive.recommendations || [];
@@ -129,6 +137,18 @@
       document.getElementById('artifacts').innerHTML = (discovery.artifacts || []).map(item => `<tr><td>${item.name}</td><td>${item.workflow}</td><td><code>${item.consumer}</code></td><td>${badge(item.risk)}</td></tr>`).join('') || '<tr><td colspan="4">Sem índice de artifacts carregado.</td></tr>';
       document.getElementById('commandChecks').innerHTML = (commandCenter.checks || []).map(item => `<tr><td>${item.name}</td><td>${badge(item.passed)}</td><td>${item.coverage_percent || item.score || '-'}</td></tr>`).join('') || '<tr><td colspan="3">Sem readiness do command center carregado.</td></tr>';
       document.getElementById('delivery').innerHTML = (delivery.groups || []).map(item => `<tr><td>${item.range}</td><td>${item.prs}</td><td>${badge(item.state)}</td><td>${item.focus}</td></tr>`).join('') || '<tr><td colspan="4">Sem status de entrega carregado.</td></tr>';
+      document.getElementById('projectionProbabilities').innerHTML = (projection.final_probability_percent || []).map(item => `<tr><td>${item.outcome}</td><td>${item.probability_percent}%</td></tr>`).join('') || '<tr><td colspan="2">Sem projeção carregada.</td></tr>';
+      document.getElementById('projectionGaps').innerHTML = (projection.remaining_gaps_percent || []).map(item => `<tr><td>${item.area}</td><td>${item.gap_percent}%</td></tr>`).join('') || '<tr><td colspan="2">Sem gaps de projeção carregados.</td></tr>';
+      const bottleneckRows = projection.bottlenecks || [];
+      const leverRows = projection.acceleration_levers || [];
+      const maxRows = Math.max(bottleneckRows.length, leverRows.length);
+      const projectionRows = [];
+      for (let index = 0; index < maxRows; index += 1) {
+        const bottleneck = bottleneckRows[index];
+        const lever = leverRows[index];
+        projectionRows.push(`<tr><td>${index + 1}</td><td>${bottleneck ? bottleneck.description : '-'}</td><td>${lever ? lever.lever : '-'}</td></tr>`);
+      }
+      document.getElementById('projectionBottlenecks').innerHTML = projectionRows.join('') || '<tr><td colspan="3">Sem gargalos/alavancas carregados.</td></tr>';
       document.getElementById('sources').innerHTML = statuses.join('');
     }
     render();

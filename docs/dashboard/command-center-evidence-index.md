@@ -16,6 +16,7 @@ Catalogar as evidencias operacionais usadas pelo command center do ReqSys, mante
 | Readiness de release | `audit/release-readiness/golden-release-readiness.json` | Dashboard dinamico |
 | Readiness do command center | `audit/command-center/command-center-readiness.json` | Dashboard dinamico |
 | Validacao de contratos | `audit/extended-contract-validation/extended-operational-contract-validation.json` | Dashboard dinamico |
+| Projecao estatistica de conclusao | `audit/projection/statistical-completion-projection.json` | Dashboard dinamico |
 
 ## Contratos associados
 
@@ -29,6 +30,7 @@ Catalogar as evidencias operacionais usadas pelo command center do ReqSys, mante
 | `docs/contracts/release-readiness.schema.json` | readiness |
 | `docs/contracts/command-center-readiness.schema.json` | command center |
 | `docs/contracts/contract-validation-report.schema.json` | validacao de contratos |
+| `docs/contracts/statistical-completion-projection.schema.json` | projecao estatistica de conclusao |
 
 ## Maturidade de evidencia
 
