@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/operational-history-snapshot.schema.json",
+  "title": "ReqSys Operational History Snapshot Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "repository", "event_name", "run_id", "sha", "baseline", "targets", "gaps", "status", "risk", "next_actions"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string" },
+    "event_name": { "type": "string" },
+    "run_id": { "type": "string" },
+    "sha": { "type": "string" },
+    "baseline": { "type": "object" },
+    "targets": { "type": "object" },
+    "gaps": { "type": "object" },
+    "status": { "type": "string" },
+    "risk": { "type": "string", "enum": ["low", "medium_low", "medium", "high"] },
+    "next_actions": { "type": "array", "items": { "type": "string" } }
+  }
+}
