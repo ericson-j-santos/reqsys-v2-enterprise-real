@@ -14,6 +14,8 @@ permissions:
   contents: read
   # Necessario para ler metadados do pull request.
   pull-requests: read
+  # Necessario para publicar comentario executivo no PR.
+  issues: write
 
 jobs:
   conflict-guard:
@@ -25,6 +27,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Buscar base do evento
         env:
@@ -51,17 +58,207 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          mkdir -p artifacts/conflict-prediction
-          git diff --name-only "${BASE_SHA}"...HEAD | sort > artifacts/conflict-prediction/changed-files.txt
-          cat artifacts/conflict-prediction/changed-files.txt
+          mkdir -p artifacts/pr-conflict-guard
+          git diff --name-only "${BASE_SHA}"...HEAD | sort -u | tee artifacts/pr-conflict-guard/changed-paths.txt
+          test -s artifacts/pr-conflict-guard/changed-paths.txt
 
-      - name: Executar conflict prediction gate
+      - name: Detectar hotspots concorrentes em PRs abertos
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          token = os.environ["GITHUB_TOKEN"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          current_pr = int(os.environ["PR_NUMBER"])
+          base_ref = os.environ["BASE_REF"]
+          out_dir = Path("artifacts/pr-conflict-guard")
+          changed_paths = {
+              path.strip()
+              for path in (out_dir / "changed-paths.txt").read_text(encoding="utf-8").splitlines()
+              if path.strip()
+          }
+
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {token}",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+
+          def api_json(path: str):
+              request = urllib.request.Request(f"https://api.github.com{path}", headers=headers)
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  return json.loads(response.read().decode("utf-8"))
+
+          query = urllib.parse.urlencode({"state": "open", "base": base_ref, "per_page": "100"})
+          pulls = api_json(f"/repos/{repo}/pulls?{query}")
+
+          concurrent_paths: set[str] = set()
+          overlapping_prs = []
+          for pr in pulls:
+              number = int(pr["number"])
+              if number == current_pr:
+                  continue
+              files = api_json(f"/repos/{repo}/pulls/{number}/files?per_page=100")
+              other_paths = {item["filename"] for item in files}
+              overlap = sorted(changed_paths.intersection(other_paths))
+              if overlap:
+                  concurrent_paths.update(overlap)
+                  overlapping_prs.append(
+                      {
+                          "number": number,
+                          "title": pr.get("title", ""),
+                          "url": pr.get("html_url", ""),
+                          "overlapping_paths": overlap,
+                      }
+                  )
+
+          (out_dir / "concurrent-hotspots.txt").write_text(
+              "\n".join(sorted(concurrent_paths)) + ("\n" if concurrent_paths else ""),
+              encoding="utf-8",
+          )
+          (out_dir / "open-pr-overlap.json").write_text(
+              json.dumps(
+                  {
+                      "base_ref": base_ref,
+                      "current_pr": current_pr,
+                      "overlapping_prs": overlapping_prs,
+                      "concurrent_hotspots": sorted(concurrent_paths),
+                  },
+                  indent=2,
+                  ensure_ascii=False,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          print(f"hotspots_concorrentes={len(concurrent_paths)} prs_sobrepostos={len(overlapping_prs)}")
+          PY
+
+      - name: Executar conflict prediction gate
+        id: prediction
+        run: |
+          set +e
           python scripts/conflict_prediction_gate.py \
-            --paths-file artifacts/conflict-prediction/changed-files.txt \
-            --output artifacts/conflict-prediction/conflict-prediction-gate.json \
-            --json
+            --paths-file artifacts/pr-conflict-guard/changed-paths.txt \
+            --hotspots-file artifacts/pr-conflict-guard/concurrent-hotspots.txt \
+            --output artifacts/pr-conflict-guard/conflict-risk-report.json \
+            --json | tee artifacts/pr-conflict-guard/conflict-risk-report.pretty.json
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          risk=$(python -c "import json; print(json.load(open('artifacts/pr-conflict-guard/conflict-risk-report.json'))['risk'])")
+          parallel_safe=$(python -c "import json; print(json.load(open('artifacts/pr-conflict-guard/conflict-risk-report.json'))['parallel_safe'])")
+          recommendation=$(python -c "import json; print(json.load(open('artifacts/pr-conflict-guard/conflict-risk-report.json'))['recommendation'])")
+          echo "risk=${risk}" >> "$GITHUB_OUTPUT"
+          echo "parallel_safe=${parallel_safe}" >> "$GITHUB_OUTPUT"
+          echo "recommendation=${recommendation}" >> "$GITHUB_OUTPUT"
+
+      - name: Resumo executivo do risco de conflito
+        if: always() && hashFiles('artifacts/pr-conflict-guard/conflict-risk-report.json') != ''
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+
+          report = json.load(open("artifacts/pr-conflict-guard/conflict-risk-report.json", encoding="utf-8"))
+          signals = report.get("signals", {})
+          print("## PR Conflict Guard — Conflict Prediction Gate")
+          print("")
+          print("| Campo | Valor |")
+          print("|---|---|")
+          print(f"| Risk | `{report.get('risk')}` |")
+          print(f"| Parallel safe | `{report.get('parallel_safe')}` |")
+          print(f"| Recomendacao | `{report.get('recommendation')}` |")
+          print(f"| Blockers | `{', '.join(report.get('blocking_reasons') or []) or 'nenhum'}` |")
+          print(f"| Workflows alterados | `{signals.get('workflow_change_count', 0)}` |")
+          print(f"| Hotspots concorrentes | `{len(signals.get('concurrent_hotspot_paths') or [])}` |")
+          PY
+
+      - name: Publicar comentario no PR
+        if: always() && hashFiles('artifacts/pr-conflict-guard/conflict-risk-report.json') != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- reqsys:pr-conflict-risk-report -->';
+            const report = JSON.parse(fs.readFileSync('artifacts/pr-conflict-guard/conflict-risk-report.json', 'utf8'));
+            const overlap = fs.existsSync('artifacts/pr-conflict-guard/open-pr-overlap.json')
+              ? JSON.parse(fs.readFileSync('artifacts/pr-conflict-guard/open-pr-overlap.json', 'utf8'))
+              : { overlapping_prs: [] };
+            const blockers = (report.blocking_reasons || []).join(', ') || 'nenhum';
+            const criticalFiles = (report.critical_files || []).slice(0, 12).map((path) => `- \`${path}\``).join('\n') || '- nenhum';
+            const overlappingPrs = (overlap.overlapping_prs || [])
+              .slice(0, 8)
+              .map((pr) => `- #${pr.number} — ${pr.overlapping_paths.map((path) => `\`${path}\``).join(', ')}`)
+              .join('\n') || '- nenhum';
+            const body = [
+              marker,
+              '## PR Conflict Guard — relatório de risco',
+              '',
+              '| Campo | Valor |',
+              '|---|---|',
+              `| Risk | \`${report.risk}\` |`,
+              `| Parallel safe | \`${report.parallel_safe}\` |`,
+              `| Recomendação | \`${report.recommendation}\` |`,
+              `| Blockers | \`${blockers}\` |`,
+              `| Arquivos alterados | \`${(report.changed_paths || []).length}\` |`,
+              '',
+              '### Arquivos críticos',
+              criticalFiles,
+              '',
+              '### Hotspots concorrentes',
+              overlappingPrs,
+              '',
+              report.risk === 'blocked'
+                ? '**Decisão:** serializar este PR antes do merge. Há bloqueio determinístico de conflito.'
+                : report.risk === 'high'
+                  ? '**Decisão:** permitir continuidade, mas evitar merge paralelo sem revisão dos arquivos críticos.'
+                  : '**Decisão:** PR classificado como seguro para paralelismo operacional.',
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const previous = comments.find((comment) => comment.body && comment.body.includes(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Publicar artifact de risco de conflito
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conflict-risk-report
+          path: artifacts/pr-conflict-guard
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Falhar se conflito preditivo bloqueante
+        if: steps.prediction.outputs.exit_code != '0'
+        run: |
+          echo "ERRO: conflict_prediction_gate bloqueou o PR."
+          echo "risk=${{ steps.prediction.outputs.risk }}"
+          echo "parallel_safe=${{ steps.prediction.outputs.parallel_safe }}"
+          echo "recommendation=${{ steps.prediction.outputs.recommendation }}"
+          exit 1
 
       - name: Validar merge limpo com a base do evento
         env:
@@ -91,12 +288,3 @@ jobs:
             git status --short
             exit 1
           fi
-
-      - name: Publicar evidencia de conflict prediction
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: conflict-prediction-gate-evidence
-          path: artifacts/conflict-prediction
-          if-no-files-found: warn
-          retention-days: 14
