@@ -27,6 +27,7 @@ flowchart TD
 | Operational Maturity Score | Dynamic Dashboard | Score executivo |
 | Artifact Discovery Index | Dynamic Dashboard | Catalogo operacional |
 | Release Readiness | Dynamic Dashboard | Prontidao de release |
+| Completion Projection Report | Dynamic Dashboard | Projecao de conclusao |
 | Contracts | Validation Workflows | Validacao |
 | Dashboard | Runbooks | Drill-down documental |
 
