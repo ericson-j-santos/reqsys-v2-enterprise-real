@@ -32,6 +32,9 @@ def test_snapshot_identifica_falha_operacional():
     assert snapshot['score_saude'] == 50.0
     assert snapshot['por_status_operacional']['unhealthy'] == 1
     assert snapshot['decisao'] == 'corrigir_falhas_de_actions_antes_de_novo_merge'
+    assert 'pareto_falhas' in snapshot
+    assert snapshot['pareto_falhas']['total_causes'] == 1
+    assert snapshot['pareto_falhas']['top_causes'][0]['workflow'] == 'Deploy'
 
 
 def test_classifica_workflow_em_execucao():
