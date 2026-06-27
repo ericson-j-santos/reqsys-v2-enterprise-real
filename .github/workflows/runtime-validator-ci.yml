@@ -26,7 +26,7 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run runtime validator tests
         working-directory: backend
-        run: python -m pytest ../backend/tests/test_runtime_validator.py -v --tb=short
+        run: python -m pytest tests/test_runtime_validator.py -v --tb=short
 
   frontend-runtime-dashboard:
     runs-on: ubuntu-latest

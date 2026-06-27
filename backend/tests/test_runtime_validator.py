@@ -49,3 +49,30 @@ def test_remediation_circuit_breaker_blocks_execute_rollback():
     data = response.json()["data"]
     assert data["accepted"] is False
     assert data["circuit_breaker_open"] is True
+
+
+def test_timeline_endpoint_returns_correlation_id():
+    response = client.get(
+        "/api/runtime-validator/timeline", headers={"X-Request-ID": "timeline-cid"}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["meta"]["correlation_id"] == "timeline-cid"
+    assert "items" in body["data"]
+
+
+def test_safe_dry_run_remediation_is_accepted_with_limited_attempts():
+    response = client.post(
+        "/api/runtime-validator/remediations",
+        json={
+            "target": "CI — ReqSys v2 Enterprise",
+            "action": "rerun_workflow",
+            "mode": "dry_run",
+            "max_retries": 5,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["accepted"] is True
+    assert data["attempts"] == 3
+    assert data["circuit_breaker_open"] is False

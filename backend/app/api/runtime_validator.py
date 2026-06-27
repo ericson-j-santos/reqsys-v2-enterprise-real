@@ -81,8 +81,14 @@ def remediate(
 
 
 @router.get("/timeline")
-def timeline():
-    return ok({"items": [e.model_dump() for e in ENGINE.timeline.list()]})
+def timeline(
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-ID"),
+    x_request_id: str | None = Header(default=None, alias="X-Request-ID"),
+):
+    correlation_id = _cid(x_correlation_id, x_request_id)
+    return ok(
+        {"items": [e.model_dump() for e in ENGINE.timeline.list()]}, correlation_id
+    )
 
 
 @router.get("/dashboard")
