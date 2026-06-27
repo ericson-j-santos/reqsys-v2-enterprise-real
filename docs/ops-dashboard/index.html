@@ -61,6 +61,8 @@
     select { background: #020617; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 8px; }
     .details { margin-top: 8px; }
     pre { white-space: pre-wrap; word-break: break-word; background: #020617; padding: 12px; border-radius: 10px; border: 1px solid var(--border); }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .chip { border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px; background: #020617; color: var(--text); font-size: 12px; }
     @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 600px) { main, header { padding: 16px; } .grid { grid-template-columns: 1fr; } table { font-size: 13px; } }
   </style>
@@ -108,6 +110,53 @@
     </section>
 
     <section class="card">
+      <h2>Projeção estatística de conclusão</h2>
+      <p class="small" id="projection-reference">Carregando referência temporal...</p>
+      <div class="grid">
+        <div><div class="kpi-label">Conclusão atual</div><div id="projection-current" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Gap restante</div><div id="projection-gap" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Fator de ritmo</div><div id="projection-pace" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Confiança</div><div id="projection-confidence" class="kpi-value">-</div></div>
+      </div>
+      <div class="grid" style="margin-top: 12px;">
+        <div>
+          <h3>Cenário conservador</h3>
+          <table>
+            <thead><tr><th>Marco</th><th>Janela (dias)</th></tr></thead>
+            <tbody id="projection-conservative"><tr><td colspan="2">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+        <div>
+          <h3>Cenário acelerado</h3>
+          <table>
+            <thead><tr><th>Marco</th><th>Janela (dias)</th></tr></thead>
+            <tbody id="projection-accelerated"><tr><td colspan="2">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="grid" style="margin-top: 12px;">
+        <div>
+          <h3>Gaps prioritários</h3>
+          <table>
+            <thead><tr><th>Área</th><th>Gap</th></tr></thead>
+            <tbody id="projection-priority-gaps"><tr><td colspan="2">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+        <div>
+          <h3>Probabilidade estatística</h3>
+          <pre id="projection-probability">{}</pre>
+        </div>
+      </div>
+      <h3 style="margin-top: 12px;">Bottlenecks e aceleradores</h3>
+      <div id="projection-bottlenecks" class="chips"></div>
+      <div id="projection-accelerators" class="chips"></div>
+      <details class="details">
+        <summary>Risco e tendência</summary>
+        <pre id="projection-risk-trend">{}</pre>
+      </details>
+    </section>
+
+    <section class="card">
       <h2>Drill-down por domínio</h2>
       <p class="small">Detalhes locais de health, evidências, risco, drift de ambiente e governança a partir do Runtime Health Center.</p>
       <table>
@@ -144,6 +193,8 @@
     const formatDate = (epoch) => epoch ? new Date(epoch * 1000).toLocaleString('pt-BR') : 'Não informado';
     const uniqueValues = (items, key) => [...new Set(items.map((item) => item[key]).filter(Boolean))].sort();
     const shortJson = (value) => JSON.stringify(value || {}, null, 2);
+    const normalizeLabel = (value) => String(value || '-').replaceAll('_', ' ');
+    const titleLabel = (value) => normalizeLabel(value).replace(/\b\w/g, (char) => char.toUpperCase());
 
     function renderDomains(domains) {
       const tbody = document.getElementById('domains');
@@ -177,6 +228,51 @@
         option.value = value;
         option.textContent = value;
         select.appendChild(option);
+      });
+    }
+
+    function renderScenarioRows(targetId, scenario) {
+      const tbody = document.getElementById(targetId);
+      tbody.innerHTML = '';
+      const entries = Object.entries(scenario || {});
+      if (!entries.length) {
+        tbody.innerHTML = '<tr><td colspan="2">Sem dados de projeção.</td></tr>';
+        return;
+      }
+      entries.forEach(([milestone, days]) => {
+        const tr = document.createElement('tr');
+        const range = Array.isArray(days) && days.length === 2 ? `${days[0]}–${days[1]}` : '-';
+        tr.innerHTML = `<td>${titleLabel(milestone)}</td><td>${range}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderPriorityGaps(gaps) {
+      const tbody = document.getElementById('projection-priority-gaps');
+      tbody.innerHTML = '';
+      if (!gaps.length) {
+        tbody.innerHTML = '<tr><td colspan="2">Sem gaps priorizados.</td></tr>';
+        return;
+      }
+      gaps.forEach((gap) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${titleLabel(gap.area)}</td><td>${gap.gap_percent ?? '-'}%</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderChips(targetId, values, prefix) {
+      const container = document.getElementById(targetId);
+      container.innerHTML = '';
+      if (!Array.isArray(values) || !values.length) {
+        container.innerHTML = `<span class="small">${prefix}: sem dados.</span>`;
+        return;
+      }
+      values.forEach((value) => {
+        const span = document.createElement('span');
+        span.className = 'chip';
+        span.textContent = `${prefix}: ${titleLabel(value)}`;
+        container.appendChild(span);
       });
     }
 
@@ -263,6 +359,22 @@
           goldBody.appendChild(tr);
         });
       }
+
+      const projection = data.completion_projection || {};
+      document.getElementById('projection-reference').textContent = projection.reference_time_brt
+        ? `Referência temporal (BRT): ${projection.reference_time_brt}`
+        : 'Referência temporal não informada.';
+      document.getElementById('projection-current').textContent = projection.current_completion_percent == null ? '-' : `${projection.current_completion_percent}%`;
+      document.getElementById('projection-gap').textContent = projection.remaining_to_100_percent == null ? '-' : `${projection.remaining_to_100_percent}%`;
+      document.getElementById('projection-pace').textContent = projection.velocity_profile?.pace_factor == null ? '-' : projection.velocity_profile.pace_factor;
+      document.getElementById('projection-confidence').textContent = titleLabel(projection.confidence_level || '-');
+      renderScenarioRows('projection-conservative', projection.scenarios?.conservative || {});
+      renderScenarioRows('projection-accelerated', projection.scenarios?.accelerated || {});
+      renderPriorityGaps(projection.priority_gaps || []);
+      renderChips('projection-bottlenecks', projection.main_bottlenecks || [], 'Gargalo');
+      renderChips('projection-accelerators', projection.accelerators || [], 'Acelerador');
+      document.getElementById('projection-probability').textContent = shortJson(projection.probability_forecast || {});
+      document.getElementById('projection-risk-trend').textContent = shortJson({ risk_index: projection.risk_index || {}, trend: projection.trend || {}, velocity_profile: projection.velocity_profile || {} });
 
       const tbody = document.getElementById('checks');
       tbody.innerHTML = '';

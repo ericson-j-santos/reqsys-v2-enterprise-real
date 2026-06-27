@@ -1,0 +1,189 @@
+{
+  "schema_version": "1.0.0",
+  "reference_time_brt": "2026-06-27T21:00:00-03:00",
+  "consolidated_state": [
+    {
+      "dimension": "Arquitetura base",
+      "status": "Alta",
+      "maturity_percent": 88
+    },
+    {
+      "dimension": "CI/CD governado",
+      "status": "Alta",
+      "maturity_percent": 82
+    },
+    {
+      "dimension": "Living Architecture",
+      "status": "Média/Alta",
+      "maturity_percent": 74
+    },
+    {
+      "dimension": "Observabilidade/Analytics",
+      "status": "Média/Alta",
+      "maturity_percent": 71
+    },
+    {
+      "dimension": "Runtime operacional",
+      "status": "Média",
+      "maturity_percent": 68
+    },
+    {
+      "dimension": "UX operacional / dashboards",
+      "status": "Média/Alta",
+      "maturity_percent": 72
+    },
+    {
+      "dimension": "Automação autônoma",
+      "status": "Média",
+      "maturity_percent": 63
+    },
+    {
+      "dimension": "Governança enterprise",
+      "status": "Alta",
+      "maturity_percent": 79
+    },
+    {
+      "dimension": "Ambientes sincronizados",
+      "status": "Média",
+      "maturity_percent": 61
+    },
+    {
+      "dimension": "Produção padrão ouro consolidado",
+      "status": "Média",
+      "maturity_percent": 54
+    }
+  ],
+  "observed_velocity": {
+    "prs_per_business_day": {
+      "min": 8,
+      "max": 18
+    },
+    "green_merges_per_day": {
+      "min": 6,
+      "max": 14
+    },
+    "ci_fixes_per_cycle": {
+      "min": 2,
+      "max": 7
+    },
+    "safe_parallel_increments": {
+      "min": 3,
+      "max": 5
+    },
+    "lead_time_minutes": {
+      "min": 18,
+      "max": 90
+    },
+    "ci_stabilization_percent": 83,
+    "critical_regression_risk": "low",
+    "structural_rework": "moderate_low"
+  },
+  "real_completion": {
+    "implemented_code_percent": 78,
+    "validated_code_percent": 69,
+    "consolidated_operational_evidence_percent": 58,
+    "consolidated_enterprise_governance_percent": 64,
+    "synchronized_environments_percent": 61,
+    "navigable_analytical_runtime_percent": 67,
+    "operational_autonomy_percent": 55,
+    "total_gold_standard_percent": 52
+  },
+  "remaining_gap": {
+    "runtime_consolidation_percent": 18,
+    "automated_evidence_percent": 22,
+    "autonomous_operation_percent": 31,
+    "analytics_drilldown_percent": 27,
+    "production_hardening_percent": 24,
+    "environment_sync_percent": 39,
+    "full_living_governance_percent": 21,
+    "enterprise_operational_ux_percent": 17
+  },
+  "timeline_days": {
+    "conservative": {
+      "mvp_operational_consolidated": [
+        3,
+        6
+      ],
+      "synchronized_environments": [
+        5,
+        9
+      ],
+      "robust_operational_runtime": [
+        7,
+        12
+      ],
+      "technical_gold_standard": [
+        14,
+        22
+      ],
+      "total_gold_standard_consolidation": [
+        21,
+        35
+      ]
+    },
+    "accelerated": {
+      "robust_mvp": [
+        2,
+        4
+      ],
+      "strong_usable_production": [
+        5,
+        8
+      ],
+      "almost_full_environment_sync": [
+        4,
+        7
+      ],
+      "technical_gold_standard": [
+        10,
+        16
+      ],
+      "full_enterprise_consolidation": [
+        14,
+        24
+      ]
+    }
+  },
+  "main_bottlenecks": [
+    "continuous_ci_stabilization",
+    "environment_synchronization",
+    "automated_operational_evidence",
+    "runtime_driven_consolidation",
+    "residual_coupling_reduction",
+    "end_to_end_observability",
+    "production_hardening"
+  ],
+  "risk_index": {
+    "architectural_regression": "low",
+    "branch_collision": "medium_low",
+    "ci_instability": "medium",
+    "environment_drift": "medium",
+    "operational_scalability": "medium",
+    "traceability_loss": "low",
+    "hidden_coupling": "medium_low"
+  },
+  "trend": {
+    "speed": "up_strong",
+    "maturity": "up_strong",
+    "governance": "up_stable",
+    "autonomy": "up_moderate",
+    "observability": "up_strong",
+    "living_runtime": "up_strong",
+    "production_consolidation": "up_moderate"
+  },
+  "probability_forecast": {
+    "strong_mvp_under_one_week_percent": 87,
+    "enterprise_usable_production_percent": 81,
+    "real_technical_gold_standard_percent": 73,
+    "full_enterprise_consolidation_percent": 61
+  },
+  "accelerators": [
+    "ci_auto_healing",
+    "automatic_evidence_generation",
+    "consolidated_validation_pipeline",
+    "fly_runtime_sync",
+    "central_operational_monitoring",
+    "single_contract_shared_packages",
+    "manual_validation_reduction"
+  ]
+}

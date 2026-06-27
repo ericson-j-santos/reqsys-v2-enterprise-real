@@ -79,6 +79,13 @@ class OpsDashboardDataTests(unittest.TestCase):
         self.assertGreaterEqual(len(payload["incident_timeline"]), 4)
         self.assertIn("323", {str(item["pr"]) for item in payload["incident_timeline"]})
         self.assertIn("runtime_health_report", {item["source"] for item in payload["incident_timeline"]})
+        projection = payload["completion_projection"]
+        self.assertGreaterEqual(projection["current_completion_percent"], 0)
+        self.assertLessEqual(projection["current_completion_percent"], 100)
+        self.assertIn("pace_factor", projection["velocity_profile"])
+        self.assertIn("conservative", projection["scenarios"])
+        self.assertIn("accelerated", projection["scenarios"])
+        self.assertGreaterEqual(len(projection["priority_gaps"]), 1)
 
 
 if __name__ == "__main__":
