@@ -20,6 +20,7 @@
     .links { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; }
     .status { font-size: 0.8rem; margin-top: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 4px; display: inline-block; }
     .status-pending { background: #334155; color: var(--muted); }
+    .status-passed { background: rgba(34,197,94,.16); color: #22c55e; }
     footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.85rem; }
   </style>
 </head>
@@ -54,10 +55,25 @@
               ${hub ? `<a href="${hub}">Hub dedicado</a>` : ''}
               <a href="../../${trail.architecture_as_code.replace('docs/', '')}">Architecture-as-Code</a>
             </div>
-            <span class="status status-pending">Validar via trilhas_padrao_ouro.py</span>
+            <span class="status status-pending" data-trail-id="${trail.id}">Carregando...</span>
           `;
           grid.appendChild(card);
         });
+        fetch('../../audit/trilhas/trilhas-padrao-ouro-report.json')
+          .then((r) => (r.ok ? r.json() : null))
+          .then((report) => {
+            if (!report) return;
+            const byId = Object.fromEntries((report.trails || []).map((t) => [t.trail_id, t]));
+            document.querySelectorAll('[data-trail-id]').forEach((el) => {
+              const trail = byId[el.dataset.trailId];
+              if (!trail) return;
+              el.textContent = trail.status;
+              el.className = `status status-${trail.status === 'passed' ? 'passed' : 'pending'}`;
+            });
+            document.getElementById('footer-meta').textContent =
+              `${registry.trails.length} trilhas · ${report.summary?.gold_standard_percent ?? '-'}% padrão ouro · ${report.status}`;
+          })
+          .catch(() => {});
         document.getElementById('footer-meta').textContent =
           `${registry.trails.length} trilhas · critérios: ${registry.gold_standard_criteria.join(', ')}`;
       })

@@ -99,6 +99,21 @@
     </section>
 
     <section class="card">
+      <h2>Trilhas A–E — Padrão Ouro</h2>
+      <p class="small">Consolidado local de <code>audit/trilhas/trilhas-padrao-ouro-report.json</code>. Hub navegável em <a href="../architecture/trilhas/index.html">docs/architecture/trilhas/</a>.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Maturidade</div><div id="trilhas-maturity" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Status consolidado</div><div id="trilhas-status" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Trilhas verdes</div><div id="trilhas-passed" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Alertas</div><div id="trilhas-alerts" class="kpi-value">-</div></div>
+      </div>
+      <table>
+        <thead><tr><th>Trilha</th><th>Nome</th><th>Status</th><th>Pendências</th></tr></thead>
+        <tbody id="trilhas-drilldown"><tr><td colspan="4">Carregando...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
       <h2>Padrão ouro — aprofundamento operacional</h2>
       <p class="small" id="gold-strategy">Carregando estratégia...</p>
       <table>
@@ -316,6 +331,38 @@
       renderTimeline(timelineEvents);
 
       const gold = data.runtime_gold_standard_depth || {};
+      const trilhas = data.trilhas_padrao_ouro || {};
+      document.getElementById('trilhas-maturity').textContent = trilhas.gold_standard_percent == null ? '-' : `${trilhas.gold_standard_percent}%`;
+      document.getElementById('trilhas-status').innerHTML = trilhas.available
+        ? `<span class="status ${statusClass(trilhas.status)}">${trilhas.status}</span>`
+        : '<span class="status unknown">fallback</span>';
+      document.getElementById('trilhas-passed').textContent = trilhas.available
+        ? `${trilhas.trails_passed ?? 0}/${trilhas.trails_total ?? 0}`
+        : '-';
+      document.getElementById('trilhas-alerts').textContent = trilhas.available
+        ? `${(trilhas.trails_warning ?? 0) + (trilhas.trails_failed ?? 0)}`
+        : '-';
+      const trilhasBody = document.getElementById('trilhas-drilldown');
+      trilhasBody.innerHTML = '';
+      const trilhasItems = trilhas.trails || [];
+      if (!trilhas.available) {
+        trilhasBody.innerHTML = `<tr><td colspan="4">${trilhas.guardrail || 'Relatório trilhas ausente.'}</td></tr>`;
+      } else if (!trilhasItems.length) {
+        trilhasBody.innerHTML = '<tr><td colspan="4">Relatório disponível sem detalhe por trilha.</td></tr>';
+      } else {
+        trilhasItems.forEach((trail) => {
+          const tr = document.createElement('tr');
+          const missing = (trail.missing || []).join(', ') || '—';
+          tr.innerHTML = `
+            <td>${trail.trail_id || '-'}</td>
+            <td>${trail.trail_name || '-'}</td>
+            <td><span class="status ${statusClass(trail.status)}">${trail.status || '-'}</span></td>
+            <td>${missing}</td>
+          `;
+          trilhasBody.appendChild(tr);
+        });
+      }
+
       document.getElementById('gold-strategy').textContent = gold.available
         ? `${gold.strategy} | Status: ${gold.overall_status} | Score: ${gold.overall_score ?? '-'}`
         : 'Relatório Runtime Health Center ainda não disponível para este artifact.';

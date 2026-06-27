@@ -294,6 +294,40 @@ def _public_runtime_summary(
     }
 
 
+def _trilhas_padrao_ouro_summary(report: dict[str, Any]) -> dict[str, Any]:
+    if not report:
+        return {
+            "available": False,
+            "artifact": "audit/trilhas/trilhas-padrao-ouro-report.json",
+            "status": "unknown",
+            "guardrail": "Fallback seguro: relatório consolidado das trilhas A–E ausente no repositório.",
+        }
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    trails = report.get("trails") if isinstance(report.get("trails"), list) else []
+    return {
+        "available": True,
+        "artifact": "audit/trilhas/trilhas-padrao-ouro-report.json",
+        "status": report.get("status", "unknown"),
+        "gold_standard_percent": summary.get("gold_standard_percent"),
+        "trails_total": summary.get("trails_total"),
+        "trails_passed": summary.get("trails_passed"),
+        "trails_warning": summary.get("trails_warning"),
+        "trails_failed": summary.get("trails_failed"),
+        "hub": "docs/architecture/trilhas/index.html",
+        "trails": [
+            {
+                "trail_id": item.get("trail_id"),
+                "trail_name": item.get("trail_name"),
+                "status": item.get("status"),
+                "missing": item.get("missing") or [],
+            }
+            for item in trails
+            if isinstance(item, dict)
+        ],
+        "recommended_actions": report.get("recommended_actions") or [],
+    }
+
+
 def build_dashboard_payload(
     report: dict[str, Any],
     repo: str,
@@ -303,6 +337,7 @@ def build_dashboard_payload(
     observability_correlation: dict[str, Any] | None = None,
     delivery_finalization: dict[str, Any] | None = None,
     public_runtime_provenance: dict[str, Any] | None = None,
+    trilhas_padrao_ouro: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     results = report.get("results", []) or []
     runtime_report = runtime_report or {}
@@ -311,8 +346,9 @@ def build_dashboard_payload(
     observability_correlation = observability_correlation or {}
     delivery_finalization = delivery_finalization or {}
     public_runtime_provenance = public_runtime_provenance or {}
+    trilhas_padrao_ouro = trilhas_padrao_ouro or {}
     return {
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "repo": repo or report.get("repo") or "unknown",
         "generated_at_epoch": int(time.time()),
         "overall_status": report.get("overall_status", "unknown"),
@@ -332,6 +368,7 @@ def build_dashboard_payload(
         "incident_timeline": _incident_timeline(report, runtime_report, evidence_graph),
         "observability_correlation_report": observability_correlation,
         "delivery_finalization": _delivery_finalization_summary(delivery_finalization),
+        "trilhas_padrao_ouro": _trilhas_padrao_ouro_summary(trilhas_padrao_ouro),
         "runtime_sources": {
             "runtime_health_report_available": bool(runtime_report),
             "runtime_operational_evidence_graph_available": bool(evidence_graph),
@@ -339,6 +376,7 @@ def build_dashboard_payload(
             "public_runtime_source_fallback": public_runtime_provenance.get("source_fallback", not bool(public_runtime)),
             "observability_correlation_report_available": bool(observability_correlation),
             "delivery_finalization_report_available": bool(delivery_finalization),
+            "trilhas_padrao_ouro_report_available": bool(trilhas_padrao_ouro),
         },
     }
 
@@ -355,6 +393,7 @@ def main() -> int:
     parser.add_argument("--public-runtime-evidence-index", default="audit/runtime/public-runtime-evidence-index.json")
     parser.add_argument("--observability-correlation-report", default="artifacts/observability-correlation-report/observability-correlation-report.json")
     parser.add_argument("--delivery-finalization-report", default="artifacts/delivery-finalization/delivery-finalization-report.json")
+    parser.add_argument("--trilhas-padrao-ouro-report", default="audit/trilhas/trilhas-padrao-ouro-report.json")
     args = parser.parse_args()
 
     report = _load_watchdog_report(Path(args.watchdog_report))
@@ -367,6 +406,7 @@ def main() -> int:
     )
     observability_correlation = _load_optional_json(Path(args.observability_correlation_report))
     delivery_finalization = _load_optional_json(Path(args.delivery_finalization_report))
+    trilhas_padrao_ouro = _load_optional_json(Path(args.trilhas_padrao_ouro_report))
     payload = build_dashboard_payload(
         report,
         args.repo,
@@ -376,6 +416,7 @@ def main() -> int:
         observability_correlation,
         delivery_finalization,
         public_runtime_provenance,
+        trilhas_padrao_ouro,
     )
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)

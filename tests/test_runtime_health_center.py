@@ -51,6 +51,10 @@ class RuntimeHealthCenterTests(unittest.TestCase):
         self.assertIn("runtime_risk_scoring", report)
         self.assertIn("public_access_validation", report)
         self.assertIn(report["public_access_validation"]["status"], {"missing", "warning", "passed"})
+        self.assertIn("trilhas_padrao_ouro", report)
+        self.assertTrue(report["trilhas_padrao_ouro"]["available"])
+        self.assertEqual(report["trilhas_padrao_ouro"]["status"], "passed")
+        self.assertEqual(report["trilhas_padrao_ouro"]["gold_standard_percent"], 100.0)
         self.assertFalse(report["pr_evidence_gate"]["duplicated"])
         self.assertLessEqual(report["maturity_percent"], report["base_maturity_percent"])
 
@@ -68,6 +72,7 @@ class RuntimeHealthCenterTests(unittest.TestCase):
         self.assertEqual(report["public_access_validation"]["status"], "missing")
         self.assertEqual(report["gold_standard_depth"]["overall_status"], "partial")
         self.assertIn("runtime", report["gold_standard_depth"]["blockers"])
+        self.assertFalse(report["trilhas_padrao_ouro"]["available"])
 
     def test_environment_drift_detector_classifies_low_for_expected_prod_delta(self):
         import tempfile

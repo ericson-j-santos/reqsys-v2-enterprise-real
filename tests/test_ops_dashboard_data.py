@@ -75,7 +75,7 @@ class OpsDashboardDataTests(unittest.TestCase):
 
         payload = build_dashboard_payload(watchdog, "example/repo", runtime, evidence_graph, public_runtime, {}, delivery_finalization)
 
-        self.assertEqual(payload["schema_version"], "1.2.0")
+        self.assertEqual(payload["schema_version"], "1.3.0")
         self.assertTrue(payload["runtime_sources"]["runtime_health_report_available"])
         self.assertTrue(payload["runtime_sources"]["runtime_operational_evidence_graph_available"])
         self.assertTrue(payload["runtime_sources"]["public_runtime_validation_available"])
@@ -95,6 +95,31 @@ class OpsDashboardDataTests(unittest.TestCase):
         self.assertGreaterEqual(len(payload["incident_timeline"]), 4)
         self.assertIn("323", {str(item["pr"]) for item in payload["incident_timeline"]})
         self.assertIn("runtime_health_report", {item["source"] for item in payload["incident_timeline"]})
+
+    def test_trilhas_padrao_ouro_summary_in_dashboard_payload(self):
+        trilhas = {
+            "status": "passed",
+            "summary": {
+                "trails_total": 5,
+                "trails_passed": 5,
+                "trails_warning": 0,
+                "trails_failed": 0,
+                "gold_standard_percent": 100.0,
+            },
+            "trails": [
+                {"trail_id": "trilha-a", "trail_name": "Runtime Público", "status": "passed", "missing": []},
+            ],
+            "recommended_actions": [],
+        }
+        payload = build_dashboard_payload(
+            {"overall_status": "healthy", "results": []},
+            "example/repo",
+            trilhas_padrao_ouro=trilhas,
+        )
+        self.assertTrue(payload["runtime_sources"]["trilhas_padrao_ouro_report_available"])
+        self.assertTrue(payload["trilhas_padrao_ouro"]["available"])
+        self.assertEqual(payload["trilhas_padrao_ouro"]["gold_standard_percent"], 100.0)
+        self.assertEqual(payload["trilhas_padrao_ouro"]["trails_total"], 5)
 
     def test_delivery_finalization_fallback_is_safe_when_artifact_missing(self):
         payload = build_dashboard_payload({"overall_status": "unknown", "results": []}, "example/repo")

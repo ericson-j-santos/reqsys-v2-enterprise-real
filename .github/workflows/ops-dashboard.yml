@@ -48,6 +48,7 @@ jobs:
             --public-runtime-validation audit/runtime/public-runtime-validation.json \
             --public-runtime-fallback artifacts/runtime/public-runtime-validation.json \
             --public-runtime-evidence-index audit/runtime/public-runtime-evidence-index.json \
+            --trilhas-padrao-ouro-report audit/trilhas/trilhas-padrao-ouro-report.json \
             --output docs/ops-dashboard/data/health.json
 
       - name: Prepare dashboard artifact

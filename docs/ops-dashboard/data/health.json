@@ -1,7 +1,7 @@
 {
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at_epoch": 1782579911,
+  "generated_at_epoch": 1782591002,
   "overall_status": "unknown",
   "health_score": 40,
   "critical_failure_count": null,
@@ -7139,12 +7139,57 @@
     "indicators": [],
     "guardrail": "Fallback seguro: nenhum dado externo é consultado quando o artifact não existe."
   },
+  "trilhas_padrao_ouro": {
+    "available": true,
+    "artifact": "audit/trilhas/trilhas-padrao-ouro-report.json",
+    "status": "passed",
+    "gold_standard_percent": 100.0,
+    "trails_total": 5,
+    "trails_passed": 5,
+    "trails_warning": 0,
+    "trails_failed": 0,
+    "hub": "docs/architecture/trilhas/index.html",
+    "trails": [
+      {
+        "trail_id": "trilha-a",
+        "trail_name": "Runtime Público",
+        "status": "passed",
+        "missing": []
+      },
+      {
+        "trail_id": "trilha-b",
+        "trail_name": "Observabilidade Enterprise",
+        "status": "passed",
+        "missing": []
+      },
+      {
+        "trail_id": "trilha-c",
+        "trail_name": "UX Operacional",
+        "status": "passed",
+        "missing": []
+      },
+      {
+        "trail_id": "trilha-d",
+        "trail_name": "Qualidade e Governança",
+        "status": "passed",
+        "missing": []
+      },
+      {
+        "trail_id": "trilha-e",
+        "trail_name": "Arquitetura Viva",
+        "status": "passed",
+        "missing": []
+      }
+    ],
+    "recommended_actions": []
+  },
   "runtime_sources": {
     "runtime_health_report_available": true,
     "runtime_operational_evidence_graph_available": false,
     "public_runtime_validation_available": true,
     "public_runtime_source_fallback": false,
     "observability_correlation_report_available": true,
-    "delivery_finalization_report_available": false
+    "delivery_finalization_report_available": false,
+    "trilhas_padrao_ouro_report_available": true
   }
 }

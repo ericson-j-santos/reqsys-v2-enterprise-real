@@ -37,7 +37,10 @@ ARTIFACT_CATALOG = {
     "pr_evidence_gate": Path("artifacts/pr-evidence-gate/pr-evidence-gate.json"),
     "public_runtime_evidence": Path("artifacts/public-runtime-evidence/public-runtime-evidence.json"),
     "public_access_validation": Path("artifacts/public-access-validation/public-access-validation.json"),
+    "trilhas_padrao_ouro": Path("audit/trilhas/trilhas-padrao-ouro-report.json"),
 }
+
+TRILHAS_PADRAO_OURO_PATH = Path("audit/trilhas/trilhas-padrao-ouro-report.json")
 
 SENSITIVE_ENV_MARKERS = ("SECRET", "TOKEN", "PASSWORD", "PASS", "KEY")
 
@@ -314,6 +317,7 @@ def signal_catalog() -> dict[str, list[LocalSignal]]:
             LocalSignal("runtime_ops_p1_doc", Path("docs/operations/runtime-ops-governance-p1.md"), True),
             LocalSignal("governance_gate_workflow", Path(".github/workflows/operational-governance-gate.yml"), True),
             LocalSignal("governance_gate_report", Path("artifacts/operational-governance-gate/operational-governance-gate.json"), json_status_path=("status",)),
+            LocalSignal("trilhas_padrao_ouro_report", TRILHAS_PADRAO_OURO_PATH, True, json_status_path=("status",)),
         ],
         "runtime_risk": [
             LocalSignal("runtime_risk_scoring_workflow", Path(".github/workflows/runtime-risk-scoring.yml"), True),
@@ -342,6 +346,74 @@ def signal_catalog() -> dict[str, list[LocalSignal]]:
     }
 
 
+def evaluate_trilhas_padrao_ouro(root: Path) -> dict[str, Any]:
+    relative = TRILHAS_PADRAO_OURO_PATH
+    data = load_json(root / relative)
+    if not data:
+        return {
+            "status": "missing",
+            "available": False,
+            "path": relative.as_posix(),
+            "hub": "docs/architecture/trilhas/index.html",
+            "summary": None,
+            "trails": [],
+            "recommended_actions": [],
+        }
+    if data.get("_parse_error"):
+        return {
+            "status": "warning",
+            "available": True,
+            "path": relative.as_posix(),
+            "hub": "docs/architecture/trilhas/index.html",
+            "summary": None,
+            "trails": [],
+            "recommended_actions": [],
+            "parse_error": True,
+        }
+    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    trails = data.get("trails") if isinstance(data.get("trails"), list) else []
+    status = normalize_status(data.get("status"), True)
+    return {
+        "status": status,
+        "available": True,
+        "path": relative.as_posix(),
+        "hub": "docs/architecture/trilhas/index.html",
+        "gold_standard_percent": summary.get("gold_standard_percent"),
+        "trails_total": summary.get("trails_total"),
+        "trails_passed": summary.get("trails_passed"),
+        "trails_warning": summary.get("trails_warning"),
+        "trails_failed": summary.get("trails_failed"),
+        "summary": summary,
+        "trails": [
+            {
+                "trail_id": item.get("trail_id"),
+                "trail_name": item.get("trail_name"),
+                "status": item.get("status"),
+                "missing": item.get("missing") or [],
+            }
+            for item in trails
+            if isinstance(item, dict)
+        ],
+        "recommended_actions": data.get("recommended_actions") or [],
+    }
+
+
+def operational_ux_status(
+    domains: dict[str, dict[str, Any]],
+    trilhas_padrao_ouro: dict[str, Any],
+) -> str:
+    statuses = [domains["governance"]["status"], domains["evidence_gate"]["status"]]
+    if trilhas_padrao_ouro.get("available"):
+        statuses.append(trilhas_padrao_ouro["status"])
+    if any(status == "missing" for status in statuses):
+        return "missing"
+    if any(status == "warning" for status in statuses):
+        return "warning"
+    if all(status == "passed" for status in statuses):
+        return "passed"
+    return "partial"
+
+
 def live_analytics_status(ingested_artifacts: dict[str, Any]) -> str:
     available = ingested_artifacts["artifacts_available"]
     if available >= 3:
@@ -355,6 +427,7 @@ def build_gold_standard_depth(
     domains: dict[str, dict[str, Any]],
     environment_drift: dict[str, Any],
     ingested_artifacts: dict[str, Any],
+    trilhas_padrao_ouro: dict[str, Any],
 ) -> dict[str, Any]:
     """Map existing signals to the six gold-standard deepening axes.
 
@@ -372,14 +445,34 @@ def build_gold_standard_depth(
         "observability": {
             "status": ingested_artifacts["status"],
             "score": STATUS_SCORE[ingested_artifacts["status"]],
-            "evidence": [artifact["id"] for artifact in ingested_artifacts["artifacts"] if artifact["available"]],
+            "evidence": [
+                artifact["id"]
+                for artifact in ingested_artifacts["artifacts"]
+                if artifact["available"]
+            ]
+            + (["trilhas_padrao_ouro"] if trilhas_padrao_ouro.get("available") else []),
             "operator_action": "Publicar artifacts faltantes para reduzir diagnostico manual e manter trilha auditavel.",
         },
         "operational_ux": {
-            "status": domains["governance"]["status"],
-            "score": min(domains["governance"]["score"], domains["evidence_gate"]["score"]),
-            "evidence": ["next_required_actions", "gold_standard_status", "pr_evidence_gate"],
-            "operator_action": "Consumir next_required_actions como fila unica de operacao, evitando criar novos paineis paralelos.",
+            "status": operational_ux_status(domains, trilhas_padrao_ouro),
+            "score": min(
+                domains["governance"]["score"],
+                domains["evidence_gate"]["score"],
+                STATUS_SCORE[trilhas_padrao_ouro["status"]]
+                if trilhas_padrao_ouro.get("available")
+                else domains["evidence_gate"]["score"],
+            ),
+            "evidence": [
+                "next_required_actions",
+                "gold_standard_status",
+                "pr_evidence_gate",
+                *(
+                    ["trilhas_padrao_ouro", "trilhas_hub"]
+                    if trilhas_padrao_ouro.get("available")
+                    else []
+                ),
+            ],
+            "operator_action": "Consumir trilhas_padrao_ouro e next_required_actions como fila unica de operacao.",
         },
         "live_analytics": {
             "status": live_analytics_status(ingested_artifacts),
@@ -435,19 +528,24 @@ def confidence_from_domains(domains: dict[str, dict[str, Any]]) -> str:
     return "low"
 
 
-def next_actions(domains: dict[str, dict[str, Any]]) -> list[str]:
+def next_actions(domains: dict[str, dict[str, Any]], trilhas_padrao_ouro: dict[str, Any]) -> list[str]:
     actions: list[str] = []
     for name, domain in domains.items():
         if domain["status"] == "missing":
             actions.append(f"Publicar ou gerar evidencias locais para o dominio {name}.")
         elif domain["status"] in {"partial", "warning"}:
             actions.append(f"Completar sinais obrigatorios e revisar alertas do dominio {name}.")
+    if not trilhas_padrao_ouro.get("available"):
+        actions.append("Executar scripts/trilhas_padrao_ouro.py e publicar audit/trilhas/trilhas-padrao-ouro-report.json.")
+    elif trilhas_padrao_ouro.get("status") != "passed":
+        actions.append("Revisar trilhas abaixo do padrao ouro no hub docs/architecture/trilhas/.")
     return actions or ["Manter coleta local em CI e preparar contrato de dashboard/API sem rede externa."]
 
 
 def build_report(root: Path) -> dict[str, Any]:
     domains = {name: evaluate_domain(name, signals, root) for name, signals in signal_catalog().items()}
     ingested_artifacts = ingest_artifacts(root)
+    trilhas_padrao_ouro = evaluate_trilhas_padrao_ouro(root)
     environment_drift = detect_environment_drift(root)
     public_access = evaluate_public_access(root)
     domains["environment"]["status"] = environment_drift["status"] if domains["environment"]["status"] == "passed" else domains["environment"]["status"]
@@ -466,7 +564,12 @@ def build_report(root: Path) -> dict[str, Any]:
         "Environment Drift Detector": domains["environment"]["status"],
         "Remediation Executor governado": domains["remediation"]["status"],
     }
-    gold_standard_depth = build_gold_standard_depth(domains, environment_drift, ingested_artifacts)
+    gold_standard_depth = build_gold_standard_depth(
+        domains,
+        environment_drift,
+        ingested_artifacts,
+        trilhas_padrao_ouro,
+    )
     return {
         "schema_version": "1.1.0",
         "report_type": "runtime_health_center",
@@ -480,13 +583,14 @@ def build_report(root: Path) -> dict[str, Any]:
         "pr_evidence_gate": {"status": domains["evidence_gate"]["status"], "duplicated": False},
         "environment_drift": environment_drift,
         "public_access_validation": public_access,
+        "trilhas_padrao_ouro": trilhas_padrao_ouro,
         "gold_standard_status": gold_standard,
         "gold_standard_depth": gold_standard_depth,
         "base_maturity_percent": base_maturity,
         "maturity_percent": maturity,
         "operational_risk": risk_with_drift(maturity, warnings, missing, environment_drift["drift_level"]),
         "confidence_level": confidence_from_domains(domains),
-        "next_required_actions": next_actions(domains),
+        "next_required_actions": next_actions(domains, trilhas_padrao_ouro),
     }
 
 
