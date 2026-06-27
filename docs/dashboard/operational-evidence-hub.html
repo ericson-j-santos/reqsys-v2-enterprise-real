@@ -44,13 +44,14 @@
 <body>
   <header>
     <h1>ReqSys — Operational Evidence Hub</h1>
-    <p>Consolidação report-only de readiness, completion, finalization, maturidade, observabilidade, contratos, regressão de dashboard e rastreabilidade viva. Local-first, sem CDN, sem secrets e com fallback governado.</p>
+    <p>Consolidação report-only de readiness, completion, finalization, maturidade, observabilidade, contratos, regressão de dashboard, rastreabilidade viva e inteligência governada de merge. Local-first, sem CDN, sem secrets e com fallback governado.</p>
   </header>
   <nav id="topnav">
     <a href="#executive">Executivo</a>
     <a href="#delivery-readiness">Readiness</a>
     <a href="#delivery-completion">Completion</a>
     <a href="#delivery-finalization">Finalization</a>
+    <a href="#merge-intelligence">Merge Intelligence</a>
     <a href="#maturity-snapshot">Maturidade</a>
     <a href="#observability-correlation">Observabilidade</a>
     <a href="#artifact-contract-validation">Contratos</a>
@@ -84,6 +85,15 @@
       <h2>Delivery finalization</h2>
       <div class="grid" id="finalizationCards"></div>
       <table><thead><tr><th>Indicador</th><th>Valor</th><th>Semáforo</th><th>Confiança</th><th>Risco</th></tr></thead><tbody id="finalizationTable"></tbody></table>
+    </section>
+
+    <section id="merge-intelligence">
+      <h2>Governance merge intelligence</h2>
+      <div class="grid" id="mergeIntelligenceCards"></div>
+      <h3>Prioridade de lanes</h3>
+      <table><thead><tr><th>Lane</th><th>Score</th><th>Paralelismo</th><th>Lane atual</th></tr></thead><tbody id="mergeLaneTable"></tbody></table>
+      <h3>Hotspots recorrentes</h3>
+      <table><thead><tr><th>Path</th><th>Crítico</th><th>Concorrente</th><th>Heat</th></tr></thead><tbody id="mergeHotspotTable"></tbody></table>
     </section>
 
     <section id="maturity-snapshot">
@@ -156,6 +166,15 @@
         workflow: '../../.github/workflows/delivery-finalization-report.yml'
       },
       {
+        key: 'mergeIntelligence',
+        label: 'Merge Intelligence',
+        section: 'merge-intelligence',
+        href: '../ops-dashboard/data/merge-intelligence-index.json',
+        contract: '../ops-dashboard/data/merge-lane-priority.json',
+        runbook: '../ops-dashboard/governance-evidence-index.md',
+        workflow: '../../.github/workflows/pr-conflict-guard.yml'
+      },
+      {
         key: 'maturitySnapshot',
         label: 'Maturity Snapshot',
         section: 'maturity-snapshot',
@@ -207,6 +226,7 @@
       deliveryReadiness: { score_percent: 0, status: 'unknown', remaining_gap_pp: 0, confidence_level: 'low', operational_risk: 'medium', checks: [] },
       deliveryCompletion: { completion_percent: 0, target_percent: 99.5, remaining_gap_pp: 0, status: 'unknown', confidence_level: 'low', operational_risk: 'medium', milestones: [] },
       deliveryFinalization: { finalization_percent: 0, status: 'unknown', confidence_level: 'low', operational_risk: 'medium', tracked_prs: 0, merge_rate_percent: 0, open_failures: 0, indicators: [] },
+      mergeIntelligence: { source_available: false, merge_intelligence: { risk: 'unknown', lane: 'unknown', parallel_safe: false, mergeability_score: 0, recommendation: 'isolamento_obrigatorio', queue_saturation: 'unknown', queue_pressure: 0, confidence: 'low', blocking_reasons: ['merge_intelligence_missing'] }, trend: { serial_merge_required: true }, hotspot_heatmap: [], lane_priority: { ranking: [] } },
       maturitySnapshot: { average_current_percent: 0, average_target_percent: 0, average_gap_percent: 0, confidence_level: 'low', operational_risk: 'medium', dimensions: [] },
       observabilityCorrelation: { summary: { mapped_sources: 0, mapped_artifacts: 0, maturity_percent: 0, operational_risk: 'unknown', confidence_level: 'low' }, correlations: [] },
       artifactContractValidation: { status: 'unknown', confidence_level: 'low', operational_risk: 'medium', maturity_percent: 0, summary: { artifacts_inventoried: 0, schemas_missing: 0, field_divergences: 0 }, artifacts: [] },
@@ -233,9 +253,9 @@
 
     function semaforo(status) {
       const map = {
-        passed: 'verde', true: 'verde', low: 'verde', verde: 'verde', ready: 'verde', stable: 'verde', closed: 'verde', completed: 'verde', consolidated: 'verde', observed: 'verde', mapped: 'verde',
-        warning: 'amarelo', unknown: 'amarelo', medium: 'amarelo', amarelo: 'amarelo', attention: 'amarelo', gap: 'amarelo', divergence_report_only: 'amarelo', open: 'amarelo',
-        high: 'vermelho', failed: 'vermelho', vermelho: 'vermelho', bad: 'vermelho', risk: 'vermelho'
+        passed: 'verde', true: 'verde', low: 'verde', verde: 'verde', ready: 'verde', stable: 'verde', closed: 'verde', completed: 'verde', consolidated: 'verde', observed: 'verde', mapped: 'verde', merge_imediato: 'verde', safe: 'verde', controlled: 'amarelo', rerun_recomendado: 'amarelo', aguardar_estabilizacao: 'amarelo', merge_serializado: 'amarelo',
+        warning: 'amarelo', unknown: 'amarelo', medium: 'amarelo', amarelo: 'amarelo', attention: 'amarelo', gap: 'amarelo', divergence_report_only: 'amarelo', open: 'amarelo', serial: 'amarelo',
+        high: 'vermelho', failed: 'vermelho', vermelho: 'vermelho', bad: 'vermelho', risk: 'vermelho', blocked: 'vermelho', isolamento_obrigatorio: 'vermelho'
       };
       const key = String(status ?? 'unknown').toLowerCase();
       const label = map[key] || (key.includes('pass') ? 'verde' : 'amarelo');
@@ -245,8 +265,9 @@
 
     function riskClass(level) {
       const v = String(level || 'unknown').toLowerCase();
-      if (v === 'high' || v === 'vermelho' || v === 'failed') return 'bad';
-      if (v === 'medium' || v === 'unknown' || v === 'amarelo' || v === 'gap') return 'warn';
+      if (v === 'high' || v === 'vermelho' || v === 'failed' || v === 'blocked' || v === 'isolamento_obrigatorio') return 'bad';
+      if (v === 'medium' || v === 'unknown' || v === 'amarelo' || v === 'gap' || v === 'merge_serializado' || v === 'aguardar_estabilizacao') return 'warn';
+      if (v === 'rerun_recomendado') return 'risk';
       return 'good';
     }
 
@@ -265,6 +286,13 @@
       return '<div class="link-card"><h4>' + title + '</h4><ul>' + lis + '</ul></div>';
     }
 
+    function mergeRiskFrom(intelligence) {
+      const rec = intelligence.recommendation || 'isolamento_obrigatorio';
+      if (rec === 'merge_imediato') return 'low';
+      if (rec === 'isolamento_obrigatorio' || intelligence.risk === 'blocked') return 'high';
+      return 'medium';
+    }
+
     async function render() {
       const loaded = {};
       const sourceRows = [];
@@ -276,13 +304,15 @@
       const readiness = loaded.deliveryReadiness.data;
       const completion = loaded.deliveryCompletion.data;
       const finalization = loaded.deliveryFinalization.data;
+      const mergeIntelligence = loaded.mergeIntelligence.data;
+      const mergeScore = mergeIntelligence.merge_intelligence || {};
       const maturity = loaded.maturitySnapshot.data;
       const observability = loaded.observabilityCorrelation.data;
       const contracts = loaded.artifactContractValidation.data;
       const regression = loaded.dashboardRegression.data;
       const traceability = loaded.livingArchitectureTraceability.data;
 
-      const execRisk = [readiness.operational_risk, completion.operational_risk, finalization.operational_risk, maturity.operational_risk, observability.summary?.operational_risk, contracts.operational_risk, traceability.summary?.operational_risk].filter(Boolean);
+      const execRisk = [readiness.operational_risk, completion.operational_risk, finalization.operational_risk, mergeRiskFrom(mergeScore), maturity.operational_risk, observability.summary?.operational_risk, contracts.operational_risk, traceability.summary?.operational_risk].filter(Boolean);
       const worstRisk = execRisk.some(function (r) { return String(r).toLowerCase() === 'high'; }) ? 'high' : execRisk.some(function (r) { return String(r).toLowerCase() === 'medium'; }) ? 'medium' : 'low';
       const loadedCount = Object.values(loaded).filter(function (l) { return l.ok; }).length;
 
@@ -290,11 +320,12 @@
         card('Delivery readiness', readiness.score_percent || 0, '%', readiness.status, 'confiança: ' + (readiness.confidence_level || 'low'), 'delivery-readiness'),
         card('Delivery completion', completion.completion_percent || 0, '%', completion.status, 'gap: ' + (completion.remaining_gap_pp || 0) + ' p.p.', 'delivery-completion'),
         card('Delivery finalization', finalization.finalization_percent || finalization.score_percent || 0, '%', finalization.status, 'PRs: ' + (finalization.tracked_prs || '-'), 'delivery-finalization'),
+        card('Mergeability score', mergeScore.mergeability_score || 0, '%', mergeRiskFrom(mergeScore), 'recomendação: ' + (mergeScore.recommendation || 'isolamento_obrigatorio'), 'merge-intelligence'),
         card('Maturity snapshot', maturity.average_current_percent || 0, '%', (maturity.average_gap_percent || 0) <= 5 ? 'low' : 'attention', 'gap médio: ' + (maturity.average_gap_percent || 0) + ' p.p.', 'maturity-snapshot'),
         card('Observability mapped', observability.summary?.mapped_sources || 0, 'fontes', observability.summary?.operational_risk, 'artifacts: ' + (observability.summary?.mapped_artifacts || 0), 'observability-correlation'),
         card('Contract artifacts', contracts.summary?.artifacts_inventoried || 0, '', contracts.status, 'divergências: ' + (contracts.summary?.field_divergences || 0), 'artifact-contract-validation'),
         card('Dashboard regression', regression.summary?.totals?.passed || 0, '/' + (regression.summary?.totals?.checks || 0), (regression.summary?.totals?.gaps || 0) === 0 ? 'low' : 'gap', 'modo: report-only', 'dashboard-regression'),
-        card('Traceability domains', (traceability.workflows?.length || 0) + (traceability.artifacts?.length || 0) + (traceability.dashboards?.length || 0), 'itens', traceability.summary?.operational_risk || 'medium', 'fontes carregadas: ' + loadedCount + '/8', 'living-architecture-traceability'),
+        card('Traceability domains', (traceability.workflows?.length || 0) + (traceability.artifacts?.length || 0) + (traceability.dashboards?.length || 0), 'itens', traceability.summary?.operational_risk || 'medium', 'fontes carregadas: ' + loadedCount + '/9', 'living-architecture-traceability'),
         card('Risco operacional consolidado', worstRisk, '', worstRisk, 'evidência report-only — não substitui CI', '')
       ].join('');
 
@@ -333,6 +364,21 @@
       document.getElementById('finalizationTable').innerHTML = finIndicators.map(function (item) {
         return '<tr><td>' + item.name + '</td><td>' + item.value + '</td><td>' + semaforo(item.status) + '</td><td>' + (finalization.confidence_level || 'low') + '</td><td>' + (finalization.operational_risk || 'medium') + '</td></tr>';
       }).join('');
+
+      const lanePriority = mergeIntelligence.lane_priority || {};
+      document.getElementById('mergeIntelligenceCards').innerHTML = [
+        card('Score de mergeabilidade', mergeScore.mergeability_score || 0, '%', mergeRiskFrom(mergeScore), 'lane: ' + (mergeScore.lane || 'unknown')),
+        card('Recomendação atual', mergeScore.recommendation || 'isolamento_obrigatorio', '', mergeScore.recommendation || 'isolamento_obrigatorio', 'confiança: ' + (mergeScore.confidence || 'low')),
+        card('Saturação da fila', mergeScore.queue_saturation || 'unknown', '', mergeScore.queue_saturation || 'unknown', 'pressão: ' + (mergeScore.queue_pressure || 0)),
+        card('Lanes seguras', (lanePriority.ranking || []).filter(function (lane) { return lane.parallelism === 'safe'; }).length, '', 'low', 'ranking operacional'),
+        card('Hotspots recorrentes', (mergeIntelligence.hotspot_heatmap || []).length, '', (mergeIntelligence.hotspot_heatmap || []).length ? 'medium' : 'low', 'paths críticos/concorrentes')
+      ].join('');
+      document.getElementById('mergeLaneTable').innerHTML = (lanePriority.ranking || []).map(function (item) {
+        return '<tr><td><code>' + item.lane + '</code></td><td>' + item.priority_score + '</td><td>' + semaforo(item.parallelism) + '</td><td>' + (item.current_pr_lane ? '<span class="badge blue">atual</span>' : '-') + '</td></tr>';
+      }).join('') || '<tr><td colspan="4">Sem ranking de lanes carregado; usando fallback governado.</td></tr>';
+      document.getElementById('mergeHotspotTable').innerHTML = (mergeIntelligence.hotspot_heatmap || []).map(function (item) {
+        return '<tr><td><code>' + item.path + '</code></td><td>' + semaforo(item.critical) + '</td><td>' + semaforo(item.concurrent) + '</td><td>' + item.heat + '</td></tr>';
+      }).join('') || '<tr><td colspan="4">Sem hotspots recorrentes evidenciados.</td></tr>';
 
       document.getElementById('maturityCards').innerHTML = [
         card('Média atual', maturity.average_current_percent || 0, '%', (maturity.average_gap_percent || 0) <= 5 ? 'low' : 'attention'),
@@ -403,6 +449,8 @@
         '<li><a href="../ops-dashboard/index.html"><code>ops-dashboard/index.html</code></a></li>',
         '</ul></div>',
         '<div class="link-card"><h4>Índices e mapas</h4><ul>',
+        '<li><a href="../ops-dashboard/data/merge-intelligence-index.json"><code>merge-intelligence-index.json</code></a></li>',
+        '<li><a href="../ops-dashboard/data/merge-lane-priority.json"><code>merge-lane-priority.json</code></a></li>',
         '<li><a href="operational-command-center.md"><code>operational-command-center.md</code></a></li>',
         '<li><a href="command-center-evidence-index.md"><code>command-center-evidence-index.md</code></a></li>',
         '<li><a href="command-center-navigation-map.md"><code>command-center-navigation-map.md</code></a></li>',

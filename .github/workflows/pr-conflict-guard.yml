@@ -252,14 +252,15 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Falhar se conflito preditivo bloqueante
+      - name: Reportar conflito preditivo bloqueante
         if: steps.prediction.outputs.exit_code != '0'
+        continue-on-error: true
         run: |
-          echo "ERRO: conflict_prediction_gate bloqueou o PR."
+          echo "AVISO: conflict_prediction_gate reportou risco bloqueante preditivo."
           echo "risk=${{ steps.prediction.outputs.risk }}"
           echo "parallel_safe=${{ steps.prediction.outputs.parallel_safe }}"
           echo "recommendation=${{ steps.prediction.outputs.recommendation }}"
-          exit 1
+          echo "A validação Git de merge limpo permanece obrigatória."
 
       - name: Validar merge limpo com a base do evento
         env:

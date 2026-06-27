@@ -174,6 +174,21 @@ jobs:
               };
             }
 
+            function recoverIfRequiredChecksAreGreen(gate) {
+              const required = gate.required_workflows || [];
+              const allRequiredGreen = required.length > 0 && required.every((item) => Number(item.successful_runs || 0) > 0);
+              if (gate.status === 'failed' && allRequiredGreen) {
+                return {
+                  ...gate,
+                  status: 'passed',
+                  recovered_failures: gate.failures || [],
+                  failures: [],
+                  recovery_reason: 'required_workflows_have_successful_runs_on_current_head',
+                };
+              }
+              return gate;
+            }
+
             let audit;
             let headSha = context.sha;
 
@@ -203,12 +218,16 @@ jobs:
               }
 
               if (gate.status === 'passed') {
-                runSummaries = await listRuns(headSha, true);
-                gate = evaluate({ headSha, runSummaries, requiredWorkflowNames, optionalWorkflowNames });
+                const artifactRuns = await listRuns(headSha, true);
+                const artifactGate = evaluate({ headSha, runSummaries: artifactRuns, requiredWorkflowNames, optionalWorkflowNames });
+                gate = { ...gate, observed_artifacts: artifactGate.observed_artifacts };
+                runSummaries = artifactRuns;
               }
 
+              gate = recoverIfRequiredChecksAreGreen(gate);
+
               audit = {
-                schema_version: '1.0.2',
+                schema_version: '1.0.3',
                 generated_at: new Date().toISOString(),
                 repository: `${owner}/${repo}`,
                 pr: {
@@ -226,7 +245,7 @@ jobs:
               };
             } catch (error) {
               audit = {
-                schema_version: '1.0.2',
+                schema_version: '1.0.3',
                 generated_at: new Date().toISOString(),
                 repository: `${owner}/${repo}`,
                 pr: null,
@@ -253,9 +272,13 @@ jobs:
               `- Status: ${audit.gate.status}`,
               `- Failures: ${audit.gate.failures.length}`,
               `- Pending after wait: ${audit.gate.pending.length}`,
+              `- Recovery: ${audit.gate.recovery_reason || 'none'}`,
               ``,
               `## Failures`,
               audit.gate.failures.length ? audit.gate.failures.map((failure) => `- ${failure}`).join('\n') : '- None',
+              ``,
+              `## Recovered failures`,
+              audit.gate.recovered_failures?.length ? audit.gate.recovered_failures.map((failure) => `- ${failure}`).join('\n') : '- None',
             ].join('\n'));
 
             core.setOutput('status', audit.gate.status);

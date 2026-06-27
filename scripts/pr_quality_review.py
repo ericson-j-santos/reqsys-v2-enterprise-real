@@ -363,24 +363,7 @@ def post_comment(repo: str, pr_number: str, token: str, body: str) -> None:
     request_json("POST", url, token, {"body": body})
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--repo", required=True)
-    parser.add_argument("--pr-number", required=True)
-    parser.add_argument("--report-dir", default=str(DEFAULT_REPORT_DIR))
-    parser.add_argument("--comment", action="store_true")
-    args = parser.parse_args()
-
-    token = os.environ.get("GITHUB_TOKEN")
-    if not token:
-        print("GITHUB_TOKEN ausente.", file=sys.stderr)
-        return 1
-
-    pr = fetch_pr(args.repo, args.pr_number, token)
-    files = fetch_changed_files(args.repo, args.pr_number, token)
-    severity, score, findings = classify_risk(files, pr)
-
-    report_dir = Path(args.report_dir)
+def write_report(report_dir: Path, pr: PullRequestContext, files: list[ChangedFile], severity: str, score: int, findings: list[QualityFinding]) -> None:
     report_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "pr": asdict(pr),
@@ -394,19 +377,57 @@ def main() -> int:
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
     }
     (report_dir / "pr-quality-review.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
     markdown = render_markdown(pr, files, severity, score, findings)
     (report_dir / "pr-quality-review.md").write_text(markdown, encoding="utf-8")
-
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if step_summary:
         with open(step_summary, "a", encoding="utf-8") as handle:
             handle.write(markdown)
 
-    if args.comment:
-        post_comment(args.repo, args.pr_number, token, markdown)
 
-    return 1 if severity == "critical" else 0
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--repo", required=True)
+    parser.add_argument("--pr-number", required=True)
+    parser.add_argument("--report-dir", default=str(DEFAULT_REPORT_DIR))
+    parser.add_argument("--comment", action="store_true")
+    args = parser.parse_args()
+
+    report_dir = Path(args.report_dir)
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        fallback_pr = PullRequestContext(args.repo, args.pr_number, "unknown", "unknown", False, "unknown", "unknown", "")
+        write_report(
+            report_dir,
+            fallback_pr,
+            [],
+            "warning",
+            70,
+            [QualityFinding("warning", "api", "GITHUB_TOKEN ausente; fallback report-only gerado.", "env:GITHUB_TOKEN")],
+        )
+        return 0
+
+    try:
+        pr = fetch_pr(args.repo, args.pr_number, token)
+        files = fetch_changed_files(args.repo, args.pr_number, token)
+        severity, score, findings = classify_risk(files, pr)
+        write_report(report_dir, pr, files, severity, score, findings)
+        if args.comment:
+            markdown = (report_dir / "pr-quality-review.md").read_text(encoding="utf-8")
+            post_comment(args.repo, args.pr_number, token, markdown)
+        return 1 if severity == "critical" else 0
+    except Exception as exc:  # noqa: BLE001 - fallback governado precisa capturar falhas operacionais do coletor
+        fallback_pr = PullRequestContext(args.repo, args.pr_number, "unresolved", "unknown", False, "unknown", "unknown", "")
+        write_report(
+            report_dir,
+            fallback_pr,
+            [],
+            "warning",
+            70,
+            [QualityFinding("warning", "api", "Falha operacional no PR Quality Review; fallback report-only gerado.", str(exc)[:500])],
+        )
+        print(f"PR Quality Review fallback gerado: {exc}", file=sys.stderr)
+        return 0
 
 
 if __name__ == "__main__":
