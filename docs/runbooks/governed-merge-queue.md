@@ -74,6 +74,9 @@ O workflow publica o artefato:
 ```text
 artifacts/governed-merge-queue/
 ├── policy.json
+├── merge-prep.json
+├── parallel-capacity-report.json
+├── parallel-capacity-summary.md
 ├── runtime-health-validator.json
 └── summary.md
 ```
@@ -86,6 +89,28 @@ artifacts/governed-merge-queue/
 | `allow_auto_merge` | Estado atual do repositório no GitHub |
 | `native_auto_merge_available` | Espelho de `allow_auto_merge` para automação futura |
 | `merge_path` | Caminho operacional recomendado (`governed_pr_automation`) |
+
+### Campos decisórios de `merge-prep.json`
+
+| Campo | Significado |
+|---|---|
+| `ready_for_governed_automation` | PR elegível para **Governed PR Automation** |
+| `ready_for_native_auto_merge` | Elegível e `allow_auto_merge=true` no repositório |
+| `missing` | Labels ou pré-requisitos ainda ausentes |
+| `next_step` | Ação operacional recomendada (read-only) |
+
+### Relatório de capacidade paralela (v2)
+
+Workflow dedicado: `.github/workflows/governed-merge-queue-capacity.yml`
+
+Script: `scripts/governed_parallel_pr_report.py`
+
+| Campo | Significado |
+|---|---|
+| `safe_parallel_capacity` | Merges paralelos seguros estimados (baseline: 3) |
+| `path_conflicts` | PRs elegíveis tocando os mesmos arquivos |
+| `domain_buckets` | Classificação `low_risk` / `controlled` / `high_risk` |
+| `decision` | `parallel_capacity_available`, `limit_parallel_merges`, etc. |
 
 Essas evidências devem ser usadas no status executivo para diferenciar:
 
@@ -108,5 +133,5 @@ Após este gate estabilizar, evoluir para:
 
 1. auditoria de branch protection acoplada ao resultado de `policy.json`;
 2. habilitação explícita de `allow_auto_merge` no repositório, se a política permitir;
-3. integração com dashboard operacional de PRs paralelos;
-4. relatório executivo de capacidade segura de paralelismo por domínio.
+3. integração do `parallel-capacity-report.json` ao dashboard operacional;
+4. relatório executivo de capacidade segura por domínio no Coordenador Principal.

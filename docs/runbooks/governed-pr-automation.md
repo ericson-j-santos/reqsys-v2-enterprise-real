@@ -30,6 +30,7 @@ Governed PR Automation
 |---|---:|---|---|
 | `pr_number` | Sim | — | PR a validar |
 | `execute_merge` | Sim | `false` | Executa merge somente quando `true` |
+| `merge_mode` | Sim | `governed_squash` | `governed_squash` ou `native_auto_merge` (este último exige `allow_auto_merge=true`) |
 | `required_label` | Sim | `governed-merge-approved` | Label obrigatória para autorizar merge |
 
 ## Gates obrigatórios
@@ -42,6 +43,9 @@ A automação valida os workflows mais recentes do head SHA do PR:
 - `Governança Padrão Ouro`
 - `Branch Protection Audit`
 - `PR Conflict Guard`
+- `Governed Merge Queue`
+
+Também exige a label `merge-queue:eligible` aplicada pelo workflow **Governed Merge Queue**.
 
 ## Regras de bloqueio
 

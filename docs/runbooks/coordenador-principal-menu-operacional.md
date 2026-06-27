@@ -74,7 +74,8 @@ Apenas estes workflows no ciclo normal. Demais workflows existem para governanç
 | **PR CI Watch** | PR aberto/sincronizado; diagnóstico de checks | `pr_number`, `sha`, `comment=false` |
 | **PR Evidence Gate** | Validar head SHA + workflows + artifacts | `pr_number` |
 | **Governed Merge Queue** | Simular merge contra `main` e gate de elegibilidade | dispara em `pull_request`; manual: `pr_number` |
-| **Governed PR Automation** | Validar elegibilidade de merge | `pr_number`, `execute_merge=false` |
+| **Governed Merge Queue Capacity** | Relatório de PRs paralelos seguros | `workflow_dispatch` ou schedule |
+| **Governed PR Automation** | Validar elegibilidade de merge | `pr_number`, `execute_merge=false`, `merge_mode=governed_squash` |
 
 ### Remediação (cuidado — allowlist)
 

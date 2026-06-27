@@ -261,6 +261,64 @@ jobs:
             exit 1
           fi
 
+      - name: Gerar merge-prep por PR
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ELIGIBLE="${{ steps.policy.outputs.eligible }}"
+          ALLOW_AUTO_MERGE="${{ steps.policy.outputs.allow_auto_merge }}"
+          READY="false"
+          MISSING='[]'
+          NEXT_STEP="Corrigir falhas da Governed Merge Queue antes de preparar merge."
+          NATIVE_STEP="Habilitar allow_auto_merge em Settings → General → Pull Requests."
+
+          if [ "$ELIGIBLE" = "true" ]; then
+            READY="true"
+            MISSING='["governed-merge-approved"]'
+            NEXT_STEP="workflow_dispatch Governed PR Automation com execute_merge=true e label governed-merge-approved."
+            if [ "$ALLOW_AUTO_MERGE" = "true" ]; then
+              NATIVE_STEP="No PR: Enable auto-merge após demais checks obrigatórios, ou merge_mode=native_auto_merge na Governed PR Automation."
+            fi
+          fi
+
+          jq -n \
+            --arg schema_version "1.0.0" \
+            --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg correlation_id "${{ env.CORRELATION_ID }}" \
+            --argjson pr_number "${{ needs.resolve-context.outputs.pr_number }}" \
+            --arg head_sha "${{ needs.resolve-context.outputs.head_sha }}" \
+            --arg ready "$READY" \
+            --arg allow_auto_merge "$ALLOW_AUTO_MERGE" \
+            --arg next_step "$NEXT_STEP" \
+            --arg native_auto_merge_step "$NATIVE_STEP" \
+            --argjson missing "$MISSING" \
+            '{
+              schema_version: $schema_version,
+              generated_at: $generated_at,
+              correlation_id: $correlation_id,
+              pr_number: $pr_number,
+              head_sha: $head_sha,
+              ready_for_governed_automation: ($ready == "true"),
+              ready_for_native_auto_merge: ($ready == "true" and $allow_auto_merge == "true"),
+              missing: $missing,
+              labels_expected: ["merge-queue:eligible", "governed-merge-approved"],
+              next_step: $next_step,
+              native_auto_merge_step: $native_auto_merge_step,
+              guardrails: { merge: false, auto_merge_execute: false }
+            }' > artifacts/governed-merge-queue/merge-prep.json
+
+      - name: Atualizar relatório de capacidade paralela
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/governed_parallel_pr_report.py \
+            --repo "${{ github.repository }}" \
+            --output-dir artifacts/governed-merge-queue \
+            --correlation-id "${{ env.CORRELATION_ID }}-capacity" \
+            || true
+
       - name: Sincronizar label de elegibilidade
         if: always()
         uses: actions/github-script@v7
@@ -321,6 +379,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: governed-merge-queue-policy-evidence
-          path: artifacts/governed-merge-queue/policy.json
-          if-no-files-found: error
+          path: |
+            artifacts/governed-merge-queue/policy.json
+            artifacts/governed-merge-queue/merge-prep.json
+            artifacts/governed-merge-queue/parallel-capacity-report.json
+            artifacts/governed-merge-queue/parallel-capacity-summary.md
+          if-no-files-found: warn
           retention-days: 30

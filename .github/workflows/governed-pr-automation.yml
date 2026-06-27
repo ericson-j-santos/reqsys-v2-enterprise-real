@@ -15,6 +15,14 @@ on:
         options:
           - "false"
           - "true"
+      merge_mode:
+        description: "Modo de merge quando execute_merge=true"
+        required: true
+        default: "governed_squash"
+        type: choice
+        options:
+          - "governed_squash"
+          - "native_auto_merge"
       required_label:
         description: "Label obrigatoria para autorizar merge governado"
         required: true
@@ -37,6 +45,7 @@ env:
     Branch Protection Audit
     PR Conflict Guard
     Governed Merge Queue
+  MERGE_QUEUE_LABEL: merge-queue:eligible
 
 jobs:
   governed-pr-check:
@@ -50,11 +59,15 @@ jobs:
       - name: Validate PR gates
         id: validate
         uses: actions/github-script@v7
+        env:
+          MERGE_QUEUE_LABEL: ${{ env.MERGE_QUEUE_LABEL }}
         with:
           script: |
             const prNumber = Number(core.getInput('pr_number'));
             const executeMerge = core.getInput('execute_merge') === 'true';
+            const mergeMode = core.getInput('merge_mode');
             const requiredLabel = core.getInput('required_label');
+            const mergeQueueLabel = process.env.MERGE_QUEUE_LABEL;
             const requiredWorkflows = process.env.REQUIRED_WORKFLOWS
               .split('\n')
               .map((item) => item.trim())
@@ -62,8 +75,11 @@ jobs:
 
             const { owner, repo } = context.repo;
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            const { data: repoMeta } = await github.rest.repos.get({ owner, repo });
+            const allowAutoMerge = Boolean(repoMeta.allow_auto_merge);
 
             const failures = [];
+            const missing = [];
             if (pr.state !== 'open') failures.push(`PR precisa estar aberto. Estado atual: ${pr.state}`);
             if (pr.draft) failures.push('PR ainda esta em draft.');
             if (!pr.mergeable) failures.push(`PR nao esta mergeable. Valor atual: ${pr.mergeable}`);
@@ -75,8 +91,17 @@ jobs:
               per_page: 100,
             });
             const labelNames = labels.map((label) => label.name);
+            if (!labelNames.includes(mergeQueueLabel)) {
+              failures.push(`Label obrigatoria ausente: ${mergeQueueLabel}`);
+              missing.push(mergeQueueLabel);
+            }
             if (!labelNames.includes(requiredLabel)) {
               failures.push(`Label obrigatoria ausente: ${requiredLabel}`);
+              missing.push(requiredLabel);
+            }
+
+            if (executeMerge && mergeMode === 'native_auto_merge' && !allowAutoMerge) {
+              failures.push('merge_mode=native_auto_merge exige allow_auto_merge=true no repositorio.');
             }
 
             const headSha = pr.head.sha;
@@ -109,13 +134,49 @@ jobs:
               if (run.conclusion !== 'success') failures.push(`Workflow sem sucesso: ${workflow} (${run.conclusion})`);
             }
 
+            const readyForGovernedAutomation = failures.length === 0;
+            const readyForNativeAutoMerge = readyForGovernedAutomation && allowAutoMerge;
+            let nextStep = 'Corrigir bloqueios listados antes de merge.';
+            if (readyForGovernedAutomation && !executeMerge) {
+              nextStep = 'Disparar novamente com execute_merge=true para merge governado.';
+            } else if (readyForGovernedAutomation && executeMerge && mergeMode === 'native_auto_merge') {
+              nextStep = 'Habilitar auto-merge nativo no PR apos checks obrigatorios.';
+            } else if (readyForGovernedAutomation && executeMerge) {
+              nextStep = 'Executar squash merge governado neste workflow.';
+            }
+
+            const mergePrep = {
+              schema_version: '1.0.0',
+              generated_at: new Date().toISOString(),
+              correlation_id: `governed-pr-automation-${context.runId}`,
+              pr_number: prNumber,
+              head_sha: headSha,
+              ready_for_governed_automation: readyForGovernedAutomation,
+              ready_for_native_auto_merge: readyForNativeAutoMerge,
+              allow_auto_merge: allowAutoMerge,
+              merge_mode: mergeMode,
+              execute_merge: executeMerge,
+              missing,
+              labels_present: labelNames,
+              next_step: nextStep,
+              guardrails: { merge: false, auto_merge_execute: false },
+            };
+            await require('fs').promises.mkdir('artifacts/governed-pr-automation', { recursive: true });
+            await require('fs').promises.writeFile(
+              'artifacts/governed-pr-automation/merge-prep.json',
+              `${JSON.stringify(mergePrep, null, 2)}\n`,
+            );
+
             const summaryLines = [
               '# Governed PR Automation',
               '',
               `PR: #${prNumber}`,
               `Head SHA: ${headSha}`,
               `Modo merge: ${executeMerge ? 'executar' : 'dry-run'}`,
+              `Merge mode: ${mergeMode}`,
               `Label obrigatoria: ${requiredLabel}`,
+              `Merge queue label: ${mergeQueueLabel}`,
+              `allow_auto_merge: ${allowAutoMerge}`,
               '',
               '| Workflow | Status | Conclusao |',
               '|---|---|---|',
@@ -123,19 +184,55 @@ jobs:
               '',
               failures.length ? '## Bloqueios' : '## Resultado',
               failures.length ? failures.map((item) => `- ${item}`).join('\n') : '- PR elegivel para merge governado.',
+              '',
+              `Next step: ${nextStep}`,
             ];
             await core.summary.addRaw(summaryLines.join('\n')).write();
 
-            core.setOutput('eligible', failures.length === 0 ? 'true' : 'false');
+            core.setOutput('eligible', readyForGovernedAutomation ? 'true' : 'false');
             core.setOutput('execute_merge', executeMerge ? 'true' : 'false');
+            core.setOutput('merge_mode', mergeMode);
+            core.setOutput('allow_auto_merge', allowAutoMerge ? 'true' : 'false');
             core.setOutput('head_sha', headSha);
+            core.setOutput('pull_request_id', pr.node_id);
 
             if (failures.length) {
               core.setFailed(failures.join('\n'));
             }
 
+      - name: Publicar merge-prep
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-pr-automation-merge-prep
+          path: artifacts/governed-pr-automation/merge-prep.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Habilitar auto-merge nativo quando autorizado
+        if: >-
+          steps.validate.outputs.eligible == 'true' &&
+          steps.validate.outputs.execute_merge == 'true' &&
+          steps.validate.outputs.merge_mode == 'native_auto_merge' &&
+          steps.validate.outputs.allow_auto_merge == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pullRequestId = '${{ steps.validate.outputs.pull_request_id }}';
+            await github.graphql(
+              `mutation($pullRequestId: ID!) {
+                enablePullRequestAutoMerge(input: {pullRequestId: $pullRequestId, mergeMethod: SQUASH}) {
+                  pullRequest { autoMergeRequest { enabledAt } }
+                }
+              }`,
+              { pullRequestId },
+            );
+
       - name: Merge PR when explicitly authorized
-        if: steps.validate.outputs.eligible == 'true' && steps.validate.outputs.execute_merge == 'true'
+        if: >-
+          steps.validate.outputs.eligible == 'true' &&
+          steps.validate.outputs.execute_merge == 'true' &&
+          steps.validate.outputs.merge_mode == 'governed_squash'
         uses: actions/github-script@v7
         with:
           script: |

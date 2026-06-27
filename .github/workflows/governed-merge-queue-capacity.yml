@@ -1,0 +1,73 @@
+name: Governed Merge Queue Capacity
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_limit:
+        description: "Maximum open PRs to inspect"
+        required: false
+        default: "30"
+        type: string
+  schedule:
+    - cron: "0 12 * * 1-5"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: governed-merge-queue-capacity
+  cancel-in-progress: false
+
+env:
+  CORRELATION_ID: governed-merge-queue-capacity-${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  parallel-capacity-report:
+    name: Relatório de PRs paralelos seguros
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Gerar relatório de capacidade paralela
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/governed_parallel_pr_report.py \
+            --repo "${{ github.repository }}" \
+            --output-dir artifacts/governed-merge-queue \
+            --pr-limit "${{ github.event.inputs.pr_limit || '30' }}" \
+            --correlation-id "${{ env.CORRELATION_ID }}"
+
+      - name: Publicar relatório de capacidade
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-merge-queue-capacity-evidence
+          path: |
+            artifacts/governed-merge-queue/parallel-capacity-report.json
+            artifacts/governed-merge-queue/parallel-capacity-summary.md
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Resumo executivo
+        shell: bash
+        run: |
+          DECISION="$(jq -r '.decision' artifacts/governed-merge-queue/parallel-capacity-report.json)"
+          CAPACITY="$(jq -r '.safe_parallel_capacity' artifacts/governed-merge-queue/parallel-capacity-report.json)"
+          ELIGIBLE="$(jq -r '.eligible_prs' artifacts/governed-merge-queue/parallel-capacity-report.json)"
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # Governed Merge Queue Capacity
+
+          | Campo | Valor |
+          |---|---|
+          | Decision | \`$DECISION\` |
+          | Eligible PRs | \`$ELIGIBLE\` |
+          | Safe parallel capacity | \`$CAPACITY\` |
+          EOF
