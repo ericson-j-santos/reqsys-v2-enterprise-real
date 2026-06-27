@@ -1,0 +1,114 @@
+name: Agent Increment Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      increment_type:
+        description: "Tipo de incremento (new_front, gap_fix, close_duplicate, hotfix, consolidate)"
+        required: true
+        default: "new_front"
+        type: choice
+        options:
+          - new_front
+          - gap_fix
+          - close_duplicate
+          - hotfix
+          - consolidate
+      reference:
+        description: "Referencia opcional (OPS-GAP-*, numero de PR)"
+        required: false
+        default: ""
+        type: string
+      intent:
+        description: "Descricao curta do incremento"
+        required: false
+        default: ""
+        type: string
+      branch:
+        description: "Branch monitorada"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: agent-increment-gate-${{ github.event.inputs.increment_type }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Validar incremento objetivo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Consolidar status e avaliar gate
+        id: gate
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INCREMENT_TYPE: ${{ github.event.inputs.increment_type }}
+          REFERENCE: ${{ github.event.inputs.reference }}
+          INTENT: ${{ github.event.inputs.intent }}
+          TARGET_BRANCH: ${{ github.event.inputs.branch }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/agent-increment-gate
+          python scripts/coordenador_status_consolidator.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --branch "${TARGET_BRANCH}" \
+            --output-dir artifacts/coordenador-status
+          args=(--increment-type "${INCREMENT_TYPE}" --status-json artifacts/coordenador-status/coordenador-status.json --output-dir artifacts/agent-increment-gate --json)
+          if [[ -n "${REFERENCE}" ]]; then
+            args+=(--reference "${REFERENCE}")
+          fi
+          if [[ -n "${INTENT}" ]]; then
+            args+=(--intent "${INTENT}")
+          fi
+          set +e
+          python scripts/agent_increment_gate.py "${args[@]}" | tee artifacts/agent-increment-gate/decision.json
+          code=$?
+          set -e
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          cat artifacts/agent-increment-gate/decision.json
+
+      - name: Resumo executivo
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f artifacts/agent-increment-gate/decision.json ]]; then
+            allowed=$(python -c "import json; print(json.load(open('artifacts/agent-increment-gate/decision.json'))['allowed'])")
+            reason=$(python -c "import json; print(json.load(open('artifacts/agent-increment-gate/decision.json'))['reason'])")
+            echo "## Agent Increment Gate" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Allowed: \`${allowed}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Reason: \`${reason}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Type: \`${{ github.event.inputs.increment_type }}\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-increment-gate-evidence
+          path: artifacts/agent-increment-gate
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Falhar se incremento bloqueado
+        if: steps.gate.outputs.exit_code != '0'
+        run: |
+          echo "Incremento bloqueado pelo gate operacional."
+          exit 1

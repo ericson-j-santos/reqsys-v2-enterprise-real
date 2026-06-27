@@ -95,11 +95,15 @@ Runbook: [governed-pr-automation](governed-pr-automation.md).
 
 ```text
 triagem (coordenador-status.json ou artifacts 1–2)
-  → verde? continuar
+  → increment_gate.new_front_allowed?
+  → verde + sem bloqueios? continuar
   → amarelo? investigar + aguardar
-  → vermelho? bloquear merge + corrigir
+  → vermelho / gaps / duplicados? bloquear nova frente
 
-execução (agente técnico em cursor/<tema>-716c)
+gate (agent_increment_gate.py ou workflow Agent Increment Gate)
+  → new_front | gap_fix | close_duplicate | hotfix | consolidate
+
+execução (agente técnico em cursor/<tema>-4309)
   → PR draft até CI verde
 
 validação (artifacts 3–4 + CI obrigatório)

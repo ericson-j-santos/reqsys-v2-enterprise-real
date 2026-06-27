@@ -173,6 +173,17 @@ Para mudanÃ§as relevantes, atualizar pelo menos um dos itens abaixo:
 
 ## OrientaÃ§Ãµes para agentes
 
+- **Antes de abrir branch/PR novo**, executar o gate de incremento objetivo:
+  ```bash
+  python scripts/agent_increment_gate.py --increment-type new_front --intent "descricao curta"
+  ```
+  Com artifact local: `--status-json artifacts/coordenador-status/coordenador-status.json`.  
+  Tipos permitidos conforme `increment_gate.allowed_increment_types` em `coordenador-status.json`.
+- Para corrigir gap: `--increment-type gap_fix --reference OPS-GAP-*`.
+- Para fechar duplicado: `--increment-type close_duplicate --reference <numero_pr>`.
+- Para hotfix escopo fechado: `--increment-type hotfix --reference OPS-GAP-*`.
+- Para concluir incremento ativo (CI/merge): `--increment-type consolidate`.
+- Workflow manual: **Agent Increment Gate** (`workflow_dispatch`).
 - NÃ£o criar mÃºltiplos PRs concorrentes para o mesmo arquivo sem necessidade.
 - Quando houver PRs duplicados, consolidar o conteÃºdo canÃ´nico em um Ãºnico PR e fechar os demais com justificativa.
 - Preferir alteraÃ§Ã£o mÃ­nima em arquivos existentes.
@@ -196,6 +207,8 @@ Ambiente jÃ¡ inicializado pelo update script (venv do backend + `npm ci` no fr
 ### Coordenador Principal (operacao hibrida)
 
 Automacao real fica em GitHub Actions + scripts + agentes por PR; chats fixos sao contexto, nao runtime autonomo. Menu fechado: `docs/runbooks/coordenador-principal-menu-operacional.md`. Leitura preferencial: artifact `coordenador-status-evidence` via workflow **Coordenador Status Consolidator**.
+
+**Gate obrigatorio para nova frente:** `python scripts/agent_increment_gate.py --increment-type new_front --intent "<objetivo>"`. Exit code `0` = permitido; `1` = bloqueado (seguir `recommended_actions`). Campo `increment_gate.new_front_allowed` em `coordenador-status.json`.
 
 ### Servicos canonicos (modo dev, sem Docker)
 

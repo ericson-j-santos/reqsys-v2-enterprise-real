@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/coordenador-status.schema.json",
+  "title": "ReqSys Coordenador Status Consolidado",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "correlation_id",
+    "generated_at",
+    "repository",
+    "branch",
+    "mode",
+    "state",
+    "decision",
+    "executive_status",
+    "operational_cycle",
+    "increment_gate",
+    "summary",
+    "recommended_actions",
+    "guardrails"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.2.0" },
+    "correlation_id": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string", "minLength": 1 },
+    "branch": { "type": "string", "minLength": 1 },
+    "mode": { "type": "string", "enum": ["report_only"] },
+    "state": { "type": "string", "enum": ["green", "yellow", "red", "unknown"] },
+    "decision": { "type": "string", "minLength": 1 },
+    "executive_status": { "type": "string" },
+    "operational_cycle": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 5
+    },
+    "increment_gate": {
+      "type": "object",
+      "required": [
+        "new_front_allowed",
+        "blockers",
+        "open_pr_threshold",
+        "open_prs",
+        "duplicate_group_count",
+        "critical_gaps",
+        "allowed_increment_types",
+        "policy"
+      ],
+      "properties": {
+        "new_front_allowed": { "type": "boolean" },
+        "blockers": { "type": "array", "items": { "type": "string" } },
+        "open_pr_threshold": { "type": "integer", "minimum": 1 },
+        "open_prs": { "type": "integer", "minimum": 0 },
+        "duplicate_group_count": { "type": "integer", "minimum": 0 },
+        "critical_gaps": { "type": "integer", "minimum": 0 },
+        "allowed_increment_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["new_front", "gap_fix", "close_duplicate", "hotfix", "consolidate"]
+          }
+        },
+        "policy": { "type": "string" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["new_front_allowed"],
+      "properties": {
+        "new_front_allowed": { "type": "boolean" },
+        "duplicate_pr_groups": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "recommended_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["priority", "action", "reference", "detail"],
+        "properties": {
+          "priority": { "type": "string" },
+          "action": { "type": "string" },
+          "reference": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "guardrails": {
+      "type": "object",
+      "required": ["new_front"],
+      "properties": {
+        "merge": { "type": "boolean" },
+        "deploy": { "type": "boolean" },
+        "new_front": { "type": "boolean" }
+      }
+    }
+  }
+}
