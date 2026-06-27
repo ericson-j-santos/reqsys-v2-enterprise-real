@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/release-readiness.schema.json",
+  "title": "ReqSys Release Readiness Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "repository", "run_id", "event_name", "score_percent", "readiness", "risk", "checks", "mode"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string" },
+    "run_id": { "type": "string" },
+    "event_name": { "type": "string" },
+    "score_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "readiness": { "type": "string", "enum": ["ready_with_observation", "needs_review"] },
+    "risk": { "type": "string", "enum": ["low", "medium_low", "medium", "high"] },
+    "checks": { "type": "array", "items": { "type": "object" } },
+    "mode": { "type": "string", "enum": ["report_only"] }
+  }
+}
