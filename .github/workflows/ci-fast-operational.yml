@@ -39,6 +39,7 @@ jobs:
           python -m py_compile scripts/pr_ci_watch.py
           python -m py_compile scripts/workflow_command_center.py
           python -m py_compile scripts/auto_rerun_governed.py
+          python -m py_compile scripts/completion_projection_report.py
 
       - name: Executar testes rápidos operacionais
         shell: bash
@@ -50,6 +51,7 @@ jobs:
             tests/test_pr_ci_watch.py \
             tests/test_workflow_command_center.py \
             tests/test_auto_rerun_governed.py \
+            tests/test_completion_projection_report.py \
             -q
 
       - name: Validar workflow PR CI Watch
@@ -81,3 +83,14 @@ jobs:
           grep -qi "MAX_RERUN_ATTEMPTS" scripts/auto_rerun_governed.py
           grep -qi "workflow_blocklisted" scripts/auto_rerun_governed.py
           grep -qi "rerun-failed-jobs" scripts/auto_rerun_governed.py
+
+      - name: Validar Completion Projection Report
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/completion-projection-report.yml
+          test -f scripts/completion_projection_report.py
+          test -f tests/test_completion_projection_report.py
+          test -f docs/contracts/completion-projection-report.schema.json
+          grep -qi "report_only" scripts/completion_projection_report.py
+          grep -qi "overall_completion_percent" scripts/completion_projection_report.py

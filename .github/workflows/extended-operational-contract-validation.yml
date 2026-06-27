@@ -38,6 +38,7 @@ jobs:
               'docs/contracts/operational-maturity-score.schema.json',
               'docs/contracts/operational-artifact-discovery-index.schema.json',
               'docs/contracts/release-readiness.schema.json',
+              'docs/contracts/completion-projection-report.schema.json',
           ]
           report = []
           for path_text in contracts:
