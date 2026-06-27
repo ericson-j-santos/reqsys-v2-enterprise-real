@@ -1,7 +1,7 @@
 # Runbook — Trilha E: Arquitetura Viva
 
 **Data:** 2026-06-27  
-**Modo:** report-only  
+**Modo:** report-only · **Padrão ouro:** canônico  
 **ADR:** [`docs/adr/ADR-035-trilha-e-arquitetura-viva.md`](../adr/ADR-035-trilha-e-arquitetura-viva.md)
 
 ## Objetivo
@@ -55,6 +55,13 @@ Publica artifact `trilha-e-arquitetura-viva-${{ github.run_id }}` com relatório
 | Mudança de topology runtime | Alinhar `runtime-topology.json` e validar contra `build_runtime_topology` |
 | Novo diagrama | Adicionar em `diagrams.json` e link no hub |
 | Nova capacidade na trilha | Atualizar `architecture-as-code.json` e `fluxo-navegavel.json` |
+
+## Integração padrão ouro
+
+- Referência transversal: [`docs/REQSYS_PADRAO_OURO_TRANSVERSAL.md`](../REQSYS_PADRAO_OURO_TRANSVERSAL.md)
+- Baseline enterprise: [`docs/governanca/PADRAO_OURO_ENTERPRISE.md`](../governanca/PADRAO_OURO_ENTERPRISE.md) (seção Trilha E)
+- Gate CI: workflow **Governança Padrão Ouro** valida a Trilha E em todo PR para `main`
+- Runtime Health Center: domínio `living_architecture` monitora manifestos da Trilha E
 
 ## Integração com arquitetura viva existente
 

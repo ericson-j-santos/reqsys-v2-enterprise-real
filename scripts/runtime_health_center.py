@@ -325,6 +325,9 @@ def signal_catalog() -> dict[str, list[LocalSignal]]:
             LocalSignal("runtime_ops_governance_p1_doc", Path("docs/operations/runtime-ops-governance-p1.md"), True),
             LocalSignal("adr_directory", Path("docs/adr"), True),
             LocalSignal("runbooks_directory", Path("docs/runbooks"), True),
+            LocalSignal("trilha_e_architecture_as_code", Path("docs/architecture/trilha-e/architecture-as-code.json"), True),
+            LocalSignal("trilha_e_hub", Path("docs/architecture/trilha-e/index.html"), True),
+            LocalSignal("trilha_e_workflow", Path(".github/workflows/trilha-e-arquitetura-viva.yml"), True),
             LocalSignal("living_architecture_drift_artifact", Path("artifacts/living-architecture-doc-drift/living-architecture-doc-drift.json"), json_status_path=("status",)),
         ],
         "environment": [

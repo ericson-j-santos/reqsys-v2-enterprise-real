@@ -2,6 +2,8 @@
 
 Pacote aditivo de **architecture-as-code** para o ReqSys, consolidando seis capacidades sem alterar runtime ou deploy.
 
+**Status:** padrão ouro canônico (ADR-035).
+
 ## Capacidades
 
 | # | Capacidade | Artefato |

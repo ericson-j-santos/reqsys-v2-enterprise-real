@@ -10,6 +10,8 @@ Diagramas e fluxos devem ser vivos, automaticos, navegaveis, versionados, audita
 
 O ReqSys deve tratar arquitetura viva como capacidade transversal.
 
+Implementacao canonica padrão ouro: **Trilha E** em `docs/architecture/trilha-e/` (ADR-035).
+
 ## Requisitos minimos
 
 - Diagramas versionados junto ao codigo.
@@ -21,3 +23,5 @@ O ReqSys deve tratar arquitetura viva como capacidade transversal.
 
 - docs/ai-governance/00_PRIORITY_RULES.md
 - docs/ai-governance/09-CHECKLISTS/GOLD_STANDARD.md
+- docs/architecture/trilha-e/architecture-as-code.json
+- docs/adr/ADR-035-trilha-e-arquitetura-viva.md

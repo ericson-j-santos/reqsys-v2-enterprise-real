@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-27T17:15:43.869332Z",
+  "generated_at": "2026-06-27T22:06:03.894858Z",
   "trail_id": "trilha-e",
   "trail_name": "Arquitetura Viva",
   "mode": "report_only",
@@ -11,7 +11,8 @@
     "services": 4,
     "workflows": 6,
     "errors": 0,
-    "warnings": 0
+    "warnings": 0,
+    "gold_standard": "padrao_ouro"
   },
   "capabilities": [
     "diagramas_vivos",

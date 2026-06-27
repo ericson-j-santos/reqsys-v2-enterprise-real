@@ -98,6 +98,35 @@ Diagramas e fluxos devem ser tratados como parte do produto:
 - auditáveis;
 - explicáveis por IA.
 
+### Trilha E — referência canônica padrão ouro
+
+A implementação obrigatória de arquitetura viva no ReqSys é a **Trilha E** (`docs/architecture/trilha-e/`), com seis capacidades versionadas como architecture-as-code:
+
+| Capacidade | Artefato canônico |
+|---|---|
+| Diagramas vivos | `docs/architecture/trilha-e/diagrams.json` |
+| ADRs | `docs/architecture/trilha-e/inventory.json` |
+| Runtime topology | `docs/architecture/trilha-e/runtime-topology.json` |
+| Fluxo navegável | `docs/architecture/trilha-e/fluxo-navegavel.json` |
+| Inventory | `docs/architecture/trilha-e/inventory.json` |
+| Architecture-as-code | `docs/architecture/trilha-e/architecture-as-code.json` |
+
+Hub navegável: `docs/architecture/trilha-e/index.html`  
+ADR: `docs/adr/ADR-035-trilha-e-arquitetura-viva.md`  
+Runbook: `docs/runbooks/trilha-e-arquitetura-viva.md`
+
+Checklist padrão ouro — arquitetura viva:
+
+- [ ] Manifesto `architecture-as-code.json` atualizado quando houver nova capacidade ou componente relevante.
+- [ ] ADRs transversais indexados em `inventory.json`.
+- [ ] Diagramas Mermaid versionados em `diagrams.json`.
+- [ ] Topology estática alinhada ao contrato runtime (`build_runtime_topology`).
+- [ ] Fluxo navegável com links internos válidos.
+- [ ] Validação report-only verde: `python3 scripts/trilha_e_arquitetura_viva.py`.
+- [ ] Hub HTML reflete as seis capacidades.
+
+Novas frentes de documentação arquitetural devem estender a Trilha E, não criar trilhas paralelas.
+
 ## Schema-Driven UI / Dynamic Data Renderer
 
 Quando houver dados variáveis, priorizar backend retornando:

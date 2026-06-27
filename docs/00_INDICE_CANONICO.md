@@ -22,6 +22,9 @@ Este índice consolida os documentos canônicos do ReqSys para orientar humanos,
 | `docs/strategy/REQSYS_ATUALIZACAO_CONSOLIDADA_2026-06-26.md` | Atualização estratégica consolidada de 26/06/2026, com foco em runtime operacional, observabilidade, ambientes e operação autônoma. |
 | `docs/runbooks/coordenador-principal-menu-operacional.md` | Menu operacional do Coordenador Principal: ordem de leitura de artifacts, semáforo, workflows allowlisted e fluxo por incremento. |
 | `docs/runbooks/coordenador-status-consolidator.md` | Consolidador automático dos artifacts 1–2 em `coordenador-status.json`. |
+| `docs/architecture/trilha-e/architecture-as-code.json` | Trilha E — Arquitetura Viva padrão ouro (diagramas, ADRs, topology, inventory, fluxo navegável). |
+| `docs/adr/ADR-035-trilha-e-arquitetura-viva.md` | Decisão canônica da Trilha E como architecture-as-code. |
+| `docs/runbooks/trilha-e-arquitetura-viva.md` | Runbook operacional da Trilha E. |
 
 ## Regra de precedência
 

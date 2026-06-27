@@ -56,7 +56,7 @@ python scripts/runtime_health_center.py --output artifacts/runtime-health-center
 | `evidence_gate` | Reaproveitar o PR Evidence Gate e evidências operacionais sem duplicar sua lógica. |
 | `governance` | Validar presença de regras operacionais, gate de governança e documentação P1. |
 | `runtime_risk` | Consolidar sinais locais de scoring de risco e estabilidade runtime. |
-| `living_architecture` | Reutilizar documentação viva e artifacts locais de drift sem duplicar o drift check. |
+| `living_architecture` | Reutilizar documentação viva, Trilha E padrão ouro e artifacts locais de drift sem duplicar o drift check. |
 | `environment` | Verificar base declarativa local de ambientes e gates de produção. |
 | `remediation` | Verificar base governada para remediação segura e análise de falhas. |
 

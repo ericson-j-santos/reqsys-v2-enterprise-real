@@ -35,6 +35,7 @@ Nenhuma entrega do ReqSys deve ser considerada pronta sem avaliação explícita
 | Testes | Aplicar testes unitários, integração, UI/responsividade e smoke/e2e conforme escopo. |
 | CI/CD | Garantir que pipelines e quality gates executem antes de merge/publicação. |
 | Documentação | Atualizar README, ADRs, documentação funcional/técnica e changelog quando aplicável. |
+| Arquitetura viva | Manter Trilha E (`docs/architecture/trilha-e/`) atualizada: diagramas, ADRs indexados, topology, inventory e architecture-as-code. |
 | Produção | Produção só pode receber mudança aprovada, testada, com rollback e evidência de validação. |
 
 ## 3. Checklist obrigatório por demanda
@@ -154,6 +155,7 @@ Uma demanda só está concluída quando:
 - [ ] Testes executados e evidenciados.
 - [ ] CI concluído com sucesso.
 - [ ] README/ADR/changelog atualizados quando aplicável.
+- [ ] Trilha E (arquitetura viva) atualizada quando a mudança afetar componentes, ADRs ou topology.
 - [ ] Rollback definido para mudanças relevantes.
 - [ ] Produção não recebeu alteração sem aprovação e evidência.
 

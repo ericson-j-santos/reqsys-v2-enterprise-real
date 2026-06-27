@@ -5,6 +5,12 @@
   "updated_at": "2026-06-27T18:00:00Z",
   "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
   "mode": "report_only",
+  "gold_standard": {
+    "tier": "padrao_ouro",
+    "status": "canonical",
+    "reference": "docs/governanca/PADRAO_OURO_ENTERPRISE.md",
+    "transversal": "docs/REQSYS_PADRAO_OURO_TRANSVERSAL.md"
+  },
   "governance": {
     "owner": "ReqSys Architecture Governance",
     "adr": "docs/adr/ADR-035-trilha-e-arquitetura-viva.md",

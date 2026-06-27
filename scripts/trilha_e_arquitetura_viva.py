@@ -83,6 +83,10 @@ def validate(aac: dict[str, Any], inventory: dict[str, Any], diagrams: dict[str,
         if capability not in aac.get("capabilities", {}):
             issues.append({"severity": "error", "type": "missing_capability", "target": capability})
 
+    gold = aac.get("gold_standard", {})
+    if gold.get("tier") != "padrao_ouro" or gold.get("status") != "canonical":
+        issues.append({"severity": "error", "type": "gold_standard_not_canonical", "target": gold})
+
     for filename in REQUIRED_FILES:
         if not (TRILHA / filename).exists():
             issues.append({"severity": "error", "type": "missing_trilha_file", "target": filename})
@@ -131,6 +135,7 @@ def build_report(issues: list[dict[str, Any]], aac: dict[str, Any], inventory: d
             "workflows": len(inventory.get("workflows", [])),
             "errors": errors,
             "warnings": warnings,
+            "gold_standard": aac.get("gold_standard", {}).get("tier"),
         },
         "capabilities": list(aac.get("capabilities", {}).keys()),
         "issues": issues,

@@ -30,6 +30,8 @@ jobs:
           arquivos_obrigatorios=(
             "docs/governanca/PADRAO_OURO_ENTERPRISE.md"
             "docs/ADR/ADR-0001-padrao-ouro-enterprise.md"
+            "docs/architecture/trilha-e/architecture-as-code.json"
+            "docs/architecture/trilha-e/index.html"
             ".github/PULL_REQUEST_TEMPLATE.md"
           )
 
@@ -55,6 +57,8 @@ jobs:
             "Schema-Driven UI"
             "IA corporativa auditável"
             "Gates bloqueantes"
+            "Trilha E"
+            "arquitetura viva"
           )
 
           for termo in "${termos[@]}"; do
@@ -63,6 +67,25 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Validar Trilha E — Arquitetura Viva (padrão ouro)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/trilha_e_arquitetura_viva.py > /tmp/trilha-e-report.json
+          status="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("/tmp/trilha-e-report.json").read_text(encoding="utf-8"))
+          print(data["status"])
+          PY
+          )"
+          if [ "$status" = "failed" ]; then
+            echo "Trilha E padrão ouro falhou validação."
+            cat /tmp/trilha-e-report.json
+            exit 1
+          fi
+          echo "Trilha E padrão ouro validada: $status"
 
       - name: Resultado
         run: echo "Governança padrão ouro validada com sucesso."

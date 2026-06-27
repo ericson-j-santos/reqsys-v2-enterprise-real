@@ -31,6 +31,8 @@ def test_trilha_e_required_files_exist():
 def test_architecture_as_code_has_six_capabilities():
     aac = _load("architecture-as-code.json")
     assert aac["trail_id"] == "trilha-e"
+    assert aac["gold_standard"]["tier"] == "padrao_ouro"
+    assert aac["gold_standard"]["status"] == "canonical"
     capabilities = aac["capabilities"]
     assert set(capabilities) == {
         "diagramas_vivos",

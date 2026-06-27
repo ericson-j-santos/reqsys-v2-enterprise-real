@@ -2,7 +2,7 @@
 
 ## Status
 
-Aceito incrementalmente em 2026-06-27.
+Aceito como **padrão ouro canônico** em 2026-06-27.
 
 ## Contexto
 
@@ -22,6 +22,8 @@ Criar a **Trilha E — Arquitetura Viva** como pacote aditivo em `docs/architect
 | Architecture-as-code | `architecture-as-code.json` + schema + gerador |
 
 Validação report-only via workflow `trilha-e-arquitetura-viva.yml` e script `scripts/trilha_e_arquitetura_viva.py`.
+
+A Trilha E passa a ser a **referência padrão ouro** de arquitetura viva no ReqSys, validada também pelo workflow `Governança Padrão Ouro`.
 
 ## Regras de governança
 

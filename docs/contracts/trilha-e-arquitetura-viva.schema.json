@@ -4,7 +4,7 @@
   "title": "ReqSys Trilha E — Arquitetura Viva",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "trail_id", "trail_name", "updated_at", "repository", "mode", "governance", "capabilities", "artifacts", "validation"],
+  "required": ["schema_version", "trail_id", "trail_name", "updated_at", "repository", "mode", "gold_standard", "governance", "capabilities", "artifacts", "validation"],
   "properties": {
     "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
     "trail_id": { "type": "string", "const": "trilha-e" },
@@ -12,6 +12,17 @@
     "updated_at": { "type": "string", "format": "date-time" },
     "repository": { "type": "string" },
     "mode": { "type": "string", "enum": ["report_only", "enforced"] },
+    "gold_standard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tier", "status"],
+      "properties": {
+        "tier": { "type": "string", "const": "padrao_ouro" },
+        "status": { "type": "string", "enum": ["canonical", "planned", "deprecated"] },
+        "reference": { "type": "string" },
+        "transversal": { "type": "string" }
+      }
+    },
     "governance": {
       "type": "object",
       "additionalProperties": false,
