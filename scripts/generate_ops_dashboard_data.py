@@ -202,11 +202,13 @@ def build_dashboard_payload(
     runtime_report: dict[str, Any] | None = None,
     evidence_graph: dict[str, Any] | None = None,
     public_runtime: dict[str, Any] | None = None,
+    observability_correlation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     results = report.get("results", []) or []
     runtime_report = runtime_report or {}
     evidence_graph = evidence_graph or {}
     public_runtime = public_runtime or {}
+    observability_correlation = observability_correlation or {}
     return {
         "schema_version": "1.1.0",
         "repo": repo or report.get("repo") or "unknown",
@@ -226,10 +228,12 @@ def build_dashboard_payload(
         "runtime_gold_standard_depth": _runtime_depth(runtime_report),
         "runtime_domain_drilldowns": _domain_drilldowns(runtime_report),
         "incident_timeline": _incident_timeline(report, runtime_report, evidence_graph),
+        "observability_correlation_report": observability_correlation,
         "runtime_sources": {
             "runtime_health_report_available": bool(runtime_report),
             "runtime_operational_evidence_graph_available": bool(evidence_graph),
             "public_runtime_validation_available": bool(public_runtime),
+            "observability_correlation_report_available": bool(observability_correlation),
         },
     }
 
@@ -242,13 +246,15 @@ def main() -> int:
     parser.add_argument("--runtime-health-report", default="artifacts/runtime-health-center/runtime-health-report.json")
     parser.add_argument("--evidence-graph", default="artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json")
     parser.add_argument("--public-runtime-validation", default="artifacts/runtime/public-runtime-validation.json")
+    parser.add_argument("--observability-correlation-report", default="artifacts/observability-correlation-report/observability-correlation-report.json")
     args = parser.parse_args()
 
     report = _load_watchdog_report(Path(args.watchdog_report))
     runtime_report = _load_optional_json(Path(args.runtime_health_report))
     evidence_graph = _load_optional_json(Path(args.evidence_graph))
     public_runtime = _load_optional_json(Path(args.public_runtime_validation))
-    payload = build_dashboard_payload(report, args.repo, runtime_report, evidence_graph, public_runtime)
+    observability_correlation = _load_optional_json(Path(args.observability_correlation_report))
+    payload = build_dashboard_payload(report, args.repo, runtime_report, evidence_graph, public_runtime, observability_correlation)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
