@@ -1,0 +1,109 @@
+{
+  "schema_version": "1.0.0",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "generated_at_epoch": 1782580000,
+  "summary": {
+    "status": "action_required",
+    "strategic_score": 66.43,
+    "runtime_executive_score": 36.8,
+    "confidence": "low",
+    "top_priority_lane": "merge_governance",
+    "recommended_action": "stabilizar_evidencias_antes_de_expandir",
+    "next_bottleneck": "runtime_publico_e_readiness"
+  },
+  "priority_lanes": [
+    {
+      "lane": "merge_governance",
+      "priority_score": 72.75,
+      "base_signal": 19,
+      "impact_weight": 90,
+      "autonomy_gain": 85,
+      "cost_reduction": 80,
+      "risk": "high",
+      "action": "stabilizar_evidencias_antes_de_expandir",
+      "reason": "mergeability_controls_delivery_throughput_and_conflict_cost"
+    },
+    {
+      "lane": "delivery_finalization",
+      "priority_score": 69.7,
+      "base_signal": 0,
+      "impact_weight": 80,
+      "autonomy_gain": 60,
+      "cost_reduction": 70,
+      "risk": "high",
+      "action": "stabilizar_evidencias_antes_de_expandir",
+      "reason": "residual_gaps_prevent_claiming_consolidated_maturity"
+    },
+    {
+      "lane": "strategic_prioritization",
+      "priority_score": 69.45,
+      "base_signal": 36.8,
+      "impact_weight": 88,
+      "autonomy_gain": 90,
+      "cost_reduction": 85,
+      "risk": "high",
+      "action": "stabilizar_evidencias_antes_de_expandir",
+      "reason": "priority_scoring_becomes_the_next_bottleneck_after_ci_and_runtime_stabilize"
+    },
+    {
+      "lane": "runtime_readiness",
+      "priority_score": 68.5,
+      "base_signal": 25,
+      "impact_weight": 95,
+      "autonomy_gain": 75,
+      "cost_reduction": 65,
+      "risk": "high",
+      "action": "stabilizar_evidencias_antes_de_expandir",
+      "reason": "public_runtime_is_the_primary_user_value_gate"
+    },
+    {
+      "lane": "system_health",
+      "priority_score": 59.2,
+      "base_signal": 40,
+      "impact_weight": 75,
+      "autonomy_gain": 65,
+      "cost_reduction": 70,
+      "risk": "high",
+      "action": "stabilizar_evidencias_antes_de_expandir",
+      "reason": "health_score_prevents_hidden_operational_debt"
+    },
+    {
+      "lane": "evidence_governance",
+      "priority_score": 58.95,
+      "base_signal": 60,
+      "impact_weight": 85,
+      "autonomy_gain": 70,
+      "cost_reduction": 75,
+      "risk": "medium",
+      "action": "manter_no_backlog_governado",
+      "reason": "evidence_quality_controls_trust_and_autonomous_decision_safety"
+    }
+  ],
+  "next_bottleneck": {
+    "name": "runtime_publico_e_readiness",
+    "reason": "readiness_degraded_or_blocked",
+    "recommended_increment": "runtime_readiness_consolidation"
+  },
+  "decision_rules": {
+    "execute_now_threshold": 80,
+    "next_batch_threshold": 60,
+    "backlog_threshold": 40,
+    "risk_blocks_expansion": true,
+    "source": "runtime_executive_index"
+  },
+  "links": {
+    "runtime_executive_index": "docs/ops-dashboard/data/runtime-executive-index.json",
+    "strategic_governance_index": "docs/ops-dashboard/data/strategic-governance-index.json",
+    "ops_dashboard": "docs/ops-dashboard/index.html",
+    "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
+    "pulls": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pulls"
+  },
+  "guardrails": [
+    "offline_static_generation",
+    "report_only_contract",
+    "no_runtime_github_api_call",
+    "priority_does_not_override_required_ci",
+    "high_risk_blocks_parallel_expansion",
+    "evidence_first_before_autonomous_execution"
+  ]
+}
