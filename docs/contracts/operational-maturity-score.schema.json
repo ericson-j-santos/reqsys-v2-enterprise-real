@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/operational-maturity-score.schema.json",
+  "title": "ReqSys Operational Maturity Score Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "repository", "run_id", "event_name", "average_percent", "average_gap_pp", "min_percent", "max_percent", "risk", "dimensions", "mode"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string" },
+    "run_id": { "type": "string" },
+    "event_name": { "type": "string" },
+    "average_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "average_gap_pp": { "type": "number" },
+    "min_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "max_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "risk": { "type": "string", "enum": ["low", "medium_low", "medium", "high"] },
+    "dimensions": { "type": "array", "items": { "type": "object" } },
+    "mode": { "type": "string", "enum": ["report_only"] }
+  }
+}
