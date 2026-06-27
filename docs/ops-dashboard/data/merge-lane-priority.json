@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0.0",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "generated_at": "2026-06-27T20:10:00+00:00",
+  "ranking": [
+    {
+      "lane": "runtime-governance",
+      "priority_score": 94,
+      "current_pr_lane": false,
+      "parallelism": "safe"
+    },
+    {
+      "lane": "docs",
+      "priority_score": 90,
+      "current_pr_lane": false,
+      "parallelism": "safe"
+    },
+    {
+      "lane": "tests",
+      "priority_score": 78,
+      "current_pr_lane": false,
+      "parallelism": "controlled"
+    },
+    {
+      "lane": "implementation",
+      "priority_score": 66,
+      "current_pr_lane": false,
+      "parallelism": "controlled"
+    },
+    {
+      "lane": "unknown",
+      "priority_score": 55,
+      "current_pr_lane": true,
+      "parallelism": "serial"
+    },
+    {
+      "lane": "workflow",
+      "priority_score": 48,
+      "current_pr_lane": false,
+      "parallelism": "serial"
+    }
+  ],
+  "policy": {
+    "merge_imediato": "score >= 88 e sem bloqueios",
+    "rerun_recomendado": "75 <= score < 88",
+    "aguardar_estabilizacao": "55 <= score < 75",
+    "merge_serializado": "35 <= score < 55",
+    "isolamento_obrigatorio": "score < 35 ou risk=blocked"
+  }
+}
