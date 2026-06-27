@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys Strategic Governance</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --muted: #94a3b8;
+      --text: #e5e7eb;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --blue: #38bdf8;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: var(--text); }
+    header { padding: 24px; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, #111827, #1e293b); }
+    main { padding: 24px; max-width: 1280px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    h2 { margin-top: 0; }
+    .subtitle, .small { color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+    .card { border: 1px solid var(--border); background: var(--panel); border-radius: 14px; padding: 18px; box-shadow: 0 10px 24px rgba(0,0,0,.25); }
+    .kpi-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .kpi-value { font-size: 30px; font-weight: 700; margin-top: 8px; }
+    .status { display: inline-block; padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+    .governed, .passed, .low, .executar_agora { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
+    .warning, .medium, .executar_no_proximo_lote, .manter_no_backlog_governado { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
+    .action_required, .failed, .critical, .high, .blocked, .stabilizar_evidencias_antes_de_expandir, .pausar_ou_reclassificar { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
+    .unknown { background: rgba(148,163,184,.16); color: var(--muted); border: 1px solid rgba(148,163,184,.45); }
+    section { margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 12px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
+    a { color: var(--blue); text-decoration: none; }
+    .links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+    .link-btn { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: #0b1220; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #020617; padding: 12px; border-radius: 10px; border: 1px solid var(--border); }
+    @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px) { main, header { padding: 16px; } .grid { grid-template-columns: 1fr; } table { font-size: 13px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Strategic Governance Engine</h1>
+    <p class="subtitle">Cards executivos de prioridade, próximo gargalo e ação recomendada a partir de <code>data/strategic-governance-index.json</code>.</p>
+  </header>
+  <main>
+    <div class="grid">
+      <div class="card"><div class="kpi-label">Status estratégico</div><div id="status" class="kpi-value">Carregando</div></div>
+      <div class="card"><div class="kpi-label">Strategic score</div><div id="strategic-score" class="kpi-value">-</div></div>
+      <div class="card"><div class="kpi-label">Top priority lane</div><div id="top-lane" class="kpi-value">-</div></div>
+      <div class="card"><div class="kpi-label">Ação recomendada</div><div id="recommended-action" class="kpi-value">-</div></div>
+    </div>
+
+    <section class="card">
+      <h2>Próximo gargalo</h2>
+      <div class="grid">
+        <div><div class="kpi-label">Gargalo</div><div id="bottleneck-name" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Incremento recomendado</div><div id="bottleneck-increment" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Score runtime</div><div id="runtime-score" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Confiança</div><div id="confidence" class="kpi-value">-</div></div>
+      </div>
+      <p class="small" id="bottleneck-reason">Carregando justificativa...</p>
+    </section>
+
+    <section class="card">
+      <h2>Priority lanes</h2>
+      <p class="small">Ordenação por impacto operacional, gap, ganho de autonomia, redução de custo futuro e risco. A prioridade é report-only e não substitui CI, evidência ou revisão humana.</p>
+      <table>
+        <thead><tr><th>Lane</th><th>Priority score</th><th>Base signal</th><th>Risco</th><th>Ação</th><th>Razão</th></tr></thead>
+        <tbody id="priority-lanes"><tr><td colspan="6">Carregando...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Guardrails e links</h2>
+      <div class="links" id="links"></div>
+      <details>
+        <summary>Contrato bruto</summary>
+        <pre id="raw">{}</pre>
+      </details>
+    </section>
+  </main>
+
+  <script>
+    const statusClass = (value) => ['governed','action_required','passed','warning','failed','critical','unknown','low','medium','high','blocked','executar_agora','executar_no_proximo_lote','manter_no_backlog_governado','stabilizar_evidencias_antes_de_expandir','pausar_ou_reclassificar'].includes(value) ? value : 'unknown';
+    const shortJson = (value) => JSON.stringify(value || {}, null, 2);
+
+    function addLink(container, label, url, external = false) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.className = 'link-btn';
+      if (external) {
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+      }
+      a.textContent = label;
+      container.appendChild(a);
+    }
+
+    async function fetchOptionalJson(path, fallback) {
+      try {
+        const response = await fetch(path, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return { available: true, data: await response.json(), source: path, error: null };
+      } catch (error) {
+        return { available: false, data: fallback, source: path, error: error.message };
+      }
+    }
+
+    async function loadStrategicGovernance() {
+      const fallback = {
+        summary: {
+          status: 'action_required',
+          strategic_score: 0,
+          runtime_executive_score: 0,
+          confidence: 'low',
+          top_priority_lane: 'unknown',
+          recommended_action: 'stabilizar_evidencias_antes_de_expandir',
+          next_bottleneck: 'unknown',
+        },
+        priority_lanes: [],
+        next_bottleneck: {
+          name: 'artifact_indisponivel',
+          reason: 'strategic_governance_index_missing',
+          recommended_increment: 'regenerate_ops_dashboard_artifact',
+        },
+        links: {},
+        guardrails: ['fallback_local'],
+      };
+      const response = await fetchOptionalJson('./data/strategic-governance-index.json', fallback);
+      const payload = response.data || fallback;
+      const summary = payload.summary || fallback.summary;
+      const bottleneck = payload.next_bottleneck || fallback.next_bottleneck;
+
+      document.getElementById('status').innerHTML = `<span class="status ${statusClass(summary.status)}">${summary.status || 'unknown'}</span>`;
+      document.getElementById('strategic-score').textContent = `${summary.strategic_score ?? 0}%`;
+      document.getElementById('top-lane').textContent = summary.top_priority_lane || '-';
+      document.getElementById('recommended-action').innerHTML = `<span class="status ${statusClass(summary.recommended_action)}">${summary.recommended_action || 'unknown'}</span>`;
+      document.getElementById('bottleneck-name').textContent = bottleneck.name || '-';
+      document.getElementById('bottleneck-increment').textContent = bottleneck.recommended_increment || '-';
+      document.getElementById('runtime-score').textContent = `${summary.runtime_executive_score ?? 0}%`;
+      document.getElementById('confidence').innerHTML = `<span class="status ${statusClass(summary.confidence)}">${summary.confidence || 'low'}</span>`;
+      document.getElementById('bottleneck-reason').textContent = `Motivo: ${bottleneck.reason || 'não informado'}`;
+
+      const lanesBody = document.getElementById('priority-lanes');
+      lanesBody.innerHTML = '';
+      const lanes = payload.priority_lanes || [];
+      if (!lanes.length) {
+        lanesBody.innerHTML = '<tr><td colspan="6">Nenhuma lane publicada; fallback governado ativo.</td></tr>';
+      } else {
+        lanes.forEach((lane) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${lane.lane || '-'}</td>
+            <td>${lane.priority_score ?? '-'}</td>
+            <td>${lane.base_signal ?? '-'}</td>
+            <td><span class="status ${statusClass(lane.risk)}">${lane.risk || '-'}</span></td>
+            <td><span class="status ${statusClass(lane.action)}">${lane.action || '-'}</span></td>
+            <td>${lane.reason || '-'}</td>
+          `;
+          lanesBody.appendChild(tr);
+        });
+      }
+
+      const links = document.getElementById('links');
+      links.innerHTML = '';
+      addLink(links, 'Ops Dashboard', './index.html');
+      addLink(links, 'strategic-governance-index.json', './data/strategic-governance-index.json');
+      addLink(links, 'runtime-executive-index.json', './data/runtime-executive-index.json');
+      Object.entries(payload.links || {}).forEach(([label, url]) => {
+        if (!url || ['strategic_governance_index', 'runtime_executive_index', 'ops_dashboard'].includes(label)) return;
+        addLink(links, label, url, String(url).startsWith('http'));
+      });
+      document.getElementById('raw').textContent = shortJson({ available: response.available, source: response.source, fallback_error: response.error, payload });
+    }
+
+    loadStrategicGovernance().catch((error) => {
+      document.getElementById('status').innerHTML = '<span class="status failed">erro</span>';
+      document.getElementById('priority-lanes').innerHTML = `<tr><td colspan="6">Falha ao carregar strategic-governance-index.json: ${error.message}</td></tr>`;
+      document.getElementById('raw').textContent = shortJson({ error: error.message });
+    });
+  </script>
+</body>
+</html>
