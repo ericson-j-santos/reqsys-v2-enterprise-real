@@ -16,24 +16,25 @@ Automação real fica **fora dos chats**. Chats consultados sob demanda; execuç
 
 ## Rotina diária (5 minutos)
 
-1. Baixar artifacts da última execução (ou disparar leitura — ver menu abaixo).
-2. Consolidar semáforo global.
+1. Baixar **`coordenador-status-evidence`** (ou disparar **Coordenador Status Consolidator**).
+2. Ler `coordenador-status.json` → `state`, `decision`, `recommended_actions`.
 3. Escolher **um** incremento objetivo.
 4. Disparar agente técnico ou `workflow_dispatch` conforme tabela.
 5. Registrar decisão no PR ou issue (não no chat como fonte única de verdade).
 
 ## Ordem de leitura (artifacts)
 
-Ler nesta ordem; parar no primeiro **vermelho** bloqueante.
+**Preferencial:** um único artifact consolidado. Detalhe por PR ou investigação profunda usa os demais.
 
 | # | Artifact | Arquivo canônico | Campo decisório |
 |---|---|---|---|
+| **0** | `coordenador-status-evidence` | `coordenador-status.json` | `state`, `decision`, `recommended_actions` |
 | 1 | `operational-governance-orchestrator-evidence` | `operational-governance-orchestrator.json` | `state`, `decision`, `operational_score` |
 | 2 | `runtime-health-validator-evidence` | `runtime-health-validator.json` | `state`, `executive_status`, `automatic_backlog` |
 | 3 | `workflow-command-center-evidence` | `workflow-command-center.json` | falhas críticas, workflows ausentes |
 | 4 | `pr-ci-watch-report` (por PR ativo) | `pr-ci-watch.json` | `decision`, `severity`, `score` |
 
-Runbooks detalhados: [operational-governance-orchestrator](operational-governance-orchestrator.md), [runtime-health-validator](runtime-health-validator.md), [workflow-command-center](workflow-command-center.md), [pr-ci-watch](pr-ci-watch.md).
+Runbooks detalhados: [coordenador-status-consolidator](coordenador-status-consolidator.md), [operational-governance-orchestrator](operational-governance-orchestrator.md), [runtime-health-validator](runtime-health-validator.md), [workflow-command-center](workflow-command-center.md), [pr-ci-watch](pr-ci-watch.md).
 
 ## Semáforo global
 
@@ -59,6 +60,7 @@ Apenas estes workflows no ciclo normal. Demais workflows existem para governanç
 
 | Workflow | Inputs úteis | Artifact |
 |---|---|---|
+| **Coordenador Status Consolidator** | `branch=main` | `coordenador-status-evidence` (**leitura preferencial**) |
 | **Operational Governance Orchestrator** | `branch=main` | `operational-governance-orchestrator-evidence` |
 | **Runtime Health Validator** | `mode=report_only`, `branch=main` | `runtime-health-validator-evidence` |
 | **Workflow Command Center** | sem dispatch (só monitor) | `workflow-command-center-evidence` |
@@ -91,7 +93,7 @@ Runbook: [governed-pr-automation](governed-pr-automation.md).
 ## Fluxo por incremento
 
 ```text
-triagem (artifacts 1–2)
+triagem (coordenador-status.json ou artifacts 1–2)
   → verde? continuar
   → amarelo? investigar + aguardar
   → vermelho? bloquear merge + corrigir

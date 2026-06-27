@@ -195,7 +195,7 @@ Ambiente jÃ¡ inicializado pelo update script (venv do backend + `npm ci` no fr
 
 ### Coordenador Principal (operacao hibrida)
 
-Automacao real fica em GitHub Actions + scripts + agentes por PR; chats fixos sao contexto, nao runtime autonomo. Menu fechado de artifacts, semaforo e `workflow_dispatch` allowlisted: `docs/runbooks/coordenador-principal-menu-operacional.md`.
+Automacao real fica em GitHub Actions + scripts + agentes por PR; chats fixos sao contexto, nao runtime autonomo. Menu fechado: `docs/runbooks/coordenador-principal-menu-operacional.md`. Leitura preferencial: artifact `coordenador-status-evidence` via workflow **Coordenador Status Consolidator**.
 
 ### Servicos canonicos (modo dev, sem Docker)
 

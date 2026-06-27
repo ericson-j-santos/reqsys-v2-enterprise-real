@@ -21,6 +21,7 @@ Este índice consolida os documentos canônicos do ReqSys para orientar humanos,
 | `docs/devops/PLANO_EVOLUTIVO_DEVOPS_CORPORATIVO.md` | Plano estratégico para evolução DevOps corporativa, Platform Engineering, DevSecOps, observabilidade e IA operacional. |
 | `docs/strategy/REQSYS_ATUALIZACAO_CONSOLIDADA_2026-06-26.md` | Atualização estratégica consolidada de 26/06/2026, com foco em runtime operacional, observabilidade, ambientes e operação autônoma. |
 | `docs/runbooks/coordenador-principal-menu-operacional.md` | Menu operacional do Coordenador Principal: ordem de leitura de artifacts, semáforo, workflows allowlisted e fluxo por incremento. |
+| `docs/runbooks/coordenador-status-consolidator.md` | Consolidador automático dos artifacts 1–2 em `coordenador-status.json`. |
 
 ## Regra de precedência
 
