@@ -8,15 +8,17 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from scripts.agent_increment_gate import main as gate_main  # noqa: E402
 from scripts.coordenador_status_consolidator import (  # noqa: E402
-    build_decision,
+    build_increment_gate,
     consolidate,
+    evaluate_increment_intent,
     merge_state,
     write_report,
 )
 
 
-def orchestrator_fixture(state: str = "green") -> dict:
+def orchestrator_fixture(state: str = "green", open_prs: int = 2) -> dict:
     return {
         "schema_version": "1.0.0",
         "generated_at": "2026-06-27T10:00:00Z",
@@ -29,7 +31,7 @@ def orchestrator_fixture(state: str = "green") -> dict:
             "red": "bloquear_novos_merges_e_corrigir_falhas_reais",
         }[state],
         "operational_score": 92.0 if state == "green" else 40.0,
-        "summary": {"open_prs": 2, "draft_prs": 1},
+        "summary": {"open_prs": open_prs, "draft_prs": 1},
         "red_runs": [{"name": "CI Enterprise Fast", "url": "https://example/run/1"}] if state == "red" else [],
         "pending_runs": [],
         "missing_critical_workflows": ["PR CI Watch"] if state == "yellow" else [],
@@ -73,6 +75,32 @@ def health_fixture(state: str = "green") -> dict:
     }
 
 
+def watchdog_fixture(*, duplicates: bool = False) -> dict:
+    duplicate_groups = (
+        [
+            [
+                {"number": 10, "title": "feat X", "draft": False},
+                {"number": 11, "title": "feat X", "draft": True},
+            ]
+        ]
+        if duplicates
+        else []
+    )
+    return {
+        "repo": "owner/repo",
+        "overall_status": "warning" if duplicates else "passed",
+        "results": [
+            {
+                "name": "duplicate_open_prs",
+                "status": "warning" if duplicates else "passed",
+                "severity": "medium" if duplicates else "info",
+                "evidence": {"duplicate_groups": duplicate_groups},
+                "recommendation": "Fechar duplicados" if duplicates else "OK",
+            }
+        ],
+    }
+
+
 def test_merge_state_prefers_red_over_yellow_and_green() -> None:
     assert merge_state("green", "yellow") == "yellow"
     assert merge_state("yellow", "red") == "red"
@@ -84,29 +112,71 @@ def test_consolidate_green_produces_continue_action() -> None:
 
     assert report["state"] == "green"
     assert report["decision"] == "continuar_proximo_incremento"
-    assert report["runtime_score"] == 88
+    assert report["increment_gate"]["new_front_allowed"] is True
     assert report["summary"]["critical_gaps"] == 0
-    assert report["quarantine"]["active"] is False
+    assert report["guardrails"]["new_front"] is False
     assert any(item["action"] == "continuar_proximo_incremento" for item in report["recommended_actions"])
 
 
-def test_consolidate_red_blocks_and_surfaces_gaps() -> None:
+def test_consolidate_red_blocks_new_front() -> None:
     report = consolidate("owner/repo", "main", orchestrator_fixture("red"), health_fixture("red"))
 
     assert report["state"] == "red"
-    assert report["decision"] == "bloquear_merges_e_tratar_gaps"
-    assert report["quarantine"]["active"] is True
-    assert report["summary"]["critical_gaps"] == 1
+    assert report["decision"] == "bloquear_novas_frentes_e_tratar_gaps"
+    assert report["increment_gate"]["new_front_allowed"] is False
+    assert report["guardrails"]["new_front"] is True
     assert any(item["reference"] == "OPS-GAP-999" for item in report["recommended_actions"])
-    assert any(item["action"] == "investigar_workflow_vermelho" for item in report["recommended_actions"])
 
 
-def test_consolidate_yellow_uses_orchestrator_decision_when_present() -> None:
-    report = consolidate("owner/repo", "main", orchestrator_fixture("yellow"), health_fixture("green"))
+def test_consolidate_duplicate_prs_blocks_new_front() -> None:
+    report = consolidate(
+        "owner/repo",
+        "main",
+        orchestrator_fixture("green"),
+        health_fixture("green"),
+        watchdog_fixture(duplicates=True),
+    )
 
-    assert report["state"] == "yellow"
-    assert report["decision"] == "validar_workflows_ausentes_na_janela_recente"
-    assert any(item["action"] == "validar_workflow_ausente_na_janela" for item in report["recommended_actions"])
+    assert report["increment_gate"]["new_front_allowed"] is False
+    assert report["decision"] == "consolidar_prs_duplicados_antes_de_novo_incremento"
+    assert any(item["action"] == "fechar_prs_duplicados" for item in report["recommended_actions"])
+
+
+def test_increment_gate_open_pr_pressure() -> None:
+    gate = build_increment_gate(
+        "green",
+        orchestrator_fixture("green", open_prs=8),
+        health_fixture("green"),
+        None,
+    )
+    assert "open_pr_queue_pressure" in gate["blockers"]
+    assert gate["new_front_allowed"] is False
+
+
+def test_evaluate_increment_intent_blocks_new_front_when_red() -> None:
+    report = consolidate("owner/repo", "main", orchestrator_fixture("red"), health_fixture("red"))
+    allowed, reason, _ = evaluate_increment_intent(report, "new_front", "")
+    assert allowed is False
+    assert "new_front" in reason
+
+
+def test_evaluate_increment_intent_allows_gap_fix_with_reference() -> None:
+    report = consolidate("owner/repo", "main", orchestrator_fixture("red"), health_fixture("red"))
+    allowed, reason, _ = evaluate_increment_intent(report, "gap_fix", "OPS-GAP-999")
+    assert allowed is True
+    assert reason == "gap_fix_referenciado"
+
+
+def test_evaluate_increment_intent_allows_close_duplicate() -> None:
+    report = consolidate(
+        "owner/repo",
+        "main",
+        orchestrator_fixture("green"),
+        health_fixture("green"),
+        watchdog_fixture(duplicates=True),
+    )
+    allowed, _, _ = evaluate_increment_intent(report, "close_duplicate", "10")
+    assert allowed is True
 
 
 def test_write_report_publishes_json_and_summary(tmp_path: Path) -> None:
@@ -116,8 +186,24 @@ def test_write_report_publishes_json_and_summary(tmp_path: Path) -> None:
     payload = json.loads((tmp_path / "coordenador-status.json").read_text(encoding="utf-8"))
     summary = (tmp_path / "summary.md").read_text(encoding="utf-8")
 
-    assert payload["schema_version"] == "1.1.0"
-    assert payload["runtime_score"] == 88
-    assert payload["evidence_consolidation"]["artifact"] == "coordenador-status-evidence"
-    assert "## Recommended actions" in summary
-    assert build_decision("green", orchestrator_fixture("green"), health_fixture("green")) == "continuar_proximo_incremento"
+    assert payload["schema_version"] == "1.2.0"
+    assert payload["increment_gate"]["new_front_allowed"] is True
+    assert "## Increment gate" in summary
+
+
+def test_agent_increment_gate_cli_blocks_new_front_on_red(tmp_path: Path) -> None:
+    report = consolidate("owner/repo", "main", orchestrator_fixture("red"), health_fixture("red"))
+    status_path = tmp_path / "coordenador-status.json"
+    status_path.write_text(json.dumps(report), encoding="utf-8")
+
+    exit_code = gate_main(
+        [
+            "--increment-type",
+            "new_front",
+            "--status-json",
+            str(status_path),
+            "--output-dir",
+            str(tmp_path / "gate"),
+        ]
+    )
+    assert exit_code == 1

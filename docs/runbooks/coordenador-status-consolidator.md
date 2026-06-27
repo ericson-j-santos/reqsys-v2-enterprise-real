@@ -44,10 +44,11 @@ Nome: `coordenador-status-evidence`
 
 | Arquivo | Uso |
 |---|---|
-| `coordenador-status.json` | **Leitura unica do coordenador** — `state`, `decision`, `recommended_actions` |
+| `coordenador-status.json` | **Leitura unica do coordenador** — `state`, `decision`, `increment_gate`, `recommended_actions` |
 | `summary.md` | Resumo navegavel |
 | `sources/operational-governance-orchestrator/operational-governance-orchestrator.json` | Fonte 1 |
 | `sources/runtime-health-validator/runtime-health-validator.json` | Fonte 2 |
+| `sources/repository-health-watchdog/repository-health-report.json` | Fonte 3 (PRs duplicados) |
 
 ## Decisao operacional
 
