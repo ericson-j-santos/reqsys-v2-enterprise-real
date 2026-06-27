@@ -38,6 +38,8 @@
     <section><h2>Artifacts catalogados</h2><table><thead><tr><th>Artifact</th><th>Workflow</th><th>Consumer</th><th>Risco</th></tr></thead><tbody id="artifacts"></tbody></table></section>
     <section><h2>Checks do command center</h2><table><thead><tr><th>Check</th><th>Status</th><th>Score/Cobertura</th></tr></thead><tbody id="commandChecks"></tbody></table></section>
     <section><h2>Status de entrega</h2><table><thead><tr><th>Grupo</th><th>PRs</th><th>Estado</th><th>Foco</th></tr></thead><tbody id="delivery"></tbody></table></section>
+    <section><h2>Projeção estatística de conclusão</h2><table><thead><tr><th>Indicador</th><th>Conclusão</th></tr></thead><tbody id="completionIndicators"></tbody></table></section>
+    <section><h2>Projeção de marcos (conservador)</h2><table><thead><tr><th>Marco</th><th>Estimativa</th></tr></thead><tbody id="projectionMilestones"></tbody></table></section>
     <section><h2>Fontes de dados</h2><table><thead><tr><th>Fonte</th><th>Status</th><th>Observação</th></tr></thead><tbody id="sources"></tbody></table></section>
   </main>
   <script>
@@ -50,7 +52,8 @@
       { key: 'release', label: 'Golden Release Readiness', href: '../audit/release-readiness/golden-release-readiness.json' },
       { key: 'commandCenter', label: 'Command Center Readiness', href: '../audit/command-center/command-center-readiness.json' },
       { key: 'extendedContracts', label: 'Extended Operational Contract Validation', href: '../audit/extended-contract-validation/extended-operational-contract-validation.json' },
-      { key: 'delivery', label: 'Delivery Status Report', href: '../audit/delivery/delivery-status-report.json' }
+      { key: 'delivery', label: 'Delivery Status Report', href: '../audit/delivery/delivery-status-report.json' },
+      { key: 'projection', label: 'Completion Projection Report', href: '../audit/projection/completion-projection-report.json' }
     ];
 
     const fallback = {
@@ -62,7 +65,8 @@
       release: { score_percent: 0, readiness: 'unknown', risk: 'unknown', checks: [] },
       commandCenter: { score_percent: 0, status: 'unknown', source_coverage_percent: 0, checks: [] },
       extendedContracts: { status: 'unknown', contracts: [] },
-      delivery: { tracked_prs: 0, merged_prs: 0, merge_rate_percent: 0, current_maturity_percent: 0, remaining_gap_pp: 0, groups: [] }
+      delivery: { tracked_prs: 0, merged_prs: 0, merge_rate_percent: 0, current_maturity_percent: 0, remaining_gap_pp: 0, groups: [] },
+      projection: { overall_completion_percent: 0, overall_maturity_percent: 0, average_gap_pp: 0, mvp_probability_percent: 0, enterprise_consolidation_probability_percent: 0, status: 'unknown', completion_indicators: [], projection_conservative: [] }
     };
 
     async function loadJson(source) {
@@ -106,6 +110,7 @@
       const commandCenter = loaded.commandCenter.data;
       const extendedContracts = loaded.extendedContracts.data;
       const delivery = loaded.delivery.data;
+      const projection = loaded.projection.data;
       document.getElementById('cards').innerHTML = [
         card('Success rate', lead.success_rate_percent || 0, '%', (lead.success_rate_percent || 0) >= 95 ? 'low' : 'medium'),
         card('P95 lead time', secondsToMinutes(lead.p95_seconds), 'min', (lead.p95_seconds || 0) < 900 ? 'low' : 'medium'),
@@ -118,6 +123,9 @@
         card('Merge rate', delivery.merge_rate_percent || 0, '%', delivery.status || 'stable'),
         card('Delivery maturity', delivery.current_maturity_percent || 0, '%', delivery.status || 'stable'),
         card('Remaining gap', delivery.remaining_gap_pp || 0, 'p.p.', delivery.status || 'stable'),
+        card('Conclusão geral', projection.overall_completion_percent || 0, '%', projection.status || 'unknown'),
+        card('Prob. MVP forte', projection.mvp_probability_percent || 0, '%', (projection.mvp_probability_percent || 0) >= 80 ? 'low' : 'medium'),
+        card('Prob. consolidação enterprise', projection.enterprise_consolidation_probability_percent || 0, '%', (projection.enterprise_consolidation_probability_percent || 0) >= 80 ? 'low' : 'medium'),
         card('Artifacts catalogados', discovery.artifact_count || 0, '', 'low'),
         card('Schema coverage', discovery.schema_coverage_percent || 0, '%', (discovery.schema_coverage_percent || 0) >= 60 ? 'low' : 'medium'),
         card('Baseline incidente', hist.baseline?.incident_lead_time_minutes || 143, 'min', 'medium_low')
@@ -129,6 +137,8 @@
       document.getElementById('artifacts').innerHTML = (discovery.artifacts || []).map(item => `<tr><td>${item.name}</td><td>${item.workflow}</td><td><code>${item.consumer}</code></td><td>${badge(item.risk)}</td></tr>`).join('') || '<tr><td colspan="4">Sem índice de artifacts carregado.</td></tr>';
       document.getElementById('commandChecks').innerHTML = (commandCenter.checks || []).map(item => `<tr><td>${item.name}</td><td>${badge(item.passed)}</td><td>${item.coverage_percent || item.score || '-'}</td></tr>`).join('') || '<tr><td colspan="3">Sem readiness do command center carregado.</td></tr>';
       document.getElementById('delivery').innerHTML = (delivery.groups || []).map(item => `<tr><td>${item.range}</td><td>${item.prs}</td><td>${badge(item.state)}</td><td>${item.focus}</td></tr>`).join('') || '<tr><td colspan="4">Sem status de entrega carregado.</td></tr>';
+      document.getElementById('completionIndicators').innerHTML = (projection.completion_indicators || []).map(item => `<tr><td>${item.indicator}</td><td>${item.percent}%</td></tr>`).join('') || '<tr><td colspan="2">Sem projeção de conclusão carregada.</td></tr>';
+      document.getElementById('projectionMilestones').innerHTML = (projection.projection_conservative || []).map(item => `<tr><td>${item.milestone}</td><td>${item.estimate_label}</td></tr>`).join('') || '<tr><td colspan="2">Sem projeção de marcos carregada.</td></tr>';
       document.getElementById('sources').innerHTML = statuses.join('');
     }
     render();
