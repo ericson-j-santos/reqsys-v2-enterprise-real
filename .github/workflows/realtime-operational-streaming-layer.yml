@@ -1,13 +1,16 @@
 name: Realtime Operational Streaming Layer
 
+# DEPRECATED: workflow_run removido — consolidado em Operational Runtime Mesh Hub.
+# Mantido apenas para workflow_dispatch manual/auditoria retroativa.
+
 on:
-  workflow_run:
-    workflows:
-      - "Live Operational Control Center"
-      - "Operational Executive Dashboard Generator"
-      - "Operational Data Lake & Historical Intelligence"
-    types:
-      - completed
+  workflow_dispatch:
+    inputs:
+      source_workflow:
+        description: "Workflow fonte simulado"
+        required: false
+        default: "manual-audit"
+        type: string
 
 jobs:
   realtime-operational-streaming:
@@ -19,11 +22,11 @@ jobs:
 
       - name: Generate realtime operational streaming feed
         env:
-          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_NAME: ${{ inputs.source_workflow || 'manual-audit' }}
+          WORKFLOW_CONCLUSION: success
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_BRANCH: ${{ github.ref_name }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           cat <<'JSON' > realtime-operational-feed.json
 {

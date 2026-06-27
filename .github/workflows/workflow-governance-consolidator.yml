@@ -1,0 +1,53 @@
+name: Workflow Governance Consolidator
+
+on:
+  schedule:
+    - cron: "41 9 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "config/workflow-governance-registry.json"
+      - "scripts/workflow_governance_consolidator.py"
+      - "scripts/operational_runtime_mesh_hub.py"
+      - "docs/ci/WORKFLOW_GOVERNANCE_CONSOLIDATION.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-governance-consolidator
+  cancel-in-progress: true
+
+jobs:
+  consolidate:
+    name: Mapear e classificar workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Gerar relatório de consolidação governada
+        run: |
+          python scripts/workflow_governance_consolidator.py \
+            --workflows-dir .github/workflows \
+            --registry config/workflow-governance-registry.json \
+            --out-dir artifacts/workflow-governance
+
+      - name: Publicar resumo
+        run: |
+          head -n 40 artifacts/workflow-governance/workflow-governance-consolidation.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-governance-consolidation
+          path: artifacts/workflow-governance
+          if-no-files-found: error
+          retention-days: 30

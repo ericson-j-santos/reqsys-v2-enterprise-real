@@ -3,19 +3,96 @@ name: Operational Alert Intelligence
 on:
   workflow_run:
     workflows:
-      - "Operational Realtime Event Mesh"
-      - "Live Operational Control Center"
+      - "Operational Runtime Mesh Hub"
       - "Operational Executive Dashboard Generator"
       - "Operational Data Lake & Historical Intelligence"
       - "Workflow Reliability Analytics"
       - "Operational Stability Score"
       - "CI Incident Intelligence"
+      - "Post Merge Operational Summary"
     types:
       - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operational-alert-intelligence
+  cancel-in-progress: true
 
 jobs:
+  governance-gate:
+    name: Classificar alerta e suprimir ruído
+    runs-on: ubuntu-latest
+    outputs:
+      should_alert: ${{ steps.govern.outputs.should_alert }}
+      alert_level: ${{ steps.govern.outputs.alert_level }}
+      alert_type: ${{ steps.govern.outputs.alert_type }}
+      noise_level: ${{ steps.govern.outputs.noise_level }}
+      action_policy: ${{ steps.govern.outputs.action_policy }}
+    steps:
+      - name: Avaliar necessidade de alerta
+        id: govern
+        env:
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name || 'manual' }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'success' }}
+        run: |
+          set -euo pipefail
+          INFORMATIVE=(
+            "Operational Runtime Mesh Hub"
+            "Workflow Governance Consolidator"
+            "Operational Intelligence Hub"
+            "Workflow Reliability Analytics"
+            "Operational Stability Score"
+            "CI Incident Intelligence"
+            "Post Merge Operational Summary"
+          )
+
+          ALERT_LEVEL="INFO"
+          ALERT_TYPE="OPERATIONAL_SIGNAL"
+          NOISE_LEVEL="LOW"
+          ACTION_POLICY="OBSERVE"
+          SHOULD_ALERT=true
+
+          for item in "${INFORMATIVE[@]}"; do
+            if [ "$WORKFLOW_NAME" = "$item" ]; then
+              ALERT_TYPE="INFORMATIVE_EVIDENCE"
+              NOISE_LEVEL="SUPPRESSED"
+              if [ "$WORKFLOW_CONCLUSION" = "success" ]; then
+                SHOULD_ALERT=false
+              else
+                ALERT_LEVEL="LOW"
+                ACTION_POLICY="VERIFY_CONTEXT"
+              fi
+              break
+            fi
+          done
+
+          if [ "$SHOULD_ALERT" = true ] && [ "$WORKFLOW_CONCLUSION" != "success" ]; then
+            ALERT_LEVEL="HIGH"
+            ALERT_TYPE="POTENTIAL_REGRESSION"
+            ACTION_POLICY="MANUAL_REVIEW_REQUIRED"
+          fi
+
+          if [ "$WORKFLOW_CONCLUSION" = "cancelled" ]; then
+            ALERT_LEVEL="MEDIUM"
+            ALERT_TYPE="CANCELLED_RUN"
+            ACTION_POLICY="VERIFY_CONTEXT"
+          fi
+
+          {
+            echo "should_alert=${SHOULD_ALERT}"
+            echo "alert_level=${ALERT_LEVEL}"
+            echo "alert_type=${ALERT_TYPE}"
+            echo "noise_level=${NOISE_LEVEL}"
+            echo "action_policy=${ACTION_POLICY}"
+          } >> "$GITHUB_OUTPUT"
+
   operational-alert-intelligence:
     runs-on: ubuntu-latest
+    needs: governance-gate
+    if: needs.governance-gate.outputs.should_alert == 'true' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout
@@ -23,32 +100,24 @@ jobs:
 
       - name: Generate operational alert intelligence
         env:
-          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name || 'manual' }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'success' }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ALERT_LEVEL: ${{ needs.governance-gate.outputs.alert_level }}
+          ALERT_TYPE: ${{ needs.governance-gate.outputs.alert_type }}
+          NOISE_LEVEL: ${{ needs.governance-gate.outputs.noise_level }}
+          ACTION_POLICY: ${{ needs.governance-gate.outputs.action_policy }}
         run: |
-          ALERT_LEVEL="INFO"
-          ALERT_TYPE="OPERATIONAL_SIGNAL"
           RECOMMENDATION="No intervention required. Keep monitoring operational trend."
-          NOISE_LEVEL="LOW"
-          ACTION_POLICY="OBSERVE"
 
-          if [ "${WORKFLOW_CONCLUSION}" != "success" ]; then
-            ALERT_LEVEL="HIGH"
-            ALERT_TYPE="POTENTIAL_REGRESSION"
+          if [ "${ALERT_LEVEL}" = "HIGH" ]; then
             RECOMMENDATION="Inspect failed workflow, correlate with recent PRs, avoid retry storms, and preserve mandatory gates."
-            NOISE_LEVEL="LOW"
-            ACTION_POLICY="MANUAL_REVIEW_REQUIRED"
-          fi
-
-          if [ "${WORKFLOW_CONCLUSION}" = "cancelled" ]; then
-            ALERT_LEVEL="MEDIUM"
-            ALERT_TYPE="CANCELLED_RUN"
+          elif [ "${ALERT_TYPE}" = "CANCELLED_RUN" ]; then
             RECOMMENDATION="Confirm whether cancellation was intentional, superseded, or caused by concurrency."
-            NOISE_LEVEL="MEDIUM"
-            ACTION_POLICY="VERIFY_CONTEXT"
+          elif [ "${ALERT_TYPE}" = "INFORMATIVE_EVIDENCE" ]; then
+            RECOMMENDATION="Informative evidence only — no operational intervention required."
           fi
 
           cat > operational-alert-intelligence.json <<JSON
@@ -141,3 +210,15 @@ HTML
             operational-alert-intelligence.md
             operational-alert-intelligence.html
           if-no-files-found: error
+
+  skip-noise:
+    name: Alerta suprimido (informativo)
+    runs-on: ubuntu-latest
+    needs: governance-gate
+    if: needs.governance-gate.outputs.should_alert != 'true' && github.event_name != 'workflow_dispatch'
+    steps:
+      - name: Registrar supressão de alerta
+        run: |
+          echo "## Operational Alert Intelligence — supressão governada" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Workflow informativo com conclusão success; alerta não emitido" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Classificação: \`governed_skip\`" >> "$GITHUB_STEP_SUMMARY"
