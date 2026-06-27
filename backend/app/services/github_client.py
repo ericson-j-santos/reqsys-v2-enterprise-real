@@ -76,3 +76,29 @@ def find_issue_by_marker(repo: str, marker: str) -> dict[str, Any] | None:
         if marker in (issue.get('body') or ''):
             return issue
     return None
+
+
+def github_token_configurado() -> bool:
+    return bool((get_secret('GITHUB_TOKEN', '') or '').strip())
+
+
+def get_branch_sha(repo: str, branch: str) -> str | None:
+    owner, name = _parse_repo(repo)
+    branch_path = parse.quote(branch, safe='')
+    try:
+        payload = _request_json('GET', f'/repos/{owner}/{name}/git/ref/heads/{branch_path}')
+        objeto = payload.get('object') or {}
+        return objeto.get('sha')
+    except GitHubError as exc:
+        if 'HTTP 404' in str(exc):
+            return None
+        raise
+
+
+def create_branch(repo: str, branch_name: str, from_sha: str) -> dict[str, Any]:
+    owner, name = _parse_repo(repo)
+    return _request_json(
+        'POST',
+        f'/repos/{owner}/{name}/git/refs',
+        {'ref': f'refs/heads/{branch_name}', 'sha': from_sha},
+    )

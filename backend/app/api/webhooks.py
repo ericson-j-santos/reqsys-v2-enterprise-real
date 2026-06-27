@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.envelope import ok
 from app.db import get_db
 from app.services import figma_client, figma_github_sync, git_parser, webhook_processor
+from app.services.agile_git_sync import sincronizar_work_items_git
 
 router = APIRouter(prefix='/v1/webhooks', tags=['Webhooks Git'])
 
@@ -58,13 +59,16 @@ async def webhook_github(
 
     event = (x_github_event or '').lower()
     vinculos: list[dict] = []
+    eventos_agile: list[dict] = []
 
     if event == 'push':
         vinculos = git_parser.processar_push_github(payload)
+        eventos_agile = git_parser.processar_push_github_agile(payload)
     elif event == 'pull_request':
         action = payload.get('action', '')
         if action in ('opened', 'reopened', 'closed', 'edited', 'synchronize'):
             vinculos = git_parser.processar_pr_github(payload)
+            eventos_agile = git_parser.processar_pr_github_agile(payload)
     elif event in ('issues', 'issue_comment'):
         sync_result = figma_github_sync.handle_github_issue_event(db, payload)
         return ok({'evento': event, 'processado': True, 'figma_github': sync_result.as_dict()})
@@ -73,12 +77,19 @@ async def webhook_github(
     else:
         return ok({'evento': event, 'processado': False, 'motivo': 'Evento não suportado.'})
 
-    if not vinculos:
+    if not vinculos and not eventos_agile:
         return ok({'evento': event, 'processado': True, 'vinculos_criados': 0,
-                   'motivo': 'Nenhum código REQ-XXXXXX encontrado nos commits/PR.'})
+                   'work_items_atualizados': 0,
+                   'motivo': 'Nenhum codigo REQ-* ou AGI-* encontrado nos commits/PR.'})
 
-    ids = webhook_processor.salvar_vinculos(db, vinculos)
-    return ok({'evento': event, 'processado': True, 'vinculos_criados': len(ids)})
+    ids = webhook_processor.salvar_vinculos(db, vinculos) if vinculos else []
+    agile_ids = sincronizar_work_items_git(db, eventos_agile) if eventos_agile else []
+    return ok({
+        'evento': event,
+        'processado': True,
+        'vinculos_criados': len(ids),
+        'work_items_atualizados': len(agile_ids),
+    })
 
 
 @router.post('/figma')
@@ -133,17 +144,27 @@ async def webhook_gitlab(
 
     event = (x_gitlab_event or '').lower()
     vinculos: list[dict] = []
+    eventos_agile: list[dict] = []
 
     if 'push' in event:
         vinculos = git_parser.processar_push_gitlab(payload)
+        eventos_agile = git_parser.processar_push_gitlab_agile(payload)
     elif 'merge request' in event:
         vinculos = git_parser.processar_mr_gitlab(payload)
+        eventos_agile = git_parser.processar_mr_gitlab_agile(payload)
     else:
         return ok({'evento': event, 'processado': False, 'motivo': 'Evento não suportado.'})
 
-    if not vinculos:
+    if not vinculos and not eventos_agile:
         return ok({'evento': event, 'processado': True, 'vinculos_criados': 0,
-                   'motivo': 'Nenhum código REQ-XXXXXX encontrado nos commits/MR.'})
+                   'work_items_atualizados': 0,
+                   'motivo': 'Nenhum codigo REQ-* ou AGI-* encontrado nos commits/MR.'})
 
-    ids = webhook_processor.salvar_vinculos(db, vinculos)
-    return ok({'evento': event, 'processado': True, 'vinculos_criados': len(ids)})
+    ids = webhook_processor.salvar_vinculos(db, vinculos) if vinculos else []
+    agile_ids = sincronizar_work_items_git(db, eventos_agile) if eventos_agile else []
+    return ok({
+        'evento': event,
+        'processado': True,
+        'vinculos_criados': len(ids),
+        'work_items_atualizados': len(agile_ids),
+    })

@@ -161,8 +161,32 @@ class AgileGithubLaunchpadOut(BaseModel):
     links: AgileGithubLaunchpadLinks
     acoes_disponiveis: list[str]
     somente_leitura: bool = False
+    increment_gate: dict | None = None
     mensagem_commit_sugerida: str
     notas: list[str] = Field(default_factory=list)
+
+
+class IncrementGateResumo(BaseModel):
+    permitido: bool
+    motivo: str
+    detalhe: str
+
+
+class GithubBranchCriarIn(BaseModel):
+    ambiente: str = 'dev'
+    criar_se_ausente: bool = True
+    aplicar_branch_no_item: bool = True
+
+
+class GithubBranchCriarOut(BaseModel):
+    criada: bool
+    branch: str
+    repositorio: str
+    branch_base: str
+    branch_existe: bool
+    motivo: str
+    increment_gate: IncrementGateResumo
+    links: AgileGithubLaunchpadLinks
 
 
 class AgileAIRoutingRecommendationOut(BaseModel):

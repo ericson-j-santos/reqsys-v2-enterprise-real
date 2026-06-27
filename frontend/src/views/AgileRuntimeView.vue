@@ -103,8 +103,28 @@
               target="_blank"
               rel="noopener noreferrer"
             >PR vinculado</a>
+            <button
+              v-if="pode('criar_branch_api')"
+              type="button"
+              class="acao botao"
+              :disabled="criandoBranch"
+              @click="criarBranchApi"
+            >{{ criandoBranch ? 'Criando...' : 'Criar branch (API)' }}</button>
           </div>
 
+          <form class="trace-form" @submit.prevent="salvarRastreabilidade">
+            <label>
+              URL do PR (change_url)
+              <input v-model="changeUrl" type="url" placeholder="https://github.com/org/repo/pull/123" />
+            </label>
+            <button type="submit" :disabled="salvandoTrace">Salvar rastreabilidade</button>
+          </form>
+
+          <p v-if="mensagem" class="nota sucesso" role="status">{{ mensagem }}</p>
+          <p v-if="launchpad.increment_gate && !launchpad.increment_gate.permitido" class="nota alerta-gate">
+            Increment gate: {{ launchpad.increment_gate.detalhe }}
+          </p>
+          <p v-if="launchpad.branch_existe === true" class="nota">Branch já existe no repositório.</p>
           <p v-if="launchpad.somente_leitura" class="nota">Ambiente produtivo: somente leitura.</p>
           <p class="nota mono">{{ launchpad.mensagem_commit_sugerida }}</p>
         </template>
@@ -133,7 +153,11 @@ const launchpad = ref(null)
 const ambiente = ref('dev')
 const carregando = ref(false)
 const carregandoLaunchpad = ref(false)
+const criandoBranch = ref(false)
+const salvandoTrace = ref(false)
 const erro = ref('')
+const mensagem = ref('')
+const changeUrl = ref('')
 
 function pode(acao) {
   return launchpad.value?.acoes_disponiveis?.includes(acao)
@@ -165,6 +189,7 @@ async function carregarLaunchpad() {
       { params: { ambiente: ambiente.value } },
     )
     launchpad.value = data.data ?? null
+    changeUrl.value = launchpad.value?.links?.change_request || selecionado.value?.change_url || ''
   } catch (error) {
     launchpad.value = null
     erro.value = error.response?.data?.detail || 'Erro ao carregar launchpad GitHub.'
@@ -180,7 +205,57 @@ async function selecionarItem(item) {
 
 async function trocarAmbiente(novoAmbiente) {
   ambiente.value = novoAmbiente
+  mensagem.value = ''
   await carregarLaunchpad()
+}
+
+async function criarBranchApi() {
+  if (!selecionado.value) return
+  criandoBranch.value = true
+  erro.value = ''
+  mensagem.value = ''
+  try {
+    const { data } = await api.post(
+      `/v1/agile-runtime/work-items/${selecionado.value.id}/github/branch`,
+      { ambiente: ambiente.value, criar_se_ausente: true, aplicar_branch_no_item: true },
+    )
+    const payload = data.data ?? data
+    mensagem.value = payload.criada ? 'Branch criada via GitHub API.' : 'Branch já existia; rastreabilidade atualizada.'
+    await carregarWorkItems()
+    const atualizado = workItems.value.find((item) => item.id === selecionado.value.id)
+    if (atualizado) selecionado.value = atualizado
+    await carregarLaunchpad()
+  } catch (error) {
+    erro.value = error.response?.data?.detail || 'Erro ao criar branch via API.'
+  } finally {
+    criandoBranch.value = false
+  }
+}
+
+async function salvarRastreabilidade() {
+  if (!selecionado.value || !changeUrl.value) return
+  salvandoTrace.value = true
+  erro.value = ''
+  mensagem.value = ''
+  try {
+    const { data } = await api.patch(
+      `/v1/agile-runtime/work-items/${selecionado.value.id}/traceability`,
+      {
+        change_provider: 'github',
+        change_url: changeUrl.value,
+        branch: launchpad.value?.branch_trabalho || selecionado.value.branch,
+        repositorio: launchpad.value?.repositorio || selecionado.value.repositorio,
+        ambiente_deploy: ambiente.value === 'homolog' ? 'homolog' : ambiente.value,
+      },
+    )
+    selecionado.value = data.data ?? selecionado.value
+    mensagem.value = 'Rastreabilidade salva com sucesso.'
+    await carregarLaunchpad()
+  } catch (error) {
+    erro.value = error.response?.data?.detail || 'Erro ao salvar rastreabilidade.'
+  } finally {
+    salvandoTrace.value = false
+  }
 }
 
 onMounted(carregarWorkItems)
@@ -301,6 +376,49 @@ onMounted(carregarWorkItems)
 
 .acao.secundaria {
   background: rgba(120, 120, 120, 0.12);
+}
+
+.acao.botao {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+.trace-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.trace-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.trace-form input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(208, 208, 208, 0.9);
+  background: transparent;
+  color: inherit;
+}
+
+.trace-form button {
+  justify-self: start;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(25, 118, 210, 0.5);
+  background: rgba(25, 118, 210, 0.12);
+  cursor: pointer;
+}
+
+.nota.sucesso {
+  color: #1b5e20;
+}
+
+.nota.alerta-gate {
+  color: #b00020;
 }
 
 .nota {

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.agile_runtime import AgileWorkItem
 from app.models.requisito import Requisito
+from app.services import github_client
 from app.services.agile_ai_router import recomendar_roteamento_multi_ia
 from app.services.git_parser import inferir_ambiente_branch
 
@@ -75,11 +76,16 @@ def _resolver_branch_trabalho(item: AgileWorkItem, ambiente: str) -> str:
 
 def _acoes_disponiveis(ambiente: str) -> list[str]:
     amb = normalizar_ambiente_launchpad(ambiente)
+    acoes: list[str]
     if amb in {'dev', 'test'}:
-        return ['abrir_branch', 'criar_branch_github', 'abrir_pr', 'ver_actions', 'abrir_app']
-    if amb == 'homolog':
-        return ['abrir_branch', 'abrir_pr', 'ver_actions', 'abrir_app']
-    return ['abrir_branch', 'abrir_app']
+        acoes = ['abrir_branch', 'criar_branch_github', 'abrir_pr', 'ver_actions', 'abrir_app']
+    elif amb == 'homolog':
+        acoes = ['abrir_branch', 'abrir_pr', 'ver_actions', 'abrir_app']
+    else:
+        acoes = ['abrir_branch', 'abrir_app']
+    if amb != 'prod' and github_client.github_token_configurado():
+        acoes.append('criar_branch_api')
+    return acoes
 
 
 def _github_url_repo(repo: str) -> str:
@@ -143,6 +149,15 @@ def montar_github_launchpad(
     branch_base = branch_base_por_ambiente(amb)
     branch_trabalho = _resolver_branch_trabalho(item, amb)
     requisito_codigo = _buscar_requisito_codigo(db, item.requisito_id)
+    branch_existe: bool | None = None
+    if github_client.github_token_configurado():
+        branch_existe = github_client.get_branch_sha(repo, branch_trabalho) is not None
+
+    gate = None
+    if amb != 'prod':
+        from app.services.increment_gate_service import verificar_increment_gate
+
+        gate = verificar_increment_gate('new_front', reference=item.codigo)
 
     links: dict[str, str | None] = {
         'branch': _github_url_tree(repo, branch_trabalho),
@@ -172,13 +187,14 @@ def montar_github_launchpad(
         'repositorio': repo,
         'branch_trabalho': branch_trabalho,
         'branch_base': branch_base,
-        'branch_existe': None,
+        'branch_existe': branch_existe,
         'links': links,
         'acoes_disponiveis': _acoes_disponiveis(amb),
         'somente_leitura': amb == 'prod',
+        'increment_gate': gate,
         'mensagem_commit_sugerida': mensagem_commit,
         'notas': [
-            'P0: links read-only; criacao de branch via API GitHub fica para fase posterior.',
-            'Validar increment gate antes de criar branch ou PR em ambiente compartilhado.',
+            'Use criar_branch_api para criar branch via GitHub API com increment gate.',
+            'Persista change_url via PATCH /traceability apos abrir o PR.',
         ],
     }
