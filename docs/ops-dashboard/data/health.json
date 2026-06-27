@@ -1,7 +1,7 @@
 {
   "schema_version": "1.2.0",
-  "repo": "reqsys-v2-enterprise-real",
-  "generated_at_epoch": 1782579381,
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "generated_at_epoch": 1782579911,
   "overall_status": "unknown",
   "health_score": 40,
   "critical_failure_count": null,
@@ -9,16 +9,16 @@
   "source_missing": true,
   "checks": [],
   "links": {
-    "actions": "https://github.com/reqsys-v2-enterprise-real/actions",
-    "pulls": "https://github.com/reqsys-v2-enterprise-real/pulls",
-    "main": "https://github.com/reqsys-v2-enterprise-real/tree/main"
+    "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
+    "pulls": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pulls",
+    "main": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/tree/main"
   },
   "public_runtime_readiness": {
     "available": true,
     "source_path": "audit/runtime/public-runtime-validation.json",
     "source_fallback": false,
     "evidence_run_id": "local-baseline",
-    "evidence_generated_at": "2026-06-27T16:56:21.915174+00:00",
+    "evidence_generated_at": "2026-06-27T17:04:56.958349+00:00",
     "strict_gate_passed": false,
     "environment": "prod",
     "base_url": "https://reqsys-api.fly.dev",
@@ -40,7 +40,24 @@
       "assets": false,
       "cors_basic": false,
       "incident_timeline": false
-    }
+    },
+    "operational_notes": [
+      {
+        "id": "fly_runtime_deploy_lag",
+        "severity": "blocker",
+        "scope": "fly_runtime_deploy",
+        "wire_scope": false,
+        "message": "Os 404 nos endpoints strict do Fly indicam deploy anterior ao Runtime Operational Observability v1 — bloqueio evidenciado, fora do escopo wire-only (sem deploy). Corrigir exige incremento separado via ReqSys Fly Runtime P0 (workflow_dispatch deploy=true) antes de declarar produção healthy.",
+        "affected_endpoints": [
+          "/api/runtime/health",
+          "/api/runtime/readiness",
+          "/api/runtime/liveness"
+        ],
+        "next_increment": "fly-runtime-p0-deploy",
+        "blocks_increment": "evidence-automation-observability-e2e",
+        "reference": "docs/runbooks/public-runtime-smoke-test.md"
+      }
+    ]
   },
   "runtime_gold_standard_depth": {
     "available": true,

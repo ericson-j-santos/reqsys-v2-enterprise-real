@@ -65,6 +65,7 @@ def _resolve_public_runtime(
                 provenance["run_id"] = index.get("run_id")
                 provenance["generated_at"] = index.get("generated_at")
                 provenance["strict_gate_passed"] = index.get("strict_gate_passed")
+                provenance["operational_notes"] = index.get("operational_notes", [])
             return _load_optional_json(path), provenance
     return {}, {
         "source_path": None,
@@ -289,6 +290,7 @@ def _public_runtime_summary(
         "evidence_ready": readiness.get("evidence_ready", False),
         "blocking_issues": readiness.get("blocking_issues", []),
         "checks": public_runtime.get("checks", {}),
+        "operational_notes": provenance.get("operational_notes", []),
     }
 
 
