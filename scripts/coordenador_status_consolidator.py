@@ -125,8 +125,12 @@ def consolidate(
     backlog = health.get("automatic_backlog") or []
     critical_gaps = sum(1 for item in backlog if str(item.get("id", "")).startswith("OPS-GAP-"))
 
+    runtime_score = health.get("runtime_score")
+    if runtime_score is None:
+        runtime_score = (health.get("maturity") or {}).get("score")
+
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "correlation_id": str(health.get("correlation_id") or uuid4()),
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repository": repo,
@@ -136,7 +140,9 @@ def consolidate(
         "decision": build_decision(global_state, orchestrator, health),
         "executive_status": build_executive_status(global_state, health),
         "operational_score": orchestrator.get("operational_score"),
+        "runtime_score": runtime_score,
         "maturity_level": (health.get("maturity") or {}).get("level"),
+        "quarantine": health.get("quarantine") or {"active": False},
         "sources": {
             "orchestrator": {
                 "state": orchestrator.get("state"),
@@ -149,6 +155,8 @@ def consolidate(
                 "executive_status": health.get("executive_status"),
                 "correlation_id": health.get("correlation_id"),
                 "generated_at": health.get("generated_at"),
+                "runtime_score": runtime_score,
+                "quarantine_active": (health.get("quarantine") or {}).get("active", False),
             },
         },
         "summary": {
@@ -200,7 +208,9 @@ def write_report(report: dict[str, Any], output_dir: Path) -> None:
         f"- Decision: `{report['decision']}`",
         f"- Executive status: `{report['executive_status']}`",
         f"- Operational score: `{report['operational_score']}%`",
+        f"- Runtime score: `{report.get('runtime_score')}`",
         f"- Maturity: `{report['maturity_level']}`",
+        f"- Quarantine active: `{(report.get('quarantine') or {}).get('active', False)}`",
         f"- Generated at: `{report['generated_at']}`",
         "",
         "## Summary",

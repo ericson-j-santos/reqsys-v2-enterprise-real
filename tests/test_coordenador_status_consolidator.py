@@ -58,14 +58,16 @@ def health_fixture(state: str = "green") -> dict:
         ]
 
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "correlation_id": "corr-test-001",
         "generated_at": "2026-06-27T10:01:00Z",
         "repository": "owner/repo",
         "branch": "main",
         "state": state,
         "executive_status": "Runtime operacional saudavel",
-        "maturity": {"level": "managed" if state == "green" else "defined"},
+        "runtime_score": 88 if state == "green" else 55,
+        "maturity": {"level": "managed" if state == "green" else "defined", "score": 88 if state == "green" else 55},
+        "quarantine": {"active": state == "red", "blocked_actions": ["deploy", "promote"] if state == "red" else []},
         "automatic_backlog": backlog,
         "regression_detection": {"state": "regression_suspected" if state == "red" else "no_regression_detected"},
     }
@@ -82,7 +84,9 @@ def test_consolidate_green_produces_continue_action() -> None:
 
     assert report["state"] == "green"
     assert report["decision"] == "continuar_proximo_incremento"
+    assert report["runtime_score"] == 88
     assert report["summary"]["critical_gaps"] == 0
+    assert report["quarantine"]["active"] is False
     assert any(item["action"] == "continuar_proximo_incremento" for item in report["recommended_actions"])
 
 
@@ -91,6 +95,7 @@ def test_consolidate_red_blocks_and_surfaces_gaps() -> None:
 
     assert report["state"] == "red"
     assert report["decision"] == "bloquear_merges_e_tratar_gaps"
+    assert report["quarantine"]["active"] is True
     assert report["summary"]["critical_gaps"] == 1
     assert any(item["reference"] == "OPS-GAP-999" for item in report["recommended_actions"])
     assert any(item["action"] == "investigar_workflow_vermelho" for item in report["recommended_actions"])
@@ -111,7 +116,8 @@ def test_write_report_publishes_json_and_summary(tmp_path: Path) -> None:
     payload = json.loads((tmp_path / "coordenador-status.json").read_text(encoding="utf-8"))
     summary = (tmp_path / "summary.md").read_text(encoding="utf-8")
 
-    assert payload["schema_version"] == "1.0.0"
+    assert payload["schema_version"] == "1.1.0"
+    assert payload["runtime_score"] == 88
     assert payload["evidence_consolidation"]["artifact"] == "coordenador-status-evidence"
     assert "## Recommended actions" in summary
     assert build_decision("green", orchestrator_fixture("green"), health_fixture("green")) == "continuar_proximo_incremento"
