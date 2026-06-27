@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T18:27:44.652596Z",
+  "trail_id": "trilha-d",
+  "trail_name": "Qualidade e Governança",
+  "mode": "report_only",
+  "status": "passed",
+  "summary": {
+    "source": "governance_snapshot",
+    "dimensions": 6
+  },
+  "capabilities": [
+    "tests",
+    "coverage",
+    "mutation",
+    "contract",
+    "schema",
+    "ci_watch"
+  ],
+  "issues": [],
+  "artifacts": {
+    "architecture_as_code": "docs/architecture/trilha-d/architecture-as-code.json"
+  }
+}

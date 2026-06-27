@@ -7,7 +7,7 @@
     "api_modules": 12,
     "workflows": 6,
     "dashboards": 5,
-    "adrs": 24,
+    "adrs": 29,
     "diagrams": 4
   },
   "services": [
@@ -88,6 +88,11 @@
     { "id": "ADR-033", "path": "docs/adr/ADR-033-product-intelligence-final-evidence-index.md", "topic": "evidencia" },
     { "id": "ADR-034", "path": "docs/adr/ADR-034-autonomous-operational-runtime-consolidation.md", "topic": "runtime" },
     { "id": "ADR-035", "path": "docs/adr/ADR-035-trilha-e-arquitetura-viva.md", "topic": "arquitetura-viva" },
+    { "id": "ADR-036", "path": "docs/adr/ADR-036-trilha-a-runtime-publico.md", "topic": "runtime" },
+    { "id": "ADR-037", "path": "docs/adr/ADR-037-trilha-b-observabilidade-enterprise.md", "topic": "observabilidade" },
+    { "id": "ADR-038", "path": "docs/adr/ADR-038-trilha-c-ux-operacional.md", "topic": "ux" },
+    { "id": "ADR-039", "path": "docs/adr/ADR-039-trilha-d-qualidade-governanca.md", "topic": "qualidade" },
+    { "id": "ADR-040", "path": "docs/adr/ADR-040-trilhas-padrao-ouro.md", "topic": "governanca" },
     { "id": "ADR-ESTATISTICAS", "path": "docs/adr/ADR-ESTATISTICAS-INTERNAS-EXTERNAS.md", "topic": "analytics" },
     { "id": "ADR-OPER-005", "path": "docs/adr/ADR-REQSYS-OPER-005-monitoramento-operacional.md", "topic": "monitoramento" },
     { "id": "ADR-PR-AUTO-RECOVERY-V2", "path": "docs/adr/ADR-PR-AUTO-RECOVERY-V2.md", "topic": "ci-cd" },

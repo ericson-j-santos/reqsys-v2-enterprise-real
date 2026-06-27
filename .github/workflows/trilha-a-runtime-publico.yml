@@ -1,0 +1,50 @@
+name: Trilha A — Runtime Público
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/trilha-a-runtime-publico.yml'
+      - 'scripts/trilha_a_runtime_publico.py'
+      - 'scripts/runtime_public_validator.py'
+      - 'scripts/fly_boot.sh'
+      - 'docs/architecture/trilha-a/**'
+      - 'docs/adr/ADR-036-trilha-a-runtime-publico.md'
+      - 'docs/runbooks/trilha-a-runtime-publico.md'
+      - 'docs/contracts/trilha-a-runtime-publico.schema.json'
+      - 'tests/test_trilha_a_runtime_publico.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/trilha-a-runtime-publico.yml'
+      - 'scripts/trilha_a_runtime_publico.py'
+
+concurrency:
+  group: trilha-a-runtime-publico-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-trilha-a:
+    name: Validate Trilha A — Runtime Público (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar Trilha A
+        run: python scripts/trilha_a_runtime_publico.py
+
+      - name: Upload Trilha A report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trilha-a-runtime-publico-${{ github.run_id }}
+          path: audit/trilha-a/
+          retention-days: 30

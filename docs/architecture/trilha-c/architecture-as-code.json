@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0.0",
+  "trail_id": "trilha-c",
+  "trail_name": "UX Operacional",
+  "updated_at": "2026-06-27T18:30:00Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "mode": "report_only",
+  "governance": {
+    "owner": "ReqSys UX Operacional",
+    "adr": "docs/adr/ADR-038-trilha-c-ux-operacional.md",
+    "runbook": "docs/runbooks/trilha-c-ux-operacional.md",
+    "workflow": ".github/workflows/trilha-c-ux-operacional.yml"
+  },
+  "capabilities": {
+    "semaforo_operacional": {
+      "status": "active",
+      "component": "frontend/src/components/SemaforoChip.vue",
+      "utility": "frontend/src/utils/filtrosMonitoramento.js"
+    },
+    "drill_down": {
+      "status": "active",
+      "component": "frontend/src/components/OperationalMetricCard.vue",
+      "service": "frontend/src/services/runtimeDashboard.js"
+    },
+    "monitoramento_operacional": {
+      "status": "active",
+      "view": "frontend/src/views/MonitoramentoOperacionalView.vue",
+      "route": "/monitoramento-operacional"
+    },
+    "analytics_hub": {
+      "status": "active",
+      "view": "frontend/src/views/AnalyticsHubView.vue",
+      "route": "/analytics"
+    },
+    "responsividade": {
+      "status": "active",
+      "registry": "frontend/src/constants/rotasResponsivas.js"
+    }
+  },
+  "artifacts": {
+    "report": "audit/trilha-c/trilha-c-ux-operacional-report.json",
+    "artifact_name": "trilha-c-ux-operacional-${{ github.run_id }}"
+  },
+  "validation": {
+    "checks": [
+      "governance_files_exist",
+      "views_present",
+      "routes_registered",
+      "components_present",
+      "responsive_registry"
+    ]
+  }
+}

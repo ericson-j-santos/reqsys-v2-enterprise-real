@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0.0",
+  "trail_id": "trilha-d",
+  "trail_name": "Qualidade e Governança",
+  "updated_at": "2026-06-27T18:30:00Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "mode": "report_only",
+  "governance": {
+    "owner": "ReqSys Quality Governance",
+    "adr": "docs/adr/ADR-039-trilha-d-qualidade-governanca.md",
+    "runbook": "docs/runbooks/trilha-d-qualidade-governanca.md",
+    "workflow": ".github/workflows/trilha-d-qualidade-governanca.yml"
+  },
+  "capabilities": {
+    "tests": { "status": "active", "dimension": "tests" },
+    "coverage": { "status": "active", "dimension": "coverage", "gate_percent": 60 },
+    "mutation": { "status": "active", "dimension": "mutation", "mode": "lightweight_probe" },
+    "contract": { "status": "active", "dimension": "contract" },
+    "schema": { "status": "active", "dimension": "schema" },
+    "ci_watch": { "status": "active", "dimension": "ci-watch" }
+  },
+  "artifacts": {
+    "report": "audit/trilha-d/trilha-d-qualidade-governanca-report.json",
+    "artifact_name": "trilha-d-qualidade-governanca-evidence"
+  },
+  "validation": {
+    "checks": [
+      "governance_files_exist",
+      "matrix_workflow",
+      "six_dimensions",
+      "consolidate_job",
+      "schema_contract"
+    ]
+  }
+}

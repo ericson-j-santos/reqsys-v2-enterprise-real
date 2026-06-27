@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/trilhas-padrao-ouro.schema.json",
+  "title": "ReqSys Trilhas — Padrão Ouro Consolidado",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "mode",
+    "status",
+    "summary",
+    "trails",
+    "gold_standard_criteria",
+    "issues",
+    "recommended_actions"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "mode": { "type": "string", "enum": ["report_only"] },
+    "status": { "type": "string", "enum": ["passed", "passed_with_warnings", "failed"] },
+    "summary": {
+      "type": "object",
+      "required": ["trails_total", "trails_passed", "trails_warning", "trails_failed", "gold_standard_percent"],
+      "properties": {
+        "trails_total": { "type": "integer", "minimum": 1 },
+        "trails_passed": { "type": "integer", "minimum": 0 },
+        "trails_warning": { "type": "integer", "minimum": 0 },
+        "trails_failed": { "type": "integer", "minimum": 0 },
+        "gold_standard_percent": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "trails": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["trail_id", "trail_name", "status", "criteria", "missing", "report_status"],
+        "properties": {
+          "trail_id": { "type": "string" },
+          "trail_name": { "type": "string" },
+          "status": { "type": "string", "enum": ["passed", "passed_with_warnings", "failed"] },
+          "criteria": { "type": "object" },
+          "missing": { "type": "array", "items": { "type": "string" } },
+          "report_status": { "type": "string" }
+        }
+      }
+    },
+    "gold_standard_criteria": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "trail_id", "type", "detail"],
+        "properties": {
+          "severity": { "type": "string", "enum": ["error", "warning"] },
+          "trail_id": { "type": "string" },
+          "type": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "recommended_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["priority", "action", "detail"],
+        "properties": {
+          "priority": { "type": "string" },
+          "action": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      }
+    }
+  }
+}
