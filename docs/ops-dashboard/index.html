@@ -133,6 +133,21 @@
     </section>
 
     <section class="card">
+      <h2>Delivery Finalization — integração segura</h2>
+      <p class="small">Consumo local opcional de <code>delivery-finalization-report.json</code>. Se o artifact não existir, o dashboard mantém fallback seguro e não altera runtime produtivo.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Score final</div><div id="delivery-final-score" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Gap residual</div><div id="delivery-residual-gap" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Status</div><div id="delivery-status" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Indicadores</div><div id="delivery-indicators" class="kpi-value">-</div></div>
+      </div>
+      <table>
+        <thead><tr><th>Indicador</th><th>Status</th><th>Score</th><th>Gap</th><th>Evidência</th></tr></thead>
+        <tbody id="delivery-indicator-drilldown"><tr><td colspan="5">Carregando...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
       <h2>Incident Timeline</h2>
       <p class="small">Eventos consolidados por workflow, PR e domínio. Use filtros locais; nenhum dado externo é acessado.</p>
       <div class="filters">
@@ -267,6 +282,32 @@
         guardrails: obs.guardrails,
       });
 
+      const delivery = data.delivery_finalization || {};
+      document.getElementById('delivery-final-score').textContent = delivery.final_score == null ? '-' : `${delivery.final_score}%`;
+      document.getElementById('delivery-residual-gap').textContent = delivery.residual_gap == null ? '-' : `${delivery.residual_gap}%`;
+      document.getElementById('delivery-status').innerHTML = `<span class="status ${statusClass(delivery.status)}">${delivery.status || 'unknown'}</span>`;
+      document.getElementById('delivery-indicators').textContent = delivery.available ? `${delivery.passed_indicator_count ?? 0}/${delivery.indicator_count ?? 0}` : 'fallback';
+      const deliveryBody = document.getElementById('delivery-indicator-drilldown');
+      deliveryBody.innerHTML = '';
+      const deliveryIndicators = delivery.indicators || [];
+      if (!delivery.available) {
+        deliveryBody.innerHTML = `<tr><td colspan="5">${delivery.guardrail || 'Artifact delivery-finalization-report.json não disponível; fallback seguro ativo.'}</td></tr>`;
+      } else if (!deliveryIndicators.length) {
+        deliveryBody.innerHTML = '<tr><td colspan="5">Artifact disponível sem indicadores detalhados.</td></tr>';
+      } else {
+        deliveryIndicators.forEach((indicator) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${indicator.name || indicator.id || '-'}</td>
+            <td><span class="status ${statusClass(indicator.status)}">${indicator.status || '-'}</span></td>
+            <td>${indicator.score ?? '-'}</td>
+            <td>${indicator.gap ?? '-'}</td>
+            <td><pre>${shortJson(indicator.evidence)}</pre></td>
+          `;
+          deliveryBody.appendChild(tr);
+        });
+      }
+
       const timelineEvents = data.incident_timeline || [];
       fillFilter('filter-severity', uniqueValues(timelineEvents, 'severity'));
       fillFilter('filter-domain', uniqueValues(timelineEvents, 'domain'));
@@ -321,6 +362,7 @@
       document.getElementById('checks').innerHTML = `<tr><td colspan="5">Falha ao carregar data/health.json: ${error.message}</td></tr>`;
       document.getElementById('domains').innerHTML = `<tr><td colspan="5">Falha ao carregar runtime drill-down.</td></tr>`;
       document.getElementById('timeline').innerHTML = `<tr><td colspan="5">Falha ao carregar incident timeline.</td></tr>`;
+      document.getElementById('delivery-indicator-drilldown').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar delivery finalization.</td></tr>`;
     });
   </script>
 </body>

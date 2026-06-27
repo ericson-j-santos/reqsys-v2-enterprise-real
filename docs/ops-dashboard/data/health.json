@@ -1,7 +1,7 @@
 {
-  "schema_version": "1.1.0",
-  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at_epoch": 1782566968,
+  "schema_version": "1.2.0",
+  "repo": "example/repo",
+  "generated_at_epoch": 1782569241,
   "overall_status": "unknown",
   "health_score": 40,
   "critical_failure_count": null,
@@ -9,9 +9,9 @@
   "source_missing": true,
   "checks": [],
   "links": {
-    "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
-    "pulls": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pulls",
-    "main": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/tree/main"
+    "actions": "https://github.com/example/repo/actions",
+    "pulls": "https://github.com/example/repo/pulls",
+    "main": "https://github.com/example/repo/tree/main"
   },
   "public_runtime_readiness": {
     "available": false,
@@ -7097,10 +7097,22 @@
       "compatível com artifacts existentes: campos ausentes permanecem null"
     ]
   },
+  "delivery_finalization": {
+    "available": false,
+    "artifact": "delivery-finalization-report.json",
+    "status": "unknown",
+    "final_score": null,
+    "residual_gap": null,
+    "indicator_count": 0,
+    "passed_indicator_count": 0,
+    "indicators": [],
+    "guardrail": "Fallback seguro: nenhum dado externo é consultado quando o artifact não existe."
+  },
   "runtime_sources": {
     "runtime_health_report_available": true,
     "runtime_operational_evidence_graph_available": false,
     "public_runtime_validation_available": false,
-    "observability_correlation_report_available": true
+    "observability_correlation_report_available": true,
+    "delivery_finalization_report_available": false
   }
 }

@@ -44,6 +44,7 @@ jobs:
           python scripts/generate_ops_dashboard_data.py \
             --repo "${{ github.repository }}" \
             --watchdog-report artifacts/repository-health-watchdog/repository-health-report.json \
+            --delivery-finalization-report artifacts/delivery-finalization/delivery-finalization-report.json \
             --output docs/ops-dashboard/data/health.json
 
       - name: Prepare dashboard artifact

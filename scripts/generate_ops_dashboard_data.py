@@ -48,6 +48,68 @@ def _load_optional_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _safe_number(*values: Any) -> Any:
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, (int, float)):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().replace("%", "").replace(",", ".")
+            try:
+                return float(normalized)
+            except ValueError:
+                continue
+    return None
+
+
+def _delivery_finalization_summary(delivery_report: dict[str, Any]) -> dict[str, Any]:
+    score = _safe_number(
+        delivery_report.get("final_score"),
+        delivery_report.get("score_final"),
+        delivery_report.get("score"),
+        delivery_report.get("completion_score"),
+        delivery_report.get("summary", {}).get("final_score") if isinstance(delivery_report.get("summary"), dict) else None,
+    )
+    residual_gap = _safe_number(
+        delivery_report.get("residual_gap"),
+        delivery_report.get("gap_residual"),
+        delivery_report.get("gap"),
+        delivery_report.get("summary", {}).get("residual_gap") if isinstance(delivery_report.get("summary"), dict) else None,
+    )
+    raw_indicators = delivery_report.get("indicators") or delivery_report.get("indicadores") or []
+    indicators = raw_indicators if isinstance(raw_indicators, list) else []
+    normalized_indicators = [
+        {
+            "id": item.get("id") or item.get("name") or item.get("nome") or f"indicator-{index + 1}",
+            "name": item.get("name") or item.get("nome") or item.get("id") or f"Indicador {index + 1}",
+            "status": item.get("status", "unknown"),
+            "score": _safe_number(item.get("score"), item.get("value"), item.get("valor")),
+            "gap": _safe_number(item.get("gap"), item.get("residual_gap"), item.get("gap_residual")),
+            "evidence": item.get("evidence") or item.get("evidencia") or item.get("evidências") or {},
+        }
+        for index, item in enumerate(indicators)
+        if isinstance(item, dict)
+    ]
+    status = (
+        delivery_report.get("status")
+        or delivery_report.get("overall_status")
+        or delivery_report.get("final_status")
+        or ("unknown" if not delivery_report else "available")
+    )
+    return {
+        "available": bool(delivery_report),
+        "artifact": "delivery-finalization-report.json",
+        "status": status,
+        "final_score": score,
+        "residual_gap": residual_gap,
+        "indicator_count": len(normalized_indicators),
+        "passed_indicator_count": sum(1 for item in normalized_indicators if str(item.get("status")).lower() in {"passed", "ok", "success", "healthy"}),
+        "indicators": normalized_indicators,
+        "guardrail": "Fallback seguro: nenhum dado externo é consultado quando o artifact não existe.",
+    }
+
+
 def _runtime_depth(runtime_report: dict[str, Any]) -> dict[str, Any]:
     depth = runtime_report.get("gold_standard_depth") or {}
     axes = depth.get("axes") or {}
@@ -203,14 +265,16 @@ def build_dashboard_payload(
     evidence_graph: dict[str, Any] | None = None,
     public_runtime: dict[str, Any] | None = None,
     observability_correlation: dict[str, Any] | None = None,
+    delivery_finalization: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     results = report.get("results", []) or []
     runtime_report = runtime_report or {}
     evidence_graph = evidence_graph or {}
     public_runtime = public_runtime or {}
     observability_correlation = observability_correlation or {}
+    delivery_finalization = delivery_finalization or {}
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "repo": repo or report.get("repo") or "unknown",
         "generated_at_epoch": int(time.time()),
         "overall_status": report.get("overall_status", "unknown"),
@@ -229,11 +293,13 @@ def build_dashboard_payload(
         "runtime_domain_drilldowns": _domain_drilldowns(runtime_report),
         "incident_timeline": _incident_timeline(report, runtime_report, evidence_graph),
         "observability_correlation_report": observability_correlation,
+        "delivery_finalization": _delivery_finalization_summary(delivery_finalization),
         "runtime_sources": {
             "runtime_health_report_available": bool(runtime_report),
             "runtime_operational_evidence_graph_available": bool(evidence_graph),
             "public_runtime_validation_available": bool(public_runtime),
             "observability_correlation_report_available": bool(observability_correlation),
+            "delivery_finalization_report_available": bool(delivery_finalization),
         },
     }
 
@@ -247,6 +313,7 @@ def main() -> int:
     parser.add_argument("--evidence-graph", default="artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json")
     parser.add_argument("--public-runtime-validation", default="artifacts/runtime/public-runtime-validation.json")
     parser.add_argument("--observability-correlation-report", default="artifacts/observability-correlation-report/observability-correlation-report.json")
+    parser.add_argument("--delivery-finalization-report", default="artifacts/delivery-finalization/delivery-finalization-report.json")
     args = parser.parse_args()
 
     report = _load_watchdog_report(Path(args.watchdog_report))
@@ -254,7 +321,8 @@ def main() -> int:
     evidence_graph = _load_optional_json(Path(args.evidence_graph))
     public_runtime = _load_optional_json(Path(args.public_runtime_validation))
     observability_correlation = _load_optional_json(Path(args.observability_correlation_report))
-    payload = build_dashboard_payload(report, args.repo, runtime_report, evidence_graph, public_runtime, observability_correlation)
+    delivery_finalization = _load_optional_json(Path(args.delivery_finalization_report))
+    payload = build_dashboard_payload(report, args.repo, runtime_report, evidence_graph, public_runtime, observability_correlation, delivery_finalization)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
