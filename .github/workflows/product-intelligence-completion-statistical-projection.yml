@@ -25,8 +25,8 @@ jobs:
         with:
           python-version: "3.11"
       - name: Validate projection contract
-        run: python -m unittest tests.test_completion_statistical_projection -v
+        run: python3 -m unittest tests.test_completion_statistical_projection -v
       - name: Build completion statistical projection
-        run: python tools/product_intelligence/generate_completion_statistical_projection.py reports/product-intelligence
+        run: python3 tools/product_intelligence/generate_completion_statistical_projection.py reports/product-intelligence
       - name: Publish summary
         run: cat reports/product-intelligence/reqsys-completion-statistical-projection.md >> "$GITHUB_STEP_SUMMARY"

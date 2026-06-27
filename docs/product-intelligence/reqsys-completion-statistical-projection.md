@@ -19,7 +19,7 @@ Gerar uma projeção estatística revisável de conclusão do ReqSys a partir do
 ## Comando
 
 ```bash
-python tools/product_intelligence/generate_completion_statistical_projection.py reports/product-intelligence
+python3 tools/product_intelligence/generate_completion_statistical_projection.py reports/product-intelligence
 ```
 
 ## Artefatos gerados
