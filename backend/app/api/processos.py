@@ -26,7 +26,7 @@ def iniciar_processo(
 
     if not resultado.apto_para_iniciar:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=resultado.model_dump(),
         )
 
