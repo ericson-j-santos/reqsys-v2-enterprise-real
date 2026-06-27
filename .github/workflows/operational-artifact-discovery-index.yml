@@ -1,0 +1,119 @@
+name: Operational Artifact Discovery Index
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '50 */6 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/operational-artifact-discovery-index.yml'
+      - 'docs/runbooks/operational-artifact-discovery-index.md'
+
+concurrency:
+  group: operational-artifact-discovery-index-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  discovery-index:
+    name: Build operational artifact discovery index
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build discovery index artifact
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          artifacts = [
+              {
+                  'name': 'ci-lead-time-analytics.json',
+                  'workflow': 'CI Lead Time Analytics',
+                  'schema': 'docs/contracts/ci-lead-time-analytics.schema.json',
+                  'consumer': 'docs/dashboard/live-operational-dashboard.dynamic.html',
+                  'mode': 'report_only',
+                  'risk': 'low',
+              },
+              {
+                  'name': 'operational-history-snapshot.json',
+                  'workflow': 'Operational History Snapshot',
+                  'schema': 'docs/contracts/operational-history-snapshot.schema.json',
+                  'consumer': 'docs/dashboard/live-operational-dashboard.dynamic.html',
+                  'mode': 'report_only',
+                  'risk': 'low',
+              },
+              {
+                  'name': 'runtime-predictive-analytics.json',
+                  'workflow': 'Runtime Predictive Analytics',
+                  'schema': 'docs/contracts/runtime-predictive-analytics.schema.json',
+                  'consumer': 'docs/dashboard/live-operational-dashboard.dynamic.html',
+                  'mode': 'report_only',
+                  'risk': 'medium_low',
+              },
+              {
+                  'name': 'main-operational-post-merge-health.json',
+                  'workflow': 'Main Operational Post-Merge Health',
+                  'schema': None,
+                  'consumer': 'docs/runbooks/main-operational-post-merge-health.md',
+                  'mode': 'report_only',
+                  'risk': 'medium_low',
+              },
+              {
+                  'name': 'operational-artifact-schema-validation.json',
+                  'workflow': 'Operational Artifact Schema Validation',
+                  'schema': None,
+                  'consumer': 'docs/runbooks/operational-artifact-schema-validation.md',
+                  'mode': 'report_only',
+                  'risk': 'low',
+              },
+          ]
+
+          report = {
+              'schema_version': '1.0.0',
+              'generated_at': datetime.now(timezone.utc).isoformat(),
+              'repository': os.environ['REPOSITORY'],
+              'run_id': os.environ['RUN_ID'],
+              'event_name': os.environ['EVENT_NAME'],
+              'artifact_count': len(artifacts),
+              'schema_coverage_percent': round((sum(1 for item in artifacts if item['schema']) / len(artifacts)) * 100, 2),
+              'dashboard_consumer_coverage_percent': round((sum(1 for item in artifacts if 'dashboard' in item['consumer']) / len(artifacts)) * 100, 2),
+              'artifacts': artifacts,
+              'mode': 'report_only',
+          }
+
+          Path('audit/artifact-discovery').mkdir(parents=True, exist_ok=True)
+          Path('audit/artifact-discovery/operational-artifact-discovery-index.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
+          lines = [
+              '# Operational Artifact Discovery Index',
+              '',
+              f"- Repository: {report['repository']}",
+              f"- Artifact count: {report['artifact_count']}",
+              f"- Schema coverage: {report['schema_coverage_percent']}%",
+              f"- Dashboard consumer coverage: {report['dashboard_consumer_coverage_percent']}%",
+              f"- Mode: {report['mode']}",
+              '',
+              '## Artifacts',
+          ]
+          lines.extend([f"- {item['name']} -> {item['workflow']} -> {item['consumer']}" for item in artifacts])
+          Path('audit/artifact-discovery/operational-artifact-discovery-index.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print(json.dumps(report, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Upload artifact discovery index
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-artifact-discovery-index-${{ github.run_id }}
+          path: audit/artifact-discovery/
+          if-no-files-found: error
+          retention-days: 30
