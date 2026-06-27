@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T19:01:00-03:00",
+  "matrix": [
+    {"lane": "docs", "risk": "low", "parallel_allowed": true, "reason": "exclusive paths and no runtime effect"},
+    {"lane": "artifacts", "risk": "low", "parallel_allowed": true, "reason": "versioned evidence only"},
+    {"lane": "dashboard_contracts", "risk": "low", "parallel_allowed": true, "reason": "contract files without frontend changes"},
+    {"lane": "frontend_dashboard", "risk": "high", "parallel_allowed": false, "reason": "open runtime/dashboard PRs touch the same area"},
+    {"lane": "backend_runtime", "risk": "high", "parallel_allowed": false, "reason": "open runtime validator PRs touch backend runtime files"},
+    {"lane": "workflows", "risk": "medium", "parallel_allowed": false, "reason": "open CI PRs touch validation behavior"},
+    {"lane": "shared_contracts", "risk": "high", "parallel_allowed": false, "reason": "cross-cutting merge conflict and contract break risk"}
+  ]
+}
