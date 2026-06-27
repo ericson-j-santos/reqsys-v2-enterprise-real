@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T19:51:00-03:00",
+  "domain": "parallel_pr_governance",
+  "metric_group": "merge_window_governance",
+  "policy": {
+    "merge_order": [
+      "new_docs",
+      "new_artifacts",
+      "runbooks",
+      "dashboard_contracts",
+      "runtime_or_frontend_only_after_competing_prs_close"
+    ],
+    "pause_conditions": [
+      "base_branch_behind_with_shared_file",
+      "required_check_failure",
+      "same_domain_open_pr",
+      "runtime_or_frontend_overlap"
+    ],
+    "merge_window_size": {
+      "normal": 6,
+      "aggressive_governed": 10,
+      "hard_stop": 12
+    }
+  },
+  "operator_note": "Prefer small independent PRs with exclusive paths and no shared file contention."
+}
