@@ -103,6 +103,7 @@ Continua sendo `coordenador-status-evidence`. O relatório de consolidação com
 - [x] Event bus e alert intelligence com supressão de ruído
 - [x] Testes unitários focados
 - [x] Documentação operacional
+- [x] Disparo pós-merge em `main` via `push` (gera artifact `workflow-governance-consolidation`)
 
 ## Referências
 
