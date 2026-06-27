@@ -1,0 +1,108 @@
+{
+  "summary": {
+    "generated_at": "2026-06-27T13:28:32.654Z",
+    "mode": "report-only",
+    "dashboard_dir": "docs/dashboard",
+    "totals": {
+      "checks": 10,
+      "passed": 10,
+      "gaps": 0
+    }
+  },
+  "required_cards": [
+    "Success rate",
+    "P95 lead time",
+    "Predictive risk score",
+    "Maturity score",
+    "Release readiness",
+    "Command center",
+    "Contracts validation",
+    "Tracked PRs",
+    "Merge rate",
+    "Delivery maturity",
+    "Delivery readiness",
+    "Delivery completion",
+    "Completion gap",
+    "Delivery readiness gap",
+    "Delivery total gap",
+    "Largest delivery gap",
+    "Delivery evidences",
+    "Evidence coverage",
+    "Artifacts catalogados",
+    "Schema coverage",
+    "Baseline incidente"
+  ],
+  "expected_json_sources": [
+    "../audit/ci-lead-time-analytics.json",
+    "../audit/history/operational-history-snapshot.json",
+    "../audit/predictive/runtime-predictive-analytics.json",
+    "../audit/maturity/operational-maturity-score.json",
+    "../audit/artifact-discovery/operational-artifact-discovery-index.json",
+    "../audit/release-readiness/golden-release-readiness.json",
+    "../audit/command-center/command-center-readiness.json",
+    "../audit/extended-contract-validation/extended-operational-contract-validation.json",
+    "../audit/delivery/delivery-status-report.json",
+    "../audit/delivery-burndown/delivery-burndown-snapshot.json",
+    "../audit/delivery-evidence/delivery-evidence-report.json",
+    "../audit/delivery-readiness/delivery-readiness-report.json",
+    "../audit/delivery-completion/delivery-completion-snapshot.json"
+  ],
+  "checks": [
+    {
+      "name": "dashboards_html_identificados",
+      "status": "passed",
+      "severity": "report-only",
+      "files": [
+        "docs/dashboard/live-operational-dashboard.dynamic.html",
+        "docs/dashboard/live-operational-dashboard.html"
+      ]
+    },
+    {
+      "name": "cards_obrigatorios_presentes",
+      "status": "passed",
+      "severity": "report-only",
+      "expected": 21
+    },
+    {
+      "name": "fontes_json_esperadas_referenciadas",
+      "status": "passed",
+      "severity": "report-only",
+      "expected": 13
+    },
+    {
+      "name": "fallback_seguro_para_artifact_ausente",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "ausencia_de_secrets:docs/dashboard/live-operational-dashboard.dynamic.html",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "ausencia_de_chamadas_externas_nao_governadas:docs/dashboard/live-operational-dashboard.dynamic.html",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "compatibilidade_basica_execucao_local:docs/dashboard/live-operational-dashboard.dynamic.html",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "ausencia_de_secrets:docs/dashboard/live-operational-dashboard.html",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "ausencia_de_chamadas_externas_nao_governadas:docs/dashboard/live-operational-dashboard.html",
+      "status": "passed",
+      "severity": "report-only"
+    },
+    {
+      "name": "compatibilidade_basica_execucao_local:docs/dashboard/live-operational-dashboard.html",
+      "status": "passed",
+      "severity": "report-only"
+    }
+  ]
+}

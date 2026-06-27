@@ -1,0 +1,41 @@
+name: Dashboard Regression Report
+
+on:
+  pull_request:
+    paths:
+      - 'docs/dashboard/**'
+      - 'docs/runbooks/dashboard-regression-validation.md'
+      - 'scripts/validate-dashboard-regression.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/dashboard-regression-report.yml'
+  workflow_dispatch:
+
+jobs:
+  dashboard-regression-report:
+    name: Dashboard regression static checks (report-only)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Generate dashboard regression report
+        run: npm run validate:dashboard-regression
+
+      - name: Upload dashboard regression report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-regression-report
+          path: |
+            docs/dashboard/dashboard-regression-report.json
+            docs/dashboard/dashboard-regression-report.md
+          if-no-files-found: error
