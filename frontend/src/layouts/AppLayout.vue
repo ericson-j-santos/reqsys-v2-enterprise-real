@@ -128,6 +128,7 @@ const navItems = [
   { to: '/',                icon: 'mdi-view-dashboard',     title: 'Dashboard',       tip: 'Visão consolidada das métricas e acessos rápidos.' },
   { to: '/monitoramento-operacional', icon: 'mdi-monitor-dashboard', title: 'Monitoramento', tip: 'Estado operacional de PRs, gates, integrações e pendências.' },
   { to: '/estatisticas',    icon: 'mdi-chart-box-outline',  title: 'Estatísticas',    tip: 'Indicadores internos e externos auditáveis com fonte, fórmula e analítico.' },
+  { to: '/analytics',       icon: 'mdi-chart-timeline-variant', title: 'Projeção',     tip: 'Projeção estatística de conclusão com cenários, gaps, riscos e aceleradores.' },
   { to: '/requisitos',      icon: 'mdi-file-document-edit', title: 'Requisitos',      tip: 'Cadastro, listagem e acompanhamento dos requisitos.' },
   { to: '/pipeline',        icon: 'mdi-pipe',               title: 'Pipeline',        tip: 'Fluxo operacional detalhado do requisito até a publicação.' },
   { to: '/task-console',    icon: 'mdi-clipboard-check-outline', title: 'Task Console', tip: 'Console web para revisar tarefas e preparar envio ao Planner.' },
