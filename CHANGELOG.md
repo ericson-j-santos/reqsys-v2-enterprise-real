@@ -21,6 +21,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - Helper puro `frontend/src/utils/filtrosRequisitos.js` para normalização, query string e filtragem analítica de requisitos.
 - Helper puro `frontend/src/utils/filtrosIntegracao.js` para drill-down analítico do Painel de Integrações (origem, status, data, correlation_id e busca).
 - Helpers `filtrosGovbi.js`, `filtrosPipeline.js` e `filtrosTaskConsole.js` com testes unitários para drill-down analítico.
+- Constante `frontend/src/constants/rotasResponsivas.js` com as 16 rotas operacionais canônicas para validação responsiva.
+- Helper E2E `tests/e2e/helpers/responsiveMocks.js` para mocks estáveis das 16 rotas.
 - Teste unitário `frontend/src/utils/filtrosIntegracao.test.js` para filtros analíticos de integrações.
 - Teste unitário `frontend/src/utils/filtrosRequisitos.test.js` para filtros analíticos de requisitos.
 - Script `npm run test:unit` no frontend.
@@ -45,6 +47,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - `PipelineView.vue`: histórico de execuções com analítico por etapa, duração, status e correlation_id.
 - `TaskConsoleView.vue`: filtros analíticos de tarefas e histórico de envios ao Planner com query string.
 - `DashboardView.vue`: cards de drill-down para GovBI degradado, pipeline com erro e Task Console pendente.
+- `styles.css`: utilitários responsivos globais (`.page-actions`, `.filter-grid`, shells de tabela) para Hub, GovBI, Task Console e demais telas.
+- `data-testid` nas 16 rotas operacionais para validação E2E de responsividade.
+- `tests/e2e/responsividade.spec.js`: cobertura das 16 rotas em mobile, tablet e desktop sem overflow horizontal.
 - `MonitoramentoOperacionalView.vue`: expansão para incluir indicadores de conectores, criticidade, ações sugeridas e `correlation_id`.
 - `ReqSysEndpoints.cs`: módulo `connection-broker` passa a constar em `/v1/sistema/info`.
 - `ReqSysEndpoints.cs`: endpoints do Connection Broker deixam de usar payload estático local e passam a consumir o registry do `ReqSysStore`.

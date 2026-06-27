@@ -1,5 +1,5 @@
 <template>
-  <section class="page">
+  <section class="page" data-testid="route-dashboard">
     <div class="page-header">
       <div>
         <h1>Dashboard de Requisitos</h1>

@@ -1,5 +1,5 @@
 <template>
-  <div class="painel-page">
+  <div class="painel-page" data-testid="route-painel-integracao">
     <div class="page-header">
       <div>
         <div class="text-h5 font-weight-bold mb-1">Painel de Integrações</div>

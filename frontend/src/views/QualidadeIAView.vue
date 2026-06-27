@@ -1,5 +1,5 @@
 <template>
-  <section class="page">
+  <section class="page" data-testid="route-qualidade-ia">
     <PageHeader
       title="Monitoramento de Qualidade de IA"
       subtitle="Acompanhe score geral, métricas-chave, tendência histórica e recomendações para melhoria contínua."

@@ -1,115 +1,55 @@
 const { test, expect } = require('@playwright/test')
+const {
+  mockResponsiveApis,
+  loginDemo,
+  hasMainHorizontalOverflow,
+} = require('./helpers/responsiveMocks')
 
-const usuarioAdmin = {
-  email: 'analista@reqsys.local',
-  nome: 'Analista ReqSys',
-  papel: 'admin',
-  permissoes: [
-    'dashboard:read',
-    'requisitos:write',
-    'rastreabilidade:read',
-    'auditoria:read',
-    'relatorios:read',
-  ],
-}
+const ROTAS_RESPONSIVAS = [
+  { path: '/login', testId: 'route-login', public: true },
+  { path: '/', testId: 'route-dashboard' },
+  { path: '/requisitos', testId: 'route-requisitos' },
+  { path: '/rastreabilidade', testId: 'route-rastreabilidade' },
+  { path: '/auditoria', testId: 'route-auditoria' },
+  { path: '/pipeline', testId: 'route-pipeline' },
+  { path: '/relatorios', testId: 'route-relatorios' },
+  { path: '/segredos-status', testId: 'route-segredos-status' },
+  { path: '/qualidade-ia', testId: 'route-qualidade-ia' },
+  { path: '/recomendacoes-ia', testId: 'route-recomendacoes-ia' },
+  { path: '/task-console', testId: 'route-task-console' },
+  { path: '/specs', testId: 'route-specs' },
+  { path: '/hub-lowcode', testId: 'route-hub-lowcode' },
+  { path: '/painel-integracao', testId: 'route-painel-integracao' },
+  { path: '/arquitetura', testId: 'route-arquitetura' },
+  { path: '/govbi-ia', testId: 'route-govbi-ia' },
+]
 
-async function mockApi(page) {
-  await page.route('**/api/v1/auth/config', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ data: { azure_enabled: false, demo_login_enabled: true } }),
-    })
-  })
+const VIEWPORTS = [
+  { name: 'mobile', width: 390, height: 844 },
+  { name: 'tablet', width: 768, height: 1024 },
+  { name: 'desktop', width: 1366, height: 768 },
+]
 
-  await page.route('**/api/v1/auth/login', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        data: {
-          access_token: 'token-e2e-responsividade',
-          token_type: 'bearer',
-          usuario: usuarioAdmin,
-        },
-      }),
-    })
-  })
-
-  await page.route('**/api/v1/dashboard/requisitos', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        data: {
-          total: 128,
-          em_analise: 17,
-          aprovados: 73,
-          pendentes: 9,
-        },
-      }),
-    })
-  })
-
-  await page.route('**/api/v1/dashboard/info', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        data: {
-          timestamp: '2026-06-18T21:00:00Z',
-          resumo: {
-            total_requisitos: 128,
-            sistema_status: 'operacional',
-            ambiente: 'e2e_responsivo',
-          },
-          endpoints_criticos: [
-            { titulo: 'Health', metodo: 'GET', url: '/health' },
-            { titulo: 'Dashboard', metodo: 'GET', url: '/v1/dashboard/info' },
-          ],
-        },
-      }),
-    })
-  })
-
-  await page.route('**/api/v1/qualidade-ia/resumo', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ data: { score_geral: 92 } }),
-    })
-  })
-}
-
-async function loginDemo(page) {
-  await page.goto('/login')
-  await expect(page.getByText('ReqSys Enterprise')).toBeVisible()
-  await page.getByRole('button', { name: /entrar \(demo\)/i }).click()
-  await expect(page.getByRole('heading', { name: /dashboard de requisitos/i })).toBeVisible()
-}
-
-async function expectMainWithoutHorizontalOverflow(page) {
-  const hasOverflow = await page.locator('.req-main').evaluate((element) => element.scrollWidth > element.clientWidth + 2)
-  expect(hasOverflow).toBe(false)
-}
-
-test.describe('responsividade do layout principal', () => {
+test.describe('responsividade padrão ouro — 16 rotas', () => {
   test.beforeEach(async ({ page }) => {
-    await mockApi(page)
+    await mockResponsiveApis(page)
   })
 
-  for (const viewport of [
-    { name: 'mobile', width: 390, height: 844 },
-    { name: 'tablet', width: 768, height: 1024 },
-    { name: 'desktop', width: 1366, height: 768 },
-  ]) {
-    test(`dashboard sem overflow horizontal em ${viewport.name}`, async ({ page }) => {
+  for (const viewport of VIEWPORTS) {
+    test(`rotas operacionais sem overflow horizontal em ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
+
+      await page.goto('/login')
+      await expect(page.getByTestId('route-login')).toBeVisible()
+      await expect(page.getByText('ReqSys Enterprise')).toBeVisible()
+
       await loginDemo(page)
 
-      await expectMainWithoutHorizontalOverflow(page)
-      await expect(page.getByTestId('metric-card-requisitos')).toBeVisible()
-      await expect(page.getByTestId('dashboard-info-card')).toBeVisible()
+      for (const rota of ROTAS_RESPONSIVAS.filter((item) => !item.public)) {
+        await page.goto(rota.path)
+        await expect(page.getByTestId(rota.testId)).toBeVisible({ timeout: 15000 })
+        expect(await hasMainHorizontalOverflow(page)).toBe(false)
+      }
     })
   }
 
@@ -122,7 +62,16 @@ test.describe('responsividade do layout principal', () => {
     await expect(menuLink).toBeVisible()
     await menuLink.click()
     await expect(page).toHaveURL(/\/requisitos$/)
+    await expect(page.getByTestId('route-requisitos')).toBeVisible()
+    expect(await hasMainHorizontalOverflow(page)).toBe(false)
+  })
 
-    await expectMainWithoutHorizontalOverflow(page)
+  test('dashboard preserva cards críticos em mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await loginDemo(page)
+
+    await expect(page.getByTestId('metric-card-requisitos')).toBeVisible()
+    await expect(page.getByTestId('dashboard-info-card')).toBeVisible()
+    expect(await hasMainHorizontalOverflow(page)).toBe(false)
   })
 })

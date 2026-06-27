@@ -1,5 +1,5 @@
 <template>
-  <div class="hub-page">
+  <div class="hub-page" data-testid="route-hub-lowcode">
     <!-- Header -->
     <div class="page-header">
       <div>

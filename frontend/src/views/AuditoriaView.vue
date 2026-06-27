@@ -1,5 +1,5 @@
 <template>
-  <section class="page">
+  <section class="page" data-testid="route-auditoria">
     <div class="page-header">
       <div>
         <h1>Auditoria</h1>

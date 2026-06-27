@@ -1,5 +1,5 @@
 <template>
-  <section class="page">
+  <section class="page" data-testid="route-rastreabilidade">
     <div class="page-header">
       <div>
         <h1>Matriz de Rastreabilidade</h1>
