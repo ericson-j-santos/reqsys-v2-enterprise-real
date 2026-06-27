@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0.0",
+  "trail_id": "trilha-a",
+  "trail_name": "Runtime Público",
+  "updated_at": "2026-06-27T18:30:00Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "mode": "report_only",
+  "governance": {
+    "owner": "ReqSys Runtime Governance",
+    "adr": "docs/adr/ADR-036-trilha-a-runtime-publico.md",
+    "runbook": "docs/runbooks/trilha-a-runtime-publico.md",
+    "workflow": ".github/workflows/trilha-a-runtime-publico.yml"
+  },
+  "capabilities": {
+    "boot_resiliente": {
+      "status": "active",
+      "script": "scripts/fly_boot.sh",
+      "dockerfile": "Dockerfile.fly",
+      "config": "fly.toml"
+    },
+    "healthcheck_camadas": {
+      "status": "active",
+      "endpoint": "/health",
+      "runtime_module": "backend/app/core/runtime_boot.py"
+    },
+    "validador_consolidado": {
+      "status": "active",
+      "validator": "scripts/runtime_public_validator.py",
+      "wrapper": "scripts/trilha_a_runtime_publico.py",
+      "schema": "docs/contracts/trilha-a-runtime-publico.schema.json"
+    },
+    "probe_publico": {
+      "status": "active",
+      "script": "scripts/validate_public_runtime.py"
+    }
+  },
+  "artifacts": {
+    "report": "audit/trilha-a/trilha-a-runtime-publico-report.json",
+    "artifact_name": "trilha-a-runtime-publico-${{ github.run_id }}"
+  },
+  "validation": {
+    "checks": [
+      "governance_files_exist",
+      "fly_config_valid",
+      "dockerfile_present",
+      "validator_executable",
+      "report_generated"
+    ]
+  }
+}

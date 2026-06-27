@@ -3,6 +3,8 @@
 **Data:** 2026-06-27  
 **Escopo:** orquestração paralelizável de testes, cobertura, mutation probe, contract tests, schema validation e CI watch.
 
+**ADR:** [`docs/adr/ADR-039-trilha-d-qualidade-governanca.md`](../adr/ADR-039-trilha-d-qualidade-governanca.md)
+
 ## Objetivo
 
 Consolidar seis dimensões de qualidade em jobs independentes (matrix CI), permitindo paralelização massiva sem duplicar a lógica do CI principal.

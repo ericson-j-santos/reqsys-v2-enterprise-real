@@ -1,0 +1,104 @@
+name: Trilhas — Padrão Ouro Consolidado
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/trilhas-padrao-ouro.yml'
+      - 'scripts/trilhas_padrao_ouro.py'
+      - 'scripts/trilha_*_*.py'
+      - 'docs/architecture/trilhas/**'
+      - 'docs/architecture/trilha-*/**'
+      - 'docs/adr/ADR-03*-trilha-*.md'
+      - 'docs/adr/ADR-040-trilhas-padrao-ouro.md'
+      - 'docs/runbooks/trilhas-padrao-ouro.md'
+      - 'docs/runbooks/trilha-*.md'
+      - 'docs/contracts/trilhas-padrao-ouro.schema.json'
+      - 'tests/test_trilhas_padrao_ouro.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/trilhas-padrao-ouro.yml'
+      - 'scripts/trilhas_padrao_ouro.py'
+      - 'docs/architecture/trilhas/**'
+
+concurrency:
+  group: trilhas-padrao-ouro-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-trilhas-padrao-ouro:
+    name: Consolidar Trilhas A–E — Padrão Ouro (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install ODBC driver (pyodbc dependency)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q unixodbc-dev
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Executar validadores individuais
+        run: |
+          set -euo pipefail
+          python scripts/trilha_a_runtime_publico.py
+          python scripts/trilha_b_observabilidade_enterprise.py
+          python scripts/trilha_c_ux_operacional.py
+          python scripts/trilha_e_arquitetura_viva.py
+
+      - name: Consolidar padrão ouro
+        id: consolidate
+        run: python scripts/trilhas_padrao_ouro.py | tee /tmp/trilhas-padrao-ouro-summary.json
+
+      - name: Resumo executivo
+        if: always()
+        shell: bash
+        run: |
+          REPORT="audit/trilhas/trilhas-padrao-ouro-report.json"
+          if [[ ! -f "${REPORT}" ]]; then exit 0; fi
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("audit/trilhas/trilhas-padrao-ouro-report.json").read_text())
+          s = report["summary"]
+          print("## Trilhas — Padrão Ouro Consolidado")
+          print()
+          print(f"- Estado: **{report['status']}**")
+          print(f"- Maturidade: {s['gold_standard_percent']}%")
+          print(f"- Trilhas: {s['trails_passed']} verde / {s['trails_warning']} amarelo / {s['trails_failed']} vermelho")
+          print()
+          print("| Trilha | Status | Faltando |")
+          print("|---|---|---|")
+          for t in report["trails"]:
+              missing = ", ".join(t["missing"]) if t["missing"] else "—"
+              print(f"| {t['trail_id']} | {t['status']} | {missing} |")
+          PY
+
+      - name: Upload consolidated evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trilhas-padrao-ouro-evidence-${{ github.run_id }}
+          path: |
+            audit/trilhas/
+            audit/trilha-a/
+            audit/trilha-b/
+            audit/trilha-c/
+            audit/trilha-e/
+          retention-days: 30

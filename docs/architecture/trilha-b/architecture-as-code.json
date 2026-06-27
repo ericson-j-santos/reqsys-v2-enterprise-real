@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0.0",
+  "trail_id": "trilha-b",
+  "trail_name": "Observabilidade Enterprise",
+  "updated_at": "2026-06-27T18:30:00Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "mode": "report_only",
+  "governance": {
+    "owner": "ReqSys Observability Governance",
+    "adr": "docs/adr/ADR-037-trilha-b-observabilidade-enterprise.md",
+    "runbook": "docs/runbooks/trilha-b-observabilidade-enterprise.md",
+    "workflow": ".github/workflows/trilha-b-observabilidade-enterprise.yml"
+  },
+  "capabilities": {
+    "correlation_id": {
+      "status": "active",
+      "module": "backend/app/core/correlation.py",
+      "middleware": "backend/app/middleware/observability.py"
+    },
+    "feature_metrics": {
+      "status": "active",
+      "module": "backend/app/core/feature_metrics.py",
+      "endpoint": "/api/runtime/metrics"
+    },
+    "operational_telemetry": {
+      "status": "active",
+      "endpoint": "/api/runtime/analytics"
+    },
+    "distributed_tracing": {
+      "status": "active",
+      "module": "backend/app/core/otel.py",
+      "default": "disabled"
+    }
+  },
+  "artifacts": {
+    "report": "audit/trilha-b/trilha-b-observabilidade-enterprise-report.json",
+    "artifact_name": "trilha-b-observabilidade-enterprise-${{ github.run_id }}"
+  },
+  "validation": {
+    "checks": [
+      "governance_files_exist",
+      "middleware_present",
+      "metrics_endpoint",
+      "analytics_telemetry",
+      "tests_present"
+    ]
+  }
+}

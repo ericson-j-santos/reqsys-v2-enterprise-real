@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trilhas A–E — Padrão Ouro | ReqSys</title>
+  <style>
+    :root { --bg: #0f1419; --card: #1a2332; --accent: #f59e0b; --text: #e8edf4; --muted: #8b9cb3; --green: #22c55e; --red: #ef4444; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; padding: 2rem; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+    .eyebrow { color: var(--accent); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
+    .muted { color: var(--muted); font-size: 0.95rem; max-width: 60ch; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-top: 2rem; }
+    .card { background: var(--card); border: 1px solid #2a3548; border-radius: 12px; padding: 1.25rem; }
+    .card h2 { font-size: 1.1rem; margin-bottom: 0.35rem; }
+    .letter { display: inline-block; background: var(--accent); color: #000; font-weight: 700; width: 1.75rem; height: 1.75rem; border-radius: 6px; text-align: center; line-height: 1.75rem; margin-right: 0.5rem; }
+    .card a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .card a:hover { text-decoration: underline; }
+    .links { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; }
+    .status { font-size: 0.8rem; margin-top: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 4px; display: inline-block; }
+    .status-pending { background: #334155; color: var(--muted); }
+    footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <p class="eyebrow">ReqSys · Padrão Ouro</p>
+  <h1>Trilhas Operacionais A–E</h1>
+  <p class="muted">Hub consolidado das cinco trilhas incrementais do ReqSys. Cada trilha possui ADR, runbook, workflow, validador, schema e architecture-as-code.</p>
+
+  <div class="grid" id="trail-grid"></div>
+
+  <footer id="footer-meta">Carregando registry…</footer>
+
+  <script>
+    const HUB_LINKS = {
+      'trilha-e': '../trilha-e/index.html',
+    };
+
+    fetch('./trilhas-registry.json')
+      .then((r) => r.json())
+      .then((registry) => {
+        const grid = document.getElementById('trail-grid');
+        registry.trails.forEach((trail) => {
+          const card = document.createElement('article');
+          card.className = 'card';
+          const hub = HUB_LINKS[trail.id] || trail.hub;
+          card.innerHTML = `
+            <h2><span class="letter">${trail.letter}</span>${trail.name}</h2>
+            <p class="muted">${trail.focus}</p>
+            <div class="links">
+              <a href="../../${trail.adr.replace('docs/', '')}">ADR</a>
+              <a href="../../${trail.runbook.replace('docs/', '')}">Runbook</a>
+              ${hub ? `<a href="${hub}">Hub dedicado</a>` : ''}
+              <a href="../../${trail.architecture_as_code.replace('docs/', '')}">Architecture-as-Code</a>
+            </div>
+            <span class="status status-pending">Validar via trilhas_padrao_ouro.py</span>
+          `;
+          grid.appendChild(card);
+        });
+        document.getElementById('footer-meta').textContent =
+          `${registry.trails.length} trilhas · critérios: ${registry.gold_standard_criteria.join(', ')}`;
+      })
+      .catch(() => {
+        document.getElementById('footer-meta').textContent = 'Erro ao carregar trilhas-registry.json';
+      });
+  </script>
+</body>
+</html>
