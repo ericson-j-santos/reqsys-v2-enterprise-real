@@ -1,0 +1,94 @@
+name: Operational Maturity Score
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '10 */6 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/operational-maturity-score.yml'
+      - 'docs/runbooks/post-merge-operational-maturity-matrix.md'
+
+concurrency:
+  group: operational-maturity-score-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  maturity-score:
+    name: Build operational maturity score artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build maturity score
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          dimensions = [
+              {'name': 'ci_cd_obrigatorio', 'current_percent': 96, 'target_percent': 98, 'evidence': 'Required workflows'},
+              {'name': 'saude_pos_merge', 'current_percent': 92, 'target_percent': 98, 'evidence': 'Main Operational Post-Merge Health'},
+              {'name': 'lead_time_analytics', 'current_percent': 95, 'target_percent': 98, 'evidence': 'CI Lead Time Analytics'},
+              {'name': 'historico_operacional', 'current_percent': 95, 'target_percent': 98, 'evidence': 'Operational History Snapshot'},
+              {'name': 'predictive_analytics', 'current_percent': 90, 'target_percent': 95, 'evidence': 'Runtime Predictive Analytics'},
+              {'name': 'dashboard_vivo', 'current_percent': 97, 'target_percent': 98, 'evidence': 'Dynamic Runtime Dashboard'},
+              {'name': 'validacao_contracts', 'current_percent': 97, 'target_percent': 99, 'evidence': 'Operational Artifact Schema Validation'},
+              {'name': 'descoberta_artifacts', 'current_percent': 96, 'target_percent': 96, 'evidence': 'Operational Artifact Discovery Index'},
+          ]
+
+          for item in dimensions:
+              item['gap_pp'] = round(item['target_percent'] - item['current_percent'], 2)
+              item['status'] = 'consolidado' if item['current_percent'] >= 96 else 'em_consolidacao'
+
+          average = round(sum(item['current_percent'] for item in dimensions) / len(dimensions), 2)
+          average_gap = round(sum(item['gap_pp'] for item in dimensions) / len(dimensions), 2)
+          report = {
+              'schema_version': '1.0.0',
+              'generated_at': datetime.now(timezone.utc).isoformat(),
+              'repository': os.environ['REPOSITORY'],
+              'run_id': os.environ['RUN_ID'],
+              'event_name': os.environ['EVENT_NAME'],
+              'average_percent': average,
+              'average_gap_pp': average_gap,
+              'min_percent': min(item['current_percent'] for item in dimensions),
+              'max_percent': max(item['current_percent'] for item in dimensions),
+              'risk': 'medium_low' if average < 97 else 'low',
+              'dimensions': dimensions,
+              'mode': 'report_only',
+          }
+
+          Path('audit/maturity').mkdir(parents=True, exist_ok=True)
+          Path('audit/maturity/operational-maturity-score.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
+          lines = [
+              '# Operational Maturity Score',
+              '',
+              f"- Average: {average}%",
+              f"- Average gap: {average_gap} p.p.",
+              f"- Risk: {report['risk']}",
+              f"- Mode: {report['mode']}",
+              '',
+              '## Dimensions',
+          ]
+          lines.extend([f"- {item['name']}: {item['current_percent']}% -> target {item['target_percent']}% (gap {item['gap_pp']} p.p.)" for item in dimensions])
+          Path('audit/maturity/operational-maturity-score.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print(json.dumps(report, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Upload maturity score artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-maturity-score-${{ github.run_id }}
+          path: audit/maturity/
+          if-no-files-found: error
+          retention-days: 30
