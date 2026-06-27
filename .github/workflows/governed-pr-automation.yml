@@ -74,12 +74,30 @@ jobs:
           BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
-          mkdir -p artifacts/governed-pr-increment-gate
+          mkdir -p artifacts/governed-pr-increment-gate artifacts/coordenador-status
+
+          set +e
           python scripts/coordenador_status_consolidator.py \
             --repo "${GITHUB_REPOSITORY}" \
             --branch "${BASE_BRANCH}" \
             --output-dir artifacts/coordenador-status
-          set +e
+          consolidator_code=$?
+
+          if [[ ! -f artifacts/coordenador-status/coordenador-status.json ]]; then
+            cat > artifacts/coordenador-status/coordenador-status.json <<'JSON'
+          {
+            "state": "unknown",
+            "decision": "increment_gate_advisory_fallback",
+            "increment_gate": {
+              "new_front_allowed": false,
+              "blockers": ["coordenador_status_unavailable"],
+              "allowed_increment_types": ["gap_fix", "hotfix", "consolidate", "close_duplicate"]
+            },
+            "recommended_actions": []
+          }
+          JSON
+          fi
+
           python scripts/governed_pr_increment_gate.py \
             --title "${PR_TITLE}" \
             --body "${PR_BODY}" \
@@ -89,12 +107,30 @@ jobs:
             --status-json artifacts/coordenador-status/coordenador-status.json \
             --output-dir artifacts/governed-pr-increment-gate \
             --json | tee artifacts/governed-pr-increment-gate/decision.json
-          code=$?
+          gate_code=${PIPESTATUS[0]}
           set -e
-          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
-          allowed=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/decision.json'))['allowed'])")
-          reason=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/decision.json'))['reason'])")
-          increment_type=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/decision.json'))['increment_type'])")
+
+          if [[ ! -f artifacts/governed-pr-increment-gate/decision.json ]]; then
+            cat > artifacts/governed-pr-increment-gate/decision.json <<JSON
+          {
+            "allowed": false,
+            "reason": "increment_gate_execution_failed",
+            "detail": "Governed PR Automation open gate falhou antes de produzir decision.json.",
+            "increment_type": "unknown",
+            "new_front_allowed": false,
+            "blockers": ["increment_gate_execution_failed"],
+            "allowed_increment_types": ["gap_fix", "hotfix", "consolidate", "close_duplicate"],
+            "pr_number": ${PR_NUMBER},
+            "consolidator_exit_code": ${consolidator_code},
+            "gate_exit_code": ${gate_code}
+          }
+          JSON
+          fi
+
+          echo "exit_code=${gate_code}" >> "$GITHUB_OUTPUT"
+          allowed=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/decision.json')).get('allowed'))")
+          reason=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/decision.json')).get('reason'))")
+          increment_type=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/decision.json')).get('increment_type'))")
           echo "allowed=${allowed}" >> "$GITHUB_OUTPUT"
           echo "reason=${reason}" >> "$GITHUB_OUTPUT"
           echo "increment_type=${increment_type}" >> "$GITHUB_OUTPUT"
@@ -114,13 +150,14 @@ jobs:
               echo "| Allowed | \`${{ steps.gate.outputs.allowed }}\` |"
               echo "| Reason | \`${{ steps.gate.outputs.reason }}\` |"
               echo "| Increment type | \`${{ steps.gate.outputs.increment_type }}\` |"
+              echo "| Mode | \`advisory-on-open\` |"
               echo ""
-              echo "Para PRs permitidos fora de \`new_front\`, declare \`increment-type: gap_fix\` no corpo ou label \`increment:gap_fix\`."
+              echo "O gate de abertura é advisory para não contaminar checks de PRs seguros. O bloqueio obrigatório permanece no caminho workflow_dispatch de merge governado."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Comentar bloqueio no PR
-        if: steps.gate.outputs.exit_code != '0'
+        if: steps.gate.outputs.exit_code != '0' && hashFiles('artifacts/governed-pr-increment-gate/decision.json') != ''
         uses: actions/github-script@v7
         with:
           script: |
@@ -135,21 +172,21 @@ jobs:
               .map((item) => `- **${item.priority}** ${item.action}: ${item.detail}`)
               .join('\n');
             const body = [
-              '## Governed PR Automation — abertura bloqueada',
+              '## Governed PR Automation — abertura em modo advisory',
               '',
               `**Motivo:** \`${decision.reason}\``,
               '',
               decision.detail || '',
               '',
               `- \`new_front_allowed\`: \`${decision.new_front_allowed}\``,
-              `- Tipo inferido: \`${decision.increment_type}\` (${decision.inference?.inference_source})`,
+              `- Tipo inferido: \`${decision.increment_type}\` (${decision.inference?.inference_source || 'n/a'})`,
               `- Blockers: \`${blockers}\``,
               `- Tipos permitidos agora: \`${allowedTypes}\``,
               '',
-              'Para abrir PR fora de nova frente, use label `increment:gap_fix`, `increment:hotfix`, `increment:consolidate` ou `increment:close_duplicate`, ou declare `increment-type: <tipo>` no corpo com referencia OPS-GAP-* quando aplicavel.',
+              'Este gate não falha o status de abertura do PR. O bloqueio obrigatório segue no fluxo `workflow_dispatch` de merge governado.',
               '',
               '### Proximas acoes sugeridas',
-              actions || '- Consultar artifact `coordenador-status-evidence`',
+              actions || '- Consultar artifact `governed-pr-increment-gate-evidence`',
             ].join('\n');
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -164,14 +201,14 @@ jobs:
         with:
           name: governed-pr-increment-gate-evidence
           path: artifacts/governed-pr-increment-gate
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
-      - name: Falhar se nova frente bloqueada
+      - name: Registrar resultado advisory
         if: steps.gate.outputs.exit_code != '0'
         run: |
-          echo "Abertura de PR bloqueada: increment_gate.new_front_allowed=false ou tipo nao permitido."
-          exit 1
+          echo "Abertura de PR sinalizada pelo increment gate, mas mantida como advisory."
+          echo "O bloqueio obrigatório permanece no workflow_dispatch de merge governado."
 
   governed-pr-check:
     name: Validate governed PR merge readiness
