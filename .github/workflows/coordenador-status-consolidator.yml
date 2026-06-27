@@ -1,0 +1,77 @@
+name: Coordenador Status Consolidator
+
+on:
+  schedule:
+    - cron: "13 * * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch monitorada"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: coordenador-status-consolidator-${{ github.event.inputs.branch || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  consolidate:
+    name: Consolidar status do Coordenador Principal
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Gerar coordenador-status.json
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ github.event.inputs.branch || 'main' }}
+        run: |
+          set -euo pipefail
+          python scripts/coordenador_status_consolidator.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --branch "${TARGET_BRANCH}" \
+            --run-limit "50" \
+            --pr-limit "30" \
+            --health-limit "50" \
+            --output-dir "artifacts/coordenador-status"
+
+      - name: Resumo executivo
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f artifacts/coordenador-status/coordenador-status.json ]]; then
+            state=$(python -c "import json; print(json.load(open('artifacts/coordenador-status/coordenador-status.json'))['state'])")
+            decision=$(python -c "import json; print(json.load(open('artifacts/coordenador-status/coordenador-status.json'))['decision'])")
+            echo "## Coordenador Status Consolidado" >> "$GITHUB_STEP_SUMMARY"
+            echo "- State: \`${state}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Decision: \`${decision}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Artifact: \`coordenador-status-evidence\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Coordenador Status Consolidado" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Falha ao gerar consolidado" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar artifact consolidado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coordenador-status-evidence
+          path: artifacts/coordenador-status
+          if-no-files-found: error
+          retention-days: 30

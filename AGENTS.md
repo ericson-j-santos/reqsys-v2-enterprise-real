@@ -193,6 +193,10 @@ Este arquivo Ã© a referÃªncia operacional para prÃ³ximos agentes que atuar
 
 Ambiente jÃ¡ inicializado pelo update script (venv do backend + `npm ci` no frontend). Dependencias de sistema (`unixodbc`/`unixodbc-dev` para `pyodbc` e `python3.12-venv`) ja estao no snapshot da VM; nao precisam ser reinstaladas.
 
+### Coordenador Principal (operacao hibrida)
+
+Automacao real fica em GitHub Actions + scripts + agentes por PR; chats fixos sao contexto, nao runtime autonomo. Menu fechado: `docs/runbooks/coordenador-principal-menu-operacional.md`. Leitura preferencial: artifact `coordenador-status-evidence` via workflow **Coordenador Status Consolidator**.
+
 ### Servicos canonicos (modo dev, sem Docker)
 
 A forma mais leve de rodar o produto e backend uvicorn + frontend Vite (o Vite faz proxy de `/api` para o backend, conforme `frontend/vite.config.js`). Nginx/KB/Docker nao sao necessarios para o fluxo principal.
