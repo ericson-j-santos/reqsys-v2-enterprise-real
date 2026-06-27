@@ -33,6 +33,7 @@ permissions:
   actions: read
 
 env:
+  PYTHONPATH: ${{ github.workspace }}
   REQUIRED_WORKFLOWS: >-
     CI Enterprise Fast
     CI — ReqSys v2 Enterprise
