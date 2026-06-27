@@ -1,0 +1,82 @@
+name: Command Center Readiness
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '40 */6 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/command-center-readiness.yml'
+      - 'docs/dashboard/live-operational-dashboard.dynamic.html'
+      - 'docs/dashboard/operational-command-center.md'
+
+concurrency:
+  group: command-center-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    name: Build command center readiness report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Evaluate command center readiness
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          dashboard = Path('docs/dashboard/live-operational-dashboard.dynamic.html')
+          index = Path('docs/dashboard/operational-command-center.md')
+          required_sources = [
+              'ci-lead-time-analytics.json',
+              'operational-history-snapshot.json',
+              'runtime-predictive-analytics.json',
+              'operational-maturity-score.json',
+              'operational-artifact-discovery-index.json',
+              'golden-release-readiness.json',
+          ]
+          dashboard_text = dashboard.read_text(encoding='utf-8') if dashboard.exists() else ''
+          index_text = index.read_text(encoding='utf-8') if index.exists() else ''
+          source_hits = sum(1 for source in required_sources if source in dashboard_text or source in index_text)
+          checks = [
+              {'name': 'dashboard_exists', 'passed': dashboard.exists()},
+              {'name': 'index_exists', 'passed': index.exists()},
+              {'name': 'fallback_governado', 'passed': 'fallback' in dashboard_text},
+              {'name': 'source_coverage', 'passed': source_hits == len(required_sources), 'coverage_percent': round((source_hits / len(required_sources)) * 100, 2)},
+              {'name': 'no_cdn_reference', 'passed': 'cdn.' not in dashboard_text.lower()},
+          ]
+          score = round((sum(1 for item in checks if item.get('passed')) / len(checks)) * 100, 2)
+          report = {
+              'schema_version': '1.0.0',
+              'generated_at': datetime.now(timezone.utc).isoformat(),
+              'score_percent': score,
+              'status': 'passed' if score >= 90 else 'warning',
+              'source_coverage_percent': checks[3]['coverage_percent'],
+              'checks': checks,
+              'mode': 'report_only',
+          }
+          Path('audit/command-center').mkdir(parents=True, exist_ok=True)
+          Path('audit/command-center/command-center-readiness.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
+          lines = ['# Command Center Readiness', '', f"- Score: {score}%", f"- Status: {report['status']}", f"- Source coverage: {report['source_coverage_percent']}%", '', '## Checks']
+          lines.extend([f"- {item['name']}: {item.get('passed')}" for item in checks])
+          Path('audit/command-center/command-center-readiness.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print(json.dumps(report, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Upload command center readiness artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: command-center-readiness-${{ github.run_id }}
+          path: audit/command-center/
+          if-no-files-found: error
+          retention-days: 30
