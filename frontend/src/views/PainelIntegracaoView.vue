@@ -4,7 +4,7 @@
       <div>
         <div class="text-h5 font-weight-bold mb-1">Painel de Integrações</div>
         <div class="text-body-2 text-medium-emphasis">
-          Histórico de tarefas enviadas ao Planner e notificações Teams.
+          Histórico de tarefas enviadas ao Planner e notificações Teams com analítico filtrável.
         </div>
       </div>
       <div class="page-actions">
@@ -72,80 +72,147 @@
       </v-expansion-panel>
     </v-expansion-panels>
 
-    <!-- Cards de resumo -->
+    <!-- Cards de resumo clicáveis -->
     <v-row class="mb-4">
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="stat-card" variant="tonal" color="primary">
+      <v-col
+        v-for="card in cardsResumo"
+        :key="card.id"
+        cols="12"
+        sm="6"
+        md="3"
+      >
+        <v-card
+          class="stat-card stat-card-interactive"
+          variant="tonal"
+          :color="card.cor"
+          role="button"
+          tabindex="0"
+          :data-testid="`integracao-card-${card.id}`"
+          @click="aplicarFiltroCard(card.filtros)"
+          @keyup.enter="aplicarFiltroCard(card.filtros)"
+          @keyup.space.prevent="aplicarFiltroCard(card.filtros)"
+        >
           <v-card-text>
-            <div class="text-caption mb-1">Total de Envios</div>
-            <div class="text-h4 font-weight-bold">{{ totalEnvios }}</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="stat-card" variant="tonal" color="success">
-          <v-card-text>
-            <div class="text-caption mb-1">Tarefas Criadas</div>
-            <div class="text-h4 font-weight-bold">{{ totalTarefas }}</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="stat-card" variant="tonal" color="info">
-          <v-card-text>
-            <div class="text-caption mb-1">Teams Notificados</div>
-            <div class="text-h4 font-weight-bold">{{ totalTeams }}</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="stat-card" variant="tonal" :color="ultimoStatus === 'ok' ? 'success' : ultimoStatus ? 'error' : 'grey'">
-          <v-card-text>
-            <div class="text-caption mb-1">Último Status</div>
-            <div class="text-h5 font-weight-bold">{{ ultimoStatus || '—' }}</div>
-            <div class="text-caption mt-1">{{ ultimoEm }}</div>
+            <div class="d-flex align-center justify-space-between mb-1">
+              <div class="text-caption">{{ card.titulo }}</div>
+              <v-icon size="16" icon="mdi-filter-variant" />
+            </div>
+            <div class="text-h4 font-weight-bold">{{ card.valor }}</div>
+            <div v-if="card.subtitulo" class="text-caption mt-1">{{ card.subtitulo }}</div>
           </v-card-text>
         </v-card>
       </v-col>
     </v-row>
 
-    <!-- Filtros -->
-    <v-card class="mb-4" variant="outlined">
+    <!-- Filtros analíticos -->
+    <v-card class="mb-4 filter-card" variant="outlined">
       <v-card-text class="pa-3">
+        <div class="filter-header mb-2">
+          <div>
+            <strong>Analítico de integrações</strong>
+            <div class="text-caption text-medium-emphasis">
+              Filtros por clique nos cards, dashboard ou seleção manual. {{ itensFiltrados.length }} de {{ itens.length }} eventos.
+            </div>
+          </div>
+          <v-chip v-if="temFiltroAtivo" size="small" color="primary" variant="tonal">Filtro ativo</v-chip>
+        </div>
+
         <v-row dense>
-          <v-col cols="12" sm="4">
+          <v-col cols="12" sm="6" md="2">
             <v-select
-              v-model="filtroTipo"
-              :items="['Todos', 'planner', 'teams']"
-              label="Tipo"
+              v-model="filtros.tipo"
+              :items="origemOptions"
+              item-title="label"
+              item-value="value"
+              label="Origem"
               density="compact"
               variant="outlined"
               hide-details
+              clearable
+              @update:model-value="sincronizarQuery"
             />
           </v-col>
-          <v-col cols="12" sm="4">
+          <v-col cols="12" sm="6" md="2">
             <v-select
-              v-model="filtroStatus"
-              :items="['Todos', 'sucesso', 'erro']"
+              v-model="filtros.status"
+              :items="statusOptions"
+              item-title="label"
+              item-value="value"
               label="Status"
               density="compact"
               variant="outlined"
               hide-details
+              clearable
+              @update:model-value="sincronizarQuery"
             />
           </v-col>
-          <v-col cols="12" sm="4">
+          <v-col cols="12" sm="6" md="2">
             <v-text-field
-              v-model="filtroAutor"
+              v-model="filtros.data"
+              label="Data"
+              type="date"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              @update:model-value="sincronizarQuery"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <v-text-field
+              v-model="filtros.correlation_id"
+              label="Correlation ID"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              prepend-inner-icon="mdi-identifier"
+              @update:model-value="sincronizarQuery"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <v-text-field
+              v-model="filtros.autor"
               label="Autor"
               density="compact"
               variant="outlined"
               hide-details
               clearable
+              @update:model-value="sincronizarQuery"
+            />
+          </v-col>
+          <v-col cols="12">
+            <v-text-field
+              v-model="filtros.busca"
+              label="Busca textual"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              prepend-inner-icon="mdi-magnify"
+              placeholder="Título, mensagem, correlation_id..."
+              @update:model-value="sincronizarQuery"
             />
           </v-col>
         </v-row>
+
+        <div class="filter-actions mt-2">
+          <v-btn
+            variant="text"
+            size="small"
+            prepend-icon="mdi-filter-off"
+            :disabled="!temFiltroAtivo"
+            @click="limparFiltros"
+          >
+            Limpar filtros
+          </v-btn>
+        </div>
       </v-card-text>
     </v-card>
+
+    <v-alert v-if="!carregando && itens.length && !itensFiltrados.length" type="info" variant="tonal" class="mb-4">
+      Nenhum evento encontrado para os filtros informados.
+    </v-alert>
 
     <!-- Tabela -->
     <v-card variant="outlined">
@@ -176,6 +243,20 @@
           >
             {{ item.status }}
           </v-chip>
+        </template>
+        <!-- eslint-disable-next-line vue/valid-v-slot -->
+        <template #item.correlation_id="{ item }">
+          <span
+            v-if="item.correlation_id"
+            class="text-caption correlation-link"
+            role="button"
+            tabindex="0"
+            @click="filtrarPorCorrelation(item.correlation_id)"
+            @keyup.enter="filtrarPorCorrelation(item.correlation_id)"
+          >
+            {{ item.correlation_id }}
+          </span>
+          <span v-else class="text-caption text-medium-emphasis">—</span>
         </template>
         <!-- eslint-disable-next-line vue/valid-v-slot -->
         <template #item.total="{ item }">
@@ -220,14 +301,22 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '../services/api'
+import {
+  contarIntegracoesPorStatus,
+  criarQueryFiltrosIntegracao,
+  filtrarIntegracoes,
+  normalizarFiltrosIntegracao,
+  possuiFiltroAtivo,
+} from '../utils/filtrosIntegracao'
+
+const route = useRoute()
+const router = useRouter()
 
 const itens = ref([])
 const carregando = ref(false)
-const filtroTipo = ref('Todos')
-const filtroStatus = ref('Todos')
-const filtroAutor = ref('')
 const dialogAberto = ref(false)
 const itemSelecionado = ref(null)
 const snackbar = ref({ aberto: false, msg: '', cor: 'error' })
@@ -238,37 +327,116 @@ const configForm = ref({ teams_webhook_url: '' })
 const salvando = ref(false)
 const testando = ref(false)
 
+const filtros = reactive(normalizarFiltrosIntegracao(route.query))
+
+const origemOptions = [
+  { label: 'Planner', value: 'planner' },
+  { label: 'Teams', value: 'teams' },
+]
+const statusOptions = [
+  { label: 'Sucesso', value: 'sucesso' },
+  { label: 'Erro', value: 'erro' },
+]
+
 const headers = [
-  { title: 'Data', key: 'criado_em', width: '160px' },
-  { title: 'Tipo', key: 'tipo', width: '110px' },
+  { title: 'Data', key: 'criado_em', width: '150px' },
+  { title: 'Origem', key: 'tipo', width: '100px' },
   { title: 'Status', key: 'status', width: '90px' },
   { title: 'Título', key: 'titulo' },
-  { title: 'Autor', key: 'autor', width: '140px' },
-  { title: 'Tarefas', key: 'total', width: '80px', align: 'center' },
+  { title: 'Autor', key: 'autor', width: '120px' },
+  { title: 'Correlation ID', key: 'correlation_id', width: '140px' },
+  { title: 'Tarefas', key: 'total', width: '70px', align: 'center' },
   { title: '', key: 'acoes', width: '50px', sortable: false },
 ]
 
-const itensFiltrados = computed(() => {
-  return itens.value.filter((i) => {
-    if (filtroTipo.value !== 'Todos' && i.tipo !== filtroTipo.value) return false
-    if (filtroStatus.value !== 'Todos' && i.status !== filtroStatus.value) return false
-    if (filtroAutor.value && !i.autor?.toLowerCase().includes(filtroAutor.value.toLowerCase())) return false
-    return true
-  })
-})
+const itensFiltrados = computed(() => filtrarIntegracoes(itens.value, filtros))
+const temFiltroAtivo = computed(() => possuiFiltroAtivo(filtros))
 
-const totalEnvios = computed(() => itensFiltrados.value.length)
+const contagemStatus = computed(() => contarIntegracoesPorStatus(itens.value))
+
 const totalTarefas = computed(() => itensFiltrados.value.reduce((s, i) => s + (i.total || 0), 0))
 const totalTeams = computed(() => {
-  return itensFiltrados.value.filter((i) => {
+  return itens.value.filter((i) => {
     try {
       const det = typeof i.detalhes === 'string' ? JSON.parse(i.detalhes) : i.detalhes
       return det?.teams_notificado === true
     } catch (_) { return false }
   }).length
 })
+
 const ultimoStatus = computed(() => itens.value[0]?.status || '')
 const ultimoEm = computed(() => (itens.value[0]?.criado_em ? formatarData(itens.value[0].criado_em) : ''))
+
+const cardsResumo = computed(() => [
+  {
+    id: 'total',
+    titulo: 'Total de Envios',
+    valor: itensFiltrados.value.length,
+    subtitulo: temFiltroAtivo.value ? `de ${itens.value.length} carregados` : 'Clique para limpar filtros',
+    cor: 'primary',
+    filtros: {},
+  },
+  {
+    id: 'erros',
+    titulo: 'Erros',
+    valor: contagemStatus.value.erros,
+    subtitulo: 'Filtrar falhas de integração',
+    cor: 'error',
+    filtros: { status: 'erro' },
+  },
+  {
+    id: 'planner',
+    titulo: 'Planner',
+    valor: itens.value.filter((i) => i.tipo === 'planner').length,
+    subtitulo: 'Filtrar origem Planner',
+    cor: 'success',
+    filtros: { tipo: 'planner' },
+  },
+  {
+    id: 'teams',
+    titulo: 'Teams',
+    valor: totalTeams.value,
+    subtitulo: 'Filtrar origem Teams',
+    cor: 'info',
+    filtros: { tipo: 'teams' },
+  },
+  {
+    id: 'ultimo',
+    titulo: 'Último Status',
+    valor: ultimoStatus.value || '—',
+    subtitulo: ultimoEm.value || 'Sem eventos',
+    cor: ultimoStatus.value === 'erro' ? 'error' : ultimoStatus.value === 'sucesso' ? 'success' : 'grey',
+    filtros: ultimoStatus.value ? { status: ultimoStatus.value } : {},
+  },
+])
+
+watch(
+  () => route.query,
+  (query) => Object.assign(filtros, normalizarFiltrosIntegracao(query)),
+)
+
+function sincronizarQuery() {
+  router.replace({ path: route.path, query: criarQueryFiltrosIntegracao(filtros) })
+}
+
+function limparFiltros() {
+  Object.assign(filtros, { tipo: '', status: '', autor: '', correlation_id: '', data: '', busca: '' })
+  sincronizarQuery()
+}
+
+function aplicarFiltroCard(novosFiltros) {
+  if (!novosFiltros || !Object.keys(novosFiltros).length) {
+    limparFiltros()
+    return
+  }
+  Object.assign(filtros, normalizarFiltrosIntegracao(novosFiltros))
+  sincronizarQuery()
+}
+
+function filtrarPorCorrelation(correlationId) {
+  filtros.correlation_id = correlationId
+  sincronizarQuery()
+}
 
 function formatarData(iso) {
   if (!iso) return '—'
@@ -360,9 +528,36 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 24px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 .stat-card {
   height: 100%;
+}
+.stat-card-interactive {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.stat-card-interactive:hover,
+.stat-card-interactive:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+.filter-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.correlation-link {
+  color: rgb(var(--v-theme-primary));
+  cursor: pointer;
+  text-decoration: underline dotted;
 }
 .detalhes-json {
   font-size: 12px;
@@ -372,5 +567,13 @@ onMounted(async () => {
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
+}
+@media (max-width: 600px) {
+  .filter-actions {
+    justify-content: stretch;
+  }
+  .filter-actions :deep(.v-btn) {
+    width: 100%;
+  }
 }
 </style>

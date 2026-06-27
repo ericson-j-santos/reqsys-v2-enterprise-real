@@ -143,16 +143,34 @@
   </section>
 </template>
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRequisitosStore } from '../stores/requisitos'
+import { api } from '../services/api'
+import { contarIntegracoesPorStatus } from '../utils/filtrosIntegracao'
 
 const store = useRequisitosStore()
 const router = useRouter()
+const integracaoErros = ref(0)
 
 onMounted(async () => {
-  await Promise.all([store.carregarMetricas(), store.carregarDashboardInfo(), store.carregarQualidadeIA()])
+  await Promise.all([
+    store.carregarMetricas(),
+    store.carregarDashboardInfo(),
+    store.carregarQualidadeIA(),
+    carregarIntegracaoErros(),
+  ])
 })
+
+async function carregarIntegracaoErros() {
+  try {
+    const resp = await api.get('/v1/hub-lowcode/integracoes/historico?limit=100')
+    const eventos = resp.data?.data?.eventos || []
+    integracaoErros.value = contarIntegracoesPorStatus(eventos).erros
+  } catch (_) {
+    integracaoErros.value = 0
+  }
+}
 
 const cards = computed(() => [
   {
@@ -199,6 +217,15 @@ const cards = computed(() => [
     tooltip: 'Itens que ainda demandam ajuste ou decisão.',
     resumo: 'Abre o analítico de requisitos recebidos, que normalmente ainda exigem triagem ou decisão.',
     rota: { path: '/requisitos', query: { status: 'recebido' } },
+  },
+  {
+    id: 'integracao-erros',
+    titulo: 'Erros integração',
+    valor: integracaoErros.value,
+    icone: 'mdi-connection',
+    tooltip: 'Falhas recentes em envios Planner ou Teams.',
+    resumo: 'Abre o painel de integrações filtrado por erros, com origem, data e correlation_id.',
+    rota: { path: '/painel-integracao', query: { status: 'erro' } },
   },
 ])
 
