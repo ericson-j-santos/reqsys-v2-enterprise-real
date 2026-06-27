@@ -1,12 +1,14 @@
 import logging
 from datetime import UTC, datetime
-from uuid import uuid4
 
 from fastapi import APIRouter, Header
 
 from app.api.monitoramento_operacional import _criar_runtime_observability_snapshot
 from app.core.config import settings
+from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
+from app.core.feature_metrics import REGISTRY
+from app.core.otel import otel_ativo
 from app.core.runtime_analytics import (
     DurableRuntimeAnalyticsStore,
     build_runtime_analytics,
@@ -18,7 +20,7 @@ STORE = DurableRuntimeAnalyticsStore(database_url=settings.database_url, max_sna
 
 
 def _resolver_correlation_id(x_correlation_id: str | None, x_request_id: str | None) -> str:
-    correlation_id = x_correlation_id or x_request_id or str(uuid4())
+    correlation_id = resolver_correlation_id(x_correlation_id, x_request_id)
     logger.info('runtime_analytics_correlation_id_resolvido', extra={'correlation_id': correlation_id})
     return correlation_id
 
@@ -84,6 +86,15 @@ def obter_runtime_analytics(
     correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
     snapshot = _criar_runtime_observability_snapshot(correlation_id)
     analytics = build_runtime_analytics(STORE, snapshot)
+    analytics['operational_telemetry'] = {
+        'correlation_id': correlation_id,
+        'distributed_tracing': {
+            'opentelemetry_enabled': otel_ativo(),
+            'trace_context': 'w3c_tracecontext',
+            'correlation_propagation': 'x-correlation-id',
+        },
+        'feature_metrics': REGISTRY.operational_analytics(),
+    }
     return ok(analytics, correlation_id)
 
 

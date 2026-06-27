@@ -22,6 +22,9 @@ const ROTAS_RESPONSIVAS = [
   { path: '/painel-integracao', testId: 'route-painel-integracao' },
   { path: '/arquitetura', testId: 'route-arquitetura' },
   { path: '/govbi-ia', testId: 'route-govbi-ia' },
+  { path: '/monitoramento-operacional', testId: 'route-monitoramento-operacional' },
+  { path: '/analytics', testId: 'route-analytics' },
+  { path: '/estatisticas', testId: 'route-estatisticas' },
 ]
 
 const VIEWPORTS = [
@@ -30,7 +33,7 @@ const VIEWPORTS = [
   { name: 'desktop', width: 1366, height: 768 },
 ]
 
-test.describe('responsividade padrão ouro — 16 rotas', () => {
+test.describe('responsividade padrão ouro — 19 rotas', () => {
   test.beforeEach(async ({ page }) => {
     await mockResponsiveApis(page)
   })

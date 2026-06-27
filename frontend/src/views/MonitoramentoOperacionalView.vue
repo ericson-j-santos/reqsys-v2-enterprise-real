@@ -1,158 +1,192 @@
 <template>
-  <main class="monitoramento-operacional" aria-labelledby="titulo-monitoramento">
-    <section class="cabecalho">
+  <section class="monitoramento-operacional" data-testid="route-monitoramento-operacional" aria-labelledby="titulo-monitoramento">
+    <div class="cabecalho">
       <div>
-        <p class="eyebrow">ReqSys Operacional</p>
+        <p class="eyebrow">ReqSys Operacional · Trilha C</p>
         <h1 id="titulo-monitoramento">Monitoramento Operacional</h1>
-        <p>Runtime navegável com health, readiness, métricas, topologia operacional e drill-downs conectados.</p>
+        <p>Runtime navegável com semáforo operacional, cards clicáveis, drill-down filtrado e layouts responsivos.</p>
       </div>
-      <button type="button" :disabled="carregando" @click="carregarTudo">
-        {{ carregando ? 'Atualizando...' : 'Atualizar' }}
-      </button>
-    </section>
+      <div class="cabecalho-acoes">
+        <SemaforoChip :value="estadoGeralExibido" size="large" />
+        <v-btn color="amber" variant="flat" :loading="carregando" @click="carregarTudo">
+          {{ carregando ? 'Atualizando...' : 'Atualizar' }}
+        </v-btn>
+      </div>
+    </div>
 
     <p v-if="erro" class="erro" role="alert">{{ erro }}</p>
 
-    <section class="cards" aria-label="Indicadores operacionais">
-      <article class="card"><span>Estado geral</span><strong>{{ resumo.estado_geral || estadoGeralCalculado }}</strong></article>
-      <article class="card"><span>Bloqueios</span><strong>{{ resumo.bloqueios ?? bloqueiosCalculados }}</strong></article>
-      <article class="card"><span>Pendências</span><strong>{{ resumo.pendencias ?? pendenciasCalculadas }}</strong></article>
-      <article class="card"><span>Itens</span><strong>{{ resumo.total_itens ?? itens.length }}</strong></article>
-      <article class="card"><span>Conectores</span><strong>{{ conectores.length }}</strong></article>
-      <article class="card"><span>Conectores críticos</span><strong>{{ conectoresCriticos.length }}</strong></article>
-    </section>
+    <v-row dense>
+      <v-col v-for="card in cardsResumo" :key="card.id" cols="12" sm="6" md="4" lg="2">
+        <OperationalMetricCard
+          :label="card.label"
+          :value="card.value"
+          :semaforo="card.semaforo"
+          :icon="card.icon"
+          :test-id="`monitoramento-card-${card.id}`"
+          @drilldown="aplicarDrilldown(card.filtros)"
+        />
+      </v-col>
+    </v-row>
 
-    <section class="painel runtime" aria-labelledby="titulo-runtime">
-      <div class="subcabecalho">
-        <div>
-          <h2 id="titulo-runtime">Runtime Operacional Navegável</h2>
-          <p>Health map, readiness gate e topologia de workflow expostos pelo backend runtime.</p>
+    <v-card class="painel runtime mt-4" elevation="0" :data-section="secaoAtiva === 'runtime' ? 'active' : undefined">
+      <v-card-title id="titulo-runtime">Runtime Operacional Navegável</v-card-title>
+      <v-card-subtitle>Health map, readiness gate e topologia de workflow expostos pelo backend runtime.</v-card-subtitle>
+      <v-card-text>
+        <div class="subcabecalho mb-3">
+          <span class="correlation">Runtime: {{ runtimeDashboard?.correlation_id || 'carregando' }}</span>
         </div>
-        <span class="correlation">Runtime: {{ runtimeDashboard?.correlation_id || 'carregando' }}</span>
-      </div>
 
-      <div class="cards" aria-label="Cards do runtime">
-        <article v-for="card in runtimeCards" :key="card.id" class="card">
-          <span>{{ card.title }}</span>
-          <strong>{{ formatarValorCard(card) }}</strong>
-          <a v-if="card.drilldown" :href="card.drilldown">Abrir drill-down</a>
-        </article>
-      </div>
+        <v-row dense>
+          <v-col v-for="card in runtimeCards" :key="card.id" cols="12" sm="6" md="4" lg="3">
+            <OperationalMetricCard
+              :label="card.title"
+              :value="formatarValorCard(card)"
+              :semaforo="semaforoCard(card)"
+              icon="mdi-chart-timeline-variant"
+              :test-id="`runtime-card-${card.id}`"
+              @drilldown="irPara(card.rotaSpa)"
+            />
+          </v-col>
+        </v-row>
 
-      <div class="cards" aria-label="Readiness de observabilidade">
-        <article class="card"><span>Observabilidade</span><strong>{{ observabilityReadiness.observability_percent ?? 'n/a' }}%</strong></article>
-        <article class="card"><span>Cobertura topologia</span><strong>{{ observabilityReadiness.topology_coverage ?? 'n/a' }}%</strong></article>
-        <article class="card"><span>Profundidade correlação</span><strong>{{ observabilityReadiness.correlation_depth ?? 'n/a' }}</strong></article>
-        <article class="card"><span>Traceabilidade</span><strong>{{ observabilityReadiness.operational_traceability ?? 'n/a' }}%</strong></article>
-      </div>
+        <v-row dense class="mt-2">
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Observabilidade" :value="`${observabilityReadiness.observability_percent ?? 'n/a'}%`" semaforo="verde" :clickable="false" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Cobertura topologia" :value="`${observabilityReadiness.topology_coverage ?? 'n/a'}%`" semaforo="amarelo" :clickable="false" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Profundidade correlação" :value="observabilityReadiness.correlation_depth ?? 'n/a'" semaforo="verde" :clickable="false" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Traceabilidade" :value="`${observabilityReadiness.operational_traceability ?? 'n/a'}%`" semaforo="verde" :clickable="false" />
+          </v-col>
+        </v-row>
 
-      <ol class="timeline" aria-label="Topologia operacional">
-        <li v-for="item in workflowTopology" :key="item.step">
-          <span class="timeline-step">{{ item.label }}</span>
-          <span :class="['badge', classeRuntime(item.status)]">{{ item.status }}</span>
-          <a :href="item.href">Detalhar</a>
-        </li>
-      </ol>
+        <v-list class="timeline mt-4" aria-label="Topologia operacional">
+          <v-list-item
+            v-for="item in workflowTopology"
+            :key="item.step"
+            class="timeline-item"
+            @click="abrirTopologia(item)"
+          >
+            <template #prepend>
+              <SemaforoChip :value="item.status" size="x-small" />
+            </template>
+            <v-list-item-title>{{ item.label }}</v-list-item-title>
+            <v-list-item-subtitle>{{ item.status }}</v-list-item-subtitle>
+            <template #append>
+              <v-btn size="small" variant="text" color="amber">Detalhar</v-btn>
+            </template>
+          </v-list-item>
+        </v-list>
 
-      <div class="analitico" aria-label="Correlation analytics">
-        <table>
-          <thead><tr><th>Artefato</th><th>Correlation ID</th><th>Cadeia operacional</th><th>Incidentes correlacionados</th></tr></thead>
-          <tbody>
-            <tr>
-              <td>{{ correlationAnalytics.artifact_name || 'runtime-correlation-report.json' }}</td>
-              <td>{{ correlationAnalytics.correlation_id || runtimeDashboard?.correlation_id }}</td>
-              <td>{{ traceChain }}</td>
-              <td>{{ correlationAnalytics.incident_correlation?.total_related_events ?? 0 }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="analitico" aria-label="Environment dependency graph">
-        <table>
-          <thead><tr><th>Ambiente</th><th>Dependências</th><th>Status</th></tr></thead>
-          <tbody>
-            <tr v-for="env in environmentDependencies" :key="env.environment">
-              <td>{{ env.environment }}</td>
-              <td>{{ env.depends_on?.join(', ') }}</td>
-              <td><span :class="['badge', classeRuntime(env.status)]">{{ env.status }}</span></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="filtros" aria-label="Filtros do analítico">
-      <label>
-        Estado
-        <select v-model="filtroEstado">
-          <option value="">Todos</option>
-          <option value="verde">Verde</option>
-          <option value="amarelo">Amarelo</option>
-          <option value="vermelho">Vermelho</option>
-          <option value="bloqueado">Bloqueado</option>
-          <option value="desconhecido">Desconhecido</option>
-        </select>
-      </label>
-    </section>
-
-    <section class="painel" aria-labelledby="titulo-conectores">
-      <div class="subcabecalho">
-        <div>
-          <h2 id="titulo-conectores">Connection Broker</h2>
-          <p>Health-check operacional dos conectores e capabilities usados por agentes e automações.</p>
+        <div class="analitico mt-4" aria-label="Correlation analytics">
+          <v-table density="compact">
+            <thead><tr><th>Artefato</th><th>Correlation ID</th><th>Cadeia operacional</th><th>Incidentes correlacionados</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>{{ correlationAnalytics.artifact_name || 'runtime-correlation-report.json' }}</td>
+                <td>{{ correlationAnalytics.correlation_id || runtimeDashboard?.correlation_id }}</td>
+                <td>{{ traceChain }}</td>
+                <td>{{ correlationAnalytics.incident_correlation?.total_related_events ?? 0 }}</td>
+              </tr>
+            </tbody>
+          </v-table>
         </div>
-        <span class="correlation">Correlação: {{ correlationId }}</span>
-      </div>
+      </v-card-text>
+    </v-card>
 
-      <div class="cards" aria-label="Indicadores de conectores">
-        <article class="card status-ready"><span>Prontos</span><strong>{{ totalPorStatus.ready }}</strong></article>
-        <article class="card status-alerta"><span>Pendentes</span><strong>{{ totalPorStatus.missing_permission }}</strong></article>
-        <article class="card status-alerta"><span>Expirados</span><strong>{{ totalPorStatus.expired }}</strong></article>
-        <article class="card status-bloqueado"><span>Bloqueados</span><strong>{{ totalPorStatus.blocked }}</strong></article>
-      </div>
+    <v-card class="filtros mt-4" elevation="0">
+      <v-card-title>Filtros do analítico</v-card-title>
+      <v-card-text>
+        <div class="filtros-grid">
+          <v-select v-model="filtroEstado" :items="opcoesEstado" label="Estado (semáforo)" clearable variant="outlined" density="comfortable" />
+          <v-select v-model="filtroSecao" :items="opcoesSecao" label="Seção" clearable variant="outlined" density="comfortable" />
+          <v-text-field v-model="filtroBusca" label="Busca" clearable variant="outlined" density="comfortable" />
+        </div>
+      </v-card-text>
+    </v-card>
 
-      <div class="analitico">
-        <table>
+    <v-card class="painel mt-4" elevation="0" :data-section="secaoAtiva === 'conectores' ? 'active' : undefined">
+      <v-card-title id="titulo-conectores">Connection Broker</v-card-title>
+      <v-card-subtitle>Health-check operacional dos conectores e capabilities usados por agentes e automações.</v-card-subtitle>
+      <v-card-text>
+        <div class="subcabecalho mb-3">
+          <span class="correlation">Correlação: {{ correlationId }}</span>
+        </div>
+
+        <v-row dense>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Prontos" :value="totalPorStatus.ready" semaforo="verde" @drilldown="aplicarDrilldown({ secao: 'conectores' })" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Pendentes" :value="totalPorStatus.missing_permission" semaforo="amarelo" @drilldown="aplicarDrilldown({ secao: 'conectores', estado: 'amarelo' })" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Expirados" :value="totalPorStatus.expired" semaforo="amarelo" @drilldown="aplicarDrilldown({ secao: 'conectores', estado: 'amarelo' })" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Bloqueados" :value="totalPorStatus.blocked" semaforo="vermelho" @drilldown="aplicarDrilldown({ secao: 'conectores', estado: 'vermelho' })" />
+          </v-col>
+        </v-row>
+
+        <div class="analitico mt-4">
+          <v-table density="compact">
+            <thead>
+              <tr><th>Ambiente</th><th>Conector</th><th>Capability</th><th>Status</th><th>Criticidade</th><th>Ação sugerida</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="conector in conectores" :key="`${conector.ambiente}-${conector.conector}-${conector.capability}`">
+                <td>{{ conector.ambiente }}</td>
+                <td>{{ conector.conector }}</td>
+                <td>{{ conector.capability }}</td>
+                <td><SemaforoChip :value="statusParaSemaforo(conector.status)" size="x-small" /></td>
+                <td>{{ conector.criticidade }}</td>
+                <td>{{ conector.acao_sugerida }}</td>
+              </tr>
+            </tbody>
+          </v-table>
+        </div>
+      </v-card-text>
+    </v-card>
+
+    <v-card class="analitico mt-4" elevation="0" :data-section="secaoAtiva === 'itens' ? 'active' : undefined" aria-label="Itens monitorados">
+      <v-card-title>Itens monitorados</v-card-title>
+      <v-card-text>
+        <v-table density="compact">
           <thead>
-            <tr><th>Ambiente</th><th>Conector</th><th>Capability</th><th>Status</th><th>Criticidade</th><th>Ação sugerida</th></tr>
+            <tr><th>Tipo</th><th>Referência</th><th>Título</th><th>Estado</th><th>Severidade</th></tr>
           </thead>
           <tbody>
-            <tr v-for="conector in conectores" :key="`${conector.ambiente}-${conector.conector}-${conector.capability}`">
-              <td>{{ conector.ambiente }}</td>
-              <td>{{ conector.conector }}</td>
-              <td>{{ conector.capability }}</td>
-              <td><span :class="['badge', classeStatus(conector.status)]">{{ conector.status }}</span></td>
-              <td>{{ conector.criticidade }}</td>
-              <td>{{ conector.acao_sugerida }}</td>
+            <tr v-for="item in itensFiltrados" :key="`${item.tipo}-${item.referencia}`">
+              <td>{{ item.tipo }}</td>
+              <td>{{ item.referencia }}</td>
+              <td>{{ item.titulo }}</td>
+              <td><SemaforoChip :value="item.estado" size="x-small" /></td>
+              <td>{{ item.severidade }}</td>
             </tr>
           </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="analitico" aria-label="Itens monitorados">
-      <table>
-        <thead>
-          <tr><th>Tipo</th><th>Referência</th><th>Título</th><th>Estado</th><th>Severidade</th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in itensFiltrados" :key="`${item.tipo}-${item.referencia}`">
-            <td>{{ item.tipo }}</td>
-            <td>{{ item.referencia }}</td>
-            <td>{{ item.titulo }}</td>
-            <td>{{ item.estado }}</td>
-            <td>{{ item.severidade }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-  </main>
+        </v-table>
+      </v-card-text>
+    </v-card>
+  </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import OperationalMetricCard from '../components/OperationalMetricCard.vue'
+import SemaforoChip from '../components/SemaforoChip.vue'
+import {
+  criarQueryFiltrosMonitoramento,
+  filtrarItensMonitoramento,
+  normalizarFiltrosMonitoramento,
+} from '../utils/filtrosMonitoramento'
+import { resolverDrilldownSpa } from '../utils/runtimeDrilldown'
+import { carregarRuntimeDashboard, formatarValorRuntimeCard, semaforoRuntimeCard } from '../services/runtimeDashboard'
 
 const route = useRoute()
 const router = useRouter()
@@ -162,17 +196,42 @@ const conectores = ref([])
 const runtimeDashboard = ref(null)
 const correlationId = ref('local-fallback')
 const filtroEstado = ref(route.query.estado || '')
+const filtroSecao = ref(route.query.secao || '')
+const filtroBusca = ref(route.query.busca || '')
 const carregando = ref(false)
 const erro = ref('')
+
+const opcoesEstado = [
+  { title: 'Verde', value: 'verde' },
+  { title: 'Amarelo', value: 'amarelo' },
+  { title: 'Vermelho', value: 'vermelho' },
+  { title: 'Bloqueado', value: 'bloqueado' },
+  { title: 'Desconhecido', value: 'desconhecido' },
+]
+
+const opcoesSecao = [
+  { title: 'Itens monitorados', value: 'itens' },
+  { title: 'Conectores', value: 'conectores' },
+  { title: 'Runtime', value: 'runtime' },
+  { title: 'Métricas', value: 'metrics' },
+  { title: 'Timeline', value: 'timeline' },
+]
 
 const fallbackConectores = [
   { ambiente: 'dev', conector: 'repository_provider', capability: 'repository.read', status: 'ready', criticidade: 'high', acao_sugerida: 'Executar com auditoria.' },
   { ambiente: 'homolog', conector: 'repository_provider', capability: 'repository.write', status: 'missing_permission', criticidade: 'critical', acao_sugerida: 'Solicitar autorização contextual antes da escrita.' },
   { ambiente: 'prod', conector: 'document_provider', capability: 'document.read', status: 'ready', criticidade: 'medium', acao_sugerida: 'Manter health-check periódico.' },
-  { ambiente: 'prod', conector: 'communication_provider', capability: 'message.compose', status: 'blocked', criticidade: 'high', acao_sugerida: 'Exigir confirmação humana antes do envio.' }
+  { ambiente: 'prod', conector: 'communication_provider', capability: 'message.compose', status: 'blocked', criticidade: 'high', acao_sugerida: 'Exigir confirmação humana antes do envio.' },
 ]
 
-const itensFiltrados = computed(() => itens.value.filter((item) => !filtroEstado.value || item.estado === filtroEstado.value))
+const filtrosAtivos = computed(() => normalizarFiltrosMonitoramento({
+  estado: filtroEstado.value,
+  secao: filtroSecao.value,
+  busca: filtroBusca.value,
+}))
+
+const secaoAtiva = computed(() => filtrosAtivos.value.secao)
+const itensFiltrados = computed(() => filtrarItensMonitoramento(itens.value, filtrosAtivos.value))
 const conectoresCriticos = computed(() => conectores.value.filter((item) => ['critical', 'high'].includes(item.criticidade)))
 const bloqueiosCalculados = computed(() => conectores.value.filter((item) => ['blocked', 'unavailable', 'misconfigured'].includes(item.status)).length)
 const pendenciasCalculadas = computed(() => conectores.value.filter((item) => ['missing_permission', 'insufficient_permission', 'expired'].includes(item.status)).length)
@@ -181,12 +240,12 @@ const estadoGeralCalculado = computed(() => {
   if (pendenciasCalculadas.value > 0) return 'amarelo'
   return 'verde'
 })
+const estadoGeralExibido = computed(() => resumo.value.estado_geral || estadoGeralCalculado.value)
 const runtimeCards = computed(() => runtimeDashboard.value?.cards || [])
 const workflowTopology = computed(() => runtimeDashboard.value?.sections?.find((section) => section.id === 'workflow-topology')?.items || [])
 const correlationAnalytics = computed(() => runtimeDashboard.value?.correlation_analytics || {})
 const observabilityReadiness = computed(() => runtimeDashboard.value?.observability_readiness || {})
 const runtimeTopologyPreview = computed(() => runtimeDashboard.value?.runtime_topology || {})
-const environmentDependencies = computed(() => runtimeTopologyPreview.value?.environment_dependencies || [])
 const traceChain = computed(() => correlationAnalytics.value?.operational_trace_chains?.[0]?.chain?.join(' → ') || runtimeTopologyPreview.value?.trace_chain?.join(' → ') || 'n/a')
 
 const totalPorStatus = computed(() => conectores.value.reduce((acc, item) => {
@@ -194,29 +253,61 @@ const totalPorStatus = computed(() => conectores.value.reduce((acc, item) => {
   return acc
 }, { ready: 0, missing_permission: 0, expired: 0, blocked: 0 }))
 
-function classeStatus(status) {
-  if (status === 'ready') return 'badge-ok'
-  if (['blocked', 'unavailable', 'misconfigured'].includes(status)) return 'badge-erro'
-  return 'badge-alerta'
-}
+const cardsResumo = computed(() => [
+  { id: 'estado', label: 'Estado geral', value: estadoGeralExibido.value, semaforo: estadoGeralExibido.value, icon: 'mdi-traffic-light', filtros: {} },
+  { id: 'bloqueios', label: 'Bloqueios', value: resumo.value.bloqueios ?? bloqueiosCalculados.value, semaforo: bloqueiosCalculados.value > 0 ? 'vermelho' : 'verde', icon: 'mdi-cancel', filtros: { estado: 'bloqueado', secao: 'itens' } },
+  { id: 'pendencias', label: 'Pendências', value: resumo.value.pendencias ?? pendenciasCalculadas.value, semaforo: pendenciasCalculadas.value > 0 ? 'amarelo' : 'verde', icon: 'mdi-clock-alert-outline', filtros: { estado: 'amarelo', secao: 'itens' } },
+  { id: 'itens', label: 'Itens', value: resumo.value.total_itens ?? itens.value.length, semaforo: 'verde', icon: 'mdi-format-list-bulleted', filtros: { secao: 'itens' } },
+  { id: 'conectores', label: 'Conectores', value: conectores.value.length, semaforo: 'verde', icon: 'mdi-lan-connect', filtros: { secao: 'conectores' } },
+  { id: 'criticos', label: 'Conectores críticos', value: conectoresCriticos.value.length, semaforo: conectoresCriticos.value.length > 0 ? 'amarelo' : 'verde', icon: 'mdi-alert-decagram-outline', filtros: { secao: 'conectores' } },
+])
 
-function classeRuntime(status) {
-  if (['healthy', 'available', 'verde', 'runtime_healthy'].includes(status)) return 'badge-ok'
-  if (['degraded', 'runtime_degraded', 'bloqueado', 'vermelho'].includes(status)) return 'badge-erro'
-  return 'badge-alerta'
+function statusParaSemaforo(status) {
+  if (status === 'ready') return 'verde'
+  if (['blocked', 'unavailable', 'misconfigured'].includes(status)) return 'vermelho'
+  return 'amarelo'
 }
 
 function formatarValorCard(card) {
-  if (card.unit === 'seconds') return `${Math.round(card.value)}s`
-  if (card.unit) return `${card.value} ${card.unit}`
-  return card.value
+  return formatarValorRuntimeCard(card)
 }
 
-async function carregarRuntimeDashboard() {
-  const resposta = await fetch('/api/runtime/dashboard', { headers: { Accept: 'application/json' } })
-  if (!resposta.ok) throw new Error('Falha ao carregar runtime dashboard')
-  const payload = await resposta.json()
-  runtimeDashboard.value = payload.data || null
+function semaforoCard(card) {
+  return semaforoRuntimeCard(card)
+}
+
+function irPara(rota) {
+  if (!rota?.path) return
+  router.push(rota)
+}
+
+function aplicarDrilldown(filtros = {}) {
+  const query = criarQueryFiltrosMonitoramento({
+    estado: filtros.estado ?? filtroEstado.value,
+    secao: filtros.secao ?? filtroSecao.value,
+    busca: filtros.busca ?? filtroBusca.value,
+  })
+  router.replace({ path: '/monitoramento-operacional', query })
+}
+
+function abrirTopologia(item) {
+  irPara(resolverDrilldownSpa(item.spa_drilldown?.path || item.href, item))
+}
+
+function sincronizarFiltrosDaUrl() {
+  const filtros = normalizarFiltrosMonitoramento(route.query)
+  filtroEstado.value = filtros.estado
+  filtroSecao.value = filtros.secao
+  filtroBusca.value = filtros.busca
+}
+
+function sincronizarUrlDosFiltros() {
+  const query = criarQueryFiltrosMonitoramento({
+    estado: filtroEstado.value,
+    secao: filtroSecao.value,
+    busca: filtroBusca.value,
+  })
+  router.replace({ path: '/monitoramento-operacional', query })
 }
 
 async function carregarMonitoramento() {
@@ -244,7 +335,12 @@ async function carregarTudo() {
   carregando.value = true
   erro.value = ''
   try {
-    await Promise.all([carregarMonitoramento(), carregarConectores(), carregarRuntimeDashboard()])
+    const [dashboard] = await Promise.all([
+      carregarRuntimeDashboard(),
+      carregarMonitoramento(),
+      carregarConectores(),
+    ])
+    runtimeDashboard.value = dashboard
   } catch (e) {
     erro.value = e?.message || 'Erro inesperado ao carregar monitoramento operacional'
     await carregarConectores()
@@ -253,40 +349,38 @@ async function carregarTudo() {
   }
 }
 
-watch(filtroEstado, () => {
-  router.replace({ query: { ...route.query, estado: filtroEstado.value || undefined } })
+watch([filtroEstado, filtroSecao, filtroBusca], sincronizarUrlDosFiltros)
+watch(() => route.query, sincronizarFiltrosDaUrl, { deep: true })
+
+watch(secaoAtiva, async (secao) => {
+  if (!secao) return
+  await nextTick()
+  const alvo = document.querySelector(`[data-section="${secao}"]`)
+  alvo?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 })
 
-onMounted(carregarTudo)
+onMounted(async () => {
+  sincronizarFiltrosDaUrl()
+  await carregarTudo()
+})
 </script>
 
 <style scoped>
-.monitoramento-operacional { display: grid; gap: 1rem; padding: 1rem; }
-.cabecalho, .subcabecalho { display: grid; gap: 1rem; align-items: center; }
-.eyebrow { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-.card { border: 1px solid #d0d7de; border-radius: 12px; padding: 1rem; background: #fff; }
-.card span, .card strong { display: block; }
-.card strong { font-size: 1.5rem; margin-top: 0.5rem; }
-.status-ready { border-color: #1a7f37; }
-.status-alerta { border-color: #9a6700; }
-.status-bloqueado { border-color: #d1242f; }
-.filtros { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-.filtros label { display: grid; gap: 0.25rem; }
+.monitoramento-operacional { display: grid; gap: 1rem; padding: 0.25rem; }
+.cabecalho { display: grid; gap: 1rem; align-items: center; }
+.cabecalho-acoes { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.eyebrow { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 .erro { border: 1px solid #d1242f; border-radius: 8px; color: #d1242f; padding: 0.75rem; }
-.painel { border: 1px solid #d0d7de; border-radius: 16px; display: grid; gap: 1rem; padding: 1rem; }
+.painel, .filtros { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 16px; }
 .runtime { background: linear-gradient(135deg, #f6f8fa, #ffffff); }
-.card a, .timeline a { color: #0969da; display: inline-block; font-size: 0.85rem; margin-top: 0.5rem; }
-.timeline { display: grid; gap: 0.75rem; list-style: none; margin: 0; padding: 0; }
-.timeline li { align-items: center; border: 1px solid #d0d7de; border-radius: 12px; display: grid; gap: 0.5rem; grid-template-columns: minmax(140px, 1fr) auto auto; padding: 0.75rem; }
-.timeline-step { font-weight: 700; }
+.subcabecalho { display: flex; justify-content: flex-end; }
 .correlation { color: #57606a; font-size: 0.85rem; }
+.filtros-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.timeline { border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; }
+.timeline-item { cursor: pointer; }
 .analitico { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; }
-th, td { border-bottom: 1px solid #d0d7de; padding: 0.75rem; text-align: left; }
-.badge { border-radius: 999px; display: inline-block; font-size: 0.8rem; font-weight: 700; padding: 0.25rem 0.5rem; }
-.badge-ok { background: #dafbe1; color: #116329; }
-.badge-alerta { background: #fff8c5; color: #7d4e00; }
-.badge-erro { background: #ffebe9; color: #a40e26; }
-@media (min-width: 768px) { .cabecalho, .subcabecalho { grid-template-columns: 1fr auto; } }
+@media (min-width: 768px) { .cabecalho { grid-template-columns: 1fr auto; } }
+@media (max-width: 600px) {
+  .filtros-grid { grid-template-columns: 1fr; }
+}
 </style>

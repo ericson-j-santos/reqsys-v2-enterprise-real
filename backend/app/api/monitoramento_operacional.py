@@ -1,14 +1,15 @@
 import logging
 import time
 from datetime import datetime, timezone
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, Response
 from pydantic import BaseModel, Field
 
 from app.core.autonomous_operations import gerar_snapshot_operacao_autonoma
 from app.core.config import settings
+from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
+from app.core.feature_metrics import REGISTRY
 from app.core.runtime_analytics import (
     build_correlation_report,
     build_observability_report,
@@ -164,7 +165,7 @@ def criar_snapshot_minimo(correlation_id: str) -> MonitoramentoOperacional:
 
 
 def _resolver_correlation_id(x_correlation_id: str | None, x_request_id: str | None) -> str:
-    correlation_id = x_correlation_id or x_request_id or str(uuid4())
+    correlation_id = resolver_correlation_id(x_correlation_id, x_request_id)
     logger.info('monitoramento_operacional_correlation_id_resolvido', extra={'correlation_id': correlation_id})
     return correlation_id
 
@@ -237,6 +238,10 @@ def _criar_runtime_observability_snapshot(correlation_id: str) -> dict:
     }
 
 
+def _spa_drilldown(path: str, query: dict | None = None) -> dict:
+    return {'path': path, 'query': query or {}}
+
+
 def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
     topology = build_runtime_topology(snapshot, [snapshot], [], [])
     correlation_report = build_correlation_report(snapshot, [snapshot], [], [])
@@ -268,6 +273,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'value': snapshot['status'],
                 'severity': snapshot['status'],
                 'drilldown': '/api/runtime/health',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime'}),
             },
             {
                 'id': 'risk-score',
@@ -278,6 +284,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'min': 0,
                 'max': 100,
                 'drilldown': '/api/runtime/metrics',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'metrics'}),
             },
             {
                 'id': 'pending-items',
@@ -286,6 +293,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'value': snapshot['critical_counts']['pending_items'],
                 'unit': 'itens',
                 'drilldown': '/monitoramento-operacional',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'estado': 'amarelo', 'secao': 'itens'}),
             },
             {
                 'id': 'uptime',
@@ -294,6 +302,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'value': snapshot['uptime_seconds'],
                 'unit': 'seconds',
                 'drilldown': '/api/runtime/liveness',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime'}),
             },
             {
                 'id': 'readiness-percent',
@@ -304,6 +313,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'min': 0,
                 'max': 100,
                 'drilldown': '/api/runtime/readiness',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime', 'estado': 'amarelo'}),
             },
             {
                 'id': 'fly-duckdns-status',
@@ -312,6 +322,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'value': 'pending_public_evidence',
                 'severity': 'attention',
                 'drilldown': '/api/runtime/contracts',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime'}),
             },
         ],
         'sections': [
@@ -325,24 +336,28 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                         'label': 'Runtime Health',
                         'status': snapshot['status'],
                         'href': '/api/runtime/health',
+                        'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime'}),
                     },
                     {
                         'step': 'readiness',
                         'label': 'Readiness Gate',
                         'status': _runtime_readiness_reason(snapshot),
                         'href': '/api/runtime/readiness',
+                        'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime', 'estado': 'amarelo'}),
                     },
                     {
                         'step': 'metrics',
                         'label': 'Prometheus Metrics',
                         'status': 'available',
                         'href': '/api/runtime/metrics',
+                        'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'metrics'}),
                     },
                     {
                         'step': 'monitoring',
                         'label': 'Analitico Operacional',
                         'status': snapshot['operational_summary']['estado_geral'],
                         'href': '/monitoramento-operacional',
+                        'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'itens'}),
                     },
                 ],
             },
@@ -526,7 +541,32 @@ def obter_api_runtime_metrics(
         '# HELP reqsys_runtime_uptime_seconds Runtime uptime in seconds.',
         '# TYPE reqsys_runtime_uptime_seconds counter',
         _metric_line('reqsys_runtime_uptime_seconds', snapshot['uptime_seconds'], labels),
+        '# HELP reqsys_http_requests_total HTTP requests by feature.',
+        '# TYPE reqsys_http_requests_total counter',
     ]
+    feature_items = REGISTRY.snapshot()
+    for item in feature_items:
+        feature_labels = {**labels, 'feature': item.feature}
+        lines.append(_metric_line('reqsys_http_requests_total', item.requests_total, feature_labels))
+    if feature_items:
+        lines.extend(
+            [
+                '# HELP reqsys_http_errors_total HTTP errors by feature.',
+                '# TYPE reqsys_http_errors_total counter',
+            ]
+        )
+        for item in feature_items:
+            feature_labels = {**labels, 'feature': item.feature}
+            lines.append(_metric_line('reqsys_http_errors_total', item.errors_total, feature_labels))
+        lines.extend(
+            [
+                '# HELP reqsys_http_duration_ms_total HTTP duration in milliseconds by feature.',
+                '# TYPE reqsys_http_duration_ms_total counter',
+            ]
+        )
+        for item in feature_items:
+            feature_labels = {**labels, 'feature': item.feature}
+            lines.append(_metric_line('reqsys_http_duration_ms_total', item.duration_ms_total, feature_labels))
     return Response('\n'.join(lines) + '\n', media_type='text/plain; version=0.0.4; charset=utf-8')
 
 

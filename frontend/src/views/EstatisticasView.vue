@@ -1,5 +1,5 @@
 <template>
-  <section class="estatisticas-page" aria-labelledby="titulo-estatisticas">
+  <section class="estatisticas-page" data-testid="route-estatisticas" aria-labelledby="titulo-estatisticas">
     <div class="estatisticas-header">
       <div>
         <p class="eyebrow">ReqSys · Analytics próprio</p>
@@ -15,23 +15,15 @@
     </div>
 
     <v-row class="mt-4" dense>
-      <v-col cols="12" sm="6" lg="2">
-        <v-card class="metric-card" elevation="0"><span>Total</span><strong>{{ resumo.total }}</strong></v-card>
-      </v-col>
-      <v-col cols="12" sm="6" lg="2">
-        <v-card class="metric-card" elevation="0"><span>Maturidade média</span><strong>{{ resumo.maturidadeMedia }}%</strong></v-card>
-      </v-col>
-      <v-col cols="12" sm="6" lg="2">
-        <v-card class="metric-card" elevation="0"><span>Críticos</span><strong>{{ resumo.criticos }}</strong></v-card>
-      </v-col>
-      <v-col cols="12" sm="6" lg="2">
-        <v-card class="metric-card" elevation="0"><span>Atenção</span><strong>{{ resumo.atencao }}</strong></v-card>
-      </v-col>
-      <v-col cols="12" sm="6" lg="2">
-        <v-card class="metric-card" elevation="0"><span>Externos</span><strong>{{ resumo.externos }}</strong></v-card>
-      </v-col>
-      <v-col cols="12" sm="6" lg="2">
-        <v-card class="metric-card" elevation="0"><span>Inválidos</span><strong>{{ resumo.invalidos }}</strong></v-card>
+      <v-col v-for="card in cardsResumo" :key="card.id" cols="12" sm="6" lg="2">
+        <OperationalMetricCard
+          :label="card.label"
+          :value="card.value"
+          :semaforo="card.semaforo"
+          :icon="card.icon"
+          :test-id="`estatisticas-card-${card.id}`"
+          @drilldown="aplicarFiltroCard(card.filtro)"
+        />
       </v-col>
     </v-row>
 
@@ -48,10 +40,19 @@
 
     <v-row class="mt-2" dense>
       <v-col v-for="indicador in indicadoresFiltrados" :key="indicador.id" cols="12" md="6" xl="4">
-        <v-card class="indicator-card" elevation="0">
+        <v-card
+          class="indicator-card indicator-card--clickable"
+          elevation="0"
+          role="button"
+          tabindex="0"
+          :data-testid="`estatisticas-indicador-${indicador.id}`"
+          @click="aplicarFiltroCard({ estado: indicador.estadoAtual })"
+          @keyup.enter="aplicarFiltroCard({ estado: indicador.estadoAtual })"
+          @keyup.space.prevent="aplicarFiltroCard({ estado: indicador.estadoAtual })"
+        >
           <v-card-title class="indicator-title">
             <span>{{ indicador.nome }}</span>
-            <v-chip size="small" :color="corEstado(indicador.estadoAtual)" variant="tonal">{{ indicador.estadoAtual }}</v-chip>
+            <SemaforoChip :value="estadoParaSemaforo(indicador.estadoAtual)" size="small" />
           </v-card-title>
           <v-card-text>
             <div class="indicator-value">
@@ -112,13 +113,19 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import OperationalMetricCard from '../components/OperationalMetricCard.vue'
+import SemaforoChip from '../components/SemaforoChip.vue'
+import { estadoParaSemaforo } from '../utils/filtrosMonitoramento'
 import { calcularResumoEstatisticas, carregarEstatisticas, validarIndicador } from '../services/estatisticas'
 
+const route = useRoute()
+const router = useRouter()
 const indicadores = ref([])
-const filtroCategoria = ref(null)
-const filtroTipoFonte = ref(null)
-const filtroEstado = ref(null)
+const filtroCategoria = ref(route.query.categoria || null)
+const filtroTipoFonte = ref(route.query.fonte || null)
+const filtroEstado = ref(route.query.estado || null)
 
 const resumo = computed(() => calcularResumoEstatisticas(indicadores.value))
 const categorias = computed(() => [...new Set(indicadores.value.map((item) => item.categoria))].sort())
@@ -136,11 +143,28 @@ function validar(indicador) {
   return validarIndicador(indicador)
 }
 
-function corEstado(estado) {
-  if (estado === 'critico') return 'error'
-  if (estado === 'atencao' || estado === 'nao_medido') return 'warning'
-  if (estado === 'avancado') return 'primary'
-  return 'success'
+const cardsResumo = computed(() => [
+  { id: 'total', label: 'Total', value: resumo.value.total, semaforo: 'verde', icon: 'mdi-counter', filtro: {} },
+  { id: 'maturidade', label: 'Maturidade média', value: `${resumo.value.maturidadeMedia}%`, semaforo: resumo.value.maturidadeMedia >= 70 ? 'verde' : 'amarelo', icon: 'mdi-chart-arc', filtro: {} },
+  { id: 'criticos', label: 'Críticos', value: resumo.value.criticos, semaforo: resumo.value.criticos > 0 ? 'vermelho' : 'verde', icon: 'mdi-alert-circle-outline', filtro: { estado: 'critico' } },
+  { id: 'atencao', label: 'Atenção', value: resumo.value.atencao, semaforo: resumo.value.atencao > 0 ? 'amarelo' : 'verde', icon: 'mdi-alert-outline', filtro: { estado: 'atencao' } },
+  { id: 'externos', label: 'Externos', value: resumo.value.externos, semaforo: 'verde', icon: 'mdi-earth', filtro: { fonte: 'externa' } },
+  { id: 'invalidos', label: 'Inválidos', value: resumo.value.invalidos, semaforo: resumo.value.invalidos > 0 ? 'vermelho' : 'verde', icon: 'mdi-shield-alert-outline', filtro: {} },
+])
+
+function aplicarFiltroCard(filtro = {}) {
+  if (filtro.estado !== undefined) filtroEstado.value = filtro.estado || null
+  if (filtro.categoria !== undefined) filtroCategoria.value = filtro.categoria || null
+  if (filtro.fonte !== undefined) filtroTipoFonte.value = filtro.fonte || null
+  sincronizarUrl()
+}
+
+function sincronizarUrl() {
+  const query = {}
+  if (filtroCategoria.value) query.categoria = filtroCategoria.value
+  if (filtroTipoFonte.value) query.fonte = filtroTipoFonte.value
+  if (filtroEstado.value) query.estado = filtroEstado.value
+  router.replace({ path: '/estatisticas', query })
 }
 
 function formatarData(valor) {
@@ -149,6 +173,14 @@ function formatarData(valor) {
   if (Number.isNaN(data.getTime())) return valor
   return data.toLocaleString('pt-BR')
 }
+
+watch([filtroCategoria, filtroTipoFonte, filtroEstado], sincronizarUrl)
+
+watch(() => route.query, () => {
+  filtroCategoria.value = route.query.categoria || null
+  filtroTipoFonte.value = route.query.fonte || null
+  filtroEstado.value = route.query.estado || null
+}, { deep: true })
 
 onMounted(async () => {
   indicadores.value = await carregarEstatisticas()
@@ -161,10 +193,14 @@ onMounted(async () => {
 .eyebrow { margin: 0 0 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; }
 .muted { color: var(--text-muted, #6b7280); }
-.panel, .metric-card, .indicator-card { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 16px; }
-.metric-card { padding: 16px; height: 100%; }
-.metric-card span { display: block; color: var(--text-muted, #6b7280); font-size: 12px; }
-.metric-card strong { display: block; margin-top: 8px; font-size: 28px; }
+.panel, .indicator-card { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 16px; }
+.indicator-card--clickable { cursor: pointer; transition: transform 0.16s ease, box-shadow 0.16s ease; }
+.indicator-card--clickable:hover, .indicator-card--clickable:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 2px;
+}
 .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .indicator-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .indicator-value { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
