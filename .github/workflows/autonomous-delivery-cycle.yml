@@ -222,10 +222,26 @@ jobs:
                 'next_increment_capture_report_only',
               ],
             };
+            const queuePayload = {
+              schema_version: '1.0.0',
+              generated_at: payload.generated_at,
+              repo: payload.repo,
+              queue: nextIncrements,
+              status: nextIncrements.length ? 'queued' : 'empty',
+              source: 'autonomous-delivery-cycle',
+              usage: 'Fila report-only para o chat/agente capturar próximos incrementos após merges governados.',
+              guardrails: [
+                'report_only_queue',
+                'no_automatic_code_generation_from_queue',
+                'requires_human_or_agent_execution_context',
+                'preserve_ci_green_before_next_increment',
+              ],
+            };
 
             fs.writeFileSync(path.join(outputDir, 'delivery-cycle-report.json'), JSON.stringify(payload, null, 2) + '\n');
             fs.mkdirSync('docs/ops-dashboard/data', { recursive: true });
             fs.writeFileSync('docs/ops-dashboard/data/autonomous-delivery-cycle-latest.json', JSON.stringify(payload, null, 2) + '\n');
+            fs.writeFileSync('docs/ops-dashboard/data/autonomous-delivery-cycle-next-increments.json', JSON.stringify(queuePayload, null, 2) + '\n');
 
             const summary = [
               '# Autonomous Delivery Cycle',
@@ -257,5 +273,6 @@ jobs:
           path: |
             artifacts/autonomous-delivery-cycle/delivery-cycle-report.json
             docs/ops-dashboard/data/autonomous-delivery-cycle-latest.json
+            docs/ops-dashboard/data/autonomous-delivery-cycle-next-increments.json
           if-no-files-found: error
           retention-days: 30
