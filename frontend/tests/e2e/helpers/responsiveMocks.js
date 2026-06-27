@@ -46,6 +46,21 @@ const handlers = [
   { pattern: /\/api\/v1\/hub-lowcode\/github$/, body: { repos: [] } },
   { pattern: /\/api\/v1\/specs\/templates$/, body: [] },
   { pattern: /\/api\/v1\/specs$/, body: [] },
+  { pattern: /\/api\/monitoramento-operacional$/, body: {
+    schema_version: '1.0.0',
+    resumo: { estado_geral: 'amarelo', bloqueios: 0, pendencias: 1, total_itens: 5 },
+    itens: [{ tipo: 'gate', referencia: 'REQSYS-OPER-001', titulo: 'Gate CI', estado: 'amarelo', severidade: 'media' }],
+  } },
+  { pattern: /\/api\/runtime\/dashboard$/, body: {
+    schema_version: '1.2.0',
+    correlation_id: 'corr-e2e',
+    cards: [{ id: 'runtime-status', title: 'Runtime Status', value: 'healthy', severity: 'healthy', drilldown: '/api/runtime/health' }],
+    sections: [{ id: 'workflow-topology', items: [{ step: 'health', label: 'Runtime Health', status: 'healthy', href: '/api/runtime/health' }] }],
+    observability_readiness: { observability_percent: 80, topology_coverage: 70, correlation_depth: 2, operational_traceability: 75 },
+    correlation_analytics: { artifact_name: 'runtime-correlation-report.json', correlation_id: 'corr-e2e' },
+  } },
+  { pattern: /\/api\/connectors\/health$/, body: { conectores: [{ ambiente: 'dev', conector: 'repository_provider', capability: 'repository.read', status: 'ready', criticidade: 'high', acao_sugerida: 'OK' }] } },
+  { pattern: /\/api\/v1\/estatisticas$/, body: [] },
 ]
 
 async function mockResponsiveApis(page) {

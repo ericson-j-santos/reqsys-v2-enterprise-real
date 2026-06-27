@@ -19,6 +19,7 @@ import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
 import MonitoramentoOperacionalView from '../views/MonitoramentoOperacionalView.vue'
 import FigmaGithubView from '../views/FigmaGithubView.vue'
 import EstatisticasView from '../views/EstatisticasView.vue'
+import AnalyticsHubView from '../views/AnalyticsHubView.vue'
 import UserFinalShellView from '../views/UserFinalShellView.vue'
 import { useAuthStore } from '../stores/auth'
 
@@ -27,7 +28,7 @@ const routes = [
   { path: '/', component: DashboardView, meta: { recurso: 'dashboard:read' } },
   { path: '/home', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
   { path: '/workspace', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
-  { path: '/analytics', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
+  { path: '/analytics', component: AnalyticsHubView, meta: { recurso: 'dashboard:read' } },
   { path: '/ajuda', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
   { path: '/requisitos', component: RequisitosView, meta: { recurso: 'requisitos:write' } },
   { path: '/rastreabilidade', component: RastreabilidadeView, meta: { recurso: 'rastreabilidade:read' } },

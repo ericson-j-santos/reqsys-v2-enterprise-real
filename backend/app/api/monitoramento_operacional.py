@@ -237,6 +237,10 @@ def _criar_runtime_observability_snapshot(correlation_id: str) -> dict:
     }
 
 
+def _spa_drilldown(path: str, query: dict | None = None) -> dict:
+    return {'path': path, 'query': query or {}}
+
+
 def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
     topology = build_runtime_topology(snapshot, [snapshot], [], [])
     correlation_report = build_correlation_report(snapshot, [snapshot], [], [])
@@ -268,6 +272,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'value': snapshot['status'],
                 'severity': snapshot['status'],
                 'drilldown': '/api/runtime/health',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime'}),
             },
             {
                 'id': 'risk-score',
@@ -278,6 +283,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'min': 0,
                 'max': 100,
                 'drilldown': '/api/runtime/metrics',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'metrics'}),
             },
             {
                 'id': 'pending-items',
@@ -286,6 +292,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'value': snapshot['critical_counts']['pending_items'],
                 'unit': 'itens',
                 'drilldown': '/monitoramento-operacional',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'estado': 'amarelo', 'secao': 'itens'}),
             },
             {
                 'id': 'uptime',
@@ -294,6 +301,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'value': snapshot['uptime_seconds'],
                 'unit': 'seconds',
                 'drilldown': '/api/runtime/liveness',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime'}),
             },
             {
                 'id': 'readiness-percent',
@@ -304,6 +312,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'min': 0,
                 'max': 100,
                 'drilldown': '/api/runtime/readiness',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime', 'estado': 'amarelo'}),
             },
             {
                 'id': 'fly-duckdns-status',
@@ -312,6 +321,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'value': 'pending_public_evidence',
                 'severity': 'attention',
                 'drilldown': '/api/runtime/contracts',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime'}),
             },
         ],
         'sections': [
@@ -325,24 +335,28 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                         'label': 'Runtime Health',
                         'status': snapshot['status'],
                         'href': '/api/runtime/health',
+                        'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime'}),
                     },
                     {
                         'step': 'readiness',
                         'label': 'Readiness Gate',
                         'status': _runtime_readiness_reason(snapshot),
                         'href': '/api/runtime/readiness',
+                        'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime', 'estado': 'amarelo'}),
                     },
                     {
                         'step': 'metrics',
                         'label': 'Prometheus Metrics',
                         'status': 'available',
                         'href': '/api/runtime/metrics',
+                        'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'metrics'}),
                     },
                     {
                         'step': 'monitoring',
                         'label': 'Analitico Operacional',
                         'status': snapshot['operational_summary']['estado_geral'],
                         'href': '/monitoramento-operacional',
+                        'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'itens'}),
                     },
                 ],
             },
