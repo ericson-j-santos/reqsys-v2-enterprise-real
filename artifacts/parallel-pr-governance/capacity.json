@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T19:00:00-03:00",
+  "domain": "parallel_pr_governance",
+  "current_safe_range": "4-7",
+  "aggressive_governed_range": "8-12",
+  "active_constraints": [
+    "avoid runtime core while runtime validator PRs are open",
+    "avoid frontend dashboard while dashboard PRs are open",
+    "avoid workflow edits while CI PRs are open",
+    "prefer new docs and artifacts in exclusive paths"
+  ],
+  "recommended_parallel_lanes": [
+    "documentation",
+    "evidence_artifacts",
+    "runbooks",
+    "dashboard_contracts",
+    "governance_data"
+  ],
+  "blocked_parallel_lanes": [
+    "backend_runtime_core",
+    "frontend_runtime_dashboard",
+    "shared_contracts",
+    "github_workflows",
+    "dependency_manifests"
+  ]
+}
