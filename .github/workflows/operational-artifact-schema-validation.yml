@@ -1,0 +1,145 @@
+name: Operational Artifact Schema Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/operational-artifact-schema-validation.yml'
+      - 'docs/contracts/*.schema.json'
+      - 'docs/runbooks/operational-artifact-schema-validation.md'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/operational-artifact-schema-validation.yml'
+      - 'docs/contracts/*.schema.json'
+      - 'docs/runbooks/operational-artifact-schema-validation.md'
+
+concurrency:
+  group: operational-artifact-schema-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-contracts:
+    name: Validate operational artifact schemas
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate schemas and synthetic artifacts
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          contracts = {
+              'ci-lead-time-analytics': Path('docs/contracts/ci-lead-time-analytics.schema.json'),
+              'operational-history-snapshot': Path('docs/contracts/operational-history-snapshot.schema.json'),
+              'runtime-predictive-analytics': Path('docs/contracts/runtime-predictive-analytics.schema.json'),
+          }
+
+          samples = {
+              'ci-lead-time-analytics': {
+                  'schema_version': '1.0.1',
+                  'generated_at': datetime.now(timezone.utc).isoformat(),
+                  'repository': 'ericson-j-santos/reqsys-v2-enterprise-real',
+                  'window_runs': 100,
+                  'completed_runs': 1,
+                  'success_count': 1,
+                  'failure_count': 0,
+                  'cancelled_count': 0,
+                  'skipped_count': 0,
+                  'success_rate_percent': 100,
+                  'failure_rate_percent': 0,
+                  'avg_seconds': 60,
+                  'p50_seconds': 60,
+                  'p95_seconds': 60,
+                  'max_seconds': 60,
+                  'baseline_incident_minutes': 143,
+                  'baseline_incident_seconds': 8580,
+                  'status': 'passed',
+                  'warnings': [],
+                  'bottlenecks': [],
+                  'workflow_stats': [],
+              },
+              'operational-history-snapshot': {
+                  'schema_version': '1.0.0',
+                  'generated_at': datetime.now(timezone.utc).isoformat(),
+                  'repository': 'ericson-j-santos/reqsys-v2-enterprise-real',
+                  'event_name': 'workflow_dispatch',
+                  'run_id': '1',
+                  'sha': 'synthetic',
+                  'baseline': {},
+                  'targets': {},
+                  'gaps': {},
+                  'status': 'report_only',
+                  'risk': 'medium_low',
+                  'next_actions': ['monitor'],
+              },
+              'runtime-predictive-analytics': {
+                  'schema_version': '1.0.0',
+                  'generated_at': datetime.now(timezone.utc).isoformat(),
+                  'repository': 'ericson-j-santos/reqsys-v2-enterprise-real',
+                  'event_name': 'workflow_dispatch',
+                  'run_id': '1',
+                  'inputs': {},
+                  'risk_score': 0,
+                  'risk_level': 'low',
+                  'predictions': ['stable_operational_trend'],
+                  'recommendations': ['monitor'],
+                  'mode': 'report_only',
+                  'guardrails': {'no_secrets': True},
+              },
+          }
+
+          def assert_type(name, key, expected_type, value):
+              if expected_type == 'string' and not isinstance(value, str):
+                  raise AssertionError(f'{name}.{key} should be string')
+              if expected_type == 'number' and not isinstance(value, (int, float)):
+                  raise AssertionError(f'{name}.{key} should be number')
+              if expected_type == 'integer' and not isinstance(value, int):
+                  raise AssertionError(f'{name}.{key} should be integer')
+              if expected_type == 'object' and not isinstance(value, dict):
+                  raise AssertionError(f'{name}.{key} should be object')
+              if expected_type == 'array' and not isinstance(value, list):
+                  raise AssertionError(f'{name}.{key} should be array')
+
+          report = []
+          for name, path in contracts.items():
+              if not path.exists():
+                  raise FileNotFoundError(path)
+              schema = json.loads(path.read_text(encoding='utf-8'))
+              sample = samples[name]
+              required = schema.get('required', [])
+              missing = [key for key in required if key not in sample]
+              if missing:
+                  raise AssertionError(f'{name} missing required sample keys: {missing}')
+              for key, definition in schema.get('properties', {}).items():
+                  if key not in sample:
+                      continue
+                  expected_type = definition.get('type')
+                  if isinstance(expected_type, str):
+                      assert_type(name, key, expected_type, sample[key])
+                  enum = definition.get('enum')
+                  if enum and sample[key] not in enum:
+                      raise AssertionError(f'{name}.{key} must be one of {enum}')
+              report.append({'contract': name, 'status': 'passed', 'required_keys': len(required)})
+
+          Path('audit/schema-validation').mkdir(parents=True, exist_ok=True)
+          Path('audit/schema-validation/operational-artifact-schema-validation.json').write_text(json.dumps({'schema_version': '1.0.0', 'status': 'passed', 'contracts': report}, indent=2), encoding='utf-8')
+          print(json.dumps(report, indent=2))
+          PY
+
+      - name: Upload schema validation artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-artifact-schema-validation-${{ github.run_id }}
+          path: audit/schema-validation/
+          if-no-files-found: error
+          retention-days: 30
