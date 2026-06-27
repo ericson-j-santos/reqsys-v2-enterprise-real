@@ -19,6 +19,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - Diretriz transversal de padrão ouro em `docs/REQSYS_PADRAO_OURO_TRANSVERSAL.md`.
 - Varredura técnica inicial em `docs/varreduras/REQSYS_VARREDURA_PADRAO_OURO_2026-06-20.md`.
 - Helper puro `frontend/src/utils/filtrosRequisitos.js` para normalização, query string e filtragem analítica de requisitos.
+- Helper puro `frontend/src/utils/filtrosIntegracao.js` para drill-down analítico do Painel de Integrações (origem, status, data, correlation_id e busca).
+- Teste unitário `frontend/src/utils/filtrosIntegracao.test.js` para filtros analíticos de integrações.
 - Teste unitário `frontend/src/utils/filtrosRequisitos.test.js` para filtros analíticos de requisitos.
 - Script `npm run test:unit` no frontend.
 - Painel runtime de Connection Broker em `frontend/src/views/MonitoramentoOperacionalView.vue`, com cards, analítico, fallback seguro e consumo futuro de `/api/connectors/health`.
@@ -35,7 +37,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 ### Alterado
 
 - `DashboardView.vue`: cards de requisitos agora apontam para rotas analíticas com filtros por query string quando aplicável.
+- `DashboardView.vue`: card de erros de integração com drill-down para `/painel-integracao?status=erro`.
 - `DashboardView.vue`: melhoria de acessibilidade por teclado nos cards interativos.
+- `PainelIntegracaoView.vue`: analítico filtrável por origem, status, data, correlation_id e busca textual, com cards clicáveis e sincronização de query string.
 - `MonitoramentoOperacionalView.vue`: expansão para incluir indicadores de conectores, criticidade, ações sugeridas e `correlation_id`.
 - `ReqSysEndpoints.cs`: módulo `connection-broker` passa a constar em `/v1/sistema/info`.
 - `ReqSysEndpoints.cs`: endpoints do Connection Broker deixam de usar payload estático local e passam a consumir o registry do `ReqSysStore`.
