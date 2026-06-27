@@ -20,6 +20,9 @@ Catalogar as evidencias operacionais usadas pelo command center do ReqSys, mante
 | Delivery completion | `audit/delivery-completion/delivery-completion-snapshot.json` | Operational Evidence Hub |
 | Delivery finalization | `audit/delivery-finalization/delivery-finalization-report.json` | Operational Evidence Hub |
 | Maturity snapshot | `audit/delivery-maturity/delivery-maturity-snapshot.json` | Operational Evidence Hub |
+| Public runtime evidence | `audit/runtime/public-runtime-evidence-index.json` | Dashboard dinamico, Ops Dashboard |
+| Public runtime validation | `audit/runtime/public-runtime-validation.json` | Ops Dashboard |
+| Public runtime readiness | `audit/runtime/ops-readiness-report.json` | Ops Dashboard |
 | Observability correlation | `artifacts/observability-correlation-report/observability-correlation-report.json` | Operational Evidence Hub |
 | Artifact contract validation | `audit/artifact-contract-validation/artifact-contract-validation-report.json` | Operational Evidence Hub |
 | Dashboard regression | `docs/dashboard/dashboard-regression-report.json` | Operational Evidence Hub |

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.2.0",
-  "repo": "example/repo",
-  "generated_at_epoch": 1782569241,
+  "repo": "reqsys-v2-enterprise-real",
+  "generated_at_epoch": 1782579381,
   "overall_status": "unknown",
   "health_score": 40,
   "critical_failure_count": null,
@@ -9,24 +9,38 @@
   "source_missing": true,
   "checks": [],
   "links": {
-    "actions": "https://github.com/example/repo/actions",
-    "pulls": "https://github.com/example/repo/pulls",
-    "main": "https://github.com/example/repo/tree/main"
+    "actions": "https://github.com/reqsys-v2-enterprise-real/actions",
+    "pulls": "https://github.com/reqsys-v2-enterprise-real/pulls",
+    "main": "https://github.com/reqsys-v2-enterprise-real/tree/main"
   },
   "public_runtime_readiness": {
-    "available": false,
+    "available": true,
+    "source_path": "audit/runtime/public-runtime-validation.json",
+    "source_fallback": false,
+    "evidence_run_id": "local-baseline",
+    "evidence_generated_at": "2026-06-27T16:56:21.915174+00:00",
+    "strict_gate_passed": false,
     "environment": "prod",
-    "base_url": "",
-    "operational_status": "unknown",
-    "readiness_percent": null,
-    "response_time": null,
+    "base_url": "https://reqsys-api.fly.dev",
+    "operational_status": "degraded",
+    "readiness_percent": 25.0,
+    "response_time": 295.15,
     "dashboard_ready": false,
     "login_ready": false,
     "api_ready": false,
     "runtime_ready": false,
     "evidence_ready": false,
-    "blocking_issues": [],
-    "checks": {}
+    "blocking_issues": [
+      "/api/runtime/health: 404 HTTP Error 404: Not Found",
+      "/api/runtime/readiness: 404 HTTP Error 404: Not Found",
+      "/api/runtime/liveness: 404 HTTP Error 404: Not Found"
+    ],
+    "checks": {
+      "frontend_loading": false,
+      "assets": false,
+      "cors_basic": false,
+      "incident_timeline": false
+    }
   },
   "runtime_gold_standard_depth": {
     "available": true,
@@ -7111,7 +7125,8 @@
   "runtime_sources": {
     "runtime_health_report_available": true,
     "runtime_operational_evidence_graph_available": false,
-    "public_runtime_validation_available": false,
+    "public_runtime_validation_available": true,
+    "public_runtime_source_fallback": false,
     "observability_correlation_report_available": true,
     "delivery_finalization_report_available": false
   }

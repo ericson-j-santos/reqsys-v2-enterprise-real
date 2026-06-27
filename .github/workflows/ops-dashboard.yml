@@ -45,6 +45,9 @@ jobs:
             --repo "${{ github.repository }}" \
             --watchdog-report artifacts/repository-health-watchdog/repository-health-report.json \
             --delivery-finalization-report artifacts/delivery-finalization/delivery-finalization-report.json \
+            --public-runtime-validation audit/runtime/public-runtime-validation.json \
+            --public-runtime-fallback artifacts/runtime/public-runtime-validation.json \
+            --public-runtime-evidence-index audit/runtime/public-runtime-evidence-index.json \
             --output docs/ops-dashboard/data/health.json
 
       - name: Prepare dashboard artifact

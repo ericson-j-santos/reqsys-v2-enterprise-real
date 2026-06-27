@@ -60,7 +60,8 @@
       { key: 'deliveryEvidence', label: 'Delivery Evidence Report', href: '../audit/delivery-evidence/delivery-evidence-report.json' },
       { key: 'deliveryReadiness', label: 'Delivery Readiness Report', href: '../audit/delivery-readiness/delivery-readiness-report.json' },
       { key: 'deliveryCompletion', label: 'Delivery Completion Snapshot', href: '../audit/delivery-completion/delivery-completion-snapshot.json' },
-      { key: 'deliveryMaturity', label: 'Delivery Maturity Snapshot', href: '../audit/delivery-maturity/delivery-maturity-snapshot.json' }
+      { key: 'deliveryMaturity', label: 'Delivery Maturity Snapshot', href: '../audit/delivery-maturity/delivery-maturity-snapshot.json' },
+      { key: 'publicRuntime', label: 'Public Runtime Evidence', href: '../audit/runtime/public-runtime-evidence-index.json' }
     ];
 
     const fallback = {
@@ -77,7 +78,8 @@
       deliveryEvidence: { evidence_count: 0, coverage_percent: 0, status: 'unknown', evidences: [] },
       deliveryReadiness: { score_percent: 0, status: 'unknown', remaining_gap_pp: 0, checks: [] },
       deliveryCompletion: { completion_percent: 0, target_percent: 99.5, remaining_gap_pp: 0, status: 'unknown', milestones: [] },
-      deliveryMaturity: { average_current_percent: 0, average_target_percent: 0, average_gap_percent: 0, dimensions: [] }
+      deliveryMaturity: { average_current_percent: 0, average_target_percent: 0, average_gap_percent: 0, dimensions: [] },
+      publicRuntime: { summary: { operational_status: 'unknown', readiness_percent: 0, strict_gate_passed: false }, strict_gate_passed: false }
     };
 
     async function loadJson(source) {
@@ -126,7 +128,10 @@
       const deliveryReadiness = loaded.deliveryReadiness.data;
       const completion = loaded.deliveryCompletion.data;
       const deliveryMaturity = loaded.deliveryMaturity.data;
+      const publicRuntime = loaded.publicRuntime.data;
+      const publicSummary = publicRuntime.summary || publicRuntime;
       document.getElementById('cards').innerHTML = [
+        card('Public runtime readiness', publicSummary.readiness_percent || 0, '%', publicSummary.operational_status || 'unknown'),
         card('Success rate', lead.success_rate_percent || 0, '%', (lead.success_rate_percent || 0) >= 95 ? 'low' : 'medium'),
         card('P95 lead time', secondsToMinutes(lead.p95_seconds), 'min', (lead.p95_seconds || 0) < 900 ? 'low' : 'medium'),
         card('Predictive risk score', predictive.risk_score || 0, '/100', predictive.risk_level),
