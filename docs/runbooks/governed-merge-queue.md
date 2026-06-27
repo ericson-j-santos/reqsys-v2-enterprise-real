@@ -36,7 +36,15 @@ Um PR só é considerado elegível para a fila quando:
 
 ## Auto-merge
 
-O repositório atualmente precisa estar com `allow_auto_merge=true` para usar o auto-merge nativo do GitHub. Enquanto essa opção estiver desabilitada, o workflow atua como gate de elegibilidade para merge manual ou para automação externa governada.
+**Observação crítica:** o repositório está com `allow_auto_merge=false`. O workflow detecta esse estado em runtime, publica `allow_auto_merge` em `policy.json` e **não** depende do auto-merge nativo do GitHub.
+
+Enquanto `allow_auto_merge=false`:
+
+- o gate continua validando isolamento, integração temporária e smoke runtime;
+- PRs elegíveis recebem a label `merge-queue:eligible`;
+- o merge segue via **Governed PR Automation** (`execute_merge=true` + label `governed-merge-approved`) ou merge manual após demais gates obrigatórios.
+
+Quando a política permitir habilitar `allow_auto_merge=true` no repositório, o mesmo workflow já expõe `native_auto_merge_available` na evidência para evolução futura sem mudança de contrato.
 
 ## Política de paralelismo seguro
 
@@ -65,9 +73,19 @@ O workflow publica o artefato:
 
 ```text
 artifacts/governed-merge-queue/
+├── policy.json
 ├── runtime-health-validator.json
 └── summary.md
 ```
+
+### Campos decisórios de `policy.json`
+
+| Campo | Significado |
+|---|---|
+| `eligible` | PR passou validação isolada + integração temporária |
+| `allow_auto_merge` | Estado atual do repositório no GitHub |
+| `native_auto_merge_available` | Espelho de `allow_auto_merge` para automação futura |
+| `merge_path` | Caminho operacional recomendado (`governed_pr_automation`) |
 
 Essas evidências devem ser usadas no status executivo para diferenciar:
 
@@ -76,12 +94,19 @@ Essas evidências devem ser usadas no status executivo para diferenciar:
 - estado evidenciado;
 - estado consolidado.
 
+## Labels automáticas
+
+| Label | Quando aplicar | Quando remover |
+|---|---|---|
+| `merge-queue:eligible` | Gate `merge-queue-gate` com sucesso | Qualquer falha nos estágios anteriores |
+
+A label **não** autoriza merge sozinha. Ela sinaliza elegibilidade técnica da fila governada; o merge continua exigindo CI obrigatório, label `governed-merge-approved` e disparo explícito de **Governed PR Automation** enquanto `allow_auto_merge=false`.
+
 ## Próximo incremento recomendado
 
 Após este gate estabilizar, evoluir para:
 
-1. auditoria de branch protection;
-2. label automática `merge-queue:eligible` quando todos os gates passarem;
-3. habilitação explícita de `allow_auto_merge` no repositório, se a política permitir;
-4. integração com dashboard operacional de PRs paralelos;
-5. relatório executivo de capacidade segura de paralelismo por domínio.
+1. auditoria de branch protection acoplada ao resultado de `policy.json`;
+2. habilitação explícita de `allow_auto_merge` no repositório, se a política permitir;
+3. integração com dashboard operacional de PRs paralelos;
+4. relatório executivo de capacidade segura de paralelismo por domínio.

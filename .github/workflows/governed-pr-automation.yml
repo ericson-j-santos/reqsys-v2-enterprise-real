@@ -36,6 +36,7 @@ env:
     Governança Padrão Ouro
     Branch Protection Audit
     PR Conflict Guard
+    Governed Merge Queue
 
 jobs:
   governed-pr-check:

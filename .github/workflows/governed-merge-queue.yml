@@ -14,7 +14,7 @@ permissions:
   contents: read
   actions: read
   checks: read
-  pull-requests: read
+  pull-requests: write
 
 concurrency:
   group: governed-merge-queue-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}
@@ -24,16 +24,44 @@ env:
   PYTHON_VERSION: "3.12"
   NODE_VERSION: "20.19.0"
   CI: "true"
+  CORRELATION_ID: governed-merge-queue-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
+  resolve-context:
+    name: Resolver contexto do PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      pr_number: ${{ steps.ctx.outputs.pr_number }}
+      head_sha: ${{ steps.ctx.outputs.head_sha }}
+    steps:
+      - name: Resolver PR e head SHA
+        id: ctx
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+            echo "head_sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            PR_NUMBER="${{ github.event.inputs.pr_number }}"
+            HEAD_SHA="$(gh pr view "$PR_NUMBER" --json headRefOid -q .headRefOid)"
+            echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+            echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          fi
+
   isolated-validation:
     name: Validação isolada do PR
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    needs: resolve-context
     steps:
       - name: Checkout PR
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.resolve-context.outputs.head_sha }}
           fetch-depth: 0
 
       - name: Setup Python
@@ -100,7 +128,7 @@ jobs:
     name: Integração temporária contra main
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: isolated-validation
+    needs: [resolve-context, isolated-validation]
     steps:
       - name: Checkout com histórico completo
         uses: actions/checkout@v4
@@ -110,11 +138,12 @@ jobs:
       - name: Preparar branch temporária de integração
         shell: bash
         run: |
+          set -euo pipefail
           git config user.name "reqsys-governed-merge-queue"
           git config user.email "actions@github.com"
           git fetch origin main
-          git checkout -B tmp/governed-merge-queue/${{ github.event.pull_request.number || github.event.inputs.pr_number }} origin/main
-          git merge --no-commit --no-ff ${{ github.event.pull_request.head.sha || github.sha }}
+          git checkout -B "tmp/governed-merge-queue/${{ needs.resolve-context.outputs.pr_number }}" origin/main
+          git merge --no-commit --no-ff "${{ needs.resolve-context.outputs.head_sha }}"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -126,7 +155,7 @@ jobs:
         run: |
           python scripts/runtime_health_validator.py \
             --repo "${{ github.repository }}" \
-            --branch "tmp/governed-merge-queue/${{ github.event.pull_request.number || github.event.inputs.pr_number }}" \
+            --branch "tmp/governed-merge-queue/${{ needs.resolve-context.outputs.pr_number }}" \
             --mode report_only \
             --output-dir artifacts/governed-merge-queue
 
@@ -142,29 +171,156 @@ jobs:
   merge-queue-gate:
     name: Gate de merge governado
     runs-on: ubuntu-latest
-    timeout-minutes: 3
-    needs: [isolated-validation, temporary-integration]
+    timeout-minutes: 5
+    needs: [resolve-context, isolated-validation, temporary-integration]
     if: always()
+    outputs:
+      eligible: ${{ steps.policy.outputs.eligible }}
+      allow_auto_merge: ${{ steps.policy.outputs.allow_auto_merge }}
     steps:
-      - name: Consolidar decisão governada
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Consolidar política e elegibilidade
+        id: policy
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          set -euo pipefail
+          mkdir -p artifacts/governed-merge-queue
+
+          ISOLATED="${{ needs.isolated-validation.result }}"
+          INTEGRATION="${{ needs.temporary-integration.result }}"
+          ELIGIBLE="false"
+          if [ "$ISOLATED" = "success" ] && [ "$INTEGRATION" = "success" ]; then
+            ELIGIBLE="true"
+          fi
+
+          ALLOW_AUTO_MERGE="false"
+          if gh api repos/${{ github.repository }} --jq '.allow_auto_merge' 2>/dev/null | grep -q true; then
+            ALLOW_AUTO_MERGE="true"
+          fi
+
+          NATIVE_AUTO_MERGE="false"
+          if [ "$ALLOW_AUTO_MERGE" = "true" ]; then
+            NATIVE_AUTO_MERGE="true"
+          fi
+
+          jq -n \
+            --arg correlation_id "${{ env.CORRELATION_ID }}" \
+            --arg pr_number "${{ needs.resolve-context.outputs.pr_number }}" \
+            --arg head_sha "${{ needs.resolve-context.outputs.head_sha }}" \
+            --arg eligible "$ELIGIBLE" \
+            --arg allow_auto_merge "$ALLOW_AUTO_MERGE" \
+            --arg native_auto_merge_available "$NATIVE_AUTO_MERGE" \
+            --arg isolated_result "$ISOLATED" \
+            --arg integration_result "$INTEGRATION" \
+            --arg merge_path "governed_pr_automation" \
+            '{
+              correlation_id: $correlation_id,
+              pr_number: ($pr_number | tonumber),
+              head_sha: $head_sha,
+              eligible: ($eligible == "true"),
+              allow_auto_merge: ($allow_auto_merge == "true"),
+              native_auto_merge_available: ($native_auto_merge_available == "true"),
+              merge_path: $merge_path,
+              stages: {
+                isolated_validation: $isolated_result,
+                temporary_integration: $integration_result
+              },
+              notes: [
+                "Auto-merge nativo depende de allow_auto_merge=true no repositório.",
+                "Com allow_auto_merge=false, usar Governed PR Automation ou merge manual após demais gates."
+              ]
+            }' > artifacts/governed-merge-queue/policy.json
+
+          echo "eligible=$ELIGIBLE" >> "$GITHUB_OUTPUT"
+          echo "allow_auto_merge=$ALLOW_AUTO_MERGE" >> "$GITHUB_OUTPUT"
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
           # Governed Merge Queue
 
           | Estágio | Resultado |
           |---|---|
-          | Validação isolada | `${{ needs.isolated-validation.result }}` |
-          | Integração temporária | `${{ needs.temporary-integration.result }}` |
-          | Smoke runtime | `runtime_health_validator report_only` |
+          | Validação isolada | \`$ISOLATED\` |
+          | Integração temporária | \`$INTEGRATION\` |
+          | Smoke runtime | \`runtime_health_validator report_only\` |
+          | Elegível para fila | \`$ELIGIBLE\` |
+          | allow_auto_merge (repo) | \`$ALLOW_AUTO_MERGE\` |
 
           ## Decisão
 
-          - `success`: PR elegível para fila de merge após demais checks obrigatórios.
-          - `failure`: bloquear merge e corrigir regressão antes de revalidar.
-          - Auto-merge nativo depende de `allow_auto_merge=true` no repositório.
+          - \`success\`: PR elegível para fila de merge após demais checks obrigatórios.
+          - \`failure\`: bloquear merge e corrigir regressão antes de revalidar.
+          - Auto-merge nativo depende de \`allow_auto_merge=true\` no repositório.
+          - Enquanto \`allow_auto_merge=false\`, o merge segue via **Governed PR Automation** ou manual com label \`governed-merge-approved\`.
           EOF
 
-          if [ "${{ needs.isolated-validation.result }}" != "success" ] || [ "${{ needs.temporary-integration.result }}" != "success" ]; then
+          if [ "$ELIGIBLE" != "true" ]; then
             exit 1
           fi
+
+      - name: Sincronizar label de elegibilidade
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = Number('${{ needs.resolve-context.outputs.pr_number }}');
+            const eligible = '${{ steps.policy.outputs.eligible }}' === 'true';
+            const label = 'merge-queue:eligible';
+            const { owner, repo } = context.repo;
+
+            const ensureLabel = async () => {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name: label });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name: label,
+                  color: '1d76db',
+                  description: 'PR elegível para fila de merge governada após validação isolada e integração temporária',
+                });
+              }
+            };
+
+            const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+              owner,
+              repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            const hasLabel = labels.some((item) => item.name === label);
+
+            if (eligible) {
+              await ensureLabel();
+              if (!hasLabel) {
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  labels: [label],
+                });
+              }
+              return;
+            }
+
+            if (hasLabel) {
+              await github.rest.issues.removeLabel({
+                owner,
+                repo,
+                issue_number: prNumber,
+                name: label,
+              });
+            }
+
+      - name: Publicar evidência de política
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-merge-queue-policy-evidence
+          path: artifacts/governed-merge-queue/policy.json
+          if-no-files-found: error
+          retention-days: 30
