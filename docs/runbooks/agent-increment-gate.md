@@ -20,6 +20,7 @@ triagem -> ajuste minimo -> CI completo -> evidencia -> merge controlado
 | Hotfix escopo fechado | `--increment-type hotfix --reference OPS-GAP-*` |
 | Concluir incremento ativo | `--increment-type consolidate` |
 | CI / evidencia auditavel | Workflow **Agent Increment Gate** (`workflow_dispatch`) |
+| Abertura de PR (runtime) | Workflow **Governed PR Automation** (`pull_request`) |
 
 ## Exit codes
 

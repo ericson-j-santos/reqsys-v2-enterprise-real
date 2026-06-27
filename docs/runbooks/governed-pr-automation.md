@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Automatizar a validação de PRs verdes e permitir merge governado sem depender do `allow_auto_merge` nativo do GitHub.
+Automatizar a validação de PRs verdes, **bloquear abertura de novas frentes** quando `increment_gate.new_front_allowed=false`, e permitir merge governado sem depender do `allow_auto_merge` nativo do GitHub.
 
 ## Princípio operacional
 
@@ -24,7 +24,14 @@ Nome:
 Governed PR Automation
 ```
 
-## Entradas
+## Gatilhos
+
+| Evento | Job | Finalidade |
+|---|---|---|
+| `pull_request` (`opened`, `reopened`, `ready_for_review`, `labeled`) | `increment-gate-on-open` | Bloquear abertura quando `new_front_allowed=false` |
+| `workflow_dispatch` | `governed-pr-check` | Validar merge + executar squash merge opcional |
+
+## Entradas (`workflow_dispatch`)
 
 | Entrada | Obrigatória | Padrão | Finalidade |
 |---|---:|---|---|
@@ -43,10 +50,30 @@ A automação valida os workflows mais recentes do head SHA do PR:
 - `Branch Protection Audit`
 - `PR Conflict Guard`
 
-## Regras de bloqueio
+## Increment gate (abertura de PR)
 
-O PR será bloqueado se:
+Na abertura do PR, o workflow consolida `coordenador-status.json` e executa `scripts/governed_pr_increment_gate.py`:
 
+- Infere `increment_type` (default: `new_front`) a partir de labels, corpo, título e branch.
+- Bloqueia quando `new_front_allowed=false` e o PR é classificado como nova frente.
+- Permite PRs de `gap_fix`, `hotfix`, `consolidate` ou `close_duplicate` conforme `increment_gate.allowed_increment_types`.
+
+### Declarar tipo de incremento no PR
+
+| Mecanismo | Exemplo |
+|---|---|
+| Label | `increment:gap_fix`, `increment:hotfix`, `increment:consolidate`, `increment:close_duplicate` |
+| Corpo do PR | `increment-type: gap_fix` + referência `OPS-GAP-*` quando aplicável |
+
+Artifact: `governed-pr-increment-gate-evidence` (`governed-pr-increment-gate.json`).
+
+Runbook relacionado: [agent-increment-gate](agent-increment-gate.md).
+
+## Regras de bloqueio (merge)
+
+O PR será bloqueado no merge se:
+
+- o increment gate reprovar o tipo inferido do PR;
 - estiver fechado;
 - estiver em draft;
 - não estiver mergeable;
