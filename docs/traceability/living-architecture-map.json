@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "updated_at": "2026-06-27T18:00:00Z",
+  "updated_at": "2026-06-27T20:00:00Z",
   "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
   "governance": {
     "owner": "ReqSys Architecture Governance",
@@ -79,6 +79,14 @@
       "purpose": "Validação report-only de semáforo, drill-down e UX operacional.",
       "artifacts": ["trilha-c-ux-operacional-report"],
       "runbooks": ["docs/runbooks/trilha-c-ux-operacional.md"]
+    },
+    {
+      "id": "runtime-operational-evidence-graph",
+      "name": "Runtime Operational Evidence Graph",
+      "path": ".github/workflows/runtime-operational-evidence-graph.yml",
+      "purpose": "Grafo review-only conectando workflows, PRs, artifacts, métricas e dashboards.",
+      "artifacts": ["runtime-operational-evidence-graph"],
+      "runbooks": ["docs/padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md", "docs/operations/RUNTIME_OPERATIONAL_EVIDENCE_GRAPH.md"]
     },
     {
       "id": "trilha-d-qualidade-governanca",
@@ -161,6 +169,14 @@
       "contract": "docs/contracts/trilha-c-ux-operacional.schema.json",
       "consumer_dashboards": ["trilhas-hub"],
       "retention_days": 30
+    },
+    {
+      "id": "runtime-operational-evidence-graph",
+      "name": "runtime-operational-evidence-graph-${{ github.run_id }}",
+      "producer_workflow": "runtime-operational-evidence-graph",
+      "contract": "docs/contracts/operational-json-artifact.schema.json",
+      "consumer_dashboards": ["operational-evidence-hub", "ops-dashboard"],
+      "retention_days": 30
     }
   ],
   "schemas": [
@@ -172,7 +188,8 @@
     { "id": "trilha-c-ux-operacional", "path": "docs/contracts/trilha-c-ux-operacional.schema.json", "domain": "ux", "version": "1.0.0" },
     { "id": "trilha-d-qualidade-governanca", "path": "docs/contracts/trilha-d-qualidade-governanca.schema.json", "domain": "quality", "version": "1.0.0" },
     { "id": "product-intelligence-event", "path": "schemas/product-intelligence/product-intelligence-event.schema.json", "domain": "product-intelligence", "version": "1.0.0" },
-    { "id": "operational-health-dashboard", "path": "docs/operations/operational-health-dashboard.schema.json", "domain": "operations", "version": "1.0.0" }
+    { "id": "operational-health-dashboard", "path": "docs/operations/operational-health-dashboard.schema.json", "domain": "operations", "version": "1.0.0" },
+    { "id": "coordenador-status", "path": "docs/contracts/coordenador-status.schema.json", "domain": "governance", "version": "1.0.0" }
   ],
   "dashboards": [
     { "id": "operational-command-center", "path": "docs/dashboard/operational-command-center.md", "data_sources": ["operational-artifact-schema-validation", "operational-artifact-discovery-index"], "runbooks": ["docs/runbooks/operational-governance-dashboard.md"] },
@@ -189,7 +206,9 @@
     { "id": "operational-artifact-schema-validation", "path": "docs/runbooks/operational-artifact-schema-validation.md", "covers": ["artifacts", "schemas"] },
     { "id": "operational-evidence-hub", "path": "docs/runbooks/operational-evidence-hub.md", "covers": ["delivery-readiness", "delivery-completion", "delivery-finalization", "maturity-snapshot", "observability-correlation", "artifact-contract-validation", "dashboard-regression", "living-architecture-traceability"] },
     { "id": "trilha-e-arquitetura-viva", "path": "docs/runbooks/trilha-e-arquitetura-viva.md", "covers": ["diagramas-vivos", "adrs", "runtime-topology", "fluxo-navegavel", "inventory", "architecture-as-code"] },
-    { "id": "trilhas-padrao-ouro", "path": "docs/runbooks/trilhas-padrao-ouro.md", "covers": ["trilha-a", "trilha-b", "trilha-c", "trilha-d", "trilha-e", "gold-standard"] }
+    { "id": "trilhas-padrao-ouro", "path": "docs/runbooks/trilhas-padrao-ouro.md", "covers": ["trilha-a", "trilha-b", "trilha-c", "trilha-d", "trilha-e", "gold-standard"] },
+    { "id": "padrao-ouro-tier1-hub", "path": "docs/padrao-ouro/README.md", "covers": ["living-architecture-index", "adr-index", "runtime-evidence-graph", "contract-catalog", "engineering-playbooks"] },
+    { "id": "agent-increment-gate", "path": "docs/runbooks/agent-increment-gate.md", "covers": ["new_front", "gap_fix", "close_duplicate", "hotfix", "consolidate"] }
   ],
   "recent_prs": [
     { "id": "PR145", "url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/145", "evidence": ["docs/evidence/pr145-clean-replacement-evidence.md", "docs/audit/pr145-clean-replacement-audit.md"] },

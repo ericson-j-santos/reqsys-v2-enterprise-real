@@ -208,6 +208,8 @@ Ambiente jÃ¡ inicializado pelo update script (venv do backend + `npm ci` no fr
 
 Automacao real fica em GitHub Actions + scripts + agentes por PR; chats fixos sao contexto, nao runtime autonomo. Menu fechado: `docs/runbooks/coordenador-principal-menu-operacional.md`. Leitura preferencial: artifact `coordenador-status-evidence` via workflow **Coordenador Status Consolidator**.
 
+**Hub documentacao Padrão Ouro Tier 1:** `docs/padrao-ouro/README.md` — Living Architecture Index, ADR Index, Runtime Evidence Graph, Contract Catalog e Engineering Playbooks. Indice machine-readable para agentes: `docs/padrao-ouro/living-architecture-index.json`.
+
 **Gate obrigatorio para nova frente:** `python scripts/agent_increment_gate.py --increment-type new_front --intent "<objetivo>"`. Exit code `0` = permitido; `1` = bloqueado (seguir `recommended_actions`). Campo `increment_gate.new_front_allowed` em `coordenador-status.json`.
 
 ### Servicos canonicos (modo dev, sem Docker)
