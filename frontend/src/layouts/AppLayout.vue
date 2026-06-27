@@ -127,6 +127,7 @@ onMounted(async () => {
 const navItems = [
   { to: '/',                icon: 'mdi-view-dashboard',     title: 'Dashboard',       tip: 'Visão consolidada das métricas e acessos rápidos.' },
   { to: '/monitoramento-operacional', icon: 'mdi-monitor-dashboard', title: 'Monitoramento', tip: 'Estado operacional de PRs, gates, integrações e pendências.' },
+  { to: '/runtime-validator', icon: 'mdi-shield-sync-outline', title: 'Runtime Validator', tip: 'Health, score, incidentes, remediação e timeline governada.' },
   { to: '/estatisticas',    icon: 'mdi-chart-box-outline',  title: 'Estatísticas',    tip: 'Indicadores internos e externos auditáveis com fonte, fórmula e analítico.' },
   { to: '/requisitos',      icon: 'mdi-file-document-edit', title: 'Requisitos',      tip: 'Cadastro, listagem e acompanhamento dos requisitos.' },
   { to: '/pipeline',        icon: 'mdi-pipe',               title: 'Pipeline',        tip: 'Fluxo operacional detalhado do requisito até a publicação.' },
