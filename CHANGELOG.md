@@ -10,6 +10,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ### Adicionado
 
+- Runtime Operational Evidence UI em `reports/github-runtime-analytics/runtime-operational-evidence-ui.html` com navegação por nós do grafo JSON, correlações temporais, semáforo report-only e workflow `runtime-operational-evidence-ui.yml`.
 - Operational Evidence Hub em `docs/dashboard/operational-evidence-hub.html` consolidando delivery readiness, completion, finalization, maturity snapshot, observability correlation, artifact contract validation, dashboard regression validation e living architecture traceability com cards executivos, drill-down navegável, semáforo, confidence level, operational risk e fallback governado para artifacts ausentes.
 - Runbook `docs/runbooks/operational-evidence-hub.md` e atualização dos índices de rastreabilidade (`living-architecture-map.json`, `command-center-evidence-index.md`, `command-center-navigation-map.md`, `operational-command-center.md`).
 - Validação estática ampliada em `scripts/validate-dashboard-regression.mjs` para o Evidence Hub (cards, fontes JSON, drill-down, fallback e indicadores de governança).
