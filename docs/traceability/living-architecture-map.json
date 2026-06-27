@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "updated_at": "2026-06-27T15:00:00Z",
+  "updated_at": "2026-06-27T18:00:00Z",
   "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
   "governance": {
     "owner": "ReqSys Architecture Governance",
@@ -39,6 +39,14 @@
       "purpose": "Validação report-only de links internos principais e artifacts declarados sem contrato.",
       "artifacts": ["living-architecture-traceability-report"],
       "runbooks": ["docs/runbooks/living-architecture-traceability.md"]
+    },
+    {
+      "id": "trilha-e-arquitetura-viva",
+      "name": "Trilha E — Arquitetura Viva",
+      "path": ".github/workflows/trilha-e-arquitetura-viva.yml",
+      "purpose": "Validação report-only de diagramas vivos, ADRs, topology, inventory e architecture-as-code.",
+      "artifacts": ["trilha-e-arquitetura-viva-report"],
+      "runbooks": ["docs/runbooks/trilha-e-arquitetura-viva.md"]
     }
   ],
   "artifacts": [
@@ -73,10 +81,19 @@
       "contract": "docs/contracts/living-architecture-map.schema.json",
       "consumer_dashboards": ["command-center-navigation-map"],
       "retention_days": 30
+    },
+    {
+      "id": "trilha-e-arquitetura-viva-report",
+      "name": "trilha-e-arquitetura-viva-${{ github.run_id }}",
+      "producer_workflow": "trilha-e-arquitetura-viva",
+      "contract": "docs/contracts/trilha-e-arquitetura-viva.schema.json",
+      "consumer_dashboards": ["trilha-e-hub"],
+      "retention_days": 30
     }
   ],
   "schemas": [
     { "id": "living-architecture-map", "path": "docs/contracts/living-architecture-map.schema.json", "domain": "traceability", "version": "1.0.0" },
+    { "id": "trilha-e-arquitetura-viva", "path": "docs/contracts/trilha-e-arquitetura-viva.schema.json", "domain": "architecture", "version": "1.0.0" },
     { "id": "product-intelligence-event", "path": "schemas/product-intelligence/product-intelligence-event.schema.json", "domain": "product-intelligence", "version": "1.0.0" },
     { "id": "operational-health-dashboard", "path": "docs/operations/operational-health-dashboard.schema.json", "domain": "operations", "version": "1.0.0" }
   ],
@@ -86,12 +103,14 @@
     { "id": "command-center-navigation-map", "path": "docs/dashboard/command-center-navigation-map.md", "data_sources": ["living-architecture-traceability-report"], "runbooks": ["docs/runbooks/living-architecture-traceability.md"] },
     { "id": "ops-dashboard", "path": "docs/ops-dashboard/index.html", "data_sources": ["docs/ops-dashboard/data/health.json"], "runbooks": ["docs/runbooks/ops-dashboard.md"] },
     { "id": "operational-evidence-hub", "path": "docs/dashboard/operational-evidence-hub.html", "data_sources": ["delivery-readiness", "delivery-completion", "delivery-finalization", "delivery-maturity", "observability-correlation", "artifact-contract-validation", "dashboard-regression", "living-architecture-traceability"], "runbooks": ["docs/runbooks/operational-evidence-hub.md"] },
-    { "id": "live-operational-dashboard", "path": "docs/dashboard/live-operational-dashboard.dynamic.html", "data_sources": ["audit/ci-lead-time-analytics.json", "audit/delivery-readiness/delivery-readiness-report.json"], "runbooks": ["docs/runbooks/dashboard-regression-validation.md"] }
+    { "id": "live-operational-dashboard", "path": "docs/dashboard/live-operational-dashboard.dynamic.html", "data_sources": ["audit/ci-lead-time-analytics.json", "audit/delivery-readiness/delivery-readiness-report.json"], "runbooks": ["docs/runbooks/dashboard-regression-validation.md"] },
+    { "id": "trilha-e-hub", "path": "docs/architecture/trilha-e/index.html", "data_sources": ["docs/architecture/trilha-e/architecture-as-code.json", "docs/architecture/trilha-e/inventory.json", "docs/architecture/trilha-e/diagrams.json"], "runbooks": ["docs/runbooks/trilha-e-arquitetura-viva.md"] }
   ],
   "runbooks": [
     { "id": "living-architecture-traceability", "path": "docs/runbooks/living-architecture-traceability.md", "covers": ["workflows", "artifacts", "schemas", "dashboards", "runbooks", "recent_prs", "ci_evidence"] },
     { "id": "operational-artifact-schema-validation", "path": "docs/runbooks/operational-artifact-schema-validation.md", "covers": ["artifacts", "schemas"] },
-    { "id": "operational-evidence-hub", "path": "docs/runbooks/operational-evidence-hub.md", "covers": ["delivery-readiness", "delivery-completion", "delivery-finalization", "maturity-snapshot", "observability-correlation", "artifact-contract-validation", "dashboard-regression", "living-architecture-traceability"] }
+    { "id": "operational-evidence-hub", "path": "docs/runbooks/operational-evidence-hub.md", "covers": ["delivery-readiness", "delivery-completion", "delivery-finalization", "maturity-snapshot", "observability-correlation", "artifact-contract-validation", "dashboard-regression", "living-architecture-traceability"] },
+    { "id": "trilha-e-arquitetura-viva", "path": "docs/runbooks/trilha-e-arquitetura-viva.md", "covers": ["diagramas-vivos", "adrs", "runtime-topology", "fluxo-navegavel", "inventory", "architecture-as-code"] }
   ],
   "recent_prs": [
     { "id": "PR145", "url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/145", "evidence": ["docs/evidence/pr145-clean-replacement-evidence.md", "docs/audit/pr145-clean-replacement-audit.md"] },

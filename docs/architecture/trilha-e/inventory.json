@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0.0",
+  "updated_at": "2026-06-27T18:00:00Z",
+  "trail_id": "trilha-e",
+  "summary": {
+    "services": 4,
+    "api_modules": 12,
+    "workflows": 6,
+    "dashboards": 5,
+    "adrs": 24,
+    "diagrams": 4
+  },
+  "services": [
+    {
+      "id": "reqsys-api",
+      "name": "ReqSys API (FastAPI)",
+      "path": "backend/app/main.py",
+      "type": "backend",
+      "runtime_endpoint": "/api/runtime/health"
+    },
+    {
+      "id": "reqsys-frontend",
+      "name": "ReqSys Frontend (Vue/Vite)",
+      "path": "frontend/",
+      "type": "frontend",
+      "runtime_endpoint": null
+    },
+    {
+      "id": "reqsys-dotnet",
+      "name": "ReqSys API (.NET complementar)",
+      "path": "backend-dotnet/",
+      "type": "backend",
+      "runtime_endpoint": null
+    },
+    {
+      "id": "nginx-gateway",
+      "name": "Nginx Gateway (opcional)",
+      "path": "nginx/",
+      "type": "proxy",
+      "runtime_endpoint": null
+    }
+  ],
+  "api_modules": [
+    { "id": "monitoramento-operacional", "path": "backend/app/api/monitoramento_operacional.py", "prefix": "/api/runtime" },
+    { "id": "runtime-analytics", "path": "backend/app/api/runtime_analytics.py", "prefix": "/api/runtime/analytics" },
+    { "id": "sistema", "path": "backend/app/api/sistema.py", "prefix": "/v1/sistema" },
+    { "id": "requisitos", "path": "backend/app/api/requisitos.py", "prefix": "/v1/requisitos" },
+    { "id": "rastreabilidade", "path": "backend/app/api/rastreabilidade.py", "prefix": "/v1/rastreabilidade" },
+    { "id": "auditoria", "path": "backend/app/api/auditoria.py", "prefix": "/v1/auditoria" },
+    { "id": "agile-runtime", "path": "backend/app/api/agile_runtime.py", "prefix": "/v1/agile-runtime" },
+    { "id": "webhooks", "path": "backend/app/api/webhooks.py", "prefix": "/v1/webhooks" },
+    { "id": "relatorios", "path": "backend/app/api/relatorios.py", "prefix": "/v1/relatorios" },
+    { "id": "specs", "path": "backend/app/api/specs.py", "prefix": "/v1/specs" },
+    { "id": "wiki", "path": "backend/app/api/wiki.py", "prefix": "/v1/wiki" },
+    { "id": "auth", "path": "backend/app/api/auth.py", "prefix": "/v1/auth" }
+  ],
+  "workflows": [
+    { "id": "ci", "path": ".github/workflows/ci.yml", "purpose": "Gate principal CI/CD" },
+    { "id": "living-architecture-traceability", "path": ".github/workflows/living-architecture-traceability.yml", "purpose": "Rastreabilidade arquitetura viva" },
+    { "id": "trilha-e-arquitetura-viva", "path": ".github/workflows/trilha-e-arquitetura-viva.yml", "purpose": "Validação Trilha E" },
+    { "id": "runtime-health-validator", "path": ".github/workflows/runtime-health-validator.yml", "purpose": "Health runtime governado" },
+    { "id": "operational-artifact-discovery-index", "path": ".github/workflows/operational-artifact-discovery-index.yml", "purpose": "Índice de artifacts operacionais" },
+    { "id": "governanca-padrao-ouro", "path": ".github/workflows/governanca-padrao-ouro.yml", "purpose": "Governança padrão ouro" }
+  ],
+  "dashboards": [
+    { "id": "trilha-e-hub", "path": "docs/architecture/trilha-e/index.html", "type": "architecture" },
+    { "id": "operational-evidence-hub", "path": "docs/dashboard/operational-evidence-hub.html", "type": "operations" },
+    { "id": "ops-dashboard", "path": "docs/ops-dashboard/index.html", "type": "operations" },
+    { "id": "live-operational-dashboard", "path": "docs/dashboard/live-operational-dashboard.html", "type": "operations" },
+    { "id": "arquitetura-viewer", "path": "docs/arquitetura/index.html", "type": "architecture" }
+  ],
+  "adrs": [
+    { "id": "ADR-0001", "path": "docs/adr/ADR-0001-arquitetura-padrao-ouro.md", "topic": "arquitetura" },
+    { "id": "ADR-0002", "path": "docs/adr/ADR-0002-seguranca-gates-producao.md", "topic": "seguranca" },
+    { "id": "ADR-0003", "path": "docs/adr/ADR-0003-ambientes-dev-hml-prod.md", "topic": "ambientes" },
+    { "id": "ADR-0004", "path": "docs/adr/ADR-0004-ci-cd-qualidade.md", "topic": "ci-cd" },
+    { "id": "ADR-0005", "path": "docs/adr/ADR-0005-observabilidade-auditoria.md", "topic": "observabilidade" },
+    { "id": "ADR-0006", "path": "docs/adr/ADR-0006-analytics-drilldown-schema-driven-ui.md", "topic": "analytics" },
+    { "id": "ADR-0021", "path": "docs/adr/ADR-0021-coderabbit-fast-review-governance.md", "topic": "governanca" },
+    { "id": "ADR-0024", "path": "docs/adr/ADR-0024-substituicao-coderabbit-pr-quality-review.md", "topic": "governanca" },
+    { "id": "ADR-020", "path": "docs/adr/ADR-020-connection-broker-permission-on-demand.md", "topic": "integracao" },
+    { "id": "ADR-021", "path": "docs/adr/ADR-021-figma-github-retorno-em-tela.md", "topic": "integracao" },
+    { "id": "ADR-022", "path": "docs/adr/ADR-022-autonomous-operations-platform-p0-1.md", "topic": "operacao" },
+    { "id": "ADR-023", "path": "docs/adr/ADR-023-aop-runtime-health-validator-remediation-executor.md", "topic": "operacao" },
+    { "id": "ADR-030", "path": "docs/adr/ADR-030-governed-dev-automerge.md", "topic": "ci-cd" },
+    { "id": "ADR-031", "path": "docs/adr/ADR-031-runtime-risk-and-promotion-pipeline.md", "topic": "runtime" },
+    { "id": "ADR-032", "path": "docs/adr/ADR-032-operational-health-dashboard-governance.md", "topic": "dashboard" },
+    { "id": "ADR-033", "path": "docs/adr/ADR-033-product-intelligence-final-evidence-index.md", "topic": "evidencia" },
+    { "id": "ADR-034", "path": "docs/adr/ADR-034-autonomous-operational-runtime-consolidation.md", "topic": "runtime" },
+    { "id": "ADR-035", "path": "docs/adr/ADR-035-trilha-e-arquitetura-viva.md", "topic": "arquitetura-viva" },
+    { "id": "ADR-ESTATISTICAS", "path": "docs/adr/ADR-ESTATISTICAS-INTERNAS-EXTERNAS.md", "topic": "analytics" },
+    { "id": "ADR-OPER-005", "path": "docs/adr/ADR-REQSYS-OPER-005-monitoramento-operacional.md", "topic": "monitoramento" },
+    { "id": "ADR-PR-AUTO-RECOVERY-V2", "path": "docs/adr/ADR-PR-AUTO-RECOVERY-V2.md", "topic": "ci-cd" },
+    { "id": "ADR-PR-AUTO-RECOVERY-V3", "path": "docs/adr/ADR-PR-AUTO-RECOVERY-V3.md", "topic": "ci-cd" },
+    { "id": "ADR-USER-FINAL-SHELL", "path": "docs/adr/ADR-USER-FINAL-SHELL-001.md", "topic": "ux" },
+    { "id": "ADR-0001-ENTERPRISE", "path": "docs/ADR/ADR-0001-padrao-ouro-enterprise.md", "topic": "governanca" }
+  ],
+  "diagrams": [
+    { "id": "arquitetura-geral", "source": "docs/architecture/trilha-e/diagrams.json", "legacy": "docs/arquitetura/index.html#diagram-1" },
+    { "id": "modelo-dados", "source": "docs/architecture/trilha-e/diagrams.json", "legacy": "docs/arquitetura/index.html#diagram-2" },
+    { "id": "fluxo-deploy", "source": "docs/architecture/trilha-e/diagrams.json", "legacy": "docs/arquitetura/index.html#diagram-3" },
+    { "id": "trilha-e-navegacao", "source": "docs/architecture/trilha-e/diagrams.json", "legacy": "docs/architecture/trilha-e/index.html" }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T17:15:43.869332Z",
+  "trail_id": "trilha-e",
+  "trail_name": "Arquitetura Viva",
+  "mode": "report_only",
+  "status": "passed",
+  "summary": {
+    "capabilities": 6,
+    "adrs_indexed": 24,
+    "services": 4,
+    "workflows": 6,
+    "errors": 0,
+    "warnings": 0
+  },
+  "capabilities": [
+    "diagramas_vivos",
+    "adrs",
+    "runtime_topology",
+    "fluxo_navegavel",
+    "inventory",
+    "architecture_as_code"
+  ],
+  "issues": [],
+  "artifacts": {
+    "architecture_as_code": "docs/architecture/trilha-e/architecture-as-code.json",
+    "hub": "docs/architecture/trilha-e/index.html",
+    "adr": "docs/adr/ADR-035-trilha-e-arquitetura-viva.md"
+  }
+}

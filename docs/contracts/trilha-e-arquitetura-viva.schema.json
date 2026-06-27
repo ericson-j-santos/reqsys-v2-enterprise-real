@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/docs/contracts/trilha-e-arquitetura-viva.schema.json",
+  "title": "ReqSys Trilha E — Arquitetura Viva",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "trail_id", "trail_name", "updated_at", "repository", "mode", "governance", "capabilities", "artifacts", "validation"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "trail_id": { "type": "string", "const": "trilha-e" },
+    "trail_name": { "type": "string" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string" },
+    "mode": { "type": "string", "enum": ["report_only", "enforced"] },
+    "governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "adr", "runbook", "workflow"],
+      "properties": {
+        "owner": { "type": "string" },
+        "adr": { "type": "string" },
+        "runbook": { "type": "string" },
+        "workflow": { "type": "string" }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["diagramas_vivos", "adrs", "runtime_topology", "fluxo_navegavel", "inventory", "architecture_as_code"],
+      "properties": {
+        "diagramas_vivos": { "$ref": "#/$defs/capability_ref" },
+        "adrs": { "$ref": "#/$defs/capability_ref" },
+        "runtime_topology": { "$ref": "#/$defs/capability_ref" },
+        "fluxo_navegavel": { "$ref": "#/$defs/capability_ref" },
+        "inventory": { "$ref": "#/$defs/capability_ref" },
+        "architecture_as_code": { "$ref": "#/$defs/capability_ref" }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["report", "artifact_name"],
+      "properties": {
+        "report": { "type": "string" },
+        "artifact_name": { "type": "string" }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checks"],
+      "properties": {
+        "checks": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "capability_ref": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["active", "planned", "deprecated"] }
+      }
+    }
+  }
+}
