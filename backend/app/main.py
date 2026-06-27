@@ -32,6 +32,7 @@ from app.api import (
     relatorios,
     requisitos,
     runtime_analytics,
+    runtime_validator,
     sistema,
     specs,
     webhooks,
@@ -89,6 +90,7 @@ app.include_router(hub_lowcode.router)
 app.include_router(agents.router)
 app.include_router(monitoramento_operacional.router)
 app.include_router(runtime_analytics.router)
+app.include_router(runtime_validator.router)
 app.include_router(operational_intelligence.router)
 app.include_router(actions_runtime_center.router)
 app.include_router(govbi.router)
