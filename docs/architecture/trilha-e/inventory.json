@@ -4,7 +4,7 @@
   "trail_id": "trilha-e",
   "summary": {
     "services": 4,
-    "api_modules": 12,
+    "api_modules": 13,
     "workflows": 6,
     "dashboards": 5,
     "adrs": 29,
@@ -52,7 +52,8 @@
     { "id": "relatorios", "path": "backend/app/api/relatorios.py", "prefix": "/v1/relatorios" },
     { "id": "specs", "path": "backend/app/api/specs.py", "prefix": "/v1/specs" },
     { "id": "wiki", "path": "backend/app/api/wiki.py", "prefix": "/v1/wiki" },
-    { "id": "auth", "path": "backend/app/api/auth.py", "prefix": "/v1/auth" }
+    { "id": "auth", "path": "backend/app/api/auth.py", "prefix": "/v1/auth" },
+    { "id": "figma-github", "path": "backend/app/api/figma_github.py", "prefix": "/v1/integracoes/figma-github" }
   ],
   "workflows": [
     { "id": "ci", "path": ".github/workflows/ci.yml", "purpose": "Gate principal CI/CD" },

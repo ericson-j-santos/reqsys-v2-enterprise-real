@@ -99,6 +99,9 @@
               <div class="arch-node arch-node--integration">
                 🐙 GitHub ALM<br><small>Runs do repo reqsys-powerplatform-alm</small>
               </div>
+              <div class="arch-node arch-node--integration">
+                🎨 Figma ↔ GitHub<br><small>Sync bidirecional · /v1/integracoes/figma-github</small>
+              </div>
             </div>
           </div>
         </div>
@@ -106,7 +109,7 @@
         <!-- VIEWS DO FRONTEND -->
         <div class="subsection-title">
           <v-icon size="15">mdi-application</v-icon>
-          Views do Frontend · 10 telas
+          Views do Frontend · principais telas
         </div>
         <v-row>
           <v-col
@@ -299,6 +302,27 @@ npm run dev</pre>
           Tópico "Capturar Tarefas" → InvokeFlowAction → ForEach linha → Create Task Planner
         </div>
 
+        <div class="flow-diagram mt-2">
+          <div class="flow-node flow-node--user">
+            👤 Designer / PO<br><small>Teams, Web ou Figma</small>
+          </div>
+          <div class="flow-connector">→</div>
+          <div class="flow-node flow-node--bot">
+            🤖 ReqSysAgent<br><small>Tópico Sincronizar Figma</small>
+          </div>
+          <div class="flow-connector">→</div>
+          <div class="flow-node flow-node--flow">
+            ⚡ ReqSys API<br><small>POST /figma-github/sync</small>
+          </div>
+          <div class="flow-connector">→</div>
+          <div class="flow-node flow-node--planner">
+            🐙 GitHub Issues<br><small>Issues e comentários vinculados</small>
+          </div>
+        </div>
+        <div class="flow-label muted mt-1 mb-4">
+          Tópico "Sincronizar Figma GitHub" → API ReqSys → vínculos Figma/GitHub auditáveis em /figma-github
+        </div>
+
         <!-- COMPONENTES DA SOLUTION -->
         <div class="subsection-title">
           <v-icon size="15">mdi-puzzle</v-icon>
@@ -467,6 +491,9 @@ const webViews = [
   { nome: 'Rastreabilidade', rota: '/rastreabilidade', icone: 'mdi-vector-link',             cor: 'indigo',    desc: 'Matriz Requisito → História → Issue Redmine → Commit Git' },
   { nome: 'Specs SDD',       rota: '/specs',           icone: 'mdi-file-code-outline',       cor: 'deep-orange', desc: 'Especificações de features do my-first-spec-project (.sdd)' },
   { nome: 'Auditoria',       rota: '/auditoria',       icone: 'mdi-shield-search',           cor: 'error',     desc: 'Linha do tempo de eventos, correlation_id e governança' },
+  { nome: 'Figma GitHub',    rota: '/figma-github',    icone: 'mdi-vector-square',           cor: 'pink',      desc: 'Sincronização governada Figma ↔ GitHub com retorno em tela e tabela analítica' },
+  { nome: 'Hub Low-Code',    rota: '/hub-lowcode',     icone: 'mdi-lightning-bolt-circle',   cor: 'teal',      desc: 'Pacotes IA, flows Power Automate, bot ReqSysAgent e pipeline GitHub ALM' },
+  { nome: 'Monitoramento',   rota: '/monitoramento-operacional', icone: 'mdi-monitor-dashboard', cor: 'cyan', desc: 'Estado operacional de PRs, gates, integrações e pendências' },
 ]
 
 const backendModulos = [
@@ -480,6 +507,7 @@ const backendModulos = [
   { nome: 'Specs SDD',       prefixo: '/v1/specs',          endpoints: '3',  desc: 'Features, exemplos e templates de especificação' },
   { nome: 'Relatórios SSRS', prefixo: '/v1/relatorios',     endpoints: '3',  desc: 'Catálogo, status e health do servidor SSRS NOTERI' },
   { nome: 'Hub Low-Code',    prefixo: '/v1/hub-lowcode',    endpoints: '4',  desc: 'Status, pacotes SharePoint, flows Dataverse, runs GitHub' },
+  { nome: 'Figma GitHub',    prefixo: '/v1/integracoes/figma-github', endpoints: '2', desc: 'Sync bidirecional Figma ↔ GitHub e consulta de vínculos em tela' },
 ]
 
 const ambientesFlyio = [
@@ -498,6 +526,11 @@ const solutionComps = [
     nome: 'Capturar Tarefas',     tipo: 'Tópico · Bot',
     icone: 'mdi-comment-text',    cor: 'indigo',
     desc:  'Coleta linhas de tarefa → confirmação → InvokeFlowAction → informa resultado',
+  },
+  {
+    nome: 'Sincronizar Figma GitHub', tipo: 'Tópico · Bot',
+    icone: 'mdi-vector-square',   cor: 'pink',
+    desc:  'Aciona sync Figma ↔ GitHub via API ReqSys e orienta consulta em /figma-github',
   },
   {
     nome: 'Criar no Planner',     tipo: 'Flow · Power Automate',
