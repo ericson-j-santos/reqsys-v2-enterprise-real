@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0.0",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "generated_at_epoch": 1782580000,
+  "summary": {
+    "status": "critical",
+    "executive_score": 36.8,
+    "risk": "high",
+    "confidence": "low",
+    "source": "static_offline_artifacts"
+  },
+  "cards": {
+    "health": {
+      "status": "unknown",
+      "score": 40,
+      "critical_failure_count": null,
+      "warning_count": null,
+      "source_missing": true,
+      "risk": "medium"
+    },
+    "readiness": {
+      "available": true,
+      "status": "degraded",
+      "readiness_percent": 25,
+      "base_url": "https://reqsys-api.fly.dev",
+      "response_time": 295.15,
+      "dashboard_ready": false,
+      "login_ready": false,
+      "api_ready": false,
+      "runtime_ready": false,
+      "evidence_ready": false,
+      "blocking_issue_count": 3,
+      "risk": "high"
+    },
+    "merge_intelligence": {
+      "available": false,
+      "risk": "unknown",
+      "lane": "unknown",
+      "parallel_safe": false,
+      "mergeability_score": 19,
+      "recommendation": "isolamento_obrigatorio",
+      "queue_saturation": "low",
+      "queue_pressure": 0,
+      "confidence": "low",
+      "blocking_reasons": [
+        "conflict_risk_report_missing"
+      ],
+      "hotspot_count": 0,
+      "safe_lane_count": 0,
+      "risk_level": "high"
+    },
+    "evidence_gate": {
+      "available": false,
+      "status": "unknown",
+      "passed_count": 0,
+      "failed_count": 0,
+      "risk": "medium"
+    },
+    "finalization": {
+      "available": false,
+      "status": "unknown",
+      "final_score": 0,
+      "residual_gap": 0,
+      "indicator_count": 0,
+      "passed_indicator_count": 0,
+      "risk": "medium"
+    }
+  },
+  "links": {
+    "ops_dashboard": "docs/ops-dashboard/index.html",
+    "operational_evidence_hub": "docs/dashboard/operational-evidence-hub.html",
+    "health_json": "docs/ops-dashboard/data/health.json",
+    "merge_intelligence_index": "docs/ops-dashboard/data/merge-intelligence-index.json",
+    "merge_lane_priority": "docs/ops-dashboard/data/merge-lane-priority.json",
+    "runtime_executive_index": "docs/ops-dashboard/data/runtime-executive-index.json",
+    "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
+    "pulls": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pulls"
+  },
+  "guardrails": [
+    "offline_static_generation",
+    "no_runtime_github_api_call",
+    "safe_fallback_when_source_artifact_missing",
+    "report_only_contract_for_public_dashboard"
+  ]
+}
