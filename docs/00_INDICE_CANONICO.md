@@ -45,3 +45,7 @@ micro PR → CI Fast → revisão objetiva → merge controlado → deep review 
 ## Política de atualização
 
 Atualizar este índice sempre que houver novo documento canônico, ADR relevante, decisão técnica transversal ou mudança no fluxo operacional do ReqSys.
+
+## Runbooks e operação
+
+- [REQSYS#002.P5 — Runbook de execução real e rollback operacional Fly.io](FLYIO_PUBLIC_RUNTIME_RUNBOOK.md)
