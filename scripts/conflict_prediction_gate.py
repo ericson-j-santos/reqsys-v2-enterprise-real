@@ -45,6 +45,8 @@ CONTRACT_HINTS = (
     "migration",
 )
 
+WORKFLOW_PREFIX = ".github/workflows/"
+
 
 def load_paths(raw_paths: list[str], paths_file: str | None = None) -> list[str]:
     paths = [item.strip() for item in raw_paths if item.strip()]
@@ -55,11 +57,37 @@ def load_paths(raw_paths: list[str], paths_file: str | None = None) -> list[str]
     return sorted(dict.fromkeys(paths))
 
 
+def load_optional_paths(paths_file: str | None = None) -> list[str]:
+    if not paths_file:
+        return []
+    file_path = Path(paths_file)
+    if not file_path.exists():
+        return []
+    return sorted(
+        dict.fromkeys(item.strip() for item in file_path.read_text(encoding="utf-8").splitlines() if item.strip())
+    )
+
+
 def _starts_with_any(path: str, prefixes: tuple[str, ...]) -> bool:
     return any(path.startswith(prefix) for prefix in prefixes)
 
 
-def classify_conflict(paths: list[str], *, overlap: bool = False) -> dict[str, Any]:
+def _workflow_paths(paths: list[str]) -> list[str]:
+    return [path for path in paths if path.startswith(WORKFLOW_PREFIX)]
+
+
+def classify_conflict(
+    paths: list[str],
+    *,
+    overlap: bool = False,
+    concurrent_hotspots: list[str] | None = None,
+) -> dict[str, Any]:
+    concurrent_hotspots = sorted(dict.fromkeys(concurrent_hotspots or []))
+    current_paths = set(paths)
+    concurrent_hotspot_paths = sorted(current_paths.intersection(concurrent_hotspots))
+    workflow_paths = _workflow_paths(paths)
+    multiple_workflows_changed = len(workflow_paths) > 1
+
     docs_only = bool(paths) and all(_starts_with_any(path, LOW_RISK_PREFIXES) for path in paths)
     artifact_only = bool(paths) and all(path.startswith("artifacts/") for path in paths)
     runtime_surface_change = any(_starts_with_any(path, HIGH_RISK_PREFIXES) for path in paths)
@@ -70,14 +98,21 @@ def classify_conflict(paths: list[str], *, overlap: bool = False) -> dict[str, A
     risk = "low"
 
     if overlap:
-        risk = "blocked"
         blocking_reasons.append("changed_paths_overlap")
+    if multiple_workflows_changed:
+        blocking_reasons.append("multiple_workflows_changed")
+    if concurrent_hotspot_paths:
+        blocking_reasons.append("concurrent_hotspots")
+
+    if blocking_reasons:
+        risk = "blocked"
     elif runtime_surface_change or public_contract_change:
         risk = "high"
     elif medium_surface_change:
         risk = "medium"
 
     parallel_safe = risk in {"low", "medium"} and not blocking_reasons
+    recommendation = "serializar_merge" if risk == "blocked" else "merge_com_atencao" if risk == "high" else "merge_paralelo_seguro"
 
     return {
         "risk": risk,
@@ -85,8 +120,21 @@ def classify_conflict(paths: list[str], *, overlap: bool = False) -> dict[str, A
         "parallel_safe": parallel_safe,
         "blocking_reasons": blocking_reasons,
         "changed_paths": paths,
+        "critical_files": sorted(
+            path
+            for path in paths
+            if _starts_with_any(path, HIGH_RISK_PREFIXES)
+            or any(hint in path.lower() for hint in CONTRACT_HINTS)
+            or path in concurrent_hotspot_paths
+        ),
+        "recommendation": recommendation,
         "signals": {
             "changed_paths_overlap": overlap,
+            "multiple_workflows_changed": multiple_workflows_changed,
+            "workflow_change_count": len(workflow_paths),
+            "workflow_paths": workflow_paths,
+            "concurrent_hotspots": bool(concurrent_hotspot_paths),
+            "concurrent_hotspot_paths": concurrent_hotspot_paths,
             "public_contract_change": public_contract_change,
             "runtime_surface_change": runtime_surface_change,
             "docs_only": docs_only,
@@ -94,7 +142,7 @@ def classify_conflict(paths: list[str], *, overlap: bool = False) -> dict[str, A
             "medium_surface_change": medium_surface_change,
         },
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
     }
 
 
@@ -103,6 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("paths", nargs="*", help="Paths alterados")
     parser.add_argument("--paths-file", default="", help="Arquivo com um path por linha")
     parser.add_argument("--overlap", action="store_true", help="Sinaliza sobreposicao ja detectada com outro PR")
+    parser.add_argument("--hotspots-file", default="", help="Arquivo com paths concorrentes alterados por PRs abertos")
     parser.add_argument("--output", default="artifacts/runtime-governance/conflict-prediction-gate.json")
     parser.add_argument("--json", action="store_true")
     return parser
@@ -111,7 +160,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     paths = load_paths(args.paths, args.paths_file or None)
-    payload = classify_conflict(paths, overlap=args.overlap)
+    concurrent_hotspots = load_optional_paths(args.hotspots_file or None)
+    payload = classify_conflict(paths, overlap=args.overlap, concurrent_hotspots=concurrent_hotspots)
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -120,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
-        print(f"risk={payload['risk']} parallel_safe={payload['parallel_safe']}")
+        print(f"risk={payload['risk']} parallel_safe={payload['parallel_safe']} recommendation={payload['recommendation']}")
 
     return 1 if payload["risk"] == "blocked" else 0
 
