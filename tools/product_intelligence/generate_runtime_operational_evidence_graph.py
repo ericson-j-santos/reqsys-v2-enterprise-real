@@ -48,7 +48,7 @@ def build_graph(timeline_payload: dict) -> dict:
         'confidence_percent': 93 if nodes else 60,
         'risk_percent': 4 if nodes else 35,
         'limits': ['no_deploy', 'no_production_mutation', 'no_external_write', 'human_review_required'],
-        'next_recommended_increment': 'Runtime Operational Evidence UI',
+        'next_recommended_increment': 'Runtime Evidence Graph Dashboard Integration',
     }
 
 def write_reports(graph: dict) -> None:

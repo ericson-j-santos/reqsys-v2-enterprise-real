@@ -66,6 +66,7 @@ Mapa navegável de módulos, fluxos, pipelines, ownership, eventos, dependência
 | **Agent Increment Gate** | `scripts/agent_increment_gate.py` | `new_front_allowed`, gaps, duplicados | `agent-increment-gate-evidence` |
 | **Living Architecture** | `living-architecture-traceability.yml` | paths, contratos | `living-architecture-traceability-report` |
 | **Runtime Evidence Graph** | `runtime-operational-evidence-graph.yml` | timeline + graph JSON | `runtime-operational-evidence-graph.json` |
+| **Runtime Evidence UI** | `runtime-operational-evidence-ui.yml` | graph JSON + UI HTML | `runtime-operational-evidence-ui.json` |
 | **Trilhas Padrão Ouro** | `trilhas-padrao-ouro.yml` | trilhas A–E | `trilhas-padrao-ouro-evidence` |
 | **Artifact Schema Validation** | `operational-artifact-schema-validation.yml` | contratos JSON | `artifact-contract-validation-report` |
 | **Coordenador Status** | `coordenador-status-consolidator.yml` | artifacts 1–2 | `coordenador-status.json` |

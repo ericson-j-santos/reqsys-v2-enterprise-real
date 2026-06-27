@@ -89,6 +89,14 @@
       "runbooks": ["docs/padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md", "docs/operations/RUNTIME_OPERATIONAL_EVIDENCE_GRAPH.md"]
     },
     {
+      "id": "runtime-operational-evidence-ui",
+      "name": "Runtime Operational Evidence UI",
+      "path": ".github/workflows/runtime-operational-evidence-ui.yml",
+      "purpose": "Interface navegável sobre o grafo JSON de evidências operacionais.",
+      "artifacts": ["runtime-operational-evidence-ui"],
+      "runbooks": ["docs/operations/RUNTIME_OPERATIONAL_EVIDENCE_UI.md", "docs/padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md"]
+    },
+    {
       "id": "trilha-d-qualidade-governanca",
       "name": "Trilha D — Qualidade e Governança",
       "path": ".github/workflows/trilha-d-qualidade-governanca.yml",
@@ -174,6 +182,14 @@
       "id": "runtime-operational-evidence-graph",
       "name": "runtime-operational-evidence-graph-${{ github.run_id }}",
       "producer_workflow": "runtime-operational-evidence-graph",
+      "contract": "docs/contracts/operational-json-artifact.schema.json",
+      "consumer_dashboards": ["operational-evidence-hub", "ops-dashboard"],
+      "retention_days": 30
+    },
+    {
+      "id": "runtime-operational-evidence-ui",
+      "name": "runtime-operational-evidence-ui-${{ github.run_id }}",
+      "producer_workflow": "runtime-operational-evidence-ui",
       "contract": "docs/contracts/operational-json-artifact.schema.json",
       "consumer_dashboards": ["operational-evidence-hub", "ops-dashboard"],
       "retention_days": 30

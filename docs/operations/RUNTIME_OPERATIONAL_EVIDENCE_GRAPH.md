@@ -19,4 +19,4 @@ Construir grafo review-only de evidências operacionais a partir da timeline de 
 
 ## Próximo incremento recomendado
 
-Runtime Operational Evidence UI.
+Runtime Evidence Graph Dashboard Integration — ver [`RUNTIME_OPERATIONAL_EVIDENCE_UI.md`](RUNTIME_OPERATIONAL_EVIDENCE_UI.md).

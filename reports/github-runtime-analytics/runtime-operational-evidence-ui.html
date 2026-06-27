@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Runtime Operational Evidence UI</title>
+<style>
+:root { --green:#137333; --yellow:#b06000; --red:#b3261e; --bg:#f8fafc; --card:#fff; --text:#172033; --muted:#667085; }
+body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+header { padding:24px; background:#0f172a; color:white; }
+main { display:grid; grid-template-columns:280px 1fr; gap:20px; padding:20px; }
+nav { position:sticky; top:20px; align-self:start; display:flex; flex-direction:column; gap:8px; }
+.nav-item { text-decoration:none; color:var(--text); background:var(--card); border-left:6px solid var(--muted); padding:10px; border-radius:8px; font-size:13px; }
+.summary { display:grid; grid-template-columns:repeat(5, minmax(120px, 1fr)); gap:12px; margin-bottom:20px; }
+.metric, .card, .edges { background:var(--card); border-radius:12px; padding:16px; box-shadow:0 1px 4px rgba(15,23,42,.08); }
+.metric span { display:block; color:var(--muted); font-size:12px; }
+.metric strong { display:block; font-size:22px; margin-top:6px; }
+.card { border-left:8px solid var(--muted); margin-bottom:12px; }
+.card-header { display:flex; justify-content:space-between; gap:16px; margin-bottom:10px; }
+.meta { display:flex; flex-wrap:wrap; gap:12px; font-size:13px; color:var(--muted); }
+.green { border-left-color:var(--green); } .yellow { border-left-color:var(--yellow); } .red { border-left-color:var(--red); }
+table { width:100%; border-collapse:collapse; margin-top:12px; }
+th, td { padding:10px; border-bottom:1px solid #e5e7eb; text-align:left; font-size:13px; }
+th { background:#eef2f7; }
+code { background:#eef2f7; padding:2px 6px; border-radius:6px; }
+@media (max-width:900px) { main { grid-template-columns:1fr; } .summary { grid-template-columns:1fr 1fr; } nav { position:static; } }
+</style>
+</head>
+<body>
+<header><h1>Runtime Operational Evidence UI</h1><p>Runtime evidence graph consolidated · review_only · revisão humana obrigatória</p></header>
+<main>
+<nav aria-label="Mapa navegável do grafo de evidências"><a href="#event-1" class="nav-item green">pull_request_state_captured</a>
+<a href="#event-2" class="nav-item green">github_actions_state_captured</a>
+<a href="#event-3" class="nav-item green">governance_gate_state_captured</a></nav>
+<section>
+<div class="summary">
+<div class="metric"><span>Nodes</span><strong>3</strong></div>
+<div class="metric"><span>Edges</span><strong>2</strong></div>
+<div class="metric"><span>Confiança</span><strong>93%</strong></div>
+<div class="metric"><span>Risco</span><strong>4%</strong></div>
+<div class="metric"><span>Status</span><strong>GREEN</strong></div>
+</div>
+<section id="event-1" class="card green">
+  <div class="card-header"><strong>pull_request_state_captured</strong><span>review_only</span></div>
+  <div class="meta"><span>ID: <code>event_1</code></span><span>Source: <code>github_runtime_analytics</code></span><span>Correlation: <code>operational</code></span></div>
+</section>
+<section id="event-2" class="card green">
+  <div class="card-header"><strong>github_actions_state_captured</strong><span>review_only</span></div>
+  <div class="meta"><span>ID: <code>event_2</code></span><span>Source: <code>github_runtime_analytics</code></span><span>Correlation: <code>ci</code></span></div>
+</section>
+<section id="event-3" class="card green">
+  <div class="card-header"><strong>governance_gate_state_captured</strong><span>review_only</span></div>
+  <div class="meta"><span>ID: <code>event_3</code></span><span>Source: <code>github_runtime_analytics</code></span><span>Correlation: <code>governance</code></span></div>
+</section>
+<div class="edges">
+<h2>Correlações temporais</h2>
+<table><thead><tr><th>From</th><th>To</th><th>Type</th></tr></thead><tbody><tr><td><code>event_1</code></td><td><code>event_2</code></td><td>temporal_correlation</td></tr>
+<tr><td><code>event_2</code></td><td><code>event_3</code></td><td>temporal_correlation</td></tr></tbody></table>
+</div>
+</section>
+</main>
+</body>
+</html>

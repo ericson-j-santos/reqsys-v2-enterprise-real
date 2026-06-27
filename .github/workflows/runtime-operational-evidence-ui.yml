@@ -1,0 +1,53 @@
+name: Runtime Operational Evidence UI
+
+on:
+  pull_request:
+    paths:
+      - 'tools/product_intelligence/**'
+      - 'docs/operations/**'
+      - '.github/workflows/runtime-operational-evidence-ui.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/product_intelligence/**'
+      - 'docs/operations/**'
+      - '.github/workflows/runtime-operational-evidence-ui.yml'
+
+jobs:
+  runtime-operational-evidence-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate timeline prerequisite
+        run: python tools/product_intelligence/generate_runtime_operational_correlation_timeline.py
+      - name: Generate evidence graph prerequisite
+        run: python tools/product_intelligence/generate_runtime_operational_evidence_graph.py
+      - name: Build runtime operational evidence UI
+        run: python tools/product_intelligence/generate_runtime_operational_evidence_ui.py reports/github-runtime-analytics
+      - name: Validate runtime operational evidence UI
+        run: |
+          python - <<'PY'
+import json
+from pathlib import Path
+
+report_dir = Path('reports/github-runtime-analytics')
+payload = json.loads((report_dir / 'runtime-operational-evidence-ui.json').read_text(encoding='utf-8'))
+html = (report_dir / 'runtime-operational-evidence-ui.html').read_text(encoding='utf-8')
+md = (report_dir / 'runtime-operational-evidence-ui.md').read_text(encoding='utf-8')
+assert payload['mode'] == 'review_only', payload
+assert payload['readiness_color'] == 'green', payload
+assert payload['node_count'] >= 3, payload
+assert payload['edge_count'] >= 2, payload
+assert payload['confidence_percent'] >= 90, payload
+assert payload['risk_percent'] <= 10, payload
+assert payload['human_review_required'] is True, payload
+assert 'Runtime Operational Evidence UI' in html
+assert 'Navigable graph nodes' in md
+assert 'Correlações temporais' in html
+PY
+      - name: Publish summary
+        run: cat reports/github-runtime-analytics/runtime-operational-evidence-ui.md >> "$GITHUB_STEP_SUMMARY"

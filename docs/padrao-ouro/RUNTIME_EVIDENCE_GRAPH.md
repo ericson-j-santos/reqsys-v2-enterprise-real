@@ -115,7 +115,7 @@ generate_runtime_operational_evidence_graph.py
 
 ## Próximo incremento recomendado
 
-**Runtime Operational Evidence UI** — interface navegável sobre o grafo JSON (ver `docs/operations/RUNTIME_OPERATIONAL_EVIDENCE_GRAPH.md`).
+**Runtime Evidence Graph Dashboard Integration** — integrar grafo e UI ao Ops Dashboard e Operational Evidence Hub (ver [`docs/operations/RUNTIME_OPERATIONAL_EVIDENCE_UI.md`](../operations/RUNTIME_OPERATIONAL_EVIDENCE_UI.md)).
 
 ## Referências
 

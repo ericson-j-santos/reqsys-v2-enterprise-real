@@ -23,6 +23,7 @@
     { "id": "runbook", "label": "Runbook Trilha E", "type": "runbook", "href": "docs/runbooks/trilha-e-arquitetura-viva.md", "icon": "runbook" },
     { "id": "workflow", "label": "Workflow Validação", "type": "workflow", "href": ".github/workflows/trilha-e-arquitetura-viva.yml", "icon": "ci" },
     { "id": "evidence-hub", "label": "Operational Evidence Hub", "type": "dashboard", "href": "docs/dashboard/operational-evidence-hub.html", "icon": "evidence" },
+    { "id": "runtime-evidence-ui", "label": "Runtime Evidence UI", "type": "dashboard", "href": "reports/github-runtime-analytics/runtime-operational-evidence-ui.html", "icon": "graph" },
     { "id": "correlation-graph", "label": "Correlation Graph", "type": "doc", "href": "docs/architecture/runtime-correlation-graph.md", "icon": "graph" }
   ],
   "edges": [
@@ -41,6 +42,8 @@
     { "from": "hub-html", "to": "workflow", "relationship": "validates", "navigable": true },
     { "from": "living-traceability", "to": "architecture-as-code", "relationship": "indexes", "navigable": true },
     { "from": "evidence-hub", "to": "living-traceability", "relationship": "consumes", "navigable": true },
+    { "from": "evidence-hub", "to": "runtime-evidence-ui", "relationship": "links", "navigable": true },
+    { "from": "runtime-evidence-ui", "to": "correlation-graph", "relationship": "documents", "navigable": true },
     { "from": "workflow", "to": "architecture-as-code", "relationship": "validates", "navigable": true }
   ],
   "drill_down": [

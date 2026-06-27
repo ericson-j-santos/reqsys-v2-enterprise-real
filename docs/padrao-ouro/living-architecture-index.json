@@ -126,6 +126,13 @@
       "evidence": "reports/github-runtime-analytics/runtime-operational-evidence-graph.json"
     },
     {
+      "id": "runtime-evidence-ui",
+      "name": "Runtime Operational Evidence UI",
+      "path": ".github/workflows/runtime-operational-evidence-ui.yml",
+      "gates": ["graph_generated", "ui_json_valid", "ui_html_navigable"],
+      "evidence": "reports/github-runtime-analytics/runtime-operational-evidence-ui.json"
+    },
+    {
       "id": "trilhas-padrao-ouro",
       "name": "Trilhas — Padrão Ouro Consolidado",
       "path": ".github/workflows/trilhas-padrao-ouro.yml",
@@ -161,7 +168,8 @@
     { "from": "backend", "to": "sqlite", "type": "database", "contract": "DATABASE_URL=sqlite:///./reqsys.db" },
     { "from": "workflows", "to": "docs/contracts", "type": "schema-validation", "contract": "operational-artifact-schema-validation.yml" },
     { "from": "agents", "to": "living-architecture-index.json", "type": "context", "contract": "docs/padrao-ouro/living-architecture-index.json" },
-    { "from": "ci", "to": "evidence-graph", "type": "analytics", "contract": "runtime-operational-evidence-graph.yml" }
+    { "from": "ci", "to": "evidence-graph", "type": "analytics", "contract": "runtime-operational-evidence-graph.yml" },
+    { "from": "evidence-graph", "to": "runtime-evidence-ui", "type": "navigation", "contract": "runtime-operational-evidence-ui.yml" }
   ],
   "dashboards": [
     { "id": "operational-command-center", "path": "docs/dashboard/operational-command-center.md" },

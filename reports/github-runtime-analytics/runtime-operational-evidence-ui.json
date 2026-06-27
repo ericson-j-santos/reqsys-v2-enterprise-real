@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0.0",
+  "name": "runtime-operational-evidence-ui",
+  "generated_at": "2026-06-27T22:06:18.954440+00:00",
+  "mode": "review_only",
+  "source": "runtime-operational-evidence-graph.json",
+  "runtime_state": "EVIDENCE_GRAPH_READY",
+  "readiness_color": "green",
+  "readiness_label": "Runtime evidence graph consolidated",
+  "confidence_percent": 93,
+  "risk_percent": 4,
+  "node_count": 3,
+  "edge_count": 2,
+  "consolidated_nodes": 3,
+  "cards": [
+    {
+      "id": "event_1",
+      "label": "pull_request_state_captured",
+      "source": "github_runtime_analytics",
+      "state": "review_only",
+      "correlation_level": "operational",
+      "status_color": "green",
+      "anchor": "event-1"
+    },
+    {
+      "id": "event_2",
+      "label": "github_actions_state_captured",
+      "source": "github_runtime_analytics",
+      "state": "review_only",
+      "correlation_level": "ci",
+      "status_color": "green",
+      "anchor": "event-2"
+    },
+    {
+      "id": "event_3",
+      "label": "governance_gate_state_captured",
+      "source": "github_runtime_analytics",
+      "state": "review_only",
+      "correlation_level": "governance",
+      "status_color": "green",
+      "anchor": "event-3"
+    }
+  ],
+  "edges": [
+    {
+      "from": "event_1",
+      "to": "event_2",
+      "type": "temporal_correlation"
+    },
+    {
+      "from": "event_2",
+      "to": "event_3",
+      "type": "temporal_correlation"
+    }
+  ],
+  "human_review_required": true,
+  "next_recommended_increment": "Runtime Evidence Graph Dashboard Integration"
+}
