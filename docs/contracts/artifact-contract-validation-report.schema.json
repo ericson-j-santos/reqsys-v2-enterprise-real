@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/artifact-contract-validation-report.schema.json",
+  "title": "ReqSys Artifact Contract Validation Report",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "source",
+    "status",
+    "confidence_level",
+    "maturity_percent",
+    "operational_risk",
+    "commit_sha",
+    "workflow_run_id",
+    "summary",
+    "minimum_fields",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "source": { "type": "string" },
+    "status": { "type": "string", "enum": ["report_only", "passed", "warning"] },
+    "confidence_level": { "type": "string" },
+    "maturity_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "operational_risk": { "type": "string" },
+    "commit_sha": { "type": "string" },
+    "workflow_run_id": { "type": ["string", "number", "integer"] },
+    "summary": { "type": "object", "additionalProperties": true },
+    "minimum_fields": { "type": "array", "items": { "type": "string" } },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["artifact", "source", "schema", "load_status", "minimum_fields_present", "minimum_fields_missing", "status"],
+        "additionalProperties": true,
+        "properties": {
+          "artifact": { "type": "string" },
+          "source": { "type": "string" },
+          "schema": { "type": ["string", "null"] },
+          "load_status": { "type": "string" },
+          "minimum_fields_present": { "type": "array", "items": { "type": "string" } },
+          "minimum_fields_missing": { "type": "array", "items": { "type": "string" } },
+          "status": { "type": "string" }
+        }
+      }
+    }
+  }
+}
