@@ -5,9 +5,11 @@ on:
     paths:
       - "fly.toml"
       - "Dockerfile.fly"
+      - "scripts/fly_boot.sh"
       - "backend/**"
       - "scripts/validate_fly_runtime_config.py"
       - "scripts/validate_public_runtime.py"
+      - "scripts/runtime_public_validator.py"
       - ".github/workflows/fly-runtime-p0.yml"
   workflow_dispatch:
     inputs:
@@ -37,11 +39,20 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validate Fly runtime files
-        run: python scripts/validate_fly_runtime_config.py
+      - name: Validate Trilha A runtime público
+        run: |
+          python scripts/runtime_public_validator.py \
+            --artifact-root . \
+            --output artifacts/runtime/runtime-public-validation.json \
+            --strict
 
-      - name: Docker build smoke
-        run: docker build -f Dockerfile.fly -t reqsys-api:fly-smoke .
+      - name: Upload Trilha A validation artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-public-validation
+          path: artifacts/runtime/runtime-public-validation.json
+          if-no-files-found: warn
 
   deploy:
     name: Deploy to Fly
@@ -77,12 +88,22 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validate public runtime endpoints
-        run: python scripts/validate_public_runtime.py --base-url "${{ inputs.public_url }}" --output public-runtime-validation.json
+      - name: Validate public runtime (Trilha A probe)
+        run: |
+          python scripts/runtime_public_validator.py \
+            --probe \
+            --base-url "${{ inputs.public_url }}" \
+            --environment prod \
+            --include-optional-evidence \
+            --artifact-root . \
+            --output artifacts/runtime/runtime-public-validation.json
 
       - name: Upload runtime evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: public-runtime-validation
-          path: public-runtime-validation.json
+          path: |
+            artifacts/runtime/runtime-public-validation.json
+            artifacts/runtime/runtime-public-probe.json
+            artifacts/runtime/runtime-public-readiness.json

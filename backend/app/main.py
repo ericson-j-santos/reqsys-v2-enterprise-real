@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 import app.models  # noqa: F401
 from app.api import (
@@ -39,6 +39,7 @@ from app.api import (
 )
 from app.core.config import settings
 from app.core.envelope import ok
+from app.core.runtime_boot import build_health_payload, probe_database
 from app.db import Base, engine
 
 logging.basicConfig(
@@ -56,6 +57,17 @@ settings.validate_production_gates()
 
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title='ReqSys Enterprise API', version=settings.app_version)
+
+
+@app.on_event('startup')
+def warm_database_on_startup() -> None:
+    ready, detail = probe_database(max_attempts=10 if settings.is_production else 3, delay_seconds=1.0)
+    if ready:
+        logger.info('database_startup_probe_ok detail=%s', detail)
+        return
+    logger.error('database_startup_probe_failed detail=%s production=%s', detail, settings.is_production)
+    if settings.is_production:
+        raise RuntimeError(f'Database indisponível após boot resiliente: {detail}')
 
 app.add_middleware(
     CORSMiddleware,
@@ -333,7 +345,11 @@ def root():
 
 @app.get('/health')
 def health():
-    return ok({'status': 'ok', 'service': 'reqsys-api'})
+    database_ok, database_detail = probe_database(max_attempts=1, delay_seconds=0)
+    payload = build_health_payload(database_ok=database_ok, database_detail=database_detail)
+    if not database_ok:
+        return JSONResponse(status_code=503, content=ok(payload))
+    return ok(payload)
 
 
 @app.get('/api/runtime/health')

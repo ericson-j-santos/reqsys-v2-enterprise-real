@@ -17,10 +17,13 @@ ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_FILES = (
     "fly.toml",
     "Dockerfile.fly",
+    "scripts/fly_boot.sh",
     "backend/requirements.txt",
     "backend/app/main.py",
+    "backend/app/core/runtime_boot.py",
     "backend/app/api/monitoramento_operacional.py",
     "scripts/validate_public_runtime.py",
+    "scripts/runtime_public_validator.py",
 )
 
 REQUIRED_FLY_SNIPPETS = (
@@ -36,12 +39,16 @@ REQUIRED_DOCKER_SNIPPETS = (
     "FROM python:3.12-slim",
     "COPY backend/requirements.txt",
     "COPY backend/app /app/app",
-    "uvicorn app.main:app",
+    "COPY scripts/fly_boot.sh",
+    "HEALTHCHECK",
+    "fly_boot.sh",
 )
 
 REQUIRED_MAIN_ENDPOINTS = (
     "@app.get('/')",
     "@app.get('/health')",
+    "runtime_boot",
+    "warm_database_on_startup",
     "'/api/runtime/health'",
     "'/api/runtime/readiness'",
     "'/api/runtime/liveness'",
