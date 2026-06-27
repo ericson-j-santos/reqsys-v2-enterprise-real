@@ -36,6 +36,22 @@
       "invalid_examples": [
         "examples/schema-governance/product-intelligence-event.invalid-extra-field.example.json"
       ]
+    },
+    {
+      "domain": "traceability",
+      "name": "living-architecture-map",
+      "version": "1.0.0",
+      "status": "active",
+      "schema_path": "docs/contracts/living-architecture-map.schema.json",
+      "owner": "ReqSys Architecture Governance",
+      "compatibility": "strict",
+      "runtime_validation_required": false,
+      "ci_validation_required": true,
+      "breaking_change_policy": "major_version_required",
+      "valid_examples": [
+        "docs/traceability/living-architecture-map.json"
+      ],
+      "invalid_examples": []
     }
   ]
 }

@@ -1,0 +1,127 @@
+name: Living Architecture Traceability
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/living-architecture-traceability.yml'
+      - 'docs/runbooks/living-architecture-traceability.md'
+      - 'docs/traceability/living-architecture-map.json'
+      - 'docs/contracts/living-architecture-map.schema.json'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/living-architecture-traceability.yml'
+      - 'docs/runbooks/living-architecture-traceability.md'
+      - 'docs/traceability/living-architecture-map.json'
+      - 'docs/contracts/living-architecture-map.schema.json'
+
+concurrency:
+  group: living-architecture-traceability-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-traceability:
+    name: Validate living architecture traceability map (report-only)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate traceability map
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          root = Path('.')
+          map_path = root / 'docs/traceability/living-architecture-map.json'
+          schema_path = root / 'docs/contracts/living-architecture-map.schema.json'
+          required_sections = [
+              'schema_version',
+              'updated_at',
+              'repository',
+              'governance',
+              'workflows',
+              'artifacts',
+              'schemas',
+              'dashboards',
+              'runbooks',
+              'recent_prs',
+              'ci_evidence',
+              'validation',
+          ]
+
+          issues = []
+          data = json.loads(map_path.read_text(encoding='utf-8'))
+          json.loads(schema_path.read_text(encoding='utf-8'))
+
+          for section in required_sections:
+              if section not in data:
+                  issues.append({'severity': 'error', 'type': 'missing_section', 'target': section})
+
+          internal_paths = set()
+          internal_paths.add(data.get('governance', {}).get('canonical_runbook', ''))
+          internal_paths.add(data.get('validation', {}).get('workflow', ''))
+
+          for workflow in data.get('workflows', []):
+              internal_paths.add(workflow.get('path', ''))
+              internal_paths.update(workflow.get('runbooks', []))
+          for artifact in data.get('artifacts', []):
+              internal_paths.add(artifact.get('contract', ''))
+              if not artifact.get('contract'):
+                  issues.append({'severity': 'warning', 'type': 'artifact_without_contract', 'target': artifact.get('id', 'unknown')})
+          for schema in data.get('schemas', []):
+              internal_paths.add(schema.get('path', ''))
+          for dashboard in data.get('dashboards', []):
+              internal_paths.add(dashboard.get('path', ''))
+              internal_paths.update(dashboard.get('runbooks', []))
+              for source in dashboard.get('data_sources', []):
+                  if '/' in source or source.endswith(('.json', '.md', '.html', '.yml', '.yaml')):
+                      internal_paths.add(source)
+          for runbook in data.get('runbooks', []):
+              internal_paths.add(runbook.get('path', ''))
+          for recent_pr in data.get('recent_prs', []):
+              internal_paths.update(recent_pr.get('evidence', []))
+          for evidence in data.get('ci_evidence', []):
+              internal_paths.add(evidence.get('path', ''))
+
+          for candidate in sorted(path for path in internal_paths if path):
+              if candidate.startswith(('http://', 'https://')):
+                  continue
+              if not (root / candidate).exists():
+                  issues.append({'severity': 'warning', 'type': 'missing_internal_path', 'target': candidate})
+
+          workflow_ids = {workflow.get('id') for workflow in data.get('workflows', [])}
+          for artifact in data.get('artifacts', []):
+              producer = artifact.get('producer_workflow')
+              if producer not in workflow_ids:
+                  issues.append({'severity': 'warning', 'type': 'artifact_unknown_producer_workflow', 'target': artifact.get('id', 'unknown'), 'producer_workflow': producer})
+
+          report = {
+              'schema_version': '1.0.0',
+              'generated_at': datetime.now(timezone.utc).isoformat(),
+              'mode': 'report_only',
+              'status': 'passed_with_warnings' if issues else 'passed',
+              'checked_paths': len(internal_paths),
+              'issues': issues,
+          }
+          out_dir = root / 'audit/living-architecture'
+          out_dir.mkdir(parents=True, exist_ok=True)
+          (out_dir / 'living-architecture-traceability-report.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
+          print(json.dumps(report, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Upload traceability report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: living-architecture-traceability-${{ github.run_id }}
+          path: audit/living-architecture/
+          if-no-files-found: error
+          retention-days: 30
