@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T00:00:00.000Z",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "queue": [],
+  "status": "empty_seed",
+  "source": "autonomous-delivery-cycle",
+  "usage": "Fila report-only para o chat/agente capturar próximos incrementos após merges governados.",
+  "guardrails": [
+    "report_only_queue",
+    "no_automatic_code_generation_from_queue",
+    "requires_human_or_agent_execution_context",
+    "preserve_ci_green_before_next_increment"
+  ]
+}
