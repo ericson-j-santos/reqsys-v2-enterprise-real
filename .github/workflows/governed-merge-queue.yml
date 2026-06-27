@@ -79,6 +79,9 @@ jobs:
           if [ -f scripts/runtime_health_validator.py ]; then
             python -m py_compile scripts/runtime_health_validator.py
           fi
+          if [ -f scripts/runtime_merge_queue_gate.py ]; then
+            python -m py_compile scripts/runtime_merge_queue_gate.py
+          fi
 
       - name: Detectar frontend
         id: frontend
@@ -181,6 +184,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
       - name: Consolidar política e elegibilidade
         id: policy
         env:
@@ -192,8 +200,30 @@ jobs:
 
           ISOLATED="${{ needs.isolated-validation.result }}"
           INTEGRATION="${{ needs.temporary-integration.result }}"
+          CI_STATUS="green"
+          RUNTIME_SMOKE="green"
+          CONTRACTS="green"
+
+          if [ "$ISOLATED" != "success" ]; then
+            CI_STATUS="red"
+          fi
+          if [ "$INTEGRATION" != "success" ]; then
+            RUNTIME_SMOKE="red"
+            CONTRACTS="red"
+          fi
+
+          python scripts/runtime_merge_queue_gate.py \
+            --lane runtime-governance \
+            --ci "$CI_STATUS" \
+            --runtime-smoke "$RUNTIME_SMOKE" \
+            --incidents none-critical \
+            --contracts "$CONTRACTS" \
+            --mergeable true \
+            --output artifacts/governed-merge-queue/runtime-merge-queue-gate.json \
+            --json || true
+
           ELIGIBLE="false"
-          if [ "$ISOLATED" = "success" ] && [ "$INTEGRATION" = "success" ]; then
+          if python -c "import json; print(json.load(open('artifacts/governed-merge-queue/runtime-merge-queue-gate.json'))['eligible'])" | grep -q True; then
             ELIGIBLE="true"
           fi
 
@@ -217,6 +247,7 @@ jobs:
             --arg isolated_result "$ISOLATED" \
             --arg integration_result "$INTEGRATION" \
             --arg merge_path "governed_pr_automation" \
+            --slurpfile runtime_gate artifacts/governed-merge-queue/runtime-merge-queue-gate.json \
             '{
               correlation_id: $correlation_id,
               pr_number: ($pr_number | tonumber),
@@ -225,12 +256,15 @@ jobs:
               allow_auto_merge: ($allow_auto_merge == "true"),
               native_auto_merge_available: ($native_auto_merge_available == "true"),
               merge_path: $merge_path,
+              runtime_merge_queue_gate: $runtime_gate[0],
+              preview_environment_contract: "progressive-required-via-workflow",
               stages: {
                 isolated_validation: $isolated_result,
                 temporary_integration: $integration_result
               },
               notes: [
                 "Auto-merge nativo depende de allow_auto_merge=true no repositório.",
+                "Preview Environment Contract é evidencia progressiva obrigatoria quando workflow estiver presente.",
                 "Com allow_auto_merge=false, usar Governed PR Automation ou merge manual após demais gates."
               ]
             }' > artifacts/governed-merge-queue/policy.json
@@ -245,8 +279,8 @@ jobs:
           |---|---|
           | Validação isolada | \`$ISOLATED\` |
           | Integração temporária | \`$INTEGRATION\` |
-          | Smoke runtime | \`runtime_health_validator report_only\` |
-          | Elegível para fila | \`$ELIGIBLE\` |
+          | Runtime merge queue gate | \`$ELIGIBLE\` |
+          | Preview Environment Contract | \`progressive-required-via-workflow\` |
           | allow_auto_merge (repo) | \`$ALLOW_AUTO_MERGE\` |
 
           ## Decisão
@@ -321,6 +355,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: governed-merge-queue-policy-evidence
-          path: artifacts/governed-merge-queue/policy.json
+          path: |
+            artifacts/governed-merge-queue/policy.json
+            artifacts/governed-merge-queue/runtime-merge-queue-gate.json
           if-no-files-found: error
           retention-days: 30
