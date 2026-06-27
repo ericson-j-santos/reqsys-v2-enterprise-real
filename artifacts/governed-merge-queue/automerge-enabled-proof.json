@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T17:00:00-03:00",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "allow_auto_merge": true,
+  "evidence_source": "GitHub.get_repo",
+  "status": "enabled",
+  "next_gate": "enable auto-merge on open PR after required checks"
+}
