@@ -1,0 +1,131 @@
+{
+  "schema_version": "1.0.0",
+  "referencia_temporal": "2026-06-27T21:00:00-03:00",
+  "estado_atual_consolidado": [
+    { "id": "arquitetura-base", "nome": "Arquitetura base", "percentual": 88, "maturidade": "alta" },
+    { "id": "ci-cd-governado", "nome": "CI/CD governado", "percentual": 82, "maturidade": "alta" },
+    { "id": "living-architecture", "nome": "Living Architecture", "percentual": 74, "maturidade": "media_alta" },
+    { "id": "observabilidade-analytics", "nome": "Observabilidade/Analytics", "percentual": 71, "maturidade": "media_alta" },
+    { "id": "runtime-operacional", "nome": "Runtime operacional", "percentual": 68, "maturidade": "media" },
+    { "id": "ux-operacional-dashboards", "nome": "UX operacional / dashboards", "percentual": 72, "maturidade": "media_alta" },
+    { "id": "automacao-autonoma", "nome": "Automacao autonoma", "percentual": 63, "maturidade": "media" },
+    { "id": "governanca-enterprise", "nome": "Governanca enterprise", "percentual": 79, "maturidade": "alta" },
+    { "id": "ambientes-sincronizados", "nome": "Ambientes sincronizados", "percentual": 61, "maturidade": "media" },
+    { "id": "producao-padrao-ouro", "nome": "Producao padrao ouro consolidado", "percentual": 54, "maturidade": "media" }
+  ],
+  "velocidade_atual": {
+    "cadencia_recente": [
+      { "id": "prs-dia-uteis", "nome": "PRs/dia uteis", "valor_texto": "8-18", "unidade": "PRs/dia uteis" },
+      { "id": "merges-verdes-dia", "nome": "Merges verdes/dia", "valor_texto": "6-14", "unidade": "merges/dia" },
+      { "id": "correcoes-ci-ciclo", "nome": "Correcoes CI por ciclo", "valor_texto": "2-7", "unidade": "correcoes/ciclo" },
+      { "id": "incrementos-paralelos", "nome": "Incrementos paralelos seguros", "valor_texto": "3-5", "unidade": "frentes" },
+      { "id": "lead-time-pr-merge", "nome": "Lead time PR -> merge", "valor_texto": "18-90", "unidade": "min" },
+      { "id": "estabilizacao-ci", "nome": "Taxa de estabilizacao CI", "valor_texto": "~83", "unidade": "%" },
+      { "id": "regressao-critica", "nome": "Regressao critica", "valor_texto": "baixa", "unidade": "qualitativo" },
+      { "id": "retrabalho-estrutural", "nome": "Retrabalho estrutural", "valor_texto": "moderado/baixo", "unidade": "qualitativo" }
+    ]
+  },
+  "percentual_real_conclusao": [
+    { "id": "codigo-implementado", "nome": "Codigo implementado", "percentual": 78 },
+    { "id": "codigo-validado", "nome": "Codigo validado", "percentual": 69 },
+    { "id": "evidencia-operacional-consolidada", "nome": "Evidencia operacional consolidada", "percentual": 58 },
+    { "id": "governanca-enterprise-consolidada", "nome": "Governanca enterprise consolidada", "percentual": 64 },
+    { "id": "sincronizacao-ambientes", "nome": "Ambientes realmente sincronizados", "percentual": 61 },
+    { "id": "runtime-navegavel-analitico", "nome": "Runtime navegavel/analitico", "percentual": 67 },
+    { "id": "autonomia-operacional", "nome": "Autonomia operacional", "percentual": 55 },
+    { "id": "padrao-ouro-consolidado-total", "nome": "Padrao ouro total consolidado", "percentual": 52 }
+  ],
+  "gap_restante": [
+    { "id": "consolidacao-runtime", "nome": "Consolidacao runtime", "percentual": 18 },
+    { "id": "evidencias-automatizadas", "nome": "Evidencias automatizadas", "percentual": 22 },
+    { "id": "operacao-autonoma", "nome": "Operacao autonoma", "percentual": 31 },
+    { "id": "analytics-drilldown-total", "nome": "Analytics/drill-down total", "percentual": 27 },
+    { "id": "hardening-producao", "nome": "Hardening producao", "percentual": 24 },
+    { "id": "sincronizacao-ambientes-gap", "nome": "Sincronizacao ambientes", "percentual": 39 },
+    { "id": "governanca-viva-completa", "nome": "Governanca viva completa", "percentual": 21 },
+    { "id": "ux-operacional-enterprise", "nome": "UX operacional enterprise", "percentual": 17 }
+  ],
+  "projecao_tempo": {
+    "conservador": {
+      "descricao": "Mantendo o ritmo atual e sem aceleracao estrutural.",
+      "marcos": [
+        { "id": "mvp-operacional-consolidado", "nome": "MVP operacional consolidado", "dias": { "min": 3, "max": 6 } },
+        { "id": "ambientes-sincronizados", "nome": "Ambientes sincronizados", "dias": { "min": 5, "max": 9 } },
+        { "id": "runtime-operacional-robusto", "nome": "Runtime operacional robusto", "dias": { "min": 7, "max": 12 } },
+        { "id": "padrao-ouro-tecnico", "nome": "Padrao ouro tecnico", "dias": { "min": 14, "max": 22 } },
+        { "id": "padrao-ouro-total", "nome": "Padrao ouro consolidado total", "dias": { "min": 21, "max": 35 } }
+      ]
+    },
+    "acelerado": {
+      "descricao": "Com incrementos paralelos, CI auto-remediavel e merge incremental governado.",
+      "marcos": [
+        { "id": "mvp-robusto", "nome": "MVP robusto", "dias": { "min": 2, "max": 4 } },
+        { "id": "producao-utilizavel-forte", "nome": "Producao utilizavel forte", "dias": { "min": 5, "max": 8 } },
+        { "id": "ambientes-quase-sincronizados", "nome": "Ambientes quase totalmente sincronizados", "dias": { "min": 4, "max": 7 } },
+        { "id": "padrao-ouro-tecnico", "nome": "Padrao ouro tecnico", "dias": { "min": 10, "max": 16 } },
+        { "id": "consolidacao-enterprise-completa", "nome": "Consolidacao enterprise completa", "dias": { "min": 14, "max": 24 } }
+      ]
+    }
+  },
+  "gargalos": [
+    "estabilizacao continua de CI",
+    "sincronizacao entre ambientes",
+    "evidencia operacional automatica",
+    "consolidacao runtime-driven",
+    "reducao de acoplamentos residuais",
+    "observabilidade fim-a-fim",
+    "hardening de producao"
+  ],
+  "riscos": [
+    { "id": "regressao-arquitetural", "tipo": "Regressao arquitetural", "nivel": "baixo" },
+    { "id": "colisao-branches", "tipo": "Colisao de branches", "nivel": "medio_baixo" },
+    { "id": "instabilidade-ci", "tipo": "Instabilidade CI", "nivel": "medio" },
+    { "id": "drift-ambientes", "tipo": "Drift entre ambientes", "nivel": "medio" },
+    { "id": "escalabilidade-operacional", "tipo": "Escalabilidade operacional", "nivel": "medio" },
+    { "id": "perda-rastreabilidade", "tipo": "Perda de rastreabilidade", "nivel": "baixo" },
+    { "id": "acoplamento-oculto", "tipo": "Acoplamento oculto", "nivel": "medio_baixo" }
+  ],
+  "tendencias": [
+    { "id": "velocidade", "nome": "Velocidade", "tendencia": "forte_alta" },
+    { "id": "maturidade", "nome": "Maturidade", "tendencia": "forte_alta" },
+    { "id": "governanca", "nome": "Governanca", "tendencia": "estavel_alta" },
+    { "id": "autonomia", "nome": "Autonomia", "tendencia": "moderada_alta" },
+    { "id": "observabilidade", "nome": "Observabilidade", "tendencia": "forte_alta" },
+    { "id": "runtime-vivo", "nome": "Runtime vivo", "tendencia": "forte_alta" },
+    { "id": "producao-consolidada", "nome": "Producao consolidada", "tendencia": "moderada_alta" }
+  ],
+  "probabilidades": [
+    { "id": "mvp-forte-menos-1-semana", "resultado": "MVP forte em menos de 1 semana", "percentual": 87 },
+    { "id": "producao-utilizavel-enterprise", "resultado": "Producao utilizavel enterprise", "percentual": 81 },
+    { "id": "padrao-ouro-tecnico-real", "resultado": "Padrao ouro tecnico real", "percentual": 73 },
+    { "id": "consolidacao-enterprise-completa", "resultado": "Consolidacao enterprise completa", "percentual": 61 }
+  ],
+  "aceleradores": [
+    "CI auto-healing",
+    "geracao automatica de evidencias",
+    "pipeline de validacao consolidada",
+    "sincronizacao Fly.io/runtime",
+    "monitor operacional centralizado",
+    "contratos/shared packages unicos",
+    "reducao de validacoes manuais"
+  ],
+  "leitura_executiva": {
+    "posicionamento": "Arquitetura enterprise funcional em aceleracao continua",
+    "forcas": [
+      "governanca",
+      "evolucao incremental consistente",
+      "arquitetura viva",
+      "analytics operacional",
+      "automacao",
+      "observabilidade",
+      "fluxo CI/CD maduro",
+      "continuidade operacional"
+    ],
+    "faltantes": [
+      "consolidacao final",
+      "sincronizacao entre ambientes",
+      "automacao total",
+      "hardening enterprise final"
+    ]
+  }
+}

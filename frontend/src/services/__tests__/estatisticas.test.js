@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   calcularResumoEstatisticas,
+  carregarSnapshotEstatisticas,
   carregarEstatisticas,
   estatisticasExternasIniciais,
   estatisticasInternasIniciais,
+  estatisticasSnapshotInicial,
   validarIndicador
 } from '../estatisticas'
 import { api } from '../api'
@@ -77,6 +79,27 @@ describe('estatisticas', () => {
     expect(indicadores).toEqual([indicadorApi])
   })
 
+  it('carrega snapshot completo quando a API entrega projecao de conclusao', async () => {
+    api.get.mockResolvedValueOnce({
+      data: {
+        data: {
+          indicadores: [],
+          projecaoConclusao: {
+            referenciaTemporal: '2026-06-27T21:00:00-03:00',
+            resumo: {
+              padraoOuroAtual: 52
+            }
+          }
+        }
+      }
+    })
+
+    const snapshot = await carregarSnapshotEstatisticas()
+
+    expect(snapshot.projecaoConclusao.referenciaTemporal).toBe('2026-06-27T21:00:00-03:00')
+    expect(snapshot.projecaoConclusao.resumo.padraoOuroAtual).toBe(52)
+  })
+
   it('usa fallback controlado quando API falha', async () => {
     api.get.mockRejectedValueOnce(new Error('api indisponivel'))
 
@@ -84,5 +107,14 @@ describe('estatisticas', () => {
 
     expect(indicadores.length).toBe(4)
     expect(indicadores.some((item) => item.fonte.origem === 'frontend-runtime-fallback')).toBe(true)
+  })
+
+  it('usa snapshot fallback quando API falha antes da projecao executiva', async () => {
+    api.get.mockRejectedValueOnce(new Error('api indisponivel'))
+
+    const snapshot = await carregarSnapshotEstatisticas()
+
+    expect(snapshot.indicadores).toHaveLength(estatisticasSnapshotInicial.indicadores.length)
+    expect(snapshot.projecaoConclusao).toBeNull()
   })
 })

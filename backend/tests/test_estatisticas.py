@@ -53,3 +53,18 @@ def test_estatisticas_fonte_externa_permanece_nao_medida_sem_registry_real():
     assert externo['fonte']['tipo'] == 'externa'
     assert externo['estadoAtual'] == 'nao_medido'
     assert externo['fonte']['ttlMinutos'] > 0
+
+
+def test_estatisticas_inclui_projecao_conclusao_versionada():
+    res = TestClient(app).get('/v1/estatisticas')
+    body = res.json()['data']
+    projecao = body['projecaoConclusao']
+    indicadores = body['indicadores']
+
+    assert projecao['schemaVersion'] == '1.0.0'
+    assert projecao['referenciaTemporal'] == '2026-06-27T21:00:00-03:00'
+    assert projecao['resumo']['maturidadeMediaDimensoes'] == 71
+    assert projecao['resumo']['padraoOuroAtual'] == 52
+    assert projecao['resumo']['janelaMvpAcelerada'] == '2-4 dias'
+    assert any(cenario['id'] == 'acelerado' for cenario in projecao['cenarios'])
+    assert any(indicador['id'] == 'padrao-ouro-consolidado-total' for indicador in indicadores)

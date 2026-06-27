@@ -104,6 +104,19 @@ export const estatisticasExternasIniciais = [
   }
 ]
 
+export const estatisticasSnapshotInicial = {
+  schema_version: '2.0.0',
+  resumo: {
+    total: estatisticasInternasIniciais.length + estatisticasExternasIniciais.length,
+    internos: estatisticasInternasIniciais.length,
+    externos: estatisticasExternasIniciais.length,
+    invalidos: 0,
+    nao_medidos: 1
+  },
+  indicadores: [...estatisticasInternasIniciais, ...estatisticasExternasIniciais],
+  projecaoConclusao: null
+}
+
 export function validarIndicador(indicador) {
   const erros = []
   if (!indicador?.id) erros.push('Indicador sem id.')
@@ -147,16 +160,21 @@ function normalizarValor(valor) {
   return Number.isFinite(convertido) ? Math.max(0, Math.min(100, convertido)) : 0
 }
 
-export async function carregarEstatisticas() {
+export async function carregarSnapshotEstatisticas() {
   try {
     const resposta = await api.get('/v1/estatisticas')
     const payload = resposta.data?.data
     if (Array.isArray(payload?.indicadores)) {
-      return payload.indicadores
+      return payload
     }
   } catch (erro) {
     console.warn('Falha ao carregar /v1/estatisticas; usando fallback local controlado.', erro)
   }
 
-  return [...estatisticasInternasIniciais, ...estatisticasExternasIniciais]
+  return estatisticasSnapshotInicial
+}
+
+export async function carregarEstatisticas() {
+  const snapshot = await carregarSnapshotEstatisticas()
+  return snapshot.indicadores
 }
