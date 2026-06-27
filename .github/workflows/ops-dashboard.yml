@@ -37,6 +37,7 @@ jobs:
           set -euo pipefail
           python -m py_compile scripts/generate_ops_dashboard_data.py
           python -m py_compile scripts/build_runtime_executive_index.py
+          python -m py_compile scripts/build_strategic_governance_index.py
 
       - name: Generate fallback dashboard data
         shell: bash
@@ -65,6 +66,15 @@ jobs:
             --conflict-risk-report docs/ops-dashboard/data/conflict-risk-report.json \
             --output docs/ops-dashboard/data/runtime-executive-index.json
 
+      - name: Generate strategic governance index
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build_strategic_governance_index.py \
+            --repo "${{ github.repository }}" \
+            --runtime-index docs/ops-dashboard/data/runtime-executive-index.json \
+            --output docs/ops-dashboard/data/strategic-governance-index.json
+
       - name: Prepare dashboard artifact
         shell: bash
         run: |
@@ -74,6 +84,7 @@ jobs:
           test -f artifacts/ops-dashboard/index.html
           test -f artifacts/ops-dashboard/data/health.json
           test -f artifacts/ops-dashboard/data/runtime-executive-index.json
+          test -f artifacts/ops-dashboard/data/strategic-governance-index.json
           test -f artifacts/ops-dashboard/data/conflict-risk-report.json
 
       - name: Publish ops dashboard artifact
@@ -94,7 +105,8 @@ jobs:
             echo "Artifact publicado: ops-dashboard-static"
             echo ""
             echo "Runtime executive index publicado em data/runtime-executive-index.json."
+            echo "Strategic governance index publicado em data/strategic-governance-index.json."
             echo "Conflict risk report publicado em data/conflict-risk-report.json."
             echo ""
-            echo "Escopo: painel estatico e report-only."
+            echo "Escopo: painel estatico, priorizacao report-only e governanca executiva."
           } >> "$GITHUB_STEP_SUMMARY"
