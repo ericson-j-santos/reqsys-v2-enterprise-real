@@ -102,6 +102,36 @@ class GitHubActionsClient:
         return [normalizar_run(item) for item in dados.get('workflow_runs', [])]
 
 
+def _pareto_falhas(runs: list[WorkflowRunSnapshot]) -> dict[str, Any]:
+    """Ranking Pareto simplificado por workflow com falhas."""
+    buckets: dict[str, dict[str, Any]] = {}
+    for run in runs:
+        if run.health != 'unhealthy':
+            continue
+        bucket = buckets.setdefault(
+            run.workflow,
+            {'workflow': run.workflow, 'occurrences': 0, 'impact_score': 0, 'severidade': 'high'},
+        )
+        bucket['occurrences'] += 1
+        bucket['impact_score'] += 80
+
+    items = sorted(buckets.values(), key=lambda item: item['impact_score'], reverse=True)
+    total_impact = sum(item['impact_score'] for item in items) or 1
+    cumulative = 0.0
+    for item in items:
+        cumulative += (item['impact_score'] / total_impact) * 100
+        item['cumulative_percent'] = round(cumulative, 2)
+        item['pareto_tier'] = 'A' if cumulative <= 80 else ('B' if cumulative <= 95 else 'C')
+
+    return {
+        'total_causes': len(items),
+        'top_causes': items[:10],
+        'pareto_threshold_80': [item for item in items if item['cumulative_percent'] <= 80 or item == items[0]],
+    }
+
+
 def montar_snapshot_operacional(runs_raw: list[dict[str, Any]]) -> dict[str, Any]:
     runs = [normalizar_run(item) for item in runs_raw]
-    return classificar_runs(runs)
+    resumo = classificar_runs(runs)
+    resumo['pareto_falhas'] = _pareto_falhas(runs)
+    return resumo

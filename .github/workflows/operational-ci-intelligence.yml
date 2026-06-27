@@ -46,6 +46,8 @@ jobs:
           python scripts/operational_ci_intelligence.py \
             --runs artifacts/operational-ci-intelligence/input/runs.json \
             --knowledge-base config/ci-failure-knowledge-base.json \
+            --failure-patterns config/failure-patterns.json \
+            --history data/operational-ci-history/instability-history.json \
             --out-dir artifacts/operational-ci-intelligence
 
       - name: Publish summary

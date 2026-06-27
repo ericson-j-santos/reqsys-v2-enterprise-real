@@ -94,11 +94,12 @@ Se o mesmo workflow rodar repetidamente para o mesmo SHA acima do limite, o rela
 
 | Prioridade | Incremento | Resultado esperado |
 |---|---|---|
-| P0.1 | Integrar com Actions Deep Diagnostic | Classificar logs reais automaticamente |
-| P0.2 | Histórico persistente por artifact/cache | Tendência, recorrência e MTTR |
-| P1 | Operational Center HTML | Dashboard vivo navegável |
-| P1 | Rerun Policy Gate | Bloquear rerun em loop sem evidência |
-| P2 | Remediation Advisor | Sugestão de arquivo/linha/ação provável |
+| P1 | CI Intelligence Layer (Pareto + histórico) | Classificação unificada KB+FPE, ranking Pareto, tendência de instabilidade |
+| P1 | Evidence Automation | Snapshot pós-workflow e score de maturidade contínuo |
+| P2 | Operational Analytics UI | Cards clicáveis, timeline viva, drill-down |
+| P2 | Observabilidade unificada | Tracing ponta a ponta com correlação visual |
+
+Ver roadmap consolidado: `docs/OPERATIONAL_INCREMENTOS_ROADMAP.md`.
 
 ## 9. Critério de aceite
 
