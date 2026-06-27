@@ -1,0 +1,170 @@
+name: Governed Merge Queue
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number for manual governed queue validation"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  checks: read
+  pull-requests: read
+
+concurrency:
+  group: governed-merge-queue-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20.19.0"
+  CI: "true"
+
+jobs:
+  isolated-validation:
+    name: Validação isolada do PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Guardrails enterprise
+        run: python scripts/ci_enterprise_guardrails.py
+
+      - name: Smoke Python scripts críticos
+        shell: bash
+        run: |
+          python -m py_compile scripts/ci_enterprise_guardrails.py
+          if [ -f scripts/runtime_health_validator.py ]; then
+            python -m py_compile scripts/runtime_health_validator.py
+          fi
+
+      - name: Detectar frontend
+        id: frontend
+        shell: bash
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "workdir=frontend" >> "$GITHUB_OUTPUT"
+          elif [ -f package.json ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "workdir=." >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "workdir=." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node
+        if: steps.frontend.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Instalar dependências frontend
+        if: steps.frontend.outputs.enabled == 'true'
+        working-directory: ${{ steps.frontend.outputs.workdir }}
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Lint e typecheck frontend
+        if: steps.frontend.outputs.enabled == 'true'
+        working-directory: ${{ steps.frontend.outputs.workdir }}
+        shell: bash
+        run: |
+          npm run lint --if-present
+          npm run typecheck --if-present
+
+  temporary-integration:
+    name: Integração temporária contra main
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: isolated-validation
+    steps:
+      - name: Checkout com histórico completo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preparar branch temporária de integração
+        shell: bash
+        run: |
+          git config user.name "reqsys-governed-merge-queue"
+          git config user.email "actions@github.com"
+          git fetch origin main
+          git checkout -B tmp/governed-merge-queue/${{ github.event.pull_request.number || github.event.inputs.pr_number }} origin/main
+          git merge --no-commit --no-ff ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Smoke runtime validator em integração temporária
+        shell: bash
+        run: |
+          python scripts/runtime_health_validator.py \
+            --repo "${{ github.repository }}" \
+            --branch "tmp/governed-merge-queue/${{ github.event.pull_request.number || github.event.inputs.pr_number }}" \
+            --mode report_only \
+            --output-dir artifacts/governed-merge-queue
+
+      - name: Publicar evidências da fila governada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-merge-queue-evidence
+          path: artifacts/governed-merge-queue/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  merge-queue-gate:
+    name: Gate de merge governado
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    needs: [isolated-validation, temporary-integration]
+    if: always()
+    steps:
+      - name: Consolidar decisão governada
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          # Governed Merge Queue
+
+          | Estágio | Resultado |
+          |---|---|
+          | Validação isolada | `${{ needs.isolated-validation.result }}` |
+          | Integração temporária | `${{ needs.temporary-integration.result }}` |
+          | Smoke runtime | `runtime_health_validator report_only` |
+
+          ## Decisão
+
+          - `success`: PR elegível para fila de merge após demais checks obrigatórios.
+          - `failure`: bloquear merge e corrigir regressão antes de revalidar.
+          - Auto-merge nativo depende de `allow_auto_merge=true` no repositório.
+          EOF
+
+          if [ "${{ needs.isolated-validation.result }}" != "success" ] || [ "${{ needs.temporary-integration.result }}" != "success" ]; then
+            exit 1
+          fi
