@@ -12,8 +12,8 @@ concurrency:
 permissions:
   # Necessario para fazer checkout do codigo do PR.
   contents: read
-  # Necessario para ler metadados do pull request.
-  pull-requests: read
+  # Necessario para ler e atualizar metadados/comentarios do pull request.
+  pull-requests: write
   # Necessario para publicar comentario executivo no PR.
   issues: write
 
@@ -187,6 +187,7 @@ jobs:
 
       - name: Publicar comentario no PR
         if: always() && hashFiles('artifacts/pr-conflict-guard/conflict-risk-report.json') != ''
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
