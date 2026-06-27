@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys — Operational Evidence Hub</title>
+  <style>
+    :root { --blue:#005CA9; --orange:#F39200; --teal:#00B3AD; --green:#198754; --yellow:#B7791F; --red:#B00020; --bg:#f6f8fb; --card:#fff; --text:#1f2937; --muted:#6b7280; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+    header { background:linear-gradient(135deg,var(--blue),#083a6b); color:white; padding:24px; }
+    header p { margin:8px 0 0; opacity:.92; max-width:900px; }
+    nav { background:#0f3557; padding:10px 24px; position:sticky; top:0; z-index:10; }
+    nav a { color:#dbeafe; text-decoration:none; margin-right:16px; font-size:.88rem; }
+    nav a:hover { color:white; text-decoration:underline; }
+    main { max-width:1280px; margin:0 auto; padding:20px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; }
+    .card { background:var(--card); border-radius:14px; padding:16px; box-shadow:0 2px 10px rgba(15,23,42,.08); border-left:5px solid var(--blue); cursor:pointer; transition:transform .12s; }
+    .card:hover { transform:translateY(-2px); }
+    .good { border-left-color:var(--green); } .warn { border-left-color:var(--yellow); } .risk { border-left-color:var(--orange); } .bad { border-left-color:var(--red); }
+    .label { color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.05em; }
+    .value { font-size:1.8rem; font-weight:700; margin-top:6px; }
+    .unit { color:var(--muted); font-size:.85rem; }
+    .meta { margin-top:8px; font-size:.78rem; color:var(--muted); }
+    section { margin-top:28px; scroll-margin-top:64px; }
+    h2 { color:#0f3557; border-bottom:2px solid #e5e7eb; padding-bottom:8px; }
+    h3 { color:#1e3a5f; margin-top:18px; }
+    table { width:100%; border-collapse:collapse; background:white; border-radius:14px; overflow:hidden; box-shadow:0 2px 10px rgba(15,23,42,.08); margin-top:12px; }
+    th, td { padding:11px 12px; border-bottom:1px solid #e5e7eb; text-align:left; vertical-align:top; }
+    th { background:#eef4fb; color:#0f3557; font-size:.88rem; }
+    .badge { display:inline-block; padding:3px 9px; border-radius:999px; font-size:.76rem; font-weight:700; }
+    .green { background:#e8f5ee; color:var(--green); } .yellow { background:#fff7e6; color:var(--yellow); } .red { background:#fdecec; color:var(--red); } .blue { background:#e7f1fb; color:var(--blue); }
+    code, a { word-break:break-all; }
+    code { background:#eef2f7; padding:2px 5px; border-radius:6px; font-size:.85rem; }
+    a { color:var(--blue); }
+    .links-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; margin-top:12px; }
+    .link-card { background:white; border-radius:12px; padding:14px; box-shadow:0 2px 8px rgba(15,23,42,.06); }
+    .link-card h4 { margin:0 0 8px; color:#0f3557; font-size:.95rem; }
+    .link-card ul { margin:0; padding-left:18px; font-size:.88rem; }
+    .hidden { display:none; }
+    .drill-panel { background:white; border-radius:14px; padding:16px; margin-top:12px; box-shadow:0 2px 10px rgba(15,23,42,.08); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ReqSys — Operational Evidence Hub</h1>
+    <p>Consolidação report-only de readiness, completion, finalization, maturidade, observabilidade, contratos, regressão de dashboard e rastreabilidade viva. Local-first, sem CDN, sem secrets e com fallback governado.</p>
+  </header>
+  <nav id="topnav">
+    <a href="#executive">Executivo</a>
+    <a href="#delivery-readiness">Readiness</a>
+    <a href="#delivery-completion">Completion</a>
+    <a href="#delivery-finalization">Finalization</a>
+    <a href="#maturity-snapshot">Maturidade</a>
+    <a href="#observability-correlation">Observabilidade</a>
+    <a href="#artifact-contract-validation">Contratos</a>
+    <a href="#dashboard-regression">Regressão</a>
+    <a href="#living-architecture-traceability">Rastreabilidade</a>
+    <a href="#navigation">Navegação</a>
+    <a href="#sources">Fontes</a>
+  </nav>
+  <main>
+    <section id="executive">
+      <h2>Resumo executivo</h2>
+      <div class="grid" id="executiveCards"></div>
+      <div class="drill-panel" id="executiveDrill">
+        <strong>Drill-down:</strong> clique em um card para navegar à seção detalhada. Indicadores semáforo, confiança e risco operacional refletem o estado evidenciado — não o alvo.
+      </div>
+    </section>
+
+    <section id="delivery-readiness">
+      <h2>Delivery readiness</h2>
+      <div class="grid" id="readinessCards"></div>
+      <table><thead><tr><th>Check</th><th>Score</th><th>Semáforo</th><th>Confiança</th><th>Risco</th></tr></thead><tbody id="readinessTable"></tbody></table>
+    </section>
+
+    <section id="delivery-completion">
+      <h2>Delivery completion</h2>
+      <div class="grid" id="completionCards"></div>
+      <table><thead><tr><th>Marco</th><th>Percentual</th><th>Semáforo</th><th>Confiança</th><th>Risco</th></tr></thead><tbody id="completionTable"></tbody></table>
+    </section>
+
+    <section id="delivery-finalization">
+      <h2>Delivery finalization</h2>
+      <div class="grid" id="finalizationCards"></div>
+      <table><thead><tr><th>Indicador</th><th>Valor</th><th>Semáforo</th><th>Confiança</th><th>Risco</th></tr></thead><tbody id="finalizationTable"></tbody></table>
+    </section>
+
+    <section id="maturity-snapshot">
+      <h2>Maturity snapshot</h2>
+      <div class="grid" id="maturityCards"></div>
+      <table><thead><tr><th>Dimensão</th><th>Atual</th><th>Alvo</th><th>Gap</th><th>Semáforo</th><th>Confiança</th><th>Evidências</th><th>Próxima ação</th></tr></thead><tbody id="maturityTable"></tbody></table>
+    </section>
+
+    <section id="observability-correlation">
+      <h2>Observability correlation</h2>
+      <div class="grid" id="observabilityCards"></div>
+      <table><thead><tr><th>Fonte</th><th>Categorias</th><th>Status</th><th>Semáforo</th><th>Confiança</th><th>Risco</th></tr></thead><tbody id="observabilityTable"></tbody></table>
+    </section>
+
+    <section id="artifact-contract-validation">
+      <h2>Artifact contract validation</h2>
+      <div class="grid" id="contractCards"></div>
+      <table><thead><tr><th>Artifact</th><th>Schema</th><th>Load</th><th>Status</th><th>Semáforo</th><th>Campos ausentes</th></tr></thead><tbody id="contractTable"></tbody></table>
+    </section>
+
+    <section id="dashboard-regression">
+      <h2>Dashboard regression validation</h2>
+      <div class="grid" id="regressionCards"></div>
+      <table><thead><tr><th>Check</th><th>Status</th><th>Severidade</th><th>Detalhe</th></tr></thead><tbody id="regressionTable"></tbody></table>
+    </section>
+
+    <section id="living-architecture-traceability">
+      <h2>Living architecture traceability</h2>
+      <div class="grid" id="traceabilityCards"></div>
+      <table><thead><tr><th>Domínio</th><th>Itens</th><th>Caminho canônico</th><th>Semáforo</th><th>Confiança</th></tr></thead><tbody id="traceabilityTable"></tbody></table>
+    </section>
+
+    <section id="navigation">
+      <h2>Navegação — dashboards, contratos e runbooks</h2>
+      <div class="links-grid" id="navLinks"></div>
+    </section>
+
+    <section id="sources">
+      <h2>Fontes de dados e fallback</h2>
+      <table><thead><tr><th>Domínio</th><th>Status</th><th>Artifact</th><th>Contrato</th><th>Runbook</th></tr></thead><tbody id="sourcesTable"></tbody></table>
+    </section>
+  </main>
+  <script>
+    const domains = [
+      {
+        key: 'deliveryReadiness',
+        label: 'Delivery Readiness',
+        section: 'delivery-readiness',
+        href: '../audit/delivery-readiness/delivery-readiness-report.json',
+        contract: '../contracts/delivery-readiness-report.schema.json',
+        runbook: '../runbooks/delivery-evidence-index.md',
+        workflow: '../../.github/workflows/delivery-readiness-report.yml'
+      },
+      {
+        key: 'deliveryCompletion',
+        label: 'Delivery Completion',
+        section: 'delivery-completion',
+        href: '../audit/delivery-completion/delivery-completion-snapshot.json',
+        contract: '../contracts/delivery-completion-snapshot.schema.json',
+        runbook: '../runbooks/delivery-evidence-index.md',
+        workflow: '../../.github/workflows/delivery-completion-snapshot.yml'
+      },
+      {
+        key: 'deliveryFinalization',
+        label: 'Delivery Finalization',
+        section: 'delivery-finalization',
+        href: '../audit/delivery-finalization/delivery-finalization-report.json',
+        contract: '../contracts/delivery-finalization-report.schema.json',
+        runbook: '../runbooks/ops-dashboard.md',
+        workflow: '../../.github/workflows/delivery-finalization-report.yml'
+      },
+      {
+        key: 'maturitySnapshot',
+        label: 'Maturity Snapshot',
+        section: 'maturity-snapshot',
+        href: '../audit/delivery-maturity/delivery-maturity-snapshot.json',
+        contract: '../contracts/delivery-maturity-snapshot.schema.json',
+        runbook: '../runbooks/delivery-maturity-snapshot.md',
+        workflow: '../../.github/workflows/delivery-maturity-snapshot.yml'
+      },
+      {
+        key: 'observabilityCorrelation',
+        label: 'Observability Correlation',
+        section: 'observability-correlation',
+        href: '../artifacts/observability-correlation-report/observability-correlation-report.json',
+        contract: '../contracts/observability-correlation-report.schema.json',
+        runbook: '../runbooks/observability-correlation-report.md',
+        workflow: '../../.github/workflows/ops-dashboard.yml'
+      },
+      {
+        key: 'artifactContractValidation',
+        label: 'Artifact Contract Validation',
+        section: 'artifact-contract-validation',
+        href: '../audit/artifact-contract-validation/artifact-contract-validation-report.json',
+        contract: '../contracts/artifact-contract-validation-report.schema.json',
+        runbook: '../runbooks/operational-artifact-schema-validation.md',
+        workflow: '../../.github/workflows/artifact-contract-validation.yml'
+      },
+      {
+        key: 'dashboardRegression',
+        label: 'Dashboard Regression',
+        section: 'dashboard-regression',
+        href: 'dashboard-regression-report.json',
+        contract: '../runbooks/dashboard-regression-validation.md',
+        runbook: '../runbooks/dashboard-regression-validation.md',
+        workflow: '../../.github/workflows/dashboard-regression-report.yml'
+      },
+      {
+        key: 'livingArchitectureTraceability',
+        label: 'Living Architecture Traceability',
+        section: 'living-architecture-traceability',
+        href: '../audit/living-architecture/living-architecture-traceability-report.json',
+        altHref: '../traceability/living-architecture-map.json',
+        contract: '../contracts/living-architecture-map.schema.json',
+        runbook: '../runbooks/living-architecture-traceability.md',
+        workflow: '../../.github/workflows/living-architecture-traceability.yml'
+      }
+    ];
+
+    const fallback = {
+      deliveryReadiness: { score_percent: 0, status: 'unknown', remaining_gap_pp: 0, confidence_level: 'low', operational_risk: 'medium', checks: [] },
+      deliveryCompletion: { completion_percent: 0, target_percent: 99.5, remaining_gap_pp: 0, status: 'unknown', confidence_level: 'low', operational_risk: 'medium', milestones: [] },
+      deliveryFinalization: { finalization_percent: 0, status: 'unknown', confidence_level: 'low', operational_risk: 'medium', tracked_prs: 0, merge_rate_percent: 0, open_failures: 0, indicators: [] },
+      maturitySnapshot: { average_current_percent: 0, average_target_percent: 0, average_gap_percent: 0, confidence_level: 'low', operational_risk: 'medium', dimensions: [] },
+      observabilityCorrelation: { summary: { mapped_sources: 0, mapped_artifacts: 0, maturity_percent: 0, operational_risk: 'unknown', confidence_level: 'low' }, correlations: [] },
+      artifactContractValidation: { status: 'unknown', confidence_level: 'low', operational_risk: 'medium', maturity_percent: 0, summary: { artifacts_inventoried: 0, schemas_missing: 0, field_divergences: 0 }, artifacts: [] },
+      dashboardRegression: { summary: { totals: { checks: 0, passed: 0, gaps: 0 }, mode: 'report-only' }, checks: [] },
+      livingArchitectureTraceability: { workflows: [], artifacts: [], dashboards: [], runbooks: [], schemas: [], validation: { mode: 'report_only' }, summary: { internal_paths_ok: 0, internal_paths_missing: 0, confidence_level: 'low', operational_risk: 'medium' } }
+    };
+
+    async function loadJson(domain) {
+      const urls = [domain.href];
+      if (domain.altHref) urls.push(domain.altHref);
+      for (const href of urls) {
+        try {
+          const response = await fetch(href, { cache: 'no-store' });
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          return { ok: true, data: await response.json(), error: null, href };
+        } catch (error) {
+          if (href === urls[urls.length - 1]) {
+            return { ok: false, data: fallback[domain.key], error: error.message, href };
+          }
+        }
+      }
+      return { ok: false, data: fallback[domain.key], error: 'unavailable', href: domain.href };
+    }
+
+    function semaforo(status) {
+      const map = {
+        passed: 'verde', true: 'verde', low: 'verde', verde: 'verde', ready: 'verde', stable: 'verde', closed: 'verde', completed: 'verde', consolidated: 'verde', observed: 'verde', mapped: 'verde',
+        warning: 'amarelo', unknown: 'amarelo', medium: 'amarelo', amarelo: 'amarelo', attention: 'amarelo', gap: 'amarelo', divergence_report_only: 'amarelo', open: 'amarelo',
+        high: 'vermelho', failed: 'vermelho', vermelho: 'vermelho', bad: 'vermelho', risk: 'vermelho'
+      };
+      const key = String(status ?? 'unknown').toLowerCase();
+      const label = map[key] || (key.includes('pass') ? 'verde' : 'amarelo');
+      const cls = label === 'verde' ? 'green' : label === 'amarelo' ? 'yellow' : 'red';
+      return '<span class="badge ' + cls + '">' + label + '</span>';
+    }
+
+    function riskClass(level) {
+      const v = String(level || 'unknown').toLowerCase();
+      if (v === 'high' || v === 'vermelho' || v === 'failed') return 'bad';
+      if (v === 'medium' || v === 'unknown' || v === 'amarelo' || v === 'gap') return 'warn';
+      return 'good';
+    }
+
+    function card(label, value, unit, status, meta, section) {
+      const anchor = section ? ' onclick="location.hash=\'' + section + '\'"' : '';
+      return '<div class="card ' + riskClass(status) + '"' + anchor + '><div class="label">' + label + '</div><div class="value">' + value + '<span class="unit">' + unit + '</span></div>' + semaforo(status) + (meta ? '<div class="meta">' + meta + '</div>' : '') + '</div>';
+    }
+
+    function linkList(title, items) {
+      if (!items || !items.length) return '';
+      const lis = items.map(function (item) {
+        const path = item.path || item.href || item;
+        const name = item.id || item.name || path;
+        return '<li><a href="../../' + String(path).replace(/^\//, '') + '"><code>' + name + '</code></a></li>';
+      }).join('');
+      return '<div class="link-card"><h4>' + title + '</h4><ul>' + lis + '</ul></div>';
+    }
+
+    async function render() {
+      const loaded = {};
+      const sourceRows = [];
+      for (const domain of domains) {
+        loaded[domain.key] = await loadJson(domain);
+        sourceRows.push('<tr><td>' + domain.label + '</td><td>' + (loaded[domain.key].ok ? '<span class="badge green">carregado</span>' : '<span class="badge yellow">fallback</span>') + '</td><td><code>' + (loaded[domain.key].href || domain.href) + '</code></td><td><a href="' + domain.contract + '"><code>contrato</code></a></td><td><a href="' + domain.runbook + '"><code>runbook</code></a></td></tr>');
+      }
+
+      const readiness = loaded.deliveryReadiness.data;
+      const completion = loaded.deliveryCompletion.data;
+      const finalization = loaded.deliveryFinalization.data;
+      const maturity = loaded.maturitySnapshot.data;
+      const observability = loaded.observabilityCorrelation.data;
+      const contracts = loaded.artifactContractValidation.data;
+      const regression = loaded.dashboardRegression.data;
+      const traceability = loaded.livingArchitectureTraceability.data;
+
+      const execRisk = [readiness.operational_risk, completion.operational_risk, finalization.operational_risk, maturity.operational_risk, observability.summary?.operational_risk, contracts.operational_risk, traceability.summary?.operational_risk].filter(Boolean);
+      const worstRisk = execRisk.some(function (r) { return String(r).toLowerCase() === 'high'; }) ? 'high' : execRisk.some(function (r) { return String(r).toLowerCase() === 'medium'; }) ? 'medium' : 'low';
+      const loadedCount = Object.values(loaded).filter(function (l) { return l.ok; }).length;
+
+      document.getElementById('executiveCards').innerHTML = [
+        card('Delivery readiness', readiness.score_percent || 0, '%', readiness.status, 'confiança: ' + (readiness.confidence_level || 'low'), 'delivery-readiness'),
+        card('Delivery completion', completion.completion_percent || 0, '%', completion.status, 'gap: ' + (completion.remaining_gap_pp || 0) + ' p.p.', 'delivery-completion'),
+        card('Delivery finalization', finalization.finalization_percent || finalization.score_percent || 0, '%', finalization.status, 'PRs: ' + (finalization.tracked_prs || '-'), 'delivery-finalization'),
+        card('Maturity snapshot', maturity.average_current_percent || 0, '%', (maturity.average_gap_percent || 0) <= 5 ? 'low' : 'attention', 'gap médio: ' + (maturity.average_gap_percent || 0) + ' p.p.', 'maturity-snapshot'),
+        card('Observability mapped', observability.summary?.mapped_sources || 0, 'fontes', observability.summary?.operational_risk, 'artifacts: ' + (observability.summary?.mapped_artifacts || 0), 'observability-correlation'),
+        card('Contract artifacts', contracts.summary?.artifacts_inventoried || 0, '', contracts.status, 'divergências: ' + (contracts.summary?.field_divergences || 0), 'artifact-contract-validation'),
+        card('Dashboard regression', regression.summary?.totals?.passed || 0, '/' + (regression.summary?.totals?.checks || 0), (regression.summary?.totals?.gaps || 0) === 0 ? 'low' : 'gap', 'modo: report-only', 'dashboard-regression'),
+        card('Traceability domains', (traceability.workflows?.length || 0) + (traceability.artifacts?.length || 0) + (traceability.dashboards?.length || 0), 'itens', traceability.summary?.operational_risk || 'medium', 'fontes carregadas: ' + loadedCount + '/8', 'living-architecture-traceability'),
+        card('Risco operacional consolidado', worstRisk, '', worstRisk, 'evidência report-only — não substitui CI', '')
+      ].join('');
+
+      document.getElementById('readinessCards').innerHTML = [
+        card('Score readiness', readiness.score_percent || 0, '%', readiness.status),
+        card('Gap restante', readiness.remaining_gap_pp || 0, 'p.p.', readiness.status),
+        card('Confiança', readiness.confidence_level || 'low', '', readiness.confidence_level),
+        card('Risco operacional', readiness.operational_risk || 'medium', '', readiness.operational_risk)
+      ].join('');
+      document.getElementById('readinessTable').innerHTML = (readiness.checks || []).map(function (item) {
+        return '<tr><td>' + item.name + '</td><td>' + (item.score ?? '-') + '%</td><td>' + semaforo(item.status) + '</td><td>' + (item.confidence_level || readiness.confidence_level || 'low') + '</td><td>' + (item.operational_risk || readiness.operational_risk || 'medium') + '</td></tr>';
+      }).join('') || '<tr><td colspan="5">Sem readiness carregado; usando fallback governado.</td></tr>';
+
+      document.getElementById('completionCards').innerHTML = [
+        card('Completion', completion.completion_percent || 0, '%', completion.status),
+        card('Alvo', completion.target_percent || 99.5, '%', 'low'),
+        card('Gap', completion.remaining_gap_pp || 0, 'p.p.', completion.status),
+        card('Confiança', completion.confidence_level || 'low', '', completion.confidence_level)
+      ].join('');
+      document.getElementById('completionTable').innerHTML = (completion.milestones || []).map(function (item) {
+        return '<tr><td>' + item.name + '</td><td>' + item.percent + '%</td><td>' + semaforo(item.status) + '</td><td>' + (item.confidence_level || completion.confidence_level || 'low') + '</td><td>' + (item.operational_risk || completion.operational_risk || 'medium') + '</td></tr>';
+      }).join('') || '<tr><td colspan="5">Sem snapshot de conclusão carregado.</td></tr>';
+
+      const finIndicators = finalization.indicators || [
+        { name: 'Score final', value: (finalization.finalization_percent || finalization.score_percent || 0) + '%', status: finalization.status },
+        { name: 'PRs rastreados', value: finalization.tracked_prs || 0, status: 'stable' },
+        { name: 'Taxa de merge', value: (finalization.merge_rate_percent || 0) + '%', status: 'stable' },
+        { name: 'Falhas abertas', value: finalization.open_failures || 0, status: (finalization.open_failures || 0) === 0 ? 'low' : 'high' }
+      ];
+      document.getElementById('finalizationCards').innerHTML = [
+        card('Finalization score', finalization.finalization_percent || finalization.score_percent || 0, '%', finalization.status),
+        card('PRs rastreados', finalization.tracked_prs || 0, '', 'stable'),
+        card('Merge rate', finalization.merge_rate_percent || 0, '%', 'stable'),
+        card('Risco', finalization.operational_risk || 'medium', '', finalization.operational_risk)
+      ].join('');
+      document.getElementById('finalizationTable').innerHTML = finIndicators.map(function (item) {
+        return '<tr><td>' + item.name + '</td><td>' + item.value + '</td><td>' + semaforo(item.status) + '</td><td>' + (finalization.confidence_level || 'low') + '</td><td>' + (finalization.operational_risk || 'medium') + '</td></tr>';
+      }).join('');
+
+      document.getElementById('maturityCards').innerHTML = [
+        card('Média atual', maturity.average_current_percent || 0, '%', (maturity.average_gap_percent || 0) <= 5 ? 'low' : 'attention'),
+        card('Média alvo', maturity.average_target_percent || 0, '%', 'low'),
+        card('Gap médio', maturity.average_gap_percent || 0, 'p.p.', (maturity.average_gap_percent || 0) <= 5 ? 'low' : 'attention'),
+        card('Confiança', maturity.confidence_level || 'medium', '', maturity.confidence_level)
+      ].join('');
+      document.getElementById('maturityTable').innerHTML = (maturity.dimensions || []).map(function (item) {
+        return '<tr><td>' + item.name + '</td><td>' + item.current_percent + '%</td><td>' + item.target_percent + '%</td><td>' + item.gap_percent + ' p.p.</td><td>' + semaforo(item.status_semáforo || item.status) + '</td><td>' + (item.confidence_level || 'low') + '</td><td>' + (item.evidence_links || []).map(function (l) { return '<code>' + l + '</code>'; }).join('<br>') + '</td><td>' + (item.next_recommended_action || '-') + '</td></tr>';
+      }).join('') || '<tr><td colspan="8">Sem snapshot de maturidade carregado.</td></tr>';
+
+      const obsSummary = observability.summary || {};
+      document.getElementById('observabilityCards').innerHTML = [
+        card('Fontes mapeadas', obsSummary.mapped_sources || 0, '', obsSummary.operational_risk),
+        card('Artifacts mapeados', obsSummary.mapped_artifacts || 0, '', 'low'),
+        card('Maturidade', obsSummary.maturity_percent || 0, '%', obsSummary.operational_risk),
+        card('Confiança', obsSummary.confidence_level || 'low', '', obsSummary.confidence_level)
+      ].join('');
+      document.getElementById('observabilityTable').innerHTML = (observability.correlations || []).slice(0, 20).map(function (item) {
+        return '<tr><td><code>' + item.path + '</code></td><td>' + (item.categories || []).join(', ') + '</td><td>' + item.status + '</td><td>' + semaforo(item.status) + '</td><td>' + (item.confidence_level || obsSummary.confidence_level || 'low') + '</td><td>' + (item.operational_risk || obsSummary.operational_risk || 'low') + '</td></tr>';
+      }).join('') || '<tr><td colspan="6">Sem correlação de observabilidade carregada.</td></tr>';
+
+      const contractSummary = contracts.summary || {};
+      document.getElementById('contractCards').innerHTML = [
+        card('Artifacts inventariados', contractSummary.artifacts_inventoried || 0, '', contracts.status),
+        card('Schemas ausentes', contractSummary.schemas_missing || 0, '', contractSummary.schemas_missing ? 'medium' : 'low'),
+        card('Divergências', contractSummary.field_divergences || 0, '', contractSummary.field_divergences ? 'gap' : 'low'),
+        card('Maturidade contratos', contracts.maturity_percent || 0, '%', contracts.operational_risk)
+      ].join('');
+      document.getElementById('contractTable').innerHTML = (contracts.artifacts || []).slice(0, 25).map(function (item) {
+        return '<tr><td><code>' + item.artifact + '</code></td><td><code>' + (item.schema || 'missing') + '</code></td><td>' + item.load_status + '</td><td>' + item.status + '</td><td>' + semaforo(item.status) + '</td><td>' + ((item.minimum_fields_missing || []).join(', ') || '-') + '</td></tr>';
+      }).join('') || '<tr><td colspan="6">Sem validação de contratos carregada.</td></tr>';
+
+      const regTotals = regression.summary?.totals || {};
+      document.getElementById('regressionCards').innerHTML = [
+        card('Checks', regTotals.checks || 0, '', 'low'),
+        card('Passou', regTotals.passed || 0, '', 'low'),
+        card('Gaps report-only', regTotals.gaps || 0, '', regTotals.gaps ? 'gap' : 'low'),
+        card('Modo', regression.summary?.mode || 'report-only', '', 'low')
+      ].join('');
+      document.getElementById('regressionTable').innerHTML = (regression.checks || []).map(function (item) {
+        const detail = item.missing ? item.missing.join(', ') : item.findings ? item.findings.join(', ') : item.message || '-';
+        return '<tr><td>' + item.name + '</td><td>' + item.status + '</td><td>' + (item.severity || 'report-only') + '</td><td>' + detail + '</td></tr>';
+      }).join('') || '<tr><td colspan="4">Sem relatório de regressão carregado.</td></tr>';
+
+      const traceDomains = [
+        { name: 'Workflows', items: traceability.workflows || [], path: '../traceability/living-architecture-map.json' },
+        { name: 'Artifacts', items: traceability.artifacts || [], path: '../traceability/living-architecture-map.json' },
+        { name: 'Dashboards', items: traceability.dashboards || [], path: '../traceability/living-architecture-map.json' },
+        { name: 'Runbooks', items: traceability.runbooks || [], path: '../traceability/living-architecture-map.json' },
+        { name: 'Schemas', items: traceability.schemas || [], path: '../contracts/artifact-contracts-index.md' }
+      ];
+      document.getElementById('traceabilityCards').innerHTML = [
+        card('Workflows', (traceability.workflows || []).length, '', 'low'),
+        card('Artifacts', (traceability.artifacts || []).length, '', 'low'),
+        card('Dashboards', (traceability.dashboards || []).length, '', 'low'),
+        card('Modo validação', traceability.validation?.mode || 'report_only', '', 'low')
+      ].join('');
+      document.getElementById('traceabilityTable').innerHTML = traceDomains.map(function (d) {
+        return '<tr><td>' + d.name + '</td><td>' + d.items.length + '</td><td><code>' + d.path + '</code></td><td>' + semaforo(d.items.length ? 'mapped' : 'unknown') + '</td><td>' + (traceability.summary?.confidence_level || 'medium') + '</td></tr>';
+      }).join('');
+
+      document.getElementById('navLinks').innerHTML = [
+        '<div class="link-card"><h4>Dashboards existentes</h4><ul>',
+        '<li><a href="live-operational-dashboard.dynamic.html"><code>live-operational-dashboard.dynamic.html</code></a></li>',
+        '<li><a href="live-operational-dashboard.html"><code>live-operational-dashboard.html</code></a></li>',
+        '<li><a href="delivery-finalization-panel.html"><code>delivery-finalization-panel.html</code></a></li>',
+        '<li><a href="../ops-dashboard/index.html"><code>ops-dashboard/index.html</code></a></li>',
+        '</ul></div>',
+        '<div class="link-card"><h4>Índices e mapas</h4><ul>',
+        '<li><a href="operational-command-center.md"><code>operational-command-center.md</code></a></li>',
+        '<li><a href="command-center-evidence-index.md"><code>command-center-evidence-index.md</code></a></li>',
+        '<li><a href="command-center-navigation-map.md"><code>command-center-navigation-map.md</code></a></li>',
+        '<li><a href="../contracts/artifact-contracts-index.md"><code>artifact-contracts-index.md</code></a></li>',
+        '</ul></div>',
+        '<div class="link-card"><h4>Runbooks</h4><ul>',
+        domains.map(function (d) { return '<li><a href="' + d.runbook + '"><code>' + d.label + '</code></a></li>'; }).join(''),
+        '<li><a href="../runbooks/operational-evidence-hub.md"><code>operational-evidence-hub.md</code></a></li>',
+        '</ul></div>',
+        '<div class="link-card"><h4>Contratos</h4><ul>',
+        domains.map(function (d) { return '<li><a href="' + d.contract + '"><code>' + d.label + '</code></a></li>'; }).join(''),
+        '</ul></div>'
+      ].join('');
+
+      document.getElementById('sourcesTable').innerHTML = sourceRows.join('');
+    }
+
+    render();
+  </script>
+</body>
+</html>

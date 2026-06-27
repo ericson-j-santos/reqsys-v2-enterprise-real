@@ -2,12 +2,12 @@
 
 Modo: **report-only**. Este relatório não bloqueia CI na primeira versão; gaps devem ser tratados como backlog governado.
 
-Gerado em: 2026-06-27T14:06:29.581Z
+Gerado em: 2026-06-27T15:06:28.064Z
 
 ## Resumo
 
-- Checks: 13
-- Passou: 13
+- Checks: 21
+- Passou: 21
 - Gaps report-only: 0
 
 ## Dashboards HTML identificados
@@ -15,6 +15,7 @@ Gerado em: 2026-06-27T14:06:29.581Z
 - `docs/dashboard/delivery-finalization-panel.html`
 - `docs/dashboard/live-operational-dashboard.dynamic.html`
 - `docs/dashboard/live-operational-dashboard.html`
+- `docs/dashboard/operational-evidence-hub.html`
 
 ## Checks
 
@@ -24,6 +25,11 @@ Gerado em: 2026-06-27T14:06:29.581Z
 | ✅ cards_obrigatorios_presentes | passed | report-only | - |
 | ✅ fontes_json_esperadas_referenciadas | passed | report-only | - |
 | ✅ fallback_seguro_para_artifact_ausente | passed | report-only | - |
+| ✅ evidence_hub_cards_executivos_presentes | passed | report-only | - |
+| ✅ evidence_hub_fontes_json_referenciadas | passed | report-only | - |
+| ✅ evidence_hub_drill_down_navegavel | passed | report-only | - |
+| ✅ evidence_hub_fallback_seguro | passed | report-only | - |
+| ✅ evidence_hub_indicadores_governanca_presentes | passed | report-only | - |
 | ✅ ausencia_de_secrets:docs/dashboard/delivery-finalization-panel.html | passed | report-only | - |
 | ✅ ausencia_de_chamadas_externas_nao_governadas:docs/dashboard/delivery-finalization-panel.html | passed | report-only | - |
 | ✅ compatibilidade_basica_execucao_local:docs/dashboard/delivery-finalization-panel.html | passed | report-only | - |
@@ -33,3 +39,6 @@ Gerado em: 2026-06-27T14:06:29.581Z
 | ✅ ausencia_de_secrets:docs/dashboard/live-operational-dashboard.html | passed | report-only | - |
 | ✅ ausencia_de_chamadas_externas_nao_governadas:docs/dashboard/live-operational-dashboard.html | passed | report-only | - |
 | ✅ compatibilidade_basica_execucao_local:docs/dashboard/live-operational-dashboard.html | passed | report-only | - |
+| ✅ ausencia_de_secrets:docs/dashboard/operational-evidence-hub.html | passed | report-only | - |
+| ✅ ausencia_de_chamadas_externas_nao_governadas:docs/dashboard/operational-evidence-hub.html | passed | report-only | - |
+| ✅ compatibilidade_basica_execucao_local:docs/dashboard/operational-evidence-hub.html | passed | report-only | - |
