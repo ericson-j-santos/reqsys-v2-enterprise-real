@@ -42,6 +42,7 @@
     <section><h2>Evidências de entrega</h2><table><thead><tr><th>Evidência</th><th>Tipo</th><th>Caminho</th></tr></thead><tbody id="deliveryEvidence"></tbody></table></section>
     <section><h2>Readiness de entrega</h2><table><thead><tr><th>Check</th><th>Score</th><th>Status</th></tr></thead><tbody id="deliveryReadiness"></tbody></table></section>
     <section><h2>Conclusão de entrega</h2><table><thead><tr><th>Marco</th><th>Percentual</th><th>Status</th></tr></thead><tbody id="deliveryCompletion"></tbody></table></section>
+    <section><h2>Snapshot executivo de maturidade de entrega</h2><table><thead><tr><th>Dimensão</th><th>Atual evidenciado</th><th>Alvo</th><th>Gap</th><th>Semáforo</th><th>Confiança</th><th>Evidências</th><th>Próxima ação</th></tr></thead><tbody id="deliveryMaturity"></tbody></table></section>
     <section><h2>Fontes de dados</h2><table><thead><tr><th>Fonte</th><th>Status</th><th>Observação</th></tr></thead><tbody id="sources"></tbody></table></section>
   </main>
   <script>
@@ -58,7 +59,8 @@
       { key: 'deliveryBurndown', label: 'Delivery Burndown Snapshot', href: '../audit/delivery-burndown/delivery-burndown-snapshot.json' },
       { key: 'deliveryEvidence', label: 'Delivery Evidence Report', href: '../audit/delivery-evidence/delivery-evidence-report.json' },
       { key: 'deliveryReadiness', label: 'Delivery Readiness Report', href: '../audit/delivery-readiness/delivery-readiness-report.json' },
-      { key: 'deliveryCompletion', label: 'Delivery Completion Snapshot', href: '../audit/delivery-completion/delivery-completion-snapshot.json' }
+      { key: 'deliveryCompletion', label: 'Delivery Completion Snapshot', href: '../audit/delivery-completion/delivery-completion-snapshot.json' },
+      { key: 'deliveryMaturity', label: 'Delivery Maturity Snapshot', href: '../audit/delivery-maturity/delivery-maturity-snapshot.json' }
     ];
 
     const fallback = {
@@ -74,7 +76,8 @@
       deliveryBurndown: { total_gap_pp: 0, largest_gap: { name: 'unknown' }, dimensions: [] },
       deliveryEvidence: { evidence_count: 0, coverage_percent: 0, status: 'unknown', evidences: [] },
       deliveryReadiness: { score_percent: 0, status: 'unknown', remaining_gap_pp: 0, checks: [] },
-      deliveryCompletion: { completion_percent: 0, target_percent: 99.5, remaining_gap_pp: 0, status: 'unknown', milestones: [] }
+      deliveryCompletion: { completion_percent: 0, target_percent: 99.5, remaining_gap_pp: 0, status: 'unknown', milestones: [] },
+      deliveryMaturity: { average_current_percent: 0, average_target_percent: 0, average_gap_percent: 0, dimensions: [] }
     };
 
     async function loadJson(source) {
@@ -89,8 +92,8 @@
 
     function secondsToMinutes(value) { return Math.round((Number(value || 0) / 60) * 10) / 10; }
     function badge(status) {
-      if (status === 'passed' || status === true || status === 'low' || status === 'medium_low' || status === 'ready_with_observation' || status === 'consolidado' || status === 'stable' || status === 'closed' || status === 'completed' || status === 'consolidated' || status === 'completed_with_observation') return '<span class="badge green">verde</span>';
-      if (status === 'warning' || status === 'unknown' || status === 'medium' || status === 'em_consolidacao' || status === 'open' || status === 'attention' || status === 'consolidating') return '<span class="badge yellow">atenção</span>';
+      if (status === 'passed' || status === true || status === 'low' || status === 'verde' || status === 'medium_low' || status === 'ready_with_observation' || status === 'consolidado' || status === 'stable' || status === 'closed' || status === 'completed' || status === 'consolidated' || status === 'completed_with_observation') return '<span class="badge green">verde</span>';
+      if (status === 'warning' || status === 'unknown' || status === 'amarelo' || status === 'medium' || status === 'em_consolidacao' || status === 'open' || status === 'attention' || status === 'consolidating') return '<span class="badge yellow">atenção</span>';
       return '<span class="badge red">risco</span>';
     }
     function riskClass(level) {
@@ -122,6 +125,7 @@
       const evidence = loaded.deliveryEvidence.data;
       const deliveryReadiness = loaded.deliveryReadiness.data;
       const completion = loaded.deliveryCompletion.data;
+      const deliveryMaturity = loaded.deliveryMaturity.data;
       document.getElementById('cards').innerHTML = [
         card('Success rate', lead.success_rate_percent || 0, '%', (lead.success_rate_percent || 0) >= 95 ? 'low' : 'medium'),
         card('P95 lead time', secondsToMinutes(lead.p95_seconds), 'min', (lead.p95_seconds || 0) < 900 ? 'low' : 'medium'),
@@ -135,7 +139,9 @@
         card('Delivery maturity', delivery.current_maturity_percent || 0, '%', delivery.status || 'stable'),
         card('Delivery readiness', deliveryReadiness.score_percent || 0, '%', deliveryReadiness.status),
         card('Delivery completion', completion.completion_percent || 0, '%', completion.status),
+        card('Exec maturity avg', deliveryMaturity.average_current_percent || 0, '%', (deliveryMaturity.average_gap_percent || 0) <= 5 ? 'low' : 'attention'),
         card('Completion gap', completion.remaining_gap_pp || 0, 'p.p.', completion.status),
+        card('Exec maturity gap', deliveryMaturity.average_gap_percent || 0, 'p.p.', (deliveryMaturity.average_gap_percent || 0) <= 5 ? 'low' : 'attention'),
         card('Delivery readiness gap', deliveryReadiness.remaining_gap_pp || 0, 'p.p.', deliveryReadiness.status),
         card('Delivery total gap', burndown.total_gap_pp || 0, 'p.p.', (burndown.total_gap_pp || 0) <= 1 ? 'low' : 'open'),
         card('Largest delivery gap', burndown.largest_gap?.name || 'unknown', '', (burndown.total_gap_pp || 0) <= 1 ? 'low' : 'open'),
@@ -156,6 +162,7 @@
       document.getElementById('deliveryEvidence').innerHTML = (evidence.evidences || []).map(item => `<tr><td>${item.name}</td><td>${item.type}</td><td><code>${item.path}</code></td></tr>`).join('') || '<tr><td colspan="3">Sem evidence report de entrega carregado.</td></tr>';
       document.getElementById('deliveryReadiness').innerHTML = (deliveryReadiness.checks || []).map(item => `<tr><td>${item.name}</td><td>${item.score}%</td><td>${badge(item.status)}</td></tr>`).join('') || '<tr><td colspan="3">Sem readiness de entrega carregado.</td></tr>';
       document.getElementById('deliveryCompletion').innerHTML = (completion.milestones || []).map(item => `<tr><td>${item.name}</td><td>${item.percent}%</td><td>${badge(item.status)}</td></tr>`).join('') || '<tr><td colspan="3">Sem snapshot de conclusão carregado.</td></tr>';
+      document.getElementById('deliveryMaturity').innerHTML = (deliveryMaturity.dimensions || []).map(item => `<tr><td>${item.name}</td><td>${item.current_percent}%</td><td>${item.target_percent}%</td><td>${item.gap_percent} p.p.</td><td>${badge(item.status_semáforo)}</td><td>${item.confidence_level}</td><td>${(item.evidence_links || []).map(link => `<code>${link}</code>`).join('<br>')}</td><td>${item.next_recommended_action}</td></tr>`).join('') || '<tr><td colspan="8">Sem snapshot executivo de maturidade carregado.</td></tr>';
       document.getElementById('sources').innerHTML = statuses.join('');
     }
     render();
