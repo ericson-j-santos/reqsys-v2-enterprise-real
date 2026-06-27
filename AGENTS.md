@@ -93,6 +93,8 @@ Antes de merge em `main`, validar o workflow `CI â€” ReqSys v2 Enterprise` 
 
 NÃ£o considerar um PR pronto para merge quando o E2E responsivo estiver ausente, em execuÃ§Ã£o ou falho, salvo decisÃ£o tÃ©cnica formal e documentada.
 
+Gate padrÃ£o ouro complementar: workflow **Trilha D â€” Qualidade e GovernanÃ§a** (matrix paralela de testes, coverage, mutation probe, contracts, schemas e CI watch). ObrigatÃ³rio no PR Evidence Gate. Runbook: `docs/runbooks/trilha-d-qualidade-governanca.md`.
+
 ## Gates de produÃ§Ã£o
 
 ProduÃ§Ã£o deve ser bloqueada se qualquer condiÃ§Ã£o abaixo ocorrer:

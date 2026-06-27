@@ -30,6 +30,7 @@ DEFAULT_OUTPUT = Path("artifacts/runtime-health-center/runtime-health-report.jso
 
 
 ARTIFACT_CATALOG = {
+    "trilha_d_qualidade_governanca": Path("artifacts/trilha-d-qualidade-governanca/trilha-d-qualidade-governanca.json"),
     "runtime_health_validator": Path("artifacts/runtime-health-validator/runtime-health-validator.json"),
     "runtime_operational_evidence_graph": Path("artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json"),
     "operational_risk_engine": Path("artifacts/operational-risk-engine/operational-risk-engine.json"),
@@ -312,6 +313,8 @@ def signal_catalog() -> dict[str, list[LocalSignal]]:
         "governance": [
             LocalSignal("agents_operational_rules", Path("AGENTS.md"), True),
             LocalSignal("runtime_ops_p1_doc", Path("docs/operations/runtime-ops-governance-p1.md"), True),
+            LocalSignal("trilha_d_workflow", Path(".github/workflows/trilha-d-qualidade-governanca.yml"), True),
+            LocalSignal("trilha_d_report", Path("artifacts/trilha-d-qualidade-governanca/trilha-d-qualidade-governanca.json"), json_status_path=("state",)),
             LocalSignal("governance_gate_workflow", Path(".github/workflows/operational-governance-gate.yml"), True),
             LocalSignal("governance_gate_report", Path("artifacts/operational-governance-gate/operational-governance-gate.json"), json_status_path=("status",)),
         ],
@@ -460,6 +463,7 @@ def build_report(root: Path) -> dict[str, Any]:
     warnings = sum(1 for item in domains.values() if item["status"] == "warning")
     gold_standard = {
         "Runtime Health Center": "passed",
+        "Trilha D — Qualidade e Governança": domains["governance"]["status"],
         "Operational Status Aggregator": "passed",
         "runtime-health-report.json": "passed",
         "Score consolidado de maturidade": "passed",

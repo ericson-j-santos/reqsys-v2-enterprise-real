@@ -14,6 +14,7 @@ on:
       - CI — ReqSys v2 Enterprise
       - Governance Quality Gates
       - Governança Padrão Ouro
+      - Trilha D — Qualidade e Governança
     types:
       - completed
   workflow_dispatch:
@@ -42,6 +43,7 @@ jobs:
         CI — ReqSys v2 Enterprise
         Governance Quality Gates
         Governança Padrão Ouro
+        Trilha D — Qualidade e Governança
       OPTIONAL_WORKFLOW_NAMES: |
         NGINX Security Profile
       MAX_WAIT_SECONDS: '180'

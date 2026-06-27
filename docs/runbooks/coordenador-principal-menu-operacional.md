@@ -72,6 +72,7 @@ Apenas estes workflows no ciclo normal. Demais workflows existem para governanç
 | Workflow | Quando usar | Inputs |
 |---|---|---|
 | **PR CI Watch** | PR aberto/sincronizado; diagnóstico de checks | `pr_number`, `sha`, `comment=false` |
+| **Trilha D — Qualidade e Governança** | Gate padrão ouro; testes/coverage/contracts em paralelo | `fail_on_error=false` (padrão) |
 | **PR Evidence Gate** | Validar head SHA + workflows + artifacts | `pr_number` |
 | **Governed PR Automation** | Validar elegibilidade de merge | `pr_number`, `execute_merge=false` |
 
@@ -101,11 +102,12 @@ triagem (coordenador-status.json ou artifacts 1–2)
 execução (agente técnico em cursor/<tema>-716c)
   → PR draft até CI verde
 
-validação (artifacts 3–4 + CI obrigatório)
+validação (artifacts 3–4 + CI obrigatório + Trilha D padrão ouro)
   → Backend Lint & Security
   → Backend Tests + Coverage
   → Frontend Build + Security Audit
   → Frontend Responsive E2E
+  → Trilha D — Qualidade e Governança (6 dimensões paralelas)
 
 evidência (artifacts no PR)
 decisão humana (merge / deploy / produção)

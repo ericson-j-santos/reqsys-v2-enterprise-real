@@ -39,6 +39,7 @@ def test_pr_evidence_gate_reruns_after_required_workflows_complete():
         'CI — ReqSys v2 Enterprise',
         'Governance Quality Gates',
         'Governança Padrão Ouro',
+        'Trilha D — Qualidade e Governança',
     ):
         assert workflow_name in text
     assert 'types:\n      - completed' in text

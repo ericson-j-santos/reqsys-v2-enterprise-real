@@ -8,6 +8,8 @@
     "schema_version",
     "trail",
     "trail_name",
+    "gold_standard",
+    "gold_standard_label",
     "generated_at",
     "correlation_id",
     "repository",
@@ -25,9 +27,11 @@
     "mode"
   ],
   "properties": {
-    "schema_version": { "type": "string", "const": "1.0.0" },
+    "schema_version": { "type": "string", "const": "1.1.0" },
     "trail": { "type": "string", "const": "D" },
     "trail_name": { "type": "string", "const": "Qualidade e Governança" },
+    "gold_standard": { "type": "boolean", "const": true },
+    "gold_standard_label": { "type": "string", "const": "Trilha D — Qualidade e Governança" },
     "generated_at": { "type": "string", "format": "date-time" },
     "correlation_id": { "type": "string", "minLength": 1 },
     "repository": { "type": "string", "minLength": 1 },
@@ -73,6 +77,6 @@
         }
       }
     },
-    "mode": { "type": "string", "enum": ["report_only"] }
+    "mode": { "type": "string", "enum": ["gold_standard"] }
   }
 }

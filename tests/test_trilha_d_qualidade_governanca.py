@@ -55,11 +55,13 @@ def test_consolidate_marks_parallelizable_trail_d() -> None:
     )
     assert report["trail"] == "D"
     assert report["trail_name"] == "Qualidade e Governança"
+    assert report["gold_standard"] is True
     assert report["parallelizable"] is True
     assert report["dimensions_total"] == 6
     assert report["state"] == "passed"
     assert report["decision"] == "continuar_incremento_qualidade"
-    assert report["schema_version"] == "1.0.0"
+    assert report["schema_version"] == "1.1.0"
+    assert report["mode"] == "gold_standard"
 
 
 def test_consolidate_failed_dimension_blocks_merge() -> None:

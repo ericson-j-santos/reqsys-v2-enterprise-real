@@ -39,6 +39,7 @@ Produção deve ser bloqueada quando existir qualquer condição abaixo:
 - auditoria sem `correlation_id`;
 - conector administrativo exposto sem controle;
 - CI vermelho, ausente ou inconclusivo;
+- Trilha D — Qualidade e Governança vermelha ou ausente no head SHA;
 - PR sem evidências mínimas.
 
 ## Checklist de demanda padrão ouro

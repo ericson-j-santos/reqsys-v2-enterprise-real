@@ -10,6 +10,7 @@ Nenhuma alteracao deve seguir para producao sem validacao minima de qualidade.
 
 - Build concluido.
 - Testes automatizados aprovados.
+- Trilha D — Qualidade e Governanca (padrao ouro) verde no head SHA do PR.
 - Revisao de PR concluida.
 - Configuracoes por ambiente revisadas.
 - Documentacao atualizada.

@@ -11,15 +11,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - '.github/workflows/trilha-d-qualidade-governanca.yml'
-      - 'scripts/trilha_d_qualidade_governanca.py'
-      - 'docs/contracts/trilha-d-qualidade-governanca.schema.json'
-      - 'docs/runbooks/trilha-d-qualidade-governanca.md'
-      - 'tests/test_trilha_d_qualidade_governanca.py'
-      - 'backend/**'
-      - 'docs/contracts/**'
-      - 'docs/schema-registry.json'
   push:
     branches:
       - main

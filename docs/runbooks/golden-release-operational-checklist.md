@@ -10,6 +10,7 @@ Definir checklist operacional padrão ouro para liberar uma rodada de incremento
 |---|---|---|
 | PRs da rodada | Até 3 PRs paralelos por rodada padrão | Sim |
 | CI obrigatório | Required workflows verdes | Sim |
+| Trilha D (padrão ouro) | Seis dimensões paralelas verdes | Sim |
 | Conflitos | Sem conflito com `main` | Sim |
 | Escopo | Sem ampliação não planejada | Sim |
 | Secrets | Sem novo secret ou vazamento | Sim |
@@ -27,6 +28,7 @@ Definir checklist operacional padrão ouro para liberar uma rodada de incremento
 | CI Lead Time Analytics | P50/P95 atualizados |
 | Runtime Predictive Analytics | Risk score atualizado |
 | Operational Artifact Schema Validation | Contratos mínimos validados |
+| Trilha D — Qualidade e Governança | Artifact `trilha-d-qualidade-governanca-evidence` com `gold_standard: true` |
 | Dashboard dinâmico | Fontes e fallback funcionais |
 | Burndown/maturidade | Gap residual atualizado |
 

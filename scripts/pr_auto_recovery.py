@@ -24,6 +24,7 @@ CRITICAL_WORKFLOWS = {
     "CI Enterprise Fast",
     "Governance Quality Gates",
     "Governança Padrão Ouro",
+    "Trilha D — Qualidade e Governança",
     "PR Conflict Guard",
     "PR Evidence Gate",
     "Branch Protection Audit",

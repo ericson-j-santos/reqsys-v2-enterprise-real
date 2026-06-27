@@ -33,6 +33,14 @@
       "runbooks": ["docs/runbooks/operational-artifact-discovery-index.md"]
     },
     {
+      "id": "trilha-d-qualidade-governanca",
+      "name": "Trilha D — Qualidade e Governança",
+      "path": ".github/workflows/trilha-d-qualidade-governanca.yml",
+      "purpose": "Gate padrão ouro paralelizável: testes, coverage, mutation probe, contracts, schemas e CI watch.",
+      "artifacts": ["trilha-d-qualidade-governanca-evidence"],
+      "runbooks": ["docs/runbooks/trilha-d-qualidade-governanca.md"]
+    },
+    {
       "id": "living-architecture-traceability",
       "name": "Living Architecture Traceability",
       "path": ".github/workflows/living-architecture-traceability.yml",
@@ -67,6 +75,14 @@
       "retention_days": 30
     },
     {
+      "id": "trilha-d-qualidade-governanca",
+      "name": "trilha-d-qualidade-governanca-evidence",
+      "producer_workflow": "trilha-d-qualidade-governanca",
+      "contract": "docs/contracts/trilha-d-qualidade-governanca.schema.json",
+      "consumer_dashboards": ["operational-command-center", "ops-dashboard"],
+      "retention_days": 30
+    },
+    {
       "id": "living-architecture-traceability-report",
       "name": "living-architecture-traceability-${{ github.run_id }}",
       "producer_workflow": "living-architecture-traceability",
@@ -76,6 +92,7 @@
     }
   ],
   "schemas": [
+    { "id": "trilha-d-qualidade-governanca", "path": "docs/contracts/trilha-d-qualidade-governanca.schema.json", "domain": "quality-governance", "version": "1.1.0" },
     { "id": "living-architecture-map", "path": "docs/contracts/living-architecture-map.schema.json", "domain": "traceability", "version": "1.0.0" },
     { "id": "product-intelligence-event", "path": "schemas/product-intelligence/product-intelligence-event.schema.json", "domain": "product-intelligence", "version": "1.0.0" },
     { "id": "operational-health-dashboard", "path": "docs/operations/operational-health-dashboard.schema.json", "domain": "operations", "version": "1.0.0" }

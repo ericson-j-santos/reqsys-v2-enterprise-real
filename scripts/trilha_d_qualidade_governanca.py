@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Trilha D — Qualidade e Governança.
+"""Trilha D — Qualidade e Governança (padrão ouro).
 
 Orquestra dimensões paralelizáveis de qualidade:
 - testes
@@ -10,6 +10,7 @@ Orquestra dimensões paralelizáveis de qualidade:
 - CI watch (estrutura local)
 
 Cada dimensão pode rodar isoladamente em CI (matrix) e ser consolidada depois.
+Este é o gate canônico padrão ouro de qualidade e governança do ReqSys.
 """
 
 from __future__ import annotations
@@ -41,6 +42,8 @@ DIMENSIONS = (
 )
 
 STATE_RANK = {"passed": 0, "warning": 1, "failed": 2, "skipped": 3}
+GOLD_STANDARD = True
+GOLD_STANDARD_MODE = "gold_standard"
 
 
 @dataclass
@@ -471,9 +474,11 @@ def consolidate(dimension_reports: list[dict[str, Any]], *, repository: str, run
         "failed": "bloquear_merge_ate_corrigir_qualidade",
     }
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "trail": "D",
         "trail_name": "Qualidade e Governança",
+        "gold_standard": GOLD_STANDARD,
+        "gold_standard_label": "Trilha D — Qualidade e Governança",
         "generated_at": utc_now(),
         "correlation_id": str(uuid4()),
         "repository": repository,
@@ -488,7 +493,7 @@ def consolidate(dimension_reports: list[dict[str, Any]], *, repository: str, run
         "blockers": blockers,
         "dimensions": dimensions,
         "recommended_actions": _recommended_actions(global_state, dimensions),
-        "mode": "report_only",
+        "mode": GOLD_STANDARD_MODE,
     }
 
 
@@ -536,8 +541,9 @@ def write_consolidated_report(report: dict[str, Any], output_dir: Path) -> tuple
     json_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     lines = [
-        "# Trilha D — Qualidade e Governança",
+        "# Trilha D — Qualidade e Governança (padrão ouro)",
         "",
+        f"- Padrão ouro: **{report.get('gold_standard', True)}**",
         f"- Estado: **{report['state']}**",
         f"- Decisão: {report['decision']}",
         f"- Score médio: {report['average_score']}%",

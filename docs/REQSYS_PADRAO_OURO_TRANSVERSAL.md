@@ -32,8 +32,8 @@ Nenhuma entrega do ReqSys deve ser considerada pronta sem avaliação explícita
 | Analítico | Tornar indicadores, cards, dashboards e gráficos clicáveis quando fizer sentido, abrindo o analítico já filtrado. |
 | Segurança | Validar autenticação, autorização, CORS, secrets, LGPD, logs sem PII e exposição indevida de endpoints. |
 | Governança | Usar correlation_id, trilha de auditoria, rastreabilidade de requisito, decisão e evidência. |
-| Testes | Aplicar testes unitários, integração, UI/responsividade e smoke/e2e conforme escopo. |
-| CI/CD | Garantir que pipelines e quality gates executem antes de merge/publicação. |
+| Testes | Aplicar testes unitários, integração, UI/responsividade e smoke/e2e conforme escopo. Trilha D (padrão ouro) consolida testes, coverage, mutation probe, contracts, schemas e CI watch em paralelo. |
+| CI/CD | Garantir que pipelines e quality gates executem antes de merge/publicação. Trilha D é gate padrão ouro obrigatório no PR Evidence Gate. |
 | Documentação | Atualizar README, ADRs, documentação funcional/técnica e changelog quando aplicável. |
 | Produção | Produção só pode receber mudança aprovada, testada, com rollback e evidência de validação. |
 

@@ -9,6 +9,7 @@ Uma entrega so deve ser aceita quando atender:
 - Arquitetura clara.
 - Codigo versionado.
 - Testes automatizados.
+- Trilha D — Qualidade e Governança (padrão ouro) verde quando aplicável.
 - Pipeline validado.
 - Seguranca revisada.
 - Logs e auditoria definidos.
