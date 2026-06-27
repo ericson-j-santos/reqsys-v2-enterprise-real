@@ -48,6 +48,31 @@ def _load_optional_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _resolve_public_runtime(
+    audit_path: Path,
+    artifacts_path: Path,
+    evidence_index_path: Path | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    for path, is_fallback in ((audit_path, False), (artifacts_path, True)):
+        if path.exists():
+            provenance = {
+                "source_path": str(path),
+                "source_fallback": is_fallback,
+                "available": True,
+            }
+            if evidence_index_path and evidence_index_path.exists():
+                index = _load_optional_json(evidence_index_path)
+                provenance["run_id"] = index.get("run_id")
+                provenance["generated_at"] = index.get("generated_at")
+                provenance["strict_gate_passed"] = index.get("strict_gate_passed")
+            return _load_optional_json(path), provenance
+    return {}, {
+        "source_path": None,
+        "source_fallback": True,
+        "available": False,
+    }
+
+
 def _safe_number(*values: Any) -> Any:
     for value in values:
         if value is None:
@@ -239,10 +264,19 @@ def _incident_timeline(report: dict[str, Any], runtime_report: dict[str, Any], e
     return events
 
 
-def _public_runtime_summary(public_runtime: dict[str, Any]) -> dict[str, Any]:
+def _public_runtime_summary(
+    public_runtime: dict[str, Any],
+    provenance: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     readiness = public_runtime.get("readiness") or {}
+    provenance = provenance or {}
     return {
-        "available": bool(public_runtime),
+        "available": bool(public_runtime) and provenance.get("available", bool(public_runtime)),
+        "source_path": provenance.get("source_path"),
+        "source_fallback": provenance.get("source_fallback", not bool(public_runtime)),
+        "evidence_run_id": provenance.get("run_id"),
+        "evidence_generated_at": provenance.get("generated_at"),
+        "strict_gate_passed": provenance.get("strict_gate_passed"),
         "environment": readiness.get("environment") or public_runtime.get("environment") or "prod",
         "base_url": public_runtime.get("base_url", ""),
         "operational_status": readiness.get("operational_status", "unknown"),
@@ -266,6 +300,7 @@ def build_dashboard_payload(
     public_runtime: dict[str, Any] | None = None,
     observability_correlation: dict[str, Any] | None = None,
     delivery_finalization: dict[str, Any] | None = None,
+    public_runtime_provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     results = report.get("results", []) or []
     runtime_report = runtime_report or {}
@@ -273,6 +308,7 @@ def build_dashboard_payload(
     public_runtime = public_runtime or {}
     observability_correlation = observability_correlation or {}
     delivery_finalization = delivery_finalization or {}
+    public_runtime_provenance = public_runtime_provenance or {}
     return {
         "schema_version": "1.2.0",
         "repo": repo or report.get("repo") or "unknown",
@@ -288,7 +324,7 @@ def build_dashboard_payload(
             "pulls": f"https://github.com/{repo}/pulls" if repo else "",
             "main": f"https://github.com/{repo}/tree/main" if repo else "",
         },
-        "public_runtime_readiness": _public_runtime_summary(public_runtime),
+        "public_runtime_readiness": _public_runtime_summary(public_runtime, public_runtime_provenance),
         "runtime_gold_standard_depth": _runtime_depth(runtime_report),
         "runtime_domain_drilldowns": _domain_drilldowns(runtime_report),
         "incident_timeline": _incident_timeline(report, runtime_report, evidence_graph),
@@ -297,7 +333,8 @@ def build_dashboard_payload(
         "runtime_sources": {
             "runtime_health_report_available": bool(runtime_report),
             "runtime_operational_evidence_graph_available": bool(evidence_graph),
-            "public_runtime_validation_available": bool(public_runtime),
+            "public_runtime_validation_available": bool(public_runtime) and public_runtime_provenance.get("available", bool(public_runtime)),
+            "public_runtime_source_fallback": public_runtime_provenance.get("source_fallback", not bool(public_runtime)),
             "observability_correlation_report_available": bool(observability_correlation),
             "delivery_finalization_report_available": bool(delivery_finalization),
         },
@@ -311,7 +348,9 @@ def main() -> int:
     parser.add_argument("--output", default="docs/ops-dashboard/data/health.json")
     parser.add_argument("--runtime-health-report", default="artifacts/runtime-health-center/runtime-health-report.json")
     parser.add_argument("--evidence-graph", default="artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json")
-    parser.add_argument("--public-runtime-validation", default="artifacts/runtime/public-runtime-validation.json")
+    parser.add_argument("--public-runtime-validation", default="audit/runtime/public-runtime-validation.json")
+    parser.add_argument("--public-runtime-fallback", default="artifacts/runtime/public-runtime-validation.json")
+    parser.add_argument("--public-runtime-evidence-index", default="audit/runtime/public-runtime-evidence-index.json")
     parser.add_argument("--observability-correlation-report", default="artifacts/observability-correlation-report/observability-correlation-report.json")
     parser.add_argument("--delivery-finalization-report", default="artifacts/delivery-finalization/delivery-finalization-report.json")
     args = parser.parse_args()
@@ -319,10 +358,23 @@ def main() -> int:
     report = _load_watchdog_report(Path(args.watchdog_report))
     runtime_report = _load_optional_json(Path(args.runtime_health_report))
     evidence_graph = _load_optional_json(Path(args.evidence_graph))
-    public_runtime = _load_optional_json(Path(args.public_runtime_validation))
+    public_runtime, public_runtime_provenance = _resolve_public_runtime(
+        Path(args.public_runtime_validation),
+        Path(args.public_runtime_fallback),
+        Path(args.public_runtime_evidence_index),
+    )
     observability_correlation = _load_optional_json(Path(args.observability_correlation_report))
     delivery_finalization = _load_optional_json(Path(args.delivery_finalization_report))
-    payload = build_dashboard_payload(report, args.repo, runtime_report, evidence_graph, public_runtime, observability_correlation, delivery_finalization)
+    payload = build_dashboard_payload(
+        report,
+        args.repo,
+        runtime_report,
+        evidence_graph,
+        public_runtime,
+        observability_correlation,
+        delivery_finalization,
+        public_runtime_provenance,
+    )
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

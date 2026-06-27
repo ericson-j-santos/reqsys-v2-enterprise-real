@@ -123,12 +123,37 @@ jobs:
           print("\n".join(summary))
           PY
 
+      - name: Persist public runtime evidence to audit
+        if: always()
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+          SHA: ${{ github.sha }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+        run: |
+          strict_passed=false
+          if [ "${SMOKE_OUTCOME}" = "success" ]; then
+            strict_passed=true
+          fi
+          python scripts/persist_public_runtime_evidence.py \
+            --validation artifacts/runtime/public-runtime-validation.json \
+            --readiness artifacts/runtime/ops-readiness-report.json \
+            --output-dir audit/runtime \
+            --repository "${REPOSITORY}" \
+            --run-id "${RUN_ID}" \
+            --event-name "${EVENT_NAME}" \
+            --sha "${SHA}" \
+            --strict-gate-passed "${strict_passed}"
+
       - name: Upload public runtime evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: public-runtime-evidence
-          path: artifacts/runtime/
+          path: |
+            artifacts/runtime/
+            audit/runtime/
           if-no-files-found: error
 
       - name: Publish evidence comment

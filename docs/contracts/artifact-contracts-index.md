@@ -95,6 +95,9 @@ Todo artifact operacional JSON deve convergir para os campos mínimos:
 | `artifacts/runtime-risk-scoring/risk-score.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/runtime-risk-scoring.yml |
 | `artifacts/runtime/ops-readiness-report.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/public-runtime-evidence.yml |
 | `artifacts/runtime/public-runtime-validation.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/public-runtime-evidence.yml |
+| `audit/runtime/ops-readiness-report.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/public-runtime-evidence.yml |
+| `audit/runtime/public-runtime-evidence-index.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/public-runtime-evidence.yml |
+| `audit/runtime/public-runtime-validation.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/public-runtime-evidence.yml |
 | `audit/artifact-discovery/operational-artifact-discovery-index.json` | workflow | `docs/contracts/operational-artifact-discovery-index.schema.json` | .github/workflows/operational-artifact-discovery-index.yml |
 | `audit/ci-lead-time-analytics.json` | workflow | `docs/contracts/ci-lead-time-analytics.schema.json` | .github/workflows/ci-lead-time-analytics.yml |
 | `audit/command-center/command-center-readiness.json` | workflow | `docs/contracts/command-center-readiness.schema.json` | .github/workflows/command-center-readiness.yml |

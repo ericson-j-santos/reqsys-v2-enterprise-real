@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0.0",
+  "contract": "public-runtime-evidence-index",
+  "generated_at": "2026-06-27T16:56:21.915174+00:00",
+  "repository": "reqsys-v2-enterprise-real",
+  "run_id": "local-baseline",
+  "event_name": "local",
+  "sha": "4ed9c9416f4ff6dc5f244eaa1035ff3100c445c5",
+  "workflow": "public-runtime-evidence",
+  "strict_gate_passed": false,
+  "source_artifact": "public-runtime-evidence",
+  "source_paths": {
+    "validation": "audit/runtime/public-runtime-validation.json",
+    "readiness": "audit/runtime/ops-readiness-report.json",
+    "index": "audit/runtime/public-runtime-evidence-index.json"
+  },
+  "summary": {
+    "base_url": "https://reqsys-api.fly.dev",
+    "environment": "prod",
+    "operational_status": "degraded",
+    "readiness_percent": 25.0,
+    "success_percentual": 25.0,
+    "strict_ok": 1,
+    "strict_total": 4,
+    "blocking_issues": [
+      "/api/runtime/health: 404 HTTP Error 404: Not Found",
+      "/api/runtime/readiness: 404 HTTP Error 404: Not Found",
+      "/api/runtime/liveness: 404 HTTP Error 404: Not Found"
+    ]
+  },
+  "consumers": [
+    "docs/ops-dashboard/index.html",
+    "scripts/generate_ops_dashboard_data.py",
+    "docs/dashboard/live-operational-dashboard.dynamic.html"
+  ]
+}
