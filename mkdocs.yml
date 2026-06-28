@@ -4,7 +4,8 @@ site_author: ReqSys Team
 site_url: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/
 repo_url: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real
 repo_name: ericson-j-santos/reqsys-v2-enterprise-real
-edit_uri: edit/main/docs/
+edit_uri: edit/main/docs-site/
+docs_dir: docs-site
 use_directory_urls: true
 
 
@@ -52,4 +53,4 @@ extra:
   reqsys:
     documentation_version: 0.1.0
     documentation_date: 2026-06-28
-    offline_html: docs/offline/reqsys-docs-v0.1.0.html
+    offline_html: docs-site/offline/reqsys-docs-v0.1.0.html
