@@ -21,6 +21,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read
 
 env:
   PYTHON_VERSION: "3.12"
@@ -49,7 +50,24 @@ jobs:
           pip install -r requirements-docs.txt
 
       - name: Build documentation
-        run: mkdocs build --strict --site-dir site
+        shell: bash
+        run: |
+          set +e
+          mkdocs build --strict --site-dir site > mkdocs-build.log 2>&1
+          status=$?
+          cat mkdocs-build.log
+          echo "$status" > mkdocs-build-status.txt
+          exit "$status"
+
+      - name: Upload MkDocs diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mkdocs-build-log
+          path: |
+            mkdocs-build.log
+            mkdocs-build-status.txt
+          if-no-files-found: ignore
 
       - name: Preserve offline fallback in artifact
         run: |
