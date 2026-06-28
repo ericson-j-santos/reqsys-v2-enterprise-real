@@ -1,23 +1,15 @@
 #!/usr/bin/env python3
-"""Open or update a draft PR for Cloud Agent / cursor/* branches."""
+"""Open or update a draft PR for Cloud Agent / cursor/* branches via GitHub REST API."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import subprocess
 import sys
-from pathlib import Path
-
-
-def run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, check=check, text=True, capture_output=True)
-
-
-def gh_json(args: list[str]) -> list[dict] | dict:
-    proc = run(["gh", *args])
-    return json.loads(proc.stdout or "null")
+import urllib.error
+import urllib.request
+from typing import Any
 
 
 def build_body(branch: str, base: str) -> str:
@@ -53,6 +45,60 @@ increment-type: consolidate
 """
 
 
+class GitHubClient:
+    def __init__(self, token: str, repository: str) -> None:
+        self.token = token
+        self.repository = repository
+
+    def _request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+        url = f"https://api.github.com/repos/{self.repository}{path}"
+        data = None
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "reqsys-padrao-ouro-delivery-automation",
+        }
+        if payload is not None:
+            data = json.dumps(payload).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(url, data=data, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                body = response.read().decode("utf-8")
+                return json.loads(body) if body else None
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"GitHub API {method} {path} failed ({exc.code}): {detail}") from exc
+
+    def find_open_pr(self, head: str, base: str) -> dict[str, Any] | None:
+        pulls = self._request("GET", f"/pulls?state=open&head={self.repository.split('/')[0]}:{head}&base={base}")
+        if isinstance(pulls, list) and pulls:
+            return pulls[0]
+        return None
+
+    def create_pr(self, *, title: str, body: str, head: str, base: str, draft: bool = True) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/pulls",
+            {"title": title, "body": body, "head": head, "base": base, "draft": draft},
+        )
+
+    def update_pr(self, number: int, *, title: str, body: str) -> dict[str, Any]:
+        return self._request("PATCH", f"/pulls/{number}", {"title": title, "body": body})
+
+    def add_labels(self, number: int, labels: list[str]) -> None:
+        self._request("POST", f"/issues/{number}/labels", {"labels": labels})
+
+
+def resolve_token() -> str:
+    for key in ("GH_PAT_ACTIONS", "GH_TOKEN", "GITHUB_TOKEN"):
+        value = os.environ.get(key, "").strip()
+        if value:
+            return value
+    raise RuntimeError("Token GitHub ausente (GH_PAT_ACTIONS/GH_TOKEN/GITHUB_TOKEN)")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Open or update draft PR for agent branches.")
     parser.add_argument("--base", default=os.environ.get("PR_BASE_BRANCH", "main"))
@@ -65,40 +111,27 @@ def main() -> int:
         print("Branch ausente (GITHUB_REF_NAME).", file=sys.stderr)
         return 2
 
+    repository = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    if not repository:
+        print("GITHUB_REPOSITORY ausente.", file=sys.stderr)
+        return 2
+
     title = args.title.strip() or f"feat: Padrão Ouro — {branch}"
     body = build_body(branch, args.base)
+    client = GitHubClient(resolve_token(), repository)
 
-    existing = gh_json(["pr", "list", "--head", branch, "--base", args.base, "--json", "number,url"])
-    if isinstance(existing, list) and existing:
-        number = existing[0]["number"]
-        url = existing[0]["url"]
-        run(["gh", "pr", "edit", str(number), "--title", title, "--body", body])
-        run(["gh", "pr", "edit", str(number), "--add-label", "padrao-ouro"], check=False)
-        run(["gh", "pr", "edit", str(number), "--add-label", "cloud-agent"], check=False)
-        print(f"PR atualizado: {url}")
+    existing = client.find_open_pr(branch, args.base)
+    if existing:
+        number = int(existing["number"])
+        client.update_pr(number, title=title, body=body)
+        client.add_labels(number, ["padrao-ouro", "cloud-agent"])
+        print(f"PR atualizado: {existing.get('html_url')}")
         return 0
 
-    proc = run(
-        [
-            "gh",
-            "pr",
-            "create",
-            "--base",
-            args.base,
-            "--head",
-            branch,
-            "--title",
-            title,
-            "--body",
-            body,
-            "--draft",
-        ]
-    )
-    print(proc.stdout.strip())
-    number = gh_json(["pr", "list", "--head", branch, "--base", args.base, "--json", "number"])
-    if isinstance(number, list) and number:
-        run(["gh", "pr", "edit", str(number[0]["number"]), "--add-label", "padrao-ouro"], check=False)
-        run(["gh", "pr", "edit", str(number[0]["number"]), "--add-label", "cloud-agent"], check=False)
+    created = client.create_pr(title=title, body=body, head=branch, base=args.base, draft=True)
+    number = int(created["number"])
+    client.add_labels(number, ["padrao-ouro", "cloud-agent"])
+    print(f"PR criado: {created.get('html_url')}")
     return 0
 
 
