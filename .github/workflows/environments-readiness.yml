@@ -12,6 +12,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
 concurrency:
   group: environments-readiness-${{ github.ref }}
   cancel-in-progress: true

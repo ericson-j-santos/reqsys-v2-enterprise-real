@@ -54,7 +54,12 @@ jobs:
           INPUT_ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
           public_url="${INPUT_PUBLIC_URL:-https://reqsys-api.fly.dev}"
-          strict="${INPUT_STRICT:-true}"
+          # Scheduled runs collect evidence without blocking on Fly deploy lag / transient outages.
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            strict="${INPUT_STRICT:-false}"
+          else
+            strict="${INPUT_STRICT:-true}"
+          fi
           publish_comment="${INPUT_PUBLISH_COMMENT:-false}"
           issue_number="${INPUT_ISSUE_NUMBER:-}"
           mkdir -p artifacts/runtime

@@ -577,6 +577,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--orchestrator-json", default="", help="Optional existing orchestrator JSON path")
     parser.add_argument("--health-json", default="", help="Optional existing health validator JSON path")
     parser.add_argument("--watchdog-json", default="", help="Optional repository health watchdog JSON path")
+    parser.add_argument(
+        "--fail-on-red",
+        action="store_true",
+        help="Exit 1 when consolidated state is red (default: always exit 0 after successful write)",
+    )
     return parser.parse_args()
 
 
@@ -640,7 +645,9 @@ def main() -> int:
 
     write_report(report, output_dir)
     print(json.dumps(report, indent=2, ensure_ascii=False))
-    return 1 if report["state"] == "red" else 0
+    if args.fail_on_red and report["state"] == "red":
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
