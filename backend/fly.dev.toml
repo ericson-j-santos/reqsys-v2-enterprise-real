@@ -1,14 +1,19 @@
 app = "reqsys-api-dev"
 primary_region = "gru"
+kill_signal = "SIGINT"
+kill_timeout = "5s"
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = "Dockerfile.fly"
 
 [env]
   APP_ENV = "development"
   PUBLIC_ENVIRONMENT = "development"
+  ALLOW_DEMO_LOGIN = "true"
   DATABASE_URL = "sqlite:////data/reqsys.db"
+  JWT_EXP_MINUTES = "60"
   CORS_ORIGINS = "https://reqsys-app-dev.fly.dev,https://tieridev.duckdns.org,http://localhost:5173,http://localhost:8081"
+  SDD_SPECS_PATH = "/app/specs"
 
 [[mounts]]
   source = "reqsys_data_dev"
@@ -20,8 +25,33 @@ primary_region = "gru"
   auto_stop_machines = true
   auto_start_machines = true
   min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "45s"
+    method = "GET"
+    path = "/api/runtime/health"
+    protocol = "http"
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "45s"
+    method = "GET"
+    path = "/api/runtime/readiness"
+    protocol = "http"
 
 [[vm]]
-  memory = "256mb"
+  memory = "512mb"
   cpu_kind = "shared"
   cpus = 1

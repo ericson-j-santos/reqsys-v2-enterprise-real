@@ -65,6 +65,15 @@ def _validate_environment(env: str, cfg: dict[str, Any], manifest: dict[str, Any
         errors.append(f"{env}: CORS_ORIGINS não pode conter wildcard")
     if health_path != "/health":
         errors.append(f"{env}: health check Fly deve apontar para /health")
+    dockerfile = _extract(r'^\s*dockerfile\s*=\s*"([^"]+)"', content)
+    if dockerfile != "Dockerfile.fly":
+        errors.append(f"{env}: dockerfile deve ser Dockerfile.fly, encontrado {dockerfile}")
+    dockerfile_path = fly_path.parent / "Dockerfile.fly"
+    if not dockerfile_path.exists():
+        errors.append(f"{env}: Dockerfile.fly ausente em {dockerfile_path.parent}")
+    for runtime_endpoint in ("/api/runtime/health", "/api/runtime/readiness"):
+        if f'path = "{runtime_endpoint}"' not in content:
+            errors.append(f"{env}: health check Fly ausente para {runtime_endpoint}")
     if not cfg.get("smoke_endpoints"):
         errors.append(f"{env}: smoke_endpoints obrigatório")
     if env in {"hml", "prod"} and not cfg.get("approval_required"):

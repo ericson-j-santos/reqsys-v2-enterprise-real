@@ -16,8 +16,8 @@ def test_validate_fly_enterprise_sync_manifest_passes():
     assert payload["promotion_order"] == ["dev", "hml", "prod"]
     assert [item["api_app"] for item in payload["environments"]] == [
         "reqsys-api-dev",
-        "reqsys-api-hml",
-        "reqsys-api-prod",
+        "reqsys-api-stg",
+        "reqsys-api",
     ]
     assert payload["errors"] == []
 
