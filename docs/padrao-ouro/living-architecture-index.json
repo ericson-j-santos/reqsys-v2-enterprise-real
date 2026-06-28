@@ -170,6 +170,13 @@
       "consumers": ["operational-intelligence-hub", "operational-governance-orchestrator"]
     },
     {
+      "id": "agent-output",
+      "schema": "docs/contracts/agent-output.schema.json",
+      "domain": "ai-governance",
+      "producers": ["agentes especializados", "cloud agents"],
+      "consumers": ["coordenador-status-consolidator", "ops-dashboard", "product-intelligence"]
+    },
+    {
       "id": "coordenador-status",
       "schema": "docs/contracts/coordenador-status.schema.json",
       "domain": "governance",

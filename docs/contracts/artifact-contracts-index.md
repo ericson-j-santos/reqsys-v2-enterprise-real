@@ -26,6 +26,7 @@ Todo artifact operacional JSON deve convergir para os campos mínimos:
 
 | Schema | Uso |
 |---|---|
+| `docs/contracts/agent-output.schema.json` | Contrato de saída padronizada para agentes especializados. |
 | `docs/contracts/artifact-contract-validation-report.schema.json` | Contrato do relatório desta validação. |
 | `docs/contracts/ci-lead-time-analytics.schema.json` | Contrato específico existente. |
 | `docs/contracts/command-center-readiness.schema.json` | Contrato específico existente. |

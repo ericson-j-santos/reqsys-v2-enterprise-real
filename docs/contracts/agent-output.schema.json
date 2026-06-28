@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/agent-output.schema.json",
+  "title": "ReqSys Agent Output Padronizado",
+  "description": "Contrato de saída estruturada para agentes especializados do ecossistema ReqSys.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "correlation_id",
+    "agent",
+    "generated_at",
+    "contexto",
+    "diagnostico",
+    "riscos",
+    "acoes_recomendadas",
+    "quick_wins",
+    "proximo_incremento",
+    "nivel_confianca"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identificador de rastreabilidade ponta a ponta (UUID recomendado)."
+    },
+    "agent": {
+      "type": "string",
+      "enum": [
+        "agent-arquiteto",
+        "agent-backend",
+        "agent-frontend",
+        "agent-devops",
+        "agent-qa",
+        "agent-power-platform",
+        "agent-sql-analytics",
+        "agent-governanca",
+        "agent-product-owner",
+        "agent-operacional"
+      ]
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "contexto": {
+      "type": "object",
+      "description": "Contexto analisado pelo agente (escopo, artefatos, branch, PR, etc.).",
+      "additionalProperties": true
+    },
+    "diagnostico": {
+      "type": "object",
+      "description": "Diagnóstico estruturado específico do domínio do agente.",
+      "additionalProperties": true
+    },
+    "riscos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "descricao", "severidade"],
+        "properties": {
+          "id": { "type": "string" },
+          "descricao": { "type": "string" },
+          "severidade": {
+            "type": "string",
+            "enum": ["baixa", "media", "alta", "critica"]
+          },
+          "mitigacao": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "acoes_recomendadas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["prioridade", "descricao"],
+        "properties": {
+          "prioridade": {
+            "type": "string",
+            "enum": ["P0", "P1", "P2", "P3"]
+          },
+          "descricao": { "type": "string" },
+          "owner": { "type": "string" },
+          "esforco": {
+            "type": "string",
+            "enum": ["baixo", "medio", "alto"]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "quick_wins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["descricao"],
+        "properties": {
+          "descricao": { "type": "string" },
+          "impacto": { "type": "string" },
+          "esforco": {
+            "type": "string",
+            "enum": ["baixo", "medio"]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "proximo_incremento": {
+      "type": "object",
+      "description": "Próximo passo natural após esta análise.",
+      "properties": {
+        "tipo": {
+          "type": "string",
+          "enum": ["gap_fix", "hotfix", "new_front", "consolidate", "report_only"]
+        },
+        "descricao": { "type": "string" },
+        "agente_sugerido": { "type": "string" },
+        "dependencias": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "nivel_confianca": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Confiança do agente na análise (0.0 a 1.0)."
+    }
+  }
+}

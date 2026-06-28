@@ -29,6 +29,7 @@ Inventário centralizado de **schemas, eventos, APIs, payloads, outputs e pipeli
 
 | Schema | Arquivo | Domínio | Status |
 | --- | --- | --- | --- |
+| agent-output | `agent-output.schema.json` | ai-governance | active |
 | coordenador-status | `coordenador-status.schema.json` | governance | active |
 | living-architecture-map | `living-architecture-map.schema.json` | traceability | active |
 | trilhas-padrao-ouro | `trilhas-padrao-ouro.schema.json` | governance | active |
