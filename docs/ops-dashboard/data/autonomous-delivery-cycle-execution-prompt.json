@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "prompt_target": "chat_or_agent",
+  "prompt": "@GitHub consuma docs/ops-dashboard/data/autonomous-delivery-cycle-next-increments.json, valide main/PRs/CI, execute apenas o próximo incremento seguro e pequeno, abra PR separado, aguarde CI verde e não duplique trabalho já implementado.",
+  "required_pre_checks": [
+    "main_green",
+    "no_critical_open_pr_blocking",
+    "queue_item_status_queued_for_chat_execution",
+    "no_duplicate_increment",
+    "small_safe_scope"
+  ],
+  "guardrails": [
+    "do_not_execute_when_main_red",
+    "do_not_execute_when_ci_pending_for_merge",
+    "do_not_bypass_required_reviews",
+    "do_not_claim_done_without_evidence"
+  ]
+}
