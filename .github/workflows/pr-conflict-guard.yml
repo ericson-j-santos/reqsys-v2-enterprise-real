@@ -25,6 +25,7 @@ jobs:
       - name: Checkout head do PR
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -54,15 +55,29 @@ jobs:
           git fetch origin "${BASE_SHA}" --depth=1
 
       - name: Coletar arquivos alterados
+        id: collect
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/pr-conflict-guard
           git diff --name-only "${BASE_SHA}"...HEAD | sort -u | tee artifacts/pr-conflict-guard/changed-paths.txt
-          test -s artifacts/pr-conflict-guard/changed-paths.txt
+          if [[ ! -s artifacts/pr-conflict-guard/changed-paths.txt ]]; then
+            echo "PR sem alteracoes netas contra ${BASE_SHA}."
+            echo "no_net_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "no_net_changes=false" >> "$GITHUB_OUTPUT"
+
+      - name: Resumo — PR sem alteracoes netas
+        if: steps.collect.outputs.no_net_changes == 'true'
+        run: |
+          echo "## PR Conflict Guard" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "PR sem alteracoes netas contra a base do evento. Nenhum arquivo alterado detectado." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Detectar hotspots concorrentes em PRs abertos
+        if: steps.collect.outputs.no_net_changes != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -146,6 +161,7 @@ jobs:
           PY
 
       - name: Executar conflict prediction gate
+        if: steps.collect.outputs.no_net_changes != 'true'
         id: prediction
         run: |
           set +e
@@ -165,7 +181,7 @@ jobs:
           echo "recommendation=${recommendation}" >> "$GITHUB_OUTPUT"
 
       - name: Resumo executivo do risco de conflito
-        if: always() && hashFiles('artifacts/pr-conflict-guard/conflict-risk-report.json') != ''
+        if: always() && steps.collect.outputs.no_net_changes != 'true' && hashFiles('artifacts/pr-conflict-guard/conflict-risk-report.json') != ''
         run: |
           set -euo pipefail
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
@@ -186,7 +202,7 @@ jobs:
           PY
 
       - name: Publicar comentario no PR
-        if: always() && hashFiles('artifacts/pr-conflict-guard/conflict-risk-report.json') != ''
+        if: always() && steps.collect.outputs.no_net_changes != 'true' && hashFiles('artifacts/pr-conflict-guard/conflict-risk-report.json') != ''
         continue-on-error: true
         uses: actions/github-script@v7
         with:
@@ -244,7 +260,7 @@ jobs:
             }
 
       - name: Publicar artifact de risco de conflito
-        if: always()
+        if: always() && steps.collect.outputs.no_net_changes != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: conflict-risk-report
@@ -253,7 +269,7 @@ jobs:
           retention-days: 14
 
       - name: Reportar conflito preditivo bloqueante
-        if: steps.prediction.outputs.exit_code != '0'
+        if: steps.collect.outputs.no_net_changes != 'true' && steps.prediction.outputs.exit_code != '0'
         continue-on-error: true
         run: |
           echo "AVISO: conflict_prediction_gate reportou risco bloqueante preditivo."
@@ -263,6 +279,7 @@ jobs:
           echo "A validação Git de merge limpo permanece obrigatória."
 
       - name: Validar merge limpo com a base do evento
+        if: steps.collect.outputs.no_net_changes != 'true'
         env:
           BASE_REF: ${{ github.base_ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}

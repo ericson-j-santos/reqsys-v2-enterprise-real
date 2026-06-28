@@ -47,6 +47,22 @@ increment-type: consolidate
 """
 
 
+def branch_metadata_slug(branch: str) -> str:
+    return branch.replace("/", "-")
+
+
+def load_branch_pr_metadata(branch: str) -> dict[str, str] | None:
+    path = Path(".github/pr-metadata") / f"{branch_metadata_slug(branch)}.json"
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    title = str(payload.get("title") or "").strip()
+    body = str(payload.get("body") or "").strip()
+    if not title and not body:
+        return None
+    return {"title": title, "body": body}
+
+
 class GitHubClient:
     def __init__(self, token: str, repository: str) -> None:
         self.token = token
@@ -289,7 +305,12 @@ def main() -> int:
         return 2
 
     title = args.title.strip() or f"feat: Padrão Ouro — {branch}"
-    body = build_body(branch, args.base)
+    metadata = load_branch_pr_metadata(branch)
+    if metadata:
+        title = metadata.get("title") or title
+        body = metadata.get("body") or build_body(branch, args.base)
+    else:
+        body = build_body(branch, args.base)
 
     try:
         client = GitHubClient(resolve_token(), repository)
