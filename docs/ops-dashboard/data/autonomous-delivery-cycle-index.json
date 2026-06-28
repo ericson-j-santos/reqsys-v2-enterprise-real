@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "files": [
+    ".github/workflows/autonomous-delivery-cycle.yml",
+    "docs/runbooks/autonomous-delivery-cycle.md",
+    "docs/architecture/autonomous-delivery-cycle.md",
+    "docs/changelog/autonomous-delivery-cycle.md",
+    "docs/prompts/autonomous-delivery-cycle-chat-executor.md",
+    "docs/prompts/autonomous-delivery-cycle-codex.md",
+    "docs/ops-dashboard/data/autonomous-delivery-cycle-latest.json",
+    "docs/ops-dashboard/data/autonomous-delivery-cycle-next-increments.json",
+    "docs/ops-dashboard/data/autonomous-delivery-cycle-policy.json",
+    "docs/ops-dashboard/data/autonomous-delivery-cycle-readiness.json",
+    "docs/ops-dashboard/data/autonomous-delivery-cycle-risk-register.json",
+    "docs/ops-dashboard/data/autonomous-delivery-cycle-sla.json",
+    "docs/ops-dashboard/data/autonomous-delivery-cycle-next-actions.json",
+    "docs/ops-dashboard/data/autonomous-delivery-cycle-dashboard-card.json",
+    "docs/ops-dashboard/data/autonomous-delivery-cycle-mermaid.md",
+    "tests/test_autonomous_delivery_cycle_contract.py"
+  ],
+  "next_increment": "consume_autonomous_delivery_cycle_contracts_in_ops_dashboard"
+}
