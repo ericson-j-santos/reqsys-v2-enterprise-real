@@ -1,0 +1,215 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ReqSys Runtime API",
+    "version": "0.3.0",
+    "description": "Contrato inicial versionado para documentação viva, Swagger/OpenAPI e prática Power Automate GET/POST."
+  },
+  "servers": [
+    {
+      "url": "https://reqsys-api.fly.dev",
+      "description": "Ambiente público DEV/API"
+    }
+  ],
+  "tags": [
+    {
+      "name": "runtime",
+      "description": "Endpoints operacionais do runtime"
+    },
+    {
+      "name": "requisitos",
+      "description": "Endpoints mockados para prática GET/POST de requisitos"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["runtime"],
+        "summary": "Health check básico",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "API operacional",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runtime/health": {
+      "get": {
+        "tags": ["runtime"],
+        "summary": "Health check runtime",
+        "operationId": "getRuntimeHealth",
+        "responses": {
+          "200": {
+            "description": "Runtime operacional",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/requisitos/{id}": {
+      "get": {
+        "tags": ["requisitos"],
+        "summary": "Consultar requisito mockado",
+        "operationId": "getRequisitoById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Identificador do requisito",
+            "schema": {
+              "type": "string",
+              "example": "REQ-001"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Requisito encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Requisito"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Requisito não encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/requisitos": {
+      "post": {
+        "tags": ["requisitos"],
+        "summary": "Receber requisito mockado",
+        "operationId": "postRequisito",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequisitoCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Requisito recebido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Requisito"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Payload inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {"type": "string", "example": "ok"},
+          "timestamp": {"type": "string", "format": "date-time"}
+        }
+      },
+      "RuntimeHealthResponse": {
+        "type": "object",
+        "required": ["status", "correlation_id"],
+        "properties": {
+          "status": {"type": "string", "example": "operational"},
+          "service": {"type": "string", "example": "reqsys-api"},
+          "correlation_id": {"type": "string", "example": "reqsys-runtime-0001"}
+        }
+      },
+      "Requisito": {
+        "type": "object",
+        "required": ["id", "titulo", "tipo", "status", "prioridade", "origem", "metadata"],
+        "properties": {
+          "id": {"type": "string", "example": "REQ-001"},
+          "titulo": {"type": "string", "example": "Registrar requisito via fluxo automatizado"},
+          "descricao": {"type": "string", "example": "Fluxo de prática para integração Power Automate."},
+          "tipo": {"type": "string", "enum": ["funcional", "nao_funcional", "regra_negocio", "restricao"]},
+          "status": {"type": "string", "enum": ["rascunho", "validado", "aprovado", "rejeitado"]},
+          "prioridade": {"type": "string", "enum": ["baixa", "media", "alta", "critica"]},
+          "origem": {"type": "string", "example": "power_automate"},
+          "metadata": {"$ref": "#/components/schemas/Metadata"}
+        }
+      },
+      "RequisitoCreateRequest": {
+        "type": "object",
+        "required": ["titulo", "descricao", "tipo", "prioridade", "origem"],
+        "properties": {
+          "titulo": {"type": "string", "minLength": 3, "example": "Registrar requisito via Power Automate"},
+          "descricao": {"type": "string", "minLength": 10, "example": "Fluxo POST para praticar estrutura de dados."},
+          "tipo": {"type": "string", "enum": ["funcional", "nao_funcional", "regra_negocio", "restricao"], "example": "funcional"},
+          "prioridade": {"type": "string", "enum": ["baixa", "media", "alta", "critica"], "example": "media"},
+          "origem": {"type": "string", "example": "power_automate"},
+          "metadata": {"$ref": "#/components/schemas/MetadataEntrada"}
+        }
+      },
+      "Metadata": {
+        "type": "object",
+        "required": ["versao_contrato", "correlation_id"],
+        "properties": {
+          "versao_contrato": {"type": "string", "example": "0.3.0"},
+          "correlation_id": {"type": "string", "example": "reqsys-demo-0001"}
+        }
+      },
+      "MetadataEntrada": {
+        "type": "object",
+        "properties": {
+          "versao_contrato": {"type": "string", "example": "0.3.0"},
+          "correlation_id": {"type": "string", "example": "power-automate-0001"}
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["erro", "correlation_id"],
+        "properties": {
+          "erro": {"type": "string", "example": "payload_invalido"},
+          "mensagem": {"type": "string", "example": "Campos obrigatórios ausentes ou inválidos."},
+          "correlation_id": {"type": "string", "example": "reqsys-error-0001"}
+        }
+      }
+    }
+  }
+}

@@ -1,12 +1,13 @@
 {
   "nome": "ReqSys Enterprise Docs",
-  "versao": "0.2.0",
+  "versao": "0.3.0",
   "data": "2026-06-28",
   "tipo": "documentacao-viva",
   "fonte": "mkdocs",
   "docs_dir": "docs-site",
   "fallback_offline": "docs-site/offline/reqsys-docs-v0.2.0.html",
   "fallback_compatibilidade": "docs-site/offline/reqsys-docs-v0.1.0.html",
+  "openapi_contract": "docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json",
   "publicacao_alvo": "https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/",
   "estado": {
     "mkdocs_configurado": true,
@@ -14,6 +15,8 @@
     "ci_documentacao_configurado": true,
     "github_pages_preparado": true,
     "arquitetura_viva_inicial": true,
+    "openapi_swagger_inicial": true,
+    "power_automate_get_post_documentado": true,
     "github_pages_publicado": false
   },
   "governanca": {
@@ -21,6 +24,7 @@
     "changelog_obrigatorio": true,
     "pr_obrigatorio": true,
     "fallback_corporativo_obrigatorio": true,
-    "compatibilidade_link_v010_obrigatoria": true
+    "compatibilidade_link_v010_obrigatoria": true,
+    "contrato_openapi_versionado_obrigatorio": true
   }
 }
