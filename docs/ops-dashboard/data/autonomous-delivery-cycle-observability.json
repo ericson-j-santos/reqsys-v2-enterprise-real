@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "observability": {
+    "artifact": "autonomous-delivery-cycle-report",
+    "latest_json": "docs/ops-dashboard/data/autonomous-delivery-cycle-latest.json",
+    "next_increment_queue": "docs/ops-dashboard/data/autonomous-delivery-cycle-next-increments.json",
+    "step_summary": true,
+    "post_merge_push_runs_observed": true
+  },
+  "recommended_dashboard_cards": [
+    "cycle_status",
+    "candidate_prs",
+    "merge_blockers",
+    "post_merge_ci",
+    "next_increment_queue"
+  ]
+}
