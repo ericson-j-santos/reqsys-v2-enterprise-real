@@ -68,7 +68,7 @@ def test_create_e_update_issue():
 
 def test_request_json_post_com_payload_vazio():
     mock_resp = MagicMock()
-    mock_resp.read.return_value = ""
+    mock_resp.read.return_value = b""
     mock_resp.__enter__.return_value = mock_resp
 
     with patch("app.services.github_client.get_secret", return_value="token-teste"):
