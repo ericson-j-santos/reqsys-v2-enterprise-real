@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "manifest_status": "complete_for_pr",
+  "primary_artifact": ".github/workflows/autonomous-delivery-cycle.yml",
+  "primary_contracts": [
+    "docs/ops-dashboard/data/autonomous-delivery-cycle-latest.json",
+    "docs/ops-dashboard/data/autonomous-delivery-cycle-next-increments.json",
+    "docs/ops-dashboard/data/autonomous-delivery-cycle-policy.json"
+  ],
+  "primary_docs": [
+    "docs/runbooks/autonomous-delivery-cycle.md",
+    "docs/architecture/autonomous-delivery-cycle.md",
+    "docs/changelog/autonomous-delivery-cycle.md"
+  ],
+  "primary_tests": [
+    "tests/test_autonomous_delivery_cycle_contract.py"
+  ],
+  "next_increment": "consume_autonomous_delivery_cycle_contracts_in_ops_dashboard"
+}
