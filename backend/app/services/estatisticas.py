@@ -8,8 +8,15 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.requisito import Requisito
-from app.services.estatisticas_historico import calcular_tendencias, carregar_historico, registrar_snapshot
-from app.services.external_sources_registry import listar_fontes_externas, resumo_fontes_externas
+from app.services.estatisticas_historico import (
+    calcular_tendencias,
+    carregar_historico,
+    registrar_snapshot,
+)
+from app.services.external_sources_registry import (
+    listar_fontes_externas,
+    resumo_fontes_externas,
+)
 
 
 @dataclass(frozen=True)

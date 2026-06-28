@@ -29,3 +29,25 @@ def test_build_snapshot_flags_blocked_pipeline():
     snapshot = build_snapshot(sources, "pull_request", "abc")
     assert snapshot["blocked_for_promotion"] is True
     assert snapshot["pipeline_estado_geral"] == "bloqueado"
+
+
+def test_main_returns_zero_even_when_blocked(monkeypatch):
+    from scripts import post_workflow_evidence_snapshot as module
+
+    monkeypatch.setattr(
+        module,
+        "build_snapshot",
+        lambda *args, **kwargs: {"blocked_for_promotion": True, "recommended_actions": []},
+    )
+    monkeypatch.setattr(module, "render_markdown", lambda snapshot: "report")
+    monkeypatch.setattr(
+        module.argparse.ArgumentParser,
+        "parse_args",
+        lambda self: module.argparse.Namespace(
+            out_dir=Path("/tmp/post-workflow-evidence-test"),
+            event="ci",
+            sha="abc",
+            pipeline_report=Path("/tmp/pipeline-missing.json"),
+        ),
+    )
+    assert module.main() == 0
