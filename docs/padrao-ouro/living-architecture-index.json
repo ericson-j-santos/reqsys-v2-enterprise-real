@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "updated_at": "2026-06-27T20:00:00Z",
+  "updated_at": "2026-06-28T20:00:00Z",
   "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
   "hub": "docs/padrao-ouro/README.md",
   "canonical_traceability_map": "docs/traceability/living-architecture-map.json",
@@ -138,6 +138,20 @@
       "path": ".github/workflows/trilhas-padrao-ouro.yml",
       "gates": ["trilha-a", "trilha-b", "trilha-c", "trilha-d", "trilha-e"],
       "evidence": "trilhas-padrao-ouro-evidence"
+    },
+    {
+      "id": "coverage-targeted-tests",
+      "name": "Coverage Targeted Tests (Trilha D)",
+      "path": "docs/runbooks/coverage-targeted-tests-trilha-d.md",
+      "gates": ["pytest", "cov-fail-under-60", "trilha-d-coverage"],
+      "evidence": "trilha-d-qualidade-governanca-evidence"
+    },
+    {
+      "id": "fly-runtime-p0-pos-deploy",
+      "name": "Fly Runtime P0 Pós-Deploy",
+      "path": "docs/runbooks/fly-runtime-p0-pos-deploy-evidencia.md",
+      "gates": ["runtime_public_validator_strict", "public-runtime-validation"],
+      "evidence": "public-runtime-validation"
     }
   ],
   "events": [
