@@ -1,4 +1,4 @@
-from tests.shared.repository_paths import resolve_repo_file
+from app.testing.repository_paths import resolve_repo_file
 
 
 def test_power_automate_provisioning_workflow_has_registry_callbacks():
