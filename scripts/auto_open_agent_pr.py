@@ -128,6 +128,26 @@ def add_labels_best_effort(client: GitHubClient, number: int, labels: list[str])
         print(f"::warning::Não foi possível aplicar labels no PR #{number}: {exc}", file=sys.stderr)
 
 
+def is_github_permission_error(exc: Exception) -> bool:
+    message = str(exc)
+    return "failed (401)" in message or "failed (403)" in message or "Resource not accessible" in message
+
+
+def update_pr_best_effort(client: GitHubClient, number: int, *, title: str, body: str) -> bool:
+    try:
+        client.update_pr(number, title=title, body=body)
+        return True
+    except RuntimeError as exc:
+        if is_github_permission_error(exc):
+            print(
+                f"::warning::PR #{number} já existe, mas o token não pode atualizá-lo. "
+                "Mantendo PR existente sem alterações.",
+                file=sys.stderr,
+            )
+            return False
+        raise
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Open or update draft PR for agent branches.")
     parser.add_argument("--base", default=os.environ.get("PR_BASE_BRANCH", "main"))
@@ -153,10 +173,10 @@ def main() -> int:
         existing = client.find_open_pr(branch, args.base)
         if existing:
             number = int(existing["number"])
-            client.update_pr(number, title=title, body=body)
+            update_pr_best_effort(client, number, title=title, body=body)
             add_labels_best_effort(client, number, ["padrao-ouro", "cloud-agent"])
             write_pr_request_artifact(branch=branch, base=args.base, title=title, body=body)
-            print(f"PR atualizado: {existing.get('html_url')}")
+            print(f"PR já existente: {existing.get('html_url')}")
             return 0
 
         created = client.create_pr(title=title, body=body, head=branch, base=args.base, draft=True)
