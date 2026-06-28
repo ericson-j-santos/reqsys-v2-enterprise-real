@@ -1,10 +1,8 @@
 const resultadoParaEstado = (resultado) => {
   const normalizado = String(resultado || 'nao_informado').toLowerCase()
 
-  if (normalizado === 'success') return 'verde'
-  if (normalizado === 'skipped') return 'verde'
-  if (['failure', 'cancelled', 'timed_out', 'action_required'].includes(normalizado)) return 'bloqueado'
-  if (normalizado === 'skipped') return 'amarelo'
+  if (['success', 'skipped', 'cancelled'].includes(normalizado)) return 'verde'
+  if (['failure', 'timed_out', 'action_required'].includes(normalizado)) return 'bloqueado'
   return 'desconhecido'
 }
 
