@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "card": "autonomous_delivery_cycle_kpis",
+  "kpis": [
+    {
+      "name": "readiness_percent",
+      "value": 85,
+      "status": "warning",
+      "target": 100
+    },
+    {
+      "name": "guardrail_coverage_percent",
+      "value": 90,
+      "status": "good",
+      "target": 100
+    },
+    {
+      "name": "first_dry_run_done",
+      "value": false,
+      "status": "pending",
+      "target": true
+    },
+    {
+      "name": "dashboard_consumption_done",
+      "value": false,
+      "status": "pending",
+      "target": true
+    }
+  ]
+}
