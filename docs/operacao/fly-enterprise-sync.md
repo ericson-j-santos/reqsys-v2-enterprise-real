@@ -26,11 +26,14 @@ Cada ambiente declara:
 ## IaC por ambiente
 
 ```text
-infra/
-├── dev/fly.toml
-├── hml/fly.toml
-└── prod/fly.toml
+backend/
+├── fly.dev.toml
+├── fly.staging.toml
+├── fly.toml
+└── Dockerfile.fly
 ```
+
+Os arquivos `infra/dev|hml|prod/fly.toml` permanecem como referência espelhada; a fonte canônica de deploy é `backend/fly.*.toml` declarada em `infra/fly-environments.json`.
 
 Os arquivos não podem conter valores reais de segredo. Secrets devem ser definidos fora do Git com `fly secrets set` por app e ambiente.
 

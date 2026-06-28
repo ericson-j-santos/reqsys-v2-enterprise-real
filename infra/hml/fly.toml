@@ -1,17 +1,22 @@
-app = "reqsys-api-hml"
+app = "reqsys-api-stg"
 primary_region = "gru"
+kill_signal = "SIGINT"
+kill_timeout = "5s"
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = "Dockerfile.fly"
 
 [env]
-  APP_ENV = "homolog"
-  PUBLIC_ENVIRONMENT = "homolog"
+  APP_ENV = "staging"
+  PUBLIC_ENVIRONMENT = "staging"
+  ALLOW_DEMO_LOGIN = "false"
   DATABASE_URL = "sqlite:////data/reqsys.db"
-  CORS_ORIGINS = "https://reqsys-app-hml.fly.dev,http://localhost:5173,http://localhost:8081"
+  JWT_EXP_MINUTES = "60"
+  CORS_ORIGINS = "https://reqsys-app-stg.fly.dev,https://tierin.duckdns.org,http://localhost:5173,http://localhost:8081"
+  SDD_SPECS_PATH = "/app/specs"
 
 [[mounts]]
-  source = "reqsys_data_hml"
+  source = "reqsys_data_stg"
   destination = "/data"
 
 [http_service]
@@ -20,16 +25,33 @@ primary_region = "gru"
   auto_stop_machines = true
   auto_start_machines = true
   min_machines_running = 1
+  processes = ["app"]
 
   [[http_service.checks]]
     interval = "15s"
     timeout = "5s"
-    grace_period = "20s"
+    grace_period = "30s"
     method = "GET"
     path = "/health"
     protocol = "http"
 
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "45s"
+    method = "GET"
+    path = "/api/runtime/health"
+    protocol = "http"
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "45s"
+    method = "GET"
+    path = "/api/runtime/readiness"
+    protocol = "http"
+
 [[vm]]
-  memory = "256mb"
+  memory = "512mb"
   cpu_kind = "shared"
   cpus = 1

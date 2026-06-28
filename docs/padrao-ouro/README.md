@@ -23,6 +23,8 @@ Documentação aqui **não é texto morto** — é infraestrutura operacional vi
 | Artefato | Caminho | Uso |
 | --- | --- | --- |
 | Living Architecture Index (JSON) | [`living-architecture-index.json`](living-architecture-index.json) | Contexto reutilizável para agentes/IA — módulos, ownership, pontos de extensão. |
+| Matriz de ambientes Fly.io | [`../../infra/fly-environments.json`](../../infra/fly-environments.json) | Apps, URLs, volumes, smoke endpoints e promoção dev → hml → prod. |
+| URLs públicas canônicas | [`../../infra/public-access-urls.json`](../../infra/public-access-urls.json) | Alvos de validação Fly/DuckDNS para `validar-acessos-publicos.mjs`. |
 | Mapa de rastreabilidade canônico | [`../traceability/living-architecture-map.json`](../traceability/living-architecture-map.json) | Workflows, artifacts, contratos, dashboards e PRs recentes. |
 | Schema registry | [`../schema-registry.json`](../schema-registry.json) | Registro central de schemas com gates de validação. |
 

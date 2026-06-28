@@ -109,7 +109,11 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_CONFIG: ${{ needs.validate-iac.outputs.fly_config }}
           FLY_APP: ${{ needs.validate-iac.outputs.fly_app }}
-        run: flyctl deploy --remote-only --config "$FLY_CONFIG" --app "$FLY_APP"
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          config="${FLY_CONFIG#backend/}"
+          flyctl deploy --remote-only --config "$config" --app "$FLY_APP"
 
   runtime-smoke:
     name: Runtime smoke evidence
