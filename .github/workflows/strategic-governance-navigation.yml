@@ -40,7 +40,7 @@ jobs:
             --output artifacts/strategic-governance-navigation-validation.json
 
       - name: Run unit test
-        run: pytest tests/test_validate_strategic_governance_navigation.py
+        run: python tests/test_validate_strategic_governance_navigation.py
 
       - name: Upload validation artifact
         uses: actions/upload-artifact@v4
