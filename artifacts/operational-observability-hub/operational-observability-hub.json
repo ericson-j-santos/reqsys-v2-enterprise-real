@@ -1,0 +1,128 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-28T14:45:43Z",
+  "source": "operational-observability-hub",
+  "status": "degraded",
+  "confidence_level": "high",
+  "maturity_percent": 0.0,
+  "operational_risk": "high",
+  "commit_sha": "local",
+  "workflow_run_id": null,
+  "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7",
+  "repository": "local/reqsys",
+  "mode": "report_only",
+  "pareto_increment": {
+    "multi_environment_evidence": true,
+    "metrics_history_persisted": false,
+    "longitudinal_analytics": false,
+    "environment_drift_detection": true,
+    "governed_alerts": true,
+    "slo_sla_evidence": true,
+    "ci_runtime_observability_correlation": true
+  },
+  "sources": {
+    "multi_environment": {
+      "environments_total": 4,
+      "ready": 0,
+      "degraded": 0,
+      "url_matrix_misaligned": 3,
+      "promotion_order": [
+        "dev",
+        "hml",
+        "prod"
+      ],
+      "overall_probe_status": "unknown"
+    },
+    "environment_drift": {
+      "drift_level": "ALTO",
+      "findings": 3
+    },
+    "slo_evidence": {
+      "slo_count": 3,
+      "breach_count": 1,
+      "met_count": 0,
+      "no_data_count": 2
+    },
+    "longitudinal": {
+      "windows": {
+        "7d": {
+          "points": 0
+        },
+        "30d": {
+          "points": 0
+        }
+      },
+      "trend": {
+        "direction": "unknown",
+        "points": 0
+      }
+    },
+    "history_index": {
+      "snapshot_count": 0,
+      "risk": "medium",
+      "maturity_percent": 0.0
+    }
+  },
+  "governed_alert": {
+    "alert_level": "HIGH",
+    "alert_type": "ENVIRONMENT_DRIFT",
+    "noise_level": "LOW",
+    "action_policy": "MANUAL_REVIEW_REQUIRED",
+    "should_alert": true,
+    "mode": "governed_report_only"
+  },
+  "correlation_chain": [
+    {
+      "sequence": 1,
+      "event": "coordenador_status_captured",
+      "source": "coordenador-status-consolidator",
+      "correlation_level": "governance",
+      "state": "yellow",
+      "decision": "bloquear_novas_frentes_ate_consolidar",
+      "correlation_id": "d61aa286-015e-451d-ad3d-c54278c2103e"
+    },
+    {
+      "sequence": 2,
+      "event": "environment_probe",
+      "source": "multi-environment-evidence",
+      "correlation_level": "runtime",
+      "environment": "dev",
+      "status": "unknown",
+      "readiness_percent": 0,
+      "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7"
+    },
+    {
+      "sequence": 3,
+      "event": "environment_probe",
+      "source": "multi-environment-evidence",
+      "correlation_level": "runtime",
+      "environment": "hml",
+      "status": "unknown",
+      "readiness_percent": 0,
+      "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7"
+    },
+    {
+      "sequence": 4,
+      "event": "environment_probe",
+      "source": "multi-environment-evidence",
+      "correlation_level": "runtime",
+      "environment": "prod",
+      "status": "unknown",
+      "readiness_percent": 0,
+      "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7"
+    }
+  ],
+  "recommended_actions": [
+    "Normalizar URLs de dev entre validate_environments_readiness e fly-environments.",
+    "Normalizar URLs de hml entre validate_environments_readiness e fly-environments.",
+    "Normalizar URLs de prod entre validate_environments_readiness e fly-environments.",
+    "Tratar breach SLO env_probe_availability: actual=0.0%",
+    "Alerta governado HIGH: ENVIRONMENT_DRIFT — MANUAL_REVIEW_REQUIRED"
+  ],
+  "guardrails": [
+    "report_only",
+    "no_auto_deploy",
+    "no_production_mutation",
+    "human_review_required"
+  ]
+}

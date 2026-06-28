@@ -1,40 +1,59 @@
 {
-  "schema_version": "1.0.0",
-  "generated_at": "2026-06-28T00:08:30.008931+00:00",
+  "schema_version": "1.1.0",
+  "generated_at": "2026-06-28T14:45:43Z",
   "name": "runtime-operational-correlation-timeline",
-  "mode": "review_only",
-  "runtime_state": "TIMELINE_READY",
-  "timeline_event_count": 3,
+  "mode": "report_only",
+  "runtime_state": "TIMELINE_HYDRATED",
+  "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7",
+  "workflow_run_id": null,
+  "timeline_event_count": 4,
   "timeline": [
     {
       "sequence": 1,
-      "event": "pull_request_state_captured",
-      "source": "github_runtime_analytics",
-      "state": "review_only",
-      "correlation_level": "operational"
+      "event": "coordenador_status_captured",
+      "source": "coordenador-status-consolidator",
+      "correlation_level": "governance",
+      "state": "yellow",
+      "decision": "bloquear_novas_frentes_ate_consolidar",
+      "correlation_id": "d61aa286-015e-451d-ad3d-c54278c2103e"
     },
     {
       "sequence": 2,
-      "event": "github_actions_state_captured",
-      "source": "github_runtime_analytics",
-      "state": "review_only",
-      "correlation_level": "ci"
+      "event": "environment_probe",
+      "source": "multi-environment-evidence",
+      "correlation_level": "runtime",
+      "environment": "dev",
+      "status": "unknown",
+      "readiness_percent": 0,
+      "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7"
     },
     {
       "sequence": 3,
-      "event": "governance_gate_state_captured",
-      "source": "github_runtime_analytics",
-      "state": "review_only",
-      "correlation_level": "governance"
+      "event": "environment_probe",
+      "source": "multi-environment-evidence",
+      "correlation_level": "runtime",
+      "environment": "hml",
+      "status": "unknown",
+      "readiness_percent": 0,
+      "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7"
+    },
+    {
+      "sequence": 4,
+      "event": "environment_probe",
+      "source": "multi-environment-evidence",
+      "correlation_level": "runtime",
+      "environment": "prod",
+      "status": "unknown",
+      "readiness_percent": 0,
+      "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7"
     }
   ],
-  "confidence_percent": 92,
-  "risk_percent": 5,
+  "confidence_percent": 85,
+  "risk_percent": 60,
   "limits": [
-    "no_deploy",
+    "report_only",
+    "no_auto_deploy",
     "no_production_mutation",
-    "no_external_write",
     "human_review_required"
-  ],
-  "next_recommended_increment": "Runtime Operational Evidence Graph"
+  ]
 }

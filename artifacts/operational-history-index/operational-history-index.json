@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-28T14:45:43Z",
+  "repository": "local/reqsys",
+  "correlation_id": "b265ef52-3f6d-488f-a82b-75cf009f71d5",
+  "retention_policy": {
+    "artifact_retention_days": 60,
+    "long_term_storage": "governed_index_report_only",
+    "write_mode": "report_only"
+  },
+  "summary": {
+    "snapshot_count": 0,
+    "risk": "medium",
+    "maturity_percent": 0.0
+  },
+  "snapshots": []
+}
