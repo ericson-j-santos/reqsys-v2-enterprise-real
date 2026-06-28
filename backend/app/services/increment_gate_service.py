@@ -50,13 +50,6 @@ def verificar_increment_gate(
             'detalhe': f"Tipo '{increment_type}' nao suportado.",
         }
 
-    if settings.normalized_environment == 'testes':
-        return {
-            'permitido': True,
-            'motivo': 'gate_relaxado_ambiente_teste',
-            'detalhe': 'Increment gate relaxado em ambiente de testes.',
-        }
-
     if strict is None:
         strict = settings.normalized_environment in {'producao', 'homologacao'}
 
