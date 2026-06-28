@@ -26,6 +26,11 @@ from app.services.governance_evidence_index import (
     mapear_cards_governance,
     mapear_secao_governance,
 )
+from app.services.trilha_d_history_index import (
+    carregar_trilha_d_history_index,
+    mapear_cards_trilha_d,
+    mapear_secao_trilha_d,
+)
 
 router = APIRouter(tags=['Monitoramento Operacional'])
 logger = logging.getLogger(__name__)
@@ -254,8 +259,11 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
     governance_index = carregar_governance_evidence_index()
     governance_cards = mapear_cards_governance(governance_index)
     governance_section = mapear_secao_governance(governance_index)
+    trilha_d_index = carregar_trilha_d_history_index()
+    trilha_d_cards = mapear_cards_trilha_d(trilha_d_index)
+    trilha_d_section = mapear_secao_trilha_d(trilha_d_index)
     return {
-        'schema_version': '1.2.0',
+        'schema_version': '1.3.0',
         'title': 'ReqSys Runtime Operational Dashboard',
         'description': 'Schema-driven dashboard para runtime publico, health, readiness e metricas operacionais.',
         'generated_at': snapshot['generated_at'],
@@ -345,8 +353,10 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'governanca'}),
             },
             *governance_cards,
+            *trilha_d_cards,
         ],
         'governance_evidence': governance_index,
+        'trilha_d_history': trilha_d_index,
         'sections': [
             {
                 'id': 'workflow-topology',
@@ -437,6 +447,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'items': {'classification': 'requires_public_artifacts', 'environments': ['dev', 'staging', 'prod']},
             },
             governance_section,
+            trilha_d_section,
             {
                 'id': 'correlation-analytics',
                 'title': 'Correlation Analytics',
