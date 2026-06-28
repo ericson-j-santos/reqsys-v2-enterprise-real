@@ -5,17 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ReqSys Strategic Governance</title>
   <style>
-    :root {
-      --bg: #0f172a;
-      --panel: #111827;
-      --muted: #94a3b8;
-      --text: #e5e7eb;
-      --green: #22c55e;
-      --yellow: #f59e0b;
-      --red: #ef4444;
-      --blue: #38bdf8;
-      --border: #334155;
-    }
+    :root { --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb; --green:#22c55e; --yellow:#f59e0b; --red:#ef4444; --blue:#38bdf8; --border:#334155; }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: var(--text); }
     header { padding: 24px; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, #111827, #1e293b); }
@@ -28,9 +18,9 @@
     .kpi-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
     .kpi-value { font-size: 30px; font-weight: 700; margin-top: 8px; }
     .status { display: inline-block; padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
-    .governed, .passed, .low, .executar_agora { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
-    .warning, .medium, .executar_no_proximo_lote, .manter_no_backlog_governado { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
-    .action_required, .failed, .critical, .high, .blocked, .stabilizar_evidencias_antes_de_expandir, .pausar_ou_reclassificar { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
+    .governed, .passed, .low, .executar_agora, .safe_to_expand, .improving { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
+    .warning, .medium, .executar_no_proximo_lote, .manter_no_backlog_governado, .governed_expansion, .stable, .stabilize_merge_flow { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
+    .action_required, .failed, .critical, .high, .blocked, .stabilizar_evidencias_antes_de_expandir, .pausar_ou_reclassificar, .freeze_expansion, .degrading { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
     .unknown { background: rgba(148,163,184,.16); color: var(--muted); border: 1px solid rgba(148,163,184,.45); }
     section { margin-top: 20px; }
     table { width: 100%; border-collapse: collapse; margin-top: 12px; }
@@ -47,7 +37,7 @@
 <body>
   <header>
     <h1>Strategic Governance Engine</h1>
-    <p class="subtitle">Cards executivos de prioridade, próximo gargalo e ação recomendada a partir de <code>data/strategic-governance-index.json</code>.</p>
+    <p class="subtitle">Cards executivos de prioridade, próximo gargalo, ação recomendada e tendência executiva a partir dos artifacts governados.</p>
   </header>
   <main>
     <div class="grid">
@@ -69,6 +59,27 @@
     </section>
 
     <section class="card">
+      <h2>Executive Trend History</h2>
+      <p class="small">Renderização direta de <code>./data/executive-trend-history.json</code>. Este bloco é histórico, offline e recommendation-only: não substitui CI, Evidence Gate nem revisão humana.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Executive trend</div><div id="trend-executive" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Readiness trend</div><div id="trend-readiness" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Mergeability trend</div><div id="trend-mergeability" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Operational decay</div><div id="trend-decay" class="kpi-value">-</div></div>
+      </div>
+      <div class="grid" style="margin-top:16px">
+        <div><div class="kpi-label">Freeze recommendation</div><div id="trend-freeze" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Snapshots</div><div id="trend-entries" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Executive slope</div><div id="trend-executive-slope" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Latest bottleneck</div><div id="trend-latest-bottleneck" class="kpi-value">-</div></div>
+      </div>
+      <table>
+        <thead><tr><th>Snapshot</th><th>Executive</th><th>Readiness</th><th>Mergeability</th><th>Strategic</th><th>Freeze</th></tr></thead>
+        <tbody id="trend-history"><tr><td colspan="6">Carregando...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
       <h2>Priority lanes</h2>
       <p class="small">Ordenação por impacto operacional, gap, ganho de autonomia, redução de custo futuro e risco. A prioridade é report-only e não substitui CI, evidência ou revisão humana.</p>
       <table>
@@ -80,25 +91,20 @@
     <section class="card">
       <h2>Guardrails e links</h2>
       <div class="links" id="links"></div>
-      <details>
-        <summary>Contrato bruto</summary>
-        <pre id="raw">{}</pre>
-      </details>
+      <details><summary>Contrato bruto</summary><pre id="raw">{}</pre></details>
     </section>
   </main>
 
   <script>
-    const statusClass = (value) => ['governed','action_required','passed','warning','failed','critical','unknown','low','medium','high','blocked','executar_agora','executar_no_proximo_lote','manter_no_backlog_governado','stabilizar_evidencias_antes_de_expandir','pausar_ou_reclassificar'].includes(value) ? value : 'unknown';
+    const statusClass = (value) => ['governed','action_required','passed','warning','failed','critical','unknown','low','medium','high','blocked','executar_agora','executar_no_proximo_lote','manter_no_backlog_governado','stabilizar_evidencias_antes_de_expandir','pausar_ou_reclassificar','freeze_expansion','governed_expansion','safe_to_expand','stabilize_merge_flow','stable','improving','degrading'].includes(value) ? value : 'unknown';
     const shortJson = (value) => JSON.stringify(value || {}, null, 2);
+    const formatDate = (epoch) => epoch ? new Date(epoch * 1000).toLocaleString('pt-BR') : '-';
 
     function addLink(container, label, url, external = false) {
       const a = document.createElement('a');
       a.href = url;
       a.className = 'link-btn';
-      if (external) {
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-      }
+      if (external) { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
       a.textContent = label;
       container.appendChild(a);
     }
@@ -113,27 +119,32 @@
       }
     }
 
+    async function loadExecutiveTrendHistory() {
+      const fallback = { summary: { entries: 0, executive_trend: 'unknown', readiness_trend: 'unknown', mergeability_trend: 'unknown', executive_slope: 0, operational_decay_percent: 0, latest_freeze_recommendation: 'unknown', latest_next_bottleneck: 'unknown' }, history: [], guardrails: ['fallback_local'] };
+      const response = await fetchOptionalJson('./data/executive-trend-history.json', fallback);
+      const payload = response.data || fallback;
+      const summary = payload.summary || fallback.summary;
+
+      document.getElementById('trend-executive').innerHTML = `<span class="status ${statusClass(summary.executive_trend)}">${summary.executive_trend || 'unknown'}</span>`;
+      document.getElementById('trend-readiness').innerHTML = `<span class="status ${statusClass(summary.readiness_trend)}">${summary.readiness_trend || 'unknown'}</span>`;
+      document.getElementById('trend-mergeability').innerHTML = `<span class="status ${statusClass(summary.mergeability_trend)}">${summary.mergeability_trend || 'unknown'}</span>`;
+      document.getElementById('trend-decay').textContent = `${summary.operational_decay_percent ?? 0}%`;
+      document.getElementById('trend-freeze').innerHTML = `<span class="status ${statusClass(summary.latest_freeze_recommendation)}">${summary.latest_freeze_recommendation || 'unknown'}</span>`;
+      document.getElementById('trend-entries').textContent = summary.entries ?? 0;
+      document.getElementById('trend-executive-slope').textContent = summary.executive_slope ?? 0;
+      document.getElementById('trend-latest-bottleneck').textContent = summary.latest_next_bottleneck || '-';
+
+      const history = payload.history || [];
+      document.getElementById('trend-history').innerHTML = history.length ? history.map((item) => `
+        <tr><td>${formatDate(item.timestamp_epoch)}</td><td>${item.executive_score ?? '-'}</td><td>${item.readiness_score ?? '-'}</td><td>${item.mergeability_score ?? '-'}</td><td>${item.strategic_score ?? '-'}</td><td><span class="status ${statusClass(item.freeze_recommendation)}">${item.freeze_recommendation || '-'}</span></td></tr>
+      `).join('') : '<tr><td colspan="6">Histórico executivo ainda não publicado; fallback local ativo.</td></tr>';
+      return { response, payload };
+    }
+
     async function loadStrategicGovernance() {
-      const fallback = {
-        summary: {
-          status: 'action_required',
-          strategic_score: 0,
-          runtime_executive_score: 0,
-          confidence: 'low',
-          top_priority_lane: 'unknown',
-          recommended_action: 'stabilizar_evidencias_antes_de_expandir',
-          next_bottleneck: 'unknown',
-        },
-        priority_lanes: [],
-        next_bottleneck: {
-          name: 'artifact_indisponivel',
-          reason: 'strategic_governance_index_missing',
-          recommended_increment: 'regenerate_ops_dashboard_artifact',
-        },
-        links: {},
-        guardrails: ['fallback_local'],
-      };
+      const fallback = { summary: { status: 'action_required', strategic_score: 0, runtime_executive_score: 0, confidence: 'low', top_priority_lane: 'unknown', recommended_action: 'stabilizar_evidencias_antes_de_expandir', next_bottleneck: 'unknown' }, priority_lanes: [], next_bottleneck: { name: 'artifact_indisponivel', reason: 'strategic_governance_index_missing', recommended_increment: 'regenerate_ops_dashboard_artifact' }, links: {}, guardrails: ['fallback_local'] };
       const response = await fetchOptionalJson('./data/strategic-governance-index.json', fallback);
+      const trend = await loadExecutiveTrendHistory();
       const payload = response.data || fallback;
       const summary = payload.summary || fallback.summary;
       const bottleneck = payload.next_bottleneck || fallback.next_bottleneck;
@@ -149,40 +160,23 @@
       document.getElementById('bottleneck-reason').textContent = `Motivo: ${bottleneck.reason || 'não informado'}`;
 
       const lanesBody = document.getElementById('priority-lanes');
-      lanesBody.innerHTML = '';
       const lanes = payload.priority_lanes || [];
-      if (!lanes.length) {
-        lanesBody.innerHTML = '<tr><td colspan="6">Nenhuma lane publicada; fallback governado ativo.</td></tr>';
-      } else {
-        lanes.forEach((lane) => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${lane.lane || '-'}</td>
-            <td>${lane.priority_score ?? '-'}</td>
-            <td>${lane.base_signal ?? '-'}</td>
-            <td><span class="status ${statusClass(lane.risk)}">${lane.risk || '-'}</span></td>
-            <td><span class="status ${statusClass(lane.action)}">${lane.action || '-'}</span></td>
-            <td>${lane.reason || '-'}</td>
-          `;
-          lanesBody.appendChild(tr);
-        });
-      }
+      lanesBody.innerHTML = lanes.length ? lanes.map((lane) => `<tr><td>${lane.lane || '-'}</td><td>${lane.priority_score ?? '-'}</td><td>${lane.base_signal ?? '-'}</td><td><span class="status ${statusClass(lane.risk)}">${lane.risk || '-'}</span></td><td><span class="status ${statusClass(lane.action)}">${lane.action || '-'}</span></td><td>${lane.reason || '-'}</td></tr>`).join('') : '<tr><td colspan="6">Nenhuma lane publicada; fallback governado ativo.</td></tr>';
 
       const links = document.getElementById('links');
       links.innerHTML = '';
       addLink(links, 'Ops Dashboard', './index.html');
       addLink(links, 'strategic-governance-index.json', './data/strategic-governance-index.json');
+      addLink(links, 'executive-trend-history.json', './data/executive-trend-history.json');
       addLink(links, 'runtime-executive-index.json', './data/runtime-executive-index.json');
-      Object.entries(payload.links || {}).forEach(([label, url]) => {
-        if (!url || ['strategic_governance_index', 'runtime_executive_index', 'ops_dashboard'].includes(label)) return;
-        addLink(links, label, url, String(url).startsWith('http'));
-      });
-      document.getElementById('raw').textContent = shortJson({ available: response.available, source: response.source, fallback_error: response.error, payload });
+      Object.entries(payload.links || {}).forEach(([label, url]) => { if (!url || ['strategic_governance_index', 'runtime_executive_index', 'ops_dashboard'].includes(label)) return; addLink(links, label, url, String(url).startsWith('http')); });
+      document.getElementById('raw').textContent = shortJson({ strategic: { available: response.available, source: response.source, fallback_error: response.error, payload }, trend: { available: trend.response.available, source: trend.response.source, fallback_error: trend.response.error, payload: trend.payload } });
     }
 
     loadStrategicGovernance().catch((error) => {
       document.getElementById('status').innerHTML = '<span class="status failed">erro</span>';
       document.getElementById('priority-lanes').innerHTML = `<tr><td colspan="6">Falha ao carregar strategic-governance-index.json: ${error.message}</td></tr>`;
+      document.getElementById('trend-history').innerHTML = `<tr><td colspan="6">Falha ao carregar executive-trend-history.json: ${error.message}</td></tr>`;
       document.getElementById('raw').textContent = shortJson({ error: error.message });
     });
   </script>
