@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "labels": [
+    {
+      "name": "cycle:auto-merge-approved",
+      "purpose": "Autoriza o Autonomous Delivery Cycle a tentar merge se todos os gates estiverem verdes.",
+      "risk": "medium",
+      "apply_when": "PR pequeno, verde, mergeável, com fila governada elegível e baixo risco."
+    },
+    {
+      "name": "merge-queue:eligible",
+      "purpose": "Sinaliza elegibilidade pela fila governada.",
+      "risk": "low",
+      "apply_when": "Gerado pela Governed Merge Queue após validação."
+    }
+  ]
+}
