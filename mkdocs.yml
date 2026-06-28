@@ -7,6 +7,7 @@ repo_name: ericson-j-santos/reqsys-v2-enterprise-real
 edit_uri: edit/main/docs/
 use_directory_urls: true
 
+
 theme:
   name: material
   language: pt-BR
@@ -14,12 +15,10 @@ theme:
     - navigation.tabs
     - navigation.sections
     - navigation.expand
-    - navigation.indexes
     - toc.integrate
     - search.suggest
     - search.highlight
     - content.code.copy
-    - content.tabs.link
 
 nav:
   - Início: index.md
@@ -36,8 +35,6 @@ markdown_extensions:
   - admonition
   - attr_list
   - def_list
-  - footnotes
-  - md_in_html
   - tables
   - toc:
       permalink: true
@@ -47,19 +44,11 @@ markdown_extensions:
       alternate_style: true
   - pymdownx.tasklist:
       custom_checkbox: true
-  - pymdownx.highlight:
-      anchor_linenums: true
-  - pymdownx.inlinehilite
-  - pymdownx.snippets
-  - pymdownx.emoji
 
 plugins:
-  - search:
-      lang: pt
+  - search
 
 extra:
-  version:
-    provider: mike
   reqsys:
     documentation_version: 0.1.0
     documentation_date: 2026-06-28
