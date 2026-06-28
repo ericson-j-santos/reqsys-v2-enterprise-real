@@ -1,0 +1,16 @@
+{
+  "name": "autonomous-delivery-cycle",
+  "version": "1.0.0",
+  "released_at": "2026-06-27",
+  "compatibility": {
+    "requires_github_actions": true,
+    "requires_allow_auto_merge": false,
+    "requires_labels": [
+      "cycle:auto-merge-approved",
+      "merge-queue:eligible"
+    ]
+  },
+  "change_type": "incremental_governance_automation",
+  "runtime_impact": "none_until_workflow_runs",
+  "public_contract_impact": "adds_static_json_contracts"
+}
