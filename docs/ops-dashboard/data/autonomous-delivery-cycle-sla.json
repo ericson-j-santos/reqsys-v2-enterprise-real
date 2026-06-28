@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "cadence": "30_minutes",
+  "max_prs_per_cycle": 1,
+  "expected_behavior": {
+    "when_no_candidates": "publish_empty_report",
+    "when_candidate_not_green": "publish_blockers_without_merge",
+    "when_candidate_green_and_authorized": "squash_merge_and_observe_post_merge",
+    "when_post_merge_failure": "mark_attention_required_and_stop_next_increment"
+  },
+  "operational_targets": {
+    "merge_lead_time_reduction_target_percent": 20,
+    "manual_polling_reduction_target_percent": 60,
+    "false_merge_risk_target": "low",
+    "auditability_target": "high"
+  }
+}
