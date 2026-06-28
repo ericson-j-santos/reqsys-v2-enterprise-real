@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0.0",
+  "contract": "reqsys-openapi-routes-drift",
+  "validated_at_epoch": 1782689904,
+  "source": "docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json",
+  "status": "passed",
+  "mode": "report-only",
+  "errors": [],
+  "warnings": [],
+  "summary": {
+    "valid": true,
+    "governed_paths": 6,
+    "backend_routes_total": 144,
+    "openapi_operations_total": 7,
+    "governed_backend_matched": 6,
+    "missing_in_openapi": 0,
+    "missing_in_backend": 0
+  },
+  "details": {
+    "governed_paths": [
+      {
+        "method": "GET",
+        "path": "/api/runtime/health"
+      },
+      {
+        "method": "GET",
+        "path": "/api/runtime/dashboard"
+      },
+      {
+        "method": "GET",
+        "path": "/api/runtime/analytics"
+      },
+      {
+        "method": "GET",
+        "path": "/api/requisitos"
+      },
+      {
+        "method": "GET",
+        "path": "/api/requisitos/{id}"
+      },
+      {
+        "method": "POST",
+        "path": "/api/requisitos"
+      }
+    ],
+    "missing_in_openapi": [],
+    "missing_in_backend": []
+  },
+  "guardrails": [
+    "report_only",
+    "governed_paths_only",
+    "no_backend_mutation",
+    "ci_artifact_enabled"
+  ]
+}

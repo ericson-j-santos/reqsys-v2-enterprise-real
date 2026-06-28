@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "contract": "reqsys-openapi-contract-validation",
+  "validated_at_epoch": 1782689869,
+  "source": "docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json",
+  "status": "passed",
+  "errors": [],
+  "warnings": [],
+  "summary": {
+    "valid": true,
+    "openapi_version": "3.0.3",
+    "info_version": "0.3.0",
+    "paths": 6,
+    "schemas": 12,
+    "required_paths": 5,
+    "required_schemas": 4
+  },
+  "guardrails": [
+    "no_external_dependencies",
+    "json_parse_required",
+    "required_runtime_paths_checked",
+    "required_component_schemas_checked",
+    "ci_artifact_enabled"
+  ]
+}

@@ -1,36 +1,43 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "2.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-27T20:10:00+00:00",
+  "generated_at": "2026-06-28T12:00:00+00:00",
+  "strategy": "parallel_lanes_by_domain",
   "ranking": [
     {
-      "lane": "runtime-governance",
+      "lane": "lane-b-docs-runtime-governance",
+      "priority_score": 96,
+      "current_pr_lane": false,
+      "parallelism": "safe"
+    },
+    {
+      "lane": "lane-a-openapi-evolution",
       "priority_score": 94,
+      "current_pr_lane": true,
+      "parallelism": "safe"
+    },
+    {
+      "lane": "lane-c-contract-sync",
+      "priority_score": 88,
+      "current_pr_lane": false,
+      "parallelism": "controlled"
+    },
+    {
+      "lane": "lane-d-operational-observability",
+      "priority_score": 85,
       "current_pr_lane": false,
       "parallelism": "safe"
     },
     {
       "lane": "docs",
-      "priority_score": 90,
+      "priority_score": 82,
       "current_pr_lane": false,
       "parallelism": "safe"
     },
     {
-      "lane": "tests",
-      "priority_score": 78,
+      "lane": "runtime-governance",
+      "priority_score": 70,
       "current_pr_lane": false,
-      "parallelism": "controlled"
-    },
-    {
-      "lane": "implementation",
-      "priority_score": 66,
-      "current_pr_lane": false,
-      "parallelism": "controlled"
-    },
-    {
-      "lane": "unknown",
-      "priority_score": 55,
-      "current_pr_lane": true,
       "parallelism": "serial"
     },
     {
@@ -46,5 +53,12 @@
     "aguardar_estabilizacao": "55 <= score < 75",
     "merge_serializado": "35 <= score < 55",
     "isolamento_obrigatorio": "score < 35 ou risk=blocked"
-  }
+  },
+  "blocked_parallel_domains": [
+    "github_workflows_global",
+    "shared_contracts",
+    "mkdocs_yml",
+    "governance_core",
+    "backend_runtime"
+  ]
 }

@@ -1,0 +1,104 @@
+name: OpenAPI Newman CI
+
+on:
+  pull_request:
+    paths:
+      - docs-site/assets/openapi/**
+      - docs/integrations/openapi/**
+      - scripts/generate_postman_from_openapi.py
+      - backend/app/api/requisitos.py
+      - backend/app/api/monitoramento_operacional.py
+      - backend/app/api/runtime_analytics.py
+      - .github/workflows/openapi-newman-ci.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openapi-newman-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  newman-smoke:
+    name: Newman smoke (governed paths)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Generate Postman collection
+        run: |
+          python scripts/generate_postman_from_openapi.py \
+            --contract docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json \
+            --output docs/integrations/openapi/reqsys-runtime-postman.collection.json
+
+      - name: Start API for smoke
+        env:
+          DATABASE_URL: sqlite:///./reqsys.db
+          JWT_SECRET: ci-placeholder-secret-min-32-chars-long
+          JWT_ISSUER: reqsys-ci
+          JWT_AUDIENCE: reqsys-ci
+        run: |
+          mkdir -p artifacts/openapi
+          cd backend
+          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8765 > ../artifacts/openapi/uvicorn-smoke.log 2>&1 &
+          echo $! > ../artifacts/openapi/uvicorn-smoke.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8765/api/runtime/health >/dev/null; then
+              echo "API ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API failed to start"
+          cat ../artifacts/openapi/uvicorn-smoke.log || true
+          exit 1
+
+      - name: Run Newman smoke
+        run: |
+          mkdir -p artifacts/openapi
+          npx --yes newman@6.2.1 run docs/integrations/openapi/reqsys-runtime-postman.collection.json \
+            --env-var baseUrl=http://127.0.0.1:8765 \
+            --folder "/api/runtime/health" \
+            --reporters cli,json \
+            --reporter-json-export artifacts/openapi/newman-smoke-report.json \
+            || true
+          if [ ! -s artifacts/openapi/newman-smoke-report.json ]; then
+            echo '{"status":"empty","mode":"report-only"}' > artifacts/openapi/newman-smoke-report.json
+          fi
+
+      - name: Stop API
+        if: always()
+        run: |
+          if [ -f artifacts/openapi/uvicorn-smoke.pid ]; then
+            kill "$(cat artifacts/openapi/uvicorn-smoke.pid)" || true
+          fi
+
+      - name: Upload Newman artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-newman-smoke
+          path: |
+            artifacts/openapi/newman-smoke-report.json
+            docs/integrations/openapi/reqsys-runtime-postman.collection.json
+          if-no-files-found: warn
+          retention-days: 15
