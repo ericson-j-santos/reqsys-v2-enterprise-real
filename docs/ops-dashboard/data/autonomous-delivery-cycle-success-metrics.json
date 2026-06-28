@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "success_metrics": [
+    {
+      "metric": "dry_run_success_count",
+      "target": 5
+    },
+    {
+      "metric": "governed_autonomous_merge_success_count",
+      "target": 3
+    },
+    {
+      "metric": "post_merge_failure_count",
+      "target": 0
+    },
+    {
+      "metric": "unauthorized_merge_count",
+      "target": 0
+    },
+    {
+      "metric": "duplicate_next_increment_count",
+      "target": 0
+    }
+  ]
+}
