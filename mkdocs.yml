@@ -30,8 +30,6 @@ nav:
       - Rastreabilidade: governanca/rastreabilidade.md
   - Versionamento:
       - Changelog: CHANGELOG.md
-  - Offline:
-      - HTML v0.1.0: offline/reqsys-docs-v0.1.0.html
 
 markdown_extensions:
   - admonition
