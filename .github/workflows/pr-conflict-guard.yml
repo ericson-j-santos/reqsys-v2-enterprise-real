@@ -61,7 +61,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/pr-conflict-guard
-          git diff --name-only "${BASE_SHA}"...HEAD | sort -u | tee artifacts/pr-conflict-guard/changed-paths.txt
+          if git merge-base "${BASE_SHA}" HEAD >/dev/null 2>&1; then
+            git diff --name-only "${BASE_SHA}"...HEAD | sort -u | tee artifacts/pr-conflict-guard/changed-paths.txt
+          else
+            echo "::warning::Sem merge-base entre ${BASE_SHA} e HEAD; usando diff direto para manter o guard deterministico."
+            git diff --name-only "${BASE_SHA}" HEAD | sort -u | tee artifacts/pr-conflict-guard/changed-paths.txt
+          fi
           if [[ ! -s artifacts/pr-conflict-guard/changed-paths.txt ]]; then
             echo "PR sem alteracoes netas contra ${BASE_SHA}."
             echo "no_net_changes=true" >> "$GITHUB_OUTPUT"
