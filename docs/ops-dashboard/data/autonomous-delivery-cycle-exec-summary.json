@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "title": "Autonomous Delivery Cycle",
+  "executive_summary": "Automação conservadora para mergear PRs verdes e autorizados, observar CI pós-merge e capturar próximos incrementos em fila report-only.",
+  "current_state": "implemented_pending_pr_validation",
+  "target_state": "governed_cycle_operational",
+  "technical_progress_percent": 85,
+  "operational_progress_percent": 70,
+  "governance_progress_percent": 90,
+  "confidence": "medium",
+  "residual_gaps": [
+    "first_dry_run_after_merge",
+    "dashboard_consumption",
+    "empirical_tuning_of_required_workflow_names"
+  ],
+  "recommended_next_step": "merge_after_ci_green_then_run_dry_run"
+}
