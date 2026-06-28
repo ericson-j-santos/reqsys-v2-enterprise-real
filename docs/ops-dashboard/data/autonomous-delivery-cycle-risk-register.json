@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "risks": [
+    {
+      "id": "ADC-RISK-001",
+      "name": "merge_without_human_context",
+      "level": "medium",
+      "mitigation": "requires_explicit_cycle_label_and_merge_queue_eligible"
+    },
+    {
+      "id": "ADC-RISK-002",
+      "name": "post_merge_ci_failure",
+      "level": "medium",
+      "mitigation": "observe_push_runs_and_block_next_increment_when_failure_detected"
+    },
+    {
+      "id": "ADC-RISK-003",
+      "name": "workflow_name_drift",
+      "level": "medium",
+      "mitigation": "required_workflows_are_versioned_in_policy_contract"
+    },
+    {
+      "id": "ADC-RISK-004",
+      "name": "duplicate_next_increment",
+      "level": "low",
+      "mitigation": "next_increment_queue_is_report_only_and_requires_context_validation"
+    }
+  ]
+}
