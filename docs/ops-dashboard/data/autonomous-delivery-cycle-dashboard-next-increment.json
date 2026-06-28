@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "next_increment": {
+    "id": "ADC-NEXT-001",
+    "title": "Consumir Autonomous Delivery Cycle no dashboard operacional",
+    "status": "ready_after_merge",
+    "risk": "low",
+    "scope": [
+      "docs/ops-dashboard/index.html",
+      "docs/ops-dashboard/data/autonomous-delivery-cycle-latest.json",
+      "docs/ops-dashboard/data/autonomous-delivery-cycle-next-increments.json"
+    ],
+    "acceptance": [
+      "cards renderizados com fallback seguro",
+      "bloqueios de PR visíveis",
+      "CI pós-merge visível",
+      "fila de próximos incrementos navegável"
+    ]
+  }
+}
