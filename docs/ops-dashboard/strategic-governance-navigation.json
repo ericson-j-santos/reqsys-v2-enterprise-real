@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "purpose": "Expose direct navigation targets for Strategic Governance across static operational surfaces without runtime API calls.",
+  "generated_for": "ops-dashboard-navigation",
+  "links": {
+    "strategic_governance_page": "docs/ops-dashboard/strategic-governance.html",
+    "strategic_governance_data": "docs/ops-dashboard/data/strategic-governance-index.json",
+    "runtime_executive_index": "docs/ops-dashboard/data/runtime-executive-index.json",
+    "ops_dashboard": "docs/ops-dashboard/index.html",
+    "operational_evidence_hub": "docs/dashboard/operational-evidence-hub.html"
+  },
+  "recommended_surfaces": [
+    {
+      "surface": "docs/ops-dashboard/index.html",
+      "recommended_anchor": "Links operacionais",
+      "label": "Strategic Governance",
+      "href": "./strategic-governance.html"
+    },
+    {
+      "surface": "docs/dashboard/operational-evidence-hub.html",
+      "recommended_anchor": "Navegação — dashboards, contratos e runbooks",
+      "label": "Strategic Governance",
+      "href": "../ops-dashboard/strategic-governance.html"
+    }
+  ],
+  "guardrails": [
+    "static_navigation_only",
+    "no_runtime_github_api_call",
+    "does_not_change_ci_gates",
+    "does_not_replace_evidence_gate",
+    "safe_manifest_for_dashboard_consumers"
+  ],
+  "next_increment": "inline_manifest_links_into_ops_dashboard_and_operational_evidence_hub"
+}

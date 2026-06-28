@@ -17,6 +17,10 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 STATE_RANK = {"green": 0, "yellow": 1, "red": 2, "unknown": 1}
 
 OPEN_PR_PRESSURE_THRESHOLD = 5
