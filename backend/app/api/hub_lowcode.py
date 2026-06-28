@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, Depends, Header, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
@@ -18,8 +18,13 @@ from app.services.hub_lowcode import (
     testar_teams_webhook,
 )
 from app.services.power_automate_provisioning import (
+    atualizar_status_provisionamento,
     despachar_workflow_provisionamento,
     gerar_manifesto_provisionamento_flow,
+    listar_registry_provisionamentos,
+    registrar_manifesto_provisionamento,
+    resumo_registry_provisionamentos,
+    serializar_registry,
 )
 
 router = APIRouter(prefix='/v1/hub-lowcode', tags=['Hub Low-Code & IA'])
@@ -56,17 +61,19 @@ async def hub_pp_ambientes():
 
 
 # ---------------------------------------------------------------------------
-# Power Automate Flow Provisioning P0
+# Power Automate Flow Provisioning P0/P0.1
 # ---------------------------------------------------------------------------
 
 @router.post('/power-automate/flows/provisioning-plan')
 def power_automate_flow_provisioning_plan(
+    db: Session = Depends(get_db),
     display_name: str = Body(..., min_length=5),
     trigger_type: str = Body(default='HttpRequest'),
     description: str = Body(default=''),
     target_environment: str = Body(default='dev'),
     solution_name: str = Body(default='ReqSysAutomacao'),
     dry_run: bool = Body(default=True),
+    registrar: bool = Body(default=True),
     x_correlation_id: str | None = Header(default=None),
 ):
     """Gera manifesto governado para criar flow via ALM/PAC CLI."""
@@ -79,7 +86,8 @@ def power_automate_flow_provisioning_plan(
         correlation_id=x_correlation_id,
         dry_run=dry_run,
     )
-    return ok(manifesto, manifesto['correlation_id'])
+    registry = registrar_manifesto_provisionamento(db, manifesto, status='planned') if registrar else None
+    return ok({'manifesto': manifesto, 'registry': serializar_registry(registry) if registry else None}, manifesto['correlation_id'])
 
 
 @router.post('/power-automate/flows/provision')
@@ -106,6 +114,8 @@ async def power_automate_flow_provision(
         dry_run=False,
     )
     dispatch = await despachar_workflow_provisionamento(manifesto)
+    status_registry = 'dispatched' if dispatch.get('dispatched') else 'pending_configuration'
+    registry = registrar_manifesto_provisionamento(db, manifesto, status=status_registry, dispatch=dispatch)
     salvar_log_integracao(
         db,
         tipo='power_automate_flow_provisioning',
@@ -113,10 +123,51 @@ async def power_automate_flow_provision(
         autor='reqsys',
         titulo=display_name,
         mensagem='Provisionamento de flow Power Automate solicitado via ALM',
-        detalhes={'manifesto': manifesto, 'dispatch': dispatch},
+        detalhes={'manifesto': manifesto, 'dispatch': dispatch, 'registry_id': registry.id},
         correlation_id=manifesto['correlation_id'],
     )
-    return ok({'manifesto': manifesto, 'dispatch': dispatch}, manifesto['correlation_id'])
+    return ok({'manifesto': manifesto, 'dispatch': dispatch, 'registry': serializar_registry(registry)}, manifesto['correlation_id'])
+
+
+@router.get('/power-automate/flows/provisioning-registry')
+def power_automate_flow_provisioning_registry(
+    db: Session = Depends(get_db),
+    ambiente: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    """Lista provisionamentos registrados com filtros operacionais."""
+    return ok({'items': listar_registry_provisionamentos(db, ambiente=ambiente, status=status, limit=limit)})
+
+
+@router.get('/power-automate/flows/provisioning-registry/summary')
+def power_automate_flow_provisioning_registry_summary(db: Session = Depends(get_db)):
+    """Resumo executivo para Ops Dashboard / Strategic Governance."""
+    return ok(resumo_registry_provisionamentos(db))
+
+
+@router.patch('/power-automate/flows/provisioning-registry/{correlation_id}/status')
+def power_automate_flow_provisioning_registry_status(
+    correlation_id: str,
+    db: Session = Depends(get_db),
+    status: str = Body(...),
+    workflow_run_url: str | None = Body(default=None),
+    artifact_url: str | None = Body(default=None),
+    erro: str | None = Body(default=None),
+):
+    """Atualiza status operacional de um provisionamento por correlation_id."""
+    try:
+        item = atualizar_status_provisionamento(
+            db,
+            correlation_id=correlation_id,
+            status=status,
+            workflow_run_url=workflow_run_url,
+            artifact_url=artifact_url,
+            erro=erro,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(serializar_registry(item), correlation_id)
 
 
 # ---------------------------------------------------------------------------

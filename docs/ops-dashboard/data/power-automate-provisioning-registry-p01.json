@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "artifact": "power-automate-provisioning-registry-p01",
+  "generated_at": "2026-06-28T00:00:00-03:00",
+  "status": "implemented",
+  "maturity": "p0_1_runtime_registry",
+  "capability": "Power Automate Flow Provisioning Registry",
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/v1/hub-lowcode/power-automate/flows/provisioning-registry",
+      "purpose": "listar provisionamentos por ambiente/status"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hub-lowcode/power-automate/flows/provisioning-registry/summary",
+      "purpose": "resumo executivo para Ops Dashboard"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hub-lowcode/power-automate/flows/provisioning-registry/{correlation_id}/status",
+      "purpose": "atualizar status governado por correlation_id"
+    }
+  ],
+  "status_model": [
+    "planned",
+    "dispatched",
+    "running",
+    "succeeded",
+    "failed",
+    "rollback_required",
+    "pending_configuration"
+  ],
+  "dashboard_contract": {
+    "cards": [
+      "total",
+      "taxa_sucesso_percentual",
+      "risco_operacional",
+      "ambientes"
+    ],
+    "environment_semaphore": true,
+    "traceability_by_correlation_id": true
+  },
+  "governance": {
+    "persistent_registry": true,
+    "audit_minimized": true,
+    "workflow_run_url": true,
+    "artifact_url": true,
+    "retry_count": true
+  }
+}
