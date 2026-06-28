@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "ci_contract": {
+    "required_event": "pull_request",
+    "post_merge_event": "push",
+    "success_conclusion": "success",
+    "allowed_non_blocking_post_merge_conclusions": [
+      "skipped"
+    ],
+    "pending_blocks_merge": true,
+    "missing_blocks_merge": true,
+    "failure_blocks_merge": true
+  }
+}
