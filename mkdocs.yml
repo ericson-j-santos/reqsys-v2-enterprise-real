@@ -1,0 +1,56 @@
+site_name: ReqSys Enterprise
+site_description: Documentação técnica, operacional e executiva do ReqSys
+site_author: ReqSys Team
+site_url: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/
+repo_url: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real
+repo_name: ericson-j-santos/reqsys-v2-enterprise-real
+edit_uri: edit/main/docs-site/
+docs_dir: docs-site
+use_directory_urls: true
+
+
+theme:
+  name: material
+  language: pt-BR
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - Início: index.md
+  - API:
+      - Runtime: api/runtime.md
+  - Operação:
+      - Ambientes: operacao/ambientes.md
+  - Governança:
+      - Rastreabilidade: governanca/rastreabilidade.md
+  - Versionamento:
+      - Changelog: CHANGELOG.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+plugins:
+  - search
+
+extra:
+  reqsys:
+    documentation_version: 0.1.0
+    documentation_date: 2026-06-28
+    offline_html: docs/offline/reqsys-docs-v0.1.0.html
