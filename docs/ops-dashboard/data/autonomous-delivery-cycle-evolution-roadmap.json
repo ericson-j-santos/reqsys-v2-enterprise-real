@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "roadmap": [
+    {
+      "phase": 1,
+      "name": "conservative_cycle",
+      "status": "implemented_in_this_increment"
+    },
+    {
+      "phase": 2,
+      "name": "dashboard_consumption",
+      "status": "next_increment"
+    },
+    {
+      "phase": 3,
+      "name": "historical_metrics",
+      "status": "future"
+    },
+    {
+      "phase": 4,
+      "name": "adaptive_merge_window",
+      "status": "future"
+    }
+  ]
+}
