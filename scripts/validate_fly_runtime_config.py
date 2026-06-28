@@ -31,6 +31,8 @@ REQUIRED_FLY_SNIPPETS = (
     'dockerfile = "Dockerfile.fly"',
     'APP_ENV = "production"',
     'ALLOW_DEMO_LOGIN = "false"',
+    'REQSYS_BOOT_FALLBACK = "true"',
+    'REQSYS_BOOT_FALLBACK_DATABASE_URL = "sqlite:////tmp/reqsys-fallback.db"',
     'force_https = true',
     'path = "/health"',
 )
