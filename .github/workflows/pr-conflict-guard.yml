@@ -12,8 +12,8 @@ concurrency:
 permissions:
   # Necessario para fazer checkout do codigo do PR.
   contents: read
-  # Necessario para ler e atualizar metadados/comentarios do pull request.
-  pull-requests: write
+  # Necessario para consultar PRs e arquivos alterados via API sem permissao elevada.
+  pull-requests: read
   # Necessario para publicar comentario executivo no PR.
   issues: write
 
