@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "burndown": [
+    {
+      "gap": "merge_increment",
+      "remaining_percent": 15,
+      "status": "pending_ci"
+    },
+    {
+      "gap": "first_dry_run",
+      "remaining_percent": 10,
+      "status": "after_merge"
+    },
+    {
+      "gap": "dashboard_consumption",
+      "remaining_percent": 10,
+      "status": "next_increment"
+    }
+  ],
+  "current_completion_percent": 85,
+  "target_completion_percent": 100
+}
