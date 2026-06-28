@@ -1,0 +1,237 @@
+name: Padrão Ouro Delivery Automation
+
+on:
+  push:
+    branches:
+      - "cursor/**"
+      - main
+    paths:
+      - ".github/workflows/padrao-ouro-delivery-automation.yml"
+      - ".github/workflows/fly-runtime-p0.yml"
+      - "backend/**"
+      - "fly.toml"
+      - "Dockerfile.fly"
+      - "scripts/fly_boot.sh"
+      - "scripts/auto_open_agent_pr.py"
+      - "scripts/generate_operational_artifacts_baseline.py"
+      - "scripts/post_workflow_evidence_snapshot.py"
+      - "scripts/validate_public_runtime.py"
+      - "scripts/runtime_public_validator.py"
+      - "config/external-sources-registry.json"
+      - "docs/ops-dashboard/**"
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Ação forçada"
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - open_pr_only
+          - deploy_runtime_only
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: padrao-ouro-delivery-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CORRELATION_ID: padrao-ouro-delivery-${{ github.run_id }}-${{ github.run_attempt }}
+  PUBLIC_API_URL: https://reqsys-api.fly.dev
+
+jobs:
+  auto-open-pr:
+    name: Auto-open draft PR (cursor/*)
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref_name, 'cursor/')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'open_pr_only')
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Criar ou atualizar PR draft
+        env:
+          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
+          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS || github.token }}
+          PR_TITLE: "feat: executar ciclos Padrão Ouro (runtime, CI intel, governança, estatísticas)"
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_PAT_ACTIONS:-}" ]; then
+            echo "::warning::GH_PAT_ACTIONS ausente; tentando GITHUB_TOKEN (pode falhar por policy da org)."
+            export GH_TOKEN="${{ github.token }}"
+          fi
+          python scripts/auto_open_agent_pr.py
+
+      - name: Publicar artifact de PR automático
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-pr-request
+          path: artifacts/auto-pr-request/
+          if-no-files-found: warn
+
+      - name: Resumo
+        run: |
+          {
+            echo "## Auto-open PR"
+            echo "- Branch: \`${{ github.ref_name }}\`"
+            echo "- Correlation ID: \`$CORRELATION_ID\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  validate-runtime:
+    name: Validate runtime público (Trilha A)
+    if: >-
+      (github.event_name == 'push' && github.ref_name == 'main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar configuração Fly/runtime
+        run: |
+          python scripts/runtime_public_validator.py \
+            --artifact-root . \
+            --output artifacts/runtime/runtime-public-validation.json \
+            --strict
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: padrao-ouro-runtime-validation
+          path: artifacts/runtime/runtime-public-validation.json
+          if-no-files-found: warn
+
+  deploy-fly-prod:
+    name: Deploy Fly.io produção (runtime)
+    runs-on: ubuntu-latest
+    needs: validate-runtime
+    if: >-
+      needs.validate-runtime.result == 'success' &&
+      ((github.event_name == 'push' && github.ref_name == 'main') ||
+       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy reqsys-api
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only --config fly.toml --app reqsys-api
+
+      - name: Resumo deploy
+        run: |
+          {
+            echo "## Fly deploy produção"
+            echo "- App: \`reqsys-api\`"
+            echo "- SHA: \`${{ github.sha }}\`"
+            echo "- Correlation ID: \`$CORRELATION_ID\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  public-runtime-smoke:
+    name: Smoke público /api/runtime/*
+    runs-on: ubuntu-latest
+    needs: [validate-runtime, deploy-fly-prod]
+    if: >-
+      always() &&
+      needs.validate-runtime.result == 'success' &&
+      (needs.deploy-fly-prod.result == 'success' || needs.deploy-fly-prod.result == 'skipped') &&
+      ((github.event_name == 'push' && github.ref_name == 'main') ||
+       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Probe endpoints runtime públicos
+        run: |
+          python scripts/runtime_public_validator.py \
+            --probe \
+            --base-url "$PUBLIC_API_URL" \
+            --environment prod \
+            --include-optional-evidence \
+            --artifact-root . \
+            --output artifacts/runtime/runtime-public-probe.json
+
+      - name: Falhar se /api/runtime/* indisponível
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("artifacts/runtime/runtime-public-probe.json")
+          if not path.exists():
+              raise SystemExit("probe artifact ausente")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          blocking = payload.get("blocking_issues") or payload.get("summary", {}).get("blocking_issues") or []
+          strict = payload.get("summary") or {}
+          for key in ("strict_ok", "success_percentual", "readiness_percent"):
+              print(f"{key}={strict.get(key)}")
+          runtime_endpoints = (
+              "/api/runtime/health",
+              "/api/runtime/readiness",
+              "/api/runtime/liveness",
+          )
+          joined = "\n".join(str(item) for item in blocking)
+          missing = [ep for ep in runtime_endpoints if ep in joined and "404" in joined]
+          if missing:
+              raise SystemExit(f"Runtime público ainda indisponível: {missing}")
+          print("Runtime público OK")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: padrao-ouro-public-runtime-smoke
+          path: |
+            artifacts/runtime/runtime-public-probe.json
+            artifacts/runtime/runtime-public-validation.json
+          if-no-files-found: warn
+
+  delivery-summary:
+    name: Delivery summary
+    runs-on: ubuntu-latest
+    needs: [auto-open-pr, validate-runtime, deploy-fly-prod, public-runtime-smoke]
+    if: always()
+    steps:
+      - name: Resumo consolidado
+        run: |
+          {
+            echo "## Padrão Ouro Delivery Automation"
+            echo ""
+            echo "| Job | Resultado |"
+            echo "|---|---|"
+            echo "| Auto-open PR | ${{ needs.auto-open-pr.result || 'skipped' }} |"
+            echo "| Validate runtime | ${{ needs.validate-runtime.result || 'skipped' }} |"
+            echo "| Deploy Fly prod | ${{ needs.deploy-fly-prod.result || 'skipped' }} |"
+            echo "| Public smoke | ${{ needs.public-runtime-smoke.result || 'skipped' }} |"
+            echo ""
+            echo "Correlation ID: \`$CORRELATION_ID\`"
+            if [ "${{ needs.auto-open-pr.result }}" = "failure" ]; then
+              echo ""
+              echo "> PR automático falhou: configure o secret \`GH_PAT_ACTIONS\` com escopo \`repo\` e permissão de PR."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

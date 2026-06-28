@@ -22,13 +22,14 @@ def _relatorio_permissivo() -> dict[str, Any]:
     }
 
 
-def carregar_relatorio_coordenador() -> dict[str, Any] | None:
+def carregar_relatorio_coordenador(*, strict: bool = False) -> dict[str, Any] | None:
     candidatos: list[Path] = []
     env_path = (os.environ.get('COORDENADOR_STATUS_JSON') or '').strip()
     if env_path:
         candidatos.append(Path(env_path))
-    candidatos.append(Path('artifacts/coordenador-status/coordenador-status.json'))
-    candidatos.append(Path(__file__).resolve().parents[3] / 'artifacts/coordenador-status/coordenador-status.json')
+    elif strict:
+        candidatos.append(Path('artifacts/coordenador-status/coordenador-status.json'))
+        candidatos.append(Path(__file__).resolve().parents[3] / 'artifacts/coordenador-status/coordenador-status.json')
 
     for caminho in candidatos:
         if caminho.is_file():
@@ -52,7 +53,7 @@ def verificar_increment_gate(
     if strict is None:
         strict = settings.normalized_environment in {'producao', 'homologacao'}
 
-    relatorio = carregar_relatorio_coordenador()
+    relatorio = carregar_relatorio_coordenador(strict=strict)
     if relatorio is None:
         if strict:
             return {
