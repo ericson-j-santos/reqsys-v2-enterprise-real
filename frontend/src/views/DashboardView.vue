@@ -370,7 +370,7 @@ const totalRequisitosInfo = computed(() => resumo.value.total_requisitos ?? stor
 const sistemaStatus = computed(() => resumo.value.sistema_status || 'indisponível')
 const statusSistemaSemaforo = computed(() => {
   const status = String(sistemaStatus.value).toLowerCase()
-  if (status.includes('ok') || status.includes('healthy') || status.includes('dispon')) return 'verde'
+  if (status.includes('ok') || status.includes('healthy') || status.includes('dispon') || status.includes('operacional')) return 'verde'
   if (status.includes('degrad') || status.includes('aten')) return 'amarelo'
   if (status.includes('indispon') || status.includes('erro') || status.includes('crit')) return 'vermelho'
   return 'desconhecido'
