@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "completed_items": [
+    "workflow",
+    "policy_contract",
+    "latest_status_contract",
+    "next_increment_queue_contract",
+    "runbook",
+    "adr",
+    "changelog",
+    "tests",
+    "prompts",
+    "risk_register",
+    "rollout_plan",
+    "rollback_plan"
+  ],
+  "completion_percent": 85,
+  "remaining_items": [
+    "ci_validation",
+    "first_dry_run",
+    "dashboard_consumption"
+  ]
+}
