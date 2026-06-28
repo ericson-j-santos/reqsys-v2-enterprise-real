@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "handoff": {
+    "for_chat": "Use docs/prompts/autonomous-delivery-cycle-chat-executor.md after a successful merge and dry-run.",
+    "for_codex": "Use docs/prompts/autonomous-delivery-cycle-codex.md for dashboard integration.",
+    "for_dashboard": "Consume autonomous-delivery-cycle-latest.json and autonomous-delivery-cycle-next-increments.json."
+  },
+  "next_action": "open_pr_and_validate_ci"
+}
