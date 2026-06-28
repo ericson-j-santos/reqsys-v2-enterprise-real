@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-28T14:45:43Z",
+  "source": "environment-drift-analyzer",
+  "status": "degraded",
+  "confidence_level": "high",
+  "maturity_percent": 0.0,
+  "operational_risk": "high",
+  "commit_sha": "local",
+  "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7",
+  "mode": "report_only",
+  "drift_level": "ALTO",
+  "findings": [
+    {
+      "type": "url_matrix_drift",
+      "severity": "high",
+      "detail": "probe URLs divergem de infra/fly-environments.json (dev)",
+      "environments": [
+        "dev"
+      ]
+    },
+    {
+      "type": "url_matrix_drift",
+      "severity": "high",
+      "detail": "probe URLs divergem de infra/fly-environments.json (hml)",
+      "environments": [
+        "hml"
+      ]
+    },
+    {
+      "type": "url_matrix_drift",
+      "severity": "high",
+      "detail": "probe URLs divergem de infra/fly-environments.json (prod)",
+      "environments": [
+        "prod"
+      ]
+    }
+  ],
+  "recommendations": [
+    "Normalizar URLs de dev entre validate_environments_readiness e fly-environments.",
+    "Normalizar URLs de hml entre validate_environments_readiness e fly-environments.",
+    "Normalizar URLs de prod entre validate_environments_readiness e fly-environments."
+  ],
+  "blocked_actions": [
+    "auto_block_production",
+    "auto_rollback",
+    "destructive_remediation"
+  ],
+  "environments_compared": [
+    "dev",
+    "hml",
+    "prod",
+    "test"
+  ]
+}

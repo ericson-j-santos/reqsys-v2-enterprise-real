@@ -10,6 +10,7 @@ on:
       - "Operational Stability Score"
       - "CI Incident Intelligence"
       - "Post Merge Operational Summary"
+      - "Operational Observability Hub"
     types:
       - completed
   workflow_dispatch:

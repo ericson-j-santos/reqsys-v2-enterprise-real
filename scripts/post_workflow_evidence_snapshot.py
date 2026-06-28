@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 
 DEFAULT_INPUTS = {
@@ -20,6 +22,7 @@ DEFAULT_INPUTS = {
     "runtime_health": Path("artifacts/runtime-health-center/runtime-health-report.json"),
     "ci_intelligence": Path("artifacts/operational-ci-intelligence/operational-ci-intelligence.json"),
     "coordenador_status": Path("artifacts/coordenador-status/coordenador-status.json"),
+    "observability_hub": Path("artifacts/operational-observability-hub/operational-observability-hub.json"),
 }
 
 
@@ -55,16 +58,32 @@ def compute_maturity_score(sources: dict[str, dict[str, Any] | None]) -> float:
     return round(sum(scores) / len(scores), 2)
 
 
-def build_snapshot(sources: dict[str, dict[str, Any] | None], event: str, sha: str | None) -> dict[str, Any]:
+def build_snapshot(
+    sources: dict[str, dict[str, Any] | None],
+    event: str,
+    sha: str | None,
+    workflow_run_id: str | None = None,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
     available = [name for name, payload in sources.items() if payload]
     maturity = compute_maturity_score(sources)
     pipeline = sources.get("pipeline_governance") or {}
+    coordenador = sources.get("coordenador_status") or {}
+    observability = sources.get("observability_hub") or {}
     blocked = pipeline.get("estadoGeral") not in (None, "verde")
+    resolved_correlation_id = (
+        correlation_id
+        or observability.get("correlation_id")
+        or coordenador.get("correlation_id")
+        or str(uuid4())
+    )
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "event_name": event,
         "sha": sha,
+        "workflow_run_id": workflow_run_id or os.environ.get("GITHUB_RUN_ID"),
+        "correlation_id": resolved_correlation_id,
         "mode": "post_workflow_hook",
         "sources_available": available,
         "sources_missing": [name for name in sources if not sources[name]],
@@ -96,6 +115,8 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         f"- Gerado em: `{snapshot['generated_at_utc']}`",
         f"- Evento: `{snapshot['event_name']}`",
         f"- SHA: `{snapshot.get('sha') or 'local'}`",
+        f"- Workflow run ID: `{snapshot.get('workflow_run_id') or 'local'}`",
+        f"- Correlation ID: `{snapshot.get('correlation_id') or 'n/a'}`",
         f"- Maturity score: `{snapshot['maturity_score']}`",
         f"- Pipeline: `{snapshot.get('pipeline_estado_geral') or 'unknown'}`",
         f"- Fontes disponíveis: `{', '.join(snapshot['sources_available']) or 'none'}`",
@@ -113,6 +134,8 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=Path("artifacts/post-workflow-evidence"))
     parser.add_argument("--event", default="ci_complete")
     parser.add_argument("--sha", default=None)
+    parser.add_argument("--workflow-run-id", default=None)
+    parser.add_argument("--correlation-id", default=None)
     parser.add_argument("--pipeline-report", type=Path, default=DEFAULT_INPUTS["pipeline_governance"])
     args = parser.parse_args()
 
@@ -122,8 +145,15 @@ def main() -> int:
         "runtime_health": load_json(DEFAULT_INPUTS["runtime_health"]),
         "ci_intelligence": load_json(DEFAULT_INPUTS["ci_intelligence"]),
         "coordenador_status": load_json(DEFAULT_INPUTS["coordenador_status"]),
+        "observability_hub": load_json(DEFAULT_INPUTS["observability_hub"]),
     }
-    snapshot = build_snapshot(sources, args.event, args.sha)
+    snapshot = build_snapshot(
+        sources,
+        args.event,
+        args.sha,
+        args.workflow_run_id,
+        args.correlation_id,
+    )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     (args.out_dir / "post-workflow-evidence.json").write_text(
         json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n",

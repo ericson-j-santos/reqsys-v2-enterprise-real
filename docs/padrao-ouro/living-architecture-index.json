@@ -126,6 +126,13 @@
       "evidence": "reports/github-runtime-analytics/runtime-operational-evidence-graph.json"
     },
     {
+      "id": "operational-observability-hub",
+      "name": "Operational Observability Hub",
+      "path": ".github/workflows/operational-observability-hub.yml",
+      "gates": ["multi_env_evidence", "drift_detection", "slo_evidence", "correlation_timeline"],
+      "evidence": "artifacts/operational-observability-hub/operational-observability-hub.json"
+    },
+    {
       "id": "trilhas-padrao-ouro",
       "name": "Trilhas — Padrão Ouro Consolidado",
       "path": ".github/workflows/trilhas-padrao-ouro.yml",
@@ -154,6 +161,13 @@
       "domain": "governance",
       "producers": ["coordenador-status-consolidator.yml"],
       "consumers": ["agent-increment-gate", "AGENTS.md"]
+    },
+    {
+      "id": "operational-observability-hub",
+      "schema": "docs/contracts/operational-json-artifact.schema.json",
+      "domain": "observability",
+      "producers": ["operational-observability-hub.yml"],
+      "consumers": ["coordenador-status-consolidator", "ops-dashboard", "operational-alert-intelligence"]
     }
   ],
   "dependencies": [

@@ -1,6 +1,6 @@
 # Runtime Operational Correlation Timeline
 
-- Runtime state: TIMELINE_READY
-- Events: 3
-- Confidence: 92%
-- Risk: 5%
+- Runtime state: TIMELINE_HYDRATED
+- Events: 2
+- Confidence: 90%
+- Risk: 10%

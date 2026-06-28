@@ -156,6 +156,7 @@ def build_recommended_actions(
     health: dict[str, Any],
     increment_gate: dict[str, Any],
     watchdog: dict[str, Any] | None = None,
+    observability_hub: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
     actions: list[dict[str, str]] = []
     backlog = health.get("automatic_backlog") or []
@@ -233,6 +234,31 @@ def build_recommended_actions(
                 ),
             }
         )
+
+    if observability_hub:
+        alert = observability_hub.get("governed_alert") or {}
+        if alert.get("should_alert"):
+            actions.append(
+                {
+                    "priority": "P1" if alert.get("alert_level") == "HIGH" else "P2",
+                    "action": "revisar_alerta_observabilidade",
+                    "reference": str(alert.get("alert_type") or "observability_hub"),
+                    "detail": (
+                        f"{alert.get('alert_level')} — {alert.get('action_policy')} "
+                        f"(correlation_id={observability_hub.get('correlation_id', '')})"
+                    ),
+                }
+            )
+        drift = (observability_hub.get("sources") or {}).get("environment_drift") or {}
+        if drift.get("drift_level") in {"ALTO", "MEDIO"}:
+            actions.append(
+                {
+                    "priority": "P1" if drift.get("drift_level") == "ALTO" else "P2",
+                    "action": "investigar_drift_multiambiente",
+                    "reference": str(drift.get("drift_level")),
+                    "detail": f"{drift.get('findings', 0)} achados de drift dev/hml/prod",
+                }
+            )
 
     if global_state == "green" and increment_gate.get("new_front_allowed") and not actions:
         actions.append(
@@ -354,6 +380,7 @@ def consolidate(
     orchestrator: dict[str, Any],
     health: dict[str, Any],
     watchdog: dict[str, Any] | None = None,
+    observability_hub: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     global_state = merge_state(str(orchestrator.get("state") or "unknown"), str(health.get("state") or "unknown"))
     backlog = health.get("automatic_backlog") or []
@@ -402,6 +429,13 @@ def consolidate(
                 "overall_status": (watchdog or {}).get("overall_status"),
                 "duplicate_pr_numbers": duplicate_numbers,
             },
+            "observability_hub": {
+                "available": observability_hub is not None,
+                "status": (observability_hub or {}).get("status"),
+                "operational_risk": (observability_hub or {}).get("operational_risk"),
+                "correlation_id": (observability_hub or {}).get("correlation_id"),
+                "pareto_increment": (observability_hub or {}).get("pareto_increment"),
+            },
         },
         "summary": {
             "open_prs": (orchestrator.get("summary") or {}).get("open_prs", 0),
@@ -417,7 +451,7 @@ def consolidate(
         },
         "automatic_backlog": backlog,
         "recommended_actions": build_recommended_actions(
-            global_state, orchestrator, health, increment_gate, watchdog
+            global_state, orchestrator, health, increment_gate, watchdog, observability_hub
         ),
         "guardrails": {
             "merge": False,
@@ -578,6 +612,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--health-json", default="", help="Optional existing health validator JSON path")
     parser.add_argument("--watchdog-json", default="", help="Optional repository health watchdog JSON path")
     parser.add_argument(
+        "--observability-hub-json",
+        default="",
+        help="Optional operational observability hub JSON path",
+    )
+    parser.add_argument(
         "--fail-on-red",
         action="store_true",
         help="Exit 1 when consolidated state is red (default: always exit 0 after successful write)",
@@ -599,6 +638,14 @@ def main() -> int:
     watchdog: dict[str, Any] | None = None
     if args.watchdog_json:
         watchdog = load_json(Path(args.watchdog_json))
+
+    observability_hub: dict[str, Any] | None = None
+    if args.observability_hub_json:
+        observability_hub = load_json(Path(args.observability_hub_json))
+    else:
+        default_hub = Path("artifacts/operational-observability-hub/operational-observability-hub.json")
+        if default_hub.exists():
+            observability_hub = load_json(default_hub)
 
     if args.orchestrator_json and args.health_json:
         orchestrator = load_json(Path(args.orchestrator_json))
@@ -624,7 +671,7 @@ def main() -> int:
         repo = args.repo
         branch = args.branch
 
-    report = consolidate(repo, branch, orchestrator, health, watchdog)
+    report = consolidate(repo, branch, orchestrator, health, watchdog, observability_hub)
 
     orchestrator_dir.mkdir(parents=True, exist_ok=True)
     health_dir.mkdir(parents=True, exist_ok=True)

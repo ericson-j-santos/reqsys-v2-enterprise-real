@@ -95,6 +95,14 @@
       "purpose": "Matrix paralelizável de qualidade e governança.",
       "artifacts": ["trilha-d-qualidade-governanca-evidence"],
       "runbooks": ["docs/runbooks/trilha-d-qualidade-governanca.md"]
+    },
+    {
+      "id": "operational-observability-hub",
+      "name": "Operational Observability Hub",
+      "path": ".github/workflows/operational-observability-hub.yml",
+      "purpose": "Evidência multiambiente, drift dev/hml/prod, SLO, analytics longitudinal e correlação CI↔runtime.",
+      "artifacts": ["operational-observability-hub", "operational-slo-evidence", "environment-drift-analyzer"],
+      "runbooks": ["docs/padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md"]
     }
   ],
   "artifacts": [
@@ -189,7 +197,8 @@
     { "id": "trilha-d-qualidade-governanca", "path": "docs/contracts/trilha-d-qualidade-governanca.schema.json", "domain": "quality", "version": "1.0.0" },
     { "id": "product-intelligence-event", "path": "schemas/product-intelligence/product-intelligence-event.schema.json", "domain": "product-intelligence", "version": "1.0.0" },
     { "id": "operational-health-dashboard", "path": "docs/operations/operational-health-dashboard.schema.json", "domain": "operations", "version": "1.0.0" },
-    { "id": "coordenador-status", "path": "docs/contracts/coordenador-status.schema.json", "domain": "governance", "version": "1.0.0" }
+    { "id": "coordenador-status", "path": "docs/contracts/coordenador-status.schema.json", "domain": "governance", "version": "1.0.0" },
+    { "id": "operational-slo-evidence", "path": "docs/contracts/operational-slo-evidence.schema.json", "domain": "operations", "version": "1.0.0" }
   ],
   "dashboards": [
     { "id": "operational-command-center", "path": "docs/dashboard/operational-command-center.md", "data_sources": ["operational-artifact-schema-validation", "operational-artifact-discovery-index"], "runbooks": ["docs/runbooks/operational-governance-dashboard.md"] },

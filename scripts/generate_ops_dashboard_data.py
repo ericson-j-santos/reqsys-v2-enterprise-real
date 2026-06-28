@@ -303,6 +303,9 @@ def build_dashboard_payload(
     observability_correlation: dict[str, Any] | None = None,
     delivery_finalization: dict[str, Any] | None = None,
     public_runtime_provenance: dict[str, Any] | None = None,
+    observability_hub: dict[str, Any] | None = None,
+    slo_evidence: dict[str, Any] | None = None,
+    multi_environment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     results = report.get("results", []) or []
     runtime_report = runtime_report or {}
@@ -311,8 +314,11 @@ def build_dashboard_payload(
     observability_correlation = observability_correlation or {}
     delivery_finalization = delivery_finalization or {}
     public_runtime_provenance = public_runtime_provenance or {}
+    observability_hub = observability_hub or {}
+    slo_evidence = slo_evidence or {}
+    multi_environment = multi_environment or {}
     return {
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "repo": repo or report.get("repo") or "unknown",
         "generated_at_epoch": int(time.time()),
         "overall_status": report.get("overall_status", "unknown"),
@@ -331,6 +337,9 @@ def build_dashboard_payload(
         "runtime_domain_drilldowns": _domain_drilldowns(runtime_report),
         "incident_timeline": _incident_timeline(report, runtime_report, evidence_graph),
         "observability_correlation_report": observability_correlation,
+        "operational_observability_hub": observability_hub,
+        "slo_evidence": slo_evidence,
+        "multi_environment_evidence": multi_environment,
         "delivery_finalization": _delivery_finalization_summary(delivery_finalization),
         "runtime_sources": {
             "runtime_health_report_available": bool(runtime_report),
@@ -338,6 +347,9 @@ def build_dashboard_payload(
             "public_runtime_validation_available": bool(public_runtime) and public_runtime_provenance.get("available", bool(public_runtime)),
             "public_runtime_source_fallback": public_runtime_provenance.get("source_fallback", not bool(public_runtime)),
             "observability_correlation_report_available": bool(observability_correlation),
+            "operational_observability_hub_available": bool(observability_hub),
+            "slo_evidence_available": bool(slo_evidence),
+            "multi_environment_evidence_available": bool(multi_environment),
             "delivery_finalization_report_available": bool(delivery_finalization),
         },
     }
@@ -355,6 +367,9 @@ def main() -> int:
     parser.add_argument("--public-runtime-evidence-index", default="audit/runtime/public-runtime-evidence-index.json")
     parser.add_argument("--observability-correlation-report", default="artifacts/observability-correlation-report/observability-correlation-report.json")
     parser.add_argument("--delivery-finalization-report", default="artifacts/delivery-finalization/delivery-finalization-report.json")
+    parser.add_argument("--observability-hub", default="artifacts/operational-observability-hub/operational-observability-hub.json")
+    parser.add_argument("--slo-evidence", default="docs/ops-dashboard/data/slo-evidence.json")
+    parser.add_argument("--multi-environment", default="artifacts/operational-multi-environment/multi-environment-evidence.json")
     args = parser.parse_args()
 
     report = _load_watchdog_report(Path(args.watchdog_report))
@@ -367,6 +382,9 @@ def main() -> int:
     )
     observability_correlation = _load_optional_json(Path(args.observability_correlation_report))
     delivery_finalization = _load_optional_json(Path(args.delivery_finalization_report))
+    observability_hub = _load_optional_json(Path(args.observability_hub))
+    slo_evidence = _load_optional_json(Path(args.slo_evidence))
+    multi_environment = _load_optional_json(Path(args.multi_environment))
     payload = build_dashboard_payload(
         report,
         args.repo,
@@ -376,6 +394,9 @@ def main() -> int:
         observability_correlation,
         delivery_finalization,
         public_runtime_provenance,
+        observability_hub,
+        slo_evidence,
+        multi_environment,
     )
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)

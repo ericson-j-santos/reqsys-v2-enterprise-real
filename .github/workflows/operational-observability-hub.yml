@@ -1,0 +1,124 @@
+name: Operational Observability Hub
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "35 12 * * 1-5"
+  workflow_run:
+    workflows:
+      - "Operational Center History"
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: operational-observability-hub-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  observability-hub:
+    name: Consolidar observabilidade operacional
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Collect operational runs (when upstream artifact missing)
+        if: github.event_name != 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/operational-health artifacts/operational-ci-intelligence/input
+          gh run list \
+            --repo "${{ github.repository }}" \
+            --limit 30 \
+            --json databaseId,name,workflowName,status,conclusion,event,headBranch,headSha,url,createdAt,updatedAt \
+            > artifacts/operational-health/runs.json || echo '[]' > artifacts/operational-health/runs.json
+
+      - name: Download operational history artifact (when triggered by upstream)
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: operational-center-history
+          path: artifacts
+
+      - name: Ensure operational history baseline
+        run: |
+          mkdir -p artifacts/operational-history data/operational-history
+          if [[ ! -f artifacts/operational-history/operational-history.json ]]; then
+            echo '[]' > artifacts/operational-history/operational-history.json
+          fi
+          if [[ ! -f artifacts/operational-history/operational-history-trend.json ]]; then
+            echo '{"direction":"unknown","points":0}' > artifacts/operational-history/operational-history-trend.json
+          fi
+
+      - name: Run Operational Observability Hub
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python scripts/operational_observability_hub.py \
+            --repository "${{ github.repository }}" \
+            --commit-sha "${{ github.sha }}" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --out-dir artifacts/operational-observability-hub
+
+      - name: Generate hydrated correlation timeline
+        run: |
+          python tools/product_intelligence/generate_runtime_operational_correlation_timeline.py
+
+      - name: Refresh coordenador with observability hub
+        if: env.GITHUB_TOKEN != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+        run: |
+          if [[ -f artifacts/coordenador-status/coordenador-status.json ]]; then
+            python scripts/coordenador_status_consolidator.py \
+              --orchestrator-json artifacts/coordenador-status/sources/operational-governance-orchestrator/operational-governance-orchestrator.json \
+              --health-json artifacts/coordenador-status/sources/runtime-health-validator/runtime-health-validator.json \
+              --observability-hub-json artifacts/operational-observability-hub/operational-observability-hub.json \
+              --output-dir artifacts/coordenador-status || true
+          fi
+
+      - name: Update ops dashboard data
+        run: |
+          python scripts/generate_ops_dashboard_data.py \
+            --repo "${{ github.repository }}" \
+            --observability-hub artifacts/operational-observability-hub/operational-observability-hub.json \
+            --slo-evidence docs/ops-dashboard/data/slo-evidence.json \
+            --multi-environment artifacts/operational-multi-environment/multi-environment-evidence.json
+
+      - name: Resumo executivo
+        if: always()
+        run: |
+          if [[ -f artifacts/operational-observability-hub/operational-observability-hub.md ]]; then
+            cat artifacts/operational-observability-hub/operational-observability-hub.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload observability hub artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-observability-hub
+          path: |
+            artifacts/operational-observability-hub/
+            artifacts/operational-multi-environment/
+            artifacts/environment-drift-analyzer/
+            artifacts/operational-slo-evidence/
+            artifacts/operational-longitudinal-analytics/
+            artifacts/operational-history-index/
+            reports/github-runtime-analytics/runtime-operational-correlation-timeline.json
+            docs/ops-dashboard/data/slo-evidence.json
+          retention-days: 30
