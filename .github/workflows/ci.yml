@@ -332,10 +332,80 @@ jobs:
           E2E_BASE_URL: http://127.0.0.1:5173
         run: npx playwright test tests/e2e/responsividade.spec.js
 
+  pipeline-governance:
+    name: Pipeline Governança + Evidence Snapshot
+    runs-on: ubuntu-latest
+    needs: [ci-router, backend-lint, backend-test, frontend-build, frontend-e2e-responsive]
+    if: always()
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Gerar pipeline-governanca-report
+        env:
+          BACKEND_LINT_RESULT: ${{ needs.backend-lint.result }}
+          BACKEND_TEST_RESULT: ${{ needs.backend-test.result }}
+          FRONTEND_BUILD_RESULT: ${{ needs.frontend-build.result }}
+          FRONTEND_E2E_RESULT: ${{ needs.frontend-e2e-responsive.result }}
+          APP_ENV: ci
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p artifacts/pipeline-governanca
+          node scripts/validar-pipeline-governanca.mjs > artifacts/pipeline-governanca/pipeline-governanca-report.json
+          cat artifacts/pipeline-governanca/pipeline-governanca-report.json
+
+      - name: Gerar baseline operacional local
+        run: python scripts/generate_operational_artifacts_baseline.py
+
+      - name: Post-workflow evidence snapshot
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          python scripts/post_workflow_evidence_snapshot.py \
+            --event "${{ github.event_name }}" \
+            --sha "${{ github.sha }}" \
+            --pipeline-report artifacts/pipeline-governanca/pipeline-governanca-report.json
+
+      - name: Validar estadoGeral do pipeline
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/pipeline-governanca/pipeline-governanca-report.json").read_text())
+          estado = report.get("estadoGeral")
+          print(f"estadoGeral={estado}")
+          if estado != "verde":
+              raise SystemExit(f"pipeline-governanca bloqueado: estadoGeral={estado}")
+          PY
+
+      - name: Publicar artifacts de governança
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pipeline-governanca-evidence
+          path: |
+            artifacts/pipeline-governanca/
+            artifacts/post-workflow-evidence/
+            artifacts/runtime-health-center/
+            artifacts/coordenador-status/
+          if-no-files-found: warn
+
   ci-result:
     name: CI Router Result
     runs-on: ubuntu-latest
-    needs: [ci-router, backend-lint, backend-test, frontend-build, frontend-e2e-responsive]
+    needs: [ci-router, backend-lint, backend-test, frontend-build, frontend-e2e-responsive, pipeline-governance]
     if: always()
     steps:
       - name: Consolidar resultado
@@ -350,13 +420,15 @@ jobs:
           echo "| Backend Tests | ${{ needs.backend-test.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Frontend Build | ${{ needs.frontend-build.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Frontend E2E | ${{ needs.frontend-e2e-responsive.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Pipeline Governança | ${{ needs.pipeline-governance.result }} |" >> "$GITHUB_STEP_SUMMARY"
 
           for result in \
             "${{ needs.ci-router.result }}" \
             "${{ needs.backend-lint.result }}" \
             "${{ needs.backend-test.result }}" \
             "${{ needs.frontend-build.result }}" \
-            "${{ needs.frontend-e2e-responsive.result }}"; do
+            "${{ needs.frontend-e2e-responsive.result }}" \
+            "${{ needs.pipeline-governance.result }}"; do
             if [[ "$result" == "failure" ]]; then
               echo "CI Router Result: falha real detectada em job obrigatório."
               exit 1

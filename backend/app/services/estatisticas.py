@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.requisito import Requisito
+from app.services.estatisticas_historico import calcular_tendencias, carregar_historico, registrar_snapshot
+from app.services.external_sources_registry import listar_fontes_externas, resumo_fontes_externas
 
 
 @dataclass(frozen=True)
@@ -57,16 +59,16 @@ def _fonte_interna(id_: str, nome: str, origem: str, coletado_em: str, confiabil
     )
 
 
-def _fonte_externa_registry(coletado_em: str) -> FonteEstatistica:
+def _fonte_externa_registry(coletado_em: str, source_id: str, nome: str, origem: str, ttl: int, confiabilidade: str) -> FonteEstatistica:
     return FonteEstatistica(
-        id='external-sources-registry',
+        id=source_id,
         tipo='externa',
-        nome='Registry de fontes externas',
-        origem='pendente-conector-backend',
+        nome=nome,
+        origem=origem,
         coletadoEm=coletado_em,
-        ttlMinutos=1440,
-        confiabilidade='baixa',
-        versaoConector='planejado-v2',
+        ttlMinutos=ttl,
+        confiabilidade=confiabilidade,
+        versaoConector='registry-v1',
     )
 
 
@@ -104,9 +106,12 @@ def _status_counts(requisitos: list[Requisito]) -> dict[str, int]:
     return counts
 
 
-def gerar_indicadores_estatisticos(db: Session) -> list[dict[str, Any]]:
+def gerar_indicadores_estatisticos(db: Session, tendencias: dict[str, str] | None = None) -> list[dict[str, Any]]:
     coletado_em = _agora_iso()
+    tendencias = tendencias or {}
     requisitos = db.query(Requisito).all()
+    resumo_externo = resumo_fontes_externas()
+    fontes_externas = listar_fontes_externas()
     total_requisitos = len(requisitos)
     requisitos_com_bdd = sum(1 for requisito in requisitos if _tem_bdd(requisito))
     requisitos_com_lacuna = sum(1 for requisito in requisitos if _tem_lacuna(requisito))
@@ -127,7 +132,7 @@ def gerar_indicadores_estatisticos(db: Session) -> list[dict[str, Any]]:
             categoria='Requisitos',
             valorAtual=total_requisitos,
             unidade='itens',
-            tendencia='indefinida',
+            tendencia=tendencias.get('total-requisitos', 'indefinida'),
             estadoAtual='adequado' if total_requisitos > 0 else 'nao_medido',
             estadoAlvo='avancado',
             formula='count(requisitos.id)',
@@ -142,7 +147,7 @@ def gerar_indicadores_estatisticos(db: Session) -> list[dict[str, Any]]:
             categoria='Requisitos',
             valorAtual=cobertura_bdd,
             unidade='%',
-            tendencia='indefinida',
+            tendencia=tendencias.get('requisitos-com-bdd', 'indefinida'),
             estadoAtual=_estado_percentual(cobertura_bdd) if total_requisitos else 'nao_medido',
             estadoAlvo='avancado',
             formula='requisitos com marcadores BDD / total de requisitos * 100',
@@ -157,7 +162,7 @@ def gerar_indicadores_estatisticos(db: Session) -> list[dict[str, Any]]:
             categoria='Qualidade',
             valorAtual=ambiguidade,
             unidade='%',
-            tendencia='indefinida',
+            tendencia=tendencias.get('requisitos-com-lacunas', 'indefinida'),
             estadoAtual='adequado' if ambiguidade <= 10 and total_requisitos else ('atencao' if ambiguidade <= 30 else 'critico'),
             estadoAlvo='adequado',
             formula='requisitos com lacunas / total de requisitos * 100',
@@ -172,7 +177,7 @@ def gerar_indicadores_estatisticos(db: Session) -> list[dict[str, Any]]:
             categoria='Operação',
             valorAtual=conclusao,
             unidade='%',
-            tendencia='indefinida',
+            tendencia=tendencias.get('requisitos-concluidos', 'indefinida'),
             estadoAtual=_estado_percentual(conclusao) if total_requisitos else 'nao_medido',
             estadoAlvo='avancado',
             formula='requisitos com status finalizado / total de requisitos * 100',
@@ -198,17 +203,34 @@ def gerar_indicadores_estatisticos(db: Session) -> list[dict[str, Any]]:
         IndicadorEstatistico(
             id='fontes-externas-validas',
             nome='Fontes externas válidas',
-            descricao='Fontes externas cadastradas com origem, data de coleta, confiabilidade e validade.',
+            descricao='Fontes externas autorizadas, dentro do TTL e sem mock marcado como real.',
             categoria='Fontes externas',
-            valorAtual=0,
+            valorAtual=resumo_externo['autorizadas_validas'],
             unidade='fontes',
-            tendencia='indefinida',
-            estadoAtual='nao_medido',
+            tendencia=tendencias.get('fontes-externas-validas', 'indefinida'),
+            estadoAtual='nao_medido' if resumo_externo['total'] == 0 else (
+                'adequado' if resumo_externo['autorizadas_validas'] > 0 else 'atencao'
+            ),
             estadoAlvo='adequado',
-            formula='fontes externas dentro do TTL / total de fontes externas cadastradas',
-            fonte=_fonte_externa_registry(coletado_em),
-            evidencias=['contrato de fonte externa definido no backend'],
-            pendencias=['implementar registry de fontes externas autorizadas', 'definir conectores externos aprovados'],
+            formula='fontes externas autorizadas dentro do TTL / total de fontes externas cadastradas',
+            fonte=_fonte_externa_registry(
+                coletado_em,
+                'external-sources-registry',
+                'Registry de fontes externas',
+                'config/external-sources-registry.json',
+                1440,
+                'media' if resumo_externo['autorizadas_validas'] else 'baixa',
+            ),
+            evidencias=[
+                'config/external-sources-registry.json',
+                'backend/app/services/external_sources_registry.py',
+            ],
+            pendencias=[
+                pendencia
+                for fonte in fontes_externas
+                if not fonte.autorizado
+                for pendencia in [f"auditar conector {fonte.id}"]
+            ] or ([] if resumo_externo['autorizadas_validas'] else ['autorizar conectores externos auditados']),
         ),
     ]
 
@@ -234,11 +256,13 @@ def indicador_to_dict(indicador: IndicadorEstatistico) -> dict[str, Any]:
     }
 
 
-def gerar_snapshot_estatisticas(db: Session, correlation_id: str) -> dict[str, Any]:
-    indicadores = gerar_indicadores_estatisticos(db)
+def gerar_snapshot_estatisticas(db: Session, correlation_id: str, persistir_historico: bool = True) -> dict[str, Any]:
+    historico_anterior = carregar_historico()
+    tendencias = calcular_tendencias(historico_anterior) if historico_anterior else {}
+    indicadores = gerar_indicadores_estatisticos(db, tendencias=tendencias)
     invalidos = sum(1 for indicador in indicadores if not indicador.get('fonte') or not indicador.get('formula'))
-    return {
-        'schema_version': '2.0.0',
+    snapshot = {
+        'schema_version': '2.1.0',
         'correlation_id': correlation_id,
         'coletado_em': _agora_iso(),
         'ambiente': settings.normalized_environment,
@@ -248,6 +272,24 @@ def gerar_snapshot_estatisticas(db: Session, correlation_id: str) -> dict[str, A
             'externos': sum(1 for indicador in indicadores if indicador['fonte']['tipo'] == 'externa'),
             'invalidos': invalidos,
             'nao_medidos': sum(1 for indicador in indicadores if indicador['estadoAtual'] == 'nao_medido'),
+            'fontes_externas': resumo_fontes_externas(),
         },
         'indicadores': indicadores,
+    }
+    if persistir_historico:
+        historico = registrar_snapshot(snapshot)
+        snapshot['historico'] = {
+            'pontos': len(historico),
+            'ultima_coleta': historico[-1]['coletado_em'] if historico else None,
+        }
+    return snapshot
+
+
+def gerar_historico_estatisticas() -> dict[str, Any]:
+    historico = carregar_historico()
+    return {
+        'schema_version': '1.0.0',
+        'pontos': len(historico),
+        'snapshots': historico,
+        'tendencias': calcular_tendencias(historico),
     }

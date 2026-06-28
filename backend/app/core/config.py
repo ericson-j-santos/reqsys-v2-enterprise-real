@@ -173,6 +173,13 @@ class Settings(BaseSettings):
         if not self.azure_configured:
             errors.append('Azure AD obrigatório em produção: configure AZURE_TENANT_ID e AZURE_CLIENT_ID')
 
+        from app.services.external_sources_registry import validar_registry_producao
+
+        try:
+            validar_registry_producao()
+        except RuntimeError as exc:
+            errors.append(str(exc))
+
         if errors:
             raise RuntimeError('Configuração insegura para produção: ' + '; '.join(errors))
 

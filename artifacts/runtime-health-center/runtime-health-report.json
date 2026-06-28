@@ -1,7 +1,7 @@
 {
   "schema_version": "1.1.0",
   "report_type": "runtime_health_center",
-  "generated_at_utc": "2026-06-26T22:18:27.199526+00:00",
+  "generated_at_utc": "2026-06-28T00:08:30.095215+00:00",
   "mode": "local_ci_read_only",
   "guardrails": [
     "no_network",
@@ -11,10 +11,10 @@
   ],
   "domains": {
     "ci_cd": {
-      "status": "partial",
-      "score": 45,
+      "status": "passed",
+      "score": 100,
       "signals_total": 4,
-      "signals_available": 3,
+      "signals_available": 4,
       "signals": [
         {
           "id": "enterprise_fast_ci",
@@ -43,18 +43,18 @@
         {
           "id": "runtime_health_validator_report",
           "path": "artifacts/runtime-health-validator/runtime-health-validator.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "passed",
           "parse_error": false
         }
       ]
     },
     "evidence_gate": {
-      "status": "partial",
-      "score": 45,
+      "status": "passed",
+      "score": 100,
       "signals_total": 4,
-      "signals_available": 3,
+      "signals_available": 4,
       "signals": [
         {
           "id": "pr_evidence_gate_workflow",
@@ -83,18 +83,18 @@
         {
           "id": "runtime_operational_evidence_graph",
           "path": "artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "passed",
           "parse_error": false
         }
       ]
     },
     "governance": {
-      "status": "partial",
-      "score": 45,
+      "status": "passed",
+      "score": 100,
       "signals_total": 4,
-      "signals_available": 3,
+      "signals_available": 4,
       "signals": [
         {
           "id": "agents_operational_rules",
@@ -123,9 +123,9 @@
         {
           "id": "governance_gate_report",
           "path": "artifacts/operational-governance-gate/operational-governance-gate.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "passed",
           "parse_error": false
         }
       ]
@@ -134,7 +134,7 @@
       "status": "partial",
       "score": 45,
       "signals_total": 4,
-      "signals_available": 2,
+      "signals_available": 4,
       "signals": [
         {
           "id": "runtime_risk_scoring_workflow",
@@ -155,17 +155,17 @@
         {
           "id": "runtime_health_validator_report",
           "path": "artifacts/runtime-health-validator/runtime-health-validator.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "passed",
           "parse_error": false
         },
         {
           "id": "operational_stability_score_artifact",
           "path": "artifacts/operational-stability-score/operational-stability-score.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "partial",
           "parse_error": false
         }
       ]
@@ -251,10 +251,10 @@
       ]
     },
     "remediation": {
-      "status": "partial",
-      "score": 45,
+      "status": "warning",
+      "score": 70,
       "signals_total": 4,
-      "signals_available": 3,
+      "signals_available": 4,
       "signals": [
         {
           "id": "runtime_remediation_core",
@@ -283,9 +283,9 @@
         {
           "id": "failure_pattern_report",
           "path": "artifacts/failure-pattern-engine/failure-pattern-report.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "warning",
           "parse_error": false
         }
       ]
@@ -294,34 +294,34 @@
   "ingested_artifacts": {
     "status": "passed",
     "artifacts_total": 7,
-    "artifacts_available": 1,
+    "artifacts_available": 5,
     "artifacts": [
       {
         "id": "runtime_health_validator",
         "path": "artifacts/runtime-health-validator/runtime-health-validator.json",
-        "available": false,
-        "status": "missing",
+        "available": true,
+        "status": "passed",
         "parse_error": false
       },
       {
         "id": "runtime_operational_evidence_graph",
         "path": "artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json",
-        "available": false,
-        "status": "missing",
+        "available": true,
+        "status": "passed",
         "parse_error": false
       },
       {
         "id": "operational_risk_engine",
         "path": "artifacts/operational-risk-engine/operational-risk-engine.json",
-        "available": false,
-        "status": "missing",
+        "available": true,
+        "status": "passed",
         "parse_error": false
       },
       {
         "id": "operational_stability_score",
         "path": "artifacts/operational-stability-score/operational-stability-score.json",
-        "available": false,
-        "status": "missing",
+        "available": true,
+        "status": "partial",
         "parse_error": false
       },
       {
@@ -350,14 +350,14 @@
   "runtime_operational_evidence_graph": {
     "status": "passed",
     "source": "local_artifacts",
-    "nodes": 1
+    "nodes": 5
   },
   "runtime_risk_scoring": {
     "status": "partial",
     "drift_level": "low"
   },
   "pr_evidence_gate": {
-    "status": "partial",
+    "status": "passed",
     "duplicated": false
   },
   "environment_drift": {
@@ -479,11 +479,11 @@
     "runtime-health-report.json": "passed",
     "Score consolidado de maturidade": "passed",
     "Environment Drift Detector": "passed",
-    "Remediation Executor governado": "partial"
+    "Remediation Executor governado": "warning"
   },
   "gold_standard_depth": {
     "strategy": "parar_expansao_horizontal_e_aprofundar_capacidades_existentes",
-    "overall_score": 63,
+    "overall_score": 86,
     "overall_status": "warning",
     "axes": {
       "runtime": {
@@ -499,13 +499,17 @@
         "status": "passed",
         "score": 100,
         "evidence": [
+          "runtime_health_validator",
+          "runtime_operational_evidence_graph",
+          "operational_risk_engine",
+          "operational_stability_score",
           "public_access_validation"
         ],
         "operator_action": "Publicar artifacts faltantes para reduzir diagnostico manual e manter trilha auditavel."
       },
       "operational_ux": {
-        "status": "partial",
-        "score": 45,
+        "status": "passed",
+        "score": 100,
         "evidence": [
           "next_required_actions",
           "gold_standard_status",
@@ -514,8 +518,8 @@
         "operator_action": "Consumir next_required_actions como fila unica de operacao, evitando criar novos paineis paralelos."
       },
       "live_analytics": {
-        "status": "partial",
-        "score": 45,
+        "status": "passed",
+        "score": 100,
         "evidence": [
           "ingested_artifacts",
           "runtime_operational_evidence_graph"
@@ -533,8 +537,8 @@
         "operator_action": "Corrigir drift medio/alto antes de promover dev -> hml -> prod."
       },
       "autonomous_operation": {
-        "status": "partial",
-        "score": 45,
+        "status": "warning",
+        "score": 70,
         "evidence": [
           "remediation",
           "guardrails",
@@ -543,7 +547,9 @@
         "operator_action": "Manter automacao assistida e allowlisted ate evidenciar baixa recorrencia de falhas."
       }
     },
-    "blockers": [],
+    "blockers": [
+      "autonomous_operation"
+    ],
     "operational_focus_order": [
       "runtime",
       "observability",
@@ -553,14 +559,11 @@
       "autonomous_operation"
     ]
   },
-  "base_maturity_percent": 53,
-  "maturity_percent": 50,
-  "operational_risk": "high",
-  "confidence_level": "low",
+  "base_maturity_percent": 83,
+  "maturity_percent": 80,
+  "operational_risk": "medium",
+  "confidence_level": "medium",
   "next_required_actions": [
-    "Completar sinais obrigatorios e revisar alertas do dominio ci_cd.",
-    "Completar sinais obrigatorios e revisar alertas do dominio evidence_gate.",
-    "Completar sinais obrigatorios e revisar alertas do dominio governance.",
     "Completar sinais obrigatorios e revisar alertas do dominio runtime_risk.",
     "Completar sinais obrigatorios e revisar alertas do dominio living_architecture.",
     "Completar sinais obrigatorios e revisar alertas do dominio remediation."

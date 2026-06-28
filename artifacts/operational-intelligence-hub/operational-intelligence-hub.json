@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at_utc": "2026-06-28T00:08:29.855552+00:00",
+  "hub_score": {
+    "score": 0.0,
+    "status": "VERMELHO",
+    "components": [
+      {
+        "name": "operational_ci_intelligence",
+        "score": 0.0,
+        "weight": 0.35
+      },
+      {
+        "name": "failure_pattern_engine",
+        "score": 0,
+        "weight": 0.2
+      }
+    ],
+    "confidence": "media"
+  },
+  "available_layers": [
+    "operational_ci_intelligence",
+    "failure_pattern_engine"
+  ],
+  "missing_layers": [
+    "operational_health",
+    "actions_deep_diagnostic"
+  ],
+  "source_reports": {
+    "operational_health": {
+      "available": false,
+      "path": "artifacts/operational-health/operational-health.json",
+      "status": null,
+      "score": null,
+      "error": null
+    },
+    "operational_ci_intelligence": {
+      "available": true,
+      "path": "artifacts/operational-ci-intelligence/operational-ci-intelligence.json",
+      "status": "VERMELHO",
+      "score": null,
+      "error": null
+    },
+    "failure_pattern_engine": {
+      "available": true,
+      "path": "artifacts/failure-pattern-engine/failure-pattern-report.json",
+      "status": "VERMELHO",
+      "score": 100,
+      "error": null
+    },
+    "actions_deep_diagnostic": {
+      "available": false,
+      "path": "artifacts/deep-diagnostic/deep-diagnostic.json",
+      "status": null,
+      "score": null,
+      "error": null
+    }
+  },
+  "recommendations": [
+    "Congelar novos incrementos grandes ate estabilizar CI operacional.",
+    "Priorizar Pareto tier A: Regressao funcional ou teste desatualizado. (test_failure) — 1 ocorrência(s), impacto 80.",
+    "Corrigir regressao de teste antes de qualquer rerun adicional.",
+    "Validar nomenclatura, retention e ordem de publicacao dos artifacts."
+  ],
+  "blocked_actions": [
+    "auto_merge",
+    "auto_fix_in_production",
+    "unrestricted_rerun",
+    "bypass_ci",
+    "hide_failure_with_continue_on_error"
+  ],
+  "limits": [
+    "Relatorio consolidado depende dos artifacts/arquivos de entrada disponiveis.",
+    "Ausencia de evidencia em uma camada nao significa ausencia de problema.",
+    "Nenhuma remediacao, rerun, merge ou deploy e executado por este hub."
+  ]
+}

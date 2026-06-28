@@ -39,6 +39,22 @@ kill_timeout = "5s"
     path = "/health"
     protocol = "http"
 
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "45s"
+    method = "GET"
+    path = "/api/runtime/health"
+    protocol = "http"
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "45s"
+    method = "GET"
+    path = "/api/runtime/readiness"
+    protocol = "http"
+
 [[vm]]
   memory = "512mb"
   cpu_kind = "shared"
