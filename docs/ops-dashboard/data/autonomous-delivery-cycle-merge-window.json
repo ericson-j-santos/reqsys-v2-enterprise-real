@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "merge_window": {
+    "enabled": false,
+    "reason": "initial_version_uses_labels_and_green_ci_only",
+    "future_option": "restrict_schedule_to_low_risk_windows_after_metrics"
+  },
+  "current_cadence": "every_30_minutes",
+  "max_prs_per_cycle": 1
+}
