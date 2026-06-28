@@ -96,6 +96,14 @@ Inventário centralizado de **schemas, eventos, APIs, payloads, outputs e pipeli
 | `/monitoramento-operacional` | `operational_intelligence.py` | Operational health dashboard schema |
 | `/api/govbi` | `govbi.py` | GovBI IA |
 | `/api/rag` | `rag_governado.py` | RAG governado — ver `docs/ai-governance/05-DADOS/RAG_STANDARD.md` |
+| `/v1/integracoes/figma-github` | `figma_github.py` | Sync Figma ↔ GitHub (`POST /sync`, `GET /status`) |
+| `/v1/webhooks/figma` | `webhooks.py` | Webhook Figma (assinatura `X-Figma-Signature`) |
+
+### Frentes de integração registradas
+
+| ID | Frente | Tópico | Feature flag |
+| --- | --- | --- | --- |
+| `figma-github` | Figma GitHub — retorno em tela | integração | `ENABLE_FIGMA_GITHUB_SYNC` |
 
 ### Contrato frontend ↔ backend
 

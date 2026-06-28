@@ -42,6 +42,16 @@ Mapa navegável de módulos, fluxos, pipelines, ownership, eventos, dependência
 | `actions_runtime_center.py` | `/v1/actions-runtime` | GitHub Actions |
 | `govbi.py` | `/api/govbi` | GovBI IA |
 | `rag_governado.py` | `/api/rag` | RAG governado |
+| `figma_github.py` | `/v1/integracoes/figma-github` | Sync Figma ↔ GitHub e status de vínculos |
+| `webhooks.py` | `/v1/webhooks/figma` | Webhook Figma para sync bidirecional |
+
+### Frentes de integração
+
+| Frente | Tópico | Rota | ADR | Status |
+| --- | --- | --- | --- | --- |
+| Figma GitHub — retorno em tela | integração | `/figma-github` | [ADR-021](../adr/ADR-021-figma-github-retorno-em-tela.md) | implementado |
+
+Tópico Copilot Studio associado: **Sincronizar Figma GitHub** (aciona `POST /v1/integracoes/figma-github/sync` e orienta consulta em `/figma-github`).
 
 ---
 

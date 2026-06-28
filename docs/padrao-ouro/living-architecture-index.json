@@ -163,6 +163,27 @@
     { "from": "agents", "to": "living-architecture-index.json", "type": "context", "contract": "docs/padrao-ouro/living-architecture-index.json" },
     { "from": "ci", "to": "evidence-graph", "type": "analytics", "contract": "runtime-operational-evidence-graph.yml" }
   ],
+  "integration_fronts": [
+    {
+      "id": "figma-github",
+      "frente": "Figma GitHub — retorno em tela",
+      "topico": "integracao",
+      "referencia": "ADR-021",
+      "status": "implementado",
+      "owner": "Backend Core",
+      "frontend_route": "/figma-github",
+      "frontend_view": "frontend/src/views/FigmaGithubView.vue",
+      "backend_router": "backend/app/api/figma_github.py",
+      "backend_prefix": "/v1/integracoes/figma-github",
+      "webhook": "/v1/webhooks/figma",
+      "feature_flag": "ENABLE_FIGMA_GITHUB_SYNC",
+      "docs": [
+        "docs/adr/ADR-021-figma-github-retorno-em-tela.md",
+        "docs/figma-github-retorno-em-tela.md"
+      ],
+      "copilot_topic": "Sincronizar Figma GitHub"
+    }
+  ],
   "dashboards": [
     { "id": "operational-command-center", "path": "docs/dashboard/operational-command-center.md" },
     { "id": "operational-evidence-hub", "path": "docs/dashboard/operational-evidence-hub.html" },

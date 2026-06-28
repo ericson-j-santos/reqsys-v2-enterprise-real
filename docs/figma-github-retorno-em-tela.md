@@ -45,9 +45,8 @@ A tela consome os endpoints já existentes:
 
 ## Pendências conhecidas
 
-- Inserção do item no menu lateral ficou pendente porque o update do arquivo `frontend/src/layouts/AppLayout.vue` foi bloqueado pelo conector durante esta execução.
-- A tela já está acessível pela rota direta `/figma-github`.
-- É necessário validar build frontend e fluxo E2E após execução do CI.
+- Validar build frontend e fluxo E2E após execução do CI.
+- Configurar `FIGMA_ACCESS_TOKEN`, `FIGMA_DEFAULT_FILE_KEY` e `FIGMA_GITHUB_DEFAULT_REPO` nos ambientes que forem usar sync real.
 
 ## Checklist de produção
 
@@ -58,7 +57,10 @@ A tela consome os endpoints já existentes:
 | Retorno em tela | Implementado |
 | Analítico em tabela | Implementado |
 | Filtro por status | Implementado |
-| Menu lateral | Pendente por bloqueio do conector |
+| Menu lateral | Implementado |
+| Frente/tópico no Mapa da Solução | Implementado |
+| Registro em Living Architecture Index | Implementado |
+| Tópico Copilot Studio (Sincronizar Figma GitHub) | Documentado |
 | Teste local | Pendente |
 | CI | Pendente |
 | Deploy produção | Bloqueado até CI verde |
