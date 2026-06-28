@@ -24,6 +24,7 @@ def test_build_payload_contains_core_evidence_items() -> None:
     assert "runtime_merge_queue" in evidence_ids
     assert "preview_environment" in evidence_ids
     assert "governed_pr_automation" in evidence_ids
+    assert "predictive_regression" in evidence_ids
 
 
 def test_write_payload_creates_valid_json(tmp_path: Path) -> None:

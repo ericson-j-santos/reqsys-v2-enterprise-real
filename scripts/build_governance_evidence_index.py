@@ -84,6 +84,28 @@ def evidence_items() -> list[dict[str, Any]]:
             },
         },
         {
+            "id": "predictive_regression",
+            "title": "Predictive Operational Regression Gate",
+            "workflow": "Predictive Regression Guard",
+            "script": "scripts/predict_operational_regression.py",
+            "artifact": "predictive-regression-gate-evidence",
+            "json_path": "artifacts/runtime-governance/predict-operational-regression-gate.json",
+            "status": "dry_run",
+            "dashboard_ready": True,
+            "drilldown_fields": [
+                "risk",
+                "regression_predicted",
+                "blocking_reasons",
+                "signals",
+                "dimension_risks",
+                "recommendation",
+            ],
+            "links": {
+                "workflow": f"https://github.com/{REPO}/actions/workflows/predictive-regression-guard.yml",
+                "source": f"https://github.com/{REPO}/blob/main/scripts/predict_operational_regression.py",
+            },
+        },
+        {
             "id": "pr_evidence_gate",
             "title": "PR Evidence Gate",
             "workflow": "PR Evidence Gate",
