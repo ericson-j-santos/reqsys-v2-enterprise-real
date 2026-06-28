@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "status_index": {
+    "implementation": "done",
+    "documentation": "done",
+    "contracts": "done",
+    "tests": "done",
+    "ci": "pending_pr",
+    "first_dry_run": "pending_after_merge",
+    "dashboard": "next_increment"
+  }
+}
