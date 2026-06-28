@@ -34,7 +34,7 @@ jobs:
           import os
           from datetime import datetime, timezone
           from pathlib import Path
-
+          
           groups = [
               {'range': '326-338', 'prs': 13, 'state': 'merged', 'focus': 'observability_and_analytics'},
               {'range': '339-350', 'prs': 12, 'state': 'merged', 'focus': 'command_center_foundation'},

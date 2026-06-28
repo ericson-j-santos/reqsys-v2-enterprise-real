@@ -41,7 +41,7 @@ jobs:
           import json
           import os
           from datetime import datetime, timedelta, timezone
-
+          
           pr_number = str(os.environ.get("PR_NUMBER") or "0")
           head_sha = os.environ.get("HEAD_SHA") or "unknown"
           now = datetime.now(timezone.utc)

@@ -97,7 +97,7 @@ jobs:
 
           cat > "${REPORT_DIR}/summary.md" <<EOF
           # Runtime Operational Health
-
+          
           | Campo | Valor |
           |---|---|
           | URL | ${TARGET_URL} |
@@ -108,9 +108,9 @@ jobs:
           | Run ID | ${GITHUB_RUN_ID} |
           | SHA | ${GITHUB_SHA} |
           | UTC | $(date -u +%Y-%m-%dT%H:%M:%SZ) |
-
+          
           ## Critérios
-
+          
           - Healthy: HTTP 2xx/3xx.
           - Unhealthy: HTTP 4xx/5xx/000.
           - Evidência operacional publicada como artifact.

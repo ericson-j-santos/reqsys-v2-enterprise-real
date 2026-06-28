@@ -43,7 +43,7 @@ jobs:
           mkdir -p ci-validation-evidence
           cat > ci-validation-evidence/pr-governed-ci-self-check.md <<EOF
           # PR Governed CI Self Check
-
+          
           | Campo | Valor |
           |---|---|
           | Workflow | PR Governed CI Validation |

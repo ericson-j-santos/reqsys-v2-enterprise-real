@@ -33,7 +33,7 @@ jobs:
           import json
           from datetime import datetime, timezone
           from pathlib import Path
-
+          
           dashboard = Path('docs/dashboard/live-operational-dashboard.dynamic.html')
           index = Path('docs/dashboard/operational-command-center.md')
           required_sources = [

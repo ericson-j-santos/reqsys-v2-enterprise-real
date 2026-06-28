@@ -34,7 +34,7 @@ jobs:
           import os
           from datetime import datetime, timezone
           from pathlib import Path
-
+          
           dimensions = [
               {'name': 'delivery_visibility', 'current_percent': 99.2, 'target_percent': 99.5},
               {'name': 'dashboard_delivery_drilldown', 'current_percent': 92.0, 'target_percent': 98.0},

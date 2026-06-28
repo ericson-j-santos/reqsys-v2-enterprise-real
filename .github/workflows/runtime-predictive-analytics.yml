@@ -60,19 +60,19 @@ jobs:
           import os
           from datetime import datetime, timezone
           from pathlib import Path
-
+          
           success_rate = float(os.environ.get('SUCCESS_RATE_PERCENT') or 95)
           failure_rate = float(os.environ.get('FAILURE_RATE_PERCENT') or 5)
           p95_seconds = float(os.environ.get('P95_SECONDS') or 900)
           max_seconds = float(os.environ.get('MAX_SECONDS') or 3600)
-
+          
           risk_score = 0
           risk_score += max(0, 95 - success_rate) * 2
           risk_score += max(0, failure_rate - 5) * 4
           risk_score += max(0, p95_seconds - 900) / 60
           risk_score += max(0, max_seconds - 3600) / 120
           risk_score = min(100, round(risk_score, 2))
-
+          
           if risk_score >= 70:
               risk_level = 'high'
           elif risk_score >= 35:
@@ -81,7 +81,7 @@ jobs:
               risk_level = 'medium_low'
           else:
               risk_level = 'low'
-
+          
           predictions = []
           if success_rate < 95:
               predictions.append('probable_ci_instability')
@@ -93,7 +93,7 @@ jobs:
               predictions.append('max_lead_time_high_risk')
           if not predictions:
               predictions.append('stable_operational_trend')
-
+          
           report = {
               'schema_version': '1.0.0',
               'generated_at': datetime.now(timezone.utc).isoformat(),
@@ -122,7 +122,7 @@ jobs:
                   'does_not_relax_required_gates': True,
               },
           }
-
+          
           Path('audit/predictive').mkdir(parents=True, exist_ok=True)
           Path('audit/predictive/runtime-predictive-analytics.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
           Path('audit/predictive/runtime-predictive-analytics.md').write_text('\n'.join([

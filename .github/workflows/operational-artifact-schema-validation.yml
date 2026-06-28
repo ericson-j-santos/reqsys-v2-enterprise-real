@@ -36,13 +36,13 @@ jobs:
           import json
           from datetime import datetime, timezone
           from pathlib import Path
-
+          
           contracts = {
               'ci-lead-time-analytics': Path('docs/contracts/ci-lead-time-analytics.schema.json'),
               'operational-history-snapshot': Path('docs/contracts/operational-history-snapshot.schema.json'),
               'runtime-predictive-analytics': Path('docs/contracts/runtime-predictive-analytics.schema.json'),
           }
-
+          
           samples = {
               'ci-lead-time-analytics': {
                   'schema_version': '1.0.1',
@@ -96,7 +96,7 @@ jobs:
                   'guardrails': {'no_secrets': True},
               },
           }
-
+          
           def assert_type(name, key, expected_type, value):
               if expected_type == 'string' and not isinstance(value, str):
                   raise AssertionError(f'{name}.{key} should be string')
@@ -108,7 +108,7 @@ jobs:
                   raise AssertionError(f'{name}.{key} should be object')
               if expected_type == 'array' and not isinstance(value, list):
                   raise AssertionError(f'{name}.{key} should be array')
-
+          
           report = []
           for name, path in contracts.items():
               if not path.exists():
@@ -129,7 +129,7 @@ jobs:
                   if enum and sample[key] not in enum:
                       raise AssertionError(f'{name}.{key} must be one of {enum}')
               report.append({'contract': name, 'status': 'passed', 'required_keys': len(required)})
-
+          
           Path('audit/schema-validation').mkdir(parents=True, exist_ok=True)
           Path('audit/schema-validation/operational-artifact-schema-validation.json').write_text(json.dumps({'schema_version': '1.0.0', 'status': 'passed', 'contracts': report}, indent=2), encoding='utf-8')
           print(json.dumps(report, indent=2))

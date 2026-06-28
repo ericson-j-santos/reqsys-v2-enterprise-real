@@ -216,7 +216,7 @@ jobs:
 
           cat > "${REPORT_DIR}/summary.md" <<EOF
           # Fly.io Governed Command Center — Evidência Operacional
-
+          
           | Campo | Valor |
           |---|---|
           | Correlation ID | ${CORRELATION_ID_SAFE} |
@@ -232,9 +232,9 @@ jobs:
           | Actor | ${GITHUB_ACTOR} |
           | SHA | ${GITHUB_SHA} |
           | Gerado em UTC | ${GENERATED_AT_UTC} |
-
+          
           ## Guardrails aplicados
-
+          
           - Execução somente por \`workflow_dispatch\`.
           - Comandos limitados por \`choice\` e por validação bash.
           - Nome do app validado antes da execução.

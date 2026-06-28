@@ -34,7 +34,7 @@ jobs:
           import os
           from datetime import datetime, timezone
           from pathlib import Path
-
+          
           checks = [
               {'name': 'parallel_pr_policy', 'status': 'passed', 'score': 100, 'evidence': 'max_3_prs_standard'},
               {'name': 'required_ci_green_policy', 'status': 'passed', 'score': 100, 'evidence': 'required_workflows_defined'},

@@ -38,7 +38,7 @@ jobs:
           import json
           from datetime import datetime, timezone
           from pathlib import Path
-
+          
           root = Path('.')
           map_path = root / 'docs/traceability/living-architecture-map.json'
           schema_path = root / 'docs/contracts/living-architecture-map.schema.json'
@@ -56,19 +56,19 @@ jobs:
               'ci_evidence',
               'validation',
           ]
-
+          
           issues = []
           data = json.loads(map_path.read_text(encoding='utf-8'))
           json.loads(schema_path.read_text(encoding='utf-8'))
-
+          
           for section in required_sections:
               if section not in data:
                   issues.append({'severity': 'error', 'type': 'missing_section', 'target': section})
-
+          
           internal_paths = set()
           internal_paths.add(data.get('governance', {}).get('canonical_runbook', ''))
           internal_paths.add(data.get('validation', {}).get('workflow', ''))
-
+          
           for workflow in data.get('workflows', []):
               internal_paths.add(workflow.get('path', ''))
               internal_paths.update(workflow.get('runbooks', []))
@@ -90,19 +90,19 @@ jobs:
               internal_paths.update(recent_pr.get('evidence', []))
           for evidence in data.get('ci_evidence', []):
               internal_paths.add(evidence.get('path', ''))
-
+          
           for candidate in sorted(path for path in internal_paths if path):
               if candidate.startswith(('http://', 'https://')):
                   continue
               if not (root / candidate).exists():
                   issues.append({'severity': 'warning', 'type': 'missing_internal_path', 'target': candidate})
-
+          
           workflow_ids = {workflow.get('id') for workflow in data.get('workflows', [])}
           for artifact in data.get('artifacts', []):
               producer = artifact.get('producer_workflow')
               if producer not in workflow_ids:
                   issues.append({'severity': 'warning', 'type': 'artifact_unknown_producer_workflow', 'target': artifact.get('id', 'unknown'), 'producer_workflow': producer})
-
+          
           report = {
               'schema_version': '1.0.0',
               'generated_at': datetime.now(timezone.utc).isoformat(),

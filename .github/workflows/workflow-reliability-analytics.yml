@@ -36,70 +36,70 @@ jobs:
           echo "" >> workflow-reliability-analytics.md
 
           python - <<'PY'
-from pathlib import Path
-import os
-
-workflow = os.getenv('WORKFLOW_NAME', '')
-conclusion = os.getenv('WORKFLOW_CONCLUSION', '')
-
-failure_rate = 0
-flaky_probability = 'LOW'
-trend = 'STABLE'
-reliability_score = 100
-
-if conclusion != 'success':
-    failure_rate = 35
-    reliability_score -= 30
-    trend = 'DEGRADING'
-    flaky_probability = 'MEDIUM'
-
-if 'Monitorador' in workflow:
-    reliability_score -= 5
-    flaky_probability = 'MEDIUM'
-
-if reliability_score < 70:
-    flaky_probability = 'HIGH'
-    trend = 'CRITICAL'
-
-ranking = []
-ranking.append((workflow, reliability_score))
-ranking.sort(key=lambda item: item[1])
-
-lines = []
-lines.append('## Reliability Metrics')
-lines.append(f'- Reliability score: {reliability_score}/100')
-lines.append(f'- Failure rate estimate: {failure_rate}%')
-lines.append(f'- Flaky probability: {flaky_probability}')
-lines.append(f'- Trend: {trend}')
-lines.append('')
-lines.append('## Workflow Ranking')
-lines.append('| Workflow | Reliability Score |')
-lines.append('|---|---|')
-
-for item in ranking:
-    lines.append(f'| {item[0]} | {item[1]}/100 |')
-
-lines.append('')
-lines.append('## Recommendations')
-
-if reliability_score >= 90:
-    lines.append('- Workflow ecosystem stable.')
-    lines.append('- Maintain operational monitoring cadence.')
-elif reliability_score >= 75:
-    lines.append('- Reliability degradation signals detected.')
-    lines.append('- Review recurrent failures and flaky patterns.')
-else:
-    lines.append('- Critical workflow instability detected.')
-    lines.append('- Prioritize CI stabilization before new releases.')
-
-lines.append('')
-lines.append('## Governance')
-lines.append('- Preserve mandatory CI gates.')
-lines.append('- Avoid force merges with unstable workflows.')
-lines.append('- Track workflow recurrence patterns.')
-
-Path('workflow-analytics.md').write_text('\n'.join(lines), encoding='utf-8')
-PY
+          from pathlib import Path
+          import os
+          
+          workflow = os.getenv('WORKFLOW_NAME', '')
+          conclusion = os.getenv('WORKFLOW_CONCLUSION', '')
+          
+          failure_rate = 0
+          flaky_probability = 'LOW'
+          trend = 'STABLE'
+          reliability_score = 100
+          
+          if conclusion != 'success':
+              failure_rate = 35
+              reliability_score -= 30
+              trend = 'DEGRADING'
+              flaky_probability = 'MEDIUM'
+          
+          if 'Monitorador' in workflow:
+              reliability_score -= 5
+              flaky_probability = 'MEDIUM'
+          
+          if reliability_score < 70:
+              flaky_probability = 'HIGH'
+              trend = 'CRITICAL'
+          
+          ranking = []
+          ranking.append((workflow, reliability_score))
+          ranking.sort(key=lambda item: item[1])
+          
+          lines = []
+          lines.append('## Reliability Metrics')
+          lines.append(f'- Reliability score: {reliability_score}/100')
+          lines.append(f'- Failure rate estimate: {failure_rate}%')
+          lines.append(f'- Flaky probability: {flaky_probability}')
+          lines.append(f'- Trend: {trend}')
+          lines.append('')
+          lines.append('## Workflow Ranking')
+          lines.append('| Workflow | Reliability Score |')
+          lines.append('|---|---|')
+          
+          for item in ranking:
+              lines.append(f'| {item[0]} | {item[1]}/100 |')
+          
+          lines.append('')
+          lines.append('## Recommendations')
+          
+          if reliability_score >= 90:
+              lines.append('- Workflow ecosystem stable.')
+              lines.append('- Maintain operational monitoring cadence.')
+          elif reliability_score >= 75:
+              lines.append('- Reliability degradation signals detected.')
+              lines.append('- Review recurrent failures and flaky patterns.')
+          else:
+              lines.append('- Critical workflow instability detected.')
+              lines.append('- Prioritize CI stabilization before new releases.')
+          
+          lines.append('')
+          lines.append('## Governance')
+          lines.append('- Preserve mandatory CI gates.')
+          lines.append('- Avoid force merges with unstable workflows.')
+          lines.append('- Track workflow recurrence patterns.')
+          
+          Path('workflow-analytics.md').write_text('\n'.join(lines), encoding='utf-8')
+          PY
 
           cat workflow-analytics.md >> workflow-reliability-analytics.md
 

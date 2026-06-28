@@ -29,105 +29,105 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
         run: |
           cat <<'HTML' > realtime-operational-mesh.html
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Realtime Operational Mesh</title>
-<style>
-body{font-family:Arial,sans-serif;background:#020617;color:#e2e8f0;margin:0;padding:20px}
-.container{max-width:1700px;margin:0 auto}
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
-.title{font-size:34px;font-weight:bold}
-.live{background:#14532d;color:#bbf7d0;padding:10px 18px;border-radius:999px;font-weight:bold}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
-.card{background:#111827;border:1px solid #1f2937;border-radius:16px;padding:22px}
-.metric{font-size:42px;font-weight:bold;margin-top:10px}
-.label{color:#94a3b8;font-size:14px}
-.ok{color:#22c55e}.warn{color:#f59e0b}.risk{color:#ef4444}
-.section{margin-top:28px}
-table{width:100%;border-collapse:collapse;margin-top:16px}
-th,td{padding:14px;border-bottom:1px solid #1f2937;text-align:left}
-.stream{display:flex;flex-direction:column;gap:12px;margin-top:16px}
-.event{background:#0f172a;border-left:4px solid #22c55e;padding:14px;border-radius:8px}
-</style>
-</head>
-<body>
-<div class="container">
-<div class="header">
-<div class="title">Realtime Operational Mesh</div>
-<div class="live">LIVE</div>
-</div>
-
-<div class="grid">
-<div class="card">
-<div class="label">Realtime Operations</div>
-<div class="metric ok">ACTIVE</div>
-</div>
-<div class="card">
-<div class="label">Operational Streaming</div>
-<div class="metric ok">ENABLED</div>
-</div>
-<div class="card">
-<div class="label">Operational Intelligence</div>
-<div class="metric ok">99%</div>
-</div>
-<div class="card">
-<div class="label">Operational Risk</div>
-<div class="metric warn">LOW</div>
-</div>
-</div>
-
-<div class="section">
-<h2>Realtime Operational Stream</h2>
-<div class="stream">
-<div class="event">Workflow executed: ${WORKFLOW_NAME}</div>
-<div class="event">Workflow conclusion: ${WORKFLOW_CONCLUSION}</div>
-<div class="event">Branch monitored: ${HEAD_BRANCH}</div>
-<div class="event">Realtime operational intelligence active.</div>
-<div class="event">Streaming operational mesh initialized.</div>
-</div>
-</div>
-
-<div class="section">
-<h2>Unified Operational Correlation</h2>
-<table>
-<thead>
-<tr>
-<th>Workflow</th>
-<th>Status</th>
-<th>Branch</th>
-<th>Trend</th>
-<th>Risk</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>${WORKFLOW_NAME}</td>
-<td>${WORKFLOW_CONCLUSION}</td>
-<td>${HEAD_BRANCH}</td>
-<td>LIVE_MONITORING</td>
-<td>LOW</td>
-</tr>
-</tbody>
-</table>
-</div>
-
-<div class="section">
-<h2>Operational Governance</h2>
-<ul>
-<li>Realtime operational monitoring enabled.</li>
-<li>Operational streaming initialized.</li>
-<li>Governed operational intelligence active.</li>
-<li>Controlled remediation policies preserved.</li>
-<li>Operational auditability enabled.</li>
-</ul>
-</div>
-</div>
-</body>
-</html>
-HTML
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Realtime Operational Mesh</title>
+          <style>
+          body{font-family:Arial,sans-serif;background:#020617;color:#e2e8f0;margin:0;padding:20px}
+          .container{max-width:1700px;margin:0 auto}
+          .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+          .title{font-size:34px;font-weight:bold}
+          .live{background:#14532d;color:#bbf7d0;padding:10px 18px;border-radius:999px;font-weight:bold}
+          .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+          .card{background:#111827;border:1px solid #1f2937;border-radius:16px;padding:22px}
+          .metric{font-size:42px;font-weight:bold;margin-top:10px}
+          .label{color:#94a3b8;font-size:14px}
+          .ok{color:#22c55e}.warn{color:#f59e0b}.risk{color:#ef4444}
+          .section{margin-top:28px}
+          table{width:100%;border-collapse:collapse;margin-top:16px}
+          th,td{padding:14px;border-bottom:1px solid #1f2937;text-align:left}
+          .stream{display:flex;flex-direction:column;gap:12px;margin-top:16px}
+          .event{background:#0f172a;border-left:4px solid #22c55e;padding:14px;border-radius:8px}
+          </style>
+          </head>
+          <body>
+          <div class="container">
+          <div class="header">
+          <div class="title">Realtime Operational Mesh</div>
+          <div class="live">LIVE</div>
+          </div>
+          
+          <div class="grid">
+          <div class="card">
+          <div class="label">Realtime Operations</div>
+          <div class="metric ok">ACTIVE</div>
+          </div>
+          <div class="card">
+          <div class="label">Operational Streaming</div>
+          <div class="metric ok">ENABLED</div>
+          </div>
+          <div class="card">
+          <div class="label">Operational Intelligence</div>
+          <div class="metric ok">99%</div>
+          </div>
+          <div class="card">
+          <div class="label">Operational Risk</div>
+          <div class="metric warn">LOW</div>
+          </div>
+          </div>
+          
+          <div class="section">
+          <h2>Realtime Operational Stream</h2>
+          <div class="stream">
+          <div class="event">Workflow executed: ${WORKFLOW_NAME}</div>
+          <div class="event">Workflow conclusion: ${WORKFLOW_CONCLUSION}</div>
+          <div class="event">Branch monitored: ${HEAD_BRANCH}</div>
+          <div class="event">Realtime operational intelligence active.</div>
+          <div class="event">Streaming operational mesh initialized.</div>
+          </div>
+          </div>
+          
+          <div class="section">
+          <h2>Unified Operational Correlation</h2>
+          <table>
+          <thead>
+          <tr>
+          <th>Workflow</th>
+          <th>Status</th>
+          <th>Branch</th>
+          <th>Trend</th>
+          <th>Risk</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr>
+          <td>${WORKFLOW_NAME}</td>
+          <td>${WORKFLOW_CONCLUSION}</td>
+          <td>${HEAD_BRANCH}</td>
+          <td>LIVE_MONITORING</td>
+          <td>LOW</td>
+          </tr>
+          </tbody>
+          </table>
+          </div>
+          
+          <div class="section">
+          <h2>Operational Governance</h2>
+          <ul>
+          <li>Realtime operational monitoring enabled.</li>
+          <li>Operational streaming initialized.</li>
+          <li>Governed operational intelligence active.</li>
+          <li>Controlled remediation policies preserved.</li>
+          <li>Operational auditability enabled.</li>
+          </ul>
+          </div>
+          </div>
+          </body>
+          </html>
+          HTML
 
       - name: Publish realtime operational summary
         run: |

@@ -29,7 +29,7 @@ jobs:
           import json
           from datetime import datetime, timezone
           from pathlib import Path
-
+          
           evidences = [
               {'name': 'delivery_status', 'path': 'audit/delivery/delivery-status-report.json', 'type': 'artifact'},
               {'name': 'delivery_burndown', 'path': 'audit/delivery-burndown/delivery-burndown-snapshot.json', 'type': 'artifact'},

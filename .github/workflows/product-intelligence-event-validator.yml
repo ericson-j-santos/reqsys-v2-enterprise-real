@@ -38,24 +38,24 @@ jobs:
       - name: Generate validation report
         run: |
           cat > product-intelligence-event-validation.md <<'MD'
-# Product Intelligence Event Validation
-
-| Check | Status |
-|---|---|
-| Schema JSON load | OK |
-| Example JSON load | OK |
-| Required fields | OK |
-| Event type enum | OK |
-| Source contract | OK |
-| Requirement contract | OK |
-| Quality scores | OK |
-| Traceability arrays | OK |
-| Governance contract | OK |
-
-## Result
-
-Product Intelligence Event Model is valid and ready for the next functional intelligence increment.
-MD
+          # Product Intelligence Event Validation
+          
+          | Check | Status |
+          |---|---|
+          | Schema JSON load | OK |
+          | Example JSON load | OK |
+          | Required fields | OK |
+          | Event type enum | OK |
+          | Source contract | OK |
+          | Requirement contract | OK |
+          | Quality scores | OK |
+          | Traceability arrays | OK |
+          | Governance contract | OK |
+          
+          ## Result
+          
+          Product Intelligence Event Model is valid and ready for the next functional intelligence increment.
+          MD
           cat product-intelligence-event-validation.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload validation artifact
