@@ -173,6 +173,9 @@ jobs:
             --base-url "$PUBLIC_API_URL" \
             --environment prod \
             --include-optional-evidence \
+            --timeout 20 \
+            --probe-attempts 6 \
+            --probe-delay 20 \
             --artifact-root . \
             --output artifacts/runtime/runtime-public-probe.json
 
@@ -185,19 +188,12 @@ jobs:
           if not path.exists():
               raise SystemExit("probe artifact ausente")
           payload = json.loads(path.read_text(encoding="utf-8"))
-          blocking = payload.get("blocking_issues") or payload.get("summary", {}).get("blocking_issues") or []
-          strict = payload.get("summary") or {}
-          for key in ("strict_ok", "success_percentual", "readiness_percent"):
-              print(f"{key}={strict.get(key)}")
-          runtime_endpoints = (
-              "/api/runtime/health",
-              "/api/runtime/readiness",
-              "/api/runtime/liveness",
-          )
-          joined = "\n".join(str(item) for item in blocking)
-          missing = [ep for ep in runtime_endpoints if ep in joined and "404" in joined]
-          if missing:
-              raise SystemExit(f"Runtime público ainda indisponível: {missing}")
+          summary = payload.get("summary") or {}
+          blocking = summary.get("blocking_issues") or payload.get("blocking_issues") or []
+          for key in ("operational_status", "confidence", "probe_ready"):
+              print(f"{key}={summary.get(key)}")
+          if blocking:
+              raise SystemExit(f"Runtime público ainda indisponível: {blocking}")
           print("Runtime público OK")
           PY
 
