@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "gaps": [
+    {
+      "id": "ADC-GAP-001",
+      "description": "First dry-run not executed yet",
+      "status": "open",
+      "severity": "medium"
+    },
+    {
+      "id": "ADC-GAP-002",
+      "description": "Dashboard does not render cycle cards yet",
+      "status": "open",
+      "severity": "medium"
+    },
+    {
+      "id": "ADC-GAP-003",
+      "description": "No historical success metrics yet",
+      "status": "open",
+      "severity": "low"
+    }
+  ]
+}
