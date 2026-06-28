@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "increment": {
+    "name": "autonomous-delivery-cycle",
+    "type": "governance_automation",
+    "risk": "low_to_medium",
+    "runtime_impact": "none_until_workflow_execution",
+    "ci_impact": "adds_new_workflow_and_contract_tests",
+    "business_value": "reduce_manual_merge_wait_and_capture_next_increment_flow",
+    "status": "ready_for_pr"
+  }
+}
