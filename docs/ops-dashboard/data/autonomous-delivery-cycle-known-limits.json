@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "known_limits": [
+    {
+      "limit": "post_merge_observation_is_short",
+      "impact": "push workflows may still be pending when the first report is generated",
+      "mitigation": "use follow-up monitoring before starting the next increment"
+    },
+    {
+      "limit": "workflow_names_are_static",
+      "impact": "renamed workflows can block otherwise valid PRs",
+      "mitigation": "update policy contract and REQUIRED_WORKFLOWS together"
+    },
+    {
+      "limit": "queue_is_report_only",
+      "impact": "next increments require chat/agent execution context",
+      "mitigation": "use docs/prompts/autonomous-delivery-cycle-chat-executor.md"
+    }
+  ]
+}
