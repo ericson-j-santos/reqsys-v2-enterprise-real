@@ -1,0 +1,123 @@
+{
+  "schema_version": "1.0.0",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "generated_at": "2026-06-28T01:50:00Z",
+  "state": "green",
+  "strategy": "pareto_operational_gold_base",
+  "current_score": 95.88,
+  "target_score": 98.0,
+  "gold_gap": 2.12,
+  "projected_score_after_recommended": 100.0,
+  "projected_gap_after_recommended": 0.0,
+  "statistical_confidence": 0.8,
+  "dominant_bottleneck": {
+    "dimension": "coverage",
+    "score": 74.29,
+    "gap_to_100": 25.71,
+    "share_of_trilha_d_remaining_gap": 1.0
+  },
+  "summary": {
+    "actions_evaluated": 4,
+    "recommended_now": 2,
+    "expected_gain_now": 6.25,
+    "pareto_rule": "2 ações recomendadas concentram maior relação impacto/risco/esforço",
+    "next_increment": "coverage_targeted_tests"
+  },
+  "links": {
+    "trilha_d_history": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/docs/ops-dashboard/data/trilha-d-history.json",
+    "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
+    "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/build_padrao_ouro_operational_pareto.py"
+  },
+  "ranked_actions": [
+    {
+      "id": "coverage_targeted_tests",
+      "title": "Elevar coverage dos módulos críticos",
+      "lane": "quality-governance",
+      "dimension": "coverage",
+      "current_score": 74.29,
+      "target_score": 82.0,
+      "expected_score_gain": 3.85,
+      "effort_points": 3,
+      "risk": "low",
+      "confidence": 0.82,
+      "why_now": "coverage concentra 100% do gap restante da Trilha D contra 100 pontos",
+      "next_artifacts": [
+        "backend/tests/test_*_critical_paths.py",
+        "docs/ops-dashboard/data/trilha-d-history.json"
+      ],
+      "pareto_score": 105.23,
+      "rank": 1,
+      "cumulative_expected_gain_pct": 38.69,
+      "recommended_now": true
+    },
+    {
+      "id": "dashboard_trilha_d_history_card",
+      "title": "Expor histórico da Trilha D no dashboard",
+      "lane": "runtime-dashboard",
+      "dimension": "operational-visibility",
+      "current_score": 70.0,
+      "target_score": 90.0,
+      "expected_score_gain": 2.4,
+      "effort_points": 2,
+      "risk": "low",
+      "confidence": 0.78,
+      "why_now": "transforma evidência histórica em leitura operacional navegável",
+      "next_artifacts": [
+        "docs/ops-dashboard/data/trilha-d-history.json",
+        "docs/ops-dashboard/index.html"
+      ],
+      "pareto_score": 93.6,
+      "rank": 2,
+      "cumulative_expected_gain_pct": 62.81,
+      "recommended_now": true
+    },
+    {
+      "id": "artifact_ingestion_refresh",
+      "title": "Automatizar refresh do histórico por artifact",
+      "lane": "governance-automation",
+      "dimension": "evidence-refresh",
+      "current_score": 60.0,
+      "target_score": 85.0,
+      "expected_score_gain": 2.1,
+      "effort_points": 5,
+      "risk": "medium",
+      "confidence": 0.7,
+      "why_now": "reduz manutenção manual e aumenta confiabilidade temporal",
+      "next_artifacts": [
+        "scripts/build_trilha_d_history.py",
+        ".github/workflows/trilha-d-qualidade-governanca.yml"
+      ],
+      "pareto_score": 24.11,
+      "rank": 3,
+      "cumulative_expected_gain_pct": 83.92,
+      "recommended_now": false
+    },
+    {
+      "id": "predictive_regression_gate",
+      "title": "Gate preditivo de regressão operacional",
+      "lane": "predictive-governance",
+      "dimension": "regression-risk",
+      "current_score": 55.0,
+      "target_score": 80.0,
+      "expected_score_gain": 1.6,
+      "effort_points": 5,
+      "risk": "medium",
+      "confidence": 0.64,
+      "why_now": "usa tendência histórica para bloquear queda antes do merge",
+      "next_artifacts": [
+        "scripts/predict_operational_regression.py",
+        "docs/ops-dashboard/data/padrao-ouro-operational-pareto.json"
+      ],
+      "pareto_score": 16.79,
+      "rank": 4,
+      "cumulative_expected_gain_pct": 100.0,
+      "recommended_now": false
+    }
+  ],
+  "runtime_dashboard_contract": {
+    "card_fields": ["state", "current_score", "target_score", "gold_gap", "projected_score_after_recommended"],
+    "ranking_fields": ["rank", "title", "pareto_score", "expected_score_gain", "confidence", "risk", "recommended_now"],
+    "bottleneck_fields": ["dimension", "score", "gap_to_100", "share_of_trilha_d_remaining_gap"],
+    "refresh_strategy": "static_json_until_trilha_d_artifact_ingestion_is_enabled"
+  }
+}
