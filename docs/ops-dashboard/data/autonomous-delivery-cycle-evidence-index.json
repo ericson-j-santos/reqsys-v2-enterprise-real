@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "evidence": [
+    {
+      "type": "workflow",
+      "path": ".github/workflows/autonomous-delivery-cycle.yml"
+    },
+    {
+      "type": "test",
+      "path": "tests/test_autonomous_delivery_cycle_contract.py"
+    },
+    {
+      "type": "runbook",
+      "path": "docs/runbooks/autonomous-delivery-cycle.md"
+    },
+    {
+      "type": "adr",
+      "path": "docs/architecture/autonomous-delivery-cycle.md"
+    },
+    {
+      "type": "policy",
+      "path": "docs/ops-dashboard/data/autonomous-delivery-cycle-policy.json"
+    },
+    {
+      "type": "queue",
+      "path": "docs/ops-dashboard/data/autonomous-delivery-cycle-next-increments.json"
+    }
+  ]
+}
