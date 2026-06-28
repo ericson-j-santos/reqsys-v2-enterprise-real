@@ -1,0 +1,79 @@
+name: Docs MkDocs
+
+on:
+  pull_request:
+    paths:
+      - "mkdocs.yml"
+      - "requirements-docs.txt"
+      - "docs/**"
+      - ".github/workflows/docs-mkdocs.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "mkdocs.yml"
+      - "requirements-docs.txt"
+      - "docs/**"
+      - ".github/workflows/docs-mkdocs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  PYTHON_VERSION: "3.12"
+
+concurrency:
+  group: docs-mkdocs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-docs:
+    name: Build MkDocs strict
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-docs.txt
+
+      - name: Build documentation
+        run: mkdocs build --strict --site-dir site
+
+      - name: Preserve offline fallback in artifact
+        run: |
+          mkdir -p site/offline
+          cp docs/offline/reqsys-docs-v0.1.0.html site/offline/reqsys-docs-v0.1.0.html
+
+      - name: Upload documentation artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy-pages:
+    name: Deploy GitHub Pages
+    needs: build-docs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
