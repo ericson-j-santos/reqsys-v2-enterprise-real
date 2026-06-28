@@ -1,0 +1,81 @@
+{
+  "generated_at_utc": "2026-06-28T00:08:29.826945+00:00",
+  "catalog_schema_version": "1.0.0",
+  "files_analyzed": [
+    "/workspace/artifacts/failure-pattern-engine/input-sample.log"
+  ],
+  "summary": {
+    "matches": 2,
+    "categories": {
+      "permissions": 1,
+      "artifact": 1
+    },
+    "severities": {
+      "high": 1,
+      "medium": 1
+    },
+    "risk": {
+      "score": 100,
+      "status": "VERMELHO",
+      "description": "Foram identificadas falhas conhecidas de alta severidade. Priorizar estabilizacao antes de prosseguir."
+    }
+  },
+  "matches": [
+    {
+      "pattern_id": "FPE-GH-PERM-001",
+      "name": "GitHub integration permission denied",
+      "category": "permissions",
+      "severity": "high",
+      "confidence": "high",
+      "matched_text": "Resource not accessible by integration",
+      "source_file": "/workspace/artifacts/failure-pattern-engine/input-sample.log",
+      "recommended_action": "Validar permissions do workflow, escopo do GITHUB_TOKEN e uso de pull_request_target apenas quando houver justificativa e guardrails.",
+      "can_auto_rerun": false,
+      "can_auto_fix": false,
+      "tags": [
+        "github",
+        "actions",
+        "permissions",
+        "token"
+      ]
+    },
+    {
+      "pattern_id": "FPE-GH-ARTIFACT-001",
+      "name": "Missing or unavailable artifact",
+      "category": "artifact",
+      "severity": "medium",
+      "confidence": "medium",
+      "matched_text": "Artifact not found",
+      "source_file": "/workspace/artifacts/failure-pattern-engine/input-sample.log",
+      "recommended_action": "Validar etapa de upload, nome do artifact, retention-days e permissao de leitura do workflow.",
+      "can_auto_rerun": true,
+      "can_auto_fix": false,
+      "tags": [
+        "artifact",
+        "evidence",
+        "ci"
+      ]
+    }
+  ],
+  "safety_policy": {
+    "automatic_remediation_enabled": false,
+    "allowed_actions": [
+      "classify",
+      "summarize",
+      "recommend",
+      "publish_artifact"
+    ],
+    "blocked_actions": [
+      "merge_pull_request",
+      "push_to_main",
+      "modify_production",
+      "delete_artifact",
+      "rerun_without_policy"
+    ]
+  },
+  "limits": [
+    "Classificacao baseada em padroes deterministos e texto disponivel.",
+    "Nao executa rerun, merge, push, deploy ou remediacao automatica.",
+    "Resultado sem matches nao garante ausencia de falha desconhecida."
+  ]
+}

@@ -133,6 +133,26 @@
     </section>
 
     <section class="card">
+      <h2>Governança — Evidence Cards</h2>
+      <p class="small">Cards de capacidades governadas consumindo <code>governance-evidence-index.json</code>. Drill-down para workflows, scripts e artifacts de merge/conflict/preview.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Score governança</div><div id="gov-evidence-score" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Status geral</div><div id="gov-evidence-status" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Capacidades prontas</div><div id="gov-evidence-ready" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Próximo incremento</div><div id="gov-evidence-next" class="small">-</div></div>
+      </div>
+      <table>
+        <thead><tr><th>Capacidade</th><th>Status</th><th>Dashboard</th><th>Artifact / Workflow</th></tr></thead>
+        <tbody id="governance-evidence-cards"><tr><td colspan="4">Carregando...</td></tr></tbody>
+      </table>
+      <div class="links" id="governance-evidence-links"></div>
+      <details class="details">
+        <summary>Contrato governance-evidence-index bruto</summary>
+        <pre id="governance-evidence-details">{}</pre>
+      </details>
+    </section>
+
+    <section class="card">
       <h2>Links operacionais</h2>
       <div class="links" id="links"></div>
       <p class="small" id="generated"></p>
@@ -429,6 +449,63 @@
       });
     }
 
+    async function renderGovernanceEvidenceCards() {
+      const fallback = {
+        overall_status: 'unknown',
+        governance_evidence_score: 0,
+        summary: {
+          total_capabilities: 0,
+          implemented_capabilities: 0,
+          dashboard_ready_capabilities: 0,
+          next_increment: 'surface_governance_evidence_cards_in_runtime_dashboard',
+        },
+        evidence: [],
+      };
+      const response = await fetchOptionalJson('./data/governance-evidence-index.json', fallback);
+      const payload = response.data || fallback;
+
+      document.getElementById('gov-evidence-score').textContent = payload.governance_evidence_score ?? '-';
+      document.getElementById('gov-evidence-status').innerHTML = `<span class="status ${statusClass(payload.overall_status)}">${payload.overall_status || 'unknown'}</span>`;
+      const summary = payload.summary || {};
+      document.getElementById('gov-evidence-ready').textContent = `${summary.dashboard_ready_capabilities ?? 0}/${summary.implemented_capabilities ?? 0}`;
+      document.getElementById('gov-evidence-next').textContent = summary.next_increment || '-';
+
+      const body = document.getElementById('governance-evidence-cards');
+      body.innerHTML = '';
+      const evidence = payload.evidence || [];
+      if (!evidence.length) {
+        body.innerHTML = '<tr><td colspan="4">Nenhuma capacidade listada; fallback governado ativo.</td></tr>';
+      } else {
+        evidence.forEach((item) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${item.title || item.id || '-'}</td>
+            <td><span class="status ${statusClass(item.status)}">${item.status || '-'}</span></td>
+            <td>${item.dashboard_ready ? '<span class="status passed">ready</span>' : '<span class="status warning">pending</span>'}</td>
+            <td>
+              <div>${item.workflow || '-'}</div>
+              <div class="small">${item.artifact || item.json_path || '-'}</div>
+            </td>
+          `;
+          body.appendChild(tr);
+        });
+      }
+
+      const links = document.getElementById('governance-evidence-links');
+      links.innerHTML = '';
+      addLink(links, 'governance-evidence-index.json', './data/governance-evidence-index.json');
+      addLink(links, 'Strategic Governance', './strategic-governance.html');
+      if (payload.links?.documentation) addLink(links, 'Documentação', payload.links.documentation, true);
+
+      document.getElementById('governance-evidence-details').textContent = shortJson({
+        available: response.available,
+        source: response.source,
+        fallback_error: response.error,
+        summary,
+        evidence,
+      });
+    }
+
     async function loadDashboard() {
       const response = await fetch('./data/health.json', { cache: 'no-store' });
       const data = await response.json();
@@ -460,6 +537,7 @@
       addLink(links, 'Lane Priority JSON', './data/merge-lane-priority.json');
 
       await renderMergeIntelligence();
+      await renderGovernanceEvidenceCards();
       renderDomains(data.runtime_domain_drilldowns || []);
       const obs = data.observability_correlation_report || {};
       const obsSummary = obs.summary || {};
@@ -562,6 +640,7 @@
       document.getElementById('merge-details').textContent = shortJson({ error: error.message });
       document.getElementById('runtime-executive-cards').innerHTML = `<tr><td colspan="4">Fallback seguro: falha ao carregar runtime executive index.</td></tr>`;
       document.getElementById('runtime-executive-details').textContent = shortJson({ error: error.message });
+      document.getElementById('governance-evidence-cards').innerHTML = `<tr><td colspan="4">Fallback seguro: falha ao carregar governance evidence cards.</td></tr>`;
     });
   </script>
 </body>

@@ -13,7 +13,7 @@ def test_estatisticas_envelope_e_schema_v2():
     body = res.json()
 
     assert body['success'] is True
-    assert body['data']['schema_version'] == '2.0.0'
+    assert body['data']['schema_version'] == '2.1.0'
     assert isinstance(body['data']['indicadores'], list)
     assert body['data']['resumo']['total'] == len(body['data']['indicadores'])
 
@@ -45,11 +45,23 @@ def test_estatisticas_indicadores_possuem_fonte_formula_e_estado():
         assert indicador['fonte']['confiabilidade'] in {'alta', 'media', 'baixa'}
 
 
-def test_estatisticas_fonte_externa_permanece_nao_medida_sem_registry_real():
+def test_estatisticas_fonte_externa_usa_registry():
     res = TestClient(app).get('/v1/estatisticas')
     indicadores = res.json()['data']['indicadores']
     externo = next(item for item in indicadores if item['id'] == 'fontes-externas-validas')
 
-    assert externo['fonte']['tipo'] == 'externa'
-    assert externo['estadoAtual'] == 'nao_medido'
-    assert externo['fonte']['ttlMinutos'] > 0
+    assert externo['fonte']['origem'] == 'config/external-sources-registry.json'
+    assert externo['fonte']['versaoConector'] == 'registry-v1'
+    assert res.json()['data']['resumo']['fontes_externas']['total'] >= 1
+
+
+def test_estatisticas_historico_endpoint():
+    client = TestClient(app)
+    client.get('/v1/estatisticas')
+    res = client.get('/v1/estatisticas/historico')
+    body = res.json()
+
+    assert res.status_code == 200
+    assert body['success'] is True
+    assert body['data']['pontos'] >= 1
+    assert isinstance(body['data']['snapshots'], list)

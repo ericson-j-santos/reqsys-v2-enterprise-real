@@ -1,0 +1,74 @@
+[
+  {
+    "snapshot_at_utc": "2026-06-26T10:00:00+00:00",
+    "instability_rate_percent": 42.0,
+    "operational_score": 58,
+    "runs_analyzed": 12,
+    "top_pareto_cause": {
+      "name": "Artifact not found",
+      "category": "artifact"
+    },
+    "pareto_causes_count": 3
+  },
+  {
+    "snapshot_at_utc": "2026-06-27T10:00:00+00:00",
+    "instability_rate_percent": 28.0,
+    "operational_score": 72,
+    "runs_analyzed": 18,
+    "top_pareto_cause": {
+      "name": "pytest failed",
+      "category": "test_failure"
+    },
+    "pareto_causes_count": 2
+  },
+  {
+    "snapshot_at_utc": "2026-06-28T00:08:03.801551+00:00",
+    "status": "VERMELHO",
+    "operational_score": 0,
+    "runs_analyzed": 3,
+    "matches_total": 5,
+    "instability_rate_percent": 66.67,
+    "failed_runs": 2,
+    "top_pareto_cause": {
+      "id": "OCI-TEST-001",
+      "name": "Regressao funcional ou teste desatualizado.",
+      "category": "test_failure",
+      "severity": "high",
+      "owner": "backend",
+      "occurrences": 1,
+      "affected_runs": 1,
+      "impact_score": 80,
+      "sources": [
+        "knowledge_base"
+      ],
+      "cumulative_percent": 25.81,
+      "pareto_tier": "A"
+    },
+    "pareto_causes_count": 5
+  },
+  {
+    "snapshot_at_utc": "2026-06-28T00:08:29.791419+00:00",
+    "status": "VERMELHO",
+    "operational_score": 0,
+    "runs_analyzed": 3,
+    "matches_total": 5,
+    "instability_rate_percent": 66.67,
+    "failed_runs": 2,
+    "top_pareto_cause": {
+      "id": "OCI-TEST-001",
+      "name": "Regressao funcional ou teste desatualizado.",
+      "category": "test_failure",
+      "severity": "high",
+      "owner": "backend",
+      "occurrences": 1,
+      "affected_runs": 1,
+      "impact_score": 80,
+      "sources": [
+        "knowledge_base"
+      ],
+      "cumulative_percent": 25.81,
+      "pareto_tier": "A"
+    },
+    "pareto_causes_count": 5
+  }
+]

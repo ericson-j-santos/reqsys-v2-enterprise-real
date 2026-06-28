@@ -131,6 +131,7 @@ async def log_security_events(request: Request, call_next):
 
 def _runtime_payload(status: str, check: str) -> dict[str, str]:
     return {
+        'schema_version': '1.1.0',
         'status': status,
         'check': check,
         'service': 'reqsys-api',

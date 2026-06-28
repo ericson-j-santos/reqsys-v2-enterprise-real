@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at_utc": "2026-06-28T00:08:29.967523+00:00",
+  "status": "partial",
+  "score": 78,
+  "classification": "WARNING",
+  "trend": "MONITORING",
+  "source": "local_baseline_generator",
+  "guardrails": [
+    "report_only",
+    "no_deploy",
+    "no_auto_merge"
+  ]
+}
