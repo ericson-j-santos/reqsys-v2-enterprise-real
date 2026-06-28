@@ -22,6 +22,11 @@ export function formatarValorRuntimeCard(card) {
 }
 
 export function semaforoRuntimeCard(card) {
+  if (card.type === 'governance_evidence') {
+    if (card.value === 'implemented') return 'verde'
+    if (card.value === 'dry_run') return 'amarelo'
+    return 'desconhecido'
+  }
   if (card.severity) return estadoParaSemaforo(card.severity)
   if (card.type === 'status') return estadoParaSemaforo(card.value)
   if (card.id === 'risk-score' && Number(card.value) >= 70) return 'vermelho'

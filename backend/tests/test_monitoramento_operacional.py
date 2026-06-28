@@ -73,8 +73,13 @@ def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
     assert data['correlation_id'] == correlation_id
     assert data['layout']['responsive'] is True
     assert data['data_source']['endpoint'] == '/api/runtime/health'
-    assert {'runtime-status', 'risk-score', 'pending-items', 'uptime', 'readiness-percent', 'fly-duckdns-status'} <= card_ids
+    assert {'runtime-status', 'risk-score', 'pending-items', 'uptime', 'readiness-percent', 'fly-duckdns-status', 'governance-evidence-score'} <= card_ids
+    assert any(card['id'].startswith('governance-') for card in data['cards'])
     assert {'workflow-topology', 'public-smoke', 'operational-timeline', 'environment-evidence', 'incident-summary', 'risk-summary', 'environment-drift-summary', 'governance-evidence'} <= section_ids
+    governance = next(section for section in data['sections'] if section['id'] == 'governance-evidence')
+    assert governance['type'] == 'governance_cards'
+    assert governance['items']['evidence']
+    assert data['governance_evidence']['summary']['total_capabilities'] >= 4
     topology = next(section for section in data['sections'] if section['id'] == 'workflow-topology')
     assert topology['type'] == 'timeline'
     assert {item['step'] for item in topology['items']} == {'health', 'readiness', 'metrics', 'monitoring'}
