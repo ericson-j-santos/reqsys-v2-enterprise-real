@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "quality_gate": {
+    "status": "passed_by_design_contract",
+    "checks": [
+      {
+        "name": "explicit_authorization_label_required",
+        "status": "passed"
+      },
+      {
+        "name": "merge_queue_eligibility_required",
+        "status": "passed"
+      },
+      {
+        "name": "all_required_workflows_green_required",
+        "status": "passed"
+      },
+      {
+        "name": "expected_sha_merge_required",
+        "status": "passed"
+      },
+      {
+        "name": "next_increment_queue_report_only",
+        "status": "passed"
+      }
+    ]
+  }
+}
