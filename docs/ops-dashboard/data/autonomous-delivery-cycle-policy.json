@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "policy_name": "autonomous-delivery-cycle",
+  "status": "proposed",
+  "default_mode": "conservative",
+  "max_prs_per_cycle": 1,
+  "required_labels": [
+    "cycle:auto-merge-approved",
+    "merge-queue:eligible"
+  ],
+  "required_workflows": [
+    "CI Enterprise Fast",
+    "CI — ReqSys v2 Enterprise",
+    "Governance Quality Gates",
+    "Governança Padrão Ouro",
+    "Branch Protection Audit",
+    "PR Conflict Guard",
+    "Governed Merge Queue"
+  ],
+  "merge_strategy": {
+    "method": "squash",
+    "expected_head_sha_required": true,
+    "force_merge_allowed": false
+  },
+  "post_merge": {
+    "observe_push_runs": true,
+    "block_next_increment_when_failure_detected": true
+  },
+  "next_increment_queue": {
+    "enabled": true,
+    "mode": "report_only",
+    "target": "docs/ops-dashboard/data/autonomous-delivery-cycle-next-increments.json"
+  },
+  "guardrails": [
+    "no_merge_without_explicit_label",
+    "no_merge_without_green_required_workflows",
+    "no_merge_without_governed_queue_eligibility",
+    "no_automatic_fix_on_failed_ci",
+    "no_automatic_next_increment_execution",
+    "audit_artifact_required"
+  ]
+}
