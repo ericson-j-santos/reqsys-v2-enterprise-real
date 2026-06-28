@@ -40,7 +40,7 @@ jobs:
           mkdir -p ci-reports
           cat > ci-reports/regression-map.md <<'EOF'
           # Mapa de Regressão Enterprise
-
+          
           | Camada | Execução | Bloqueia PR | Objetivo |
           |---|---|---:|---|
           | Fast checks | Pull request | Sim | Lint, typecheck, unitários e build rápido |

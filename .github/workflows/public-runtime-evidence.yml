@@ -80,7 +80,7 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-
+          
           evidence_path = Path("artifacts/runtime/public-runtime-validation.json")
           summary_path = Path("artifacts/runtime/public-runtime-summary.md")
           if not evidence_path.exists():
@@ -96,14 +96,14 @@ jobs:
           else:
               payload = json.loads(evidence_path.read_text(encoding="utf-8"))
           readiness = payload.get("readiness", {})
-
+          
           rows = []
           for result in payload.get("results", []):
               status = "OK" if result.get("ok") else "FAIL"
               rows.append(
                   f"| {result.get('endpoint')} | {status} | {result.get('status_code')} | {result.get('elapsed_ms')} | {result.get('error') or ''} |"
               )
-
+          
           summary = [
               "# Public Runtime Evidence Gate",
               "",

@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
-from scripts.auto_open_agent_pr import build_body, is_permission_error, main, sync_existing_pr
+from scripts.auto_open_agent_pr import (
+    GitHubClient,
+    build_body,
+    create_pr_best_effort,
+    is_permission_error,
+    main,
+    resolve_token,
+    skip_existing_pr,
+    sync_existing_pr,
+)
 
 
 def test_build_body_contains_increment_type():
@@ -18,6 +26,29 @@ def test_build_body_contains_increment_type():
 
 def test_is_permission_error_detects_403():
     assert is_permission_error(RuntimeError('GitHub API PATCH /pulls/461 failed (403): {"message":"forbidden"}'))
+    assert is_permission_error(RuntimeError('GitHub API POST /pulls failed (403): {"message":"forbidden"}'))
+
+
+def test_resolve_token_prefers_gh_token_over_pat(monkeypatch):
+    monkeypatch.setenv("GH_PAT_ACTIONS", "pat-limitado")
+    monkeypatch.setenv("GH_TOKEN", "token-workflow")
+    assert resolve_token() == "token-workflow"
+
+
+def test_find_existing_pr_url_encodes_branch_com_barra():
+    client = GitHubClient("token", "owner/repo")
+    captured: dict[str, str] = {}
+
+    def fake_request(method: str, path: str, payload=None):
+        captured["method"] = method
+        captured["path"] = path
+        return []
+
+    client._request = fake_request  # type: ignore[method-assign]
+    assert client.find_existing_pr("cursor/coverage-targeted-tests-ddbb", "main") is None
+    assert captured["method"] == "GET"
+    assert "head=owner%3Acursor%2Fcoverage-targeted-tests-ddbb" in captured["path"]
+    assert "base=main" in captured["path"]
 
 
 def test_sync_existing_pr_ignora_403_quando_pr_ja_existe(tmp_path, monkeypatch):
@@ -41,6 +72,48 @@ def test_sync_existing_pr_ignora_403_quando_pr_ja_existe(tmp_path, monkeypatch):
     artifact = (tmp_path / "auto-pr-request.json").read_text(encoding="utf-8")
     assert "skipped_permission" in artifact
     assert "461" in artifact
+
+
+def test_skip_existing_pr_quando_pr_ja_mergeado(tmp_path, monkeypatch):
+    monkeypatch.setenv("PR_REQUEST_ARTIFACT_DIR", str(tmp_path))
+    existing = {
+        "number": 461,
+        "html_url": "https://github.com/example/repo/pull/461",
+        "state": "closed",
+        "merged_at": "2026-06-28T00:00:00Z",
+    }
+
+    exit_code = skip_existing_pr(
+        branch="cursor/consume-governance-cards-monitoramento-36e0",
+        base="main",
+        title="feat: teste",
+        body="body",
+        existing=existing,
+    )
+
+    assert exit_code == 0
+    artifact = (tmp_path / "auto-pr-request.json").read_text(encoding="utf-8")
+    assert "skipped_merged" in artifact
+
+
+def test_create_pr_best_effort_ignora_403(tmp_path, monkeypatch):
+    monkeypatch.setenv("PR_REQUEST_ARTIFACT_DIR", str(tmp_path))
+    client = MagicMock()
+    client.create_pr.side_effect = RuntimeError(
+        'GitHub API POST /pulls failed (403): {"message":"Resource not accessible by personal access token"}'
+    )
+
+    exit_code = create_pr_best_effort(
+        client,
+        branch="cursor/teste-36e0",
+        base="main",
+        title="feat: teste",
+        body="body",
+    )
+
+    assert exit_code == 0
+    artifact = (tmp_path / "auto-pr-request.json").read_text(encoding="utf-8")
+    assert "skipped_permission" in artifact
 
 
 def test_sync_existing_pr_atualiza_quando_token_tem_permissao(tmp_path, monkeypatch):
@@ -82,8 +155,8 @@ def test_sync_existing_pr_propaga_erros_nao_relacionados_a_permissao():
 
 def test_main_sucesso_quando_pr_ja_existe_mas_update_retorna_403(monkeypatch, tmp_path):
     class FakeClient:
-        def find_open_pr(self, head: str, base: str):
-            return {"number": 469, "html_url": "https://github.com/example/repo/pull/469"}
+        def find_existing_pr(self, head: str, base: str):
+            return {"number": 469, "html_url": "https://github.com/example/repo/pull/469", "state": "open"}
 
         def update_pr(self, number: int, *, title: str, body: str):
             raise RuntimeError("GitHub API PATCH /pulls/469 failed (403): forbidden")

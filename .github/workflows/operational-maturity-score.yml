@@ -34,7 +34,7 @@ jobs:
           import os
           from datetime import datetime, timezone
           from pathlib import Path
-
+          
           dimensions = [
               {'name': 'ci_cd_obrigatorio', 'current_percent': 96, 'target_percent': 98, 'evidence': 'Required workflows'},
               {'name': 'saude_pos_merge', 'current_percent': 92, 'target_percent': 98, 'evidence': 'Main Operational Post-Merge Health'},
@@ -45,11 +45,11 @@ jobs:
               {'name': 'validacao_contracts', 'current_percent': 97, 'target_percent': 99, 'evidence': 'Operational Artifact Schema Validation'},
               {'name': 'descoberta_artifacts', 'current_percent': 96, 'target_percent': 96, 'evidence': 'Operational Artifact Discovery Index'},
           ]
-
+          
           for item in dimensions:
               item['gap_pp'] = round(item['target_percent'] - item['current_percent'], 2)
               item['status'] = 'consolidado' if item['current_percent'] >= 96 else 'em_consolidacao'
-
+          
           average = round(sum(item['current_percent'] for item in dimensions) / len(dimensions), 2)
           average_gap = round(sum(item['gap_pp'] for item in dimensions) / len(dimensions), 2)
           report = {
@@ -66,7 +66,7 @@ jobs:
               'dimensions': dimensions,
               'mode': 'report_only',
           }
-
+          
           Path('audit/maturity').mkdir(parents=True, exist_ok=True)
           Path('audit/maturity/operational-maturity-score.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
           lines = [

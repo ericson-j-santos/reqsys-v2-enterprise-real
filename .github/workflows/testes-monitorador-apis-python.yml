@@ -15,6 +15,8 @@ on:
 jobs:
   testes:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
     defaults:
       run:
         working-directory: examples/monitorador_apis_python
@@ -46,18 +48,7 @@ jobs:
         run: |
           echo "## Cobertura — Monitorador APIs Python" >> "$GITHUB_STEP_SUMMARY"
           if [ -f coverage.xml ]; then
-            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-import xml.etree.ElementTree as ET
-
-tree = ET.parse('coverage.xml')
-root = tree.getroot()
-line_rate = float(root.attrib.get('line-rate', 0)) * 100
-branch_rate = float(root.attrib.get('branch-rate', 0)) * 100
-print(f"- Line coverage: {line_rate:.2f}%")
-print(f"- Branch coverage: {branch_rate:.2f}%")
-print("- Limiar obrigatório: 60.00%")
-print("- Arquivos gerados localmente: `coverage.xml` e `htmlcov/`")
-PY
+            python -c "import xml.etree.ElementTree as ET; root = ET.parse('coverage.xml').getroot(); line_rate = float(root.attrib.get('line-rate', 0)) * 100; branch_rate = float(root.attrib.get('branch-rate', 0)) * 100; print(f'- Line coverage: {line_rate:.2f}%'); print(f'- Branch coverage: {branch_rate:.2f}%'); print('- Limiar obrigatório: 60.00%'); print('- Arquivos gerados localmente: \`coverage.xml\` e \`htmlcov/\`')" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "- coverage.xml não foi gerado; verificar falha antes da coleta de cobertura." >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -65,19 +56,19 @@ PY
       - name: Validar cobertura mínima
         run: |
           python - <<'PY'
-import sys
-import xml.etree.ElementTree as ET
-
-LIMIAR = 60.0
-root = ET.parse('coverage.xml').getroot()
-line_rate = float(root.attrib.get('line-rate', 0)) * 100
-print(f"Cobertura de linhas apurada: {line_rate:.2f}%")
-print(f"Limiar obrigatório: {LIMIAR:.2f}%")
-if line_rate < LIMIAR:
-    print(f"Cobertura insuficiente: {line_rate:.2f}% < {LIMIAR:.2f}%")
-    sys.exit(1)
-print("Cobertura mínima atendida.")
-PY
+          import sys
+          import xml.etree.ElementTree as ET
+          
+          LIMIAR = 60.0
+          root = ET.parse('coverage.xml').getroot()
+          line_rate = float(root.attrib.get('line-rate', 0)) * 100
+          print(f"Cobertura de linhas apurada: {line_rate:.2f}%")
+          print(f"Limiar obrigatório: {LIMIAR:.2f}%")
+          if line_rate < LIMIAR:
+              print(f"Cobertura insuficiente: {line_rate:.2f}% < {LIMIAR:.2f}%")
+              sys.exit(1)
+          print("Cobertura mínima atendida.")
+          PY
 
       - name: Validar import FastAPI
         run: |

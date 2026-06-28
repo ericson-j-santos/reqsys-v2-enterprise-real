@@ -28,7 +28,7 @@ jobs:
           import json
           from datetime import datetime, timezone
           from pathlib import Path
-
+          
           milestones = [
               {'name': 'observability_foundation', 'percent': 100, 'status': 'completed'},
               {'name': 'command_center_foundation', 'percent': 100, 'status': 'completed'},

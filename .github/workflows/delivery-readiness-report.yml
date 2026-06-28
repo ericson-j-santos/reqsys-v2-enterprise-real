@@ -28,7 +28,7 @@ jobs:
           import json
           from datetime import datetime, timezone
           from pathlib import Path
-
+          
           checks = [
               {'name': 'delivery_status_report', 'score': 100, 'status': 'passed'},
               {'name': 'delivery_status_contract', 'score': 100, 'status': 'passed'},

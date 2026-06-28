@@ -21,12 +21,12 @@ jobs:
       - name: Validate timeline
         run: |
           python - <<'PY'
-import json
-from pathlib import Path
-payload = json.loads(Path('reports/github-runtime-analytics/runtime-operational-correlation-timeline.json').read_text(encoding='utf-8'))
-assert payload['mode'] == 'review_only', payload
-assert payload['runtime_state'] == 'TIMELINE_READY', payload
-assert payload['timeline_event_count'] >= 3, payload
-assert payload['confidence_percent'] >= 90, payload
-assert payload['risk_percent'] <= 5, payload
-PY
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('reports/github-runtime-analytics/runtime-operational-correlation-timeline.json').read_text(encoding='utf-8'))
+          assert payload['mode'] == 'review_only', payload
+          assert payload['runtime_state'] == 'TIMELINE_READY', payload
+          assert payload['timeline_event_count'] >= 3, payload
+          assert payload['confidence_percent'] >= 90, payload
+          assert payload['risk_percent'] <= 5, payload
+          PY

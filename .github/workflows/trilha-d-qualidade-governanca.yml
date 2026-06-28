@@ -172,7 +172,7 @@ jobs:
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
           from pathlib import Path
-
+          
           report = json.loads(Path("artifacts/trilha-d-qualidade-governanca/trilha-d-qualidade-governanca.json").read_text())
           print("## Trilha D — Qualidade e Governança")
           print()

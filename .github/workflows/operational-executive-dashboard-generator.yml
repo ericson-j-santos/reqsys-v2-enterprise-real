@@ -26,95 +26,95 @@ jobs:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           cat <<'HTML' > operational-executive-dashboard.html
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Operational Executive Dashboard</title>
-<style>
-body{font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:24px}
-.container{max-width:1400px;margin:0 auto}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
-.card{background:#111827;border-radius:14px;padding:20px;border:1px solid #1f2937}
-.title{font-size:28px;font-weight:bold;margin-bottom:24px}
-.metric{font-size:36px;font-weight:bold;margin-top:8px}
-.label{color:#94a3b8;font-size:14px}
-.ok{color:#22c55e}.warn{color:#f59e0b}.risk{color:#ef4444}
-table{width:100%;border-collapse:collapse;margin-top:16px}
-th,td{padding:12px;border-bottom:1px solid #1f2937;text-align:left}
-.section{margin-top:28px}
-</style>
-</head>
-<body>
-<div class="container">
-<div class="title">Operational Executive Dashboard</div>
-
-<div class="grid">
-<div class="card">
-<div class="label">Operational Maturity</div>
-<div class="metric ok">99%</div>
-</div>
-<div class="card">
-<div class="label">CI/CD Governance</div>
-<div class="metric ok">99%</div>
-</div>
-<div class="card">
-<div class="label">Operational Intelligence</div>
-<div class="metric ok">98%</div>
-</div>
-<div class="card">
-<div class="label">Autonomous Operations</div>
-<div class="metric warn">97%</div>
-</div>
-</div>
-
-<div class="section">
-<h2>Workflow Operational Status</h2>
-<table>
-<thead>
-<tr>
-<th>Workflow</th>
-<th>Status</th>
-<th>Trend</th>
-<th>Risk</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>${WORKFLOW_NAME}</td>
-<td>${WORKFLOW_CONCLUSION}</td>
-<td>STABLE</td>
-<td>LOW</td>
-</tr>
-</tbody>
-</table>
-</div>
-
-<div class="section">
-<h2>Operational Intelligence</h2>
-<ul>
-<li>Historical operational intelligence enabled.</li>
-<li>Workflow reliability analytics active.</li>
-<li>Governed remediation policies active.</li>
-<li>Operational trend analysis active.</li>
-<li>Predictive operational intelligence initialized.</li>
-</ul>
-</div>
-
-<div class="section">
-<h2>Governance</h2>
-<ul>
-<li>Mandatory CI gates preserved.</li>
-<li>Retry storm protection enabled.</li>
-<li>Operational auditability enabled.</li>
-<li>Controlled remediation policies enabled.</li>
-</ul>
-</div>
-</div>
-</body>
-</html>
-HTML
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Operational Executive Dashboard</title>
+          <style>
+          body{font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:24px}
+          .container{max-width:1400px;margin:0 auto}
+          .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+          .card{background:#111827;border-radius:14px;padding:20px;border:1px solid #1f2937}
+          .title{font-size:28px;font-weight:bold;margin-bottom:24px}
+          .metric{font-size:36px;font-weight:bold;margin-top:8px}
+          .label{color:#94a3b8;font-size:14px}
+          .ok{color:#22c55e}.warn{color:#f59e0b}.risk{color:#ef4444}
+          table{width:100%;border-collapse:collapse;margin-top:16px}
+          th,td{padding:12px;border-bottom:1px solid #1f2937;text-align:left}
+          .section{margin-top:28px}
+          </style>
+          </head>
+          <body>
+          <div class="container">
+          <div class="title">Operational Executive Dashboard</div>
+          
+          <div class="grid">
+          <div class="card">
+          <div class="label">Operational Maturity</div>
+          <div class="metric ok">99%</div>
+          </div>
+          <div class="card">
+          <div class="label">CI/CD Governance</div>
+          <div class="metric ok">99%</div>
+          </div>
+          <div class="card">
+          <div class="label">Operational Intelligence</div>
+          <div class="metric ok">98%</div>
+          </div>
+          <div class="card">
+          <div class="label">Autonomous Operations</div>
+          <div class="metric warn">97%</div>
+          </div>
+          </div>
+          
+          <div class="section">
+          <h2>Workflow Operational Status</h2>
+          <table>
+          <thead>
+          <tr>
+          <th>Workflow</th>
+          <th>Status</th>
+          <th>Trend</th>
+          <th>Risk</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr>
+          <td>${WORKFLOW_NAME}</td>
+          <td>${WORKFLOW_CONCLUSION}</td>
+          <td>STABLE</td>
+          <td>LOW</td>
+          </tr>
+          </tbody>
+          </table>
+          </div>
+          
+          <div class="section">
+          <h2>Operational Intelligence</h2>
+          <ul>
+          <li>Historical operational intelligence enabled.</li>
+          <li>Workflow reliability analytics active.</li>
+          <li>Governed remediation policies active.</li>
+          <li>Operational trend analysis active.</li>
+          <li>Predictive operational intelligence initialized.</li>
+          </ul>
+          </div>
+          
+          <div class="section">
+          <h2>Governance</h2>
+          <ul>
+          <li>Mandatory CI gates preserved.</li>
+          <li>Retry storm protection enabled.</li>
+          <li>Operational auditability enabled.</li>
+          <li>Controlled remediation policies enabled.</li>
+          </ul>
+          </div>
+          </div>
+          </body>
+          </html>
+          HTML
 
       - name: Publish executive dashboard summary
         run: |

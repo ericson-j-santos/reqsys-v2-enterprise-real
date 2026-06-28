@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 
 def build_body(branch: str, base: str) -> str:
@@ -72,11 +73,22 @@ class GitHubClient:
             detail = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"GitHub API {method} {path} failed ({exc.code}): {detail}") from exc
 
-    def find_open_pr(self, head: str, base: str) -> dict[str, Any] | None:
+    def find_existing_pr(self, head: str, base: str) -> dict[str, Any] | None:
         owner = self.repository.split("/")[0]
-        pulls = self._request("GET", f"/pulls?state=open&head={owner}:{head}&base={base}")
-        if isinstance(pulls, list) and pulls:
-            return pulls[0]
+        for state in ("open", "closed"):
+            query = urlencode(
+                {
+                    "state": state,
+                    "head": f"{owner}:{head}",
+                    "base": base,
+                    "sort": "updated",
+                    "direction": "desc",
+                    "per_page": "5",
+                }
+            )
+            pulls = self._request("GET", f"/pulls?{query}")
+            if isinstance(pulls, list) and pulls:
+                return pulls[0]
         return None
 
     def create_pr(self, *, title: str, body: str, head: str, base: str, draft: bool = True) -> dict[str, Any]:
@@ -127,11 +139,12 @@ def write_pr_request_artifact(
 
 
 def resolve_token() -> str:
-    for key in ("GH_PAT_ACTIONS", "GH_TOKEN", "GITHUB_TOKEN"):
+    # GH_TOKEN/GITHUB_TOKEN do workflow têm escopo explícito (pull-requests: write).
+    for key in ("GH_TOKEN", "GITHUB_TOKEN", "GH_PAT_ACTIONS"):
         value = os.environ.get(key, "").strip()
         if value:
             return value
-    raise RuntimeError("Token GitHub ausente (GH_PAT_ACTIONS/GH_TOKEN/GITHUB_TOKEN)")
+    raise RuntimeError("Token GitHub ausente (GH_TOKEN/GITHUB_TOKEN/GH_PAT_ACTIONS)")
 
 
 def add_labels_best_effort(client: GitHubClient, number: int, labels: list[str]) -> None:
@@ -144,6 +157,72 @@ def add_labels_best_effort(client: GitHubClient, number: int, labels: list[str])
 def is_permission_error(exc: Exception) -> bool:
     message = str(exc)
     return " failed (401):" in message or " failed (403):" in message
+
+
+def skip_existing_pr(
+    *,
+    branch: str,
+    base: str,
+    title: str,
+    body: str,
+    existing: dict[str, Any],
+) -> int:
+    number = int(existing["number"])
+    pr_url = str(existing.get("html_url") or "")
+    state = str(existing.get("state") or "closed")
+    status = "skipped_merged" if existing.get("merged_at") else f"skipped_{state}"
+    write_pr_request_artifact(
+        branch=branch,
+        base=base,
+        title=title,
+        body=body,
+        status=status,
+        pr_number=number,
+        pr_url=pr_url,
+    )
+    print(f"PR já existente ({state}): {pr_url}")
+    return 0
+
+
+def create_pr_best_effort(
+    client: GitHubClient,
+    *,
+    branch: str,
+    base: str,
+    title: str,
+    body: str,
+) -> int:
+    try:
+        created = client.create_pr(title=title, body=body, head=branch, base=base, draft=True)
+        number = int(created["number"])
+        add_labels_best_effort(client, number, ["padrao-ouro", "cloud-agent"])
+        write_pr_request_artifact(
+            branch=branch,
+            base=base,
+            title=title,
+            body=body,
+            status="created",
+            pr_number=number,
+            pr_url=str(created.get("html_url") or ""),
+        )
+        print(f"PR criado: {created.get('html_url')}")
+        return 0
+    except RuntimeError as exc:
+        if not is_permission_error(exc):
+            raise
+        write_pr_request_artifact(
+            branch=branch,
+            base=base,
+            title=title,
+            body=body,
+            status="skipped_permission",
+            error=str(exc),
+        )
+        print(
+            "::warning::Criação de PR ignorada por permissão insuficiente do token.",
+            file=sys.stderr,
+        )
+        return 0
 
 
 def sync_existing_pr(
@@ -214,31 +293,32 @@ def main() -> int:
 
     try:
         client = GitHubClient(resolve_token(), repository)
-        existing = client.find_open_pr(branch, args.base)
+        existing = client.find_existing_pr(branch, args.base)
         if existing:
-            return sync_existing_pr(
-                client,
-                existing,
+            if str(existing.get("state")) == "open":
+                return sync_existing_pr(
+                    client,
+                    existing,
+                    branch=branch,
+                    base=args.base,
+                    title=title,
+                    body=body,
+                )
+            return skip_existing_pr(
                 branch=branch,
                 base=args.base,
                 title=title,
                 body=body,
+                existing=existing,
             )
 
-        created = client.create_pr(title=title, body=body, head=branch, base=args.base, draft=True)
-        number = int(created["number"])
-        add_labels_best_effort(client, number, ["padrao-ouro", "cloud-agent"])
-        write_pr_request_artifact(
+        return create_pr_best_effort(
+            client,
             branch=branch,
             base=args.base,
             title=title,
             body=body,
-            status="created",
-            pr_number=number,
-            pr_url=str(created.get("html_url") or ""),
         )
-        print(f"PR criado: {created.get('html_url')}")
-        return 0
     except Exception as exc:  # noqa: BLE001 - report failure with artifact for automation retry
         artifact = write_pr_request_artifact(branch=branch, base=args.base, title=title, body=body, error=str(exc))
         print(f"Falha ao abrir PR automaticamente; artifact salvo em {artifact}", file=sys.stderr)
