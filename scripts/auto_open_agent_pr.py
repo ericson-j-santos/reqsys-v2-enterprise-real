@@ -9,6 +9,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 
@@ -72,7 +73,8 @@ class GitHubClient:
             raise RuntimeError(f"GitHub API {method} {path} failed ({exc.code}): {detail}") from exc
 
     def find_open_pr(self, head: str, base: str) -> dict[str, Any] | None:
-        pulls = self._request("GET", f"/pulls?state=open&head={self.repository.split('/')[0]}:{head}&base={base}")
+        owner = self.repository.split("/")[0]
+        pulls = self._request("GET", f"/pulls?state=open&head={owner}:{head}&base={base}")
         if isinstance(pulls, list) and pulls:
             return pulls[0]
         return None
@@ -89,6 +91,26 @@ class GitHubClient:
 
     def add_labels(self, number: int, labels: list[str]) -> None:
         self._request("POST", f"/issues/{number}/labels", {"labels": labels})
+
+
+def write_pr_request_artifact(*, branch: str, base: str, title: str, body: str, error: str | None = None) -> Path:
+    out_dir = Path(os.environ.get("PR_REQUEST_ARTIFACT_DIR", "artifacts/auto-pr-request"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": "1.0.0",
+        "branch": branch,
+        "base": base,
+        "title": title,
+        "body": body,
+        "draft": True,
+        "labels": ["padrao-ouro", "cloud-agent"],
+        "error": error,
+        "required_secret": "GH_PAT_ACTIONS",
+        "repo_setting": "Allow GitHub Actions to create and approve pull requests",
+    }
+    path = out_dir / "auto-pr-request.json"
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def resolve_token() -> str:
@@ -118,21 +140,29 @@ def main() -> int:
 
     title = args.title.strip() or f"feat: Padrão Ouro — {branch}"
     body = build_body(branch, args.base)
-    client = GitHubClient(resolve_token(), repository)
 
-    existing = client.find_open_pr(branch, args.base)
-    if existing:
-        number = int(existing["number"])
-        client.update_pr(number, title=title, body=body)
+    try:
+        client = GitHubClient(resolve_token(), repository)
+        existing = client.find_open_pr(branch, args.base)
+        if existing:
+            number = int(existing["number"])
+            client.update_pr(number, title=title, body=body)
+            client.add_labels(number, ["padrao-ouro", "cloud-agent"])
+            write_pr_request_artifact(branch=branch, base=args.base, title=title, body=body)
+            print(f"PR atualizado: {existing.get('html_url')}")
+            return 0
+
+        created = client.create_pr(title=title, body=body, head=branch, base=args.base, draft=True)
+        number = int(created["number"])
         client.add_labels(number, ["padrao-ouro", "cloud-agent"])
-        print(f"PR atualizado: {existing.get('html_url')}")
+        write_pr_request_artifact(branch=branch, base=args.base, title=title, body=body)
+        print(f"PR criado: {created.get('html_url')}")
         return 0
-
-    created = client.create_pr(title=title, body=body, head=branch, base=args.base, draft=True)
-    number = int(created["number"])
-    client.add_labels(number, ["padrao-ouro", "cloud-agent"])
-    print(f"PR criado: {created.get('html_url')}")
-    return 0
+    except Exception as exc:  # noqa: BLE001 - report failure with artifact for automation retry
+        artifact = write_pr_request_artifact(branch=branch, base=args.base, title=title, body=body, error=str(exc))
+        print(f"Falha ao abrir PR automaticamente; artifact salvo em {artifact}", file=sys.stderr)
+        print(str(exc), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

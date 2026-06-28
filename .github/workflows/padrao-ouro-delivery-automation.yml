@@ -54,6 +54,7 @@ jobs:
       (github.event_name == 'push' && startsWith(github.ref_name, 'cursor/')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'open_pr_only')
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -73,6 +74,14 @@ jobs:
             export GH_TOKEN="${{ github.token }}"
           fi
           python scripts/auto_open_agent_pr.py
+
+      - name: Publicar artifact de PR automático
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-pr-request
+          path: artifacts/auto-pr-request/
+          if-no-files-found: warn
 
       - name: Resumo
         run: |
