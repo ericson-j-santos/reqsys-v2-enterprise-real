@@ -5,7 +5,7 @@
   "tipo": "documentacao-viva",
   "fonte": "mkdocs",
   "docs_dir": "docs-site",
-  "fallback_offline": "docs-site/offline/reqsys-docs-v0.1.0.html",
+  "fallback_offline": "docs/offline/reqsys-docs-v0.1.0.html",
   "publicacao_alvo": "https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/",
   "estado": {
     "mkdocs_configurado": true,
