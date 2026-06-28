@@ -46,6 +46,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   ALM_REPOSITORY: ericson-j-santos/reqsys-powerplatform-alm
@@ -55,6 +56,8 @@ env:
   SOLUTION_NAME: ${{ inputs.solution_name }}
   CORRELATION_ID: ${{ inputs.correlation_id }}
   DRY_RUN: ${{ inputs.dry_run }}
+  REQSYS_API_BASE_URL: ${{ secrets.REQSYS_API_BASE_URL }}
+  REQSYS_PROVISIONING_STATUS_TOKEN: ${{ secrets.REQSYS_PROVISIONING_STATUS_TOKEN }}
 
 jobs:
   validate-and-provision:
@@ -72,6 +75,26 @@ jobs:
           repository: ${{ env.ALM_REPOSITORY }}
           path: alm
           token: ${{ secrets.GH_ALM_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Notify registry running
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Continue'
+          if ([string]::IsNullOrWhiteSpace('${{ env.REQSYS_API_BASE_URL }}') -or [string]::IsNullOrWhiteSpace('${{ env.CORRELATION_ID }}')) {
+            Write-Host 'Registry callback skipped: REQSYS_API_BASE_URL ou CORRELATION_ID ausente.'
+            exit 0
+          }
+          $headers = @{ 'Content-Type' = 'application/json'; 'X-Correlation-Id' = '${{ env.CORRELATION_ID }}' }
+          if (-not [string]::IsNullOrWhiteSpace('${{ env.REQSYS_PROVISIONING_STATUS_TOKEN }}')) {
+            $headers['Authorization'] = 'Bearer ${{ env.REQSYS_PROVISIONING_STATUS_TOKEN }}'
+          }
+          $body = @{
+            status = 'running'
+            workflow_run_url = 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+          } | ConvertTo-Json
+          $url = '${{ env.REQSYS_API_BASE_URL }}'.TrimEnd('/') + '/v1/hub-lowcode/power-automate/flows/provisioning-registry/${{ env.CORRELATION_ID }}/status'
+          Invoke-RestMethod -Method Patch -Uri $url -Headers $headers -Body $body | ConvertTo-Json -Depth 10
 
       - name: Validate reused ALM assets
         shell: pwsh
@@ -99,10 +122,10 @@ jobs:
             status = if ('${{ env.DRY_RUN }}' -eq 'true') { 'validated_dry_run' } else { 'ready_to_execute' }
             generated_at = (Get-Date).ToUniversalTime().ToString('o')
             correlation_id = '${{ env.CORRELATION_ID }}'
-            source = @{ repository = '${{ github.repository }}'; run_id = '${{ github.run_id }}'; sha = '${{ github.sha }}' }
+            source = @{ repository = '${{ github.repository }}'; run_id = '${{ github.run_id }}'; sha = '${{ github.sha }}'; run_url = 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}' }
             target = @{ alm_repository = '${{ env.ALM_REPOSITORY }}'; environment = '${{ env.TARGET_ENVIRONMENT }}'; solution_name = '${{ env.SOLUTION_NAME }}' }
             flow = @{ display_name = '${{ env.FLOW_DISPLAY_NAME }}'; trigger_type = '${{ env.FLOW_TRIGGER_TYPE }}' }
-            governance = @{ method = 'pac_solution_import'; reused_asset = 'scripts/LowCodeFactory.psm1'; dry_run = '${{ env.DRY_RUN }}' }
+            governance = @{ method = 'pac_solution_import'; reused_asset = 'scripts/LowCodeFactory.psm1'; dry_run = '${{ env.DRY_RUN }}'; registry_callback = 'p0.2' }
           }
           $manifest | ConvertTo-Json -Depth 20 | Set-Content -Path artifacts/power-automate-flow-provisioning-result.json -Encoding utf8
           Get-Content artifacts/power-automate-flow-provisioning-result.json
@@ -175,3 +198,49 @@ jobs:
           name: power-automate-flow-provisioning-p0
           path: artifacts/*.json
           if-no-files-found: error
+
+      - name: Notify registry succeeded
+        if: ${{ success() }}
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Continue'
+          if ([string]::IsNullOrWhiteSpace('${{ env.REQSYS_API_BASE_URL }}') -or [string]::IsNullOrWhiteSpace('${{ env.CORRELATION_ID }}')) {
+            Write-Host 'Registry success callback skipped: REQSYS_API_BASE_URL ou CORRELATION_ID ausente.'
+            exit 0
+          }
+          $headers = @{ 'Content-Type' = 'application/json'; 'X-Correlation-Id' = '${{ env.CORRELATION_ID }}' }
+          if (-not [string]::IsNullOrWhiteSpace('${{ env.REQSYS_PROVISIONING_STATUS_TOKEN }}')) {
+            $headers['Authorization'] = 'Bearer ${{ env.REQSYS_PROVISIONING_STATUS_TOKEN }}'
+          }
+          $artifactUrl = 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts'
+          $body = @{
+            status = 'succeeded'
+            workflow_run_url = 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            artifact_url = $artifactUrl
+          } | ConvertTo-Json
+          $url = '${{ env.REQSYS_API_BASE_URL }}'.TrimEnd('/') + '/v1/hub-lowcode/power-automate/flows/provisioning-registry/${{ env.CORRELATION_ID }}/status'
+          Invoke-RestMethod -Method Patch -Uri $url -Headers $headers -Body $body | ConvertTo-Json -Depth 10
+
+      - name: Notify registry failed
+        if: ${{ failure() }}
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Continue'
+          if ([string]::IsNullOrWhiteSpace('${{ env.REQSYS_API_BASE_URL }}') -or [string]::IsNullOrWhiteSpace('${{ env.CORRELATION_ID }}')) {
+            Write-Host 'Registry failure callback skipped: REQSYS_API_BASE_URL ou CORRELATION_ID ausente.'
+            exit 0
+          }
+          $headers = @{ 'Content-Type' = 'application/json'; 'X-Correlation-Id' = '${{ env.CORRELATION_ID }}' }
+          if (-not [string]::IsNullOrWhiteSpace('${{ env.REQSYS_PROVISIONING_STATUS_TOKEN }}')) {
+            $headers['Authorization'] = 'Bearer ${{ env.REQSYS_PROVISIONING_STATUS_TOKEN }}'
+          }
+          $body = @{
+            status = 'failed'
+            workflow_run_url = 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            artifact_url = 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts'
+            erro = 'GitHub Actions workflow failed. See workflow_run_url.'
+          } | ConvertTo-Json
+          $url = '${{ env.REQSYS_API_BASE_URL }}'.TrimEnd('/') + '/v1/hub-lowcode/power-automate/flows/provisioning-registry/${{ env.CORRELATION_ID }}/status'
+          Invoke-RestMethod -Method Patch -Uri $url -Headers $headers -Body $body | ConvertTo-Json -Depth 10
