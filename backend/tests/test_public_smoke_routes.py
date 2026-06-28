@@ -21,6 +21,8 @@ def test_public_root_route_exposes_smoke_links():
     assert data['runtime_version'] == '/api/runtime/version'
     assert data['runtime_build_info'] == '/api/runtime/build-info'
     assert data['runtime_dependencies'] == '/api/runtime/dependencies'
+    assert data['requisitos_api'] == '/api/requisitos'
+    assert data['requisitos_v1'] == '/v1/requisitos'
 
 
 def test_public_health_route_remains_available():
@@ -54,7 +56,7 @@ def test_public_runtime_contract_declares_required_endpoints():
 
     assert res.status_code == 200
     data = res.json()['data']
-    assert data['schema_version'] == '1.0.0'
+    assert data['schema_version'] == '1.1.0'
     assert data['contract'] == 'reqsys-public-runtime-contract'
 
     required_paths = {item['path'] for item in data['required_public_endpoints']}
@@ -64,6 +66,10 @@ def test_public_runtime_contract_declares_required_endpoints():
         '/api/runtime/readiness',
         '/api/runtime/liveness',
     }
+
+    optional_paths = {item['path'] for item in data['optional_public_evidence']}
+    assert '/api/requisitos' in optional_paths
+    assert '/api/requisitos/{codigo}' in optional_paths
 
     for item in data['required_public_endpoints']:
         assert item['method'] == 'GET'

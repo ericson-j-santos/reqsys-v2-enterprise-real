@@ -83,6 +83,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(requisitos.router)
+app.include_router(requisitos.api_router)
 app.include_router(agile_runtime.router)
 app.include_router(dashboard.router)
 app.include_router(estatisticas.router)
@@ -147,7 +148,7 @@ def _build_sha() -> str:
 
 def _runtime_contracts() -> dict:
     return {
-        'schema_version': '1.0.0',
+        'schema_version': '1.1.0',
         'contract': 'reqsys-public-runtime-contract',
         'service': 'reqsys-api',
         'environment': settings.normalized_environment,
@@ -165,6 +166,9 @@ def _runtime_contracts() -> dict:
             {'method': 'GET', 'path': '/api/runtime/version', 'purpose': 'runtime_version'},
             {'method': 'GET', 'path': '/api/runtime/build-info', 'purpose': 'runtime_build'},
             {'method': 'GET', 'path': '/api/runtime/dependencies', 'purpose': 'runtime_dependencies'},
+            {'method': 'GET', 'path': '/api/requisitos', 'purpose': 'power_automate_get_collection'},
+            {'method': 'GET', 'path': '/api/requisitos/{codigo}', 'purpose': 'power_automate_get_by_codigo'},
+            {'method': 'POST', 'path': '/api/requisitos', 'purpose': 'power_automate_post_receive'},
         ],
     }
 
@@ -235,6 +239,7 @@ def _runtime_html() -> str:
         ('Version', '/api/runtime/version', 'Versão pública'),
         ('Build Info', '/api/runtime/build-info', 'Build e deploy'),
         ('Dependencies', '/api/runtime/dependencies', 'Dependências'),
+        ('Requisitos API', '/api/requisitos', 'GET/POST para Power Automate'),
         ('Evidence', '/runtime/evidence', 'Histórico operacional'),
     ]
     cards_html = ''.join(
@@ -347,6 +352,8 @@ def root():
             'runtime_evidence_history': '/api/runtime/evidence/history',
             'runtime_evidence_summary': '/api/runtime/evidence/summary',
             'runtime_evidence_trends': '/api/runtime/evidence/trends',
+            'requisitos_api': '/api/requisitos',
+            'requisitos_v1': '/v1/requisitos',
             'agile_runtime': '/v1/agile-runtime/resumo',
         }
     )
