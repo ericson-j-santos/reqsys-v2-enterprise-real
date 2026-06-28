@@ -1,0 +1,127 @@
+{
+  "schema_version": "1.0.0",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "generated_at": "2026-06-28T01:45:00Z",
+  "state": "green",
+  "current_score": 95.88,
+  "baseline_score": 88.33,
+  "delta_from_baseline": 7.55,
+  "trend": "improving",
+  "summary": {
+    "samples": 3,
+    "green_samples": 2,
+    "failed_samples": 1,
+    "next_increment": "surface_trilha_d_history_in_ops_dashboard"
+  },
+  "links": {
+    "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
+    "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/build_trilha_d_history.py",
+    "dashboard_data": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/docs/ops-dashboard/data/trilha-d-history.json"
+  },
+  "dimension_summary": {
+    "tests": {
+      "current_status": "passed",
+      "current_score": 100.0,
+      "previous_score": 100.0,
+      "delta_from_baseline": 0.0,
+      "trend": "stable",
+      "samples": 3
+    },
+    "coverage": {
+      "current_status": "passed",
+      "current_score": 74.29,
+      "previous_score": 74.29,
+      "delta_from_baseline": 45.29,
+      "trend": "improving",
+      "samples": 3
+    },
+    "mutation": {
+      "current_status": "passed",
+      "current_score": 100.0,
+      "previous_score": 100.0,
+      "delta_from_baseline": 0.0,
+      "trend": "stable",
+      "samples": 3
+    },
+    "contract": {
+      "current_status": "passed",
+      "current_score": 100.0,
+      "previous_score": 100.0,
+      "delta_from_baseline": 0.0,
+      "trend": "stable",
+      "samples": 3
+    },
+    "schema": {
+      "current_status": "passed",
+      "current_score": 100.0,
+      "previous_score": 100.0,
+      "delta_from_baseline": 0.0,
+      "trend": "stable",
+      "samples": 3
+    },
+    "ci-watch": {
+      "current_status": "passed",
+      "current_score": 100.0,
+      "previous_score": 100.0,
+      "delta_from_baseline": 0.0,
+      "trend": "stable",
+      "samples": 3
+    }
+  },
+  "history": [
+    {
+      "timestamp": "2026-06-28T00:50:55Z",
+      "source": "github_actions_artifact",
+      "run_id": "28306826456",
+      "state": "failed",
+      "average_score": 88.33,
+      "dimensions": {
+        "tests": { "status": "passed", "score": 100.0 },
+        "coverage": { "status": "failed", "score": 29.0 },
+        "mutation": { "status": "passed", "score": 100.0 },
+        "contract": { "status": "passed", "score": 100.0 },
+        "schema": { "status": "passed", "score": 100.0 },
+        "ci-watch": { "status": "passed", "score": 100.0 }
+      },
+      "notes": ["baseline_before_coverage_parser_fix"]
+    },
+    {
+      "timestamp": "2026-06-28T01:39:18Z",
+      "source": "merged_pr",
+      "run_id": "pr-462",
+      "state": "green",
+      "average_score": 95.88,
+      "dimensions": {
+        "tests": { "status": "passed", "score": 100.0 },
+        "coverage": { "status": "passed", "score": 74.29 },
+        "mutation": { "status": "passed", "score": 100.0 },
+        "contract": { "status": "passed", "score": 100.0 },
+        "schema": { "status": "passed", "score": 100.0 },
+        "ci-watch": { "status": "passed", "score": 100.0 }
+      },
+      "notes": ["coverage_parser_fix_merged"]
+    },
+    {
+      "timestamp": "2026-06-28T01:43:44Z",
+      "source": "merged_pr",
+      "run_id": "pr-463",
+      "state": "green",
+      "average_score": 95.88,
+      "dimensions": {
+        "tests": { "status": "passed", "score": 100.0 },
+        "coverage": { "status": "passed", "score": 74.29 },
+        "mutation": { "status": "passed", "score": 100.0 },
+        "contract": { "status": "passed", "score": 100.0 },
+        "schema": { "status": "passed", "score": 100.0 },
+        "ci-watch": { "status": "passed", "score": 100.0 }
+      },
+      "notes": ["coverage_parser_regression_tests_merged"]
+    }
+  ],
+  "runtime_dashboard_contract": {
+    "card_fields": ["state", "current_score", "trend", "delta_from_baseline"],
+    "series_fields": ["timestamp", "average_score", "state"],
+    "dimension_fields": ["current_status", "current_score", "trend", "delta_from_baseline"],
+    "refresh_strategy": "static_json_until_artifact_ingestion_is_enabled"
+  }
+}
