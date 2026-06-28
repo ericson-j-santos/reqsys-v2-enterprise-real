@@ -152,6 +152,31 @@
       </details>
     </section>
 
+    <section class="card" id="autonomous-delivery-cycle">
+      <h2>Autonomous Delivery Cycle</h2>
+      <p class="small">Card operacional estático consumindo <code>autonomous-delivery-cycle-dashboard-card.json</code>. Fila report-only; design alinhado à Trilha C (SPA) com referência Figma via integração GitHub.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Status</div><div id="adc-status" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Risco</div><div id="adc-risk" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Candidatos</div><div id="adc-candidates" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Elegíveis / Mergeados</div><div id="adc-eligible-merged" class="kpi-value">-</div></div>
+      </div>
+      <p class="small" id="adc-summary">-</p>
+      <table>
+        <thead><tr><th>Fila</th><th>Label obrigatório</th><th>Max PRs</th><th>Blockers</th><th>Próximos incrementos</th></tr></thead>
+        <tbody id="adc-queue-summary"><tr><td colspan="5">Carregando...</td></tr></tbody>
+      </table>
+      <table>
+        <thead><tr><th>Incremento</th><th>Prioridade</th><th>Detalhe</th></tr></thead>
+        <tbody id="adc-queue-items"><tr><td colspan="3">Carregando...</td></tr></tbody>
+      </table>
+      <div class="links" id="autonomous-delivery-cycle-links"></div>
+      <details class="details">
+        <summary>Contrato autonomous-delivery-cycle-dashboard-card bruto</summary>
+        <pre id="autonomous-delivery-cycle-details">{}</pre>
+      </details>
+    </section>
+
     <section class="card">
       <h2>Trilha D — Histórico operacional</h2>
       <p class="small">Evolução de score, dimensões e amostras históricas consumindo <code>trilha-d-history.json</code>.</p>
@@ -473,6 +498,72 @@
       });
     }
 
+    async function renderAutonomousDeliveryCycleCard() {
+      const fallback = {
+        status: 'seed',
+        risk: 'medium',
+        summary: 'Ciclo governado de auto-merge condicionado a CI verde.',
+        metrics: { candidate_count: 0, eligible_count: 0, merged_count: 0, blocker_count: 0, next_increment_queue_count: 0 },
+        latest: { required_label: 'cycle:auto-merge-approved', max_prs: 1 },
+        queue: { status: 'empty_seed', items: [] },
+        design: {},
+      };
+      const response = await fetchOptionalJson('./data/autonomous-delivery-cycle-dashboard-card.json', fallback);
+      const payload = response.data || fallback;
+      const metrics = payload.metrics || {};
+      const latest = payload.latest || {};
+      const queue = payload.queue || {};
+
+      document.getElementById('adc-status').innerHTML = `<span class="status ${statusClass(payload.status)}">${payload.status || '-'}</span>`;
+      document.getElementById('adc-risk').innerHTML = `<span class="status ${statusClass(payload.risk)}">${payload.risk || '-'}</span>`;
+      document.getElementById('adc-candidates').textContent = metrics.candidate_count ?? 0;
+      document.getElementById('adc-eligible-merged').textContent = `${metrics.eligible_count ?? 0} / ${metrics.merged_count ?? 0}`;
+      document.getElementById('adc-summary').textContent = payload.summary || '-';
+
+      const summaryBody = document.getElementById('adc-queue-summary');
+      summaryBody.innerHTML = `
+        <tr>
+          <td>${queue.status || '-'}</td>
+          <td>${latest.required_label || '-'}</td>
+          <td>${latest.max_prs ?? '-'}</td>
+          <td>${metrics.blocker_count ?? 0}</td>
+          <td>${metrics.next_increment_queue_count ?? (queue.items || []).length}</td>
+        </tr>
+      `;
+
+      const itemsBody = document.getElementById('adc-queue-items');
+      itemsBody.innerHTML = '';
+      const items = queue.items || [];
+      if (!items.length) {
+        itemsBody.innerHTML = '<tr><td colspan="3">Fila vazia (report-only).</td></tr>';
+      } else {
+        items.forEach((item) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${item.title || item.id || item.increment || '-'}</td>
+            <td>${item.priority || item.pareto || '-'}</td>
+            <td>${item.detail || item.description || '-'}</td>
+          `;
+          itemsBody.appendChild(tr);
+        });
+      }
+
+      const links = document.getElementById('autonomous-delivery-cycle-links');
+      links.innerHTML = '';
+      addLink(links, 'autonomous-delivery-cycle-dashboard-card.json', './data/autonomous-delivery-cycle-dashboard-card.json');
+      if (payload.links?.runbook) addLink(links, 'Runbook', payload.links.runbook, true);
+      if (payload.design?.trilha_c_reference) addLink(links, 'Trilha C (ADR-038)', payload.design.trilha_c_reference, true);
+      if (payload.design?.figma_github_route) addLink(links, 'Figma GitHub (SPA)', payload.design.figma_github_route, true);
+      if (payload.design?.spa_surface) addLink(links, 'Monitoramento SPA', payload.design.spa_surface, true);
+
+      document.getElementById('autonomous-delivery-cycle-details').textContent = shortJson({
+        available: response.available,
+        source: response.source,
+        fallback_error: response.error,
+        payload,
+      });
+    }
+
     async function renderTrilhaDHistory() {
       const fallback = {
         state: 'unknown',
@@ -635,6 +726,7 @@
 
       await renderMergeIntelligence();
       await renderGovernanceEvidenceCards();
+      await renderAutonomousDeliveryCycleCard();
       await renderTrilhaDHistory();
       renderDomains(data.runtime_domain_drilldowns || []);
       const obs = data.observability_correlation_report || {};

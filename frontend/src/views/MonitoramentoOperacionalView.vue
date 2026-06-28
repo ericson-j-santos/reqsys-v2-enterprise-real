@@ -139,6 +139,83 @@
       </v-card-text>
     </v-card>
 
+    <v-card class="painel autonomous-cycle mt-4" elevation="0" :data-section="secaoAtiva === 'autonomous-cycle' ? 'active' : undefined">
+      <v-card-title id="titulo-autonomous-cycle">Autonomous Delivery Cycle</v-card-title>
+      <v-card-subtitle>
+        Card operacional estático do ciclo governado de auto-merge — fila report-only, sem chamada GitHub em runtime.
+      </v-card-subtitle>
+      <v-card-text>
+        <v-row dense>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Status" :value="autonomousCycleResumo.status" :semaforo="autonomousCycleResumo.statusSemaforo" :clickable="false" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Risco" :value="autonomousCycleResumo.risk" :semaforo="autonomousCycleResumo.riskSemaforo" :clickable="false" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Candidatos / Elegíveis" :value="`${autonomousCycleResumo.candidates} / ${autonomousCycleResumo.eligible}`" semaforo="amarelo" :clickable="false" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Mergeados / Blockers" :value="`${autonomousCycleResumo.merged} / ${autonomousCycleResumo.blockers}`" :semaforo="autonomousCycleResumo.blockers > 0 ? 'vermelho' : 'verde'" :clickable="false" />
+          </v-col>
+        </v-row>
+
+        <p class="small text-medium-emphasis mt-3">{{ autonomousCycleResumo.summary }}</p>
+
+        <div class="links mt-3" aria-label="Design e referências">
+          <v-btn
+            v-if="autonomousCycleDesign.figma_github_route"
+            size="small"
+            variant="tonal"
+            color="amber"
+            prepend-icon="mdi-figma"
+            @click="irPara({ path: autonomousCycleDesign.figma_github_route })"
+          >
+            Abrir Figma GitHub
+          </v-btn>
+          <v-btn
+            v-if="autonomousCycleDesign.ops_dashboard_static"
+            size="small"
+            variant="text"
+            color="primary"
+            prepend-icon="mdi-open-in-new"
+            :href="autonomousCycleOpsDashboardHref"
+            target="_blank"
+            rel="noopener"
+          >
+            Dashboard estático
+          </v-btn>
+        </div>
+
+        <v-table density="compact" class="mt-4" aria-label="Fila de próximos incrementos">
+          <thead>
+            <tr><th>Status fila</th><th>Label obrigatório</th><th>Max PRs</th><th>Próximos incrementos</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{{ autonomousCycleResumo.queueStatus }}</td>
+              <td>{{ autonomousCycleResumo.requiredLabel }}</td>
+              <td>{{ autonomousCycleResumo.maxPrs }}</td>
+              <td>{{ autonomousCycleResumo.queueCount }}</td>
+            </tr>
+          </tbody>
+        </v-table>
+
+        <v-table v-if="autonomousCycleQueue.length" density="compact" class="mt-4" aria-label="Itens da fila">
+          <thead>
+            <tr><th>Incremento</th><th>Prioridade</th><th>Detalhe</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="(item, index) in autonomousCycleQueue" :key="`${item.title || item.id || index}`">
+              <td>{{ item.title || item.id || item.increment || 'n/a' }}</td>
+              <td>{{ item.priority || item.pareto || '-' }}</td>
+              <td>{{ item.detail || item.description || '-' }}</td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card-text>
+    </v-card>
+
     <v-card class="painel trilha-d mt-4" elevation="0" :data-section="secaoAtiva === 'trilha-d' ? 'active' : undefined">
       <v-card-title id="titulo-trilha-d">Histórico Trilha D</v-card-title>
       <v-card-subtitle>Evolução de score, dimensões e amostras históricas consumindo trilha-d-history.json.</v-card-subtitle>
@@ -317,6 +394,7 @@ const opcoesSecao = [
   { title: 'Métricas', value: 'metrics' },
   { title: 'Timeline', value: 'timeline' },
   { title: 'Governança', value: 'governanca' },
+  { title: 'Autonomous Cycle', value: 'autonomous-cycle' },
   { title: 'Trilha D', value: 'trilha-d' },
 ]
 
@@ -365,6 +443,36 @@ const governanceEvidenceFiltrada = computed(() => {
   const capability = route.query.capability
   if (!capability) return governanceItems.value
   return governanceItems.value.filter((item) => item.id === capability)
+})
+const autonomousCycleSection = computed(() => runtimeDashboard.value?.sections?.find((section) => section.id === 'autonomous-delivery-cycle') || null)
+const autonomousCyclePayload = computed(() => runtimeDashboard.value?.autonomous_delivery_cycle || autonomousCycleSection.value?.items || {})
+const autonomousCycleDesign = computed(() => autonomousCyclePayload.value?.design || {})
+const autonomousCycleOpsDashboardHref = computed(() => {
+  const target = autonomousCycleDesign.value?.ops_dashboard_static || 'docs/ops-dashboard/index.html#autonomous-delivery-cycle'
+  if (target.startsWith('http')) return target
+  return `/${target.replace(/^\/+/, '')}`
+})
+const autonomousCycleQueue = computed(() => autonomousCyclePayload.value?.queue?.items || [])
+const autonomousCycleResumo = computed(() => {
+  const metrics = autonomousCyclePayload.value?.metrics || {}
+  const latest = autonomousCyclePayload.value?.latest || {}
+  const risk = autonomousCyclePayload.value?.risk || 'medium'
+  const status = autonomousCyclePayload.value?.status || 'seed'
+  return {
+    status,
+    statusSemaforo: status === 'passed' || status === 'seed' ? (status === 'passed' ? 'verde' : 'amarelo') : 'vermelho',
+    risk,
+    riskSemaforo: risk === 'low' ? 'verde' : risk === 'high' ? 'vermelho' : 'amarelo',
+    candidates: metrics.candidate_count ?? 0,
+    eligible: metrics.eligible_count ?? 0,
+    merged: metrics.merged_count ?? 0,
+    blockers: metrics.blocker_count ?? 0,
+    queueCount: metrics.next_increment_queue_count ?? autonomousCycleQueue.value.length,
+    queueStatus: autonomousCyclePayload.value?.queue?.status || 'empty_seed',
+    requiredLabel: latest.required_label || 'cycle:auto-merge-approved',
+    maxPrs: latest.max_prs ?? 1,
+    summary: autonomousCyclePayload.value?.summary || 'Ciclo governado de auto-merge condicionado a CI verde.',
+  }
 })
 const trilhaDSection = computed(() => runtimeDashboard.value?.sections?.find((section) => section.id === 'trilha-d-history') || null)
 const trilhaDHistory = computed(() => runtimeDashboard.value?.trilha_d_history || {})

@@ -1,0 +1,4 @@
+{
+  "title": "feat(dashboard): render autonomous delivery cycle card na UI operacional",
+  "body": "## Resumo\n\nRenderiza `autonomous-delivery-cycle-dashboard-card.json` na SPA (`MonitoramentoOperacionalView`) e no dashboard estático (`docs/ops-dashboard/index.html`), com link para superfície Figma via `/figma-github`.\n\n## Escopo\n\n- `backend/app/services/autonomous_delivery_cycle_card.py`\n- `backend/app/api/monitoramento_operacional.py`\n- `frontend/src/views/MonitoramentoOperacionalView.vue`\n- `docs/ops-dashboard/index.html`\n- `scripts/build_autonomous_delivery_cycle_dashboard_card.py` (links design)\n\n## Fora de escopo\n\n- Execução automática do ciclo\n- Chamadas GitHub API em runtime\n\n## Evidências\n\n- `pytest backend/tests/test_autonomous_delivery_cycle_card.py`\n- `pytest backend/tests/test_monitoramento_operacional.py`\n\n## increment-type\n\nconsolidate"
+}

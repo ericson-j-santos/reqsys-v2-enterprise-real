@@ -26,6 +26,11 @@ from app.services.governance_evidence_index import (
     mapear_cards_governance,
     mapear_secao_governance,
 )
+from app.services.autonomous_delivery_cycle_card import (
+    carregar_autonomous_delivery_cycle_card,
+    mapear_cards_autonomous_cycle,
+    mapear_secao_autonomous_cycle,
+)
 from app.services.trilha_d_history_index import (
     carregar_trilha_d_history_index,
     mapear_cards_trilha_d,
@@ -259,6 +264,9 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
     governance_index = carregar_governance_evidence_index()
     governance_cards = mapear_cards_governance(governance_index)
     governance_section = mapear_secao_governance(governance_index)
+    autonomous_cycle_card = carregar_autonomous_delivery_cycle_card()
+    autonomous_cycle_cards = mapear_cards_autonomous_cycle(autonomous_cycle_card)
+    autonomous_cycle_section = mapear_secao_autonomous_cycle(autonomous_cycle_card)
     trilha_d_index = carregar_trilha_d_history_index()
     trilha_d_cards = mapear_cards_trilha_d(trilha_d_index)
     trilha_d_section = mapear_secao_trilha_d(trilha_d_index)
@@ -353,9 +361,11 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'governanca'}),
             },
             *governance_cards,
+            *autonomous_cycle_cards,
             *trilha_d_cards,
         ],
         'governance_evidence': governance_index,
+        'autonomous_delivery_cycle': autonomous_cycle_card,
         'trilha_d_history': trilha_d_index,
         'sections': [
             {
@@ -447,6 +457,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'items': {'classification': 'requires_public_artifacts', 'environments': ['dev', 'staging', 'prod']},
             },
             governance_section,
+            autonomous_cycle_section,
             trilha_d_section,
             {
                 'id': 'correlation-analytics',

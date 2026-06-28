@@ -83,6 +83,13 @@ def build_card(latest: dict[str, Any] | None = None, queue: dict[str, Any] | Non
             "safe_fallback_when_source_artifact_missing",
             "post_merge_attention_blocks_next_increment",
         ],
+        "design": {
+            "trilha_c_reference": "docs/adr/ADR-038-trilha-c-ux-operacional.md",
+            "spa_surface": "/monitoramento-operacional?secao=autonomous-cycle",
+            "figma_github_route": "/figma-github",
+            "ops_dashboard_static": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/docs/ops-dashboard/index.html#autonomous-delivery-cycle",
+            "figma_note": "Superficie Trilha C na SPA; arquivo Figma via /figma-github quando FIGMA_DEFAULT_FILE_KEY estiver configurado.",
+        },
     }
 
 

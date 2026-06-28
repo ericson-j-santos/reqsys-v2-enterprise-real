@@ -75,12 +75,17 @@ def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
     assert data['data_source']['endpoint'] == '/api/runtime/health'
     assert {'runtime-status', 'risk-score', 'pending-items', 'uptime', 'readiness-percent', 'fly-duckdns-status', 'governance-evidence-score', 'trilha-d-score'} <= card_ids
     assert any(card['id'].startswith('governance-') for card in data['cards'])
+    assert any(card['id'].startswith('autonomous-cycle-') for card in data['cards'])
     assert any(card['id'].startswith('trilha-d-dim-') for card in data['cards'])
-    assert {'workflow-topology', 'public-smoke', 'operational-timeline', 'environment-evidence', 'incident-summary', 'risk-summary', 'environment-drift-summary', 'governance-evidence', 'trilha-d-history'} <= section_ids
+    assert {'workflow-topology', 'public-smoke', 'operational-timeline', 'environment-evidence', 'incident-summary', 'risk-summary', 'environment-drift-summary', 'governance-evidence', 'autonomous-delivery-cycle', 'trilha-d-history'} <= section_ids
     governance = next(section for section in data['sections'] if section['id'] == 'governance-evidence')
     assert governance['type'] == 'governance_cards'
     assert governance['items']['evidence']
     assert data['governance_evidence']['summary']['total_capabilities'] >= 4
+    autonomous = next(section for section in data['sections'] if section['id'] == 'autonomous-delivery-cycle')
+    assert autonomous['type'] == 'autonomous_delivery_cycle_card'
+    assert autonomous['items']['metrics']
+    assert data['autonomous_delivery_cycle']['card'] == 'autonomous_delivery_cycle'
     trilha_d = next(section for section in data['sections'] if section['id'] == 'trilha-d-history')
     assert trilha_d['type'] == 'trilha_d_history'
     assert trilha_d['items']['history']

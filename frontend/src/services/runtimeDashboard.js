@@ -32,6 +32,11 @@ export function semaforoRuntimeCard(card) {
     if (card.severity === 'unhealthy') return 'vermelho'
     return 'amarelo'
   }
+  if (card.type === 'autonomous_delivery_cycle') {
+    if (card.severity === 'healthy') return 'verde'
+    if (card.severity === 'unhealthy') return 'vermelho'
+    return 'amarelo'
+  }
   if (card.severity) return estadoParaSemaforo(card.severity)
   if (card.type === 'status') return estadoParaSemaforo(card.value)
   if (card.id === 'risk-score' && Number(card.value) >= 70) return 'vermelho'
