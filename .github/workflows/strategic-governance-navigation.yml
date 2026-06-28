@@ -1,0 +1,51 @@
+name: Strategic Governance Navigation
+
+on:
+  pull_request:
+    paths:
+      - docs/ops-dashboard/strategic-governance*.html
+      - docs/ops-dashboard/strategic-governance*.json
+      - scripts/validate_strategic_governance_navigation.py
+      - tests/test_validate_strategic_governance_navigation.py
+      - .github/workflows/strategic-governance-navigation.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: strategic-governance-navigation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-navigation:
+    name: Validate Strategic Governance navigation
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate script syntax
+        run: python -m py_compile scripts/validate_strategic_governance_navigation.py
+
+      - name: Run navigation validator
+        run: |
+          python scripts/validate_strategic_governance_navigation.py \
+            --output artifacts/strategic-governance-navigation-validation.json
+
+      - name: Run unit test
+        run: pytest tests/test_validate_strategic_governance_navigation.py
+
+      - name: Upload validation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategic-governance-navigation-validation
+          path: artifacts/strategic-governance-navigation-validation.json
+          if-no-files-found: error
+          retention-days: 15
