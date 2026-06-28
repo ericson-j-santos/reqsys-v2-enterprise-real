@@ -169,6 +169,7 @@ Data de referência: 2026-06-27
 - [`docs/runbooks/golden-release-operational-checklist.md`](../runbooks/golden-release-operational-checklist.md)
 - [`docs/runbooks/fly-governed-command-center.md`](../runbooks/fly-governed-command-center.md)
 - [`docs/runbooks/fly-runtime-p0.md`](../runbooks/fly-runtime-p0.md)
+- [`docs/runbooks/fly-runtime-p0-pos-deploy-evidencia.md`](../runbooks/fly-runtime-p0-pos-deploy-evidencia.md)
 
 ---
 
@@ -242,6 +243,7 @@ Data de referência: 2026-06-27
 | CI Lead Time Analytics | `docs/runbooks/ci-lead-time-analytics.md` |
 | CI Router | `docs/runbooks/ci-router.md` |
 | Dashboard Regression | `docs/runbooks/dashboard-regression-validation.md` |
+| Coverage Targeted Tests (Trilha D) | `docs/runbooks/coverage-targeted-tests-trilha-d.md` |
 
 ### Operações e runtime
 
@@ -274,6 +276,7 @@ Data de referência: 2026-06-27
 | Delivery Status Report | `docs/runbooks/delivery-status-report.md` |
 | Golden Release Checklist | `docs/runbooks/golden-release-operational-checklist.md` |
 | Fly Governed Command Center | `docs/runbooks/fly-governed-command-center.md` |
+| Fly Runtime P0 Pós-Deploy | `docs/runbooks/fly-runtime-p0-pos-deploy-evidencia.md` |
 
 ---
 

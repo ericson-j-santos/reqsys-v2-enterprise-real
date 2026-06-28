@@ -132,6 +132,12 @@ FLY_API_TOKEN
 | `/api/runtime/dashboard` | HTTP 2xx |
 | Artifact `public-runtime-validation.json` | Publicado |
 
+## Pós-deploy (Padrão Ouro)
+
+Após `deploy=true`, seguir o runbook canônico de evidência:
+
+- [`fly-runtime-p0-pos-deploy-evidencia.md`](fly-runtime-p0-pos-deploy-evidencia.md) — probe strict, artifacts, gates dependentes e rollback.
+
 ## Limites
 
 - Este incremento não cria secrets.

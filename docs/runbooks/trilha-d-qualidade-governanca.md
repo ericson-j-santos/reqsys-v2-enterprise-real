@@ -73,3 +73,11 @@ A Trilha D complementa esses gates com visão consolidada paralelizável para ag
 1. Workflow publica artifact `trilha-d-qualidade-governanca-evidence`.
 2. JSON consolidado com `parallelizable: true` e seis dimensões.
 3. Testes unitários em `tests/test_trilha_d_qualidade_governanca.py` verdes.
+
+## Incremento Pareto — coverage_targeted_tests
+
+Quando o Pareto apontar `coverage` como gargalo dominante:
+
+- Runbook: [`coverage-targeted-tests-trilha-d.md`](coverage-targeted-tests-trilha-d.md)
+- Artefatos: `backend/tests/test_*_critical_paths.py`
+- Gate: `OPS-GAP-COVERAGE` · `increment-type: hotfix`
