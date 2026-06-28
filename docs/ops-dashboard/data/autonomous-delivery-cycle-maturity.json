@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "maturity": {
+    "current": "enterprise_initial",
+    "target": "padrao_ouro_consolidado",
+    "technical_percent": 85,
+    "operational_percent": 70,
+    "governance_percent": 90,
+    "user_value_percent": 75,
+    "confidence": "medium"
+  },
+  "gaps_to_gold": [
+    "first_successful_dry_run",
+    "dashboard_runtime_consumption",
+    "historical_success_metrics",
+    "post_merge_ci_burndown"
+  ]
+}
