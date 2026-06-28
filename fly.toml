@@ -13,6 +13,8 @@ kill_timeout = "5s"
   JWT_EXP_MINUTES = "60"
   CORS_ORIGINS = "https://reqsys-app.fly.dev,https://reqsys-api.fly.dev"
   SDD_SPECS_PATH = "/app/specs"
+  REQSYS_BOOT_FALLBACK = "true"
+  REQSYS_BOOT_FALLBACK_DATABASE_URL = "sqlite:////tmp/reqsys-fallback.db"
 
 [[mounts]]
   source = "reqsys_data"
