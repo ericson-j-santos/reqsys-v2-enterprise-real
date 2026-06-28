@@ -1,0 +1,52 @@
+name: OpenAPI Contract Governance
+
+on:
+  pull_request:
+    paths:
+      - docs-site/assets/openapi/**
+      - scripts/validate_openapi_contract.py
+      - tests/test_validate_openapi_contract.py
+      - .github/workflows/openapi-contract-governance.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openapi-contract-governance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-openapi-contract:
+    name: Validate OpenAPI contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate validator syntax
+        run: python -m py_compile scripts/validate_openapi_contract.py
+
+      - name: Run OpenAPI contract validator
+        run: |
+          python scripts/validate_openapi_contract.py \
+            --contract docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json \
+            --output artifacts/openapi/openapi-contract-validation.json
+
+      - name: Run unit tests
+        run: pytest tests/test_validate_openapi_contract.py
+
+      - name: Upload validation artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-contract-validation
+          path: artifacts/openapi/openapi-contract-validation.json
+          if-no-files-found: error
+          retention-days: 15
