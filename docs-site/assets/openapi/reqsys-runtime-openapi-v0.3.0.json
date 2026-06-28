@@ -1,0 +1,276 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ReqSys Runtime API",
+    "version": "0.3.0",
+    "description": "Contrato OpenAPI governado para prática GET/POST, Power Automate e runtime operacional do ReqSys."
+  },
+  "servers": [
+    {
+      "url": "https://reqsys-api.fly.dev",
+      "description": "Produção pública"
+    },
+    {
+      "url": "https://reqsys-api-dev.fly.dev",
+      "description": "Desenvolvimento público"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Requisitos",
+      "description": "Endpoints mockados para prática GET/POST"
+    },
+    {
+      "name": "Runtime",
+      "description": "Endpoints operacionais de saúde, dashboard e analytics"
+    }
+  ],
+  "paths": {
+    "/api/requisitos/{id}": {
+      "get": {
+        "tags": ["Requisitos"],
+        "summary": "Consultar requisito mockado por ID",
+        "operationId": "consultarRequisitoPorId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "REQ-001"
+            }
+          },
+          {
+            "name": "x-correlation-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "example": "reqsys-pa-get-0001"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Requisito encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequisitoResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/requisitos": {
+      "post": {
+        "tags": ["Requisitos"],
+        "summary": "Receber requisito mockado",
+        "operationId": "criarRequisitoMockado",
+        "parameters": [
+          {
+            "name": "x-correlation-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "example": "reqsys-pa-post-0001"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequisitoCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Requisito recebido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequisitoCreateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/api/runtime/health": {
+      "get": {
+        "tags": ["Runtime"],
+        "summary": "Verificar saúde operacional",
+        "operationId": "runtimeHealth",
+        "responses": {
+          "200": {
+            "description": "Runtime saudável ou parcialmente disponível",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runtime/dashboard": {
+      "get": {
+        "tags": ["Runtime"],
+        "summary": "Consultar dashboard operacional runtime",
+        "operationId": "runtimeDashboard",
+        "responses": {
+          "200": {
+            "description": "Sinais operacionais consolidados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runtime/analytics": {
+      "get": {
+        "tags": ["Runtime"],
+        "summary": "Consultar analytics operacional",
+        "operationId": "runtimeAnalytics",
+        "responses": {
+          "200": {
+            "description": "Evidências e métricas operacionais",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RequisitoCreateRequest": {
+        "type": "object",
+        "required": ["titulo", "descricao", "tipo", "prioridade", "origem"],
+        "properties": {
+          "titulo": {
+            "type": "string",
+            "minLength": 5,
+            "example": "Registrar requisito via Power Automate"
+          },
+          "descricao": {
+            "type": "string",
+            "minLength": 10,
+            "example": "Fluxo de recebimento POST para praticar estrutura de dados."
+          },
+          "tipo": {
+            "type": "string",
+            "enum": ["funcional", "nao_funcional", "regra_negocio", "restricao"],
+            "example": "funcional"
+          },
+          "prioridade": {
+            "type": "string",
+            "enum": ["baixa", "media", "alta", "critica"],
+            "example": "media"
+          },
+          "origem": {
+            "type": "string",
+            "example": "power_automate"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RequisitoResponse": {
+        "type": "object",
+        "required": ["id", "titulo", "tipo", "status", "prioridade", "origem", "metadata"],
+        "properties": {
+          "id": {"type": "string", "example": "REQ-001"},
+          "titulo": {"type": "string"},
+          "tipo": {"type": "string"},
+          "status": {"type": "string", "example": "rascunho"},
+          "prioridade": {"type": "string"},
+          "origem": {"type": "string"},
+          "metadata": {"$ref": "#/components/schemas/Metadata"}
+        }
+      },
+      "RequisitoCreateResponse": {
+        "type": "object",
+        "required": ["id", "status", "mensagem", "metadata"],
+        "properties": {
+          "id": {"type": "string", "example": "REQ-PA-0001"},
+          "status": {"type": "string", "example": "recebido"},
+          "mensagem": {"type": "string"},
+          "metadata": {"$ref": "#/components/schemas/Metadata"}
+        }
+      },
+      "RuntimeHealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string", "example": "ok"},
+          "environment": {"type": "string", "example": "prod"},
+          "metadata": {"$ref": "#/components/schemas/Metadata"}
+        },
+        "additionalProperties": true
+      },
+      "Metadata": {
+        "type": "object",
+        "required": ["versao_contrato", "correlation_id"],
+        "properties": {
+          "versao_contrato": {"type": "string", "example": "0.3.0"},
+          "correlation_id": {"type": "string", "example": "reqsys-pa-0001"}
+        }
+      },
+      "ErroPadrao": {
+        "type": "object",
+        "required": ["erro", "mensagem", "metadata"],
+        "properties": {
+          "erro": {"type": "string", "example": "bad_request"},
+          "mensagem": {"type": "string"},
+          "metadata": {"$ref": "#/components/schemas/Metadata"}
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Payload inválido",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErroPadrao"}
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Recurso não encontrado",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErroPadrao"}
+          }
+        }
+      }
+    }
+  }
+}
