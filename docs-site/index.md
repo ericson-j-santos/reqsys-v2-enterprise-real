@@ -1,8 +1,8 @@
 # ReqSys Enterprise Docs
 
-> **Versão da documentação:** `0.1.0`  
+> **Versão da documentação:** `0.2.0`  
 > **Data:** 28/06/2026  
-> **Estado:** incremento inicial versionado para documentação viva.
+> **Estado:** Arquitetura Viva inicial versionada.
 
 ## Objetivo
 
@@ -12,18 +12,22 @@ O objetivo é permitir que arquitetura, APIs, ambientes, governança, rastreabil
 
 ## Acesso sem MkDocs local
 
-Caso o ambiente corporativo não permita instalar Python, MkDocs ou dependências externas, utilize o HTML estático versionado localizado em `docs/offline/reqsys-docs-v0.1.0.html`.
+Caso o ambiente corporativo não permita instalar Python, MkDocs ou dependências externas, utilize um dos HTMLs estáticos publicados em `/offline/`:
 
-Esse arquivo é autocontido, versionado no Git e pode ser usado como fallback de leitura.
+| Versão | Caminho publicado |
+|---|---|
+| Compatibilidade | `/offline/reqsys-docs-v0.1.0.html` |
+| Atual | `/offline/reqsys-docs-v0.2.0.html` |
 
 ## Áreas documentadas neste incremento
 
 | Área | Conteúdo | Estado |
 |---|---|---|
+| Arquitetura Viva | Visão geral e fluxo operacional com Mermaid | Implementado |
 | API Runtime | Contrato inicial dos endpoints runtime e requisitos | Inicial versionado |
-| Operação | Ambientes, acesso, publicação e fallback | Inicial versionado |
-| Governança | Rastreabilidade, evidências, versionamento e CI | Inicial versionado |
-| Offline | HTML estático sem dependência de MkDocs local | Implementado |
+| Operação | Ambientes, acesso, publicação e fallback | Atualizado |
+| Governança | Rastreabilidade, evidências, versionamento e CI | Atualizado |
+| Offline | HTML estático sem dependência de MkDocs local | Corrigido |
 
 ## Comandos locais opcionais
 
@@ -39,8 +43,7 @@ MkDocs usa `docs-site/` como fonte oficial para evitar varredura da árvore hist
 
 ## Próximos incrementos recomendados
 
-1. Adicionar diagramas Mermaid vivos para arquitetura e runtime.
-2. Publicar automaticamente via GitHub Pages após merge em `main`.
-3. Integrar OpenAPI/Swagger aos documentos de API.
-4. Renderizar evidências JSON operacionais dentro do portal de documentação.
-5. Criar versionamento semântico por release de documentação.
+1. Integrar OpenAPI/Swagger aos documentos de API.
+2. Renderizar evidências JSON operacionais dentro do portal de documentação.
+3. Adicionar cards executivos por ambiente.
+4. Automatizar versionamento semântico por release documental.
