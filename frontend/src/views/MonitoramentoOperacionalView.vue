@@ -139,6 +139,67 @@
       </v-card-text>
     </v-card>
 
+    <v-card class="painel trilha-d mt-4" elevation="0" :data-section="secaoAtiva === 'trilha-d' ? 'active' : undefined">
+      <v-card-title id="titulo-trilha-d">Histórico Trilha D</v-card-title>
+      <v-card-subtitle>Evolução de score, dimensões e amostras históricas consumindo trilha-d-history.json.</v-card-subtitle>
+      <v-card-text>
+        <v-row>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Score atual" :value="trilhaDResumo.score" :semaforo="trilhaDResumo.state" :clickable="false" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Estado" :value="trilhaDResumo.state" :semaforo="trilhaDResumo.state" :clickable="false" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Tendência" :value="trilhaDResumo.trend" :semaforo="trilhaDResumo.trend" :clickable="false" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Delta baseline" :value="trilhaDResumo.delta" semaforo="verde" :clickable="false" />
+          </v-col>
+        </v-row>
+        <v-table density="compact" class="mt-4" aria-label="Dimensões Trilha D">
+          <thead>
+            <tr>
+              <th>Dimensão</th>
+              <th>Status</th>
+              <th>Score</th>
+              <th>Tendência</th>
+              <th>Delta baseline</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(item, dimension) in trilhaDDimensoesFiltradas" :key="dimension">
+              <td>{{ dimension }}</td>
+              <td><SemaforoChip :estado="statusTrilhaDParaSemaforo(item.current_status)" :label="item.current_status || 'n/a'" /></td>
+              <td>{{ item.current_score }}</td>
+              <td>{{ item.trend }}</td>
+              <td>{{ item.delta_from_baseline }}</td>
+            </tr>
+          </tbody>
+        </v-table>
+        <v-table density="compact" class="mt-4" aria-label="Histórico Trilha D">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Estado</th>
+              <th>Score médio</th>
+              <th>Fonte</th>
+              <th>Run</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="entry in trilhaDHistorico" :key="`${entry.timestamp}-${entry.run_id}`">
+              <td>{{ entry.timestamp }}</td>
+              <td><SemaforoChip :estado="statusTrilhaDParaSemaforo(entry.state)" :label="entry.state || 'n/a'" /></td>
+              <td>{{ entry.average_score }}</td>
+              <td>{{ entry.source }}</td>
+              <td>{{ entry.run_id }}</td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card-text>
+    </v-card>
+
     <v-card class="filtros mt-4" elevation="0">
       <v-card-title>Filtros do analítico</v-card-title>
       <v-card-text>
@@ -256,6 +317,7 @@ const opcoesSecao = [
   { title: 'Métricas', value: 'metrics' },
   { title: 'Timeline', value: 'timeline' },
   { title: 'Governança', value: 'governanca' },
+  { title: 'Trilha D', value: 'trilha-d' },
 ]
 
 const fallbackConectores = [
@@ -304,6 +366,22 @@ const governanceEvidenceFiltrada = computed(() => {
   if (!capability) return governanceItems.value
   return governanceItems.value.filter((item) => item.id === capability)
 })
+const trilhaDSection = computed(() => runtimeDashboard.value?.sections?.find((section) => section.id === 'trilha-d-history') || null)
+const trilhaDHistory = computed(() => runtimeDashboard.value?.trilha_d_history || {})
+const trilhaDItems = computed(() => trilhaDSection.value?.items || trilhaDHistory.value || {})
+const trilhaDResumo = computed(() => ({
+  score: trilhaDItems.value.current_score ?? 'n/a',
+  state: trilhaDItems.value.state ?? 'desconhecido',
+  trend: trilhaDItems.value.trend ?? 'n/a',
+  delta: trilhaDItems.value.delta_from_baseline ?? 'n/a',
+}))
+const trilhaDDimensoes = computed(() => trilhaDItems.value.dimension_summary || {})
+const trilhaDDimensoesFiltradas = computed(() => {
+  const dimensao = route.query.dimensao
+  if (!dimensao) return trilhaDDimensoes.value
+  return Object.fromEntries(Object.entries(trilhaDDimensoes.value).filter(([key]) => key === dimensao))
+})
+const trilhaDHistorico = computed(() => trilhaDItems.value.history || [])
 const traceChain = computed(() => correlationAnalytics.value?.operational_trace_chains?.[0]?.chain?.join(' → ') || runtimeTopologyPreview.value?.trace_chain?.join(' → ') || 'n/a')
 
 const totalPorStatus = computed(() => conectores.value.reduce((acc, item) => {
@@ -323,6 +401,13 @@ const cardsResumo = computed(() => [
 function statusGovernancaParaSemaforo(status) {
   if (status === 'implemented') return 'verde'
   if (status === 'dry_run') return 'amarelo'
+  return 'desconhecido'
+}
+
+function statusTrilhaDParaSemaforo(status) {
+  if (status === 'green' || status === 'passed' || status === 'improving') return 'verde'
+  if (status === 'yellow' || status === 'stable') return 'amarelo'
+  if (status === 'failed' || status === 'regressing') return 'vermelho'
   return 'desconhecido'
 }
 

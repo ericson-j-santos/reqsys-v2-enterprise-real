@@ -11,7 +11,7 @@
     "samples": 3,
     "green_samples": 2,
     "failed_samples": 1,
-    "next_increment": "surface_trilha_d_history_in_ops_dashboard"
+    "next_increment": "artifact_ingestion_refresh"
   },
   "links": {
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",

@@ -133,7 +133,7 @@ def build_payload(history: list[dict[str, Any]] | None = None) -> dict[str, Any]
             "samples": len(samples),
             "green_samples": sum(1 for item in samples if item.get("state") == "green"),
             "failed_samples": sum(1 for item in samples if item.get("state") == "failed"),
-            "next_increment": "surface_trilha_d_history_in_ops_dashboard",
+            "next_increment": "artifact_ingestion_refresh",
         },
         "links": {
             "actions": f"https://github.com/{REPO}/actions/workflows/trilha-d-qualidade-governanca.yml",
