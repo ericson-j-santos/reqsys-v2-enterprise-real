@@ -19,6 +19,9 @@ on:
       - "scripts/runtime_public_validator.py"
       - "config/external-sources-registry.json"
       - "docs/ops-dashboard/**"
+  pull_request:
+    types: [closed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       action:
@@ -60,9 +63,16 @@ jobs:
 
       - name: Criar ou atualizar PR draft
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
+          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS || github.token }}
           PR_TITLE: "feat: executar ciclos Padrão Ouro (runtime, CI intel, governança, estatísticas)"
-        run: python scripts/auto_open_agent_pr.py
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_PAT_ACTIONS:-}" ]; then
+            echo "::warning::GH_PAT_ACTIONS ausente; tentando GITHUB_TOKEN (pode falhar por policy da org)."
+            export GH_TOKEN="${{ github.token }}"
+          fi
+          python scripts/auto_open_agent_pr.py
 
       - name: Resumo
         run: |
@@ -76,6 +86,7 @@ jobs:
     name: Validate runtime público (Trilha A)
     if: >-
       (github.event_name == 'push' && github.ref_name == 'main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto'))
     runs-on: ubuntu-latest
     steps:
@@ -106,6 +117,7 @@ jobs:
     if: >-
       needs.validate-runtime.result == 'success' &&
       ((github.event_name == 'push' && github.ref_name == 'main') ||
+       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
        (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
     environment: production
     steps:
@@ -136,6 +148,7 @@ jobs:
       needs.validate-runtime.result == 'success' &&
       (needs.deploy-fly-prod.result == 'success' || needs.deploy-fly-prod.result == 'skipped') &&
       ((github.event_name == 'push' && github.ref_name == 'main') ||
+       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
        (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
     steps:
       - uses: actions/checkout@v4
@@ -207,4 +220,8 @@ jobs:
             echo "| Public smoke | ${{ needs.public-runtime-smoke.result || 'skipped' }} |"
             echo ""
             echo "Correlation ID: \`$CORRELATION_ID\`"
+            if [ "${{ needs.auto-open-pr.result }}" = "failure" ]; then
+              echo ""
+              echo "> PR automático falhou: configure o secret \`GH_PAT_ACTIONS\` com escopo \`repo\` e permissão de PR."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
