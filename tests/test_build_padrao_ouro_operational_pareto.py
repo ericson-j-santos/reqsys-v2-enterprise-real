@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.build_padrao_ouro_operational_pareto import build_payload, score_action, trend_for if False else build_ranked_actions
+from scripts.build_padrao_ouro_operational_pareto import build_payload, build_ranked_actions, score_action
 
 
 def test_operational_pareto_prioritizes_coverage_first() -> None:
