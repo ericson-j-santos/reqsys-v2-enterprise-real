@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "readiness_percent": 85,
+  "status": "ready_for_dry_run_after_merge",
+  "confidence": "medium",
+  "implemented": true,
+  "validated_by_contract_tests": true,
+  "requires_first_dry_run": true,
+  "requires_dashboard_consumption": true,
+  "maturity": "enterprise_initial",
+  "next_increment": "consume_autonomous_delivery_cycle_contracts_in_ops_dashboard"
+}
