@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, Depends, Header, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
@@ -156,14 +156,17 @@ def power_automate_flow_provisioning_registry_status(
     erro: str | None = Body(default=None),
 ):
     """Atualiza status operacional de um provisionamento por correlation_id."""
-    item = atualizar_status_provisionamento(
-        db,
-        correlation_id=correlation_id,
-        status=status,
-        workflow_run_url=workflow_run_url,
-        artifact_url=artifact_url,
-        erro=erro,
-    )
+    try:
+        item = atualizar_status_provisionamento(
+            db,
+            correlation_id=correlation_id,
+            status=status,
+            workflow_run_url=workflow_run_url,
+            artifact_url=artifact_url,
+            erro=erro,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ok(serializar_registry(item), correlation_id)
 
 
