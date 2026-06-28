@@ -16,3 +16,13 @@ def test_strategic_governance_navigation_validator_passes_for_static_assets() ->
     assert "strategic_governance_page" in report["manifest"]["validated_links"]
     assert "./strategic-governance.html" in report["entrypoint"]["validated_fragments"]
     assert "no_network_calls" in report["guardrails"]
+
+
+def test_strategic_governance_page_exposes_executive_trend_artifact() -> None:
+    html = Path("docs/ops-dashboard/strategic-governance.html").read_text(encoding="utf-8")
+
+    assert "Executive Trend History" in html
+    assert "./data/executive-trend-history.json" in html
+    assert "executive-trend-history.json" in html
+    assert "recommendation-only" in html
+    assert "não substitui CI" in html
