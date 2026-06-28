@@ -10,6 +10,7 @@ from scripts.auto_open_agent_pr import (
     build_body,
     create_pr_best_effort,
     is_permission_error,
+    load_branch_pr_metadata,
     main,
     resolve_token,
     skip_existing_pr,
@@ -175,3 +176,52 @@ def test_main_sucesso_quando_pr_ja_existe_mas_update_retorna_403(monkeypatch, tm
     artifact = json.loads((tmp_path / "auto-pr-request.json").read_text(encoding="utf-8"))
     assert artifact["branch"] == "cursor/coverage-targeted-tests-ddbb"
     assert artifact["status"] == "skipped_permission"
+
+
+def test_load_branch_pr_metadata_reads_json(tmp_path, monkeypatch):
+    metadata_dir = tmp_path / ".github" / "pr-metadata"
+    metadata_dir.mkdir(parents=True)
+    (metadata_dir / "cursor-gap-fix-consolidator-71ed.json").write_text(
+        json.dumps({"title": "fix(ci): titulo", "body": "corpo customizado"}),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    payload = load_branch_pr_metadata("cursor/gap-fix-consolidator-71ed")
+    assert payload == {"title": "fix(ci): titulo", "body": "corpo customizado"}
+
+
+def test_main_uses_branch_metadata_when_present(tmp_path, monkeypatch):
+    metadata_dir = tmp_path / ".github" / "pr-metadata"
+    metadata_dir.mkdir(parents=True)
+    (metadata_dir / "cursor-gap-fix-consolidator-71ed.json").write_text(
+        json.dumps(
+            {
+                "title": "fix(ci): corrigir PR Conflict Guard com checkout do head SHA",
+                "body": "descricao canonica do PR",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class FakeClient:
+        def find_existing_pr(self, head: str, base: str):
+            return {"number": 471, "state": "open", "html_url": "https://example/pr/471"}
+
+        def update_pr(self, number: int, *, title: str, body: str):
+            self.updated = {"number": number, "title": title, "body": body}
+
+        def add_labels(self, number: int, labels: list[str]):
+            return None
+
+    fake = FakeClient()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "ericson-j-santos/reqsys-v2-enterprise-real")
+    monkeypatch.setenv("GITHUB_REF_NAME", "cursor/gap-fix-consolidator-71ed")
+    monkeypatch.setenv("GH_TOKEN", "token-teste")
+    monkeypatch.setenv("PR_REQUEST_ARTIFACT_DIR", str(tmp_path))
+    monkeypatch.setattr("scripts.auto_open_agent_pr.GitHubClient", lambda token, repo: fake)
+    monkeypatch.setattr("sys.argv", ["auto_open_agent_pr.py", "--base", "main"])
+
+    assert main() == 0
+    assert fake.updated["title"] == "fix(ci): corrigir PR Conflict Guard com checkout do head SHA"
+    assert fake.updated["body"] == "descricao canonica do PR"
