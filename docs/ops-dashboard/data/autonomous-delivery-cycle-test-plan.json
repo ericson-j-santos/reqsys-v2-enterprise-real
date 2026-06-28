@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "test_plan": [
+    {
+      "id": "ADC-TEST-001",
+      "description": "Workflow contains explicit authorization label guardrail",
+      "type": "contract",
+      "automated": true
+    },
+    {
+      "id": "ADC-TEST-002",
+      "description": "Seed contracts are valid JSON",
+      "type": "contract",
+      "automated": true
+    },
+    {
+      "id": "ADC-TEST-003",
+      "description": "Dry-run publishes report without merging",
+      "type": "post_merge_manual",
+      "automated": false
+    },
+    {
+      "id": "ADC-TEST-004",
+      "description": "PR without required labels is blocked",
+      "type": "post_merge_manual",
+      "automated": false
+    }
+  ]
+}
