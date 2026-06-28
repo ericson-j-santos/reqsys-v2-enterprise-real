@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "correlation_prefix": "autonomous-delivery-cycle",
+  "artifact_name": "autonomous-delivery-cycle-report",
+  "trace_points": [
+    "candidate_selection",
+    "label_validation",
+    "workflow_validation",
+    "merge_execution",
+    "post_merge_observation",
+    "next_increment_capture"
+  ]
+}
