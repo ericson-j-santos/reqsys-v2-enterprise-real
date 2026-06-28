@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 
 def build_body(branch: str, base: str) -> str:
@@ -75,10 +76,17 @@ class GitHubClient:
     def find_existing_pr(self, head: str, base: str) -> dict[str, Any] | None:
         owner = self.repository.split("/")[0]
         for state in ("open", "closed"):
-            pulls = self._request(
-                "GET",
-                f"/pulls?state={state}&head={owner}:{head}&base={base}&sort=updated&direction=desc&per_page=5",
+            query = urlencode(
+                {
+                    "state": state,
+                    "head": f"{owner}:{head}",
+                    "base": base,
+                    "sort": "updated",
+                    "direction": "desc",
+                    "per_page": "5",
+                }
             )
+            pulls = self._request("GET", f"/pulls?{query}")
             if isinstance(pulls, list) and pulls:
                 return pulls[0]
         return None
@@ -131,11 +139,12 @@ def write_pr_request_artifact(
 
 
 def resolve_token() -> str:
-    for key in ("GH_PAT_ACTIONS", "GH_TOKEN", "GITHUB_TOKEN"):
+    # GH_TOKEN/GITHUB_TOKEN do workflow têm escopo explícito (pull-requests: write).
+    for key in ("GH_TOKEN", "GITHUB_TOKEN", "GH_PAT_ACTIONS"):
         value = os.environ.get(key, "").strip()
         if value:
             return value
-    raise RuntimeError("Token GitHub ausente (GH_PAT_ACTIONS/GH_TOKEN/GITHUB_TOKEN)")
+    raise RuntimeError("Token GitHub ausente (GH_TOKEN/GITHUB_TOKEN/GH_PAT_ACTIONS)")
 
 
 def add_labels_best_effort(client: GitHubClient, number: int, labels: list[str]) -> None:

@@ -65,14 +65,13 @@ jobs:
 
       - name: Criar ou atualizar PR draft
         env:
-          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
-          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS || github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           PR_TITLE: "feat: executar ciclos Padrão Ouro (runtime, CI intel, governança, estatísticas)"
         run: |
           set -euo pipefail
-          if [ -z "${GH_PAT_ACTIONS:-}" ]; then
-            echo "::warning::GH_PAT_ACTIONS ausente; tentando GITHUB_TOKEN (pode falhar por policy da org)."
-            export GH_TOKEN="${{ github.token }}"
+          export GH_TOKEN="${GITHUB_TOKEN}"
+          if [ -n "${{ secrets.GH_PAT_ACTIONS }}" ]; then
+            echo "::notice::GH_PAT_ACTIONS ignorado neste job; usando GITHUB_TOKEN com pull-requests: write."
           fi
           python scripts/auto_open_agent_pr.py
 
