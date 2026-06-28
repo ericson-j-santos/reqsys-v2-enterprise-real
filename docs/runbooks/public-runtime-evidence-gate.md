@@ -111,9 +111,12 @@ Quando `/health` responde 200 e `/api/runtime/*` retorna 404, a persistência em
 - bloqueio evidenciado no runtime Fly público, não no wire de evidência;
 - fora do escopo de PRs wire-only (sem deploy);
 - correção exige incremento separado via **ReqSys Fly Runtime P0** (`workflow_dispatch` com `deploy=true`);
-- o incremento #2 (observabilidade/E2E) só deve avançar após CI verde deste deploy ou com o bloqueio explicitamente aceito.
+- o incremento #2 (`evidence-automation-observability-e2e`) só deve avançar após CI verde deste deploy ou com o bloqueio explicitamente aceito.
 
-Referência de diagnóstico: `docs/runbooks/public-runtime-smoke-test.md`.
+Referências:
+
+- Diagnóstico: `docs/runbooks/public-runtime-smoke-test.md`
+- Incremento #2: `docs/runbooks/evidence-automation-observability-e2e.md`
 
 ## Publicação de comentário
 
