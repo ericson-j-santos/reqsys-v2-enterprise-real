@@ -1,0 +1,177 @@
+name: Power Automate Flow Provisioning P0
+
+on:
+  workflow_dispatch:
+    inputs:
+      display_name:
+        description: 'Nome do flow Power Automate'
+        required: true
+        type: string
+      trigger_type:
+        description: 'HttpRequest, Recurrence ou Manual'
+        required: true
+        default: 'HttpRequest'
+        type: choice
+        options:
+          - HttpRequest
+          - Recurrence
+          - Manual
+      target_environment:
+        description: 'Ambiente alvo lógico'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+      solution_name:
+        description: 'Nome único da solution'
+        required: true
+        default: 'ReqSysAutomacao'
+        type: string
+      correlation_id:
+        description: 'Correlation ID ReqSys'
+        required: false
+        default: ''
+        type: string
+      dry_run:
+        description: 'Executar somente validação, sem importar solution'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: read
+
+env:
+  ALM_REPOSITORY: ericson-j-santos/reqsys-powerplatform-alm
+  FLOW_DISPLAY_NAME: ${{ inputs.display_name }}
+  FLOW_TRIGGER_TYPE: ${{ inputs.trigger_type }}
+  TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+  SOLUTION_NAME: ${{ inputs.solution_name }}
+  CORRELATION_ID: ${{ inputs.correlation_id }}
+  DRY_RUN: ${{ inputs.dry_run }}
+
+jobs:
+  validate-and-provision:
+    name: Validate and provision flow via ALM
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout ReqSys
+        uses: actions/checkout@v4
+
+      - name: Checkout Power Platform ALM repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ALM_REPOSITORY }}
+          path: alm
+          token: ${{ secrets.GH_ALM_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Validate reused ALM assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $required = @(
+            'alm/scripts/LowCodeFactory.psm1',
+            'alm/SETUP.md'
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              throw "ALM asset ausente: $path"
+            }
+          }
+          Write-Host "ALM assets encontrados. Reuso confirmado."
+
+      - name: Build provisioning manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          $manifest = [ordered]@{
+            schema_version = '1.0.0'
+            capability = 'Power Automate Flow Provisioning P0'
+            status = if ('${{ env.DRY_RUN }}' -eq 'true') { 'validated_dry_run' } else { 'ready_to_execute' }
+            generated_at = (Get-Date).ToUniversalTime().ToString('o')
+            correlation_id = '${{ env.CORRELATION_ID }}'
+            source = @{ repository = '${{ github.repository }}'; run_id = '${{ github.run_id }}'; sha = '${{ github.sha }}' }
+            target = @{ alm_repository = '${{ env.ALM_REPOSITORY }}'; environment = '${{ env.TARGET_ENVIRONMENT }}'; solution_name = '${{ env.SOLUTION_NAME }}' }
+            flow = @{ display_name = '${{ env.FLOW_DISPLAY_NAME }}'; trigger_type = '${{ env.FLOW_TRIGGER_TYPE }}' }
+            governance = @{ method = 'pac_solution_import'; reused_asset = 'scripts/LowCodeFactory.psm1'; dry_run = '${{ env.DRY_RUN }}' }
+          }
+          $manifest | ConvertTo-Json -Depth 20 | Set-Content -Path artifacts/power-automate-flow-provisioning-result.json -Encoding utf8
+          Get-Content artifacts/power-automate-flow-provisioning-result.json
+
+      - name: Validate Power Platform secrets for execution
+        if: ${{ inputs.dry_run == 'false' }}
+        shell: pwsh
+        env:
+          POWERPLATFORM_APP_ID: ${{ secrets.POWERPLATFORM_APP_ID }}
+          POWERPLATFORM_CLIENT_SECRET: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
+          POWERPLATFORM_TENANT_ID: ${{ secrets.POWERPLATFORM_TENANT_ID }}
+          DEV_ENVIRONMENT_URL: ${{ secrets.DEV_ENVIRONMENT_URL }}
+          TEST_ENVIRONMENT_URL: ${{ secrets.TEST_ENVIRONMENT_URL }}
+          PROD_ENVIRONMENT_URL: ${{ secrets.PROD_ENVIRONMENT_URL }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $missing = @()
+          foreach ($name in @('POWERPLATFORM_APP_ID','POWERPLATFORM_CLIENT_SECRET','POWERPLATFORM_TENANT_ID')) {
+            if ([string]::IsNullOrWhiteSpace((Get-Item "env:$name").Value)) { $missing += $name }
+          }
+          $envName = '${{ env.TARGET_ENVIRONMENT }}'
+          $envUrlName = switch ($envName) {
+            'dev' { 'DEV_ENVIRONMENT_URL' }
+            'test' { 'TEST_ENVIRONMENT_URL' }
+            'prod' { 'PROD_ENVIRONMENT_URL' }
+          }
+          if ([string]::IsNullOrWhiteSpace((Get-Item "env:$envUrlName").Value)) { $missing += $envUrlName }
+          if ($missing.Count -gt 0) { throw "Secrets ausentes: $($missing -join ', ')" }
+          Write-Host "Secrets mínimos presentes para execução."
+
+      - name: Install Power Platform CLI
+        if: ${{ inputs.dry_run == 'false' }}
+        shell: bash
+        run: |
+          dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Provision flow using LowCodeFactory
+        if: ${{ inputs.dry_run == 'false' }}
+        shell: pwsh
+        env:
+          POWERPLATFORM_APP_ID: ${{ secrets.POWERPLATFORM_APP_ID }}
+          POWERPLATFORM_CLIENT_SECRET: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
+          POWERPLATFORM_TENANT_ID: ${{ secrets.POWERPLATFORM_TENANT_ID }}
+          DEV_ENVIRONMENT_URL: ${{ secrets.DEV_ENVIRONMENT_URL }}
+          TEST_ENVIRONMENT_URL: ${{ secrets.TEST_ENVIRONMENT_URL }}
+          PROD_ENVIRONMENT_URL: ${{ secrets.PROD_ENVIRONMENT_URL }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targetUrl = switch ('${{ env.TARGET_ENVIRONMENT }}') {
+            'dev' { $env:DEV_ENVIRONMENT_URL }
+            'test' { $env:TEST_ENVIRONMENT_URL }
+            'prod' { $env:PROD_ENVIRONMENT_URL }
+          }
+          $credPath = Join-Path $PWD 'alm/scripts/credenciais.runtime.json'
+          @{
+            POWERPLATFORM_TENANT_ID = $env:POWERPLATFORM_TENANT_ID
+            POWERPLATFORM_APP_ID = $env:POWERPLATFORM_APP_ID
+            POWERPLATFORM_CLIENT_SECRET = $env:POWERPLATFORM_CLIENT_SECRET
+          } | ConvertTo-Json | Set-Content -Path $credPath -Encoding utf8
+
+          Import-Module ./alm/scripts/LowCodeFactory.psm1 -Force
+          Connect-LowCodeFactory -CredFile $credPath -SolutionDir ./alm/solutions/${{ env.SOLUTION_NAME }} -EnvUrl $targetUrl -SolutionName '${{ env.SOLUTION_NAME }}'
+          $result = New-LCFlow -DisplayName '${{ env.FLOW_DISPLAY_NAME }}' -TriggerType '${{ env.FLOW_TRIGGER_TYPE }}' -Description 'Provisionado pelo ReqSys Power Automate Flow Provisioning P0'
+          $result | ConvertTo-Json -Depth 10 | Set-Content -Path artifacts/power-automate-flow-provisioning-execution.json -Encoding utf8
+
+      - name: Upload provisioning evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: power-automate-flow-provisioning-p0
+          path: artifacts/*.json
+          if-no-files-found: error

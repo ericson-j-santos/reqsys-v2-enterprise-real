@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "artifact": "power-automate-flow-provisioning-p0",
+  "generated_at": "2026-06-28T00:00:00-03:00",
+  "status": "implemented",
+  "maturity": "p0_governed_dispatch",
+  "reuse": {
+    "repository": "ericson-j-santos/reqsys-powerplatform-alm",
+    "assets": [
+      "scripts/LowCodeFactory.psm1",
+      "SETUP.md",
+      "scripts/New-IASyncFlow.ps1"
+    ],
+    "decision": "reuse_existing_alm_factory_instead_of_duplicate_direct_flow_api"
+  },
+  "reqsys_endpoints": [
+    {
+      "method": "POST",
+      "path": "/v1/hub-lowcode/power-automate/flows/provisioning-plan",
+      "purpose": "generate_governed_manifest"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hub-lowcode/power-automate/flows/provision",
+      "purpose": "dispatch_github_actions_provisioning"
+    }
+  ],
+  "workflow": {
+    "path": ".github/workflows/power-automate-flow-provisioning-p0.yml",
+    "mode": "workflow_dispatch",
+    "dry_run_default": true,
+    "artifact": "power-automate-flow-provisioning-p0"
+  },
+  "governance": {
+    "correlation_id": true,
+    "no_secret_persistence_in_reqsys": true,
+    "solution_import_via_pac_cli": true,
+    "manual_or_pipeline_approval_required": true,
+    "production_approval_recommended": true
+  }
+}

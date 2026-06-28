@@ -23,8 +23,13 @@ theme:
 
 nav:
   - Início: index.md
+  - Arquitetura Viva:
+      - Visão Geral: arquitetura/visao-geral.md
+      - Fluxo da Documentação Viva: arquitetura/fluxo-documentacao-viva.md
   - API:
       - Runtime: api/runtime.md
+      - OpenAPI / Swagger: api/openapi.md
+      - Power Automate GET/POST: api/power-automate-get-post.md
   - Operação:
       - Ambientes: operacao/ambientes.md
   - Governança:
@@ -40,7 +45,11 @@ markdown_extensions:
   - toc:
       permalink: true
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.tasklist:
@@ -51,6 +60,8 @@ plugins:
 
 extra:
   reqsys:
-    documentation_version: 0.1.0
+    documentation_version: 0.3.0
     documentation_date: 2026-06-28
-    offline_html: docs/offline/reqsys-docs-v0.1.0.html
+    offline_html: docs-site/offline/reqsys-docs-v0.2.0.html
+    offline_compatibility_html: docs-site/offline/reqsys-docs-v0.1.0.html
+    openapi_contract: docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json

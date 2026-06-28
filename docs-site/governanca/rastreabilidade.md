@@ -1,6 +1,6 @@
 # Rastreabilidade da Documentação
 
-> **Versão:** `0.1.0`
+> **Versão:** `0.2.0`
 
 ## Princípios
 
@@ -21,7 +21,8 @@ A documentação do ReqSys deve ser:
 | Fonte MkDocs | Arquivos Markdown em `docs-site/` |
 | Configuração | `mkdocs.yml` |
 | Validação | Workflow `.github/workflows/docs-mkdocs.yml` |
-| Consumo offline | `docs-site/offline/reqsys-docs-v0.1.0.html` |
+| Consumo offline atual | `docs-site/offline/reqsys-docs-v0.2.0.html` |
+| Compatibilidade offline | `docs-site/offline/reqsys-docs-v0.1.0.html` |
 | Histórico | `docs-site/CHANGELOG.md` |
 | Manifesto | `docs-site/VERSION.json` |
 | Revisão | Pull Request |
@@ -45,8 +46,9 @@ MAJOR.MINOR.PATCH
 | Dimensão | Estado |
 |---|---|
 | Fonte MkDocs isolada | Implementada em `docs-site/` |
-| HTML offline versionado | Implementado |
-| CI de documentação | Implementado |
-| GitHub Pages | Preparado, depende de merge e deploy |
+| HTML offline v0.1.0 | Preservado para compatibilidade |
+| HTML offline v0.2.0 | Implementado |
+| Arquitetura Viva inicial | Implementada |
+| CI de documentação | Validar neste PR |
 | Integração OpenAPI | Próximo incremento |
-| Diagramas vivos | Próximo incremento |
+| Artifacts JSON renderizados | Próximo incremento |
