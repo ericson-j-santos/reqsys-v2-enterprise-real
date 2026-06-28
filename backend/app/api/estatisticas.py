@@ -7,7 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
 from app.db import get_db
-from app.services.estatisticas import gerar_historico_estatisticas, gerar_snapshot_estatisticas
+from app.services.estatisticas import (
+    gerar_historico_estatisticas,
+    gerar_snapshot_estatisticas,
+)
 
 router = APIRouter(prefix='/v1/estatisticas', tags=['Estatísticas'])
 
