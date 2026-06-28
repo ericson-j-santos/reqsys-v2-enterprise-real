@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0.0",
+  "contract": "all-environments-readiness-validation",
+  "generated_at_epoch": 1782591300,
+  "summary": {
+    "overall_status": "unknown",
+    "average_readiness_percent": 0,
+    "environments_total": 4,
+    "ready": 0,
+    "degraded": 0,
+    "unavailable": 0,
+    "local_only": 0,
+    "mode": "read_only_non_blocking"
+  },
+  "environments": [
+    {
+      "name": "desenvolvimento",
+      "frontend": "https://reqsys-app-dev.fly.dev",
+      "api": "https://reqsys-api-dev.fly.dev/docs",
+      "notes": "Fly dev; local usa docker-compose.yml + docker-compose.dev.yml",
+      "status": "unknown",
+      "operational_risk": "medium",
+      "readiness_percent": 0,
+      "ok_checks": 0,
+      "total_checks": 2,
+      "skipped_checks": 0,
+      "checks": {}
+    },
+    {
+      "name": "testes",
+      "frontend": "http://localhost:8084",
+      "api": "http://localhost:8212/docs",
+      "notes": "Docker test",
+      "status": "local_only",
+      "operational_risk": "medium",
+      "readiness_percent": 0,
+      "ok_checks": 0,
+      "total_checks": 2,
+      "skipped_checks": 2,
+      "checks": {}
+    },
+    {
+      "name": "homologacao",
+      "frontend": "https://reqsys-web-stg.fly.dev",
+      "api": "https://reqsys-api-stg.fly.dev",
+      "notes": "Fly staging",
+      "status": "unknown",
+      "operational_risk": "medium",
+      "readiness_percent": 0,
+      "ok_checks": 0,
+      "total_checks": 2,
+      "skipped_checks": 0,
+      "checks": {}
+    },
+    {
+      "name": "producao",
+      "frontend": "https://reqsys-app.fly.dev",
+      "api": "https://reqsys-api.fly.dev/docs",
+      "notes": "Fly producao; local usa docker-compose.yml + docker-compose.prod.yml",
+      "status": "unknown",
+      "operational_risk": "medium",
+      "readiness_percent": 0,
+      "ok_checks": 0,
+      "total_checks": 2,
+      "skipped_checks": 0,
+      "checks": {}
+    }
+  ],
+  "guardrails": [
+    "read_only_probe",
+    "non_blocking_operational_evidence",
+    "no_secret_required",
+    "local_endpoints_skipped_by_default",
+    "ci_should_fail_only_on_contract_errors"
+  ]
+}
