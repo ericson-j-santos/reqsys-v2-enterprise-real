@@ -12,7 +12,7 @@ O objetivo é permitir que arquitetura, APIs, ambientes, governança, rastreabil
 
 ## Acesso sem MkDocs local
 
-Caso o ambiente corporativo não permita instalar Python, MkDocs ou dependências externas, utilize o HTML estático versionado localizado em `docs-site/offline/reqsys-docs-v0.1.0.html`.
+Caso o ambiente corporativo não permita instalar Python, MkDocs ou dependências externas, utilize o HTML estático versionado localizado em `docs/offline/reqsys-docs-v0.1.0.html`.
 
 Esse arquivo é autocontido, versionado no Git e pode ser usado como fallback de leitura.
 
