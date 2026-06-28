@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "safe_defaults": {
+    "max_prs": 1,
+    "dry_run_default": true,
+    "schedule_merge_enabled": true,
+    "requires_explicit_label": true,
+    "requires_merge_queue_label": true,
+    "requires_all_required_workflows_success": true,
+    "post_merge_observation_delay_seconds": 30,
+    "next_increment_execution": "manual_or_agent_context_only"
+  }
+}
