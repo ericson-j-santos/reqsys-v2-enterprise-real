@@ -5,7 +5,8 @@ on:
     paths:
       - "mkdocs.yml"
       - "requirements-docs.txt"
-      - "docs/**"
+      - "docs-site/**"
+      - "docs/offline/**"
       - ".github/workflows/docs-mkdocs.yml"
   push:
     branches:
@@ -13,7 +14,8 @@ on:
     paths:
       - "mkdocs.yml"
       - "requirements-docs.txt"
-      - "docs/**"
+      - "docs-site/**"
+      - "docs/offline/**"
       - ".github/workflows/docs-mkdocs.yml"
   workflow_dispatch:
 
