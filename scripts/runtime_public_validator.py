@@ -84,11 +84,36 @@ def validate_docker_smoke(*, skip: bool) -> dict[str, Any]:
     }
 
 
-def validate_public_probe(*, base_url: str, environment: str, timeout: float, include_optional: bool) -> dict[str, Any]:
+def _read_json_if_exists(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except json.JSONDecodeError as exc:
+        return {'_parse_error': f'{type(exc).__name__}: {exc}'}
+
+
+def validate_public_probe(
+    *,
+    base_url: str,
+    environment: str,
+    timeout: float,
+    include_optional: bool,
+    attempts: int,
+    retry_delay_seconds: float,
+) -> dict[str, Any]:
     script = ROOT / 'scripts' / 'validate_public_runtime.py'
     output = ROOT / 'artifacts' / 'runtime' / 'runtime-public-probe.json'
     readiness = ROOT / 'artifacts' / 'runtime' / 'runtime-public-readiness.json'
     output.parent.mkdir(parents=True, exist_ok=True)
+
+    attempts = max(1, attempts)
+    attempt_details: list[dict[str, Any]] = []
+    completed: subprocess.CompletedProcess[str] | None = None
+    probe_payload: dict[str, Any] = {}
+    readiness_payload: dict[str, Any] = {}
+    ok = False
+
     command = [
         sys.executable,
         str(script),
@@ -105,15 +130,30 @@ def validate_public_probe(*, base_url: str, environment: str, timeout: float, in
     ]
     if include_optional:
         command.append('--include-optional-evidence')
-    completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
-    probe_payload: dict[str, Any] = {}
-    if output.exists():
-        probe_payload = json.loads(output.read_text(encoding='utf-8'))
-    readiness_payload: dict[str, Any] = {}
-    if readiness.exists():
-        readiness_payload = json.loads(readiness.read_text(encoding='utf-8'))
-    if probe_payload:
-        ok = probe_payload.get('failed', 1) == 0
+
+    for attempt in range(1, attempts + 1):
+        completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
+        probe_payload = _read_json_if_exists(output)
+        readiness_payload = _read_json_if_exists(readiness)
+        ok = completed.returncode == 0 and probe_payload.get('failed', 1) == 0
+        attempt_details.append(
+            {
+                'attempt': attempt,
+                'exit_code': completed.returncode,
+                'ok': ok,
+                'readiness_percent': readiness_payload.get('readiness_percent') or probe_payload.get('readiness', {}).get('readiness_percent'),
+                'operational_status': readiness_payload.get('operational_status') or probe_payload.get('readiness', {}).get('operational_status'),
+                'blocking_issues': readiness_payload.get('blocking_issues') or probe_payload.get('readiness', {}).get('blocking_issues') or [],
+            }
+        )
+        if ok:
+            break
+        if attempt < attempts:
+            time.sleep(retry_delay_seconds)
+
+    if completed is None:
+        raise RuntimeError('probe não executado')
+
     return {
         'track': 'public_probe',
         'ok': ok,
@@ -124,6 +164,10 @@ def validate_public_probe(*, base_url: str, environment: str, timeout: float, in
             'probe_artifact': str(output.relative_to(ROOT)),
             'readiness': readiness_payload or probe_payload.get('readiness', {}),
             'success_percentual': probe_payload.get('success_percentual'),
+            'attempts_configured': attempts,
+            'attempts_executed': len(attempt_details),
+            'retry_delay_seconds': retry_delay_seconds,
+            'attempt_details': attempt_details,
         },
     }
 
@@ -234,6 +278,8 @@ def main() -> int:
     parser.add_argument('--probe', action='store_true', help='Executa probe HTTP público read-only')
     parser.add_argument('--include-optional-evidence', action='store_true')
     parser.add_argument('--timeout', type=float, default=10.0)
+    parser.add_argument('--probe-attempts', type=int, default=1, help='Tentativas do probe HTTP público antes de declarar indisponibilidade')
+    parser.add_argument('--probe-delay', type=float, default=10.0, help='Espera, em segundos, entre tentativas do probe público')
     parser.add_argument('--skip-docker', action='store_true')
     parser.add_argument('--artifact-root', default='.', help='Raiz para fallback de artifacts')
     parser.add_argument('--output', default='artifacts/runtime/runtime-public-validation.json')
@@ -252,6 +298,8 @@ def main() -> int:
                 environment=args.environment,
                 timeout=args.timeout,
                 include_optional=args.include_optional_evidence,
+                attempts=args.probe_attempts,
+                retry_delay_seconds=args.probe_delay,
             )
         )
     else:
