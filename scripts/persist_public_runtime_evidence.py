@@ -69,6 +69,22 @@ def infer_operational_notes(
             }
         ]
 
+    if strict_gate_passed and health_ok and not runtime_404s:
+        return [
+            {
+                "id": "public_runtime_strict_ready",
+                "severity": "info",
+                "scope": "public_runtime_evidence",
+                "wire_scope": True,
+                "message": (
+                    "Strict gate verde; incremento evidence-automation-observability-e2e "
+                    "pode executar (automático após Public Runtime Evidence Gate ou manual)."
+                ),
+                "next_increment": "evidence-automation-observability-e2e",
+                "reference": "docs/runbooks/evidence-automation-observability-e2e.md",
+            }
+        ]
+
     if not strict_gate_passed and blocking:
         return [
             {
