@@ -93,17 +93,30 @@ class GitHubClient:
         self._request("POST", f"/issues/{number}/labels", {"labels": labels})
 
 
-def write_pr_request_artifact(*, branch: str, base: str, title: str, body: str, error: str | None = None) -> Path:
+def write_pr_request_artifact(
+    *,
+    branch: str,
+    base: str,
+    title: str,
+    body: str,
+    error: str | None = None,
+    status: str = "requested",
+    pr_number: int | None = None,
+    pr_url: str | None = None,
+) -> Path:
     out_dir = Path(os.environ.get("PR_REQUEST_ARTIFACT_DIR", "artifacts/auto-pr-request"))
     out_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": "1.0.0",
+        "status": status,
         "branch": branch,
         "base": base,
         "title": title,
         "body": body,
         "draft": True,
         "labels": ["padrao-ouro", "cloud-agent"],
+        "pr_number": pr_number,
+        "pr_url": pr_url,
         "error": error,
         "required_secret": "GH_PAT_ACTIONS",
         "repo_setting": "Allow GitHub Actions to create and approve pull requests",
@@ -126,6 +139,57 @@ def add_labels_best_effort(client: GitHubClient, number: int, labels: list[str])
         client.add_labels(number, labels)
     except RuntimeError as exc:
         print(f"::warning::Não foi possível aplicar labels no PR #{number}: {exc}", file=sys.stderr)
+
+
+def is_permission_error(exc: Exception) -> bool:
+    message = str(exc)
+    return " failed (401):" in message or " failed (403):" in message
+
+
+def sync_existing_pr(
+    client: GitHubClient,
+    existing: dict[str, Any],
+    *,
+    branch: str,
+    base: str,
+    title: str,
+    body: str,
+) -> int:
+    number = int(existing["number"])
+    pr_url = str(existing.get("html_url") or "")
+    try:
+        client.update_pr(number, title=title, body=body)
+        add_labels_best_effort(client, number, ["padrao-ouro", "cloud-agent"])
+        write_pr_request_artifact(
+            branch=branch,
+            base=base,
+            title=title,
+            body=body,
+            status="updated",
+            pr_number=number,
+            pr_url=pr_url,
+        )
+        print(f"PR atualizado: {pr_url}")
+        return 0
+    except RuntimeError as exc:
+        if not is_permission_error(exc):
+            raise
+        write_pr_request_artifact(
+            branch=branch,
+            base=base,
+            title=title,
+            body=body,
+            status="skipped_permission",
+            pr_number=number,
+            pr_url=pr_url,
+            error=str(exc),
+        )
+        print(
+            f"::warning::PR #{number} já existe; atualização ignorada por permissão insuficiente do token.",
+            file=sys.stderr,
+        )
+        print(f"PR existente preservado: {pr_url}")
+        return 0
 
 
 def main() -> int:
@@ -152,17 +216,27 @@ def main() -> int:
         client = GitHubClient(resolve_token(), repository)
         existing = client.find_open_pr(branch, args.base)
         if existing:
-            number = int(existing["number"])
-            client.update_pr(number, title=title, body=body)
-            add_labels_best_effort(client, number, ["padrao-ouro", "cloud-agent"])
-            write_pr_request_artifact(branch=branch, base=args.base, title=title, body=body)
-            print(f"PR atualizado: {existing.get('html_url')}")
-            return 0
+            return sync_existing_pr(
+                client,
+                existing,
+                branch=branch,
+                base=args.base,
+                title=title,
+                body=body,
+            )
 
         created = client.create_pr(title=title, body=body, head=branch, base=args.base, draft=True)
         number = int(created["number"])
         add_labels_best_effort(client, number, ["padrao-ouro", "cloud-agent"])
-        write_pr_request_artifact(branch=branch, base=args.base, title=title, body=body)
+        write_pr_request_artifact(
+            branch=branch,
+            base=args.base,
+            title=title,
+            body=body,
+            status="created",
+            pr_number=number,
+            pr_url=str(created.get("html_url") or ""),
+        )
         print(f"PR criado: {created.get('html_url')}")
         return 0
     except Exception as exc:  # noqa: BLE001 - report failure with artifact for automation retry

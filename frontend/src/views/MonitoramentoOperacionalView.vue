@@ -99,6 +99,46 @@
       </v-card-text>
     </v-card>
 
+    <v-card class="painel governanca mt-4" elevation="0" :data-section="secaoAtiva === 'governanca' ? 'active' : undefined">
+      <v-card-title id="titulo-governanca">Governança e Evidências</v-card-title>
+      <v-card-subtitle>Cards de capacidades governadas consumindo governance-evidence-index.json.</v-card-subtitle>
+      <v-card-text>
+        <v-row dense>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Score de governança" :value="governanceResumo.score" semaforo="verde" :clickable="false" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Status geral" :value="governanceResumo.status" :semaforo="governanceResumo.status" :clickable="false" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Capacidades prontas" :value="governanceResumo.dashboardReady" semaforo="verde" :clickable="false" />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard label="Próximo incremento" :value="governanceResumo.nextIncrement" semaforo="amarelo" :clickable="false" />
+          </v-col>
+        </v-row>
+
+        <div class="analitico mt-4">
+          <v-table density="compact">
+            <thead>
+              <tr><th>Capacidade</th><th>Status</th><th>Dashboard</th><th>Workflow / Artifact</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in governanceEvidenceFiltrada" :key="item.id">
+                <td>{{ item.title || item.id }}</td>
+                <td><SemaforoChip :value="statusGovernancaParaSemaforo(item.status)" size="x-small" /></td>
+                <td>{{ item.dashboard_ready ? 'ready' : 'pending' }}</td>
+                <td>
+                  <div>{{ item.workflow || '-' }}</div>
+                  <div class="small text-medium-emphasis">{{ item.artifact || item.json_path || '-' }}</div>
+                </td>
+              </tr>
+            </tbody>
+          </v-table>
+        </div>
+      </v-card-text>
+    </v-card>
+
     <v-card class="filtros mt-4" elevation="0">
       <v-card-title>Filtros do analítico</v-card-title>
       <v-card-text>
@@ -215,6 +255,7 @@ const opcoesSecao = [
   { title: 'Runtime', value: 'runtime' },
   { title: 'Métricas', value: 'metrics' },
   { title: 'Timeline', value: 'timeline' },
+  { title: 'Governança', value: 'governanca' },
 ]
 
 const fallbackConectores = [
@@ -246,6 +287,23 @@ const workflowTopology = computed(() => runtimeDashboard.value?.sections?.find((
 const correlationAnalytics = computed(() => runtimeDashboard.value?.correlation_analytics || {})
 const observabilityReadiness = computed(() => runtimeDashboard.value?.observability_readiness || {})
 const runtimeTopologyPreview = computed(() => runtimeDashboard.value?.runtime_topology || {})
+const governanceEvidence = computed(() => runtimeDashboard.value?.governance_evidence || {})
+const governanceSection = computed(() => runtimeDashboard.value?.sections?.find((section) => section.id === 'governance-evidence') || null)
+const governanceItems = computed(() => governanceSection.value?.items?.evidence || governanceEvidence.value?.evidence || [])
+const governanceResumo = computed(() => {
+  const summary = governanceSection.value?.items?.summary || governanceEvidence.value?.summary || {}
+  return {
+    score: governanceSection.value?.items?.governance_evidence_score ?? governanceEvidence.value?.governance_evidence_score ?? 'n/a',
+    status: governanceSection.value?.items?.overall_status ?? governanceEvidence.value?.overall_status ?? 'desconhecido',
+    dashboardReady: `${summary.dashboard_ready_capabilities ?? 0}/${summary.implemented_capabilities ?? 0}`,
+    nextIncrement: summary.next_increment || 'n/a',
+  }
+})
+const governanceEvidenceFiltrada = computed(() => {
+  const capability = route.query.capability
+  if (!capability) return governanceItems.value
+  return governanceItems.value.filter((item) => item.id === capability)
+})
 const traceChain = computed(() => correlationAnalytics.value?.operational_trace_chains?.[0]?.chain?.join(' → ') || runtimeTopologyPreview.value?.trace_chain?.join(' → ') || 'n/a')
 
 const totalPorStatus = computed(() => conectores.value.reduce((acc, item) => {
@@ -261,6 +319,12 @@ const cardsResumo = computed(() => [
   { id: 'conectores', label: 'Conectores', value: conectores.value.length, semaforo: 'verde', icon: 'mdi-lan-connect', filtros: { secao: 'conectores' } },
   { id: 'criticos', label: 'Conectores críticos', value: conectoresCriticos.value.length, semaforo: conectoresCriticos.value.length > 0 ? 'amarelo' : 'verde', icon: 'mdi-alert-decagram-outline', filtros: { secao: 'conectores' } },
 ])
+
+function statusGovernancaParaSemaforo(status) {
+  if (status === 'implemented') return 'verde'
+  if (status === 'dry_run') return 'amarelo'
+  return 'desconhecido'
+}
 
 function statusParaSemaforo(status) {
   if (status === 'ready') return 'verde'

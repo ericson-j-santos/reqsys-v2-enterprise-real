@@ -8,7 +8,7 @@
     "total_capabilities": 5,
     "implemented_capabilities": 5,
     "dashboard_ready_capabilities": 4,
-    "next_increment": "consume_governance_cards_in_monitoramento_operacional"
+    "next_increment": "link_governance_cards_to_latest_workflow_runs"
   },
   "links": {
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",

@@ -11,6 +11,7 @@ if str(ROOT_DIR) not in sys.path:
 from scripts.trilha_d_qualidade_governanca import (  # noqa: E402
     consolidate,
     merge_state,
+    parse_coverage_percent,
     run_ci_watch_dimension,
 )
 
@@ -32,6 +33,14 @@ def dimension_fixture(
         "blockers": blockers or [],
         "recommendations": [],
     }
+
+
+def test_parse_coverage_percent_handles_decimal_total_line() -> None:
+    output = (
+        "TOTAL                                           5351   1187   1168    217  74.05%\n"
+        "Required test coverage of 60% reached. Total coverage: 74.05%\n"
+    )
+    assert parse_coverage_percent(output) == 74.05
 
 
 def test_merge_state_prefers_failed_over_warning_and_passed() -> None:
