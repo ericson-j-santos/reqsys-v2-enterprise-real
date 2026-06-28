@@ -48,9 +48,39 @@ def test_infer_increment_defaults_to_new_front() -> None:
     assert inferred["inference_source"] == "default:new_front"
 
 
+def test_infer_increment_ops_environments_as_hotfix() -> None:
+    inferred = infer_increment_from_pr(
+        title="feat: validate readiness for all environments",
+        head_ref="cursor/environments-readiness-f247",
+    )
+    assert inferred["increment_type"] == "hotfix"
+    assert inferred["inference_source"] == "heuristic:ops_evidence"
+
+
+def test_infer_increment_ops_dashboard_as_hotfix() -> None:
+    inferred = infer_increment_from_pr(
+        title="feat: render environments validation dashboard",
+        head_ref="cursor/environments-dashboard-f247",
+    )
+    assert inferred["increment_type"] == "hotfix"
+    assert inferred["inference_source"] == "heuristic:ops_evidence"
+
+
 def test_infer_increment_hotfix_from_branch() -> None:
     inferred = infer_increment_from_pr(head_ref="hotfix/auth-token", title="fix token")
     assert inferred["increment_type"] == "hotfix"
+
+
+def test_evaluate_pr_increment_gate_allows_ops_hotfix_when_yellow() -> None:
+    report = consolidate("owner/repo", "main", orchestrator_fixture("yellow"), health_fixture("green"))
+    result = evaluate_pr_increment_gate(
+        report,
+        title="feat: validate readiness for all environments",
+        head_ref="cursor/environments-readiness-f247",
+    )
+    assert result["allowed"] is True
+    assert result["increment_type"] == "hotfix"
+    assert result["inference"]["inference_source"] == "heuristic:ops_evidence"
 
 
 def test_evaluate_pr_increment_gate_blocks_new_front_when_red() -> None:

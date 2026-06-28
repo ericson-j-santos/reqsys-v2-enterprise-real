@@ -58,10 +58,15 @@ jobs:
           if [[ -f artifacts/coordenador-status/coordenador-status.json ]]; then
             state=$(python -c "import json; print(json.load(open('artifacts/coordenador-status/coordenador-status.json'))['state'])")
             decision=$(python -c "import json; print(json.load(open('artifacts/coordenador-status/coordenador-status.json'))['decision'])")
+            new_front=$(python -c "import json; print(json.load(open('artifacts/coordenador-status/coordenador-status.json'))['increment_gate']['new_front_allowed'])")
             echo "## Coordenador Status Consolidado" >> "$GITHUB_STEP_SUMMARY"
             echo "- State: \`${state}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Decision: \`${decision}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- New front allowed: \`${new_front}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Artifact: \`coordenador-status-evidence\`" >> "$GITHUB_STEP_SUMMARY"
+            if [[ "${state}" == "red" ]]; then
+              echo "- Nota: estado \`red\` registrado no artifact; o consolidador concluiu com sucesso (report-only)." >> "$GITHUB_STEP_SUMMARY"
+            fi
           else
             echo "## Coordenador Status Consolidado" >> "$GITHUB_STEP_SUMMARY"
             echo "- Falha ao gerar consolidado" >> "$GITHUB_STEP_SUMMARY"

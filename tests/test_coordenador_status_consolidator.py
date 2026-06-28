@@ -210,6 +210,73 @@ def test_agent_increment_gate_cli_blocks_new_front_on_red(tmp_path: Path) -> Non
     assert exit_code == 1
 
 
+def test_consolidator_cli_exits_zero_on_red_without_fail_on_red(tmp_path: Path) -> None:
+    import subprocess
+
+    orchestrator_path = tmp_path / "orchestrator.json"
+    health_path = tmp_path / "health.json"
+    output_dir = tmp_path / "out"
+    orchestrator_path.write_text(json.dumps(orchestrator_fixture("red")), encoding="utf-8")
+    health_path.write_text(json.dumps(health_fixture("red")), encoding="utf-8")
+
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT_DIR / "scripts" / "coordenador_status_consolidator.py"),
+            "--orchestrator-json",
+            str(orchestrator_path),
+            "--health-json",
+            str(health_path),
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=ROOT_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads((output_dir / "coordenador-status.json").read_text(encoding="utf-8"))
+    assert payload["state"] == "red"
+
+
+def test_consolidator_cli_exits_one_on_red_with_fail_on_red(tmp_path: Path) -> None:
+    import subprocess
+
+    orchestrator_path = tmp_path / "orchestrator.json"
+    health_path = tmp_path / "health.json"
+    output_dir = tmp_path / "out"
+    orchestrator_path.write_text(json.dumps(orchestrator_fixture("red")), encoding="utf-8")
+    health_path.write_text(json.dumps(health_fixture("red")), encoding="utf-8")
+
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT_DIR / "scripts" / "coordenador_status_consolidator.py"),
+            "--orchestrator-json",
+            str(orchestrator_path),
+            "--health-json",
+            str(health_path),
+            "--output-dir",
+            str(output_dir),
+            "--fail-on-red",
+        ],
+        cwd=ROOT_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 1, completed.stderr
+
+
 def test_consolidator_cli_imports_without_pythonpath(tmp_path: Path) -> None:
     import subprocess
 

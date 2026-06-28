@@ -13,6 +13,9 @@ permissions:
   contents: read
   pull-requests: read
 
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
 jobs:
   predictive-regression-guard:
     name: Predictive regression guard
@@ -32,11 +35,12 @@ jobs:
       - name: Coletar arquivos alterados
         id: collect
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
+          git fetch origin "${BASE_REF}"
           mkdir -p artifacts/predictive-regression-guard
-          git diff --name-only "${BASE_SHA}"...HEAD > artifacts/predictive-regression-guard/changed-paths.txt
+          git diff --name-only "origin/${BASE_REF}"...HEAD > artifacts/predictive-regression-guard/changed-paths.txt
           echo "count=$(wc -l < artifacts/predictive-regression-guard/changed-paths.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
 
       - name: Executar gate preditivo

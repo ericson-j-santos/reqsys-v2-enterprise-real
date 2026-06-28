@@ -46,6 +46,22 @@ INCREMENT_TYPE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 PR_NUMBER_PATTERN = re.compile(r"(?:#|PR\s*)(\d+)", re.IGNORECASE)
+OPS_EVIDENCE_HINTS = (
+    "environments",
+    "environment",
+    "readiness",
+    "ops-dashboard",
+    "ops dashboard",
+    "dashboard",
+    "workflow",
+    "governance",
+    "consolidator",
+    "evidence gate",
+    "conflict guard",
+    "ci:",
+    "fix(ci)",
+    "chore(ci)",
+)
 
 
 def _normalize_label(label: str) -> str:
@@ -104,6 +120,9 @@ def _increment_from_text_heuristics(
     if gap_match or "gap-fix" in head_lower or "gap_fix" in head_lower:
         reference = gap_match.group(0).upper() if gap_match else ""
         return "gap_fix", reference, "heuristic:gap_fix"
+
+    if any(hint in combined for hint in OPS_EVIDENCE_HINTS):
+        return "hotfix", "", "heuristic:ops_evidence"
 
     return None
 
