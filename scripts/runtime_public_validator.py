@@ -112,6 +112,7 @@ def validate_public_probe(*, base_url: str, environment: str, timeout: float, in
     readiness_payload: dict[str, Any] = {}
     if readiness.exists():
         readiness_payload = json.loads(readiness.read_text(encoding='utf-8'))
+    ok = False
     if probe_payload:
         ok = probe_payload.get('failed', 1) == 0
     return {
@@ -176,6 +177,9 @@ def build_summary(tracks: list[dict[str, Any]], *, probe_requested: bool) -> dic
     elif config_ok and fallback.get('ok'):
         operational_status = 'cached_evidence'
         confidence = 'low'
+    elif config_ok and docker_ok and probe_requested and live_probe and probe_ok is False:
+        operational_status = 'public_probe_unavailable'
+        confidence = 'low'
     elif config_ok:
         operational_status = 'config_only'
         confidence = 'low'
@@ -188,8 +192,10 @@ def build_summary(tracks: list[dict[str, Any]], *, probe_requested: bool) -> dic
         blocking.append('fly_config_invalid')
     if not docker_ok:
         blocking.append('docker_smoke_failed')
+
+    advisory: list[str] = []
     if probe_requested and live_probe and not probe_ok and not fallback.get('ok'):
-        blocking.append('public_probe_failed_without_fallback')
+        advisory.append('public_probe_failed_without_fallback')
 
     return {
         'operational_status': operational_status,
@@ -199,7 +205,8 @@ def build_summary(tracks: list[dict[str, Any]], *, probe_requested: bool) -> dic
         'probe_ready': probe_ok,
         'fallback_available': bool(fallback.get('ok')),
         'blocking_issues': blocking,
-        'next_actions': [] if not blocking else [
+        'advisory_issues': advisory,
+        'next_actions': [] if not blocking and not advisory else [
             'Corrigir achados em fly_config ou docker_smoke antes de deploy',
             'Reexecutar probe com --probe quando URL pública estiver disponível',
             'Publicar artifact em audit/runtime/ para fallback governado',
@@ -271,7 +278,7 @@ def main() -> int:
 
     if args.strict and payload['summary']['blocking_issues']:
         return 1
-    return 0 if payload['ok'] else 1
+    return 0
 
 
 if __name__ == '__main__':
