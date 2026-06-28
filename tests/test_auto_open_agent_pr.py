@@ -1,15 +1,12 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
-from scripts.auto_open_agent_pr import (
-    GitHubClient,
-    build_body,
-    is_github_permission_error,
-    main,
-    update_pr_best_effort,
-)
+from scripts.auto_open_agent_pr import build_body, is_permission_error, main, sync_existing_pr
 
 
 def test_build_body_contains_increment_type():
@@ -19,28 +16,68 @@ def test_build_body_contains_increment_type():
     assert "Padrão Ouro Delivery Automation" in body
 
 
-def test_is_github_permission_error_detecta_403():
-    exc = RuntimeError(
-        'GitHub API PATCH /pulls/469 failed (403): {"message":"Resource not accessible by personal access token"}'
+def test_is_permission_error_detects_403():
+    assert is_permission_error(RuntimeError('GitHub API PATCH /pulls/461 failed (403): {"message":"forbidden"}'))
+
+
+def test_sync_existing_pr_ignora_403_quando_pr_ja_existe(tmp_path, monkeypatch):
+    monkeypatch.setenv("PR_REQUEST_ARTIFACT_DIR", str(tmp_path))
+    client = MagicMock()
+    client.update_pr.side_effect = RuntimeError(
+        'GitHub API PATCH /pulls/461 failed (403): {"message":"Resource not accessible by personal access token"}'
     )
-    assert is_github_permission_error(exc) is True
+    existing = {"number": 461, "html_url": "https://github.com/example/repo/pull/461"}
+
+    exit_code = sync_existing_pr(
+        client,
+        existing,
+        branch="cursor/consume-governance-cards-monitoramento-36e0",
+        base="main",
+        title="feat: teste",
+        body="body",
+    )
+
+    assert exit_code == 0
+    artifact = (tmp_path / "auto-pr-request.json").read_text(encoding="utf-8")
+    assert "skipped_permission" in artifact
+    assert "461" in artifact
 
 
-def test_update_pr_best_effort_ignora_403():
-    class FakeClient:
-        def update_pr(self, number: int, *, title: str, body: str) -> dict:
-            raise RuntimeError("GitHub API PATCH /pulls/469 failed (403): forbidden")
+def test_sync_existing_pr_atualiza_quando_token_tem_permissao(tmp_path, monkeypatch):
+    monkeypatch.setenv("PR_REQUEST_ARTIFACT_DIR", str(tmp_path))
+    client = MagicMock()
+    existing = {"number": 12, "html_url": "https://github.com/example/repo/pull/12"}
 
-    assert update_pr_best_effort(FakeClient(), 469, title="t", body="b") is False
+    exit_code = sync_existing_pr(
+        client,
+        existing,
+        branch="cursor/test-branch",
+        base="main",
+        title="feat: teste",
+        body="body",
+    )
+
+    assert exit_code == 0
+    client.update_pr.assert_called_once()
+    artifact = json.loads((tmp_path / "auto-pr-request.json").read_text(encoding="utf-8"))
+    assert artifact["status"] == "updated"
+    assert artifact["pr_number"] == 12
 
 
-def test_update_pr_best_effort_propaga_outros_erros():
-    class FakeClient:
-        def update_pr(self, number: int, *, title: str, body: str) -> dict:
-            raise RuntimeError("GitHub API PATCH /pulls/469 failed (422): invalid")
+def test_sync_existing_pr_propaga_erros_nao_relacionados_a_permissao():
+    client = MagicMock()
+    client.update_pr.side_effect = RuntimeError("GitHub API PATCH /pulls/12 failed (422): invalid")
+    existing = {"number": 12, "html_url": "https://github.com/example/repo/pull/12"}
 
     with pytest.raises(RuntimeError, match="422"):
-        update_pr_best_effort(FakeClient(), 469, title="t", body="b")
+        sync_existing_pr(
+            client,
+            existing,
+            branch="cursor/test-branch",
+            base="main",
+            title="feat: teste",
+            body="body",
+        )
 
 
 def test_main_sucesso_quando_pr_ja_existe_mas_update_retorna_403(monkeypatch, tmp_path):
@@ -64,32 +101,4 @@ def test_main_sucesso_quando_pr_ja_existe_mas_update_retorna_403(monkeypatch, tm
     assert main() == 0
     artifact = json.loads((tmp_path / "auto-pr-request.json").read_text(encoding="utf-8"))
     assert artifact["branch"] == "cursor/coverage-targeted-tests-ddbb"
-    assert artifact["error"] is None
-
-
-def test_main_atualiza_pr_existente_quando_token_tem_permissao(monkeypatch, tmp_path):
-    class FakeClient:
-        updated = False
-
-        def find_open_pr(self, head: str, base: str):
-            return {"number": 12, "html_url": "https://github.com/example/repo/pull/12"}
-
-        def update_pr(self, number: int, *, title: str, body: str):
-            self.updated = True
-            return {"number": number}
-
-        def add_labels(self, number: int, labels: list[str]):
-            return None
-
-    monkeypatch.setenv("GITHUB_REPOSITORY", "ericson-j-santos/reqsys-v2-enterprise-real")
-    monkeypatch.setenv("GITHUB_REF_NAME", "cursor/test-branch")
-    monkeypatch.setenv("GH_TOKEN", "token-teste")
-    monkeypatch.setenv("PR_REQUEST_ARTIFACT_DIR", str(tmp_path))
-    fake = FakeClient()
-    monkeypatch.setattr("scripts.auto_open_agent_pr.GitHubClient", lambda token, repo: fake)
-    monkeypatch.setattr("sys.argv", ["auto_open_agent_pr.py", "--base", "main", "--title", "feat: teste"])
-
-    assert main() == 0
-    assert fake.updated is True
-    artifact_path = Path(tmp_path / "auto-pr-request.json")
-    assert artifact_path.is_file()
+    assert artifact["status"] == "skipped_permission"

@@ -116,7 +116,7 @@ def build_payload() -> dict[str, Any]:
             "total_capabilities": len(items),
             "implemented_capabilities": implemented,
             "dashboard_ready_capabilities": dashboard_ready,
-            "next_increment": "surface_governance_evidence_cards_in_runtime_dashboard",
+            "next_increment": "link_governance_cards_to_latest_workflow_runs",
         },
         "links": {
             "actions": f"https://github.com/{REPO}/actions",

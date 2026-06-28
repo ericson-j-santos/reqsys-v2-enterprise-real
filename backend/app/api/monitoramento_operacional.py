@@ -21,6 +21,11 @@ from app.core.runtime_remediation import (
     criar_health_snapshot_base,
 )
 from app.core.security import require_admin
+from app.services.governance_evidence_index import (
+    carregar_governance_evidence_index,
+    mapear_cards_governance,
+    mapear_secao_governance,
+)
 
 router = APIRouter(tags=['Monitoramento Operacional'])
 logger = logging.getLogger(__name__)
@@ -246,6 +251,9 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
     topology = build_runtime_topology(snapshot, [snapshot], [], [])
     correlation_report = build_correlation_report(snapshot, [snapshot], [], [])
     observability_report = build_observability_report(snapshot, {'failure_rate': 0, 'availability_score': 100}, topology, correlation_report)
+    governance_index = carregar_governance_evidence_index()
+    governance_cards = mapear_cards_governance(governance_index)
+    governance_section = mapear_secao_governance(governance_index)
     return {
         'schema_version': '1.2.0',
         'title': 'ReqSys Runtime Operational Dashboard',
@@ -324,7 +332,21 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'drilldown': '/api/runtime/contracts',
                 'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime'}),
             },
+            {
+                'id': 'governance-evidence-score',
+                'title': 'Governanca Evidenciada',
+                'type': 'metric',
+                'value': governance_index.get('governance_evidence_score', 0),
+                'unit': 'score',
+                'min': 0,
+                'max': 100,
+                'severity': governance_index.get('overall_status', 'unknown'),
+                'drilldown': '/monitoramento-operacional',
+                'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'governanca'}),
+            },
+            *governance_cards,
         ],
+        'governance_evidence': governance_index,
         'sections': [
             {
                 'id': 'workflow-topology',
@@ -414,12 +436,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'type': 'summary',
                 'items': {'classification': 'requires_public_artifacts', 'environments': ['dev', 'staging', 'prod']},
             },
-            {
-                'id': 'governance-evidence',
-                'title': 'Governanca e Evidencias',
-                'type': 'key_value',
-                'items': snapshot['evidence'],
-            },
+            governance_section,
             {
                 'id': 'correlation-analytics',
                 'title': 'Correlation Analytics',
