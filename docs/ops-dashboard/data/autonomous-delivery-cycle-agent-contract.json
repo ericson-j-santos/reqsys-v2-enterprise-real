@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "agent_contract": {
+    "may": [
+      "read_next_increment_queue",
+      "validate_repo_state",
+      "open_small_safe_pr",
+      "report_ci_status"
+    ],
+    "must": [
+      "check_main_before_execution",
+      "avoid_duplicate_increment",
+      "preserve_required_gates",
+      "return_clickable_links_when_actionable"
+    ],
+    "must_not": [
+      "execute_queue_item_without_context_validation",
+      "bypass_ci",
+      "force_merge",
+      "claim_green_without_evidence"
+    ]
+  }
+}
