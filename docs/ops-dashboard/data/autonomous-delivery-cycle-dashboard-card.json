@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "card": "autonomous_delivery_cycle",
+  "title": "Autonomous Delivery Cycle",
+  "status": "implemented_pending_ci",
+  "summary": "Ciclo governado para merge automático condicionado a CI verde, labels explícitas, fila governada e observação pós-merge.",
+  "metrics": {
+    "readiness_percent": 85,
+    "candidate_count": 0,
+    "eligible_count": 0,
+    "merged_count": 0,
+    "next_increment_queue_count": 0
+  },
+  "links": {
+    "workflow": ".github/workflows/autonomous-delivery-cycle.yml",
+    "latest": "docs/ops-dashboard/data/autonomous-delivery-cycle-latest.json",
+    "next_increments": "docs/ops-dashboard/data/autonomous-delivery-cycle-next-increments.json",
+    "runbook": "docs/runbooks/autonomous-delivery-cycle.md"
+  }
+}
