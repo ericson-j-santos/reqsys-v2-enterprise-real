@@ -15,6 +15,7 @@ on:
       - '.github/workflows/trilha-d-qualidade-governanca.yml'
       - 'scripts/trilha_d_qualidade_governanca.py'
       - 'scripts/trilha_d_coverage_dimension.py'
+      - 'scripts/build_trilha_d_history.py'
       - 'docs/contracts/trilha-d-qualidade-governanca.schema.json'
       - 'docs/runbooks/trilha-d-qualidade-governanca.md'
       - 'tests/test_trilha_d_qualidade_governanca.py'
@@ -28,6 +29,7 @@ on:
       - '.github/workflows/trilha-d-qualidade-governanca.yml'
       - 'scripts/trilha_d_qualidade_governanca.py'
       - 'scripts/trilha_d_coverage_dimension.py'
+      - 'scripts/build_trilha_d_history.py'
       - 'docs/contracts/trilha-d-qualidade-governanca.schema.json'
       - 'docs/runbooks/trilha-d-qualidade-governanca.md'
       - 'tests/test_trilha_d_qualidade_governanca.py'
@@ -187,11 +189,64 @@ jobs:
               print(f"| {item['dimension']} | {item['status']} | {item['score']} | {item['summary']} |")
           PY
 
+      - name: Atualizar histórico Trilha D (artifact ingestion)
+        if: always()
+        run: |
+          set -euo pipefail
+          REPORT="artifacts/trilha-d-qualidade-governanca/trilha-d-qualidade-governanca.json"
+          if [[ ! -f "${REPORT}" ]]; then
+            echo "::warning::Relatório consolidado ausente; histórico não atualizado."
+            exit 0
+          fi
+          python scripts/build_trilha_d_history.py \
+            --ingest-report "${REPORT}" \
+            --output docs/ops-dashboard/data/trilha-d-history.json
+
       - name: Publicar artifact consolidado
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trilha-d-qualidade-governanca-evidence
-          path: artifacts/trilha-d-qualidade-governanca/
-          if-no-files-found: error
+          path: |
+            artifacts/trilha-d-qualidade-governanca/
+            docs/ops-dashboard/data/trilha-d-history.json
+          if-no-files-found: warn
           retention-days: 30
+
+  trilha-d-publish-history:
+    name: Trilha D — Publicar histórico
+    runs-on: ubuntu-latest
+    needs: trilha-d-consolidate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Baixar histórico gerado
+        uses: actions/download-artifact@v4
+        with:
+          name: trilha-d-qualidade-governanca-evidence
+          path: artifacts/trilha-d-ingest
+
+      - name: Commit histórico atualizado na main
+        run: |
+          set -euo pipefail
+          SRC="artifacts/trilha-d-ingest/docs/ops-dashboard/data/trilha-d-history.json"
+          DEST="docs/ops-dashboard/data/trilha-d-history.json"
+          if [[ ! -f "${SRC}" ]]; then
+            echo "Histórico não gerado neste run; nada a publicar."
+            exit 0
+          fi
+          mkdir -p "$(dirname "${DEST}")"
+          cp "${SRC}" "${DEST}"
+          if git diff --quiet -- "${DEST}"; then
+            echo "Histórico Trilha D já está atualizado."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${DEST}"
+          git commit -m "chore(ops): atualizar trilha-d-history via artifact ingestion"
+          git push
