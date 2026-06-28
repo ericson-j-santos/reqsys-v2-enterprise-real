@@ -14,6 +14,7 @@ on:
     paths:
       - '.github/workflows/trilha-d-qualidade-governanca.yml'
       - 'scripts/trilha_d_qualidade_governanca.py'
+      - 'scripts/trilha_d_coverage_dimension.py'
       - 'docs/contracts/trilha-d-qualidade-governanca.schema.json'
       - 'docs/runbooks/trilha-d-qualidade-governanca.md'
       - 'tests/test_trilha_d_qualidade_governanca.py'
@@ -26,6 +27,7 @@ on:
     paths:
       - '.github/workflows/trilha-d-qualidade-governanca.yml'
       - 'scripts/trilha_d_qualidade_governanca.py'
+      - 'scripts/trilha_d_coverage_dimension.py'
       - 'docs/contracts/trilha-d-qualidade-governanca.schema.json'
       - 'docs/runbooks/trilha-d-qualidade-governanca.md'
       - 'tests/test_trilha_d_qualidade_governanca.py'
@@ -82,11 +84,18 @@ jobs:
           OUTPUT_DIR: artifacts/trilha-d-qualidade-governanca
         run: |
           set -euo pipefail
-          python scripts/trilha_d_qualidade_governanca.py \
-            --dimension "${{ matrix.dimension }}" \
-            --output-dir "${OUTPUT_DIR}" \
-            --repository "${{ github.repository }}" \
-            --run-id "${{ github.run_id }}"
+          if [[ "${{ matrix.dimension }}" == "coverage" ]]; then
+            python scripts/trilha_d_coverage_dimension.py \
+              --output-dir "${OUTPUT_DIR}" \
+              --repository "${{ github.repository }}" \
+              --run-id "${{ github.run_id }}"
+          else
+            python scripts/trilha_d_qualidade_governanca.py \
+              --dimension "${{ matrix.dimension }}" \
+              --output-dir "${OUTPUT_DIR}" \
+              --repository "${{ github.repository }}" \
+              --run-id "${{ github.run_id }}"
+          fi
 
       - name: Publicar artifact da dimensão
         if: always()
