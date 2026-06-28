@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Depends, Header, Query
 from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
@@ -12,9 +12,14 @@ from app.services.hub_lowcode import (
     listar_runs_github,
     obter_planner_webhook_config,
     publicar_tarefas_planner,
+    salvar_log_integracao,
     salvar_planner_webhook_config,
     status_consolidado,
     testar_teams_webhook,
+)
+from app.services.power_automate_provisioning import (
+    despachar_workflow_provisionamento,
+    gerar_manifesto_provisionamento_flow,
 )
 
 router = APIRouter(prefix='/v1/hub-lowcode', tags=['Hub Low-Code & IA'])
@@ -48,6 +53,70 @@ async def hub_github(limit: int = Query(default=10, ge=1, le=50)):
 async def hub_pp_ambientes():
     """Lista ambientes Power Platform via Management API."""
     return ok(await listar_ambientes_powerplatform())
+
+
+# ---------------------------------------------------------------------------
+# Power Automate Flow Provisioning P0
+# ---------------------------------------------------------------------------
+
+@router.post('/power-automate/flows/provisioning-plan')
+def power_automate_flow_provisioning_plan(
+    display_name: str = Body(..., min_length=5),
+    trigger_type: str = Body(default='HttpRequest'),
+    description: str = Body(default=''),
+    target_environment: str = Body(default='dev'),
+    solution_name: str = Body(default='ReqSysAutomacao'),
+    dry_run: bool = Body(default=True),
+    x_correlation_id: str | None = Header(default=None),
+):
+    """Gera manifesto governado para criar flow via ALM/PAC CLI."""
+    manifesto = gerar_manifesto_provisionamento_flow(
+        display_name=display_name,
+        trigger_type=trigger_type,
+        description=description,
+        target_environment=target_environment,
+        solution_name=solution_name,
+        correlation_id=x_correlation_id,
+        dry_run=dry_run,
+    )
+    return ok(manifesto, manifesto['correlation_id'])
+
+
+@router.post('/power-automate/flows/provision')
+async def power_automate_flow_provision(
+    db: Session = Depends(get_db),
+    display_name: str = Body(..., min_length=5),
+    trigger_type: str = Body(default='HttpRequest'),
+    description: str = Body(default=''),
+    target_environment: str = Body(default='dev'),
+    solution_name: str = Body(default='ReqSysAutomacao'),
+    x_correlation_id: str | None = Header(default=None),
+):
+    """Solicita dispatch do workflow ALM que provisiona o flow.
+
+    Se GITHUB_PAT nao estiver configurado, retorna plano e motivo sem falhar.
+    """
+    manifesto = gerar_manifesto_provisionamento_flow(
+        display_name=display_name,
+        trigger_type=trigger_type,
+        description=description,
+        target_environment=target_environment,
+        solution_name=solution_name,
+        correlation_id=x_correlation_id,
+        dry_run=False,
+    )
+    dispatch = await despachar_workflow_provisionamento(manifesto)
+    salvar_log_integracao(
+        db,
+        tipo='power_automate_flow_provisioning',
+        status='solicitado' if dispatch.get('dispatched') else 'pendente',
+        autor='reqsys',
+        titulo=display_name,
+        mensagem='Provisionamento de flow Power Automate solicitado via ALM',
+        detalhes={'manifesto': manifesto, 'dispatch': dispatch},
+        correlation_id=manifesto['correlation_id'],
+    )
+    return ok({'manifesto': manifesto, 'dispatch': dispatch}, manifesto['correlation_id'])
 
 
 # ---------------------------------------------------------------------------
