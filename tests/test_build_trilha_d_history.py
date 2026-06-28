@@ -139,6 +139,6 @@ def test_ingest_report_into_history_appends_sample(tmp_path: Path) -> None:
 
     assert payload["summary"]["artifact_ingestion_enabled"] is True
     assert payload["runtime_dashboard_contract"]["refresh_strategy"] == "artifact_ingestion_on_trilha_d_consolidate"
-    assert payload["summary"]["next_increment"] == "predictive_regression_gate"
+    assert payload["summary"]["next_increment"] == "consolidate_operational_pareto_cycle"
     assert len(payload["history"]) == 2
     assert payload["history"][-1]["run_id"] == "run-ingest-1"

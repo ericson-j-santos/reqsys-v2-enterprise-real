@@ -16,6 +16,7 @@ on:
       - 'scripts/trilha_d_qualidade_governanca.py'
       - 'scripts/trilha_d_coverage_dimension.py'
       - 'scripts/build_trilha_d_history.py'
+      - 'scripts/predict_operational_regression.py'
       - 'docs/contracts/trilha-d-qualidade-governanca.schema.json'
       - 'docs/runbooks/trilha-d-qualidade-governanca.md'
       - 'tests/test_trilha_d_qualidade_governanca.py'
@@ -30,6 +31,7 @@ on:
       - 'scripts/trilha_d_qualidade_governanca.py'
       - 'scripts/trilha_d_coverage_dimension.py'
       - 'scripts/build_trilha_d_history.py'
+      - 'scripts/predict_operational_regression.py'
       - 'docs/contracts/trilha-d-qualidade-governanca.schema.json'
       - 'docs/runbooks/trilha-d-qualidade-governanca.md'
       - 'tests/test_trilha_d_qualidade_governanca.py'
@@ -201,6 +203,27 @@ jobs:
           python scripts/build_trilha_d_history.py \
             --ingest-report "${REPORT}" \
             --output docs/ops-dashboard/data/trilha-d-history.json
+
+      - name: Predict operational regression (report-only)
+        if: always()
+        run: |
+          set -euo pipefail
+          REPORT="artifacts/trilha-d-qualidade-governanca/trilha-d-qualidade-governanca.json"
+          HISTORY="docs/ops-dashboard/data/trilha-d-history.json"
+          if [[ ! -f "${HISTORY}" ]]; then
+            echo "::warning::Histórico Trilha D ausente; gate preditivo ignorado."
+            exit 0
+          fi
+          args=(
+            --history-json "${HISTORY}"
+            --output artifacts/trilha-d-qualidade-governanca/predict-operational-regression-gate.json
+            --mode report_only
+            --json
+          )
+          if [[ -f "${REPORT}" ]]; then
+            args+=(--report-json "${REPORT}")
+          fi
+          python scripts/predict_operational_regression.py "${args[@]}"
 
       - name: Publicar artifact consolidado
         if: always()

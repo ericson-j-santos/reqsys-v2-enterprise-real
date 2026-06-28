@@ -1,0 +1,67 @@
+name: Predictive Regression Guard
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: predictive-regression-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  predictive-regression-guard:
+    name: Predictive regression guard
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Coletar arquivos alterados
+        id: collect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/predictive-regression-guard
+          git diff --name-only "${BASE_SHA}"...HEAD > artifacts/predictive-regression-guard/changed-paths.txt
+          echo "count=$(wc -l < artifacts/predictive-regression-guard/changed-paths.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Executar gate preditivo
+        run: |
+          set -euo pipefail
+          python scripts/predict_operational_regression.py \
+            --history-json docs/ops-dashboard/data/trilha-d-history.json \
+            --paths-file artifacts/predictive-regression-guard/changed-paths.txt \
+            --output artifacts/predictive-regression-guard/predict-operational-regression-gate.json \
+            --mode advisory \
+            --json
+
+      - name: Publicar artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: predictive-regression-gate-evidence
+          path: artifacts/predictive-regression-guard/
+          if-no-files-found: warn
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "## Predictive Regression Guard"
+            echo "- Paths alterados: \`${{ steps.collect.outputs.count }}\`"
+            echo "- Modo: \`advisory\`"
+          } >> "$GITHUB_STEP_SUMMARY"
