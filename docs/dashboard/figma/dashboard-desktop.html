@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReqSys Dashboard — Figma Desktop 1440×900</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --line: rgba(148, 163, 184, 0.28);
+      --accent: #f39200;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: #020617;
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .frame {
+      width: 1440px;
+      max-width: 100%;
+      min-height: 900px;
+      background: linear-gradient(180deg, #0f172a 0%, #0b1220 100%);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 30px 100px rgba(0,0,0,.45);
+    }
+    .appbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(2,6,23,.72);
+    }
+    .brand { font-weight: 800; display: flex; align-items: center; gap: 10px; }
+    .brand-dot { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #111; display: grid; place-items: center; font-size: 13px; }
+    .content { padding: 28px 32px 40px; }
+    .eyebrow { color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 6px; }
+    h1 { margin: 0; font-size: 38px; line-height: 1.05; }
+    .subtitle { color: var(--muted); max-width: 62ch; margin-top: 8px; }
+    .header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+    .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .chip, .btn {
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.04);
+    }
+    .btn.primary { background: var(--accent); color: #111; border-color: var(--accent); }
+    .semaforo { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.35); }
+    .semaforo-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 24px; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      background: rgba(255,255,255,.02);
+      min-height: 148px;
+      position: relative;
+      cursor: pointer;
+      transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+    }
+    .card:hover { transform: translateY(-2px); border-color: rgba(243,146,0,.45); box-shadow: 0 8px 20px rgba(0,0,0,.22); }
+    .card-top { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+    .card-value { font-size: 32px; font-weight: 800; margin: 10px 0 6px; }
+    .card-hint { color: var(--muted); font-size: 12px; margin: 0; }
+    .drill { color: var(--accent); font-size: 12px; font-weight: 700; margin-top: 10px; display: inline-flex; gap: 4px; align-items: center; }
+    .badge { margin-left: auto; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 999px; }
+    .badge.green { background: rgba(34,197,94,.15); color: var(--green); }
+    .badge.amber { background: rgba(245,158,11,.15); color: var(--amber); }
+    .badge.red { background: rgba(239,68,68,.15); color: var(--red); }
+    .lower { display: grid; grid-template-columns: 1.2fr .8fr; gap: 16px; margin-top: 18px; }
+    .panel { border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; background: rgba(255,255,255,.02); }
+    .panel h2 { margin: 0 0 4px; font-size: 20px; }
+    .panel p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+    .timeline { display: grid; gap: 12px; }
+    .step { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 10px; }
+    .step:hover { background: rgba(243,146,0,.08); }
+    .step strong { display: block; }
+    .step span { color: var(--muted); font-size: 13px; }
+    .step-btn { color: var(--accent); font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .list { display: grid; gap: 8px; }
+    .list-item { padding: 10px 12px; border-radius: 12px; border: 1px solid transparent; }
+    .list-item:hover { border-color: rgba(243,146,0,.35); background: rgba(243,146,0,.06); cursor: pointer; }
+    .list-item small { display: block; color: var(--muted); margin-top: 2px; font-size: 12px; }
+    .figma-label {
+      position: fixed; top: 12px; right: 12px;
+      background: #7c3aed; color: #fff; font-size: 12px; font-weight: 800;
+      padding: 6px 10px; border-radius: 8px;
+    }
+    @media (max-width: 1100px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+      .lower { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="figma-label">FIGMA · Desktop 1440×900</div>
+  <div class="frame" data-figma-frame="dashboard-desktop-1440">
+    <div class="appbar">
+      <div class="brand"><div class="brand-dot">R</div> ReqSys Enterprise</div>
+      <div class="actions"><span class="chip">Ambiente: desenvolvimento</span></div>
+    </div>
+    <div class="content">
+      <div class="header">
+        <div>
+          <p class="eyebrow">ReqSys · Trilha C · Dashboard Operacional</p>
+          <h1>Dashboard de Requisitos</h1>
+          <p class="subtitle">Visão consolidada com semáforo operacional, cards clicáveis e drill-down filtrado.</p>
+        </div>
+        <div class="actions">
+          <div class="semaforo"><span class="semaforo-dot"></span> Geral: Verde</div>
+          <button class="btn primary">Atualizar</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <article class="card"><div class="card-top">📄 Requisitos <span class="badge green">Verde</span></div><div class="card-value">128</div><p class="card-hint">Base completa de requisitos</p><div class="drill">↗ Abrir analítico</div></article>
+        <article class="card"><div class="card-top">📈 Em análise <span class="badge amber">Amarelo</span></div><div class="card-value">14</div><p class="card-hint">Avaliação técnica/funcional</p><div class="drill">↗ Abrir analítico</div></article>
+        <article class="card"><div class="card-top">✓ Aprovados <span class="badge green">Verde</span></div><div class="card-value">76</div><p class="card-hint">Aprovados para execução</p><div class="drill">↗ Abrir analítico</div></article>
+        <article class="card"><div class="card-top">🧠 Qualidade IA <span class="badge green">Verde</span></div><div class="card-value">92%</div><p class="card-hint">Score geral do módulo IA</p><div class="drill">↗ Abrir analítico</div></article>
+        <article class="card"><div class="card-top">⚠ Pendências <span class="badge amber">Amarelo</span></div><div class="card-value">9</div><p class="card-hint">Triagem ou decisão pendente</p><div class="drill">↗ Abrir analítico</div></article>
+        <article class="card"><div class="card-top">🔗 Erros integração <span class="badge red">Vermelho</span></div><div class="card-value">3</div><p class="card-hint">Falhas Planner/Teams</p><div class="drill">↗ Abrir analítico</div></article>
+        <article class="card"><div class="card-top">🤖 GovBI degradado <span class="badge green">Verde</span></div><div class="card-value">0</div><p class="card-hint">Consultas em modo degradado</p><div class="drill">↗ Abrir analítico</div></article>
+        <article class="card"><div class="card-top">🛠 Pipeline com erro <span class="badge green">Verde</span></div><div class="card-value">0</div><p class="card-hint">Etapas com falha</p><div class="drill">↗ Abrir analítico</div></article>
+        <article class="card"><div class="card-top">⌨ Task Console <span class="card-top badge amber">Amarelo</span></div><div class="card-value">9</div><p class="card-hint">Tarefas pendentes Planner</p><div class="drill">↗ Abrir analítico</div></article>
+      </div>
+
+      <div class="lower">
+        <section class="panel">
+          <h2>Pipeline operacional</h2>
+          <p>Etapas clicáveis com drill-down para o analítico correspondente.</p>
+          <div class="timeline">
+            <div class="step"><div><strong>Entrada</strong><span>SharePoint, Forms e planilhas Excel</span></div><span class="step-btn">Abrir analítico</span></div>
+            <div class="step"><div><strong>Normalização e validação</strong><span>Padronização e checagens</span></div><span class="step-btn">Abrir analítico</span></div>
+            <div class="step"><div><strong>Estruturação do requisito</strong><span>Requisito, histórias e backlog</span></div><span class="step-btn">Abrir analítico</span></div>
+            <div class="step"><div><strong>Publicação e auditoria</strong><span>Redmine, Planner e trilha</span></div><span class="step-btn">Abrir analítico</span></div>
+          </div>
+        </section>
+        <section class="panel">
+          <h2>Informações do sistema</h2>
+          <p>Destinos analíticos e endpoints críticos.</p>
+          <div class="list">
+            <div class="list-item"><strong>Analytics navegável</strong><small>Hub executivo com runtime</small></div>
+            <div class="list-item"><strong>Incidentes críticos</strong><small>Itens em vermelho ou bloqueados</small></div>
+            <div class="list-item"><strong>Estatísticas auditáveis</strong><small>Indicadores com fonte e fórmula</small></div>
+            <div class="list-item"><strong>GET /v1/dashboard/requisitos</strong><small>Endpoint crítico de métricas</small></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
