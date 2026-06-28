@@ -1,10 +1,9 @@
 import os
+from unittest.mock import patch
 
 os.environ.setdefault('APP_ENV', 'test')
 os.environ.setdefault('DATABASE_URL', 'sqlite:///./test_reqsys_phases_p1_p3.db')
 os.environ.setdefault('JWT_SECRET', 'reqsys-test-secret-with-minimum-safe-length')
-
-from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -22,15 +21,23 @@ def test_extrair_codigos_agile():
     assert extrair_codigos_agile('feat(AGI-123456789): story') == ['AGI-123456789']
 
 
-def test_increment_gate_relaxado_em_teste():
+@patch('app.services.increment_gate_service.carregar_relatorio_coordenador', return_value=None)
+def test_increment_gate_relaxado_em_teste(mock_relatorio):
     gate = verificar_increment_gate('new_front')
     assert gate['permitido'] is True
+    assert gate['motivo'] == 'gate_relaxado_sem_relatorio'
 
 
+@patch('app.services.github_branch_service.verificar_increment_gate')
 @patch('app.services.github_branch_service.github_client.create_branch')
 @patch('app.services.github_branch_service.github_client.get_branch_sha')
 @patch('app.services.github_branch_service.github_client.github_token_configurado', return_value=True)
-def test_criar_branch_github_api(mock_token, mock_get_sha, mock_create_branch):
+def test_criar_branch_github_api(mock_token, mock_get_sha, mock_create_branch, mock_gate):
+    mock_gate.return_value = {
+        'permitido': True,
+        'motivo': 'incremento_permitido_teste',
+        'detalhe': 'Increment gate liberado no teste unitario.',
+    }
     client = TestClient(app)
     mock_get_sha.side_effect = lambda repo, branch: 'sha-base' if branch == 'dev' else None
 
