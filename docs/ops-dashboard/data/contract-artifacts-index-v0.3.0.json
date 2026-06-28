@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0.0",
+  "contract": "reqsys-contract-artifacts-index",
+  "version": "0.3.0",
+  "generated_at": "2026-06-28T23:30:00Z",
+  "status": "governed",
+  "summary": {
+    "contract_governance_maturity": "medium_high",
+    "runtime_contract_sync": "partial",
+    "manual_validation_ready": true,
+    "ci_validation_ready": true,
+    "newman_ready": false,
+    "next_recommended_increment": "postman_collection_validator_p0"
+  },
+  "artifacts": [
+    {
+      "name": "OpenAPI Runtime v0.3.0",
+      "type": "openapi",
+      "version": "0.3.0",
+      "path": "docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json",
+      "purpose": "Contrato HTTP versionado para runtime, requisitos mockados e integração Power Automate",
+      "status": "available",
+      "validation": "openapi_contract_governance_p0",
+      "risk": "low"
+    },
+    {
+      "name": "Postman Runtime v0.3.0",
+      "type": "postman_collection",
+      "version": "0.3.0",
+      "path": "docs-site/assets/postman/reqsys-runtime-postman-v0.3.0.json",
+      "purpose": "Coleção importável para prática GET/POST e futura automação Newman",
+      "status": "candidate_pr",
+      "validation": "manual_import_pending",
+      "risk": "low"
+    },
+    {
+      "name": "Power Automate GET/POST Guide",
+      "type": "documentation",
+      "version": "0.3.0",
+      "path": "docs-site/api/power-automate-get-post.md",
+      "purpose": "Guia de prática controlada GET/POST no Power Automate",
+      "status": "available_or_candidate",
+      "validation": "mkdocs_build_strict",
+      "risk": "low"
+    }
+  ],
+  "traceability": {
+    "openapi_to_postman": {
+      "status": "partial",
+      "covered_paths": [
+        "/api/runtime/health",
+        "/api/runtime/dashboard",
+        "/api/runtime/analytics",
+        "/api/requisitos/{id}",
+        "/api/requisitos"
+      ],
+      "gap": "postman_validation_not_yet_automated"
+    },
+    "openapi_to_ci": {
+      "status": "in_progress",
+      "source_pr": "#504",
+      "gap": "semantic_backend_route_sync_pending"
+    },
+    "postman_to_ci": {
+      "status": "not_started",
+      "gap": "newman_optional_execution_pending"
+    }
+  },
+  "guardrails": [
+    "no_secrets",
+    "no_runtime_change",
+    "no_backend_change",
+    "no_workflow_change",
+    "artifact_only",
+    "traceability_ready"
+  ],
+  "next_actions": [
+    "Validar coleção Postman por JSON parse e schema mínimo",
+    "Adicionar Newman opcional não bloqueante para endpoints públicos",
+    "Renderizar este índice no Ops Dashboard / Strategic Governance",
+    "Adicionar verificação semântica backend routes versus OpenAPI paths"
+  ]
+}
