@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "schema_name": "autonomous-delivery-cycle-next-increments",
+  "required_fields": [
+    "source_pr",
+    "source_url",
+    "title",
+    "status"
+  ],
+  "allowed_statuses": [
+    "queued_for_chat_execution",
+    "in_progress",
+    "done",
+    "blocked",
+    "discarded_duplicate"
+  ],
+  "rules": [
+    "queue_items_are_recommendations_not_commands",
+    "each_item_requires_context_validation_before_execution",
+    "do_not_execute_when_main_or_required_ci_is_red"
+  ]
+}
