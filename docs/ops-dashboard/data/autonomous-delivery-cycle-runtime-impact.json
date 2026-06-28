@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "runtime_impact": {
+    "public_app": "none",
+    "dashboard_static_contracts": "added",
+    "github_actions": "new_workflow",
+    "merge_behavior": "conditional_only_after_explicit_label_and_green_ci",
+    "risk": "low_to_medium"
+  }
+}
