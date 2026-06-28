@@ -17,7 +17,7 @@ REPO = "ericson-j-santos/reqsys-v2-enterprise-real"
 DEFAULT_OUTPUT = "docs/ops-dashboard/data/trilha-d-history.json"
 REFRESH_STRATEGY_ARTIFACT = "artifact_ingestion_on_trilha_d_consolidate"
 REFRESH_STRATEGY_STATIC = "static_json_until_artifact_ingestion_is_enabled"
-NEXT_INCREMENT_AFTER_INGESTION = "predictive_regression_gate"
+NEXT_INCREMENT_AFTER_INGESTION = "consolidate_operational_pareto_cycle"
 DIMENSIONS = ("tests", "coverage", "mutation", "contract", "schema", "ci-watch")
 
 
