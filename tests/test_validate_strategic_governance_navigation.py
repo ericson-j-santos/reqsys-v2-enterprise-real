@@ -26,3 +26,13 @@ def test_strategic_governance_page_exposes_executive_trend_artifact() -> None:
     assert "executive-trend-history.json" in html
     assert "recommendation-only" in html
     assert "não substitui CI" in html
+
+
+def main() -> int:
+    test_strategic_governance_navigation_validator_passes_for_static_assets()
+    test_strategic_governance_page_exposes_executive_trend_artifact()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
