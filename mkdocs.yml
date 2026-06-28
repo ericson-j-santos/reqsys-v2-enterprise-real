@@ -53,4 +53,4 @@ extra:
   reqsys:
     documentation_version: 0.1.0
     documentation_date: 2026-06-28
-    offline_html: docs-site/offline/reqsys-docs-v0.1.0.html
+    offline_html: docs/offline/reqsys-docs-v0.1.0.html
