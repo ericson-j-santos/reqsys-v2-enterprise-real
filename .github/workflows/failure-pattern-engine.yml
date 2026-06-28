@@ -52,28 +52,28 @@ jobs:
             printf '%s\n' "$SAMPLE_TEXT" > artifacts/failure-pattern-engine/input/sample.txt
           else
             cat > artifacts/failure-pattern-engine/input/sample.txt <<'EOF'
-                      Failure Pattern Engine validation sample.
-                      Resource not accessible by integration
-                      Artifact not found
-                      EOF
-                      fi
-            
-                  - name: Executar Failure Pattern Engine
-                    run: |
-                      python scripts/failure_pattern_engine.py \
+          Failure Pattern Engine validation sample.
+          Resource not accessible by integration
+          Artifact not found
+          EOF
+          fi
+
+      - name: Executar Failure Pattern Engine
+        run: |
+          python scripts/failure_pattern_engine.py \
             --catalog config/failure-patterns.json \
             --input artifacts/failure-pattern-engine/input/sample.txt \
             --out-dir artifacts/failure-pattern-engine
-            
-                  - name: Publicar resumo executivo
-                    run: cat artifacts/failure-pattern-engine/failure-pattern-report.md >> "$GITHUB_STEP_SUMMARY"
-            
-                  - name: Upload artifact
-                    uses: actions/upload-artifact@v4
-                    with:
-                      name: failure-pattern-engine-report
-                      path: |
+
+      - name: Publicar resumo executivo
+        run: cat artifacts/failure-pattern-engine/failure-pattern-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-pattern-engine-report
+          path: |
             artifacts/failure-pattern-engine/failure-pattern-report.json
             artifacts/failure-pattern-engine/failure-pattern-report.md
             artifacts/failure-pattern-engine/input/sample.txt
-                      retention-days: 30
+          retention-days: 30

@@ -86,7 +86,7 @@ jobs:
 
           if [[ ! -f artifacts/coordenador-status/coordenador-status.json ]]; then
             cat > artifacts/coordenador-status/coordenador-status.json <<'JSON'
-                      {
+          {
             "state": "unknown",
             "decision": "increment_gate_advisory_fallback",
             "increment_gate": {
@@ -95,11 +95,11 @@ jobs:
               "allowed_increment_types": ["gap_fix", "hotfix", "consolidate", "close_duplicate"]
             },
             "recommended_actions": []
-                      }
-                      JSON
-                      fi
-            
-                      python scripts/governed_pr_increment_gate.py \
+          }
+          JSON
+          fi
+
+          python scripts/governed_pr_increment_gate.py \
             --title "${PR_TITLE}" \
             --body "${PR_BODY}" \
             --labels "${PR_LABELS}" \
@@ -108,12 +108,12 @@ jobs:
             --status-json artifacts/coordenador-status/coordenador-status.json \
             --output-dir artifacts/governed-pr-increment-gate \
             --json | tee artifacts/governed-pr-increment-gate/decision.json
-                      gate_code=${PIPESTATUS[0]}
-                      set -e
-            
-                      if [[ ! -f artifacts/governed-pr-increment-gate/decision.json ]]; then
+          gate_code=${PIPESTATUS[0]}
+          set -e
+
+          if [[ ! -f artifacts/governed-pr-increment-gate/decision.json ]]; then
             cat > artifacts/governed-pr-increment-gate/decision.json <<JSON
-                      {
+          {
             "allowed": false,
             "reason": "increment_gate_execution_failed",
             "detail": "Governed PR Automation open gate falhou antes de produzir decision.json.",
@@ -124,24 +124,24 @@ jobs:
             "pr_number": ${PR_NUMBER},
             "consolidator_exit_code": ${consolidator_code},
             "gate_exit_code": ${gate_code}
-                      }
-                      JSON
-                      fi
-            
-                      echo "exit_code=${gate_code}" >> "$GITHUB_OUTPUT"
-                      allowed=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/decision.json')).get('allowed'))")
-                      reason=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/decision.json')).get('reason'))")
-                      increment_type=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/decision.json')).get('increment_type'))")
-                      echo "allowed=${allowed}" >> "$GITHUB_OUTPUT"
-                      echo "reason=${reason}" >> "$GITHUB_OUTPUT"
-                      echo "increment_type=${increment_type}" >> "$GITHUB_OUTPUT"
-            
-                  - name: Resumo executivo
-                    if: always()
-                    shell: bash
-                    run: |
-                      set -euo pipefail
-                      if [[ -f artifacts/governed-pr-increment-gate/decision.json ]]; then
+          }
+          JSON
+          fi
+
+          echo "exit_code=${gate_code}" >> "$GITHUB_OUTPUT"
+          allowed=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/decision.json')).get('allowed'))")
+          reason=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/decision.json')).get('reason'))")
+          increment_type=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/decision.json')).get('increment_type'))")
+          echo "allowed=${allowed}" >> "$GITHUB_OUTPUT"
+          echo "reason=${reason}" >> "$GITHUB_OUTPUT"
+          echo "increment_type=${increment_type}" >> "$GITHUB_OUTPUT"
+
+      - name: Resumo executivo
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f artifacts/governed-pr-increment-gate/decision.json ]]; then
             {
               echo "## Governed PR Automation — Increment Gate"
               echo ""
@@ -155,13 +155,13 @@ jobs:
               echo ""
               echo "O gate de abertura é advisory para não contaminar checks de PRs seguros. O bloqueio obrigatório permanece no caminho workflow_dispatch de merge governado."
             } >> "$GITHUB_STEP_SUMMARY"
-                      fi
-            
-                  - name: Comentar bloqueio no PR
-                    if: steps.gate.outputs.exit_code != '0' && hashFiles('artifacts/governed-pr-increment-gate/decision.json') != ''
-                    uses: actions/github-script@v7
-                    with:
-                      script: |
+          fi
+
+      - name: Comentar bloqueio no PR
+        if: steps.gate.outputs.exit_code != '0' && hashFiles('artifacts/governed-pr-increment-gate/decision.json') != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
             const fs = require('fs');
             const decision = JSON.parse(
               fs.readFileSync('artifacts/governed-pr-increment-gate/decision.json', 'utf8')
@@ -195,58 +195,58 @@ jobs:
               issue_number: context.payload.pull_request.number,
               body,
             });
-            
-                  - name: Publicar artifact
-                    if: always()
-                    uses: actions/upload-artifact@v4
-                    with:
-                      name: governed-pr-increment-gate-evidence
-                      path: artifacts/governed-pr-increment-gate
-                      if-no-files-found: warn
-                      retention-days: 14
-            
-                  - name: Registrar resultado advisory
-                    if: steps.gate.outputs.exit_code != '0'
-                    run: |
-                      echo "Abertura de PR sinalizada pelo increment gate, mas mantida como advisory."
-                      echo "O bloqueio obrigatório permanece no workflow_dispatch de merge governado."
-            
-              governed-pr-check:
-                name: Validate governed PR merge readiness
-                if: github.event_name == 'workflow_dispatch'
-                runs-on: ubuntu-latest
-                timeout-minutes: 10
-                steps:
-                  - name: Checkout
-                    uses: actions/checkout@v4
-            
-                  - name: Setup Python
-                    uses: actions/setup-python@v5
-                    with:
-                      python-version: "3.12"
-            
-                  - name: Validar increment gate do PR (merge path)
-                    id: increment_gate
-                    shell: bash
-                    env:
-                      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                      PR_NUMBER: ${{ github.event.inputs.pr_number }}
-                    run: |
-                      set -euo pipefail
-                      mkdir -p artifacts/governed-pr-increment-gate
-                      PR_JSON=$(gh pr view "$PR_NUMBER" --json title,body,labels,headRefName,baseRefName,number)
-                      echo "$PR_JSON" > artifacts/governed-pr-increment-gate/pr.json
-                      BASE_BRANCH=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/pr.json'))['baseRefName'])")
-                      python scripts/coordenador_status_consolidator.py \
+
+      - name: Publicar artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-pr-increment-gate-evidence
+          path: artifacts/governed-pr-increment-gate
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Registrar resultado advisory
+        if: steps.gate.outputs.exit_code != '0'
+        run: |
+          echo "Abertura de PR sinalizada pelo increment gate, mas mantida como advisory."
+          echo "O bloqueio obrigatório permanece no workflow_dispatch de merge governado."
+
+  governed-pr-check:
+    name: Validate governed PR merge readiness
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar increment gate do PR (merge path)
+        id: increment_gate
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/governed-pr-increment-gate
+          PR_JSON=$(gh pr view "$PR_NUMBER" --json title,body,labels,headRefName,baseRefName,number)
+          echo "$PR_JSON" > artifacts/governed-pr-increment-gate/pr.json
+          BASE_BRANCH=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/pr.json'))['baseRefName'])")
+          python scripts/coordenador_status_consolidator.py \
             --repo "${GITHUB_REPOSITORY}" \
             --branch "${BASE_BRANCH}" \
             --output-dir artifacts/coordenador-status
-                      TITLE=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/pr.json'))['title'])")
-                      BODY=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/pr.json'))['body'] or '')")
-                      LABELS=$(python -c "import json; labels=[item['name'] for item in json.load(open('artifacts/governed-pr-increment-gate/pr.json'))['labels']]; print(','.join(labels))")
-                      HEAD_REF=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/pr.json'))['headRefName'])")
-                      set +e
-                      python scripts/governed_pr_increment_gate.py \
+          TITLE=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/pr.json'))['title'])")
+          BODY=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/pr.json'))['body'] or '')")
+          LABELS=$(python -c "import json; labels=[item['name'] for item in json.load(open('artifacts/governed-pr-increment-gate/pr.json'))['labels']]; print(','.join(labels))")
+          HEAD_REF=$(python -c "import json; print(json.load(open('artifacts/governed-pr-increment-gate/pr.json'))['headRefName'])")
+          set +e
+          python scripts/governed_pr_increment_gate.py \
             --title "$TITLE" \
             --body "$BODY" \
             --labels "$LABELS" \
@@ -255,19 +255,19 @@ jobs:
             --status-json artifacts/coordenador-status/coordenador-status.json \
             --output-dir artifacts/governed-pr-increment-gate \
             --json | tee artifacts/governed-pr-increment-gate/decision.json
-                      code=$?
-                      set -e
-                      echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
-                      if [[ "$code" != "0" ]]; then
+          code=$?
+          set -e
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          if [[ "$code" != "0" ]]; then
             echo "Increment gate bloqueou o PR antes da validacao de merge."
             exit 1
-                      fi
-            
-                  - name: Validate PR gates
-                    id: validate
-                    uses: actions/github-script@v7
-                    with:
-                      script: |
+          fi
+
+      - name: Validate PR gates
+        id: validate
+        uses: actions/github-script@v7
+        with:
+          script: |
             const prNumber = Number(core.getInput('pr_number'));
             const executeMerge = core.getInput('execute_merge') === 'true';
             const requiredLabel = core.getInput('required_label');
@@ -275,15 +275,15 @@ jobs:
               .split('\n')
               .map((item) => item.trim())
               .filter(Boolean);
-            
+
             const { owner, repo } = context.repo;
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-            
+
             const failures = [];
             if (pr.state !== 'open') failures.push(`PR precisa estar aberto. Estado atual: ${pr.state}`);
             if (pr.draft) failures.push('PR ainda esta em draft.');
             if (!pr.mergeable) failures.push(`PR nao esta mergeable. Valor atual: ${pr.mergeable}`);
-            
+
             const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
               owner,
               repo,
@@ -294,7 +294,7 @@ jobs:
             if (!labelNames.includes(requiredLabel)) {
               failures.push(`Label obrigatoria ausente: ${requiredLabel}`);
             }
-            
+
             const headSha = pr.head.sha;
             const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
               owner,
@@ -303,7 +303,7 @@ jobs:
               event: 'pull_request',
               per_page: 100,
             });
-            
+
             const latestByWorkflow = new Map();
             for (const run of runs) {
               const existing = latestByWorkflow.get(run.name);
@@ -311,7 +311,7 @@ jobs:
                 latestByWorkflow.set(run.name, run);
               }
             }
-            
+
             const workflowSummary = [];
             for (const workflow of requiredWorkflows) {
               const run = latestByWorkflow.get(workflow);
@@ -324,7 +324,7 @@ jobs:
               if (run.status !== 'completed') failures.push(`Workflow ainda nao completou: ${workflow} (${run.status})`);
               if (run.conclusion !== 'success') failures.push(`Workflow sem sucesso: ${workflow} (${run.conclusion})`);
             }
-            
+
             const summaryLines = [
               '# Governed PR Automation',
               '',
@@ -341,20 +341,20 @@ jobs:
               failures.length ? failures.map((item) => `- ${item}`).join('\n') : '- PR elegivel para merge governado.',
             ];
             await core.summary.addRaw(summaryLines.join('\n')).write();
-            
+
             core.setOutput('eligible', failures.length === 0 ? 'true' : 'false');
             core.setOutput('execute_merge', executeMerge ? 'true' : 'false');
             core.setOutput('head_sha', headSha);
-            
+
             if (failures.length) {
               core.setFailed(failures.join('\n'));
             }
-            
-                  - name: Merge PR when explicitly authorized
-                    if: steps.validate.outputs.eligible == 'true' && steps.validate.outputs.execute_merge == 'true'
-                    uses: actions/github-script@v7
-                    with:
-                      script: |
+
+      - name: Merge PR when explicitly authorized
+        if: steps.validate.outputs.eligible == 'true' && steps.validate.outputs.execute_merge == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
             const prNumber = Number(core.getInput('pr_number'));
             const headSha = '${{ steps.validate.outputs.head_sha }}';
             const { owner, repo } = context.repo;
