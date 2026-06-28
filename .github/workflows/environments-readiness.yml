@@ -1,0 +1,51 @@
+name: Environments Readiness
+
+on:
+  pull_request:
+    paths:
+      - scripts/validate_environments_readiness.py
+      - tests/test_validate_environments_readiness.py
+      - docs/ops-dashboard/data/environments-validation.json
+      - .github/workflows/environments-readiness.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: environments-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-environments:
+    name: Validate all environments readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate script syntax
+        run: python -m py_compile scripts/validate_environments_readiness.py
+
+      - name: Run unit tests
+        run: pytest tests/test_validate_environments_readiness.py
+
+      - name: Generate environments readiness evidence
+        run: |
+          python scripts/validate_environments_readiness.py \
+            --timeout-seconds 5 \
+            --output docs/ops-dashboard/data/environments-validation.json
+
+      - name: Upload environments validation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: environments-validation
+          path: docs/ops-dashboard/data/environments-validation.json
+          if-no-files-found: error
+          retention-days: 15
