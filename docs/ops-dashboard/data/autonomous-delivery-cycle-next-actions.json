@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "actions": [
+    {
+      "order": 1,
+      "action": "merge_this_increment_after_ci_green",
+      "status": "pending_ci",
+      "risk": "low"
+    },
+    {
+      "order": 2,
+      "action": "run_autonomous_delivery_cycle_dry_run",
+      "status": "after_merge",
+      "risk": "low"
+    },
+    {
+      "order": 3,
+      "action": "consume_cycle_contracts_in_ops_dashboard",
+      "status": "next_increment",
+      "risk": "low"
+    },
+    {
+      "order": 4,
+      "action": "enable_label_based_merge_for_small_green_prs",
+      "status": "after_first_successful_dry_run",
+      "risk": "medium"
+    }
+  ]
+}
