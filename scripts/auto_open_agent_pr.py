@@ -121,6 +121,13 @@ def resolve_token() -> str:
     raise RuntimeError("Token GitHub ausente (GH_PAT_ACTIONS/GH_TOKEN/GITHUB_TOKEN)")
 
 
+def add_labels_best_effort(client: GitHubClient, number: int, labels: list[str]) -> None:
+    try:
+        client.add_labels(number, labels)
+    except RuntimeError as exc:
+        print(f"::warning::Não foi possível aplicar labels no PR #{number}: {exc}", file=sys.stderr)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Open or update draft PR for agent branches.")
     parser.add_argument("--base", default=os.environ.get("PR_BASE_BRANCH", "main"))
@@ -147,14 +154,14 @@ def main() -> int:
         if existing:
             number = int(existing["number"])
             client.update_pr(number, title=title, body=body)
-            client.add_labels(number, ["padrao-ouro", "cloud-agent"])
+            add_labels_best_effort(client, number, ["padrao-ouro", "cloud-agent"])
             write_pr_request_artifact(branch=branch, base=args.base, title=title, body=body)
             print(f"PR atualizado: {existing.get('html_url')}")
             return 0
 
         created = client.create_pr(title=title, body=body, head=branch, base=args.base, draft=True)
         number = int(created["number"])
-        client.add_labels(number, ["padrao-ouro", "cloud-agent"])
+        add_labels_best_effort(client, number, ["padrao-ouro", "cloud-agent"])
         write_pr_request_artifact(branch=branch, base=args.base, title=title, body=body)
         print(f"PR criado: {created.get('html_url')}")
         return 0
