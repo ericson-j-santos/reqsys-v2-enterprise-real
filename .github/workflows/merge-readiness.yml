@@ -1,0 +1,91 @@
+name: Merge Readiness Pareto Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: "Branch base para validação"
+        required: true
+        default: "main"
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  CORRELATION_ID: merge-readiness-${{ github.run_id }}-${{ github.run_attempt }}
+
+concurrency:
+  group: merge-readiness-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  merge-readiness:
+    name: Merge readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout head com histórico completo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validar prontidão objetiva de merge
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.inputs.base_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          python scripts/merge_readiness_gate.py \
+            --base-ref "$BASE_REF" \
+            --max-changed-files 25 \
+            --max-workflow-files 3 \
+            --max-domains 4 \
+            --output artifacts/merge-readiness/merge-readiness.json
+
+      - name: Publicar evidência de merge-readiness
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: merge-readiness-evidence
+          path: artifacts/merge-readiness/merge-readiness.json
+          if-no-files-found: warn
+
+      - name: Resumo executivo
+        if: always()
+        run: |
+          {
+            echo "## Merge Readiness Pareto Gate"
+            echo ""
+            echo "- Correlation ID: \`$CORRELATION_ID\`"
+            echo "- Evidência: \`artifacts/merge-readiness/merge-readiness.json\`"
+            echo ""
+            if [ -f artifacts/merge-readiness/merge-readiness.json ]; then
+              python - <<'PY'
+              import json
+              from pathlib import Path
+              payload = json.loads(Path('artifacts/merge-readiness/merge-readiness.json').read_text(encoding='utf-8'))
+              print(f"- Status: `{payload.get('status')}`")
+              print(f"- Ahead: `{payload.get('ahead_by')}`")
+              print(f"- Behind: `{payload.get('behind_by')}`")
+              print(f"- Arquivos alterados: `{payload.get('changed_files')}`")
+              print(f"- Workflows alterados: `{payload.get('workflow_files')}`")
+              blocking = payload.get('blocking_issues') or []
+              warnings = payload.get('warnings') or []
+              if blocking:
+                  print('')
+                  print('### Bloqueios')
+                  for item in blocking:
+                      print(f"- {item}")
+              if warnings:
+                  print('')
+                  print('### Alertas')
+                  for item in warnings:
+                      print(f"- {item}")
+              PY
+            else
+              echo "- Status: \`sem artifact\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
