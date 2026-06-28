@@ -246,6 +246,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Baixar histórico gerado
         uses: actions/download-artifact@v4
@@ -262,14 +264,28 @@ jobs:
             echo "Histórico não gerado neste run; nada a publicar."
             exit 0
           fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
           mkdir -p "$(dirname "${DEST}")"
           cp "${SRC}" "${DEST}"
           if git diff --quiet -- "${DEST}"; then
             echo "Histórico Trilha D já está atualizado."
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "${DEST}"
           git commit -m "chore(ops): atualizar trilha-d-history via artifact ingestion"
-          git push
+          for attempt in 1 2 3; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              echo "Histórico Trilha D publicado na main."
+              exit 0
+            fi
+            status=$?
+            git rebase --abort || true
+            echo "::warning::Tentativa ${attempt}/3 de publicar histórico falhou com status ${status}; nova tentativa em ${attempt}s."
+            sleep "${attempt}"
+          done
+          echo "::warning::Histórico Trilha D não publicado por corrida de atualização em main; artifact preservado para auditoria."
+          exit 0
