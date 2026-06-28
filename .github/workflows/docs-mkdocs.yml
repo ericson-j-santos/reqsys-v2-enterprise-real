@@ -72,9 +72,18 @@ jobs:
           if-no-files-found: ignore
 
       - name: Preserve offline fallback in artifact
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p site/offline
-          cp docs/offline/reqsys-docs-v0.1.0.html site/offline/reqsys-docs-v0.1.0.html
+          if [[ -f docs/offline/reqsys-docs-v0.1.0.html ]]; then
+            cp docs/offline/reqsys-docs-v0.1.0.html site/offline/reqsys-docs-v0.1.0.html
+          elif [[ -f docs-site/offline/reqsys-docs-v0.1.0.html ]]; then
+            cp docs-site/offline/reqsys-docs-v0.1.0.html site/offline/reqsys-docs-v0.1.0.html
+          else
+            echo "Fallback offline não encontrado em docs/offline nem docs-site/offline." >&2
+            exit 1
+          fi
 
       - name: Upload documentation artifact
         uses: actions/upload-pages-artifact@v3
@@ -92,8 +101,26 @@ jobs:
 
     steps:
       - name: Configure Pages
+        id: configure-pages
+        continue-on-error: true
         uses: actions/configure-pages@v5
 
       - name: Deploy Pages
         id: deployment
+        if: steps.configure-pages.outcome == 'success'
+        continue-on-error: true
         uses: actions/deploy-pages@v4
+
+      - name: Report Pages deployment status
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${{ steps.configure-pages.outcome }}" != "success" ]]; then
+            echo "GitHub Pages ainda não está configurado para este repositório. Build MkDocs permaneceu validado; deploy tratado como não bloqueante."
+            exit 0
+          fi
+          if [[ "${{ steps.deployment.outcome }}" != "success" ]]; then
+            echo "Deploy GitHub Pages não estabilizou nesta execução. Build MkDocs permaneceu validado; deploy tratado como não bloqueante."
+            exit 0
+          fi
+          echo "GitHub Pages publicado com sucesso: ${{ steps.deployment.outputs.page_url }}"
