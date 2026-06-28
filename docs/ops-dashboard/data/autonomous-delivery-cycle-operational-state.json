@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "autonomous-delivery-cycle",
+  "state": "implemented_pending_validation",
+  "state_reason": "workflow_and_contracts_added_but_first_dry_run_requires_merge",
+  "evidenced": {
+    "workflow_added": true,
+    "contracts_added": true,
+    "tests_added": true,
+    "documentation_added": true,
+    "first_dry_run_executed": false,
+    "first_autonomous_merge_executed": false
+  },
+  "target": {
+    "state": "operational_governed_cycle",
+    "requires": [
+      "ci_green_on_pr",
+      "merge_to_main",
+      "successful_dry_run",
+      "dashboard_consumption"
+    ]
+  }
+}
