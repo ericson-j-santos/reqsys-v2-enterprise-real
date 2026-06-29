@@ -33,6 +33,60 @@ def run_script(script: str, *args: str) -> int:
     return result.returncode
 
 
+def load_contract_artifacts(
+    contract_index_path: Path,
+    openapi_validation_path: Path,
+    openapi_semantic_diff_path: Path,
+) -> dict[str, Any]:
+    contract_index = load_json(contract_index_path, {})
+    openapi_validation = load_json(openapi_validation_path, {})
+    semantic_diff = load_json(openapi_semantic_diff_path, {})
+
+    semantic_drift_count = int((semantic_diff.get("summary") or {}).get("drift_count") or 0)
+    validation_status = str(openapi_validation.get("status") or "unknown")
+    traceability = contract_index.get("traceability") or {}
+    openapi_to_ci = traceability.get("openapi_to_ci") or {}
+
+    hydrated = bool(contract_index) or bool(openapi_validation) or bool(semantic_diff)
+    return {
+        "hydrated": hydrated,
+        "contract_index": {
+            "available": bool(contract_index),
+            "version": contract_index.get("version"),
+            "status": contract_index.get("status"),
+            "runtime_contract_sync": (contract_index.get("summary") or {}).get("runtime_contract_sync"),
+            "gap": openapi_to_ci.get("gap"),
+        },
+        "openapi_validation": {
+            "available": bool(openapi_validation),
+            "status": validation_status,
+            "valid": (openapi_validation.get("summary") or {}).get("valid"),
+            "error_count": len(openapi_validation.get("errors") or []),
+        },
+        "semantic_diff": {
+            "available": bool(semantic_diff),
+            "status": semantic_diff.get("status"),
+            "drift_count": semantic_drift_count,
+            "missing_in_backend": (semantic_diff.get("summary") or {}).get("missing_in_backend", 0),
+            "missing_in_openapi": (semantic_diff.get("summary") or {}).get("missing_in_openapi", 0),
+        },
+        "summary": {
+            "artifacts_available": sum(
+                1
+                for item in (
+                    contract_index,
+                    openapi_validation,
+                    semantic_diff,
+                )
+                if item
+            ),
+            "semantic_drift_count": semantic_drift_count,
+            "validation_passed": validation_status == "passed",
+            "sync_gap": openapi_to_ci.get("gap"),
+        },
+    }
+
+
 def build_correlation_chain(
     runs: list[dict[str, Any]],
     history: list[dict[str, Any]],
@@ -41,6 +95,7 @@ def build_correlation_chain(
     workflow_run_id: str | None,
     commit_sha: str,
     correlation_id: str,
+    contract_artifacts: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     chain: list[dict[str, Any]] = []
     seq = 1
@@ -107,6 +162,23 @@ def build_correlation_chain(
             )
             seq += 1
 
+    if contract_artifacts and contract_artifacts.get("hydrated"):
+        summary = contract_artifacts.get("summary") or {}
+        chain.append(
+            {
+                "sequence": seq,
+                "event": "contract_artifacts_hydrated",
+                "source": "contract-governance-artifacts",
+                "correlation_level": "contract",
+                "artifacts_available": summary.get("artifacts_available", 0),
+                "semantic_drift_count": summary.get("semantic_drift_count", 0),
+                "validation_passed": summary.get("validation_passed"),
+                "sync_gap": summary.get("sync_gap"),
+                "correlation_id": correlation_id,
+            }
+        )
+        seq += 1
+
     return chain
 
 
@@ -166,6 +238,7 @@ def consolidate_hub(
     commit_sha: str,
     workflow_run_id: str | None,
     correlation_id: str,
+    contract_artifacts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     risks = [
         multi_env.get("operational_risk"),
@@ -179,6 +252,10 @@ def consolidate_hub(
         status, risk = "watch", "medium"
     else:
         status, risk = "healthy", "low"
+
+    contract_summary = (contract_artifacts or {}).get("summary") or {}
+    if contract_summary.get("semantic_drift_count", 0) > 0 and risk == "low":
+        status, risk = "watch", "medium"
 
     return {
         "schema_version": "1.0.0",
@@ -201,6 +278,9 @@ def consolidate_hub(
             "governed_alerts": alert.get("should_alert") is not None,
             "slo_sla_evidence": (slo.get("summary") or {}).get("slo_count", 0) > 0,
             "ci_runtime_observability_correlation": len(correlation_chain) > 0,
+            "contract_artifacts_hydrated": bool((contract_artifacts or {}).get("hydrated")),
+            "openapi_validation_available": bool((contract_artifacts or {}).get("openapi_validation", {}).get("available")),
+            "semantic_diff_available": bool((contract_artifacts or {}).get("semantic_diff", {}).get("available")),
         },
         "sources": {
             "multi_environment": multi_env.get("summary"),
@@ -208,10 +288,11 @@ def consolidate_hub(
             "slo_evidence": slo.get("summary"),
             "longitudinal": {"windows": longitudinal.get("windows"), "trend": longitudinal.get("trend")},
             "history_index": history_index.get("summary"),
+            "contract_governance": contract_artifacts or {"hydrated": False},
         },
         "governed_alert": alert,
         "correlation_chain": correlation_chain,
-        "recommended_actions": _recommended_actions(drift, slo, longitudinal, alert),
+        "recommended_actions": _recommended_actions(drift, slo, longitudinal, alert, contract_artifacts),
         "guardrails": [
             "report_only",
             "no_auto_deploy",
@@ -226,6 +307,7 @@ def _recommended_actions(
     slo: dict[str, Any],
     longitudinal: dict[str, Any],
     alert: dict[str, Any],
+    contract_artifacts: dict[str, Any] | None = None,
 ) -> list[str]:
     actions: list[str] = []
     actions.extend(drift.get("recommendations") or [])
@@ -236,6 +318,17 @@ def _recommended_actions(
         actions.append("Revisar tendencia longitudinal degradante nos ultimos snapshots.")
     if alert.get("should_alert"):
         actions.append(f"Alerta governado {alert['alert_level']}: {alert['alert_type']} — {alert['action_policy']}")
+    if contract_artifacts and contract_artifacts.get("hydrated"):
+        semantic = contract_artifacts.get("semantic_diff") or {}
+        if semantic.get("drift_count", 0) > 0:
+            actions.append(
+                f"Revisar drift semântico OpenAPI: {semantic['drift_count']} divergências "
+                f"(missing_in_backend={semantic.get('missing_in_backend', 0)}, "
+                f"missing_in_openapi={semantic.get('missing_in_openapi', 0)})"
+            )
+        sync_gap = (contract_artifacts.get("summary") or {}).get("sync_gap")
+        if sync_gap:
+            actions.append(f"Tratar gap de sincronização contrato: {sync_gap}")
     if not actions:
         actions.append("Hub saudavel — continuar ciclo operacional e monitoramento agendado.")
     return actions[:10]
@@ -273,6 +366,18 @@ def main() -> int:
     parser.add_argument("--correlation-id", default="")
     parser.add_argument("--skip-probes", action="store_true", help="Skip live environment probes")
     parser.add_argument("--out-dir", type=Path, default=Path("artifacts/operational-observability-hub"))
+    parser.add_argument(
+        "--contract-artifacts-index",
+        default="docs/ops-dashboard/data/contract-artifacts-index-v0.3.0.json",
+    )
+    parser.add_argument(
+        "--openapi-validation-json",
+        default="artifacts/openapi/openapi-contract-validation.json",
+    )
+    parser.add_argument(
+        "--openapi-semantic-diff-json",
+        default="artifacts/openapi/openapi-semantic-diff.json",
+    )
     args = parser.parse_args()
 
     correlation_id = args.correlation_id or str(uuid4())
@@ -305,6 +410,11 @@ def main() -> int:
     if not isinstance(runs, list):
         runs = []
     coordenador = load_json(Path("artifacts/coordenador-status/coordenador-status.json"), {})
+    contract_artifacts = load_contract_artifacts(
+        Path(args.contract_artifacts_index),
+        Path(args.openapi_validation_json),
+        Path(args.openapi_semantic_diff_json),
+    )
 
     correlation_chain = build_correlation_chain(
         runs,
@@ -314,6 +424,7 @@ def main() -> int:
         args.workflow_run_id or None,
         args.commit_sha,
         correlation_id,
+        contract_artifacts,
     )
     alert = classify_alert(drift, slo, longitudinal)
     report = consolidate_hub(
@@ -328,6 +439,7 @@ def main() -> int:
         args.commit_sha,
         args.workflow_run_id or None,
         correlation_id,
+        contract_artifacts,
     )
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
