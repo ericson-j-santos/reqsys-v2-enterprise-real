@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "updated_at": "2026-06-29T12:00:00Z",
+  "updated_at": "2026-06-29T20:00:00Z",
   "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
   "hub": "docs/padrao-ouro/README.md",
   "canonical_traceability_map": "docs/traceability/living-architecture-map.json",
@@ -309,6 +309,56 @@
     { "area": "Governança PR/Agentes", "owner": "Platform Engineering", "adr": "ADR-030" },
     { "area": "Camada de Testes", "owner": "Quality Governance", "adr": "ADR-0004" }
   ],
+  "operational_focus": {
+    "purpose": "Priorizar mudanças pequenas e rastreáveis que fortaleçam governança, rastreabilidade, CI, segurança e documentação acionável.",
+    "mode": "consolidate",
+    "coordenador_status_ref": "artifacts/coordenador-status/coordenador-status.json",
+    "priorities": [
+      {
+        "id": "P0",
+        "area": "Governança de incremento",
+        "minimum_evidence": "Agent Increment Gate, status do coordenador ou justificativa explícita de escopo fechado",
+        "done_when": "Sem nova frente bloqueada, duplicada ou sem dono.",
+        "risk_reduced": "concorrência de PRs e expansão de escopo sem governança"
+      },
+      {
+        "id": "P1",
+        "area": "Rastreabilidade viva",
+        "minimum_evidence": "Índice, contrato, ADR, runbook ou grafo de evidência atualizado",
+        "done_when": "Owner, workflow, artifact e rollback localizáveis por humanos e agentes.",
+        "risk_reduced": "perda de rastreabilidade operacional"
+      },
+      {
+        "id": "P2",
+        "area": "CI e qualidade sustentável",
+        "minimum_evidence": "Teste, lint, schema validation ou workflow report-only aplicável",
+        "done_when": "Falha reproduzível vira evidência; sucesso vira artifact rastreável.",
+        "risk_reduced": "regressão silenciosa sem evidência"
+      },
+      {
+        "id": "P3",
+        "area": "Segurança operacional",
+        "minimum_evidence": "Gates de produção, segredos, CORS, JWT, auditoria ou correlation ID revisados quando tocados",
+        "done_when": "Nenhum segredo, PII ou relaxamento produtivo entra no PR.",
+        "risk_reduced": "exposição indevida em produção"
+      },
+      {
+        "id": "P4",
+        "area": "Documentação acionável",
+        "minimum_evidence": "Playbook/runbook curto com comando validado ou pendência explícita",
+        "done_when": "O próximo agente sabe o próximo passo sem depender de contexto de chat.",
+        "risk_reduced": "desalinhamento entre decisão, contrato e implementação"
+      }
+    ],
+    "pr_checklist": [
+      "Confirmar o artefato Tier 1 afetado",
+      "Registrar evidência programática possível",
+      "Declarar fora de escopo",
+      "Atualizar machine-readable quando ownership/workflow/contrato/módulo mudar",
+      "Manter rollback simples"
+    ],
+    "exit_criteria": "gate, artefatos Tier 1 afetados e validação focada rastreáveis no PR"
+  },
   "tier1_docs": {
     "living_architecture_index": "docs/padrao-ouro/LIVING_ARCHITECTURE_INDEX.md",
     "adr_index": "docs/padrao-ouro/ADR_INDEX.md",
