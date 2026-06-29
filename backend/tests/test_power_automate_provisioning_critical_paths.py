@@ -72,3 +72,65 @@ def test_resumo_registry_provisionamentos_vazio():
         assert 'por_ambiente' in resumo
     finally:
         db.close()
+
+
+def test_gerar_manifesto_provisionamento_flow():
+    manifesto = svc.gerar_manifesto_provisionamento_flow(
+        display_name='ReqSys - Flow Critico',
+        trigger_type='HttpRequest',
+        target_environment='dev',
+        correlation_id='corr-manifesto-001',
+    )
+
+    assert manifesto['correlation_id'] == 'corr-manifesto-001'
+    assert manifesto['flow']['display_name'] == 'ReqSys - Flow Critico'
+    assert manifesto['target']['environment'] == 'dev'
+
+
+def test_normalizar_trigger_type_rejeita_invalido():
+    import pytest
+
+    with pytest.raises(ValueError, match='TriggerType invalido'):
+        svc.normalizar_trigger_type('InvalidTrigger')
+
+
+def test_registrar_e_atualizar_manifesto_no_registry():
+    db = SessionLocal()
+    try:
+        manifesto = svc.gerar_manifesto_provisionamento_flow(
+            display_name='ReqSys - Registry Flow',
+            correlation_id='corr-registry-001',
+        )
+        item = svc.registrar_manifesto_provisionamento(db, manifesto, status='planned')
+        assert item.correlation_id == 'corr-registry-001'
+
+        atualizado = svc.atualizar_status_provisionamento(
+            db,
+            'corr-registry-001',
+            status='succeeded',
+            workflow_run_url='https://github.com/acme/actions',
+        )
+        assert atualizado.status == 'succeeded'
+        assert atualizado.workflow_run_url.startswith('https://')
+    finally:
+        db.close()
+
+
+@patch('app.services.power_automate_provisioning.httpx.AsyncClient')
+def test_despachar_workflow_http_erro(mock_client_cls, monkeypatch):
+    monkeypatch.setattr(svc.settings, 'github_pat', 'ghp_test_token')
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 422
+    mock_resp.text = 'validation failed'
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = asyncio.run(svc.despachar_workflow_provisionamento(_manifesto()))
+
+    assert resultado['dispatched'] is False
+    assert resultado['configured'] is True
+    assert resultado['status_code'] == 422

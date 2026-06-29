@@ -110,6 +110,7 @@ def test_status_consolidado_agrega_pacotes_e_github(monkeypatch):
 def test_planner_webhook_config_salvar_e_listar_historico():
     db = SessionLocal()
     try:
+        svc.salvar_planner_webhook_config(db, webhook_url='', teams_webhook_url='')
         cfg = svc.obter_planner_webhook_config(db)
         assert cfg['configurado'] is False
 
@@ -124,17 +125,18 @@ def test_planner_webhook_config_salvar_e_listar_historico():
         assert cfg2['configurado'] is True
         assert cfg2['teams_configurado'] is True
 
+        correlation_id = 'corr-hub-lowcode-historico-001'
         svc.salvar_log_integracao(
             db,
             tipo='planner',
             status='sucesso',
             autor='tester',
             mensagem='evento de teste',
-            correlation_id='corr-hub-lowcode-001',
+            correlation_id=correlation_id,
         )
         historico = svc.listar_historico_integracoes(db, tipo='planner', limit=10)
         assert historico['total'] >= 1
-        assert historico['eventos'][0]['correlation_id'] == 'corr-hub-lowcode-001'
+        assert any(evento['correlation_id'] == correlation_id for evento in historico['eventos'])
     finally:
         db.close()
 
@@ -167,3 +169,158 @@ def test_try_json_serializa_dict_e_none():
     assert svc._try_json(None) == '{}'
     assert svc._try_json('raw-text') == 'raw-text'
     assert '"a"' in svc._try_json({'a': 1})
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_listar_pacotes_ia_com_mock_graph(mock_client_cls, monkeypatch):
+    monkeypatch.setattr(svc.settings, 'azure_tenant_id', 'tenant')
+    monkeypatch.setattr(svc.settings, 'azure_client_id', 'client')
+    monkeypatch.setattr(svc.settings, 'azure_client_secret', 'secret')
+    monkeypatch.setattr(svc.settings, 'sharepoint_site_id', 'site-1')
+
+    token_resp = MagicMock()
+    token_resp.raise_for_status = MagicMock()
+    token_resp.json.return_value = {'access_token': 'graph-token'}
+
+    items_resp = MagicMock()
+    items_resp.raise_for_status = MagicMock()
+    items_resp.json.return_value = {
+        'value': [
+            {
+                'id': '1',
+                'fields': {
+                    'Projeto': 'ProjA',
+                    'Branch': 'main',
+                    'CommitHash': 'abcdef123456',
+                    'TechStack': 'python',
+                    'TotalArquivos': 3,
+                    'TamanhoPacoteMb': 1.2,
+                    'Status': 'ok',
+                    'ChaveIdempotencia': 'key-1',
+                    'DataGeracaoUtc': '2026-06-28',
+                    'ProcessadoEmUtc': '2026-06-28',
+                },
+            }
+        ]
+    }
+
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=token_resp)
+    mock_client.get = AsyncMock(return_value=items_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_pacotes_ia(limit=5))
+
+    assert resultado['configurado'] is True
+    assert len(resultado['itens']) == 1
+    assert resultado['itens'][0]['projeto'] == 'ProjA'
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_listar_flows_pa_com_mock_dataverse(mock_client_cls, monkeypatch):
+    monkeypatch.setattr(svc.settings, 'azure_tenant_id', 'tenant')
+    monkeypatch.setattr(svc.settings, 'azure_client_id', 'client')
+    monkeypatch.setattr(svc.settings, 'azure_client_secret', 'secret')
+
+    token_resp = MagicMock()
+    token_resp.raise_for_status = MagicMock()
+    token_resp.json.return_value = {'access_token': 'dv-token'}
+
+    flows_resp = MagicMock()
+    flows_resp.raise_for_status = MagicMock()
+    flows_resp.json.return_value = {
+        'value': [
+            {'workflowid': 'wf-1', 'name': 'Flow A', 'statuscode': 2, 'createdon': 't1', 'modifiedon': 't2'},
+        ]
+    }
+
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=token_resp)
+    mock_client.get = AsyncMock(return_value=flows_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_flows_pa())
+
+    assert resultado['configurado'] is True
+    assert resultado['flows'][0]['nome'] == 'Flow A'
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_publicar_tarefas_planner_sucesso(mock_client_cls):
+    db = SessionLocal()
+    try:
+        svc.salvar_planner_webhook_config(db, webhook_url='https://example.com/planner-hook')
+
+        flow_resp = MagicMock()
+        flow_resp.raise_for_status = MagicMock()
+        flow_resp.json.return_value = {'criadas': 2, 'teams_notificado': True}
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=flow_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        resultado = _run(
+            svc.publicar_tarefas_planner(
+                db,
+                tarefas_texto='Tarefa|Dev|2026-06-28|Backlog|Alta|Desc',
+                autor='tester',
+                correlation_id='corr-planner-ok',
+            )
+        )
+
+        assert resultado['ok'] is True
+        assert resultado['criadas'] == 2
+        assert resultado['teams_notificado'] is True
+    finally:
+        db.close()
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_descobrir_planos_planner_com_mock(mock_client_cls, monkeypatch):
+    monkeypatch.setattr(svc.settings, 'azure_tenant_id', 'tenant')
+    monkeypatch.setattr(svc.settings, 'azure_client_id', 'client')
+    monkeypatch.setattr(svc.settings, 'azure_client_secret', 'secret')
+
+    token_resp = MagicMock()
+    token_resp.raise_for_status = MagicMock()
+    token_resp.json.return_value = {'access_token': 'graph-token'}
+
+    plans_resp = MagicMock()
+    plans_resp.raise_for_status = MagicMock()
+    plans_resp.json.return_value = {'value': [{'id': 'plan-1', 'title': 'Sprint 1'}]}
+
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=token_resp)
+    mock_client.get = AsyncMock(return_value=plans_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.descobrir_planos_planner('group-1'))
+
+    assert resultado['configurado'] is True
+    assert resultado['planos'][0]['titulo'] == 'Sprint 1'
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_testar_teams_webhook_sucesso(mock_client_cls):
+    teams_resp = MagicMock()
+    teams_resp.raise_for_status = MagicMock()
+    teams_resp.status_code = 200
+
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=teams_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.testar_teams_webhook('https://example.com/teams-hook'))
+
+    assert resultado['ok'] is True
+    assert resultado['status'] == 200
