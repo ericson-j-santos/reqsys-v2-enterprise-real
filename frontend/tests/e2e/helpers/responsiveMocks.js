@@ -60,7 +60,36 @@ const handlers = [
     correlation_analytics: { artifact_name: 'runtime-correlation-report.json', correlation_id: 'corr-e2e' },
   } },
   { pattern: /\/api\/connectors\/health$/, body: { conectores: [{ ambiente: 'dev', conector: 'repository_provider', capability: 'repository.read', status: 'ready', criticidade: 'high', acao_sugerida: 'OK' }] } },
-  { pattern: /\/api\/v1\/estatisticas$/, body: [] },
+  { pattern: /\/api\/v1\/estatisticas$/, body: {
+    schema_version: '2.1.0',
+    correlation_id: 'corr-e2e-responsivo',
+    coletado_em: '2026-06-29T12:00:00Z',
+    ambiente: 'e2e_responsivo',
+    resumo: { total: 1, internos: 1, externos: 0, invalidos: 0, nao_medidos: 0 },
+    indicadores: [{
+      id: 'total-requisitos',
+      nome: 'Total de requisitos',
+      descricao: 'Quantidade total de requisitos cadastrados.',
+      categoria: 'Requisitos',
+      valorAtual: 5,
+      unidade: 'itens',
+      tendencia: 'estavel',
+      estadoAtual: 'adequado',
+      estadoAlvo: 'avancado',
+      formula: 'count(requisitos.id)',
+      fonte: {
+        id: 'reqsys-db-requisitos',
+        tipo: 'interna',
+        nome: 'Banco operacional ReqSys',
+        origem: 'backend-db:requisitos',
+        coletadoEm: '2026-06-29T12:00:00Z',
+        confiabilidade: 'alta',
+        versaoConector: 'backend-v2',
+      },
+      evidencias: ['endpoint backend /v1/estatisticas'],
+      pendencias: [],
+    }],
+  } },
 ]
 
 async function mockResponsiveApis(page) {
