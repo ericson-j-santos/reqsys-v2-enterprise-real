@@ -1,0 +1,69 @@
+{
+  "schema_version": "0.1.0",
+  "generated_at": "2026-06-29T10:45:00-03:00",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "mode": "executive_burndown_seed",
+  "objective": "track_runtime_evidence_consolidation_progress_over_time",
+  "overall": {
+    "status": "active",
+    "current_score": 78,
+    "target_score": 95,
+    "remaining_gap": 17,
+    "confidence_level": "medium"
+  },
+  "dimensions": [
+    {
+      "id": "ci_cd_stability",
+      "label": "CI/CD Stability",
+      "current_percent": 82,
+      "target_percent": 95,
+      "gap_percent": 13,
+      "risk": "medium",
+      "next_action": "reduce_pending_or_flaky_external_delivery_checks"
+    },
+    {
+      "id": "runtime_governance",
+      "label": "Runtime Governance",
+      "current_percent": 84,
+      "target_percent": 95,
+      "gap_percent": 11,
+      "risk": "low",
+      "next_action": "link_runtime_governance_contracts_to_navigation_and_ops_dashboard"
+    },
+    {
+      "id": "evidence_consolidation",
+      "label": "Evidence Consolidation",
+      "current_percent": 76,
+      "target_percent": 95,
+      "gap_percent": 19,
+      "risk": "medium",
+      "next_action": "render_burndown_history_and_required_sources"
+    },
+    {
+      "id": "observability_traceability",
+      "label": "Observability Traceability",
+      "current_percent": 68,
+      "target_percent": 90,
+      "gap_percent": 22,
+      "risk": "medium",
+      "next_action": "connect_correlation_reports_to_runtime_dashboard"
+    }
+  ],
+  "history": [
+    {
+      "timestamp": "2026-06-29T09:00:00-03:00",
+      "score": 69,
+      "event": "pareto_strategy_defined"
+    },
+    {
+      "timestamp": "2026-06-29T09:40:00-03:00",
+      "score": 78,
+      "event": "operational_runtime_governance_and_dashboard_layers_merged"
+    }
+  ],
+  "next_safe_increments": [
+    "render_runtime_evidence_burndown_in_ops_dashboard",
+    "publish_daily_runtime_evidence_snapshot",
+    "connect_burndown_to_governance_quality_gates"
+  ]
+}
