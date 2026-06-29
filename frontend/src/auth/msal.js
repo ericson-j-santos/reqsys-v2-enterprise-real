@@ -3,10 +3,8 @@ import { api } from '../services/api'
 
 let _instance = null
 
-const CALLBACK_PATH = '/auth/callback.html'
-
 export function getAuthCallbackUri() {
-  return new URL(CALLBACK_PATH, window.location.origin).toString()
+  return window.location.origin
 }
 
 async function fetchAuthConfig() {
