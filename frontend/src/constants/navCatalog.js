@@ -20,12 +20,32 @@ export const NAV_TEMAS = [
     title: 'Requisitos',
     topic: 'Demanda · entrega',
     icon: 'mdi-file-document-edit',
+    subgroups: [
+      {
+        id: 'entrada',
+        title: 'Entrada',
+        topic: 'Captura e triagem da demanda',
+        paths: ['/requisitos', '/task-console'],
+      },
+      {
+        id: 'pipeline',
+        title: 'Pipeline',
+        topic: 'Fluxo até publicação',
+        paths: ['/pipeline', '/agile-runtime'],
+      },
+      {
+        id: 'publicacao',
+        title: 'Publicação',
+        topic: 'Rastreio e auditoria da entrega',
+        paths: ['/rastreabilidade'],
+      },
+    ],
     items: [
-      { to: '/requisitos', icon: 'mdi-file-document-edit', title: 'Requisitos', tip: 'Cadastro, listagem e acompanhamento dos requisitos.' },
-      { to: '/pipeline', icon: 'mdi-pipe', title: 'Pipeline', tip: 'Fluxo operacional do requisito até a publicação.' },
-      { to: '/task-console', icon: 'mdi-clipboard-check-outline', title: 'Task Console', tip: 'Revisar tarefas e preparar envio ao Planner.' },
-      { to: '/agile-runtime', icon: 'mdi-source-branch', title: 'Agile Runtime', tip: 'Work items no GitHub com branch e ambiente corretos.' },
-      { to: '/rastreabilidade', icon: 'mdi-vector-link', title: 'Rastreabilidade', tip: 'Matriz requisito → história → entrega.' },
+      { to: '/requisitos', icon: 'mdi-file-document-edit', title: 'Requisitos', tip: 'Cadastro, listagem e acompanhamento dos requisitos.', subgroupId: 'entrada' },
+      { to: '/pipeline', icon: 'mdi-pipe', title: 'Pipeline', tip: 'Fluxo operacional do requisito até a publicação.', subgroupId: 'pipeline' },
+      { to: '/task-console', icon: 'mdi-clipboard-check-outline', title: 'Task Console', tip: 'Revisar tarefas e preparar envio ao Planner.', subgroupId: 'entrada' },
+      { to: '/agile-runtime', icon: 'mdi-source-branch', title: 'Agile Runtime', tip: 'Work items no GitHub com branch e ambiente corretos.', subgroupId: 'pipeline' },
+      { to: '/rastreabilidade', icon: 'mdi-vector-link', title: 'Rastreabilidade', tip: 'Matriz requisito → história → entrega.', subgroupId: 'publicacao' },
     ],
   },
   {
@@ -94,4 +114,28 @@ export function temaPorId(id) {
 export function itemPorRota(path) {
   const normalizado = path === '/' ? '/' : path.replace(/\/$/, '')
   return NAV_ITEMS_FLAT.find((item) => item.to === normalizado)
+}
+
+export function subgrupoIdPorRota(path) {
+  const item = itemPorRota(path)
+  if (item?.subgroupId) return item.subgroupId
+  const tema = temaPorId(temaIdPorRota(path))
+  return tema.subgroups?.[0]?.id ?? null
+}
+
+export function itensDoSubgrupo(temaId, subgrupoId) {
+  const tema = temaPorId(temaId)
+  if (!tema.subgroups?.length) return tema.items
+  const sub = tema.subgroups.find((s) => s.id === subgrupoId) ?? tema.subgroups[0]
+  const paths = new Set(sub.paths)
+  return tema.items.filter((item) => paths.has(item.to))
+}
+
+export function subgrupoAtual(temaId, subgrupoId) {
+  const tema = temaPorId(temaId)
+  return tema.subgroups?.find((s) => s.id === subgrupoId) ?? tema.subgroups?.[0] ?? null
+}
+
+export function temaTemSubgrupos(temaId) {
+  return Boolean(temaPorId(temaId).subgroups?.length)
 }
