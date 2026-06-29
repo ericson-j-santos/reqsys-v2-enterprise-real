@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'runtime/**'
+      - 'docs-site/assets/openapi/**'
       - '.github/workflows/runtime-async-jobs.yml'
   workflow_dispatch:
 
@@ -31,3 +32,7 @@ jobs:
       - name: Run tests
         working-directory: runtime
         run: pytest -q
+
+      - name: Validate generated OpenAPI sync
+        working-directory: runtime
+        run: python scripts/export_openapi.py --check
