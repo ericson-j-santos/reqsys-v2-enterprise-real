@@ -2,7 +2,15 @@ import hashlib
 import hmac
 import json
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -10,6 +18,15 @@ from app.core.envelope import ok
 from app.db import get_db
 from app.services import figma_client, figma_github_sync, git_parser, webhook_processor
 from app.services.agile_git_sync import sincronizar_work_items_git
+from app.services.async_workflow_jobs import (
+    AsyncWorkflowJobRequest,
+    build_correlation_id,
+    enqueue_async_workflow_job,
+    process_async_workflow_job,
+)
+from app.services.async_workflow_jobs import (
+    store as async_workflow_store,
+)
 
 router = APIRouter(prefix='/v1/webhooks', tags=['Webhooks Git'])
 
@@ -167,4 +184,41 @@ async def webhook_gitlab(
         'processado': True,
         'vinculos_criados': len(ids),
         'work_items_atualizados': len(agile_ids),
+    })
+
+
+@router.post('/async-httpx/jobs', status_code=status.HTTP_202_ACCEPTED)
+async def criar_job_httpx_assincrono(
+    payload: AsyncWorkflowJobRequest,
+    background_tasks: BackgroundTasks,
+    x_correlation_id: str | None = Header(default=None),
+):
+    correlation_id = build_correlation_id(x_correlation_id)
+    job = await enqueue_async_workflow_job(payload, correlation_id)
+    background_tasks.add_task(process_async_workflow_job, job.job_id)
+    return ok({
+        'job_id': job.job_id,
+        'status': job.status.value,
+        'correlation_id': job.correlation_id,
+        'status_url': f'/v1/webhooks/async-httpx/jobs/{job.job_id}',
+        'message': 'Processamento recebido e enfileirado.',
+    })
+
+
+@router.get('/async-httpx/jobs/{job_id}')
+async def consultar_job_httpx_assincrono(job_id: str):
+    job = await async_workflow_store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail='Job assíncrono não encontrado.')
+    return ok(job.to_public_dict())
+
+
+@router.get('/async-httpx/health')
+async def async_httpx_health():
+    return ok({
+        'service': 'async-httpx-workflows',
+        'status': 'ok',
+        'queue_backend': 'in_memory',
+        'worker_mode': 'fastapi_background_task',
+        'enterprise_upgrade_path': ['redis', 'rabbitmq', 'azure_service_bus'],
     })
