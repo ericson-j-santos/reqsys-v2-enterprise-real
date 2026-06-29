@@ -114,7 +114,7 @@ jobs:
             api_public_url: https://reqsys-api.fly.dev
           - environment: staging
             fly_app: reqsys-api-stg
-            app_public_url: https://reqsys-web-stg.fly.dev
+            app_public_url: https://reqsys-app-stg.fly.dev
             api_public_url: https://reqsys-api-stg.fly.dev
           - environment: development
             fly_app: reqsys-api-dev

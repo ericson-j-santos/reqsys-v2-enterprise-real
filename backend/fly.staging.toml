@@ -9,6 +9,8 @@ kill_timeout = "5s"
 [env]
   APP_ENV = "staging"
   PUBLIC_ENVIRONMENT = "staging"
+  APP_PUBLIC_URL = "https://reqsys-app-stg.fly.dev"
+  API_PUBLIC_URL = "https://reqsys-api-stg.fly.dev"
   ALLOW_DEMO_LOGIN = "false"
   DATABASE_URL = "sqlite:////data/reqsys.db"
   JWT_EXP_MINUTES = "60"
