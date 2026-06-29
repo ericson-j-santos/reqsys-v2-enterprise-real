@@ -1,0 +1,106 @@
+name: OpenAPI Semantic Diff
+
+on:
+  pull_request:
+    paths:
+      - docs-site/assets/openapi/**
+      - backend/app/api/**
+      - scripts/openapi_semantic_diff.py
+      - tests/test_openapi_semantic_diff.py
+      - .github/workflows/openapi-semantic-diff.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openapi-semantic-diff-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-diff:
+    name: Semantic OpenAPI ↔ backend diff
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate diff script syntax
+        run: python -m py_compile scripts/openapi_semantic_diff.py
+
+      - name: Run semantic OpenAPI diff (report-only)
+        run: |
+          python scripts/openapi_semantic_diff.py \
+            --contract docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json \
+            --api-dir backend/app/api \
+            --scope runtime_contract \
+            --output artifacts/openapi/openapi-semantic-diff.json
+
+      - name: Run unit tests
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_openapi_semantic_diff.py -v --tb=short
+
+      - name: Ensure semantic diff artifact fallback
+        if: always()
+        run: |
+          mkdir -p artifacts/openapi
+          if [[ ! -f artifacts/openapi/openapi-semantic-diff.json ]]; then
+            cat > artifacts/openapi/openapi-semantic-diff.json <<'JSON'
+          {
+            "schema_version": "1.0.0",
+            "contract": "reqsys-openapi-semantic-diff",
+            "status": "diagnostic_artifact_missing",
+            "errors": [
+              "semantic_diff_report_not_generated_before_upload"
+            ],
+            "drifts": [],
+            "summary": {
+              "drift_count": 0,
+              "openapi_routes": 0,
+              "backend_routes": 0,
+              "missing_in_backend": 0,
+              "missing_in_openapi": 0,
+              "method_mismatches": 0,
+              "scope": "runtime_contract"
+            }
+          }
+          JSON
+          fi
+
+      - name: Upload semantic diff artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-semantic-diff
+          path: artifacts/openapi/openapi-semantic-diff.json
+          if-no-files-found: warn
+          retention-days: 15
+
+      - name: Resumo executivo
+        if: always()
+        run: |
+          if [[ -f artifacts/openapi/openapi-semantic-diff.json ]]; then
+            python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("artifacts/openapi/openapi-semantic-diff.json").read_text(encoding="utf-8"))
+          summary = report.get("summary") or {}
+          print("## OpenAPI Semantic Diff (report-only)")
+          print(f"- Status: `{report.get('status')}`")
+          print(f"- Drift count: `{summary.get('drift_count')}`")
+          print(f"- OpenAPI routes: `{summary.get('openapi_routes')}`")
+          print(f"- Backend routes: `{summary.get('backend_routes')}`")
+          print(f"- Missing in backend: `{summary.get('missing_in_backend')}`")
+          print(f"- Missing in OpenAPI: `{summary.get('missing_in_openapi')}`")
+          PY
+          fi >> "$GITHUB_STEP_SUMMARY"
