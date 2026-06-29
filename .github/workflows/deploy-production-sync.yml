@@ -98,14 +98,62 @@ jobs:
       - name: Validar matriz enterprise Fly
         run: python scripts/validate_fly_enterprise_sync.py --output fly-enterprise-sync-validation.json
 
-  deploy-backend:
-    name: Deploy API produção
+  configure-prod-secrets:
+    name: Configurar secrets auth produção
     runs-on: ubuntu-latest
     needs: [gate, validate-runtime]
     if: >-
       always() &&
       needs.gate.result == 'success' &&
       needs.validate-runtime.result == 'success' &&
+      (
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
+        (github.event_name == 'push')
+      )
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Aplicar secrets JWT/Azure no reqsys-api
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
+          VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
+          AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          python scripts/configurar_fly_auth_azure.py \
+            --fly-app reqsys-api \
+            --app-env production \
+            --app-public-url "$PUBLIC_FRONTEND_URL" \
+            --api-public-url "$PUBLIC_API_URL" \
+            --azure-tenant-id "$AZURE_TENANT_ID_SECRET" \
+            --azure-client-id "$AZURE_CLIENT_ID_SECRET" \
+            --cofre-tenant-key AZURE_TENANT_ID \
+            --cofre-client-key AZURE_CLIENT_ID \
+            | tee fly-auth-azure-report-production.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fly-auth-azure-report-production
+          path: fly-auth-azure-report-production.json
+          if-no-files-found: warn
+
+  deploy-backend:
+    name: Deploy API produção
+    runs-on: ubuntu-latest
+    needs: [gate, validate-runtime, configure-prod-secrets]
+    if: >-
+      always() &&
+      needs.gate.result == 'success' &&
+      needs.validate-runtime.result == 'success' &&
+      needs.configure-prod-secrets.result == 'success' &&
       (
         (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
         (github.event_name == 'push')
@@ -200,6 +248,37 @@ jobs:
             --expected-sha "${{ github.sha }}" \
             --timeout 25 \
             --output publication-sync-post.json
+
+      - name: Validar login produção (Azure + demo bloqueado)
+        run: |
+          set -euo pipefail
+          python scripts/validar_login_azure_operacional.py \
+            --api-url "$PUBLIC_API_URL" \
+            --expected-redirect-uri "$PUBLIC_FRONTEND_URL" \
+            | tee login-azure-prod-report.json
+          python scripts/validar_frontend_auth_redirect.py \
+            --frontend-url "$PUBLIC_FRONTEND_URL" \
+            | tee login-frontend-prod-report.json
+          python - <<'PY'
+          import json, os, sys, urllib.request, urllib.error
+          api = os.environ["PUBLIC_API_URL"].rstrip("/")
+          req = urllib.request.Request(
+              f"{api}/v1/auth/login",
+              data=json.dumps({"email": "ericsonjosedossantos@tieri659.onmicrosoft.com"}).encode(),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          try:
+              urllib.request.urlopen(req, timeout=25)
+              raise SystemExit("demo login deveria retornar 403 em produção")
+          except urllib.error.HTTPError as exc:
+              if exc.code != 403:
+                  raise SystemExit(f"demo login esperado 403, recebido {exc.code}") from exc
+          print("demo_login_blocked_ok")
+          PY
+        env:
+          PUBLIC_API_URL: https://reqsys-api.fly.dev
+          PUBLIC_FRONTEND_URL: https://reqsys-app.fly.dev
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -207,12 +286,14 @@ jobs:
           path: |
             publication-sync-post.json
             artifacts/runtime/runtime-public-probe.json
+            login-azure-prod-report.json
+            login-frontend-prod-report.json
           if-no-files-found: warn
 
   summary:
     name: Resumo publicação
     runs-on: ubuntu-latest
-    needs: [pre-sync-check, validate-runtime, deploy-backend, deploy-frontend, post-sync-check]
+    needs: [pre-sync-check, validate-runtime, configure-prod-secrets, deploy-backend, deploy-frontend, post-sync-check]
     if: always()
     steps:
       - name: Resumo
@@ -225,6 +306,7 @@ jobs:
             echo "|---|---|"
             echo "| Pré-sync | ${{ needs.pre-sync-check.result || 'skipped' }} |"
             echo "| Validate runtime | ${{ needs.validate-runtime.result || 'skipped' }} |"
+            echo "| Configure secrets | ${{ needs.configure-prod-secrets.result || 'skipped' }} |"
             echo "| Deploy API | ${{ needs.deploy-backend.result || 'skipped' }} |"
             echo "| Deploy frontend | ${{ needs.deploy-frontend.result || 'skipped' }} |"
             echo "| Pós-sync | ${{ needs.post-sync-check.result || 'skipped' }} |"
