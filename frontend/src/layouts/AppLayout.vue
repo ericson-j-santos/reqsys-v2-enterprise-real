@@ -16,7 +16,7 @@
       v-model="drawer"
       :permanent="!mobile"
       :temporary="mobile"
-      width="260"
+      width="280"
       class="req-drawer"
     >
       <!-- Brand -->
@@ -27,10 +27,33 @@
       </div>
       <v-divider />
 
-      <!-- Nav items -->
-      <v-list density="compact" nav class="pt-2 req-nav-list" aria-label="Navegação principal">
+      <!-- Abas por tema de negócio -->
+      <div class="nav-temas" aria-label="Temas de navegação">
+        <v-tabs
+          v-model="temaAtivo"
+          density="compact"
+          color="primary"
+          class="nav-temas-tabs"
+          show-arrows
+        >
+          <v-tab
+            v-for="tema in NAV_TEMAS"
+            :key="tema.id"
+            :value="tema.id"
+            :data-testid="`nav-tema-${tema.id}`"
+            class="nav-tema-tab"
+          >
+            <v-icon :icon="tema.icon" size="16" class="mr-1" />
+            <span class="nav-tema-label">{{ tema.title }}</span>
+          </v-tab>
+        </v-tabs>
+        <p class="nav-tema-topic muted">{{ temaAtual.topic }}</p>
+      </div>
+
+      <!-- Sub-abas (rotas do tema) -->
+      <v-list density="compact" nav class="pt-1 req-nav-list" aria-label="Navegação do tema">
         <v-tooltip
-          v-for="item in navItems"
+          v-for="item in temaAtual.items"
           :key="item.to"
           :text="item.tip"
           location="right"
@@ -42,6 +65,7 @@
               :prepend-icon="item.icon"
               :title="item.title"
               class="nav-item"
+              :data-testid="`nav-item-${item.to.replace(/\//g, '').replace(/^$/, 'dashboard')}`"
               @click="mobile && (drawer = false)"
             />
           </template>
@@ -83,21 +107,19 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../services/api'
+import { NAV_TEMAS, temaIdPorRota, temaPorId } from '../constants/navCatalog'
 
 const { mobile } = useDisplay()
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 const drawer = ref(!mobile.value)
 const environment = ref(import.meta.env.VITE_APP_ENVIRONMENT || '')
-
-const environmentLabel = computed(() => {
-  const value = (environment.value || 'ambiente').replace(/_/g, ' ')
-  return value.toUpperCase()
-})
+const temaAtivo = ref(temaIdPorRota(route.path))
 
 const environmentLabelShort = computed(() => {
   const value = (environment.value || 'dev').toLowerCase()
@@ -110,9 +132,18 @@ const ambienteDrawerLabel = computed(() => {
   return (environment.value || 'desenvolvimento').replace(/_/g, ' ')
 })
 
+const temaAtual = computed(() => temaPorId(temaAtivo.value))
+
 watch(mobile, (isMobile) => {
   drawer.value = !isMobile
 })
+
+watch(
+  () => route.path,
+  (path) => {
+    temaAtivo.value = temaIdPorRota(path)
+  },
+)
 
 onMounted(async () => {
   try {
@@ -122,30 +153,6 @@ onMounted(async () => {
     // Mantem fallback do build quando a API publica nao estiver disponivel.
   }
 })
-
-const navItems = [
-  { to: '/',                icon: 'mdi-view-dashboard',     title: 'Dashboard',       tip: 'Visão consolidada das métricas e acessos rápidos.' },
-  { to: '/monitoramento-operacional', icon: 'mdi-monitor-dashboard', title: 'Monitoramento', tip: 'Estado operacional de PRs, gates, integrações e pendências.' },
-  { to: '/analytics',           icon: 'mdi-chart-timeline-variant', title: 'Analytics',       tip: 'Hub navegável com semáforo operacional e drill-down filtrado.' },
-  { to: '/estatisticas',    icon: 'mdi-chart-box-outline',  title: 'Estatísticas',    tip: 'Indicadores internos e externos auditáveis com fonte, fórmula e analítico.' },
-  { to: '/requisitos',      icon: 'mdi-file-document-edit', title: 'Requisitos',      tip: 'Cadastro, listagem e acompanhamento dos requisitos.' },
-  { to: '/pipeline',        icon: 'mdi-pipe',               title: 'Pipeline',        tip: 'Fluxo operacional detalhado do requisito até a publicação.' },
-  { to: '/task-console',    icon: 'mdi-clipboard-check-outline', title: 'Task Console', tip: 'Console web para revisar tarefas e preparar envio ao Planner.' },
-  { to: '/agile-runtime',   icon: 'mdi-source-branch',           title: 'Agile Runtime', tip: 'Abrir work items no GitHub com branch e ambiente corretos.' },
-  { to: '/qualidade-ia',    icon: 'mdi-brain',              title: 'Qualidade IA',    tip: 'Monitoramento contínuo de score e tendência de qualidade de IA.' },
-  { to: '/recomendacoes-ia', icon: 'mdi-robot-outline',     title: 'Recomendações IA', tip: 'Criação, decisão e outcome de recomendações geradas por IA.' },
-  { to: '/relatorios',      icon: 'mdi-file-chart-outline', title: 'Relatórios SSRS', tip: 'Catálogo e status dos relatórios SSRS publicados.' },
-  { to: '/segredos-status', icon: 'mdi-key-chain-variant',  title: 'Segredos',        tip: 'Diagnóstico da origem dos segredos do backend.' },
-  { to: '/rastreabilidade', icon: 'mdi-vector-link',        title: 'Rastreabilidade', tip: 'Matriz de vínculo entre requisito, história e entrega.' },
-  { to: '/specs',            icon: 'mdi-file-code-outline',  title: 'Specs SDD',       tip: 'Especificações de features do my-first-spec-project.' },
-  { to: '/auditoria',       icon: 'mdi-shield-search',      title: 'Auditoria',       tip: 'Linha do tempo de eventos e governança operacional.' },
-  { to: '/hub-lowcode',       icon: 'mdi-lightning-bolt-circle',    title: 'Hub Low-Code',   tip: 'Pacotes IA, flows Power Automate, bot ReqSysAgent e pipeline GitHub ALM.' },
-  { to: '/painel-integracao', icon: 'mdi-view-dashboard-outline',  title: 'Integrações',    tip: 'Painel de acompanhamento: Planner, Teams e histórico de eventos.' },
-  { to: '/figma-github',      icon: 'mdi-vector-square',           title: 'Figma GitHub',   tip: 'Sincronização e retorno em tela entre Figma e GitHub.' },
-  { to: '/arquitetura',       icon: 'mdi-sitemap',                  title: 'Mapa da Solução', tip: 'Visão completa de todos os componentes Web e Low-Code.' },
-  { to: '/governanca',        icon: 'mdi-shield-check-outline',     title: 'Governança',     tip: 'Padrão Ouro Enterprise: gates, CI/CD, observabilidade, analytics e IA auditável.' },
-  { to: '/govbi-ia',      icon: 'mdi-database-search',    title: 'GovBI IA',        tip: 'Consultas analíticas em linguagem natural com IA governada.' },
-]
 
 function initials(u) {
   return (u.nome || u.email || '?')[0].toUpperCase()
@@ -182,9 +189,36 @@ function sair() {
 .req-brand-block {
   min-width: 0;
 }
+.nav-temas {
+  padding: 8px 8px 0;
+}
+.nav-temas-tabs :deep(.v-slide-group__content) {
+  gap: 2px;
+}
+.nav-tema-tab {
+  min-width: auto !important;
+  padding-inline: 8px !important;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.nav-tema-label {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-tema-topic {
+  margin: 6px 12px 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .req-nav-list {
-  max-height: calc(100vh - 176px);
+  max-height: calc(100vh - 260px);
   overflow-y: auto;
+  padding-inline: 4px;
 }
 .nav-item {
   border-radius: 8px;
