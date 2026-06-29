@@ -10,13 +10,16 @@ on:
       - ".github/pr-metadata/**"
       - ".github/workflows/fly-runtime-p0.yml"
       - "backend/**"
+      - "frontend/**"
       - "fly.toml"
+      - "frontend/fly.toml"
       - "Dockerfile.fly"
       - "scripts/fly_boot.sh"
       - "scripts/auto_open_agent_pr.py"
       - "scripts/generate_operational_artifacts_baseline.py"
       - "scripts/post_workflow_evidence_snapshot.py"
       - "scripts/validate_public_runtime.py"
+      - "scripts/validate_publication_sync.py"
       - "scripts/runtime_public_validator.py"
       - "config/external-sources-registry.json"
       - "docs/ops-dashboard/**"
@@ -147,7 +150,7 @@ jobs:
           for attempt in $(seq 1 "$max_attempts"); do
             echo "::group::Fly deploy attempt ${attempt}/${max_attempts}"
             set +e
-            flyctl deploy --remote-only --config fly.toml --app reqsys-api 2>&1 | tee "$deploy_log"
+            flyctl deploy --remote-only --config fly.toml --app reqsys-api --build-arg "GITHUB_SHA=${{ github.sha }}" 2>&1 | tee "$deploy_log"
             status="${PIPESTATUS[0]}"
             set -e
             echo "::endgroup::"
@@ -180,14 +183,46 @@ jobs:
             echo "- Correlation ID: `$CORRELATION_ID`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  deploy-fly-frontend-prod:
+    name: Deploy Fly.io produção (frontend)
+    runs-on: ubuntu-latest
+    needs: validate-runtime
+    if: >-
+      needs.validate-runtime.result == 'success' &&
+      ((github.event_name == 'push' && github.ref_name == 'main') ||
+       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy reqsys-app
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        working-directory: frontend
+        run: flyctl deploy --remote-only --config fly.toml --app reqsys-app
+
+      - name: Resumo deploy frontend
+        run: |
+          {
+            echo "## Fly deploy frontend produção"
+            echo "- App: \`reqsys-app\`"
+            echo "- SHA: \`${{ github.sha }}\`"
+            echo "- Correlation ID: \`$CORRELATION_ID\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   public-runtime-smoke:
     name: Smoke público /api/runtime/*
     runs-on: ubuntu-latest
-    needs: [validate-runtime, deploy-fly-prod]
+    needs: [validate-runtime, deploy-fly-prod, deploy-fly-frontend-prod]
     if: >-
       always() &&
       needs.validate-runtime.result == 'success' &&
       (needs.deploy-fly-prod.result == 'success' || needs.deploy-fly-prod.result == 'skipped') &&
+      (needs.deploy-fly-frontend-prod.result == 'success' || needs.deploy-fly-frontend-prod.result == 'skipped') &&
       ((github.event_name == 'push' && github.ref_name == 'main') ||
        (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
        (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
@@ -205,8 +240,8 @@ jobs:
             --base-url "$PUBLIC_API_URL" \
             --environment prod \
             --include-optional-evidence \
-            --timeout 20 \
-            --probe-attempts 6 \
+            --timeout 25 \
+            --probe-attempts 8 \
             --probe-delay 20 \
             --artifact-root . \
             --output artifacts/runtime/runtime-public-probe.json
@@ -229,6 +264,14 @@ jobs:
           print("Runtime público OK")
           PY
 
+      - name: Validar sincronização repo ↔ runtime
+        run: |
+          python scripts/validate_publication_sync.py \
+            --environment prod \
+            --expected-sha "${{ github.sha }}" \
+            --timeout 25 \
+            --output publication-sync.json
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -236,12 +279,13 @@ jobs:
           path: |
             artifacts/runtime/runtime-public-probe.json
             artifacts/runtime/runtime-public-validation.json
+            publication-sync.json
           if-no-files-found: warn
 
   delivery-summary:
     name: Delivery summary
     runs-on: ubuntu-latest
-    needs: [auto-open-pr, validate-runtime, deploy-fly-prod, public-runtime-smoke]
+    needs: [auto-open-pr, validate-runtime, deploy-fly-prod, deploy-fly-frontend-prod, public-runtime-smoke]
     if: always()
     steps:
       - name: Resumo consolidado
@@ -254,6 +298,7 @@ jobs:
             echo "| Auto-open PR | ${{ needs.auto-open-pr.result || 'skipped' }} |"
             echo "| Validate runtime | ${{ needs.validate-runtime.result || 'skipped' }} |"
             echo "| Deploy Fly prod | ${{ needs.deploy-fly-prod.result || 'skipped' }} |"
+            echo "| Deploy Fly frontend | ${{ needs.deploy-fly-frontend-prod.result || 'skipped' }} |"
             echo "| Public smoke | ${{ needs.public-runtime-smoke.result || 'skipped' }} |"
             echo ""
             echo "Correlation ID: `$CORRELATION_ID`"

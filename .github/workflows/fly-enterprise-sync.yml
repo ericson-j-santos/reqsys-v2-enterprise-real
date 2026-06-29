@@ -41,8 +41,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       api_url: ${{ steps.env.outputs.api_url }}
+      frontend_url: ${{ steps.env.outputs.frontend_url }}
       fly_config: ${{ steps.env.outputs.fly_config }}
+      frontend_fly_config: ${{ steps.env.outputs.frontend_fly_config }}
       fly_app: ${{ steps.env.outputs.fly_app }}
+      frontend_app: ${{ steps.env.outputs.frontend_app }}
       deploy_allowed: ${{ steps.policy.outputs.deploy_allowed }}
     steps:
       - uses: actions/checkout@v4
@@ -66,8 +69,11 @@ jobs:
           env = os.environ['TARGET_ENVIRONMENT']
           cfg = data['environments'][env]
           print(f"api_url={cfg['api_url']}")
+          print(f"frontend_url={cfg['frontend_url']}")
           print(f"fly_config={cfg['fly_config']}")
+          print(f"frontend_fly_config={cfg['frontend_fly_config']}")
           print(f"fly_app={cfg['api_app']}")
+          print(f"frontend_app={cfg['frontend_app']}")
           PY
 
       - name: Enforce deployment policy
@@ -95,8 +101,8 @@ jobs:
           path: fly-enterprise-sync-validation.json
           if-no-files-found: error
 
-  deploy:
-    name: Deploy selected Fly app
+  deploy-backend:
+    name: Deploy API Fly app
     runs-on: ubuntu-latest
     needs: validate-iac
     if: ${{ github.event_name == 'workflow_dispatch' && needs.validate-iac.outputs.deploy_allowed == 'true' }}
@@ -104,7 +110,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Deploy with canonical config
+      - name: Deploy API with canonical config
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_CONFIG: ${{ needs.validate-iac.outputs.fly_config }}
@@ -113,13 +119,40 @@ jobs:
         run: |
           set -euo pipefail
           config="${FLY_CONFIG#backend/}"
-          flyctl deploy --remote-only --config "$config" --app "$FLY_APP"
+          flyctl deploy --remote-only --config "$config" --app "$FLY_APP" --build-arg "GITHUB_SHA=${{ github.sha }}"
+
+  deploy-frontend:
+    name: Deploy frontend Fly app
+    runs-on: ubuntu-latest
+    needs: validate-iac
+    if: ${{ github.event_name == 'workflow_dispatch' && needs.validate-iac.outputs.deploy_allowed == 'true' }}
+    environment: ${{ github.event.inputs.target_environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy frontend with canonical config
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FRONTEND_FLY_CONFIG: ${{ needs.validate-iac.outputs.frontend_fly_config }}
+          FRONTEND_APP: ${{ needs.validate-iac.outputs.frontend_app }}
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          config="${FRONTEND_FLY_CONFIG#frontend/}"
+          flyctl deploy --remote-only --config "$config" --app "$FRONTEND_APP"
 
   runtime-smoke:
     name: Runtime smoke evidence
     runs-on: ubuntu-latest
-    needs: [validate-iac, deploy]
-    if: ${{ always() && github.event_name == 'workflow_dispatch' && (github.event.inputs.deploy == false || needs.deploy.result == 'success') }}
+    needs: [validate-iac, deploy-backend, deploy-frontend]
+    if: >-
+      always() &&
+      github.event_name == 'workflow_dispatch' &&
+      (
+        github.event.inputs.deploy == false ||
+        needs.deploy-backend.result == 'success' ||
+        needs.deploy-frontend.result == 'success'
+      )
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
