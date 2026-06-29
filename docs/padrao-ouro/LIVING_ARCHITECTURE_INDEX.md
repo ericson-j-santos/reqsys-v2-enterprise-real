@@ -11,6 +11,7 @@ Mapa navegável de módulos, fluxos, pipelines, ownership, eventos, dependência
 | Onde estender o backend | [Módulos Backend](#módulos-backend) |
 | Onde estender o frontend | [Módulos Frontend](#módulos-frontend) |
 | Qual workflow usar | [Pipelines](#pipelines) |
+| Onde adicionar testes | [Camada de Testes](#camada-de-testes) |
 | Quem é dono de quê | [Ownership Matrix](#ownership-matrix) |
 | Eventos e contratos | [Eventos](#eventos) |
 | Dependências entre camadas | [Dependências](#dependências) |
@@ -43,6 +44,8 @@ Mapa navegável de módulos, fluxos, pipelines, ownership, eventos, dependência
 | `govbi.py` | `/api/govbi` | GovBI IA |
 | `rag_governado.py` | `/api/rag` | RAG governado |
 | `figma_github.py` | `/v1/integracoes/figma-github` | Sync Figma ↔ GitHub e status de vínculos |
+| `cofre.py` | `/v1/cofre` | Cofre local AES-GCM: init, status, gravar, remover, resolver |
+| `sistema.py` | `/v1/sistema` | Diagnóstico de segredos (`/segredos-status`) |
 | `webhooks.py` | `/v1/webhooks/figma` | Webhook Figma para sync bidirecional |
 
 ### Frentes de integração
@@ -50,8 +53,11 @@ Mapa navegável de módulos, fluxos, pipelines, ownership, eventos, dependência
 | Frente | Tópico | Rota | ADR | Status |
 | --- | --- | --- | --- | --- |
 | Figma GitHub — retorno em tela | integração | `/figma-github` | [ADR-021](../adr/ADR-021-figma-github-retorno-em-tela.md) | implementado |
+| Cofre de Segredos Locais | segurança | `/segredos-status` | [ADR-041](../adr/ADR-041-cofre-segredos-locais.md) | implementado |
 
 Tópico Copilot Studio associado: **Sincronizar Figma GitHub** (aciona `POST /v1/integracoes/figma-github/sync` e orienta consulta em `/figma-github`).
+
+Runbook cofre: [`docs/runbooks/cofre-operacional.md`](../runbooks/cofre-operacional.md).
 
 ---
 
@@ -68,6 +74,32 @@ Tópico Copilot Studio associado: **Sincronizar Figma GitHub** (aciona `POST /v1
 
 ---
 
+## Camada de Testes
+
+Playbook Tier 1: [`TESTING_PLAYBOOK.md`](TESTING_PLAYBOOK.md)
+
+| Camada | Caminho | Runner | Gate merge |
+| --- | --- | --- | --- |
+| **Backend pytest** | `backend/tests/` | pytest | Sim (`ci.yml`, cov ≥ 60%) |
+| **Frontend unitário** | `frontend/src/**/__tests__/` | Vitest | Não (local) |
+| **Frontend E2E** | `frontend/tests/e2e/` | Playwright | `responsividade.spec.js` quando roteado |
+| **Governança** | `tests/` (raiz) | pytest | Workflows dedicados |
+| **Alt frontends** | `e2e/` (raiz) | Playwright | `validar_qualidade.sh` |
+
+### Convenções rápidas
+
+| Padrão | Uso |
+| --- | --- |
+| `test_<modulo>.py` | Espelho de `backend/app/` |
+| `test_*_critical_paths.py` | Pareto Trilha D (cobertura) |
+| `test_*_contract.py` | Contratos e schemas |
+| `*.test.js` / `__tests__/` | Unitário frontend |
+| `data-testid="route-*"` | Marcadores E2E responsivo |
+
+Runbook: [`docs/runbooks/camada-testes-padrao-ouro.md`](../runbooks/camada-testes-padrao-ouro.md).
+
+---
+
 ## Pipelines
 
 | Pipeline | Workflow/Script | Gates | Evidência |
@@ -77,6 +109,7 @@ Tópico Copilot Studio associado: **Sincronizar Figma GitHub** (aciona `POST /v1
 | **Living Architecture** | `living-architecture-traceability.yml` | paths, contratos | `living-architecture-traceability-report` |
 | **Runtime Evidence Graph** | `runtime-operational-evidence-graph.yml` | timeline + graph JSON | `runtime-operational-evidence-graph.json` |
 | **Trilhas Padrão Ouro** | `trilhas-padrao-ouro.yml` | trilhas A–E | `trilhas-padrao-ouro-evidence` |
+| **Camada de Testes** | `camada-testes-padrao-ouro.yml` | layers, governança Tier 1 | `camada-testes-padrao-ouro-evidence` |
 | **Artifact Schema Validation** | `operational-artifact-schema-validation.yml` | contratos JSON | `artifact-contract-validation-report` |
 | **Coordenador Status** | `coordenador-status-consolidator.yml` | artifacts 1–2 | `coordenador-status.json` |
 
@@ -99,6 +132,7 @@ Tópico Copilot Studio associado: **Sincronizar Figma GitHub** (aciona `POST /v1
 | --- | --- | --- |
 | Backend API | Backend Core | [ADR-0001](../adr/ADR-0001-arquitetura-padrao-ouro.md) |
 | Segurança / JWT / CORS | Security | [ADR-0002](../adr/ADR-0002-seguranca-gates-producao.md) |
+| Cofre / Segredos | Security | [ADR-041](../adr/ADR-041-cofre-segredos-locais.md) |
 | Ambientes dev/hml/prod | DevOps | [ADR-0003](../adr/ADR-0003-ambientes-dev-hml-prod.md) |
 | CI/CD | DevOps | [ADR-0004](../adr/ADR-0004-ci-cd-qualidade.md) |
 | Observabilidade | Platform Engineering | [ADR-0005](../adr/ADR-0005-observabilidade-auditoria.md) |
@@ -107,6 +141,7 @@ Tópico Copilot Studio associado: **Sincronizar Figma GitHub** (aciona `POST /v1
 | Trilhas Padrão Ouro | Architecture Governance | [ADR-040](../adr/ADR-040-trilhas-padrao-ouro.md) |
 | Product Intelligence | Product Intelligence | [ADR-033](../adr/ADR-033-product-intelligence-final-evidence-index.md) |
 | Governança PR/Agentes | Platform Engineering | [ADR-030](../adr/ADR-030-governed-dev-automerge.md) |
+| Camada de Testes | Quality Governance | [ADR-0004](../adr/ADR-0004-ci-cd-qualidade.md) |
 
 ---
 

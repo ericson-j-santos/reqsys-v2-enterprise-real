@@ -503,7 +503,7 @@ const backendModulos = [
   { nome: 'Requisitos',      prefixo: '/v1/requisitos',     endpoints: '3',  desc: 'CRUD, validação de payload e registro de solicitações' },
   { nome: 'Qualidade IA',    prefixo: '/v1/qualidade-ia',   endpoints: '5',  desc: 'Resumo, tendência, export CSV/PDF e snapshot manual' },
   { nome: 'Auditoria',       prefixo: '/v1/auditoria',      endpoints: '2',  desc: 'Eventos de auditoria e configuração de infra' },
-  { nome: 'Cofre',           prefixo: '/v1/cofre',          endpoints: '1',  desc: 'Status do cofre local (Credential Manager)' },
+  { nome: 'Cofre',           prefixo: '/v1/cofre',          endpoints: '6',  desc: 'Cofre local AES-GCM: init, status, gravar, remover e resolver segredos' },
   { nome: 'Specs SDD',       prefixo: '/v1/specs',          endpoints: '3',  desc: 'Features, exemplos e templates de especificação' },
   { nome: 'Relatórios SSRS', prefixo: '/v1/relatorios',     endpoints: '3',  desc: 'Catálogo, status e health do servidor SSRS NOTERI' },
   { nome: 'Hub Low-Code',    prefixo: '/v1/hub-lowcode',    endpoints: '4',  desc: 'Status, pacotes SharePoint, flows Dataverse, runs GitHub' },

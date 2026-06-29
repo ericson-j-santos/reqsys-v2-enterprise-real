@@ -1,7 +1,7 @@
 {
   "schema_version": "1.1.0",
   "report_type": "runtime_health_center",
-  "generated_at_utc": "2026-06-28T00:08:30.095215+00:00",
+  "generated_at_utc": "2026-06-29T03:10:54.107279+00:00",
   "mode": "local_ci_read_only",
   "guardrails": [
     "no_network",
@@ -131,8 +131,8 @@
       ]
     },
     "runtime_risk": {
-      "status": "partial",
-      "score": 45,
+      "status": "passed",
+      "score": 100,
       "signals_total": 4,
       "signals_available": 4,
       "signals": [
@@ -165,16 +165,16 @@
           "path": "artifacts/operational-stability-score/operational-stability-score.json",
           "available": true,
           "required": false,
-          "status": "partial",
+          "status": "passed",
           "parse_error": false
         }
       ]
     },
     "living_architecture": {
-      "status": "partial",
-      "score": 45,
+      "status": "passed",
+      "score": 100,
       "signals_total": 4,
-      "signals_available": 3,
+      "signals_available": 4,
       "signals": [
         {
           "id": "runtime_ops_governance_p1_doc",
@@ -203,9 +203,9 @@
         {
           "id": "living_architecture_drift_artifact",
           "path": "artifacts/living-architecture-doc-drift/living-architecture-doc-drift.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "passed",
           "parse_error": false
         }
       ]
@@ -251,8 +251,8 @@
       ]
     },
     "remediation": {
-      "status": "warning",
-      "score": 70,
+      "status": "passed",
+      "score": 100,
       "signals_total": 4,
       "signals_available": 4,
       "signals": [
@@ -285,7 +285,7 @@
           "path": "artifacts/failure-pattern-engine/failure-pattern-report.json",
           "available": true,
           "required": false,
-          "status": "warning",
+          "status": "passed",
           "parse_error": false
         }
       ]
@@ -294,7 +294,7 @@
   "ingested_artifacts": {
     "status": "passed",
     "artifacts_total": 7,
-    "artifacts_available": 5,
+    "artifacts_available": 7,
     "artifacts": [
       {
         "id": "runtime_health_validator",
@@ -321,21 +321,21 @@
         "id": "operational_stability_score",
         "path": "artifacts/operational-stability-score/operational-stability-score.json",
         "available": true,
-        "status": "partial",
+        "status": "passed",
         "parse_error": false
       },
       {
         "id": "pr_evidence_gate",
         "path": "artifacts/pr-evidence-gate/pr-evidence-gate.json",
-        "available": false,
-        "status": "missing",
+        "available": true,
+        "status": "passed",
         "parse_error": false
       },
       {
         "id": "public_runtime_evidence",
         "path": "artifacts/public-runtime-evidence/public-runtime-evidence.json",
-        "available": false,
-        "status": "missing",
+        "available": true,
+        "status": "passed",
         "parse_error": false
       },
       {
@@ -350,10 +350,10 @@
   "runtime_operational_evidence_graph": {
     "status": "passed",
     "source": "local_artifacts",
-    "nodes": 5
+    "nodes": 7
   },
   "runtime_risk_scoring": {
-    "status": "partial",
+    "status": "passed",
     "drift_level": "low"
   },
   "pr_evidence_gate": {
@@ -439,37 +439,25 @@
     ]
   },
   "public_access_validation": {
-    "status": "missing",
+    "status": "passed",
     "path": "artifacts/public-access-validation/public-access-validation.json",
     "available": true,
-    "generated_at": "2026-06-26T22:18:22.656Z",
+    "generated_at": "2026-06-29T03:10:54.048380+00:00",
     "summary": {
-      "total": 9,
-      "reachable": 0,
-      "expected": 0,
-      "reachablePercent": 0,
-      "expectedPercent": 0,
-      "unavailable": 9,
-      "unexpectedStatus": 9
+      "total": 3,
+      "reachable": 3,
+      "expected": 3,
+      "reachablePercent": 100,
+      "expectedPercent": 100,
+      "unavailable": 0,
+      "unexpectedStatus": 0
     },
     "environments": {
-      "prod": {
+      "canonical": {
         "total": 3,
-        "reachable": 0,
-        "expected": 0,
-        "status": "missing"
-      },
-      "staging": {
-        "total": 3,
-        "reachable": 0,
-        "expected": 0,
-        "status": "missing"
-      },
-      "dev": {
-        "total": 3,
-        "reachable": 0,
-        "expected": 0,
-        "status": "missing"
+        "reachable": 3,
+        "expected": 3,
+        "status": "passed"
       }
     }
   },
@@ -479,16 +467,16 @@
     "runtime-health-report.json": "passed",
     "Score consolidado de maturidade": "passed",
     "Environment Drift Detector": "passed",
-    "Remediation Executor governado": "warning"
+    "Remediation Executor governado": "passed"
   },
   "gold_standard_depth": {
     "strategy": "parar_expansao_horizontal_e_aprofundar_capacidades_existentes",
-    "overall_score": 86,
-    "overall_status": "warning",
+    "overall_score": 100,
+    "overall_status": "passed",
     "axes": {
       "runtime": {
-        "status": "partial",
-        "score": 45,
+        "status": "passed",
+        "score": 100,
         "evidence": [
           "runtime_risk",
           "runtime_health_validator_report"
@@ -503,6 +491,8 @@
           "runtime_operational_evidence_graph",
           "operational_risk_engine",
           "operational_stability_score",
+          "pr_evidence_gate",
+          "public_runtime_evidence",
           "public_access_validation"
         ],
         "operator_action": "Publicar artifacts faltantes para reduzir diagnostico manual e manter trilha auditavel."
@@ -537,8 +527,8 @@
         "operator_action": "Corrigir drift medio/alto antes de promover dev -> hml -> prod."
       },
       "autonomous_operation": {
-        "status": "warning",
-        "score": 70,
+        "status": "passed",
+        "score": 100,
         "evidence": [
           "remediation",
           "guardrails",
@@ -547,9 +537,7 @@
         "operator_action": "Manter automacao assistida e allowlisted ate evidenciar baixa recorrencia de falhas."
       }
     },
-    "blockers": [
-      "autonomous_operation"
-    ],
+    "blockers": [],
     "operational_focus_order": [
       "runtime",
       "observability",
@@ -559,13 +547,11 @@
       "autonomous_operation"
     ]
   },
-  "base_maturity_percent": 83,
-  "maturity_percent": 80,
+  "base_maturity_percent": 100,
+  "maturity_percent": 97,
   "operational_risk": "medium",
-  "confidence_level": "medium",
+  "confidence_level": "high",
   "next_required_actions": [
-    "Completar sinais obrigatorios e revisar alertas do dominio runtime_risk.",
-    "Completar sinais obrigatorios e revisar alertas do dominio living_architecture.",
-    "Completar sinais obrigatorios e revisar alertas do dominio remediation."
+    "Manter coleta local em CI e preparar contrato de dashboard/API sem rede externa."
   ]
 }

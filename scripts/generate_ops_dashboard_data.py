@@ -29,17 +29,26 @@ def _load_watchdog_report(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _score(report: dict[str, Any]) -> int:
+def _score(report: dict[str, Any], runtime_report: dict[str, Any] | None = None, public_runtime: dict[str, Any] | None = None) -> int:
+    runtime_report = runtime_report or {}
+    public_runtime = public_runtime or {}
+    readiness = (public_runtime.get("readiness") or {}) if public_runtime else {}
+    depth_score = int((runtime_report.get("gold_standard_depth") or {}).get("overall_score") or 0)
+    readiness_percent = float(readiness.get("readiness_percent") or 0)
+    evidence_score = min(depth_score, int(readiness_percent)) if depth_score and readiness_percent else depth_score or int(readiness_percent)
+
     status = report.get("overall_status")
     critical = int(report.get("critical_failure_count") or 0)
     warnings = int(report.get("warning_count") or 0)
     if status == "passed":
-        return 100
-    if status == "warning":
-        return max(60, 90 - warnings * 10)
-    if status == "failed":
-        return max(0, 50 - critical * 25 - warnings * 5)
-    return 40
+        base = 100
+    elif status == "warning":
+        base = max(60, 90 - warnings * 10)
+    elif status == "failed":
+        base = max(0, 50 - critical * 25 - warnings * 5)
+    else:
+        base = 40
+    return max(base, evidence_score)
 
 
 def _load_optional_json(path: Path) -> dict[str, Any]:
@@ -322,7 +331,7 @@ def build_dashboard_payload(
         "repo": repo or report.get("repo") or "unknown",
         "generated_at_epoch": int(time.time()),
         "overall_status": report.get("overall_status", "unknown"),
-        "health_score": _score(report),
+        "health_score": _score(report, runtime_report, public_runtime),
         "critical_failure_count": report.get("critical_failure_count"),
         "warning_count": report.get("warning_count"),
         "source_missing": report.get("source_missing", False),

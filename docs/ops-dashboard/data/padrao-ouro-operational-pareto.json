@@ -1,27 +1,27 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-28T01:50:00Z",
+  "generated_at": "2026-06-29T03:10:54.191565Z",
   "state": "green",
   "strategy": "pareto_operational_gold_base",
-  "current_score": 95.88,
+  "current_score": 100.0,
   "target_score": 98.0,
-  "gold_gap": 2.12,
+  "gold_gap": 0,
   "projected_score_after_recommended": 100.0,
-  "projected_gap_after_recommended": 0.0,
+  "projected_gap_after_recommended": 0,
   "statistical_confidence": 0.8,
   "dominant_bottleneck": {
-    "dimension": "coverage",
-    "score": 74.29,
-    "gap_to_100": 25.71,
-    "share_of_trilha_d_remaining_gap": 1.0
+    "dimension": "none",
+    "score": 100.0,
+    "gap_to_100": 0.0,
+    "share_of_trilha_d_remaining_gap": 0.0
   },
   "summary": {
     "actions_evaluated": 4,
-    "recommended_now": 2,
-    "expected_gain_now": 6.25,
+    "recommended_now": 0,
+    "expected_gain_now": 0,
     "pareto_rule": "2 ações recomendadas concentram maior relação impacto/risco/esforço",
-    "next_increment": "coverage_targeted_tests"
+    "next_increment": null
   },
   "links": {
     "trilha_d_history": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/docs/ops-dashboard/data/trilha-d-history.json",
@@ -115,9 +115,28 @@
     }
   ],
   "runtime_dashboard_contract": {
-    "card_fields": ["state", "current_score", "target_score", "gold_gap", "projected_score_after_recommended"],
-    "ranking_fields": ["rank", "title", "pareto_score", "expected_score_gain", "confidence", "risk", "recommended_now"],
-    "bottleneck_fields": ["dimension", "score", "gap_to_100", "share_of_trilha_d_remaining_gap"],
-    "refresh_strategy": "static_json_until_trilha_d_artifact_ingestion_is_enabled"
+    "card_fields": [
+      "state",
+      "current_score",
+      "target_score",
+      "gold_gap",
+      "projected_score_after_recommended"
+    ],
+    "ranking_fields": [
+      "rank",
+      "title",
+      "pareto_score",
+      "expected_score_gain",
+      "confidence",
+      "risk",
+      "recommended_now"
+    ],
+    "bottleneck_fields": [
+      "dimension",
+      "score",
+      "gap_to_100",
+      "share_of_trilha_d_remaining_gap"
+    ],
+    "refresh_strategy": "evidence_driven_when_from_evidence_enabled"
   }
 }

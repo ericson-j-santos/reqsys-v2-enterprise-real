@@ -106,6 +106,8 @@ CREDENCIAIS_DEMO = {
 
 SECRET_DIAGNOSTICS = [
     {'name': 'JWT_SECRET', 'default': 'trocar-em-producao'},
+    {'name': 'VAULT_API_TOKEN'},
+    {'name': 'REQSYS_VAULT_SERVICE_NAME', 'default': 'mvp-intelligence-vault'},
     {'name': 'DATABASE_URL', 'default': 'sqlite:///./reqsys.db'},
     {'name': 'CORS_ORIGINS', 'default': 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:8082,http://reqsys.localtest.me:8082'},
     {'name': 'GITHUB_TOKEN'},

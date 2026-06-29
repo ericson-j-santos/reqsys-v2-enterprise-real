@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0.0",
+  "layer_id": "camada-testes",
+  "layer_name": "Camada de Testes — Padrão Ouro",
+  "updated_at": "2026-06-29T12:00:00Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "mode": "report_only",
+  "governance": {
+    "owner": "ReqSys Quality Governance",
+    "adr": "docs/adr/ADR-0004-ci-cd-qualidade.md",
+    "runbook": "docs/runbooks/camada-testes-padrao-ouro.md",
+    "playbook_tier1": "docs/padrao-ouro/TESTING_PLAYBOOK.md",
+    "workflow": ".github/workflows/camada-testes-padrao-ouro.yml",
+    "validator": "scripts/camada_testes_padrao_ouro.py"
+  },
+  "layers": {
+    "backend_pytest": {
+      "status": "active",
+      "path": "backend/tests/",
+      "runner": "pytest",
+      "ci_gate": true,
+      "coverage_gate_percent": 60,
+      "coverage_target_percent": 82
+    },
+    "frontend_vitest": {
+      "status": "active",
+      "path": "frontend/src/",
+      "runner": "vitest",
+      "ci_gate": false,
+      "discovery": "src/**/*.{test,spec}.{js,mjs,ts}"
+    },
+    "frontend_playwright": {
+      "status": "active",
+      "path": "frontend/tests/e2e/",
+      "runner": "playwright",
+      "ci_gate": true,
+      "mandatory_spec": "responsividade.spec.js"
+    },
+    "governance_pytest": {
+      "status": "active",
+      "path": "tests/",
+      "runner": "pytest",
+      "ci_gate": false,
+      "scope": "scripts, workflows, contracts, trilhas"
+    },
+    "alt_frontends_e2e": {
+      "status": "active",
+      "path": "e2e/",
+      "runner": "playwright",
+      "ci_gate": false,
+      "local_script": "scripts/validar_qualidade.sh"
+    }
+  },
+  "ci_main": {
+    "workflow": ".github/workflows/ci.yml",
+    "jobs": [
+      "backend-lint",
+      "backend-test",
+      "frontend-build",
+      "frontend-e2e-responsive"
+    ]
+  },
+  "trilha_d": {
+    "workflow": ".github/workflows/trilha-d-qualidade-governanca.yml",
+    "dimensions": ["tests", "coverage", "mutation", "contract", "schema", "ci-watch"]
+  },
+  "artifacts": {
+    "report": "audit/camada-testes/camada-testes-padrao-ouro-report.json",
+    "artifact_name": "camada-testes-padrao-ouro-evidence"
+  },
+  "validation": {
+    "checks": [
+      "governance_files_exist",
+      "test_layers_exist",
+      "ci_workflow_referenced",
+      "tier1_playbook_indexed",
+      "conftest_and_setup_exist"
+    ]
+  }
+}

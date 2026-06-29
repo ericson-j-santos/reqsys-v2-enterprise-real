@@ -10,6 +10,7 @@ Data de referência: 2026-06-27
 | --- | --- |
 | Abrir novo incremento/PR | [Abrir incremento](#1-abrir-incremento) |
 | Corrigir CI vermelho | [Corrigir CI](#2-corrigir-ci) |
+| Adicionar / estruturar testes | [Testing layer](#8-camada-de-testes) |
 | Merge governado | [Governed merge](#3-governed-merge) |
 | Validar evidências | [Evidence validation](#4-evidence-validation) |
 | Release governance | [Release governance](#5-release-governance) |
@@ -196,6 +197,35 @@ Data de referência: 2026-06-27
 
 ---
 
+## 8. Camada de testes
+
+**Objetivo:** Adicionar ou estruturar testes alinhados à pirâmide Padrão Ouro e aos gates de CI.
+
+### Pré-condições
+
+- Ler [`TESTING_PLAYBOOK.md`](TESTING_PLAYBOOK.md) e módulo afetado em `living-architecture-index.json`.
+
+### Passos
+
+```text
+1. Identificar camada: backend pytest | frontend vitest | playwright | governança
+2. Seguir convenção de nomenclatura (test_<modulo>.py, *.test.js, *.spec.js)
+3. Validar localmente com comando canônico (ver TESTING_PLAYBOOK)
+4. Se cobertura crítica: docs/runbooks/coverage-targeted-tests-trilha-d.md
+5. Evidenciar comandos no PR
+6. Validar estrutura: python scripts/camada_testes_padrao_ouro.py
+```
+
+### Runbooks
+
+- [`docs/padrao-ouro/TESTING_PLAYBOOK.md`](TESTING_PLAYBOOK.md)
+- [`docs/runbooks/camada-testes-padrao-ouro.md`](../runbooks/camada-testes-padrao-ouro.md)
+- [`docs/runbooks/coverage-targeted-tests-trilha-d.md`](../runbooks/coverage-targeted-tests-trilha-d.md)
+- [`docs/runbooks/trilha-d-qualidade-governanca.md`](../runbooks/trilha-d-qualidade-governanca.md)
+- [`docs/SECURITY_GATES_TEST_MATRIX.md`](../SECURITY_GATES_TEST_MATRIX.md)
+
+---
+
 ## 7. Onboarding agente/IA
 
 **Objetivo:** Contexto reutilizável para agente executar incremento com precisão arquitetural.
@@ -208,8 +238,9 @@ Data de referência: 2026-06-27
 3. living-architecture-index.json     → módulos, ownership, extensão
 4. docs/padrao-ouro/ADR_INDEX.md        → decisões fundacionais (0001–0006)
 5. docs/padrao-ouro/CONTRACT_CATALOG.md → contratos do domínio afetado
-6. docs/runbooks/coordenador-principal-menu-operacional.md → menu operacional
-7. Executar agent_increment_gate antes de criar branch
+6. docs/padrao-ouro/TESTING_PLAYBOOK.md → camada de testes (se alterar testes)
+7. docs/runbooks/coordenador-principal-menu-operacional.md → menu operacional
+8. Executar agent_increment_gate antes de criar branch
 ```
 
 ### Referências IA
@@ -246,6 +277,7 @@ Data de referência: 2026-06-27
 | CI Router | `docs/runbooks/ci-router.md` |
 | Dashboard Regression | `docs/runbooks/dashboard-regression-validation.md` |
 | Coverage Targeted Tests (Trilha D) | `docs/runbooks/coverage-targeted-tests-trilha-d.md` |
+| Camada de Testes — Padrão Ouro | `docs/runbooks/camada-testes-padrao-ouro.md` |
 
 ### Operações e runtime
 

@@ -46,6 +46,12 @@ Inventário centralizado de **schemas, eventos, APIs, payloads, outputs e pipeli
 | trilha-d-qualidade-governanca | `trilha-d-qualidade-governanca.schema.json` | D — Qualidade |
 | trilha-e-arquitetura-viva | `trilha-e-arquitetura-viva.schema.json` | E — Arquitetura Viva |
 
+### Camada de testes (Tier 1)
+
+| Schema | Arquivo | Uso |
+| --- | --- | --- |
+| camada-testes-padrao-ouro | `camada-testes-padrao-ouro.schema.json` | Relatório do validador da camada de testes |
+
 ### Delivery e release
 
 | Schema | Arquivo | Uso |
@@ -99,12 +105,32 @@ Inventário centralizado de **schemas, eventos, APIs, payloads, outputs e pipeli
 | `/api/rag` | `rag_governado.py` | RAG governado — ver `docs/ai-governance/05-DADOS/RAG_STANDARD.md` |
 | `/v1/integracoes/figma-github` | `figma_github.py` | Sync Figma ↔ GitHub (`POST /sync`, `GET /status`) |
 | `/v1/webhooks/figma` | `webhooks.py` | Webhook Figma (assinatura `X-Figma-Signature`) |
+| `/v1/cofre` | `cofre.py` | Cofre local AES-GCM — ver [ADR-041](../adr/ADR-041-cofre-segredos-locais.md) |
+| `/v1/sistema` | `sistema.py` | Diagnóstico de segredos (`GET /segredos-status`) |
 
 ### Frentes de integração registradas
 
 | ID | Frente | Tópico | Feature flag |
 | --- | --- | --- | --- |
 | `figma-github` | Figma GitHub — retorno em tela | integração | `ENABLE_FIGMA_GITHUB_SYNC` |
+| `cofre-segredos` | Cofre de Segredos Locais | segurança | `REQSYS_VAULT_SERVICE_NAME`, `VAULT_API_TOKEN` |
+
+### Contrato Cofre (`/v1/cofre`)
+
+| Endpoint | Auth | Request | Response `data` |
+| --- | --- | --- | --- |
+| `POST /init` | JWT admin | `?overwrite=false` | `{ status, service }` |
+| `GET /status` | JWT admin | — | `{ inicializado, service, vault_api_token_configurado }` |
+| `POST /segredos` | JWT admin | `{ key, value }` | `{ key, gravado }` |
+| `DELETE /segredos/{key}` | JWT admin | — | `{ key, removido }` |
+| `GET /segredos/{key}` | `X-Vault-Token` | — | `{ key, value }` |
+| `POST /resolver` | `X-Vault-Token` | `{ key }` | `{ key, value }` |
+
+Diagnóstico (`GET /v1/sistema/segredos-status`): cada item contém `name`, `source` (`env|vault|default|absent`), `configured`, `resolved`, `value_exposed: false`.
+
+Chave reservada bloqueada: `__master_key__`.
+
+Runbook: [`docs/runbooks/cofre-operacional.md`](../runbooks/cofre-operacional.md).
 
 ### Contrato frontend ↔ backend
 
