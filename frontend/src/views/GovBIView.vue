@@ -20,6 +20,20 @@
       </template>
     </PageHeader>
 
+    <div v-if="historicoConsultas.length" class="metrics-grid mb-4" data-testid="govbi-metrics-grid">
+      <OperationalMetricCard
+        v-for="metric in metricasGovbi"
+        :key="metric.id"
+        :label="metric.label"
+        :value="metric.value"
+        :semaforo="metric.semaforo"
+        :icon="metric.icon"
+        :hint="metric.hint"
+        :test-id="`govbi-metric-${metric.id}`"
+        @drilldown="aplicarFiltroMetrica(metric.filtros)"
+      />
+    </div>
+
     <v-card class="table-card mb-4">
       <v-card-text>
         <v-textarea
@@ -168,6 +182,7 @@
               :items="resposta.resultado.linhas || []"
               density="compact"
               :items-per-page="20"
+              class="responsive-table-shell"
             />
           </v-card>
         </v-col>
@@ -224,85 +239,99 @@
         <v-chip size="x-small" variant="tonal">{{ consultasFiltradas.length }} de {{ historicoConsultas.length }}</v-chip>
         <v-spacer />
         <v-chip v-if="temFiltroHistorico" size="x-small" color="blue" variant="tonal">Filtro ativo</v-chip>
+        <v-spacer />
+        <v-btn
+          variant="outlined"
+          size="small"
+          prepend-icon="mdi-content-copy"
+          :disabled="!consultasFiltradas.length"
+          data-testid="govbi-exportar-evidencia"
+          @click="copiarEvidencia"
+        >
+          Copiar evidência
+        </v-btn>
       </v-card-title>
       <v-divider />
       <v-card-text>
-        <v-row class="mb-2" dense>
-          <v-col cols="12" sm="6" md="2">
-            <v-select
-              v-model="filtrosHistorico.status"
-              :items="statusHistoricoOptions"
-              item-title="label"
-              item-value="value"
-              label="Status"
-              density="compact"
-              variant="outlined"
-              hide-details
-              clearable
-              @update:model-value="sincronizarQueryHistorico"
-            />
-          </v-col>
-          <v-col cols="12" sm="6" md="2">
-            <v-select
-              v-model="filtrosHistorico.fonte"
-              :items="fonteHistoricoOptions"
-              item-title="label"
-              item-value="value"
-              label="Fonte"
-              density="compact"
-              variant="outlined"
-              hide-details
-              clearable
-              @update:model-value="sincronizarQueryHistorico"
-            />
-          </v-col>
-          <v-col cols="12" sm="6" md="2">
-            <v-text-field
-              v-model="filtrosHistorico.data"
-              label="Data"
-              type="date"
-              density="compact"
-              variant="outlined"
-              hide-details
-              clearable
-              @update:model-value="sincronizarQueryHistorico"
-            />
-          </v-col>
-          <v-col cols="12" sm="6" md="3">
-            <v-text-field
-              v-model="filtrosHistorico.correlation_id"
-              label="Correlation ID"
-              density="compact"
-              variant="outlined"
-              hide-details
-              clearable
-              @update:model-value="sincronizarQueryHistorico"
-            />
-          </v-col>
-          <v-col cols="12" md="3">
-            <v-text-field
-              v-model="filtrosHistorico.busca"
-              label="Busca"
-              density="compact"
-              variant="outlined"
-              hide-details
-              clearable
-              prepend-inner-icon="mdi-magnify"
-              @update:model-value="sincronizarQueryHistorico"
-            />
-          </v-col>
-        </v-row>
+        <div class="filter-grid mb-2">
+          <v-select
+            v-model="filtrosHistorico.status"
+            :items="statusHistoricoOptions"
+            item-title="label"
+            item-value="value"
+            label="Status"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistorico"
+          />
+          <v-select
+            v-model="filtrosHistorico.fonte"
+            :items="fonteHistoricoOptions"
+            item-title="label"
+            item-value="value"
+            label="Fonte"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistorico"
+          />
+          <v-select
+            v-model="filtrosHistorico.fallback"
+            :items="fallbackHistoricoOptions"
+            item-title="label"
+            item-value="value"
+            label="Fallback"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistorico"
+          />
+          <v-text-field
+            v-model="filtrosHistorico.data"
+            label="Data"
+            type="date"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistorico"
+          />
+          <v-text-field
+            v-model="filtrosHistorico.correlation_id"
+            label="Correlation ID"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistorico"
+          />
+          <v-text-field
+            v-model="filtrosHistorico.busca"
+            label="Busca"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            prepend-inner-icon="mdi-magnify"
+            @update:model-value="sincronizarQueryHistorico"
+          />
+        </div>
         <div class="d-flex justify-end mb-3">
           <v-btn variant="text" size="small" prepend-icon="mdi-filter-off" :disabled="!temFiltroHistorico" @click="limparFiltrosHistorico">
             Limpar filtros
           </v-btn>
         </div>
-        <v-data-table
-          :headers="historicoHeaders"
-          :items="consultasFiltradas"
-          density="compact"
-          :items-per-page="10"
-        >
+        <div class="responsive-table-shell">
+          <v-data-table
+            :headers="historicoHeaders"
+            :items="consultasFiltradas"
+            density="compact"
+            :items-per-page="10"
+          >
           <template #item.consultadoEm="{ item }">
             <span class="text-caption">{{ formatarDataHistorico(item.consultadoEm) }}</span>
           </template>
@@ -331,7 +360,8 @@
             </span>
             <span v-else>—</span>
           </template>
-        </v-data-table>
+          </v-data-table>
+        </div>
       </v-card-text>
     </v-card>
   </section>
@@ -342,11 +372,13 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import PageHeader from '../components/PageHeader.vue'
+import OperationalMetricCard from '../components/OperationalMetricCard.vue'
 import {
+  calcularMetricasGovbi,
   carregarHistoricoGovbi,
-  contarConsultasGovbi,
   criarQueryFiltrosGovbi,
   criarRegistroConsultaGovbi,
+  exportarEvidenciaGovbi,
   filtrarConsultasGovbi,
   normalizarFiltrosGovbi,
   possuiFiltroAtivo,
@@ -384,6 +416,10 @@ const fonteHistoricoOptions = [
   { label: 'Fallback', value: 'fallback' },
   { label: 'Proxy', value: 'proxy' },
 ]
+const fallbackHistoricoOptions = [
+  { label: 'Com fallback', value: 'true' },
+  { label: 'Sem fallback', value: 'false' },
+]
 const historicoHeaders = [
   { title: 'Data', key: 'consultadoEm', width: '140px' },
   { title: 'Pergunta', key: 'pergunta' },
@@ -396,6 +432,46 @@ const historicoHeaders = [
 
 const consultasFiltradas = computed(() => filtrarConsultasGovbi(historicoConsultas.value, filtrosHistorico))
 const temFiltroHistorico = computed(() => possuiFiltroAtivo(filtrosHistorico))
+const resumoMetricas = computed(() => calcularMetricasGovbi(historicoConsultas.value))
+
+const metricasGovbi = computed(() => [
+  {
+    id: 'total',
+    label: 'Consultas',
+    value: resumoMetricas.value.total,
+    semaforo: resumoMetricas.value.total > 0 ? 'verde' : 'desconhecido',
+    icon: 'mdi-robot-outline',
+    hint: 'Total de consultas na sessão',
+    filtros: {},
+  },
+  {
+    id: 'sucesso',
+    label: 'Sucesso',
+    value: resumoMetricas.value.sucesso,
+    semaforo: resumoMetricas.value.sucesso > 0 ? 'verde' : 'desconhecido',
+    icon: 'mdi-check-circle-outline',
+    hint: 'Consultas concluídas sem fallback',
+    filtros: { status: 'CONCLUIDO', fallback: 'false' },
+  },
+  {
+    id: 'degradado',
+    label: 'Degradado',
+    value: resumoMetricas.value.erros,
+    semaforo: resumoMetricas.value.erros > 0 ? 'vermelho' : 'verde',
+    icon: 'mdi-alert-circle-outline',
+    hint: 'Consultas com erro ou modo degradado',
+    filtros: { status: 'MODO_DEGRADADO' },
+  },
+  {
+    id: 'latencia',
+    label: 'Latência média',
+    value: resumoMetricas.value.latenciaMediaMs ? `${resumoMetricas.value.latenciaMediaMs} ms` : '—',
+    semaforo: resumoMetricas.value.latenciaMediaMs > 10000 ? 'amarelo' : 'verde',
+    icon: 'mdi-timer-outline',
+    hint: 'Tempo médio de resposta das consultas',
+    filtros: {},
+  },
+])
 
 watch(
   () => route.query,
@@ -504,6 +580,16 @@ function sincronizarQueryHistorico() {
 function limparFiltrosHistorico() {
   Object.assign(filtrosHistorico, { status: '', fonte: '', correlation_id: '', data: '', busca: '', fallback: '' })
   sincronizarQueryHistorico()
+}
+
+function aplicarFiltroMetrica(novosFiltros = {}) {
+  Object.assign(filtrosHistorico, normalizarFiltrosGovbi(novosFiltros))
+  sincronizarQueryHistorico()
+}
+
+function copiarEvidencia() {
+  const texto = exportarEvidenciaGovbi(historicoConsultas.value, filtrosHistorico)
+  navigator.clipboard.writeText(texto).catch(() => {})
 }
 
 function filtrarHistoricoPorCorrelation(correlationId) {
@@ -700,5 +786,11 @@ function copiarSql() {
   text-decoration: underline dotted;
   font-family: monospace;
   font-size: 0.78rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
 }
 </style>

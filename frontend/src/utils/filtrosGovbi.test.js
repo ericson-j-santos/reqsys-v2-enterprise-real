@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  calcularMetricasGovbi,
   contarConsultasGovbi,
   criarQueryFiltrosGovbi,
   criarRegistroConsultaGovbi,
+  exportarEvidenciaGovbi,
   filtrarConsultasGovbi,
   possuiFiltroAtivo,
 } from './filtrosGovbi'
@@ -45,5 +47,23 @@ describe('filtrosGovbi', () => {
 
   it('conta consultas por resultado', () => {
     expect(contarConsultasGovbi(consultas)).toEqual({ erros: 1, fallback: 1, sucesso: 1 })
+  })
+
+  it('calcula metricas agregadas com latencia media', () => {
+    expect(calcularMetricasGovbi(consultas)).toEqual({
+      total: 2,
+      sucesso: 1,
+      erros: 1,
+      fallback: 1,
+      latenciaMediaMs: 7660,
+    })
+  })
+
+  it('exporta evidencia filtrada em JSON', () => {
+    const payload = JSON.parse(exportarEvidenciaGovbi(consultas, { status: 'MODO_DEGRADADO' }))
+    expect(payload.modulo).toBe('govbi-ia')
+    expect(payload.consultas).toHaveLength(1)
+    expect(payload.metricas.erros).toBe(1)
+    expect(payload.filtros.status).toBe('MODO_DEGRADADO')
   })
 })

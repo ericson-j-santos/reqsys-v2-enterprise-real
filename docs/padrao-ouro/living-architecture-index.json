@@ -18,7 +18,7 @@
         "purpose": "Routers FastAPI — superfície HTTP (auth, requisitos, agile, dashboard, integrações, IA, governança).",
         "ownership": "Backend Core",
         "extension_points": ["novo router em api/ + include_router em main.py"],
-        "key_routes": ["auth.py", "requisitos.py", "agile_runtime.py", "dashboard.py", "monitoramento_operacional.py", "runtime_analytics.py"]
+        "key_routes": ["auth.py", "requisitos.py", "agile_runtime.py", "dashboard.py", "govbi.py", "monitoramento_operacional.py", "runtime_analytics.py"]
       },
       {
         "id": "core",

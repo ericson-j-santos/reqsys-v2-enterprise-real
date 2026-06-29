@@ -25,7 +25,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - Varredura técnica inicial em `docs/varreduras/REQSYS_VARREDURA_PADRAO_OURO_2026-06-20.md`.
 - Helper puro `frontend/src/utils/filtrosRequisitos.js` para normalização, query string e filtragem analítica de requisitos.
 - Helper puro `frontend/src/utils/filtrosIntegracao.js` para drill-down analítico do Painel de Integrações (origem, status, data, correlation_id e busca).
-- Helpers `filtrosGovbi.js`, `filtrosPipeline.js` e `filtrosTaskConsole.js` com testes unitários para drill-down analítico.
+- Helpers `filtrosGovbi.js`, `filtrosPipeline.js` e `filtrosTaskConsole.js` com testes unitários para drill-down analítico; GovBI inclui `calcularMetricasGovbi` e `exportarEvidenciaGovbi`.
 - Constante `frontend/src/constants/rotasResponsivas.js` com as 16 rotas operacionais canônicas para validação responsiva.
 - Helper E2E `tests/e2e/helpers/responsiveMocks.js` para mocks estáveis das 16 rotas.
 - Teste unitário `frontend/src/utils/filtrosIntegracao.test.js` para filtros analíticos de integrações.
@@ -48,7 +48,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - `DashboardView.vue`: card de erros de integração com drill-down para `/painel-integracao?status=erro`.
 - `DashboardView.vue`: melhoria de acessibilidade por teclado nos cards interativos.
 - `PainelIntegracaoView.vue`: analítico filtrável por origem, status, data, correlation_id e busca textual, com cards clicáveis e sincronização de query string.
-- `GovBIView.vue`: histórico analítico de consultas com latência, fonte, fallback e correlation_id filtráveis via URL.
+- `GovBIView.vue`: histórico analítico padrão ouro com métricas clicáveis (total, sucesso, degradado, latência média), filtro de fallback, exportação de evidência JSON, `filter-grid`/`responsive-table-shell` e query string para latência, fonte, fallback e correlation_id.
 - `PipelineView.vue`: histórico de execuções com analítico por etapa, duração, status e correlation_id.
 - `TaskConsoleView.vue`: filtros analíticos de tarefas e histórico de envios ao Planner com query string.
 - `DashboardView.vue`: cards de drill-down para GovBI degradado, pipeline com erro e Task Console pendente.

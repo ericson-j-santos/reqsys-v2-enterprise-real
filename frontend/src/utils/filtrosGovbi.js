@@ -119,6 +119,45 @@ export function contarConsultasGovbi(itens = []) {
   }, { erros: 0, fallback: 0, sucesso: 0 })
 }
 
+export function calcularMetricasGovbi(itens = []) {
+  const contagem = contarConsultasGovbi(itens)
+  const latencias = itens
+    .map((item) => Number(item.latenciaMs) || 0)
+    .filter((valor) => valor > 0)
+  const latenciaMediaMs = latencias.length
+    ? Math.round(latencias.reduce((acc, valor) => acc + valor, 0) / latencias.length)
+    : 0
+
+  return {
+    total: itens.length,
+    sucesso: contagem.sucesso,
+    erros: contagem.erros,
+    fallback: contagem.fallback,
+    latenciaMediaMs,
+  }
+}
+
+export function exportarEvidenciaGovbi(itens = [], filtros = {}) {
+  const filtrados = filtrarConsultasGovbi(itens, filtros)
+  return JSON.stringify({
+    exportadoEm: new Date().toISOString(),
+    modulo: 'govbi-ia',
+    filtros: criarQueryFiltrosGovbi(filtros),
+    metricas: calcularMetricasGovbi(filtrados),
+    consultas: filtrados.map((item) => ({
+      pergunta: item.pergunta,
+      statusFluxo: item.statusFluxo,
+      fonte: item.fonte,
+      latenciaMs: item.latenciaMs,
+      correlationId: item.correlationId,
+      fallback: item.fallback,
+      erro: item.erro,
+      explicacao: item.explicacao,
+      consultadoEm: item.consultadoEm,
+    })),
+  }, null, 2)
+}
+
 export const GOVBI_HISTORICO_KEY = 'reqsys_govbi_historico'
 
 export function carregarHistoricoGovbi(storage = sessionStorage) {
