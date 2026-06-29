@@ -2,7 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 from uuid import uuid4
 
@@ -15,7 +15,7 @@ DEFAULT_TIMEOUT_SECONDS = 20.0
 MAX_ATTEMPTS = 3
 
 
-class WorkflowJobStatus(StrEnum):
+class WorkflowJobStatus(str, Enum):
     QUEUED = 'queued'
     PROCESSING = 'processing'
     COMPLETED = 'completed'
