@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from scripts.validate_publication_sync import (
+    _api_sha_acceptable,
     _extract_frontend_asset_hash,
     _normalize_sha,
     _sha_matches,
@@ -14,6 +15,26 @@ from scripts.validate_publication_sync import (
 
 def test_sha_matches_accepts_short_prefix():
     assert _sha_matches("854d887f014e", "854d887f014ef70c90751bc422d139694fc4134d")
+
+
+def test_api_sha_acceptable_when_observed_matches_main_head(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.validate_publication_sync._fetch_origin_main_sha",
+        lambda: "0cfadcbcc348",
+    )
+    ok, reason = _api_sha_acceptable("723160b2c9ae", "0cfadcbcc3485fc42c3d4ad9d4a7f86279f0415f")
+    assert ok is True
+    assert reason == "matches_origin_main_head"
+
+
+def test_api_sha_not_acceptable_when_observed_stale(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.validate_publication_sync._fetch_origin_main_sha",
+        lambda: "0cfadcbcc348",
+    )
+    ok, reason = _api_sha_acceptable("0cfadcbcc348", "723160b2c9ae")
+    assert ok is False
+    assert reason == "sha_mismatch"
 
 
 def test_normalize_sha_handles_fly_image_ref():

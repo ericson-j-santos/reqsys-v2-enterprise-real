@@ -125,6 +125,36 @@ def _sha_matches(expected: str, observed: str | None) -> bool:
     return _normalize_sha(observed) == _normalize_sha(expected)
 
 
+def _fetch_origin_main_sha() -> str | None:
+    try:
+        subprocess.run(
+            ["git", "fetch", "origin", "main", "--depth", "1"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        completed = subprocess.run(
+            ["git", "rev-parse", "origin/main"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return _normalize_sha(completed.stdout.strip())
+    except Exception:
+        return None
+
+
+def _api_sha_acceptable(expected_sha: str, observed_sha: str | None) -> tuple[bool, str]:
+    if _sha_matches(expected_sha, observed_sha):
+        return True, "matches_event_sha"
+    main_head = _fetch_origin_main_sha()
+    if main_head and _sha_matches(main_head, observed_sha):
+        return True, "matches_origin_main_head"
+    return False, "sha_mismatch"
+
+
 def validate_environment(
     env_name: str,
     cfg: dict[str, Any],
@@ -151,7 +181,8 @@ def validate_environment(
 
     api_reachable = health_info is not None and health_error is None
     frontend_reachable = frontend_html is not None and frontend_error is None
-    api_synced = api_reachable and _sha_matches(expected_sha, observed_sha) and (
+    sha_ok, sync_reason = _api_sha_acceptable(expected_sha, observed_sha)
+    api_synced = api_reachable and sha_ok and (
         not observed_version or observed_version == expected_version
     )
     frontend_asset = _extract_frontend_asset_hash(frontend_html)
@@ -200,6 +231,7 @@ def validate_environment(
             "version": observed_version,
             "frontend_asset": frontend_asset,
             "frontend_last_modified": frontend_modified,
+            "sync_reason": sync_reason if api_reachable else None,
         },
         "components": [asdict(item) for item in components],
         "operational_status": operational_status,
