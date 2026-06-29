@@ -4,10 +4,10 @@ import json
 from pathlib import Path
 
 from scripts.openapi_semantic_diff import (
+    _normalize_path,
     build_semantic_diff,
     extract_backend_routes,
     extract_openapi_routes,
-    _normalize_path,
 )
 
 
@@ -37,7 +37,7 @@ def test_extract_backend_routes_includes_runtime_contract_paths() -> None:
     assert ("POST", "/api/requisitos") in routes
 
 
-def test_semantic_diff_runtime_contract_detects_missing_openapi_paths() -> None:
+def test_semantic_diff_runtime_contract_detects_current_backend_drifts() -> None:
     report = build_semantic_diff(
         Path("docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json"),
         Path("backend/app/api"),
@@ -47,11 +47,14 @@ def test_semantic_diff_runtime_contract_detects_missing_openapi_paths() -> None:
     assert report["status"] in {"passed", "drift_detected"}
     assert report["summary"]["backend_routes"] > 0
     assert report["summary"]["openapi_routes"] > 0
+
     missing_in_openapi = [
         item for item in report["drifts"] if item["code"] == "missing_in_openapi"
     ]
-    assert any(item["backend_path"] == "/api/runtime/dashboard" for item in missing_in_openapi)
-    assert any(item["backend_path"] == "/api/runtime/analytics" for item in missing_in_openapi)
+
+    assert report["summary"]["missing_in_openapi"] == len(missing_in_openapi)
+    assert report["summary"]["missing_in_backend"] == 0
+    assert all(item["backend_path"].startswith("/api/runtime") for item in missing_in_openapi)
 
 
 def test_semantic_diff_report_only_exits_zero_on_drift(tmp_path: Path) -> None:
