@@ -22,7 +22,7 @@ Documentação aqui **não é texto morto** — é infraestrutura operacional vi
 
 ## Foco operacional Padrão Ouro
 
-Para manter o ciclo em **máximo ROI**, qualquer atuação neste repositório deve priorizar a menor mudança capaz de fortalecer uma das frentes abaixo:
+Plano detalhado em [`FOCO_PADRAO_OURO.md`](FOCO_PADRAO_OURO.md). Para manter o ciclo em **máximo ROI**, qualquer atuação neste repositório deve priorizar a menor mudança capaz de fortalecer uma das frentes abaixo:
 
 | Prioridade | Frente | Evidência mínima | Critério de pronto |
 | --- | --- | --- | --- |
@@ -32,6 +32,16 @@ Para manter o ciclo em **máximo ROI**, qualquer atuação neste repositório de
 | P3 | Segurança operacional | Gates de produção, segredos, CORS, JWT, auditoria ou correlation ID revisados quando tocados | Nenhum segredo, PII ou relaxamento produtivo entra no PR. |
 | P4 | Documentação acionável | Playbook/runbook curto com comando validado ou pendência explícita | O próximo agente sabe o próximo passo sem depender de contexto de chat. |
 
+### Modo consolidação (`state_yellow`)
+
+Enquanto o coordenador estiver em `state_yellow`, priorize estabilização e rastreabilidade sem abrir nova frente concorrente:
+
+| # | Direção | Evidência esperada |
+| --- | --- | --- |
+| 1 | Consolidar CI, gates e artifacts já existentes. | Workflow verde ou artifact versionado referenciado no grafo. |
+| 2 | Fechar gaps documentados de arquitetura, contratos ou testes. | ADR, contrato, playbook ou teste atualizado com referência cruzada. |
+| 3 | Evitar novas superfícies funcionais sem `Agent Increment Gate` permitido. | Saída do gate anexada ao PR ou registrada como pendência. |
+
 Checklist rápido antes de abrir/atualizar PR:
 
 1. Confirmar o artefato Tier 1 afetado na tabela acima.
@@ -39,6 +49,8 @@ Checklist rápido antes de abrir/atualizar PR:
 3. Declarar fora de escopo para evitar PR amplo.
 4. Preferir atualização machine-readable quando a mudança alterar ownership, workflow, contrato ou módulo.
 5. Manter rollback simples: reverter commit ou remover artifact sem impactar runtime.
+
+Critério de saída: uma mudança Padrão Ouro só é pronta quando a evidência de gate, os artefatos Tier 1 afetados e o comando de validação focado estiverem rastreáveis no PR.
 
 ## Índices machine-readable
 
@@ -64,9 +76,9 @@ Onboarding agente/IA     → README (este) → living-architecture-index.json
 ```
 
 
-## Foco operacional Padrão Ouro
+## Protocolo rápido para agentes
 
-Use este foco quando o pedido for amplo (ex.: "foco padrão ouro") ou quando houver dúvida entre criar frente nova, corrigir gap ou consolidar evidência. A prioridade é aumentar maturidade sem abrir superfície desnecessária.
+Use este protocolo quando o pedido for amplo (ex.: "foco padrão ouro") ou quando houver dúvida entre criar frente nova, corrigir gap ou consolidar evidência.
 
 | Prioridade | Fazer | Evidência mínima | Antiobjetivo |
 | --- | --- | --- | --- |
