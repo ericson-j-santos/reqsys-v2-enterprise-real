@@ -33,6 +33,9 @@ jobs:
       - name: Consolidar Padrão Ouro 100%
         run: python scripts/padrao_ouro_maturity_consolidator.py
 
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest
+
       - name: Validar testes de consolidação
         run: python -m pytest tests/test_padrao_ouro_maturity_consolidator.py -q
 

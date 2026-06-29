@@ -41,6 +41,9 @@ jobs:
       - name: Validar camada de testes
         run: python scripts/camada_testes_padrao_ouro.py
 
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest
+
       - name: Testes do validador
         run: python -m pytest tests/test_camada_testes_padrao_ouro.py -v --tb=short
 
