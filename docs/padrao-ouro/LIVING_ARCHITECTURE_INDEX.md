@@ -11,6 +11,7 @@ Mapa navegável de módulos, fluxos, pipelines, ownership, eventos, dependência
 | Onde estender o backend | [Módulos Backend](#módulos-backend) |
 | Onde estender o frontend | [Módulos Frontend](#módulos-frontend) |
 | Qual workflow usar | [Pipelines](#pipelines) |
+| Onde adicionar testes | [Camada de Testes](#camada-de-testes) |
 | Quem é dono de quê | [Ownership Matrix](#ownership-matrix) |
 | Eventos e contratos | [Eventos](#eventos) |
 | Dependências entre camadas | [Dependências](#dependências) |
@@ -73,6 +74,32 @@ Runbook cofre: [`docs/runbooks/cofre-operacional.md`](../runbooks/cofre-operacio
 
 ---
 
+## Camada de Testes
+
+Playbook Tier 1: [`TESTING_PLAYBOOK.md`](TESTING_PLAYBOOK.md)
+
+| Camada | Caminho | Runner | Gate merge |
+| --- | --- | --- | --- |
+| **Backend pytest** | `backend/tests/` | pytest | Sim (`ci.yml`, cov ≥ 60%) |
+| **Frontend unitário** | `frontend/src/**/__tests__/` | Vitest | Não (local) |
+| **Frontend E2E** | `frontend/tests/e2e/` | Playwright | `responsividade.spec.js` quando roteado |
+| **Governança** | `tests/` (raiz) | pytest | Workflows dedicados |
+| **Alt frontends** | `e2e/` (raiz) | Playwright | `validar_qualidade.sh` |
+
+### Convenções rápidas
+
+| Padrão | Uso |
+| --- | --- |
+| `test_<modulo>.py` | Espelho de `backend/app/` |
+| `test_*_critical_paths.py` | Pareto Trilha D (cobertura) |
+| `test_*_contract.py` | Contratos e schemas |
+| `*.test.js` / `__tests__/` | Unitário frontend |
+| `data-testid="route-*"` | Marcadores E2E responsivo |
+
+Runbook: [`docs/runbooks/camada-testes-padrao-ouro.md`](../runbooks/camada-testes-padrao-ouro.md).
+
+---
+
 ## Pipelines
 
 | Pipeline | Workflow/Script | Gates | Evidência |
@@ -82,6 +109,7 @@ Runbook cofre: [`docs/runbooks/cofre-operacional.md`](../runbooks/cofre-operacio
 | **Living Architecture** | `living-architecture-traceability.yml` | paths, contratos | `living-architecture-traceability-report` |
 | **Runtime Evidence Graph** | `runtime-operational-evidence-graph.yml` | timeline + graph JSON | `runtime-operational-evidence-graph.json` |
 | **Trilhas Padrão Ouro** | `trilhas-padrao-ouro.yml` | trilhas A–E | `trilhas-padrao-ouro-evidence` |
+| **Camada de Testes** | `camada-testes-padrao-ouro.yml` | layers, governança Tier 1 | `camada-testes-padrao-ouro-evidence` |
 | **Artifact Schema Validation** | `operational-artifact-schema-validation.yml` | contratos JSON | `artifact-contract-validation-report` |
 | **Coordenador Status** | `coordenador-status-consolidator.yml` | artifacts 1–2 | `coordenador-status.json` |
 
@@ -113,6 +141,7 @@ Runbook cofre: [`docs/runbooks/cofre-operacional.md`](../runbooks/cofre-operacio
 | Trilhas Padrão Ouro | Architecture Governance | [ADR-040](../adr/ADR-040-trilhas-padrao-ouro.md) |
 | Product Intelligence | Product Intelligence | [ADR-033](../adr/ADR-033-product-intelligence-final-evidence-index.md) |
 | Governança PR/Agentes | Platform Engineering | [ADR-030](../adr/ADR-030-governed-dev-automerge.md) |
+| Camada de Testes | Quality Governance | [ADR-0004](../adr/ADR-0004-ci-cd-qualidade.md) |
 
 ---
 

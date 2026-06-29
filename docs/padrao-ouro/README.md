@@ -17,6 +17,7 @@ Documentação aqui **não é texto morto** — é infraestrutura operacional vi
 | 3 | **Runtime Evidence Graph** | [`RUNTIME_EVIDENCE_GRAPH.md`](RUNTIME_EVIDENCE_GRAPH.md) | Grafo que conecta workflows, PRs, artifacts, métricas e dashboards. |
 | 4 | **Contract Catalog** | [`CONTRACT_CATALOG.md`](CONTRACT_CATALOG.md) | Inventário de schemas, eventos, APIs, payloads e pipelines. |
 | 5 | **Engineering Playbooks** | [`ENGINEERING_PLAYBOOKS.md`](ENGINEERING_PLAYBOOKS.md) | Fluxos operacionais para incrementos, CI, merge governado e evidências. |
+| 6 | **Testing Playbook** | [`TESTING_PLAYBOOK.md`](TESTING_PLAYBOOK.md) | Pirâmide, árvores, gates, convenções e comandos da camada de testes. |
 
 ## Índices machine-readable
 
@@ -32,6 +33,7 @@ Documentação aqui **não é texto morto** — é infraestrutura operacional vi
 
 ```text
 Novo incremento / PR     → ENGINEERING_PLAYBOOKS → Agent Increment Gate
+Novo teste / gate CI     → TESTING_PLAYBOOK → Trilha D (quando qualidade)
 Decisão arquitetural     → ADR_INDEX → criar ADR em docs/adr/
 Quebra silenciosa        → CONTRACT_CATALOG → validar schema/contrato
 Conflito entre branches  → LIVING_ARCHITECTURE_INDEX → boundaries/ownership

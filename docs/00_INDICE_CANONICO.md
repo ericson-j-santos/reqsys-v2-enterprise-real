@@ -14,6 +14,7 @@ Este índice consolida os documentos canônicos do ReqSys para orientar humanos,
 | [`docs/padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md`](padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md) | Grafo workflows → PRs → artifacts → métricas → dashboards. |
 | [`docs/padrao-ouro/CONTRACT_CATALOG.md`](padrao-ouro/CONTRACT_CATALOG.md) | Inventário de schemas, eventos, APIs e contratos. |
 | [`docs/padrao-ouro/ENGINEERING_PLAYBOOKS.md`](padrao-ouro/ENGINEERING_PLAYBOOKS.md) | Fluxos operacionais para incrementos, CI, merge e evidências. |
+| [`docs/padrao-ouro/TESTING_PLAYBOOK.md`](padrao-ouro/TESTING_PLAYBOOK.md) | Pirâmide, árvores, gates e convenções da camada de testes. |
 | [`docs/padrao-ouro/living-architecture-index.json`](padrao-ouro/living-architecture-index.json) | Índice machine-readable para agentes/IA. |
 
 ## Documentos obrigatórios

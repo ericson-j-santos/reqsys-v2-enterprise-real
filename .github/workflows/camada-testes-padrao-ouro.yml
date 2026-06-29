@@ -1,0 +1,52 @@
+name: Camada de Testes — Padrão Ouro
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/camada-testes-padrao-ouro.yml'
+      - 'scripts/camada_testes_padrao_ouro.py'
+      - 'docs/padrao-ouro/TESTING_PLAYBOOK.md'
+      - 'docs/architecture/camada-testes/**'
+      - 'docs/contracts/camada-testes-padrao-ouro.schema.json'
+      - 'docs/runbooks/camada-testes-padrao-ouro.md'
+      - 'tests/test_camada_testes_padrao_ouro.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/camada-testes-padrao-ouro.yml'
+      - 'scripts/camada_testes_padrao_ouro.py'
+      - 'docs/padrao-ouro/TESTING_PLAYBOOK.md'
+
+concurrency:
+  group: camada-testes-padrao-ouro-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-camada-testes:
+    name: Validate Camada de Testes (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar camada de testes
+        run: python scripts/camada_testes_padrao_ouro.py
+
+      - name: Testes do validador
+        run: python -m pytest tests/test_camada_testes_padrao_ouro.py -v --tb=short
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: camada-testes-padrao-ouro-${{ github.run_id }}
+          path: audit/camada-testes/
+          retention-days: 30
