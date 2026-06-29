@@ -2,6 +2,31 @@
 
 Todas as mudanças relevantes da documentação viva do ReqSys devem ser registradas neste arquivo.
 
+## [0.5.0] - 2026-06-28
+
+### Adicionado
+
+- Runtime executável inicial em `runtime/` para jobs assíncronos.
+- API FastAPI com `POST /api/jobs`, `GET /api/jobs/{job_id}`, `/health`, `/api/runtime/health` e `/api/runtime/analytics`.
+- DTOs Pydantic para criação, aceite e consulta de status de job.
+- Repositório em memória DEV para primeira fatia executável.
+- Fila local baseada em `asyncio.Queue`.
+- Worker assíncrono local controlado por feature flag `ENABLE_ASYNC_WORKER`.
+- Gateway outbound com `httpx.AsyncClient` e propagação de `X-Correlation-Id`.
+- Testes unitários cobrindo criação, consulta e processamento de job.
+
+### Governança
+
+- Mantida compatibilidade com os estados documentados em `v0.4.0`.
+- Implementação isolada para reduzir risco de regressão no restante do repositório.
+- Próxima troca de infraestrutura deve ocorrer por adapter, sem alterar contratos HTTP.
+
+### Próximo incremento recomendado
+
+- Persistir jobs em banco relacional ou Redis.
+- Adicionar workflow CI dedicado para `runtime/`.
+- Sincronizar OpenAPI gerado pelo FastAPI com `docs-site/assets/openapi`.
+
 ## [0.4.0] - 2026-06-28
 
 ### Adicionado
