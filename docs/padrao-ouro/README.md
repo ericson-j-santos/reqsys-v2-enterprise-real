@@ -41,6 +41,19 @@ Troubleshooting CI/ops   → RUNTIME_EVIDENCE_GRAPH → timeline + artifacts
 Onboarding agente/IA     → README (este) → living-architecture-index.json
 ```
 
+
+## Foco operacional atual
+
+Para manter o Padrão Ouro em modo de consolidação, priorize apenas incrementos que reforcem rastreabilidade, evidência e redução de risco operacional antes de abrir novas frentes.
+
+| Prioridade | Direção prática | Evidência esperada |
+| --- | --- | --- |
+| 1 | Consolidar CI, gates e artifacts já existentes. | Workflow verde ou artifact versionado referenciado no grafo. |
+| 2 | Fechar gaps documentados de arquitetura, contratos ou testes. | ADR, contrato, playbook ou teste atualizado com referência cruzada. |
+| 3 | Evitar novas superfícies funcionais sem `Agent Increment Gate` permitido. | Saída do gate anexada ao PR ou registrada como pendência. |
+
+Critério de pronto: qualquer mudança sob este hub deve deixar claro **qual artefato Tier 1 foi fortalecido**, **qual evidência valida o ganho** e **qual risco operacional foi reduzido**.
+
 ## Impacto esperado
 
 | Métrica | Ganho estimado |

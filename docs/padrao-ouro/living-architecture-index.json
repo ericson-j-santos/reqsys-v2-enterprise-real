@@ -316,5 +316,28 @@
     "contract_catalog": "docs/padrao-ouro/CONTRACT_CATALOG.md",
     "engineering_playbooks": "docs/padrao-ouro/ENGINEERING_PLAYBOOKS.md",
     "testing_playbook": "docs/padrao-ouro/TESTING_PLAYBOOK.md"
-  }
+  },
+  "focus_priorities": [
+    {
+      "id": "consolidar-evidencias",
+      "priority": 1,
+      "direction": "Consolidar CI, gates e artifacts existentes antes de abrir novas frentes.",
+      "expected_evidence": ["workflow verde", "artifact versionado", "referencia no runtime evidence graph"],
+      "risk_reduced": "perda de rastreabilidade operacional"
+    },
+    {
+      "id": "fechar-gaps-tier1",
+      "priority": 2,
+      "direction": "Fechar gaps documentados de arquitetura, contratos ou testes com alteracao minima.",
+      "expected_evidence": ["ADR atualizado", "contrato ou schema validado", "playbook ou teste atualizado"],
+      "risk_reduced": "desalinhamento entre decisao, contrato e implementacao"
+    },
+    {
+      "id": "bloquear-novas-frentes-sem-gate",
+      "priority": 3,
+      "direction": "Evitar nova superficie funcional quando o Agent Increment Gate estiver bloqueado.",
+      "expected_evidence": ["saida do agent_increment_gate", "pendencia registrada quando bloqueado"],
+      "risk_reduced": "concorrencia de PRs e expansao de escopo sem governanca"
+    }
+  ]
 }
