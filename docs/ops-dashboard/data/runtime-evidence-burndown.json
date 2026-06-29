@@ -6,10 +6,10 @@
   "objective": "track_runtime_evidence_consolidation_progress_over_time",
   "overall": {
     "status": "active",
-    "current_score": 78,
+    "current_score": 88,
     "target_score": 95,
-    "remaining_gap": 17,
-    "confidence_level": "medium"
+    "remaining_gap": 7,
+    "confidence_level": "high"
   },
   "dimensions": [
     {
@@ -33,20 +33,20 @@
     {
       "id": "evidence_consolidation",
       "label": "Evidence Consolidation",
-      "current_percent": 76,
+      "current_percent": 92,
       "target_percent": 95,
-      "gap_percent": 19,
-      "risk": "medium",
-      "next_action": "render_burndown_history_and_required_sources"
+      "gap_percent": 3,
+      "risk": "low",
+      "next_action": "runtime_validation_consolidator_continuous_snapshot"
     },
     {
       "id": "observability_traceability",
       "label": "Observability Traceability",
-      "current_percent": 68,
+      "current_percent": 85,
       "target_percent": 90,
-      "gap_percent": 22,
-      "risk": "medium",
-      "next_action": "connect_correlation_reports_to_runtime_dashboard"
+      "gap_percent": 5,
+      "risk": "low",
+      "next_action": "connect_executive_brief_to_ops_dashboard"
     }
   ],
   "history": [
@@ -59,11 +59,16 @@
       "timestamp": "2026-06-29T09:40:00-03:00",
       "score": 78,
       "event": "operational_runtime_governance_and_dashboard_layers_merged"
+    },
+    {
+      "timestamp": "2026-06-29T21:00:00-03:00",
+      "score": 88,
+      "event": "runtime_validation_consolidator_deployed"
     }
   ],
   "next_safe_increments": [
-    "render_runtime_evidence_burndown_in_ops_dashboard",
-    "publish_daily_runtime_evidence_snapshot",
+    "connect_executive_brief_card_to_ops_dashboard",
+    "publish_daily_runtime_validation_snapshot",
     "connect_burndown_to_governance_quality_gates"
   ]
 }

@@ -240,6 +240,18 @@
       "domain": "observability",
       "producers": ["operational-observability-hub.yml"],
       "consumers": ["coordenador-status-consolidator", "ops-dashboard", "operational-alert-intelligence"]
+    },
+    {
+      "id": "runtime-validation-snapshot",
+      "schema": "docs/contracts/runtime-validation-snapshot.schema.json",
+      "domain": "runtime",
+      "producers": ["runtime-validation-consolidator.yml"],
+      "consumers": [
+        "coordenador-status-consolidator",
+        "build_runtime_executive_index",
+        "post-workflow-evidence-snapshot",
+        "ops-dashboard"
+      ]
     }
   ],
   "dependencies": [

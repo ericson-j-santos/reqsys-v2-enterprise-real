@@ -68,6 +68,16 @@ jobs:
           fi
           python -m json.tool docs/ops-dashboard/data/conflict-risk-report.json >/tmp/conflict-risk-report.validated.json
 
+      - name: Generate runtime validation snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/runtime_validation_consolidator.py \
+            --repo "${{ github.repository }}" \
+            --branch main \
+            --output-dir artifacts/runtime-validation-consolidator \
+            --publish-executive-brief docs/ops-dashboard/data/executive-brief.json
+
       - name: Generate runtime executive index
         shell: bash
         run: |
@@ -80,6 +90,7 @@ jobs:
             --evidence-gate audit/pr-evidence-gate.json \
             --delivery-finalization artifacts/delivery-finalization/delivery-finalization-report.json \
             --conflict-risk-report docs/ops-dashboard/data/conflict-risk-report.json \
+            --runtime-validation artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json \
             --output docs/ops-dashboard/data/runtime-executive-index.json
 
       - name: Generate strategic governance index
