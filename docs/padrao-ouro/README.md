@@ -1,6 +1,6 @@
 # Padrão Ouro — Infraestrutura de Documentação Viva (Tier 1)
 
-Data de referência: 2026-06-27
+Data de referência: 2026-06-29
 
 Este hub consolida a documentação operacional de **máximo ROI** para o ReqSys v2 Enterprise Real: múltiplos PRs paralelos, governança automatizada, CI orchestration, agentes e evolução contínua pós-merge.
 
@@ -18,6 +18,36 @@ Documentação aqui **não é texto morto** — é infraestrutura operacional vi
 | 4 | **Contract Catalog** | [`CONTRACT_CATALOG.md`](CONTRACT_CATALOG.md) | Inventário de schemas, eventos, APIs, payloads e pipelines. |
 | 5 | **Engineering Playbooks** | [`ENGINEERING_PLAYBOOKS.md`](ENGINEERING_PLAYBOOKS.md) | Fluxos operacionais para incrementos, CI, merge governado e evidências. |
 | 6 | **Testing Playbook** | [`TESTING_PLAYBOOK.md`](TESTING_PLAYBOOK.md) | Pirâmide, árvores, gates, convenções e comandos da camada de testes. |
+
+## Foco operacional Padrão Ouro
+
+Enquanto o coordenador estiver em `state_yellow`, o modo ativo é **consolidação**: priorizar estabilização e rastreabilidade sem abrir nova frente concorrente. Para manter o ciclo em **máximo ROI**, qualquer atuação deve priorizar a menor mudança capaz de fortalecer uma das frentes abaixo:
+
+| Prioridade | Frente | Evidência mínima | Critério de pronto |
+| --- | --- | --- | --- |
+| P0 | Governança de incremento | Agent Increment Gate, status do coordenador ou justificativa explícita de escopo fechado | Sem nova frente bloqueada, duplicada ou sem dono. |
+| P1 | Rastreabilidade viva | Atualização em índice, contrato, ADR, runbook ou grafo de evidência | Humanos e agentes conseguem localizar owner, workflow, artifact e rollback. |
+| P2 | CI e qualidade sustentável | Teste, lint, schema validation ou workflow report-only aplicável | Falha reproduzível vira evidência; sucesso vira artifact rastreável. |
+| P3 | Segurança operacional | Gates de produção, segredos, CORS, JWT, auditoria ou correlation ID revisados quando tocados | Nenhum segredo, PII ou relaxamento produtivo entra no PR. |
+| P4 | Documentação acionável | Playbook/runbook curto com comando validado ou pendência explícita | O próximo agente sabe o próximo passo sem depender de contexto de chat. |
+
+Direções práticas em modo consolidação:
+
+| # | Direção | Evidência esperada |
+| --- | --- | --- |
+| 1 | Consolidar CI, gates e artifacts já existentes. | Workflow verde ou artifact versionado referenciado no grafo. |
+| 2 | Fechar gaps documentados de arquitetura, contratos ou testes. | ADR, contrato, playbook ou teste atualizado com referência cruzada. |
+| 3 | Evitar novas superfícies funcionais sem `Agent Increment Gate` permitido. | Saída do gate anexada ao PR ou registrada como pendência. |
+
+Checklist rápido antes de abrir/atualizar PR:
+
+1. Confirmar o artefato Tier 1 afetado na tabela acima.
+2. Registrar evidência programática possível, mesmo que report-only.
+3. Declarar fora de escopo para evitar PR amplo.
+4. Preferir atualização machine-readable quando a mudança alterar ownership, workflow, contrato ou módulo.
+5. Manter rollback simples: reverter commit ou remover artifact sem impactar runtime.
+
+Critério de saída: uma mudança Padrão Ouro só é pronta quando a evidência de gate, os artefatos Tier 1 afetados e o comando de validação focado estiverem rastreáveis no PR.
 
 ## Índices machine-readable
 
