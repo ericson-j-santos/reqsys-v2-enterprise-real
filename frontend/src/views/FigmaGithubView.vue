@@ -2,7 +2,7 @@
   <main class="figma-github" aria-labelledby="titulo-figma-github">
     <section class="cabecalho">
       <div>
-        <p class="eyebrow">ReqSys · Integração visual</p>
+        <p class="figma-eyebrow">ReqSys · Integração visual</p>
         <h1 id="titulo-figma-github">Figma GitHub</h1>
         <p>
           Painel operacional para sincronizar artefatos do Figma com GitHub e exibir retorno auditável em tela.
@@ -248,33 +248,32 @@ onMounted(carregarStatus)
 </script>
 
 <style scoped>
-.figma-github { display: grid; gap: 1rem; padding: 1rem; }
+.figma-github { display: grid; gap: 1rem; padding: 28px 32px 40px; }
 .cabecalho, .linha-painel { display: grid; gap: 1rem; align-items: start; }
-.eyebrow { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .acoes-cabecalho { display: flex; gap: 0.5rem; justify-content: flex-start; }
 .cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-.card, .painel { border: 1px solid #d0d7de; border-radius: 12px; padding: 1rem; background: #fff; }
+.card, .painel { border: 1px solid var(--line); border-radius: 16px; padding: 1rem; background: rgba(255,255,255,0.02); }
 .card span, .card strong { display: block; }
-.card strong { font-size: 1.4rem; margin-top: 0.5rem; }
+.card strong { font-size: 1.4rem; margin-top: 0.5rem; color: var(--accent); }
 .formulario { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 1rem; }
-.formulario label, .filtro { display: grid; gap: 0.25rem; font-weight: 600; }
-input, select, button { border: 1px solid #d0d7de; border-radius: 8px; padding: 0.65rem; }
-button { cursor: pointer; font-weight: 700; }
+.formulario label, .filtro { display: grid; gap: 0.25rem; font-weight: 600; color: var(--text); }
+input, select, button { border: 1px solid var(--line); border-radius: 8px; padding: 0.65rem; background: rgba(255,255,255,0.04); color: var(--text); }
+button { cursor: pointer; font-weight: 700; background: var(--accent); color: #111; border-color: var(--accent); }
 button:disabled { cursor: not-allowed; opacity: 0.6; }
 .checks { display: grid; gap: 0.4rem; align-content: end; }
 .checks label { display: flex; gap: 0.4rem; align-items: center; font-weight: 500; }
 .alerta { border-radius: 8px; padding: 0.75rem; }
-.erro { border: 1px solid #d1242f; color: #d1242f; }
-.sucesso { border: 1px solid #1a7f37; color: #1a7f37; }
+.erro { border: 1px solid var(--red); color: var(--red); }
+.sucesso { border: 1px solid var(--green); color: var(--green); }
 .detalhes { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-.detalhes div { border: 1px solid #d0d7de; border-radius: 8px; padding: 0.75rem; }
+.detalhes div { border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; }
 dt { font-weight: 700; }
-dd { margin: 0.25rem 0 0; word-break: break-word; }
-.json-retorno { overflow-x: auto; border: 1px solid #d0d7de; border-radius: 8px; padding: 0.75rem; }
+dd { margin: 0.25rem 0 0; word-break: break-word; color: var(--muted); }
+.json-retorno { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; }
 .tabela-wrapper { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; min-width: 980px; }
-th, td { border-bottom: 1px solid #d0d7de; padding: 0.75rem; text-align: left; vertical-align: top; }
-.badge { border: 1px solid #d0d7de; border-radius: 999px; padding: 0.2rem 0.55rem; }
-.vazio { text-align: center; color: #57606a; }
+th, td { border-bottom: 1px solid var(--line); padding: 0.75rem; text-align: left; vertical-align: top; }
+.badge { border: 1px solid var(--line); border-radius: 999px; padding: 0.2rem 0.55rem; }
+.vazio { text-align: center; color: var(--muted); }
 @media (min-width: 768px) { .cabecalho, .linha-painel { grid-template-columns: 1fr auto; } }
 </style>

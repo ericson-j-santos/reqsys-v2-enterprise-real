@@ -1,11 +1,11 @@
 <template>
   <main class="login-page" data-testid="route-login">
-    <v-card class="login-card" :width="cardWidth">
-      <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
-        <span>ReqSys Enterprise</span>
-        <v-chip size="small" color="amber" variant="tonal">RBAC</v-chip>
+    <v-card class="login-card" :width="cardWidth" elevation="0">
+      <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2 login-card-title">
+        <span class="login-brand"><span class="brand-dot">R</span> ReqSys Enterprise</span>
+        <span class="figma-pill figma-pill--compact">RBAC</span>
       </v-card-title>
-      <v-card-subtitle>Login corporativo - Tieri659</v-card-subtitle>
+      <v-card-subtitle class="login-card-subtitle">Login corporativo - Tieri659</v-card-subtitle>
 
       <v-card-text>
         <v-btn
@@ -73,8 +73,9 @@
       <v-card-actions v-if="demoLoginDisponivel" class="px-4 pb-4">
         <v-btn
           block
-          color="amber"
+          color="primary"
           size="large"
+          class="figma-btn-entrar"
           :loading="carregandoDemo"
           :disabled="carregandoAzure"
           @click="entrarDemo"
@@ -160,21 +161,25 @@ async function entrarDemo() {
 </script>
 
 <style scoped>
-.login-page {
-  min-height: 100vh;
-  display: flex;
+.login-brand {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: var(--bg);
+  gap: 10px;
+  font-weight: 800;
 }
 
-.login-card {
-  width: 100%;
+.login-card-title,
+.login-card-subtitle {
+  color: var(--text) !important;
+}
+
+.figma-btn-entrar {
+  border-radius: 999px !important;
+  font-weight: 700 !important;
 }
 
 .btn-microsoft {
-  border-color: #0078d4 !important;
-  color: #0078d4 !important;
+  border-color: #38bdf8 !important;
+  color: #38bdf8 !important;
 }
 </style>
