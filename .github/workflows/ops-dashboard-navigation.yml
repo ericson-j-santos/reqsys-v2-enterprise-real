@@ -5,6 +5,7 @@ on:
     paths:
       - 'docs/ops-dashboard/operational-navigation.html'
       - 'docs/ops-dashboard/operational-navigation-index.json'
+      - 'docs/ops-dashboard/index.html'
       - 'scripts/validate_ops_dashboard_navigation.py'
       - '.github/workflows/ops-dashboard-navigation.yml'
   workflow_dispatch:

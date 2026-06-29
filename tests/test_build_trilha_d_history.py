@@ -4,10 +4,13 @@ import json
 from pathlib import Path
 
 from scripts.build_trilha_d_history import (
+    NEXT_INCREMENT_AFTER_PARETO_DASHBOARD,
     build_payload,
     ingest_report_into_history,
     merge_history,
+    ops_dashboard_pareto_surface_ready,
     report_to_history_entry,
+    resolve_next_increment,
     trend_for,
 )
 from scripts.trilha_d_qualidade_governanca import consolidate
@@ -139,6 +142,12 @@ def test_ingest_report_into_history_appends_sample(tmp_path: Path) -> None:
 
     assert payload["summary"]["artifact_ingestion_enabled"] is True
     assert payload["runtime_dashboard_contract"]["refresh_strategy"] == "artifact_ingestion_on_trilha_d_consolidate"
-    assert payload["summary"]["next_increment"] == "consolidate_operational_pareto_cycle"
+    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_PARETO_DASHBOARD
     assert len(payload["history"]) == 2
     assert payload["history"][-1]["run_id"] == "run-ingest-1"
+
+
+def test_resolve_next_increment_advances_after_pareto_dashboard_surface() -> None:
+    assert ops_dashboard_pareto_surface_ready() is True
+    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_PARETO_DASHBOARD
+    assert resolve_next_increment(artifact_ingestion=False) == "artifact_ingestion_refresh"

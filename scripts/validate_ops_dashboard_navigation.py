@@ -13,12 +13,19 @@ HTML_PATH = ROOT / "docs/ops-dashboard/operational-navigation.html"
 
 REQUIRED_LINK_IDS = {
     "ops_dashboard_main",
+    "trilha_d_history_dashboard",
+    "operational_pareto_dashboard",
     "operational_runtime_governance",
     "operational_evidence_hub",
     "runtime_governance_contract",
     "runtime_governance_runbook",
     "runtime_contract_governance_policy",
     "power_platform_runtime_runbook",
+}
+
+REQUIRED_DEEP_LINK_HREFS = {
+    "trilha_d_history_dashboard": "./index.html#trilha-d-history-card",
+    "operational_pareto_dashboard": "./index.html#operational-pareto-card",
 }
 
 REQUIRED_HTML_TERMS = [
@@ -45,9 +52,16 @@ def validate_index() -> None:
     missing = REQUIRED_LINK_IDS - ids
     if missing:
         fail(f"missing required navigation links: {sorted(missing)}")
+    by_id = {item.get("id"): item for item in links if isinstance(item, dict)}
     for item in links:
         if not item.get("href") or not item.get("title") or not item.get("category"):
             fail(f"invalid navigation link: {item}")
+    for link_id, expected_href in REQUIRED_DEEP_LINK_HREFS.items():
+        link = by_id.get(link_id)
+        if not link:
+            fail(f"missing required navigation link: {link_id}")
+        if link.get("href") != expected_href:
+            fail(f"unexpected href for {link_id}: {link.get('href')!r} (expected {expected_href!r})")
 
 
 def validate_html() -> None:

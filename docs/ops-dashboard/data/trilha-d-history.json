@@ -11,7 +11,7 @@
     "samples": 5,
     "green_samples": 4,
     "failed_samples": 1,
-    "next_increment": "consolidate_operational_pareto_cycle",
+    "next_increment": "predictive_regression_gate",
     "artifact_ingestion_enabled": true
   },
   "links": {

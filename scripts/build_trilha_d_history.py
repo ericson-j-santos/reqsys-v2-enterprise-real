@@ -18,6 +18,7 @@ DEFAULT_OUTPUT = "docs/ops-dashboard/data/trilha-d-history.json"
 REFRESH_STRATEGY_ARTIFACT = "artifact_ingestion_on_trilha_d_consolidate"
 REFRESH_STRATEGY_STATIC = "static_json_until_artifact_ingestion_is_enabled"
 NEXT_INCREMENT_AFTER_INGESTION = "consolidate_operational_pareto_cycle"
+NEXT_INCREMENT_AFTER_PARETO_DASHBOARD = "predictive_regression_gate"
 DIMENSIONS = ("tests", "coverage", "mutation", "contract", "schema", "ci-watch")
 
 
@@ -178,6 +179,29 @@ def build_dimension_summary(history: list[dict[str, Any]]) -> dict[str, Any]:
     return summary
 
 
+def ops_dashboard_pareto_surface_ready(repo_root: Path | None = None) -> bool:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    index_html = root / "docs/ops-dashboard/index.html"
+    if not index_html.exists():
+        return False
+    text = index_html.read_text(encoding="utf-8")
+    required_markers = (
+        'id="trilha-d-history-card"',
+        'id="operational-pareto-card"',
+        "renderOperationalPareto",
+        "renderTrilhaDHistory",
+    )
+    return all(marker in text for marker in required_markers)
+
+
+def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None = None) -> str:
+    if not artifact_ingestion:
+        return "artifact_ingestion_refresh"
+    if ops_dashboard_pareto_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_PARETO_DASHBOARD
+    return NEXT_INCREMENT_AFTER_INGESTION
+
+
 def build_payload(
     history: list[dict[str, Any]] | None = None,
     *,
@@ -204,7 +228,7 @@ def build_payload(
             "samples": len(samples),
             "green_samples": sum(1 for item in samples if item.get("state") == "green"),
             "failed_samples": sum(1 for item in samples if item.get("state") == "failed"),
-            "next_increment": NEXT_INCREMENT_AFTER_INGESTION if artifact_ingestion else "artifact_ingestion_refresh",
+            "next_increment": resolve_next_increment(artifact_ingestion=artifact_ingestion),
             "artifact_ingestion_enabled": artifact_ingestion,
         },
         "links": {
