@@ -17,6 +17,7 @@ Data de referência: 2026-06-27
 | Criar analytics | [Criar analytics](#6-criar-analytics) |
 | Onboarding agente | [Onboarding agente/IA](#7-onboarding-agenteia) |
 | Evidência visual de telas | [Evidência visual](#9-evidencia-visual-telas-recentes) |
+| Consolidar Padrão Ouro | [Foco Padrão Ouro](#10-foco-padrão-ouro) |
 
 ---
 
@@ -353,3 +354,35 @@ triagem → ajuste mínimo → CI completo → evidência → merge controlado �
 - Hub Tier 1: [`docs/padrao-ouro/README.md`](README.md)
 - AGENTS.md: [`AGENTS.md`](../../AGENTS.md)
 - Índice canônico: [`docs/00_INDICE_CANONICO.md`](../00_INDICE_CANONICO.md)
+
+
+---
+
+## 10. Foco Padrão Ouro
+
+**Objetivo:** Priorizar melhorias pequenas que aumentem prontidão de merge, rastreabilidade e qualidade operacional sem abrir frentes paralelas desnecessárias.
+
+### Pré-condições
+
+- Ler [`FOCO_PADRAO_OURO.md`](FOCO_PADRAO_OURO.md).
+- Confirmar se a demanda é nova frente, consolidação, gap fix ou hotfix antes de alterar arquivos.
+
+### Passos
+
+```text
+1. Classificar a prioridade P0–P4 no plano de foco.
+2. Consultar ownership no Living Architecture Index.
+3. Fazer o menor diff que remova o risco ou aumente a rastreabilidade.
+4. Rodar o teste mais próximo do risco alterado.
+5. Registrar evidência, riscos, rollback e fora de escopo no PR.
+```
+
+### Evidências obrigatórias
+
+- Link ou citação do artefato Tier 1 atualizado.
+- Comando de validação executado ou limitação ambiental explícita.
+- Declaração de que bancos locais, segredos e artefatos temporários não foram incluídos.
+
+### Runbook
+
+- [`docs/padrao-ouro/FOCO_PADRAO_OURO.md`](FOCO_PADRAO_OURO.md)
