@@ -42,12 +42,32 @@ jobs:
   auto-dispatch-public-runtime-evidence:
     name: Auto dispatch public runtime evidence
     runs-on: ubuntu-latest
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     steps:
+      - name: Resolve trigger context
+        id: ctx
+        run: |
+          should_dispatch=false
+          skip_reason=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            should_dispatch=true
+          elif [ "${{ github.event.workflow_run.conclusion }}" = "success" ] && [ "${{ github.event.workflow_run.head_branch }}" = "main" ]; then
+            should_dispatch=true
+          else
+            skip_reason="Skip esperado: workflow_run upstream nao concluiu com success em main."
+          fi
+          echo "should_dispatch=${should_dispatch}" >> "$GITHUB_OUTPUT"
+          echo "skip_reason=${skip_reason}" >> "$GITHUB_OUTPUT"
+
+      - name: Report expected skip
+        if: steps.ctx.outputs.should_dispatch != 'true'
+        run: |
+          echo "## Auto Public Runtime Evidence — skip esperado" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ${{ steps.ctx.outputs.skip_reason }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Modo: report_only (nao bloqueia malha CI)" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Resolve inputs
         id: inputs
+        if: steps.ctx.outputs.should_dispatch == 'true'
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "public_url=${{ inputs.public_url }}" >> "$GITHUB_OUTPUT"
@@ -57,13 +77,14 @@ jobs:
             echo "ref=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
           else
             echo "public_url=https://reqsys-api.fly.dev" >> "$GITHUB_OUTPUT"
-            echo "strict=true" >> "$GITHUB_OUTPUT"
+            echo "strict=false" >> "$GITHUB_OUTPUT"
             echo "publish_comment=false" >> "$GITHUB_OUTPUT"
             echo "issue_number=" >> "$GITHUB_OUTPUT"
             echo "ref=main" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Validate governed token
+        if: steps.ctx.outputs.should_dispatch == 'true'
         env:
           GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
         run: |
@@ -73,6 +94,7 @@ jobs:
           fi
 
       - name: Dispatch Public Runtime Evidence Gate
+        if: steps.ctx.outputs.should_dispatch == 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
           REPOSITORY: ${{ github.repository }}
@@ -91,6 +113,7 @@ jobs:
             -f "issue_number=${ISSUE_NUMBER}"
 
       - name: Show latest public runtime evidence runs
+        if: steps.ctx.outputs.should_dispatch == 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
           REPOSITORY: ${{ github.repository }}

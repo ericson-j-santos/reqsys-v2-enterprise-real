@@ -11,6 +11,13 @@ on:
       - 'docs/operations/**'
       - 'docs/evidence/**'
       - '.github/workflows/runtime-operational-correlation-timeline.yml'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/product_intelligence/**'
+      - '.github/workflows/runtime-operational-correlation-timeline.yml'
 
 jobs:
   runtime-operational-correlation-timeline:
