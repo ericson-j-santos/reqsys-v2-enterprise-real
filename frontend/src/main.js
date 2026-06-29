@@ -11,30 +11,15 @@ import './styles.css'
 import { useAuthStore } from './stores/auth'
 import { api } from './services/api'
 import { handleRedirectResult } from './auth/msal'
+import { figmaVuetifyTheme } from './theme/figmaPadraoOuro'
 
 const vuetify = createVuetify({
   components,
   directives,
   theme: {
-    defaultTheme: 'institucional',
+    defaultTheme: 'figmaPadraoOuro',
     themes: {
-      institucional: {
-        dark: false,
-        colors: {
-          background: '#FFFFFF',
-          surface: '#FFFFFF',
-          'surface-variant': '#E8F1FA',
-          primary: '#005CA9',
-          secondary: '#F39200',
-          accent: '#00B3AD',
-          error: '#C62828',
-          warning: '#F57C00',
-          info: '#0277BD',
-          success: '#2E7D32',
-          'on-background': '#333333',
-          'on-surface': '#333333',
-        },
-      },
+      figmaPadraoOuro: figmaVuetifyTheme,
     },
   },
 })

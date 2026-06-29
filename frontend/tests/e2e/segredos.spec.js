@@ -1,11 +1,11 @@
 const { test, expect } = require('@playwright/test')
-const { login } = require('./helpers/auth')
+const { login, navegarMenu } = require('./helpers/auth')
 
 test.describe.configure({ retries: 1 })
 
 async function irParaSegredos(page) {
     await login(page)
-    await page.getByRole('link', { name: /^Segredos$/i }).click()
+    await navegarMenu(page, { temaId: 'governanca', tituloLink: /^Segredos$/i })
     await expect(page).toHaveURL(/\/segredos-status/, { timeout: 15000 })
     await expect(page.getByRole('heading', { name: /status de segredos/i })).toBeVisible({ timeout: 10000 })
 }

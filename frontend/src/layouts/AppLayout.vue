@@ -3,10 +3,8 @@
     <!-- Mobile app bar -->
     <v-app-bar v-if="mobile" flat class="req-appbar" elevation="0" height="56">
       <v-app-bar-nav-icon color="white" aria-label="Abrir menu de navegação" @click="drawer = !drawer" />
-      <span class="brand-sm ml-1">◈ ReqSys</span>
-      <v-chip size="x-small" :color="environmentColor" variant="flat" class="ml-2 req-env-chip">
-        {{ environmentLabel }}
-      </v-chip>
+      <span class="brand-sm ml-1"><span class="brand-dot brand-dot--sm">R</span> ReqSys</span>
+      <span class="figma-pill figma-pill--compact ml-2">{{ environmentLabelShort }}</span>
       <v-spacer />
       <v-chip size="x-small" color="amber" variant="tonal" class="mr-2 req-role-chip">
         {{ auth.usuario?.papel || 'user' }}
@@ -18,23 +16,79 @@
       v-model="drawer"
       :permanent="!mobile"
       :temporary="mobile"
-      width="260"
+      width="280"
       class="req-drawer"
     >
-      <!-- Brand -->
       <div class="pa-5 pb-3 req-brand-block">
-        <div class="brand">◈ ReqSys</div>
+        <div class="brand"><span class="brand-dot">R</span> ReqSys Enterprise</div>
         <div class="muted mt-1">SaaS Interno · v2 Enterprise</div>
-        <v-chip size="x-small" :color="environmentColor" variant="flat" class="mt-2 req-env-chip">
-          {{ environmentLabel }}
-        </v-chip>
+        <span class="figma-pill figma-pill--compact mt-2 d-inline-block">Ambiente: {{ ambienteDrawerLabel }}</span>
       </div>
       <v-divider />
 
-      <!-- Nav items -->
-      <v-list density="compact" nav class="pt-2 req-nav-list" aria-label="Navegação principal">
+      <!-- Abas por tema de negócio -->
+      <div class="nav-temas" aria-label="Temas de navegação">
+        <v-tabs
+          v-model="temaAtivo"
+          density="compact"
+          color="primary"
+          class="nav-temas-tabs"
+          show-arrows
+        >
+          <v-tab
+            v-for="tema in NAV_TEMAS"
+            :key="tema.id"
+            :value="tema.id"
+            :data-testid="`nav-tema-${tema.id}`"
+            class="nav-tema-tab"
+          >
+            <span class="nav-tema-tab-inner">
+              <v-icon :icon="tema.icon" size="16" />
+              <span class="nav-tema-label">{{ tema.title }}</span>
+              <span
+                v-if="badgeTema(tema.id).count > 0"
+                class="nav-tema-badge"
+                :class="`nav-tema-badge--${badgeTema(tema.id).level}`"
+                :data-testid="`nav-badge-${tema.id}`"
+                :title="`${badgeTema(tema.id).count} pendência(s)`"
+              >
+                {{ badgeLabel(badgeTema(tema.id).count) }}
+              </span>
+            </span>
+          </v-tab>
+        </v-tabs>
+        <p class="nav-tema-topic muted">{{ temaAtual.topic }}</p>
+      </div>
+
+      <!-- Sub-abas do tema Requisitos (Entrada / Pipeline / Publicação) -->
+      <div
+        v-if="temaTemSubgrupos(temaAtivo)"
+        class="nav-subgrupos"
+        aria-label="Subtemas de Requisitos"
+      >
+        <v-tabs
+          v-model="subgrupoAtivo"
+          density="compact"
+          color="secondary"
+          class="nav-subgrupos-tabs"
+        >
+          <v-tab
+            v-for="sub in temaAtual.subgroups"
+            :key="sub.id"
+            :value="sub.id"
+            :data-testid="`nav-subgrupo-${sub.id}`"
+            class="nav-subgrupo-tab"
+          >
+            {{ sub.title }}
+          </v-tab>
+        </v-tabs>
+        <p v-if="subgrupoAtualInfo" class="nav-subgrupo-topic muted">{{ subgrupoAtualInfo.topic }}</p>
+      </div>
+
+      <!-- Sub-rotas do tema (ou do subgrupo ativo) -->
+      <v-list density="compact" nav class="pt-1 req-nav-list" aria-label="Navegação do tema">
         <v-tooltip
-          v-for="item in navItems"
+          v-for="item in itensVisiveis"
           :key="item.to"
           :text="item.tip"
           location="right"
@@ -46,20 +100,18 @@
               :prepend-icon="item.icon"
               :title="item.title"
               class="nav-item"
+              :data-testid="`nav-item-${navItemTestId(item.to)}`"
               @click="mobile && (drawer = false)"
             />
           </template>
         </v-tooltip>
       </v-list>
 
-      <!-- User + logout -->
       <template #append>
         <v-divider />
         <div v-if="auth.usuario" class="user-info">
           <v-avatar size="30" color="amber" aria-hidden="true">
-            <span class="user-initials">
-              {{ initials(auth.usuario) }}
-            </span>
+            <span class="user-initials">{{ initials(auth.usuario) }}</span>
           </v-avatar>
           <div class="overflow-hidden">
             <div class="user-name">{{ auth.usuario.nome || auth.usuario.email }}</div>
@@ -87,66 +139,128 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../services/api'
+import { carregarDadosPendenciasNav } from '../composables/navPendencias'
+import {
+  lerSubgrupoRequisitosPersistido,
+  lerTemaPersistido,
+  salvarSubgrupoRequisitosPersistido,
+  salvarTemaPersistido,
+} from '../composables/navTemaPersist'
+import {
+  NAV_TEMAS,
+  itensDoSubgrupo,
+  subgrupoAtual,
+  subgrupoIdPorRota,
+  temaIdPorRota,
+  temaPorId,
+  temaTemSubgrupos,
+} from '../constants/navCatalog'
 
 const { mobile } = useDisplay()
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 const drawer = ref(!mobile.value)
 const environment = ref(import.meta.env.VITE_APP_ENVIRONMENT || '')
+const pendenciasPorTema = ref({})
+const navegacaoInicializada = ref(false)
 
-const environmentLabel = computed(() => {
-  const value = (environment.value || 'ambiente').replace(/_/g, ' ')
-  return value.toUpperCase()
+const temaAtivo = ref(temaIdPorRota(route.path))
+const subgrupoAtivo = ref(subgrupoIdPorRota(route.path) || lerSubgrupoRequisitosPersistido() || 'entrada')
+
+const environmentLabelShort = computed(() => {
+  const value = (environment.value || 'dev').toLowerCase()
+  if (['prod', 'producao', 'production'].includes(value)) return 'prod'
+  if (['staging', 'homolog', 'homologacao', 'hml'].includes(value)) return 'stg'
+  return 'dev'
 })
 
-const environmentColor = computed(() => {
-  const value = (environment.value || '').toLowerCase()
-  if (['prod', 'producao', 'production'].includes(value)) return 'red'
-  if (['staging', 'homolog', 'homologacao', 'hml'].includes(value)) return 'amber'
-  if (['dev', 'development', 'desenvolvimento'].includes(value)) return 'blue'
-  return 'grey'
+const ambienteDrawerLabel = computed(() => {
+  return (environment.value || 'desenvolvimento').replace(/_/g, ' ')
+})
+
+const temaAtual = computed(() => temaPorId(temaAtivo.value))
+
+const subgrupoAtualInfo = computed(() =>
+  temaTemSubgrupos(temaAtivo.value) ? subgrupoAtual(temaAtivo.value, subgrupoAtivo.value) : null,
+)
+
+const itensVisiveis = computed(() => {
+  if (temaTemSubgrupos(temaAtivo.value)) {
+    return itensDoSubgrupo(temaAtivo.value, subgrupoAtivo.value)
+  }
+  return temaAtual.value.items
 })
 
 watch(mobile, (isMobile) => {
   drawer.value = !isMobile
 })
 
+watch(temaAtivo, (id) => {
+  salvarTemaPersistido(id)
+  if (temaTemSubgrupos(id) && !subgrupoAtivo.value) {
+    subgrupoAtivo.value = lerSubgrupoRequisitosPersistido() || temaAtual.value.subgroups[0].id
+  }
+})
+
+watch(subgrupoAtivo, (id) => {
+  if (temaTemSubgrupos(temaAtivo.value)) {
+    salvarSubgrupoRequisitosPersistido(id)
+  }
+})
+
+watch(
+  () => route.path,
+  (path) => {
+    temaAtivo.value = temaIdPorRota(path)
+    if (temaTemSubgrupos(temaAtivo.value)) {
+      subgrupoAtivo.value = subgrupoIdPorRota(path) || subgrupoAtivo.value
+    }
+  },
+)
+
 onMounted(async () => {
+  if (!navegacaoInicializada.value) {
+    const persistido = lerTemaPersistido()
+    const rotaTema = temaIdPorRota(route.path)
+    if (route.path === '/' && persistido && persistido !== rotaTema) {
+      temaAtivo.value = persistido
+      if (temaTemSubgrupos(persistido)) {
+        subgrupoAtivo.value = lerSubgrupoRequisitosPersistido() || 'entrada'
+      }
+    }
+    navegacaoInicializada.value = true
+  }
+
   try {
     const { data } = await api.get('/v1/auth/config')
     if (data?.data?.environment) environment.value = data.data.environment
   } catch {
-    // Mantem fallback do build quando a API publica nao estiver disponivel.
+    /* fallback build */
+  }
+
+  try {
+    pendenciasPorTema.value = await carregarDadosPendenciasNav(api)
+  } catch {
+    pendenciasPorTema.value = {}
   }
 })
 
-const navItems = [
-  { to: '/',                icon: 'mdi-view-dashboard',     title: 'Dashboard',       tip: 'Visão consolidada das métricas e acessos rápidos.' },
-  { to: '/monitoramento-operacional', icon: 'mdi-monitor-dashboard', title: 'Monitoramento', tip: 'Estado operacional de PRs, gates, integrações e pendências.' },
-  { to: '/analytics',           icon: 'mdi-chart-timeline-variant', title: 'Analytics',       tip: 'Hub navegável com semáforo operacional e drill-down filtrado.' },
-  { to: '/estatisticas',    icon: 'mdi-chart-box-outline',  title: 'Estatísticas',    tip: 'Indicadores internos e externos auditáveis com fonte, fórmula e analítico.' },
-  { to: '/requisitos',      icon: 'mdi-file-document-edit', title: 'Requisitos',      tip: 'Cadastro, listagem e acompanhamento dos requisitos.' },
-  { to: '/pipeline',        icon: 'mdi-pipe',               title: 'Pipeline',        tip: 'Fluxo operacional detalhado do requisito até a publicação.' },
-  { to: '/task-console',    icon: 'mdi-clipboard-check-outline', title: 'Task Console', tip: 'Console web para revisar tarefas e preparar envio ao Planner.' },
-  { to: '/agile-runtime',   icon: 'mdi-source-branch',           title: 'Agile Runtime', tip: 'Abrir work items no GitHub com branch e ambiente corretos.' },
-  { to: '/qualidade-ia',    icon: 'mdi-brain',              title: 'Qualidade IA',    tip: 'Monitoramento contínuo de score e tendência de qualidade de IA.' },
-  { to: '/recomendacoes-ia', icon: 'mdi-robot-outline',     title: 'Recomendações IA', tip: 'Criação, decisão e outcome de recomendações geradas por IA.' },
-  { to: '/relatorios',      icon: 'mdi-file-chart-outline', title: 'Relatórios SSRS', tip: 'Catálogo e status dos relatórios SSRS publicados.' },
-  { to: '/segredos-status', icon: 'mdi-key-chain-variant',  title: 'Segredos',        tip: 'Diagnóstico da origem dos segredos do backend.' },
-  { to: '/rastreabilidade', icon: 'mdi-vector-link',        title: 'Rastreabilidade', tip: 'Matriz de vínculo entre requisito, história e entrega.' },
-  { to: '/specs',            icon: 'mdi-file-code-outline',  title: 'Specs SDD',       tip: 'Especificações de features do my-first-spec-project.' },
-  { to: '/auditoria',       icon: 'mdi-shield-search',      title: 'Auditoria',       tip: 'Linha do tempo de eventos e governança operacional.' },
-  { to: '/hub-lowcode',       icon: 'mdi-lightning-bolt-circle',    title: 'Hub Low-Code',   tip: 'Pacotes IA, flows Power Automate, bot ReqSysAgent e pipeline GitHub ALM.' },
-  { to: '/painel-integracao', icon: 'mdi-view-dashboard-outline',  title: 'Integrações',    tip: 'Painel de acompanhamento: Planner, Teams e histórico de eventos.' },
-  { to: '/figma-github',      icon: 'mdi-vector-square',           title: 'Figma GitHub',   tip: 'Sincronização e retorno em tela entre Figma e GitHub.' },
-  { to: '/arquitetura',       icon: 'mdi-sitemap',                  title: 'Mapa da Solução', tip: 'Visão completa de todos os componentes Web e Low-Code.' },
-  { to: '/governanca',        icon: 'mdi-shield-check-outline',     title: 'Governança',     tip: 'Padrão Ouro Enterprise: gates, CI/CD, observabilidade, analytics e IA auditável.' },
-  { to: '/govbi-ia',      icon: 'mdi-database-search',    title: 'GovBI IA',        tip: 'Consultas analíticas em linguagem natural com IA governada.' },
-]
+function badgeTema(temaId) {
+  return pendenciasPorTema.value[temaId] ?? { count: 0, level: null }
+}
+
+function badgeLabel(count) {
+  return count > 99 ? '99+' : String(count)
+}
+
+function navItemTestId(path) {
+  return path.replace(/\//g, '').replace(/^$/, 'dashboard')
+}
 
 function initials(u) {
   return (u.nome || u.email || '?')[0].toUpperCase()
@@ -160,24 +274,102 @@ function sair() {
 
 <style scoped>
 .req-appbar {
-  background: var(--accent) !important;
+  background: rgba(2, 6, 23, 0.92) !important;
 }
 .brand-sm {
-  color: #fff;
+  color: var(--text);
   font-weight: 800;
   font-size: 16px;
   letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.brand-dot--sm {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+.figma-pill--compact {
+  padding: 4px 10px;
+  font-size: 11px;
 }
 .req-brand-block {
   min-width: 0;
 }
-.req-nav-list {
-  max-height: calc(100vh - 176px);
-  overflow-y: auto;
+.nav-temas {
+  padding: 8px 8px 0;
 }
-.req-env-chip {
+.nav-temas-tabs :deep(.v-slide-group__content) {
+  gap: 2px;
+}
+.nav-tema-tab {
+  min-width: auto !important;
+  padding-inline: 6px !important;
+  font-size: 11px;
   font-weight: 700;
+  text-transform: none;
   letter-spacing: 0;
+}
+.nav-tema-tab-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+.nav-tema-label {
+  max-width: 58px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-tema-badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  color: #111;
+}
+.nav-tema-badge--amarelo {
+  background: var(--amber);
+}
+.nav-tema-badge--vermelho {
+  background: var(--red);
+  color: #fff;
+}
+.nav-tema-topic {
+  margin: 6px 12px 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.nav-subgrupos {
+  padding: 4px 8px 0;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+}
+.nav-subgrupos-tabs :deep(.v-tab) {
+  min-width: auto !important;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  padding-inline: 10px !important;
+}
+.nav-subgrupo-topic {
+  margin: 4px 12px 2px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.req-nav-list {
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+  padding-inline: 4px;
 }
 .nav-item {
   border-radius: 8px;
@@ -196,7 +388,7 @@ function sair() {
 .user-initials {
   font-size: 12px;
   font-weight: 700;
-  color: #000;
+  color: #111;
 }
 .user-name {
   font-size: 13px;

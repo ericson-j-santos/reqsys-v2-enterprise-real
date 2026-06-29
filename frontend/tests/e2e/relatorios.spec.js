@@ -1,10 +1,10 @@
 const { test, expect } = require('@playwright/test')
-const { login } = require('./helpers/auth')
+const { login, navegarMenu } = require('./helpers/auth')
 
 test.describe.configure({ retries: 1 })
 
 async function abrirRelatoriosPeloMenu(page) {
-    await page.getByRole('link', { name: /relatórios ssrs/i }).click()
+    await navegarMenu(page, { temaId: 'governanca', tituloLink: /relatórios ssrs/i })
     await expect(page).toHaveURL(/\/relatorios/, { timeout: 15000 })
 }
 
@@ -34,7 +34,7 @@ test('link de relatório no menu lateral navega para /relatorios', async ({ page
     await login(page)
 
     // Clica em "Relatórios SSRS" no menu lateral
-    await page.getByRole('link', { name: /relatórios ssrs/i }).click()
+    await navegarMenu(page, { temaId: 'governanca', tituloLink: /relatórios ssrs/i })
     await expect(page).toHaveURL(/\/relatorios/)
 })
 

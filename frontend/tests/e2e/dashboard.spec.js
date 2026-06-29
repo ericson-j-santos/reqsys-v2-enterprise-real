@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test')
-const { login } = require('./helpers/auth')
+const { login, navegarMenu } = require('./helpers/auth')
 
 test('dashboard exibe cards padrão ouro, pipeline e informações do sistema', async ({ page }) => {
   await login(page)
@@ -49,7 +49,15 @@ test('dashboard responsivo em 600px mantém layout funcional', async ({ page }) 
 test('menu lateral de navegação está presente', async ({ page }) => {
   await login(page)
 
-  await expect(page.getByRole('link', { name: 'Relatórios SSRS' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Rastreabilidade' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Auditoria' })).toBeVisible()
+  await expect(page.getByTestId('nav-tema-operacao')).toBeVisible()
+  await expect(page.getByTestId('nav-tema-governanca')).toBeVisible()
+
+  await navegarMenu(page, { temaId: 'governanca', tituloLink: /^Relatórios SSRS$/ })
+  await expect(page).toHaveURL(/\/relatorios/)
+
+  await navegarMenu(page, { temaId: 'requisitos', subgrupoId: 'publicacao', tituloLink: /^Rastreabilidade$/ })
+  await expect(page).toHaveURL(/\/rastreabilidade/)
+
+  await navegarMenu(page, { temaId: 'governanca', tituloLink: /^Auditoria$/ })
+  await expect(page).toHaveURL(/\/auditoria/)
 })

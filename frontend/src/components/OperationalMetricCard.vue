@@ -1,29 +1,26 @@
 <template>
-  <v-card
+  <article
     class="operational-metric-card"
     :class="{ 'operational-metric-card--clickable': clickable }"
     :data-testid="testId"
     :role="clickable ? 'button' : undefined"
     :tabindex="clickable ? 0 : undefined"
-    elevation="0"
     @click="handleClick"
     @keyup.enter="handleClick"
     @keyup.space.prevent="handleClick"
   >
-    <v-card-text>
-      <div class="card-top">
-        <v-icon v-if="icon" :icon="icon" size="18" class="card-icon" />
-        <span class="card-label">{{ label }}</span>
-        <SemaforoChip v-if="semaforo" :value="semaforo" size="x-small" />
-      </div>
-      <div class="card-value">{{ value }}</div>
-      <p v-if="hint" class="card-hint muted">{{ hint }}</p>
-      <div v-if="clickable" class="drilldown-hint">
-        <v-icon icon="mdi-open-in-new" size="14" />
-        {{ drilldownLabel }}
-      </div>
-    </v-card-text>
-  </v-card>
+    <div class="card-top">
+      <v-icon v-if="icon" :icon="icon" size="18" class="card-icon" />
+      <span class="card-label">{{ label }}</span>
+      <SemaforoChip v-if="semaforo" :value="semaforo" variant="figma" :show-icon="false" />
+    </div>
+    <div class="card-value">{{ value }}</div>
+    <p v-if="hint" class="card-hint">{{ hint }}</p>
+    <div v-if="clickable" class="drilldown-hint">
+      <span aria-hidden="true">↗</span>
+      {{ drilldownLabel }}
+    </div>
+  </article>
 </template>
 
 <script setup>
@@ -51,8 +48,11 @@ function handleClick() {
 <style scoped>
 .operational-metric-card {
   height: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--line);
   border-radius: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  min-height: 148px;
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 }
 
@@ -63,10 +63,9 @@ function handleClick() {
 .operational-metric-card--clickable:hover,
 .operational-metric-card--clickable:focus-visible {
   transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--accent, #f39200) 38%, #d0d7de);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-  outline: 2px solid color-mix(in srgb, var(--accent, #f39200) 45%, transparent);
-  outline-offset: 2px;
+  border-color: rgba(243, 146, 0, 0.45);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  outline: none;
 }
 
 .card-top {
@@ -74,28 +73,31 @@ function handleClick() {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .card-icon {
-  color: var(--accent, #f39200);
+  color: var(--muted);
 }
 
 .card-label {
   flex: 1;
-  font-size: 13px;
-  color: var(--text-muted, #6b7280);
+  min-width: 0;
 }
 
 .card-value {
-  font-size: clamp(24px, 4vw, 32px);
+  font-size: 32px;
   font-weight: 800;
-  margin-top: 8px;
+  margin: 10px 0 6px;
   line-height: 1.1;
+  color: var(--text);
 }
 
 .card-hint {
-  margin: 6px 0 0;
+  margin: 0;
   font-size: 12px;
+  color: var(--muted);
 }
 
 .drilldown-hint {
@@ -105,6 +107,6 @@ function handleClick() {
   margin-top: 10px;
   font-size: 12px;
   font-weight: 700;
-  color: var(--accent, #f39200);
+  color: var(--accent);
 }
 </style>
