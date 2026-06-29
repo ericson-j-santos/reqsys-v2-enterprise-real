@@ -79,6 +79,50 @@
         "extension_points": ["nova store Pinia"]
       }
     ],
+    "tests": [
+      {
+        "id": "backend-pytest",
+        "path": "backend/tests/",
+        "purpose": "Suite pytest — unitário, integração API, security gates, critical paths.",
+        "ownership": "Backend Core",
+        "extension_points": ["test_<modulo>.py", "test_*_critical_paths.py", "test_*_contract.py"],
+        "ci_gate": true,
+        "coverage_gate_percent": 60
+      },
+      {
+        "id": "frontend-vitest",
+        "path": "frontend/src/",
+        "purpose": "Testes unitários Vitest — stores, services, composables, views smoke.",
+        "ownership": "Frontend Core",
+        "extension_points": ["src/**/__tests__/*.test.js", "src/**/*.test.js"],
+        "ci_gate": false
+      },
+      {
+        "id": "frontend-playwright",
+        "path": "frontend/tests/e2e/",
+        "purpose": "E2E Playwright — responsividade (gate CI) e fluxos funcionais locais.",
+        "ownership": "Frontend Core",
+        "extension_points": ["tests/e2e/<feature>.spec.js", "rotasResponsivas.js"],
+        "ci_gate": true,
+        "mandatory_spec": "responsividade.spec.js"
+      },
+      {
+        "id": "governance-pytest",
+        "path": "tests/",
+        "purpose": "Testes de governança — scripts, workflows, contratos, trilhas, OpenAPI.",
+        "ownership": "Platform Engineering",
+        "extension_points": ["tests/test_<dominio>.py"],
+        "ci_gate": false
+      },
+      {
+        "id": "alt-frontends-e2e",
+        "path": "e2e/",
+        "purpose": "E2E Playwright para frontend-vuetify e frontend-angular.",
+        "ownership": "Frontend Core",
+        "extension_points": ["e2e/<frontend>-<feature>.spec.ts"],
+        "ci_gate": false
+      }
+    ],
     "automation": [
       {
         "id": "workflows",
@@ -145,6 +189,13 @@
       "path": "docs/runbooks/coverage-targeted-tests-trilha-d.md",
       "gates": ["pytest", "cov-fail-under-60", "trilha-d-coverage"],
       "evidence": "trilha-d-qualidade-governanca-evidence"
+    },
+    {
+      "id": "camada-testes-padrao-ouro",
+      "name": "Camada de Testes — Padrão Ouro",
+      "path": ".github/workflows/camada-testes-padrao-ouro.yml",
+      "gates": ["test_layers_exist", "governance_files", "tier1_playbook_indexed"],
+      "evidence": "camada-testes-padrao-ouro-evidence"
     },
     {
       "id": "fly-runtime-p0-pos-deploy",
@@ -255,13 +306,15 @@
     { "area": "Arquitetura Viva", "owner": "Architecture Governance", "adr": "ADR-035" },
     { "area": "Trilhas Padrão Ouro", "owner": "Architecture Governance", "adr": "ADR-040" },
     { "area": "Product Intelligence", "owner": "Product Intelligence", "adr": "ADR-033" },
-    { "area": "Governança PR/Agentes", "owner": "Platform Engineering", "adr": "ADR-030" }
+    { "area": "Governança PR/Agentes", "owner": "Platform Engineering", "adr": "ADR-030" },
+    { "area": "Camada de Testes", "owner": "Quality Governance", "adr": "ADR-0004" }
   ],
   "tier1_docs": {
     "living_architecture_index": "docs/padrao-ouro/LIVING_ARCHITECTURE_INDEX.md",
     "adr_index": "docs/padrao-ouro/ADR_INDEX.md",
     "runtime_evidence_graph": "docs/padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md",
     "contract_catalog": "docs/padrao-ouro/CONTRACT_CATALOG.md",
-    "engineering_playbooks": "docs/padrao-ouro/ENGINEERING_PLAYBOOKS.md"
+    "engineering_playbooks": "docs/padrao-ouro/ENGINEERING_PLAYBOOKS.md",
+    "testing_playbook": "docs/padrao-ouro/TESTING_PLAYBOOK.md"
   }
 }

@@ -46,6 +46,12 @@ Inventário centralizado de **schemas, eventos, APIs, payloads, outputs e pipeli
 | trilha-d-qualidade-governanca | `trilha-d-qualidade-governanca.schema.json` | D — Qualidade |
 | trilha-e-arquitetura-viva | `trilha-e-arquitetura-viva.schema.json` | E — Arquitetura Viva |
 
+### Camada de testes (Tier 1)
+
+| Schema | Arquivo | Uso |
+| --- | --- | --- |
+| camada-testes-padrao-ouro | `camada-testes-padrao-ouro.schema.json` | Relatório do validador da camada de testes |
+
 ### Delivery e release
 
 | Schema | Arquivo | Uso |
