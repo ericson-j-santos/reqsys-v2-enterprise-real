@@ -225,6 +225,16 @@ A forma mais leve de rodar o produto e backend uvicorn + frontend Vite (o Vite f
 
 `ruff`, `pip-audit`, `bandit` e `pytest-cov` sao instalados no venv pelo update script (nao estao em `requirements.txt`). Comandos canonicos em "Comandos essenciais". A cobertura de testes fica ~74% (gate `--cov-fail-under=60` passa).
 
+### Evidencia visual — telas recentes (sempre aplicar)
+
+Quando o usuario pedir telas, ultimas implementacoes ou evidencia visual, entregar **sempre os tres**:
+
+1. Screenshots full-screen das rotas recentes.
+2. Video walkthrough navegando entre as telas.
+3. Aprofundamento tecnico (PR, arquivos, APIs, limitacoes do ambiente).
+
+Rotas canonicas atuais: `/govbi-ia`, `/segredos-status`, `/figma-github`, `/monitoramento-operacional`, `/governanca`, `/`. Login demo: `ericsonjosedossantos@tieri659.onmicrosoft.com`. Artefatos em `/opt/cursor/artifacts/`. Runbook: `docs/runbooks/evidencia-visual-telas-recentes.md`.
+
 ### Gotchas (importantes)
 
 - `backend/reqsys.db` e um SQLite versionado; rodar o app grava nele e o deixa "modified" no git. Nao commitar essas alteracoes (ver "Seguranca e segredos").

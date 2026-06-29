@@ -16,6 +16,7 @@ Data de referência: 2026-06-27
 | Release governance | [Release governance](#5-release-governance) |
 | Criar analytics | [Criar analytics](#6-criar-analytics) |
 | Onboarding agente | [Onboarding agente/IA](#7-onboarding-agenteia) |
+| Evidência visual de telas | [Evidência visual](#9-evidencia-visual-telas-recentes) |
 
 ---
 
@@ -253,7 +254,33 @@ Data de referência: 2026-06-27
 
 ---
 
-## Índice completo de runbooks (~85)
+## 9. Evidência visual — telas recentes
+
+**Objetivo:** Sempre que o usuário pedir telas, implementações recentes ou evidência visual, entregar screenshots full-screen + vídeo walkthrough + aprofundamento técnico.
+
+### Gatilhos (aplicar sem pedir confirmação)
+
+- "Traga as telas", "últimas implementações", "evidência visual", walkthrough de UI.
+
+### Passos
+
+```text
+1. git log --oneline -10 -- frontend/src/views/
+2. Subir backend (:8000) + frontend (:5173) — ver AGENTS.md
+3. Login demo → percorrer rotas canônicas (govbi, segredos, figma, monitoramento, governança, dashboard)
+4. Screenshots em /opt/cursor/artifacts/screenshots/
+5. Vídeo com RecordScreen (pausar em GovBI painel 100%)
+6. Retorno: imagens + vídeo + tabela PR×rota + detalhe técnico
+7. Não commitar backend/reqsys.db; restaurar DB só com uvicorn parado
+```
+
+### Runbook
+
+- [`docs/runbooks/evidencia-visual-telas-recentes.md`](../runbooks/evidencia-visual-telas-recentes.md)
+
+---
+
+## Índice completo de runbooks (~86)
 
 ### Governança e PR
 
@@ -294,6 +321,7 @@ Data de referência: 2026-06-27
 
 | Runbook | Caminho |
 | --- | --- |
+| Evidência visual — telas recentes | `docs/runbooks/evidencia-visual-telas-recentes.md` |
 | Trilhas Consolidadas | `docs/runbooks/trilhas-padrao-ouro.md` |
 | Trilha A — Runtime Público | `docs/runbooks/trilha-a-runtime-publico.md` |
 | Trilha B — Observabilidade | `docs/runbooks/trilha-b-observabilidade-enterprise.md` |
