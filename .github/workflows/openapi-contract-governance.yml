@@ -30,6 +30,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pytest
+
       - name: Validate validator syntax
         run: python -m py_compile scripts/validate_openapi_contract.py
 
@@ -40,7 +43,7 @@ jobs:
             --output artifacts/openapi/openapi-contract-validation.json
 
       - name: Run unit tests
-        run: pytest tests/test_validate_openapi_contract.py
+        run: python -m pytest tests/test_validate_openapi_contract.py
 
       - name: Upload validation artifact
         if: always()

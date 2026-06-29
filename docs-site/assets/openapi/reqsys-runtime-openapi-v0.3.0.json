@@ -83,7 +83,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Requisito"
+                  "$ref": "#/components/schemas/RequisitoResponse"
                 }
               }
             }
@@ -102,6 +102,23 @@
       }
     },
     "/api/requisitos": {
+      "get": {
+        "tags": ["requisitos"],
+        "summary": "Listar requisitos mockados",
+        "operationId": "listRequisitos",
+        "responses": {
+          "200": {
+            "description": "Lista de requisitos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequisitoListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": ["requisitos"],
         "summary": "Receber requisito mockado",
@@ -122,7 +139,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Requisito"
+                  "$ref": "#/components/schemas/RequisitoCreateResponse"
                 }
               }
             }
@@ -133,6 +150,44 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runtime/dashboard": {
+      "get": {
+        "tags": ["runtime"],
+        "summary": "Dashboard operacional do runtime",
+        "operationId": "getRuntimeDashboard",
+        "responses": {
+          "200": {
+            "description": "Snapshot do dashboard runtime",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeDashboardResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runtime/analytics": {
+      "get": {
+        "tags": ["runtime"],
+        "summary": "Analytics operacional do runtime",
+        "operationId": "getRuntimeAnalytics",
+        "responses": {
+          "200": {
+            "description": "Métricas e telemetria operacional",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeAnalyticsResponse"
                 }
               }
             }
@@ -172,6 +227,57 @@
           "prioridade": {"type": "string", "enum": ["baixa", "media", "alta", "critica"]},
           "origem": {"type": "string", "example": "power_automate"},
           "metadata": {"$ref": "#/components/schemas/Metadata"}
+        }
+      },
+      "RequisitoResponse": {
+        "allOf": [
+          {"$ref": "#/components/schemas/Requisito"},
+          {
+            "type": "object",
+            "description": "Resposta envelopeada de consulta de requisito"
+          }
+        ]
+      },
+      "RequisitoCreateResponse": {
+        "type": "object",
+        "required": ["id", "titulo", "status", "metadata"],
+        "properties": {
+          "id": {"type": "string", "example": "REQ-001"},
+          "titulo": {"type": "string"},
+          "status": {"type": "string", "enum": ["rascunho", "validado", "aprovado", "rejeitado"]},
+          "metadata": {"$ref": "#/components/schemas/Metadata"}
+        }
+      },
+      "RequisitoListResponse": {
+        "type": "object",
+        "required": ["schema_version", "items", "total"],
+        "properties": {
+          "schema_version": {"type": "string", "example": "1.0.0"},
+          "items": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Requisito"}
+          },
+          "total": {"type": "integer", "minimum": 0}
+        }
+      },
+      "RuntimeDashboardResponse": {
+        "type": "object",
+        "required": ["status", "correlation_id"],
+        "properties": {
+          "status": {"type": "string", "example": "operational"},
+          "service": {"type": "string", "example": "reqsys-api"},
+          "correlation_id": {"type": "string"},
+          "readiness": {"type": "object"},
+          "observability": {"type": "object"}
+        }
+      },
+      "RuntimeAnalyticsResponse": {
+        "type": "object",
+        "required": ["correlation_id"],
+        "properties": {
+          "correlation_id": {"type": "string"},
+          "operational_telemetry": {"type": "object"},
+          "feature_metrics": {"type": "object"}
         }
       },
       "RequisitoCreateRequest": {

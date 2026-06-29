@@ -1,16 +1,131 @@
 {
-  "schema_version": "1.0.0",
-  "generated_at": "2026-06-27T19:02:00-03:00",
+  "schema_version": "2.0.0",
+  "generated_at": "2026-06-28T12:00:00+00:00",
+  "strategy": "parallel_lanes_by_domain",
+  "baseline_pr": 504,
   "safe_lanes": [
-    {"id": "docs", "status": "open", "max_parallel_prs": 3},
-    {"id": "artifacts", "status": "open", "max_parallel_prs": 3},
-    {"id": "dashboard_contracts", "status": "open", "max_parallel_prs": 2},
-    {"id": "runbooks", "status": "open", "max_parallel_prs": 2}
+    {
+      "id": "docs",
+      "path_prefixes": ["docs/", "docs-site/"],
+      "status": "open",
+      "max_parallel_prs": 3,
+      "conflict_risk": "very_low",
+      "lane_ref": "B"
+    },
+    {
+      "id": "ci",
+      "path_prefixes": [".github/workflows/openapi-", "contracts/openapi/"],
+      "status": "open",
+      "max_parallel_prs": 2,
+      "conflict_risk": "low",
+      "lane_ref": "A",
+      "note": "Somente workflows OpenAPI dedicados; não editar workflows globais em paralelo"
+    },
+    {
+      "id": "ops",
+      "path_prefixes": ["docs/ops-dashboard/", "artifacts/operational-", "artifacts/parallel-pr-governance/"],
+      "status": "open",
+      "max_parallel_prs": 2,
+      "conflict_risk": "low",
+      "lane_ref": "D"
+    },
+    {
+      "id": "contracts",
+      "path_prefixes": ["docs/contracts/openapi-", "docs/integrations/openapi/"],
+      "status": "open",
+      "max_parallel_prs": 2,
+      "conflict_risk": "low",
+      "lane_ref": "A"
+    },
+    {
+      "id": "artifacts",
+      "path_prefixes": ["docs/audit/openapi/", "artifacts/openapi/"],
+      "status": "open",
+      "max_parallel_prs": 3,
+      "conflict_risk": "low",
+      "lane_ref": "B"
+    },
+    {
+      "id": "runbooks",
+      "path_prefixes": ["docs/runbooks/parallel"],
+      "status": "open",
+      "max_parallel_prs": 2,
+      "conflict_risk": "very_low",
+      "lane_ref": "B"
+    },
+    {
+      "id": "dashboard_contracts",
+      "path_prefixes": ["docs/dashboard/operational-evidence-hub.html"],
+      "status": "open",
+      "max_parallel_prs": 1,
+      "conflict_risk": "low",
+      "lane_ref": "B"
+    }
+  ],
+  "execution_lanes": [
+    {
+      "id": "lane-a-openapi-evolution",
+      "label": "OpenAPI Evolution",
+      "status": "active",
+      "conflict_risk": "low",
+      "capabilities": ["spectral_lint", "semantic_diff_ready", "postman_generation", "newman_ci"],
+      "exclusive_paths": [
+        "contracts/openapi/",
+        "docs/integrations/openapi/",
+        ".github/workflows/openapi-spectral-lint.yml",
+        ".github/workflows/openapi-newman-ci.yml"
+      ],
+      "shared_contract_warning": "docs-site/assets/openapi/*.json — serializar alterações"
+    },
+    {
+      "id": "lane-b-docs-runtime-governance",
+      "label": "Docs Runtime Governance",
+      "status": "active",
+      "conflict_risk": "very_low",
+      "capabilities": ["artifact_render", "navigable_status", "executive_cards", "evidence_links"],
+      "exclusive_paths": [
+        "docs/audit/openapi/",
+        "docs/ops-dashboard/data/openapi-governance-index.json",
+        "docs/dashboard/operational-evidence-hub.html"
+      ]
+    },
+    {
+      "id": "lane-c-contract-sync",
+      "label": "Contract Sync",
+      "status": "active",
+      "conflict_risk": "medium_low",
+      "capabilities": ["backend_routes_validation", "drift_detection", "evidence_artifacts"],
+      "exclusive_paths": [
+        "scripts/validate_openapi_routes_drift.py",
+        "tests/test_validate_openapi_routes_drift.py",
+        ".github/workflows/openapi-routes-drift.yml"
+      ],
+      "blocked_with": ["backend_runtime"]
+    },
+    {
+      "id": "lane-d-operational-observability",
+      "label": "Observabilidade Operacional",
+      "status": "active",
+      "conflict_risk": "low",
+      "capabilities": ["lane_priority_index", "merge_intelligence", "operational_semaphore"],
+      "exclusive_paths": [
+        "docs/ops-dashboard/data/merge-lane-priority.json",
+        "docs/ops-dashboard/data/merge-intelligence-index.json"
+      ]
+    }
   ],
   "blocked_lanes": [
-    {"id": "backend_runtime", "reason": "runtime validator PRs open"},
+    {"id": "backend_runtime", "reason": "runtime validator PRs open — Lane C report-only permitida fora de backend/"},
     {"id": "frontend_dashboard", "reason": "runtime dashboard PRs open"},
-    {"id": "github_workflows", "reason": "CI PRs open"},
-    {"id": "shared_contracts", "reason": "high conflict radius"}
+    {"id": "github_workflows_global", "reason": "não alterar workflows globais em paralelo (CI, mesh, fly)"},
+    {"id": "shared_contracts", "reason": "docs-site/assets/openapi — uma PR por vez"},
+    {"id": "mkdocs_yml", "reason": "alterações concorrentes em mkdocs.yml"},
+    {"id": "governance_core", "reason": "múltiplos PRs no coordenador/gate core"}
+  ],
+  "operational_rules": [
+    "nao_tocar_mesmos_arquivos",
+    "nao_alterar_mesmos_workflows",
+    "nao_compartilhar_contratos_mutaveis_em_paralelo",
+    "nao_mexer_em_branch_com_ci_instavel"
   ]
 }

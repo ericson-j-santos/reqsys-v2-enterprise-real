@@ -55,6 +55,7 @@
     <a href="#maturity-snapshot">Maturidade</a>
     <a href="#observability-correlation">Observabilidade</a>
     <a href="#artifact-contract-validation">Contratos</a>
+    <a href="#openapi-governance">OpenAPI</a>
     <a href="#dashboard-regression">Regressão</a>
     <a href="#living-architecture-traceability">Rastreabilidade</a>
     <a href="#navigation">Navegação</a>
@@ -112,6 +113,12 @@
       <h2>Artifact contract validation</h2>
       <div class="grid" id="contractCards"></div>
       <table><thead><tr><th>Artifact</th><th>Schema</th><th>Load</th><th>Status</th><th>Semáforo</th><th>Campos ausentes</th></tr></thead><tbody id="contractTable"></tbody></table>
+    </section>
+
+    <section id="openapi-governance">
+      <h2>OpenAPI governance</h2>
+      <div class="grid" id="openapiCards"></div>
+      <table><thead><tr><th>Check</th><th>Status</th><th>Semáforo</th><th>Detalhe</th><th>Evidência</th></tr></thead><tbody id="openapiTable"></tbody></table>
     </section>
 
     <section id="dashboard-regression">
@@ -193,6 +200,15 @@
         workflow: '../../.github/workflows/ops-dashboard.yml'
       },
       {
+        key: 'openapiGovernance',
+        label: 'OpenAPI Governance',
+        section: 'openapi-governance',
+        href: '../ops-dashboard/data/openapi-governance-index.json',
+        contract: '../audit/openapi/openapi-contract-validation.json',
+        runbook: '../runbooks/parallel-lanes-strategy.md',
+        workflow: '../../.github/workflows/openapi-contract-governance.yml'
+      },
+      {
         key: 'artifactContractValidation',
         label: 'Artifact Contract Validation',
         section: 'artifact-contract-validation',
@@ -230,6 +246,7 @@
       maturitySnapshot: { average_current_percent: 0, average_target_percent: 0, average_gap_percent: 0, confidence_level: 'low', operational_risk: 'medium', dimensions: [] },
       observabilityCorrelation: { summary: { mapped_sources: 0, mapped_artifacts: 0, maturity_percent: 0, operational_risk: 'unknown', confidence_level: 'low' }, correlations: [] },
       artifactContractValidation: { status: 'unknown', confidence_level: 'low', operational_risk: 'medium', maturity_percent: 0, summary: { artifacts_inventoried: 0, schemas_missing: 0, field_divergences: 0 }, artifacts: [] },
+      openapiGovernance: { status: 'unknown', confidence_level: 'low', operational_risk: 'medium', maturity_percent: 0, summary: { valid: false, paths: 0, schemas: 0, drift_valid: false }, checks: [], evidence_links: [] },
       dashboardRegression: { summary: { totals: { checks: 0, passed: 0, gaps: 0 }, mode: 'report-only' }, checks: [] },
       livingArchitectureTraceability: { workflows: [], artifacts: [], dashboards: [], runbooks: [], schemas: [], validation: { mode: 'report_only' }, summary: { internal_paths_ok: 0, internal_paths_missing: 0, confidence_level: 'low', operational_risk: 'medium' } }
     };
@@ -309,10 +326,11 @@
       const maturity = loaded.maturitySnapshot.data;
       const observability = loaded.observabilityCorrelation.data;
       const contracts = loaded.artifactContractValidation.data;
+      const openapi = loaded.openapiGovernance.data;
       const regression = loaded.dashboardRegression.data;
       const traceability = loaded.livingArchitectureTraceability.data;
 
-      const execRisk = [readiness.operational_risk, completion.operational_risk, finalization.operational_risk, mergeRiskFrom(mergeScore), maturity.operational_risk, observability.summary?.operational_risk, contracts.operational_risk, traceability.summary?.operational_risk].filter(Boolean);
+      const execRisk = [readiness.operational_risk, completion.operational_risk, finalization.operational_risk, mergeRiskFrom(mergeScore), maturity.operational_risk, observability.summary?.operational_risk, contracts.operational_risk, openapi.operational_risk, traceability.summary?.operational_risk].filter(Boolean);
       const worstRisk = execRisk.some(function (r) { return String(r).toLowerCase() === 'high'; }) ? 'high' : execRisk.some(function (r) { return String(r).toLowerCase() === 'medium'; }) ? 'medium' : 'low';
       const loadedCount = Object.values(loaded).filter(function (l) { return l.ok; }).length;
 
@@ -324,8 +342,9 @@
         card('Maturity snapshot', maturity.average_current_percent || 0, '%', (maturity.average_gap_percent || 0) <= 5 ? 'low' : 'attention', 'gap médio: ' + (maturity.average_gap_percent || 0) + ' p.p.', 'maturity-snapshot'),
         card('Observability mapped', observability.summary?.mapped_sources || 0, 'fontes', observability.summary?.operational_risk, 'artifacts: ' + (observability.summary?.mapped_artifacts || 0), 'observability-correlation'),
         card('Contract artifacts', contracts.summary?.artifacts_inventoried || 0, '', contracts.status, 'divergências: ' + (contracts.summary?.field_divergences || 0), 'artifact-contract-validation'),
+        card('OpenAPI governance', openapi.maturity_percent || 0, '%', openapi.status, 'paths: ' + (openapi.summary?.paths || 0), 'openapi-governance'),
         card('Dashboard regression', regression.summary?.totals?.passed || 0, '/' + (regression.summary?.totals?.checks || 0), (regression.summary?.totals?.gaps || 0) === 0 ? 'low' : 'gap', 'modo: report-only', 'dashboard-regression'),
-        card('Traceability domains', (traceability.workflows?.length || 0) + (traceability.artifacts?.length || 0) + (traceability.dashboards?.length || 0), 'itens', traceability.summary?.operational_risk || 'medium', 'fontes carregadas: ' + loadedCount + '/9', 'living-architecture-traceability'),
+        card('Traceability domains', (traceability.workflows?.length || 0) + (traceability.artifacts?.length || 0) + (traceability.dashboards?.length || 0), 'itens', traceability.summary?.operational_risk || 'medium', 'fontes carregadas: ' + loadedCount + '/10', 'living-architecture-traceability'),
         card('Risco operacional consolidado', worstRisk, '', worstRisk, 'evidência report-only — não substitui CI', '')
       ].join('');
 
@@ -412,6 +431,17 @@
         return '<tr><td><code>' + item.artifact + '</code></td><td><code>' + (item.schema || 'missing') + '</code></td><td>' + item.load_status + '</td><td>' + item.status + '</td><td>' + semaforo(item.status) + '</td><td>' + ((item.minimum_fields_missing || []).join(', ') || '-') + '</td></tr>';
       }).join('') || '<tr><td colspan="6">Sem validação de contratos carregada.</td></tr>';
 
+      const openapiSummary = openapi.summary || {};
+      document.getElementById('openapiCards').innerHTML = [
+        card('Maturidade OpenAPI', openapi.maturity_percent || 0, '%', openapi.status),
+        card('Paths governados', openapiSummary.paths || 0, '', openapiSummary.valid ? 'low' : 'high'),
+        card('Schemas', openapiSummary.schemas || 0, '', 'low'),
+        card('Drift report-only', openapiSummary.drift_valid ? 'aligned' : 'gap', '', openapiSummary.drift_valid ? 'low' : 'medium')
+      ].join('');
+      document.getElementById('openapiTable').innerHTML = (openapi.checks || []).map(function (item) {
+        return '<tr><td>' + item.name + '</td><td>' + item.status + '</td><td>' + semaforo(item.status) + '</td><td>' + (item.detail || '-') + '</td><td><code>' + (item.evidence || '-') + '</code></td></tr>';
+      }).join('') || '<tr><td colspan="5">Sem índice OpenAPI carregado; usando fallback governado.</td></tr>';
+
       const regTotals = regression.summary?.totals || {};
       document.getElementById('regressionCards').innerHTML = [
         card('Checks', regTotals.checks || 0, '', 'low'),
@@ -450,6 +480,9 @@
         '</ul></div>',
         '<div class="link-card"><h4>Índices e mapas</h4><ul>',
         '<li><a href="../ops-dashboard/data/merge-intelligence-index.json"><code>merge-intelligence-index.json</code></a></li>',
+        '<li><a href="../ops-dashboard/data/openapi-governance-index.json"><code>openapi-governance-index.json</code></a></li>',
+        '<li><a href="../audit/openapi/openapi-contract-validation.json"><code>openapi-contract-validation.json</code></a></li>',
+        '<li><a href="../runbooks/parallel-lanes-strategy.md"><code>parallel-lanes-strategy.md</code></a></li>',
         '<li><a href="../ops-dashboard/data/merge-lane-priority.json"><code>merge-lane-priority.json</code></a></li>',
         '<li><a href="operational-command-center.md"><code>operational-command-center.md</code></a></li>',
         '<li><a href="command-center-evidence-index.md"><code>command-center-evidence-index.md</code></a></li>',

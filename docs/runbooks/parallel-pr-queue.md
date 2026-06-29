@@ -8,7 +8,19 @@ Aumentar a vazão de PRs sem criar conflito estrutural ou PR impossível de merg
 
 Abrir PRs paralelos apenas quando cada PR alterar caminho exclusivo e domínio desacoplado.
 
-## Lanes seguras
+## Lanes seguras (estratégia ativa)
+
+| Lane | Domínio | Risco |
+| --- | --- | --- |
+| A — OpenAPI Evolution | Spectral, Postman, Newman, workflows `openapi-*` | Baixo |
+| B — Docs Runtime Governance | `docs/audit/`, evidence hub, cards executivos | Muito baixo |
+| C — Contract Sync | drift routes ↔ OpenAPI (report-only) | Médio/baixo |
+| D — Observabilidade | `merge-lane-priority`, índices ops-dashboard | Baixo |
+
+Índice machine-readable: `artifacts/parallel-pr-governance/safe-lanes.json`.  
+Runbook completo: `docs/runbooks/parallel-lanes-strategy.md`.
+
+Lanes genéricas ainda válidas:
 
 - Documentação.
 - Evidências versionadas.

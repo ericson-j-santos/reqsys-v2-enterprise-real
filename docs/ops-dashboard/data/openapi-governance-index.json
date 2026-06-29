@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-28T12:00:00+00:00",
+  "source": "scripts/validate_openapi_contract.py",
+  "status": "passed",
+  "confidence_level": "high",
+  "maturity_percent": 72,
+  "operational_risk": "low",
+  "commit_sha": "pending-ci",
+  "contract": "reqsys-openapi-contract-validation",
+  "validated_at_epoch": 1782689869,
+  "openapi_version": "0.3.0",
+  "summary": {
+    "valid": true,
+    "paths": 6,
+    "schemas": 12,
+    "required_paths": 5,
+    "required_schemas": 4,
+    "errors": 0,
+    "warnings": 0,
+    "drift_valid": true,
+    "drift_missing_in_openapi": 0,
+    "drift_missing_in_backend": 0
+  },
+  "checks": [
+    {"name": "Contract validation", "status": "passed", "detail": "required paths and schemas", "evidence": "docs/audit/openapi/openapi-contract-validation.json"},
+    {"name": "Routes drift (report-only)", "status": "passed", "detail": "governed backend routes aligned", "evidence": "docs/audit/openapi/openapi-routes-drift.json"},
+    {"name": "Spectral lint", "status": "active", "detail": "workflow openapi-spectral-lint.yml", "evidence": "artifacts/openapi/spectral-lint-report.json"},
+    {"name": "Newman smoke", "status": "active", "detail": "workflow openapi-newman-ci.yml", "evidence": "docs/integrations/openapi/reqsys-runtime-postman.collection.json"},
+    {"name": "Parallel lane B", "status": "passed", "detail": "evidence hub + ops-dashboard index", "evidence": "docs/ops-dashboard/data/openapi-governance-index.json"}
+  ],
+  "evidence_links": [
+    "docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json",
+    "docs/audit/openapi/openapi-contract-validation.json",
+    "docs/audit/openapi/openapi-routes-drift.json",
+    "docs/integrations/openapi/reqsys-runtime-postman.collection.json",
+    ".github/workflows/openapi-contract-governance.yml",
+    ".github/workflows/openapi-spectral-lint.yml",
+    ".github/workflows/openapi-newman-ci.yml",
+    ".github/workflows/openapi-routes-drift.yml"
+  ],
+  "lanes": {
+    "lane_a": "OpenAPI Evolution — ativa",
+    "lane_b": "Docs Runtime Governance — ativa",
+    "lane_c": "Contract Sync — ativa (report-only)",
+    "lane_d": "Observabilidade Operacional — ativa"
+  },
+  "next_actions": [
+    "Semantic OpenAPI diff em PR dedicado",
+    "Hydratação automática pós-workflow no evidence hub"
+  ]
+}
