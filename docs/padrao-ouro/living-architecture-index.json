@@ -316,5 +316,16 @@
     "contract_catalog": "docs/padrao-ouro/CONTRACT_CATALOG.md",
     "engineering_playbooks": "docs/padrao-ouro/ENGINEERING_PLAYBOOKS.md",
     "testing_playbook": "docs/padrao-ouro/TESTING_PLAYBOOK.md"
+  },
+  "gold_standard_focus": {
+    "mode": "consolidate",
+    "reason": "state_yellow bloqueia novas frentes; foco em estabilizacao, evidencia e rastreabilidade",
+    "priorities": [
+      { "id": "P0", "focus": "Consolidar incremento ativo", "evidence": "agent_increment_gate consolidate permitido" },
+      { "id": "P1", "focus": "Validar contratos e paths vivos", "evidence": "JSONs carregaveis e mapas de rastreabilidade sem drift" },
+      { "id": "P2", "focus": "Preservar CI e testes minimos", "evidence": "comando focado executado ou limitacao documentada" },
+      { "id": "P3", "focus": "Atualizar documentacao operacional", "evidence": "artefato Tier 1 impactado atualizado" }
+    ],
+    "exit_criteria": "gate, artefatos Tier 1 afetados e validacao focada rastreaveis no PR"
   }
 }

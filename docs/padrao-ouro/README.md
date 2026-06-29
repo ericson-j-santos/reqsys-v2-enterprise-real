@@ -19,6 +19,20 @@ Documentação aqui **não é texto morto** — é infraestrutura operacional vi
 | 5 | **Engineering Playbooks** | [`ENGINEERING_PLAYBOOKS.md`](ENGINEERING_PLAYBOOKS.md) | Fluxos operacionais para incrementos, CI, merge governado e evidências. |
 | 6 | **Testing Playbook** | [`TESTING_PLAYBOOK.md`](TESTING_PLAYBOOK.md) | Pirâmide, árvores, gates, convenções e comandos da camada de testes. |
 
+
+## Foco operacional Padrão Ouro
+
+Enquanto o gate de incremento estiver em modo de consolidação, o foco Padrão Ouro deve priorizar estabilização e rastreabilidade, sem abrir nova frente concorrente. Use a sequência abaixo como checklist curto para agentes e revisores:
+
+| Prioridade | Foco | Evidência esperada | Artefato de apoio |
+| --- | --- | --- | --- |
+| P0 | Consolidar incremento ativo | Gate `consolidate` permitido e pendências críticas registradas | `artifacts/coordenador-status/coordenador-status.json` |
+| P1 | Validar contratos e paths vivos | JSONs carregáveis, links internos e schemas sem drift | `living-architecture-index.json`, `docs/traceability/living-architecture-map.json` |
+| P2 | Preservar CI e testes mínimos | Comando focado executado ou limitação documentada | `TESTING_PLAYBOOK.md` |
+| P3 | Atualizar documentação operacional | README, runbook, ADR ou release note atualizado quando houver impacto | `ENGINEERING_PLAYBOOKS.md` |
+
+Critério de saída: uma mudança Padrão Ouro só deve ser considerada pronta quando a evidência de gate, os artefatos Tier 1 afetados e o comando de validação focado estiverem rastreáveis no PR.
+
 ## Índices machine-readable
 
 | Artefato | Caminho | Uso |
