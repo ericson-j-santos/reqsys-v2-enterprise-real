@@ -11,6 +11,16 @@
         <v-btn
           size="small"
           variant="outlined"
+          prepend-icon="mdi-clipboard-check-outline"
+          :loading="verificandoFuncionamento"
+          data-testid="govbi-reexecutar-funcionamento"
+          @click="executarVerificacaoFuncionamento"
+        >
+          Testes
+        </v-btn>
+        <v-btn
+          size="small"
+          variant="outlined"
           prepend-icon="mdi-refresh"
           :loading="carregando"
           @click="limpar"
@@ -19,6 +29,60 @@
         </v-btn>
       </template>
     </PageHeader>
+
+    <v-card class="table-card mb-4" data-testid="govbi-painel-funcionamento">
+      <v-card-title class="d-flex align-center flex-wrap gap-2">
+        <span>Painel de funcionamento</span>
+        <v-chip
+          size="small"
+          :color="funcionamentoResumo.completo ? 'green' : funcionamentoResumo.percentual > 0 ? 'orange' : 'grey'"
+          variant="tonal"
+          data-testid="govbi-funcionamento-percentual"
+        >
+          {{ funcionamentoResumo.percentual }}% ({{ funcionamentoResumo.aprovados }}/{{ funcionamentoResumo.total }})
+        </v-chip>
+        <v-spacer />
+        <span class="text-caption muted" data-testid="govbi-funcionamento-executado-em">
+          {{ funcionamentoExecutadoEmLabel }}
+        </span>
+      </v-card-title>
+      <v-divider />
+      <v-card-text>
+        <v-alert
+          v-if="verificandoFuncionamento"
+          type="info"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+        >
+          Executando testes de funcionamento GovBI (local + API)…
+        </v-alert>
+        <div class="responsive-table-shell">
+          <v-data-table
+            :headers="funcionamentoHeaders"
+            :items="funcionamentoResumo.resultados"
+            density="compact"
+            :items-per-page="20"
+            hide-default-footer
+            data-testid="govbi-funcionamento-tabela"
+          >
+            <template #item.ok="{ item }">
+              <v-chip
+                size="x-small"
+                :color="item.ok ? 'green' : 'red'"
+                variant="tonal"
+                :data-testid="`govbi-teste-${item.id}`"
+              >
+                {{ item.ok ? 'OK' : 'Falha' }}
+              </v-chip>
+            </template>
+            <template #item.categoria="{ item }">
+              <v-chip size="x-small" variant="outlined">{{ item.categoria }}</v-chip>
+            </template>
+          </v-data-table>
+        </div>
+      </v-card-text>
+    </v-card>
 
     <div v-if="historicoConsultas.length" class="metrics-grid mb-4" data-testid="govbi-metrics-grid">
       <OperationalMetricCard
@@ -384,6 +448,7 @@ import {
   possuiFiltroAtivo,
   salvarHistoricoGovbi,
 } from '../utils/filtrosGovbi'
+import { executarFuncionamentoGovbi } from '../utils/govbiFuncionamento'
 
 const route = useRoute()
 const router = useRouter()
@@ -404,6 +469,31 @@ const resposta = ref(null)
 const diagnosticoOperacional = ref(null)
 const historicoConsultas = ref([])
 const filtrosHistorico = reactive(normalizarFiltrosGovbi(route.query))
+const verificandoFuncionamento = ref(false)
+const funcionamentoResumo = ref({
+  executadoEm: '',
+  total: 0,
+  aprovados: 0,
+  reprovados: 0,
+  percentual: 0,
+  completo: false,
+  resultados: [],
+})
+
+const funcionamentoHeaders = [
+  { title: 'Teste', key: 'nome' },
+  { title: 'Categoria', key: 'categoria', width: '110px' },
+  { title: 'Status', key: 'ok', width: '90px' },
+  { title: 'Detalhe', key: 'detalhe' },
+]
+
+const funcionamentoExecutadoEmLabel = computed(() => {
+  if (!funcionamentoResumo.value.executadoEm) return 'Aguardando primeira verificação…'
+  return new Date(funcionamentoResumo.value.executadoEm).toLocaleString('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'medium',
+  })
+})
 
 const statusHistoricoOptions = [
   { label: 'Concluído', value: 'CONCLUIDO' },
@@ -480,7 +570,33 @@ watch(
 
 onMounted(() => {
   historicoConsultas.value = carregarHistoricoGovbi()
+  executarVerificacaoFuncionamento()
 })
+
+async function executarVerificacaoFuncionamento() {
+  verificandoFuncionamento.value = true
+  try {
+    funcionamentoResumo.value = await executarFuncionamentoGovbi(govbiApi)
+  } catch (error) {
+    funcionamentoResumo.value = {
+      executadoEm: new Date().toISOString(),
+      total: 1,
+      aprovados: 0,
+      reprovados: 1,
+      percentual: 0,
+      completo: false,
+      resultados: [{
+        id: 'execucao-funcionamento',
+        nome: 'Execução da suíte de funcionamento',
+        ok: false,
+        detalhe: error?.message || 'Falha inesperada',
+        categoria: 'runtime',
+      }],
+    }
+  } finally {
+    verificandoFuncionamento.value = false
+  }
+}
 
 const exemplos = [
   'Quantas propostas por mês em 2024?',

@@ -48,7 +48,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - `DashboardView.vue`: card de erros de integração com drill-down para `/painel-integracao?status=erro`.
 - `DashboardView.vue`: melhoria de acessibilidade por teclado nos cards interativos.
 - `PainelIntegracaoView.vue`: analítico filtrável por origem, status, data, correlation_id e busca textual, com cards clicáveis e sincronização de query string.
-- `GovBIView.vue`: histórico analítico padrão ouro com métricas clicáveis (total, sucesso, degradado, latência média), filtro de fallback, exportação de evidência JSON, `filter-grid`/`responsive-table-shell` e query string para latência, fonte, fallback e correlation_id.
+- `GovBIView.vue`: histórico analítico padrão ouro com métricas clicáveis (total, sucesso, degradado, latência média), filtro de fallback, exportação de evidência JSON, `filter-grid`/`responsive-table-shell`, query string e **painel permanente de funcionamento** com testes locais + API exibidos sempre na tela.
+- `govbiFuncionamento.js` e endpoint `GET /api/govbi/funcionamento` para auto-teste com percentual 100%.
 - `PipelineView.vue`: histórico de execuções com analítico por etapa, duração, status e correlation_id.
 - `TaskConsoleView.vue`: filtros analíticos de tarefas e histórico de envios ao Planner com query string.
 - `DashboardView.vue`: cards de drill-down para GovBI degradado, pipeline com erro e Task Console pendente.
