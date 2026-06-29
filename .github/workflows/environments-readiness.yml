@@ -6,6 +6,7 @@ on:
       - scripts/validate_environments_readiness.py
       - tests/test_validate_environments_readiness.py
       - docs/ops-dashboard/data/environments-validation.json
+      - infra/fly-environments.json
       - .github/workflows/environments-readiness.yml
   workflow_dispatch:
 

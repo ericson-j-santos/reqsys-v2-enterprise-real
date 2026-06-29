@@ -5,7 +5,13 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from scripts.validate_environments_readiness import ENVIRONMENTS, classify_environment, is_local_url, validate_all_environments
+from scripts.validate_environments_readiness import (
+    ENVIRONMENTS,
+    classify_environment,
+    is_local_url,
+    load_environment_targets,
+    validate_all_environments,
+)
 
 
 def test_all_canonical_environments_are_declared() -> None:
@@ -14,8 +20,19 @@ def test_all_canonical_environments_are_declared() -> None:
     assert names == {"desenvolvimento", "testes", "homologacao", "producao"}
     assert any(target.frontend == "https://reqsys-app-dev.fly.dev" for target in ENVIRONMENTS)
     assert any(target.api == "https://reqsys-api-dev.fly.dev/docs" for target in ENVIRONMENTS)
-    assert any(target.frontend == "https://reqsys-web-stg.fly.dev" for target in ENVIRONMENTS)
+    assert any(target.frontend == "https://reqsys-app-stg.fly.dev" for target in ENVIRONMENTS)
     assert any(target.frontend == "https://reqsys-app.fly.dev" for target in ENVIRONMENTS)
+    assert any(target.canonical == "hml" for target in ENVIRONMENTS)
+
+
+def test_environment_targets_match_fly_manifest() -> None:
+    targets = load_environment_targets()
+    by_canonical = {target.canonical: target for target in targets if target.canonical}
+
+    assert by_canonical["dev"].frontend == "https://reqsys-app-dev.fly.dev"
+    assert by_canonical["hml"].frontend == "https://reqsys-app-stg.fly.dev"
+    assert by_canonical["prod"].frontend == "https://reqsys-app.fly.dev"
+    assert by_canonical["hml"].api == "https://reqsys-api-stg.fly.dev/docs"
 
 
 def test_local_urls_are_detected() -> None:
