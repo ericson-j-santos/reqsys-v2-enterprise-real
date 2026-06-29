@@ -209,6 +209,62 @@
       </v-col>
     </v-row>
 
+    <v-card class="table-card mt-4" data-testid="secao-testes-cofre">
+      <v-card-title class="py-3 px-4 d-flex align-center flex-wrap ga-2">
+        <span>Testes aplicados</span>
+        <v-chip size="small" color="success" variant="tonal" data-testid="chip-total-testes">
+          {{ totalTestes }} testes
+        </v-chip>
+        <v-chip size="small" color="primary" variant="tonal">
+          {{ testesApi }} API
+        </v-chip>
+        <v-chip size="small" color="secondary" variant="tonal">
+          {{ testesServico }} serviço
+        </v-chip>
+        <v-chip size="small" color="amber" variant="tonal">
+          {{ testesE2e }} E2E
+        </v-chip>
+      </v-card-title>
+      <v-divider />
+      <v-card-text class="px-4 pb-4">
+        <v-alert type="info" variant="tonal" density="compact" class="mb-4">
+          Matriz de evidência Padrão Ouro do cofre. Comando CI:
+          <code class="test-cmd">{{ catalogoTestes.comando }}</code>
+        </v-alert>
+
+        <v-expansion-panels variant="accordion" multiple>
+          <v-expansion-panel
+            v-for="suite in catalogoTestes.suites"
+            :key="suite.id"
+            :data-testid="`suite-${suite.id}`"
+          >
+            <v-expansion-panel-title>
+              <div class="suite-title">
+                <span class="suite-alvo">{{ suite.alvo }}</span>
+                <span class="muted text-caption">{{ suite.grupo }} · {{ suite.testes.length }} teste(s)</span>
+              </div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text>
+              <div class="suite-meta muted text-caption mb-3">
+                {{ suite.arquivo }} — {{ suite.classe }}
+              </div>
+              <ul class="test-list">
+                <li
+                  v-for="teste in suite.testes"
+                  :key="`${suite.id}-${teste}`"
+                  class="test-item"
+                  :data-testid="`teste-${suite.id}-${teste}`"
+                >
+                  <v-icon icon="mdi-check-circle" color="success" size="16" class="mr-2" />
+                  <span>{{ formatTestName(teste) }}</span>
+                </li>
+              </ul>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
+      </v-card-text>
+    </v-card>
+
     <v-dialog v-model="dialogGravar" max-width="500" persistent>
       <v-card>
         <v-card-title class="pt-5 px-6">Gravar segredo no cofre</v-card-title>
@@ -270,6 +326,13 @@ import { api } from '../services/api'
 import PageHeader from '../components/PageHeader.vue'
 import StatusChip from '../components/StatusChip.vue'
 import { useAsyncLoader } from '../composables/useAsyncLoader.js'
+import { COFRE_TEST_CATALOG, countCofreTestsByGrupo, formatTestName, totalCofreTests } from '../constants/cofreTestCatalog.js'
+
+const catalogoTestes = COFRE_TEST_CATALOG
+const totalTestes = totalCofreTests()
+const testesApi = countCofreTestsByGrupo('API')
+const testesServico = countCofreTestsByGrupo('Serviço')
+const testesE2e = countCofreTestsByGrupo('E2E')
 
 const { carregando, erro, run } = useAsyncLoader()
 
@@ -449,5 +512,34 @@ onMounted(carregar)
   display: flex;
   justify-content: flex-end;
   gap: 2px;
+}
+
+.suite-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.suite-alvo {
+  font-weight: 600;
+}
+
+.test-cmd {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+}
+
+.test-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.test-item {
+  display: flex;
+  align-items: flex-start;
+  font-size: 0.9rem;
 }
 </style>

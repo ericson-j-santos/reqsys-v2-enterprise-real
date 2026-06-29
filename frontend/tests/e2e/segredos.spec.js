@@ -98,3 +98,12 @@ test('botão Atualizar dispara recarga dos segredos', async ({ page }) => {
     const tabela = page.getByTestId('tabela-segredos').or(page.locator('.v-table').first())
     await expect(tabela.first()).toBeVisible()
 })
+
+test('seção Testes aplicados está visível', async ({ page }) => {
+    await irParaSegredos(page)
+    const secao = page.getByTestId('secao-testes-cofre')
+    await expect(secao).toBeVisible()
+    await expect(page.getByTestId('chip-total-testes')).toContainText(/testes/i)
+    await expect(page.getByTestId('suite-api-init')).toBeVisible()
+    await expect(page.getByTestId('suite-e2e-segredos')).toBeVisible()
+})
