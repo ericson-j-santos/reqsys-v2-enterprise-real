@@ -61,7 +61,9 @@
     select { background: #020617; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 8px; }
     .details { margin-top: 8px; }
     pre { white-space: pre-wrap; word-break: break-word; background: #020617; padding: 12px; border-radius: 10px; border: 1px solid var(--border); }
-    @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+    #trilha-d-history-card,
+    #operational-pareto-card,
+    #operational-intelligence-nav { scroll-margin-top: 24px; }
     @media (max-width: 600px) { main, header { padding: 16px; } .grid { grid-template-columns: 1fr; } table { font-size: 13px; } }
   </style>
 </head>
@@ -152,8 +154,16 @@
       </details>
     </section>
 
-    <section class="card">
-      <h2>Trilha D — Histórico operacional</h2>
+    <section class="card" id="operational-intelligence-nav">
+      <h2>Navegação — Trilha D e Pareto</h2>
+      <p class="small">Atalhos para os cards de evidência histórica e priorização estatística 80/20 no próprio dashboard.</p>
+      <div class="links" id="operational-intelligence-quick-links">
+        <a class="link-btn" href="#trilha-d-history-card">Trilha D — Histórico</a>
+        <a class="link-btn" href="#operational-pareto-card">Pareto Operacional</a>
+      </div>
+    </section>
+
+    <section class="card" id="trilha-d-history-card">
       <p class="small">Evolução de score, dimensões e amostras históricas consumindo <code>trilha-d-history.json</code>.</p>
       <div class="grid">
         <div><div class="kpi-label">Score atual</div><div id="trilha-d-score" class="kpi-value">-</div></div>
@@ -176,7 +186,7 @@
       </details>
     </section>
 
-    <section class="card">
+    <section class="card" id="operational-pareto-card">
       <h2>Padrão Ouro — Pareto operacional (80/20)</h2>
       <p class="small">Priorização estatística dos gaps com maior impacto na evolução padrão ouro, derivada de <code>padrao-ouro-operational-pareto.json</code> e evidências da Trilha D.</p>
       <div class="grid">
@@ -633,6 +643,17 @@
       });
     }
 
+    function renderOperationalIntelligenceQuickLinks() {
+      const trilhaScore = document.getElementById('trilha-d-score')?.textContent?.trim() || '-';
+      const paretoScore = document.getElementById('pareto-score')?.textContent?.trim().split(/\s/)[0] || '-';
+      const quick = document.getElementById('operational-intelligence-quick-links');
+      if (!quick) return;
+      quick.innerHTML = '';
+      addLink(quick, `Trilha D — score ${trilhaScore}`, '#trilha-d-history-card');
+      addLink(quick, `Pareto — score ${paretoScore}`, '#operational-pareto-card');
+      addLink(quick, 'Navegação operacional', './operational-navigation.html');
+    }
+
     async function renderGovernanceEvidenceCards() {
       const fallback = {
         overall_status: 'unknown',
@@ -716,6 +737,9 @@
         addLink(links, label, url, true);
       });
       addLink(links, 'Operational Evidence Hub', '../dashboard/operational-evidence-hub.html');
+      addLink(links, 'Navegação Operacional', './operational-navigation.html');
+      addLink(links, 'Trilha D — Histórico', '#trilha-d-history-card');
+      addLink(links, 'Pareto Operacional', '#operational-pareto-card');
       addLink(links, 'Runtime Executive Index', './data/runtime-executive-index.json');
       addLink(links, 'Merge Intelligence JSON', './data/merge-intelligence-index.json');
       addLink(links, 'Lane Priority JSON', './data/merge-lane-priority.json');
@@ -724,6 +748,7 @@
       await renderGovernanceEvidenceCards();
       await renderTrilhaDHistory();
       await renderOperationalPareto();
+      renderOperationalIntelligenceQuickLinks();
       renderDomains(data.runtime_domain_drilldowns || []);
       const obs = data.observability_correlation_report || {};
       const obsSummary = obs.summary || {};
