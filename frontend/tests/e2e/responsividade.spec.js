@@ -61,7 +61,8 @@ test.describe('responsividade padrão ouro — 19 rotas', () => {
     await loginDemo(page)
 
     await page.locator('button[aria-label="Abrir menu de navegação"]').click()
-    const menuLink = page.locator('.req-drawer a[href="/requisitos"]').first()
+    await page.getByTestId('nav-tema-requisitos').click()
+    const menuLink = page.getByTestId('nav-item-requisitos')
     await expect(menuLink).toBeVisible()
     await menuLink.click()
     await expect(page).toHaveURL(/\/requisitos$/)
