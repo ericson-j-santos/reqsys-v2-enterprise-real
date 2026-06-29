@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  calcularMetricasGovbi,
+  carregarHistoricoGovbi,
   contarConsultasGovbi,
   criarQueryFiltrosGovbi,
   criarRegistroConsultaGovbi,
+  exportarEvidenciaGovbi,
   filtrarConsultasGovbi,
+  GOVBI_HISTORICO_KEY,
+  normalizarFiltrosGovbi,
   possuiFiltroAtivo,
+  salvarHistoricoGovbi,
 } from './filtrosGovbi'
 
 const consultas = [
@@ -45,5 +51,45 @@ describe('filtrosGovbi', () => {
 
   it('conta consultas por resultado', () => {
     expect(contarConsultasGovbi(consultas)).toEqual({ erros: 1, fallback: 1, sucesso: 1 })
+  })
+
+  it('calcula metricas agregadas com latencia media', () => {
+    expect(calcularMetricasGovbi(consultas)).toEqual({
+      total: 2,
+      sucesso: 1,
+      erros: 1,
+      fallback: 1,
+      latenciaMediaMs: 7660,
+    })
+  })
+
+  it('exporta evidencia filtrada em JSON', () => {
+    const payload = JSON.parse(exportarEvidenciaGovbi(consultas, { status: 'MODO_DEGRADADO' }))
+    expect(payload.modulo).toBe('govbi-ia')
+    expect(payload.consultas).toHaveLength(1)
+    expect(payload.metricas.erros).toBe(1)
+    expect(payload.filtros.status).toBe('MODO_DEGRADADO')
+  })
+
+  it('normaliza filtros por data e fallback', () => {
+    expect(normalizarFiltrosGovbi({ data: '2026-06-29', fallback: 'true' })).toEqual({
+      status: '',
+      fonte: '',
+      correlation_id: '',
+      data: '2026-06-29',
+      busca: '',
+      fallback: 'true',
+    })
+  })
+
+  it('persiste e carrega historico no storage da sessao', () => {
+    const storage = {
+      store: {},
+      getItem(key) { return this.store[key] ?? null },
+      setItem(key, value) { this.store[key] = value },
+    }
+    salvarHistoricoGovbi(consultas, storage, 10)
+    expect(carregarHistoricoGovbi(storage)).toHaveLength(2)
+    expect(storage.store[GOVBI_HISTORICO_KEY]).toBeTruthy()
   })
 })

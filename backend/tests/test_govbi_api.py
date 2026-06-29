@@ -45,3 +45,27 @@ def test_govbi_perguntas_valida_payload_minimo():
     response = client.post('/api/govbi/perguntas', json={'pergunta': 'oi'})
 
     assert response.status_code == 422
+
+
+def test_govbi_health_retorna_envelope_operacional():
+    client = TestClient(app)
+    response = client.get('/api/govbi/health')
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['success'] is True
+    assert payload['data']['service'] == 'govbi-proxy'
+    assert payload['data']['status'] == 'ok'
+
+
+def test_govbi_funcionamento_retorna_cem_por_cento():
+    client = TestClient(app)
+    response = client.get('/api/govbi/funcionamento')
+
+    assert response.status_code == 200
+    payload = response.json()
+    dados = payload['data']
+    assert dados['completo'] is True
+    assert dados['percentual'] == 100
+    assert dados['aprovados'] == dados['total']
+    assert len(dados['resultados']) >= 5

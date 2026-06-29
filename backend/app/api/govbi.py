@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 import logging
 from typing import Any
 from uuid import uuid4
@@ -131,3 +132,79 @@ def govbi_health():
         'external_base_url_configured': bool(_govbi_base_url()),
         'timeout_seconds': _govbi_timeout(),
     })
+
+
+def _resultado_funcionamento(
+    resultado_id: str,
+    nome: str,
+    aprovado: bool,
+    detalhe: str = 'OK',
+) -> dict[str, Any]:
+    return {
+        'id': resultado_id,
+        'nome': nome,
+        'ok': bool(aprovado),
+        'detalhe': detalhe,
+        'categoria': 'backend',
+    }
+
+
+def _executar_funcionamento_govbi() -> dict[str, Any]:
+    base_url = _govbi_base_url()
+    timeout = _govbi_timeout()
+    fallback = _fallback_governado('teste funcionamento', 'govbi-func-backend', 'simulado')
+
+    resultados = [
+        _resultado_funcionamento(
+            'config-base-url',
+            'Configuração GOVBI_BASE_URL',
+            bool(base_url),
+            base_url or 'ausente',
+        ),
+        _resultado_funcionamento(
+            'config-timeout',
+            'Timeout do proxy configurado',
+            timeout > 0,
+            f'{timeout}s',
+        ),
+        _resultado_funcionamento(
+            'contrato-fallback',
+            'Fallback governado com contrato mínimo',
+            all(
+                campo in fallback
+                for campo in ('statusFluxo', 'correlationId', 'resultado', 'explicacao', 'mascaramentoAplicado')
+            ),
+            fallback.get('statusFluxo', ''),
+        ),
+        _resultado_funcionamento(
+            'contrato-normalizacao',
+            'Normalização de resposta externa',
+            'statusFluxo' in _normalizar_resposta({'resultado': {'colunas': [], 'linhas': []}}, 'corr-test'),
+            'campos canônicos presentes',
+        ),
+        _resultado_funcionamento(
+            'validacao-pergunta',
+            'Validação mínima de pergunta (3 caracteres)',
+            GovBIPerguntaRequest.model_validate({'pergunta': 'sim'}).pergunta == 'sim',
+            'min_length=3 ativo',
+        ),
+    ]
+
+    total = len(resultados)
+    aprovados = sum(1 for item in resultados if item['ok'])
+    percentual = round((aprovados / total) * 100) if total else 0
+
+    return {
+        'executadoEm': datetime.now(UTC).isoformat(),
+        'total': total,
+        'aprovados': aprovados,
+        'reprovados': total - aprovados,
+        'percentual': percentual,
+        'completo': total > 0 and aprovados == total,
+        'resultados': resultados,
+    }
+
+
+@router.get('/funcionamento')
+def govbi_funcionamento():
+    return ok(_executar_funcionamento_govbi())
