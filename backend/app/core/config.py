@@ -215,7 +215,7 @@ class Settings(BaseSettings):
                 'notas': 'Fly producao; local usa docker-compose.yml + docker-compose.prod.yml',
             },
             'testes': {'frontend': 'http://localhost:8084', 'api': 'http://localhost:8212/docs', 'notas': 'Docker test'},
-            'homologacao': {'frontend': 'https://reqsys-web-stg.fly.dev', 'api': 'https://reqsys-api-stg.fly.dev', 'notas': 'Fly staging'},
+            'homologacao': {'frontend': 'https://reqsys-app-stg.fly.dev', 'api': 'https://reqsys-api-stg.fly.dev', 'notas': 'Fly staging'},
         }
 
     @property
