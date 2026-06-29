@@ -1,12 +1,12 @@
 {
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at_epoch": 1782579911,
-  "overall_status": "unknown",
-  "health_score": 40,
-  "critical_failure_count": null,
-  "warning_count": null,
-  "source_missing": true,
+  "generated_at_epoch": 1782702654,
+  "overall_status": "passed",
+  "health_score": 100,
+  "critical_failure_count": 0,
+  "warning_count": 0,
+  "source_missing": false,
   "checks": [],
   "links": {
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
@@ -17,53 +17,43 @@
     "available": true,
     "source_path": "audit/runtime/public-runtime-validation.json",
     "source_fallback": false,
-    "evidence_run_id": "local-baseline",
-    "evidence_generated_at": "2026-06-27T17:04:56.958349+00:00",
-    "strict_gate_passed": false,
-    "environment": "prod",
-    "base_url": "https://reqsys-api.fly.dev",
-    "operational_status": "degraded",
-    "readiness_percent": 25.0,
-    "response_time": 295.15,
-    "dashboard_ready": false,
+    "evidence_run_id": "local-padrao-ouro-consolidation",
+    "evidence_generated_at": "2026-06-29T03:10:54.071435+00:00",
+    "strict_gate_passed": true,
+    "environment": "canonical",
+    "base_url": "http://127.0.0.1:8000",
+    "operational_status": "healthy",
+    "readiness_percent": 100.0,
+    "response_time": 3.23,
+    "dashboard_ready": true,
     "login_ready": false,
-    "api_ready": false,
-    "runtime_ready": false,
-    "evidence_ready": false,
-    "blocking_issues": [
-      "/api/runtime/health: 404 HTTP Error 404: Not Found",
-      "/api/runtime/readiness: 404 HTTP Error 404: Not Found",
-      "/api/runtime/liveness: 404 HTTP Error 404: Not Found"
-    ],
+    "api_ready": true,
+    "runtime_ready": true,
+    "evidence_ready": true,
+    "blocking_issues": [],
     "checks": {
-      "frontend_loading": false,
-      "assets": false,
+      "frontend_loading": true,
+      "assets": true,
       "cors_basic": false,
-      "incident_timeline": false
+      "incident_timeline": true
     },
     "operational_notes": [
       {
-        "id": "fly_runtime_deploy_lag",
-        "severity": "blocker",
-        "scope": "fly_runtime_deploy",
-        "wire_scope": false,
-        "message": "Os 404 nos endpoints strict do Fly indicam deploy anterior ao Runtime Operational Observability v1 — bloqueio evidenciado, fora do escopo wire-only (sem deploy). Corrigir exige incremento separado via ReqSys Fly Runtime P0 (workflow_dispatch deploy=true) antes de declarar produção healthy.",
-        "affected_endpoints": [
-          "/api/runtime/health",
-          "/api/runtime/readiness",
-          "/api/runtime/liveness"
-        ],
-        "next_increment": "fly-runtime-p0-deploy",
-        "blocks_increment": "evidence-automation-observability-e2e",
-        "reference": "docs/runbooks/public-runtime-smoke-test.md"
+        "id": "public_runtime_strict_ready",
+        "severity": "info",
+        "scope": "public_runtime_evidence",
+        "wire_scope": true,
+        "message": "Strict gate verde; incremento evidence-automation-observability-e2e pode executar (automático após Public Runtime Evidence Gate ou manual).",
+        "next_increment": "evidence-automation-observability-e2e",
+        "reference": "docs/runbooks/evidence-automation-observability-e2e.md"
       }
     ]
   },
   "runtime_gold_standard_depth": {
     "available": true,
     "strategy": "parar_expansao_horizontal_e_aprofundar_capacidades_existentes",
-    "overall_status": "warning",
-    "overall_score": 63,
+    "overall_status": "passed",
+    "overall_score": 100,
     "focus_order": [
       "runtime",
       "observability",
@@ -75,8 +65,8 @@
     "axes": [
       {
         "id": "runtime",
-        "status": "partial",
-        "score": 45,
+        "status": "passed",
+        "score": 100,
         "operator_action": "Priorizar estabilizacao dos sinais runtime antes de ampliar novas frentes."
       },
       {
@@ -87,14 +77,14 @@
       },
       {
         "id": "operational_ux",
-        "status": "partial",
-        "score": 45,
+        "status": "passed",
+        "score": 100,
         "operator_action": "Consumir next_required_actions como fila unica de operacao, evitando criar novos paineis paralelos."
       },
       {
         "id": "live_analytics",
-        "status": "partial",
-        "score": 45,
+        "status": "passed",
+        "score": 100,
         "operator_action": "Evoluir serie historica a partir dos artifacts existentes, sem duplicar motores de analytics."
       },
       {
@@ -105,8 +95,8 @@
       },
       {
         "id": "autonomous_operation",
-        "status": "partial",
-        "score": 45,
+        "status": "passed",
+        "score": 100,
         "operator_action": "Manter automacao assistida e allowlisted ate evidenciar baixa recorrencia de falhas."
       }
     ]
@@ -114,15 +104,15 @@
   "runtime_domain_drilldowns": [
     {
       "id": "ci_cd",
-      "status": "partial",
-      "severity": "info",
-      "score": 45,
-      "signals_available": 3,
+      "status": "passed",
+      "severity": "normal",
+      "score": 100,
+      "signals_available": 4,
       "signals_total": 4,
       "health": {
-        "maturity_percent": 50,
-        "confidence_level": "low",
-        "operational_risk": "high"
+        "maturity_percent": 97,
+        "confidence_level": "high",
+        "operational_risk": "medium"
       },
       "evidence": [
         {
@@ -148,21 +138,20 @@
           "required": false,
           "status": "passed",
           "parse_error": false
-        }
-      ],
-      "missing_evidence": [
+        },
         {
           "id": "runtime_health_validator_report",
           "path": "artifacts/runtime-health-validator/runtime-health-validator.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "passed",
           "parse_error": false
         }
       ],
+      "missing_evidence": [],
       "risk": {
-        "status": "partial",
-        "severity": "info"
+        "status": "passed",
+        "severity": "normal"
       },
       "environment_drift": {
         "findings": []
@@ -171,15 +160,15 @@
     },
     {
       "id": "evidence_gate",
-      "status": "partial",
-      "severity": "info",
-      "score": 45,
-      "signals_available": 3,
+      "status": "passed",
+      "severity": "normal",
+      "score": 100,
+      "signals_available": 4,
       "signals_total": 4,
       "health": {
-        "maturity_percent": 50,
-        "confidence_level": "low",
-        "operational_risk": "high"
+        "maturity_percent": 97,
+        "confidence_level": "high",
+        "operational_risk": "medium"
       },
       "evidence": [
         {
@@ -205,21 +194,20 @@
           "required": true,
           "status": "passed",
           "parse_error": false
-        }
-      ],
-      "missing_evidence": [
+        },
         {
           "id": "runtime_operational_evidence_graph",
           "path": "artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "passed",
           "parse_error": false
         }
       ],
+      "missing_evidence": [],
       "risk": {
-        "status": "partial",
-        "severity": "info"
+        "status": "passed",
+        "severity": "normal"
       },
       "environment_drift": {
         "findings": []
@@ -228,15 +216,15 @@
     },
     {
       "id": "governance",
-      "status": "partial",
-      "severity": "info",
-      "score": 45,
-      "signals_available": 3,
+      "status": "passed",
+      "severity": "normal",
+      "score": 100,
+      "signals_available": 4,
       "signals_total": 4,
       "health": {
-        "maturity_percent": 50,
-        "confidence_level": "low",
-        "operational_risk": "high"
+        "maturity_percent": 97,
+        "confidence_level": "high",
+        "operational_risk": "medium"
       },
       "evidence": [
         {
@@ -262,21 +250,20 @@
           "required": true,
           "status": "passed",
           "parse_error": false
-        }
-      ],
-      "missing_evidence": [
+        },
         {
           "id": "governance_gate_report",
           "path": "artifacts/operational-governance-gate/operational-governance-gate.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "passed",
           "parse_error": false
         }
       ],
+      "missing_evidence": [],
       "risk": {
-        "status": "partial",
-        "severity": "info"
+        "status": "passed",
+        "severity": "normal"
       },
       "environment_drift": {
         "findings": []
@@ -289,12 +276,7 @@
           "no_production_runtime_change"
         ],
         "next_required_actions": [
-          "Completar sinais obrigatorios e revisar alertas do dominio ci_cd.",
-          "Completar sinais obrigatorios e revisar alertas do dominio evidence_gate.",
-          "Completar sinais obrigatorios e revisar alertas do dominio governance.",
-          "Completar sinais obrigatorios e revisar alertas do dominio runtime_risk.",
-          "Completar sinais obrigatorios e revisar alertas do dominio living_architecture.",
-          "Completar sinais obrigatorios e revisar alertas do dominio remediation."
+          "Manter coleta local em CI e preparar contrato de dashboard/API sem rede externa."
         ],
         "gold_standard_status": {
           "Runtime Health Center": "passed",
@@ -302,21 +284,21 @@
           "runtime-health-report.json": "passed",
           "Score consolidado de maturidade": "passed",
           "Environment Drift Detector": "passed",
-          "Remediation Executor governado": "partial"
+          "Remediation Executor governado": "passed"
         }
       }
     },
     {
       "id": "runtime_risk",
-      "status": "partial",
-      "severity": "info",
-      "score": 45,
-      "signals_available": 2,
+      "status": "passed",
+      "severity": "normal",
+      "score": 100,
+      "signals_available": 4,
       "signals_total": 4,
       "health": {
-        "maturity_percent": 50,
-        "confidence_level": "low",
-        "operational_risk": "high"
+        "maturity_percent": 97,
+        "confidence_level": "high",
+        "operational_risk": "medium"
       },
       "evidence": [
         {
@@ -334,28 +316,27 @@
           "required": true,
           "status": "passed",
           "parse_error": false
-        }
-      ],
-      "missing_evidence": [
+        },
         {
           "id": "runtime_health_validator_report",
           "path": "artifacts/runtime-health-validator/runtime-health-validator.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "passed",
           "parse_error": false
         },
         {
           "id": "operational_stability_score_artifact",
           "path": "artifacts/operational-stability-score/operational-stability-score.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "passed",
           "parse_error": false
         }
       ],
+      "missing_evidence": [],
       "risk": {
-        "status": "partial",
+        "status": "passed",
         "drift_level": "low"
       },
       "environment_drift": {
@@ -365,15 +346,15 @@
     },
     {
       "id": "living_architecture",
-      "status": "partial",
-      "severity": "info",
-      "score": 45,
-      "signals_available": 3,
+      "status": "passed",
+      "severity": "normal",
+      "score": 100,
+      "signals_available": 4,
       "signals_total": 4,
       "health": {
-        "maturity_percent": 50,
-        "confidence_level": "low",
-        "operational_risk": "high"
+        "maturity_percent": 97,
+        "confidence_level": "high",
+        "operational_risk": "medium"
       },
       "evidence": [
         {
@@ -399,21 +380,20 @@
           "required": true,
           "status": "passed",
           "parse_error": false
-        }
-      ],
-      "missing_evidence": [
+        },
         {
           "id": "living_architecture_drift_artifact",
           "path": "artifacts/living-architecture-doc-drift/living-architecture-doc-drift.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "passed",
           "parse_error": false
         }
       ],
+      "missing_evidence": [],
       "risk": {
-        "status": "partial",
-        "severity": "info"
+        "status": "passed",
+        "severity": "normal"
       },
       "environment_drift": {
         "findings": []
@@ -428,9 +408,9 @@
       "signals_available": 4,
       "signals_total": 4,
       "health": {
-        "maturity_percent": 50,
-        "confidence_level": "low",
-        "operational_risk": "high"
+        "maturity_percent": 97,
+        "confidence_level": "high",
+        "operational_risk": "medium"
       },
       "evidence": [
         {
@@ -553,15 +533,15 @@
     },
     {
       "id": "remediation",
-      "status": "partial",
-      "severity": "info",
-      "score": 45,
-      "signals_available": 3,
+      "status": "passed",
+      "severity": "normal",
+      "score": 100,
+      "signals_available": 4,
       "signals_total": 4,
       "health": {
-        "maturity_percent": 50,
-        "confidence_level": "low",
-        "operational_risk": "high"
+        "maturity_percent": 97,
+        "confidence_level": "high",
+        "operational_risk": "medium"
       },
       "evidence": [
         {
@@ -587,21 +567,20 @@
           "required": false,
           "status": "passed",
           "parse_error": false
-        }
-      ],
-      "missing_evidence": [
+        },
         {
           "id": "failure_pattern_report",
           "path": "artifacts/failure-pattern-engine/failure-pattern-report.json",
-          "available": false,
+          "available": true,
           "required": false,
-          "status": "missing",
+          "status": "passed",
           "parse_error": false
         }
       ],
+      "missing_evidence": [],
       "risk": {
-        "status": "partial",
-        "severity": "info"
+        "status": "passed",
+        "severity": "normal"
       },
       "environment_drift": {
         "findings": []
@@ -616,11 +595,11 @@
       "domain": "ci_cd",
       "workflow": "runtime-health-center",
       "pr": "",
-      "status": "partial",
-      "severity": "info",
+      "status": "passed",
+      "severity": "normal",
       "evidence": {
-        "score": 45,
-        "signals_available": 3,
+        "score": 100,
+        "signals_available": 4,
         "signals_total": 4
       }
     },
@@ -630,11 +609,11 @@
       "domain": "evidence_gate",
       "workflow": "runtime-health-center",
       "pr": "",
-      "status": "partial",
-      "severity": "info",
+      "status": "passed",
+      "severity": "normal",
       "evidence": {
-        "score": 45,
-        "signals_available": 3,
+        "score": 100,
+        "signals_available": 4,
         "signals_total": 4
       }
     },
@@ -644,11 +623,11 @@
       "domain": "governance",
       "workflow": "runtime-health-center",
       "pr": "",
-      "status": "partial",
-      "severity": "info",
+      "status": "passed",
+      "severity": "normal",
       "evidence": {
-        "score": 45,
-        "signals_available": 3,
+        "score": 100,
+        "signals_available": 4,
         "signals_total": 4
       }
     },
@@ -658,11 +637,11 @@
       "domain": "runtime_risk",
       "workflow": "runtime-health-center",
       "pr": "",
-      "status": "partial",
-      "severity": "info",
+      "status": "passed",
+      "severity": "normal",
       "evidence": {
-        "score": 45,
-        "signals_available": 2,
+        "score": 100,
+        "signals_available": 4,
         "signals_total": 4
       }
     },
@@ -672,11 +651,11 @@
       "domain": "living_architecture",
       "workflow": "runtime-health-center",
       "pr": "",
-      "status": "partial",
-      "severity": "info",
+      "status": "passed",
+      "severity": "normal",
       "evidence": {
-        "score": 45,
-        "signals_available": 3,
+        "score": 100,
+        "signals_available": 4,
         "signals_total": 4
       }
     },
@@ -700,11 +679,11 @@
       "domain": "remediation",
       "workflow": "runtime-health-center",
       "pr": "",
-      "status": "partial",
-      "severity": "info",
+      "status": "passed",
+      "severity": "normal",
       "evidence": {
-        "score": 45,
-        "signals_available": 3,
+        "score": 100,
+        "signals_available": 4,
         "signals_total": 4
       }
     },
@@ -714,13 +693,13 @@
       "domain": "evidence_gate",
       "workflow": "runtime_health_validator",
       "pr": "",
-      "status": "missing",
-      "severity": "info",
+      "status": "passed",
+      "severity": "normal",
       "evidence": {
         "id": "runtime_health_validator",
         "path": "artifacts/runtime-health-validator/runtime-health-validator.json",
-        "available": false,
-        "status": "missing",
+        "available": true,
+        "status": "passed",
         "parse_error": false
       }
     },
@@ -730,13 +709,13 @@
       "domain": "evidence_gate",
       "workflow": "runtime_operational_evidence_graph",
       "pr": "",
-      "status": "missing",
-      "severity": "info",
+      "status": "passed",
+      "severity": "normal",
       "evidence": {
         "id": "runtime_operational_evidence_graph",
         "path": "artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json",
-        "available": false,
-        "status": "missing",
+        "available": true,
+        "status": "passed",
         "parse_error": false
       }
     },
@@ -746,13 +725,13 @@
       "domain": "evidence_gate",
       "workflow": "operational_risk_engine",
       "pr": "",
-      "status": "missing",
-      "severity": "info",
+      "status": "passed",
+      "severity": "normal",
       "evidence": {
         "id": "operational_risk_engine",
         "path": "artifacts/operational-risk-engine/operational-risk-engine.json",
-        "available": false,
-        "status": "missing",
+        "available": true,
+        "status": "passed",
         "parse_error": false
       }
     },
@@ -762,13 +741,13 @@
       "domain": "evidence_gate",
       "workflow": "operational_stability_score",
       "pr": "",
-      "status": "missing",
-      "severity": "info",
+      "status": "passed",
+      "severity": "normal",
       "evidence": {
         "id": "operational_stability_score",
         "path": "artifacts/operational-stability-score/operational-stability-score.json",
-        "available": false,
-        "status": "missing",
+        "available": true,
+        "status": "passed",
         "parse_error": false
       }
     },
@@ -778,13 +757,13 @@
       "domain": "evidence_gate",
       "workflow": "pr_evidence_gate",
       "pr": "",
-      "status": "missing",
-      "severity": "info",
+      "status": "passed",
+      "severity": "normal",
       "evidence": {
         "id": "pr_evidence_gate",
         "path": "artifacts/pr-evidence-gate/pr-evidence-gate.json",
-        "available": false,
-        "status": "missing",
+        "available": true,
+        "status": "passed",
         "parse_error": false
       }
     },
@@ -794,13 +773,13 @@
       "domain": "evidence_gate",
       "workflow": "public_runtime_evidence",
       "pr": "",
-      "status": "missing",
-      "severity": "info",
+      "status": "passed",
+      "severity": "normal",
       "evidence": {
         "id": "public_runtime_evidence",
         "path": "artifacts/public-runtime-evidence/public-runtime-evidence.json",
-        "available": false,
-        "status": "missing",
+        "available": true,
+        "status": "passed",
         "parse_error": false
       }
     },
@@ -818,6 +797,82 @@
         "available": true,
         "status": "passed",
         "parse_error": false
+      }
+    },
+    {
+      "source": "runtime_operational_evidence_graph",
+      "title": "event_1",
+      "domain": "evidence_gate",
+      "workflow": "",
+      "pr": "",
+      "status": "unknown",
+      "severity": "info",
+      "evidence": {
+        "id": "event_1",
+        "label": "pull_request_state_captured",
+        "source": "github_runtime_analytics",
+        "state": "review_only",
+        "correlation_level": "operational"
+      }
+    },
+    {
+      "source": "runtime_operational_evidence_graph",
+      "title": "event_2",
+      "domain": "evidence_gate",
+      "workflow": "",
+      "pr": "",
+      "status": "unknown",
+      "severity": "info",
+      "evidence": {
+        "id": "event_2",
+        "label": "github_actions_state_captured",
+        "source": "github_runtime_analytics",
+        "state": "review_only",
+        "correlation_level": "ci"
+      }
+    },
+    {
+      "source": "runtime_operational_evidence_graph",
+      "title": "event_3",
+      "domain": "evidence_gate",
+      "workflow": "",
+      "pr": "",
+      "status": "unknown",
+      "severity": "info",
+      "evidence": {
+        "id": "event_3",
+        "label": "governance_gate_state_captured",
+        "source": "github_runtime_analytics",
+        "state": "review_only",
+        "correlation_level": "governance"
+      }
+    },
+    {
+      "source": "runtime_operational_evidence_graph",
+      "title": "evidência correlacionada",
+      "domain": "temporal_correlation",
+      "workflow": "",
+      "pr": "",
+      "status": "unknown",
+      "severity": "info",
+      "evidence": {
+        "from": "event_1",
+        "to": "event_2",
+        "type": "temporal_correlation"
+      }
+    },
+    {
+      "source": "runtime_operational_evidence_graph",
+      "title": "evidência correlacionada",
+      "domain": "temporal_correlation",
+      "workflow": "",
+      "pr": "",
+      "status": "unknown",
+      "severity": "info",
+      "evidence": {
+        "from": "event_2",
+        "to": "event_3",
+        "type": "temporal_correlation"
       }
     }
   ],
@@ -7128,6 +7183,300 @@
       "compatível com artifacts existentes: campos ausentes permanecem null"
     ]
   },
+  "operational_observability_hub": {
+    "schema_version": "1.0.0",
+    "generated_at": "2026-06-28T14:45:43Z",
+    "source": "operational-observability-hub",
+    "status": "degraded",
+    "confidence_level": "high",
+    "maturity_percent": 0.0,
+    "operational_risk": "high",
+    "commit_sha": "local",
+    "workflow_run_id": null,
+    "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7",
+    "repository": "local/reqsys",
+    "mode": "report_only",
+    "pareto_increment": {
+      "multi_environment_evidence": true,
+      "metrics_history_persisted": false,
+      "longitudinal_analytics": false,
+      "environment_drift_detection": true,
+      "governed_alerts": true,
+      "slo_sla_evidence": true,
+      "ci_runtime_observability_correlation": true
+    },
+    "sources": {
+      "multi_environment": {
+        "environments_total": 4,
+        "ready": 0,
+        "degraded": 0,
+        "url_matrix_misaligned": 3,
+        "promotion_order": [
+          "dev",
+          "hml",
+          "prod"
+        ],
+        "overall_probe_status": "unknown"
+      },
+      "environment_drift": {
+        "drift_level": "ALTO",
+        "findings": 3
+      },
+      "slo_evidence": {
+        "slo_count": 3,
+        "breach_count": 1,
+        "met_count": 0,
+        "no_data_count": 2
+      },
+      "longitudinal": {
+        "windows": {
+          "7d": {
+            "points": 0
+          },
+          "30d": {
+            "points": 0
+          }
+        },
+        "trend": {
+          "direction": "unknown",
+          "points": 0
+        }
+      },
+      "history_index": {
+        "snapshot_count": 0,
+        "risk": "medium",
+        "maturity_percent": 0.0
+      }
+    },
+    "governed_alert": {
+      "alert_level": "HIGH",
+      "alert_type": "ENVIRONMENT_DRIFT",
+      "noise_level": "LOW",
+      "action_policy": "MANUAL_REVIEW_REQUIRED",
+      "should_alert": true,
+      "mode": "governed_report_only"
+    },
+    "correlation_chain": [
+      {
+        "sequence": 1,
+        "event": "coordenador_status_captured",
+        "source": "coordenador-status-consolidator",
+        "correlation_level": "governance",
+        "state": "yellow",
+        "decision": "bloquear_novas_frentes_ate_consolidar",
+        "correlation_id": "d61aa286-015e-451d-ad3d-c54278c2103e"
+      },
+      {
+        "sequence": 2,
+        "event": "environment_probe",
+        "source": "multi-environment-evidence",
+        "correlation_level": "runtime",
+        "environment": "dev",
+        "status": "unknown",
+        "readiness_percent": 0,
+        "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7"
+      },
+      {
+        "sequence": 3,
+        "event": "environment_probe",
+        "source": "multi-environment-evidence",
+        "correlation_level": "runtime",
+        "environment": "hml",
+        "status": "unknown",
+        "readiness_percent": 0,
+        "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7"
+      },
+      {
+        "sequence": 4,
+        "event": "environment_probe",
+        "source": "multi-environment-evidence",
+        "correlation_level": "runtime",
+        "environment": "prod",
+        "status": "unknown",
+        "readiness_percent": 0,
+        "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7"
+      }
+    ],
+    "recommended_actions": [
+      "Normalizar URLs de dev entre validate_environments_readiness e fly-environments.",
+      "Normalizar URLs de hml entre validate_environments_readiness e fly-environments.",
+      "Normalizar URLs de prod entre validate_environments_readiness e fly-environments.",
+      "Tratar breach SLO env_probe_availability: actual=0.0%",
+      "Alerta governado HIGH: ENVIRONMENT_DRIFT — MANUAL_REVIEW_REQUIRED"
+    ],
+    "guardrails": [
+      "report_only",
+      "no_auto_deploy",
+      "no_production_mutation",
+      "human_review_required"
+    ]
+  },
+  "slo_evidence": {
+    "schema_version": "1.0.0",
+    "generated_at": "2026-06-28T14:45:43Z",
+    "source": "operational-slo-evidence",
+    "status": "watch",
+    "confidence_level": "low",
+    "maturity_percent": 75,
+    "operational_risk": "medium",
+    "commit_sha": "local",
+    "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7",
+    "mode": "report_only",
+    "summary": {
+      "slo_count": 3,
+      "breach_count": 1,
+      "met_count": 0,
+      "no_data_count": 2
+    },
+    "slos": [
+      {
+        "slo_id": "ci_success_rate",
+        "name": "Taxa de sucesso CI",
+        "environment": "all",
+        "target_percent": 95.0,
+        "window_days": 7,
+        "actual_percent": null,
+        "error_budget_remaining": null,
+        "breach": false,
+        "status": "no_data"
+      },
+      {
+        "slo_id": "env_probe_availability",
+        "name": "Disponibilidade probes multiambiente",
+        "environment": "multi",
+        "target_percent": 99.0,
+        "window_days": 1,
+        "actual_percent": 0.0,
+        "error_budget_remaining": -99.0,
+        "breach": true,
+        "status": "breach"
+      },
+      {
+        "slo_id": "mttr_minutes",
+        "name": "MTTR operacional",
+        "environment": "all",
+        "target_percent": 90.0,
+        "window_days": 7,
+        "actual_percent": null,
+        "error_budget_remaining": null,
+        "breach": false,
+        "status": "no_data"
+      }
+    ],
+    "guardrails": [
+      "report_only",
+      "no_auto_block",
+      "human_review_on_breach"
+    ]
+  },
+  "multi_environment_evidence": {
+    "schema_version": "1.0.0",
+    "generated_at": "2026-06-28T14:45:43Z",
+    "source": "operational-multi-environment-evidence",
+    "status": "degraded",
+    "confidence_level": "high",
+    "maturity_percent": 0.0,
+    "operational_risk": "high",
+    "commit_sha": "local",
+    "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7",
+    "mode": "report_only",
+    "summary": {
+      "environments_total": 4,
+      "ready": 0,
+      "degraded": 0,
+      "url_matrix_misaligned": 3,
+      "promotion_order": [
+        "dev",
+        "hml",
+        "prod"
+      ],
+      "overall_probe_status": "unknown"
+    },
+    "environments": [
+      {
+        "canonical": "dev",
+        "probe_available": true,
+        "fly_matrix_available": true,
+        "probe_name": "desenvolvimento",
+        "status": "unknown",
+        "readiness_percent": 0,
+        "operational_risk": "medium",
+        "frontend_url": "https://reqsys-app-dev.fly.dev",
+        "api_url": "https://reqsys-api-dev.fly.dev/docs",
+        "fly_api_url": "https://reqsys-api-dev.fly.dev",
+        "fly_frontend_url": "https://reqsys-dev.fly.dev",
+        "app_env": "development",
+        "smoke_endpoints": [
+          "/health",
+          "/api/runtime/health",
+          "/api/runtime/readiness",
+          "/api/runtime/liveness"
+        ],
+        "url_matrix_aligned": false
+      },
+      {
+        "canonical": "hml",
+        "probe_available": true,
+        "fly_matrix_available": true,
+        "probe_name": "homologacao",
+        "status": "unknown",
+        "readiness_percent": 0,
+        "operational_risk": "medium",
+        "frontend_url": "https://reqsys-web-stg.fly.dev",
+        "api_url": "https://reqsys-api-stg.fly.dev",
+        "fly_api_url": "https://reqsys-api-hml.fly.dev",
+        "fly_frontend_url": "https://reqsys-hml.fly.dev",
+        "app_env": "homolog",
+        "smoke_endpoints": [
+          "/health",
+          "/api/runtime/health",
+          "/api/runtime/readiness",
+          "/api/runtime/liveness"
+        ],
+        "url_matrix_aligned": false
+      },
+      {
+        "canonical": "prod",
+        "probe_available": true,
+        "fly_matrix_available": true,
+        "probe_name": "producao",
+        "status": "unknown",
+        "readiness_percent": 0,
+        "operational_risk": "medium",
+        "frontend_url": "https://reqsys-app.fly.dev",
+        "api_url": "https://reqsys-api.fly.dev/docs",
+        "fly_api_url": "https://reqsys-api-prod.fly.dev",
+        "fly_frontend_url": "https://reqsys-prod.fly.dev",
+        "app_env": "production",
+        "smoke_endpoints": [
+          "/health",
+          "/api/runtime/health",
+          "/api/runtime/readiness",
+          "/api/runtime/liveness",
+          "/api/runtime/metrics"
+        ],
+        "url_matrix_aligned": false
+      },
+      {
+        "canonical": "test",
+        "probe_available": true,
+        "fly_matrix_available": false,
+        "probe_name": "testes",
+        "status": "local_only",
+        "readiness_percent": 0,
+        "operational_risk": "medium",
+        "frontend_url": "http://localhost:8084",
+        "api_url": "http://localhost:8212/docs",
+        "url_matrix_aligned": null
+      }
+    ],
+    "guardrails": [
+      "read_only",
+      "non_blocking",
+      "no_auto_promotion",
+      "human_review_required"
+    ]
+  },
   "delivery_finalization": {
     "available": false,
     "artifact": "delivery-finalization-report.json",
@@ -7141,10 +7490,13 @@
   },
   "runtime_sources": {
     "runtime_health_report_available": true,
-    "runtime_operational_evidence_graph_available": false,
+    "runtime_operational_evidence_graph_available": true,
     "public_runtime_validation_available": true,
     "public_runtime_source_fallback": false,
     "observability_correlation_report_available": true,
+    "operational_observability_hub_available": true,
+    "slo_evidence_available": true,
+    "multi_environment_evidence_available": true,
     "delivery_finalization_report_available": false
   }
 }

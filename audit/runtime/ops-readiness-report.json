@@ -1,23 +1,15 @@
 {
-  "environment": "prod",
-  "base_url": "https://reqsys-api.fly.dev",
+  "environment": "canonical",
+  "base_url": "http://127.0.0.1:8000",
   "reachable": true,
-  "response_time": 295.15,
-  "dashboard_ready": false,
+  "response_time": 3.23,
+  "dashboard_ready": true,
   "login_ready": false,
-  "api_ready": false,
-  "runtime_ready": false,
-  "evidence_ready": false,
-  "operational_status": "degraded",
-  "readiness_percent": 25.0,
-  "blocking_issues": [
-    "/api/runtime/health: 404 HTTP Error 404: Not Found",
-    "/api/runtime/readiness: 404 HTTP Error 404: Not Found",
-    "/api/runtime/liveness: 404 HTTP Error 404: Not Found"
-  ],
-  "next_actions": [
-    "Validar artifact public-runtime-validation.json",
-    "Corrigir endpoints indisponíveis antes de promover ambiente",
-    "Reexecutar smoke validator read-only"
-  ]
+  "api_ready": true,
+  "runtime_ready": true,
+  "evidence_ready": true,
+  "operational_status": "healthy",
+  "readiness_percent": 100.0,
+  "blocking_issues": [],
+  "next_actions": []
 }

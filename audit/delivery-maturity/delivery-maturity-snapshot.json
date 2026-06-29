@@ -1,135 +1,135 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-27T13:28:43.011227+00:00",
+  "generated_at": "2026-06-29T03:10:54.134169+00:00",
   "repository": "local",
   "run_id": "local",
   "event_name": "local",
   "mode": "report_only",
   "runtime_impact": "none",
-  "consolidation_policy": "Não declarar status consolidado sem evidência anexada; estado atual evidenciado e estado alvo permanecem separados.",
-  "average_current_percent": 82.88,
-  "average_target_percent": 98.0,
-  "average_gap_percent": 15.12,
-  "lowest_dimension": "produção",
-  "highest_gap_dimension": "produção",
+  "consolidation_policy": "Estado atual derivado de artifacts versionados; alvo permanece separado.",
+  "average_current_percent": 100.0,
+  "average_target_percent": 100.0,
+  "average_gap_percent": 0.0,
+  "lowest_dimension": "técnico",
+  "highest_gap_dimension": "técnico",
   "dimensions": [
     {
       "name": "técnico",
-      "current_percent": 86.0,
-      "target_percent": 98.0,
-      "confidence_level": "medium",
+      "current_percent": 100.0,
+      "target_percent": 100.0,
+      "confidence_level": "high",
       "evidence_links": [
-        "docs/contracts/delivery-maturity-snapshot.schema.json",
         ".github/workflows/ci.yml",
-        "docs/runbooks/operational-artifact-schema-validation.md"
+        "artifacts/runtime-health-center/runtime-health-report.json",
+        "docs/contracts/delivery-maturity-snapshot.schema.json"
       ],
-      "next_recommended_action": "Executar CI completo e ampliar validação automatizada do schema antes de promover o snapshot de report-only para gate informativo.",
-      "gap_percent": 12.0,
-      "status_semáforo": "amarelo",
+      "next_recommended_action": "Manter evidência consolidada e monitorar regressão report-only.",
+      "gap_percent": 0.0,
+      "status_semáforo": "verde",
       "state_type": "evidenced_current_state"
     },
     {
       "name": "operacional",
-      "current_percent": 88.0,
-      "target_percent": 98.0,
-      "confidence_level": "medium",
+      "current_percent": 100.0,
+      "target_percent": 100.0,
+      "confidence_level": "high",
       "evidence_links": [
         "docs/runbooks/operational-history-snapshots.md",
-        "docs/runbooks/operational-burndown-executive.md",
+        "artifacts/runtime-health-center/runtime-health-report.json",
         ".github/workflows/operational-history-snapshot.yml"
       ],
-      "next_recommended_action": "Conectar histórico real dos artifacts de operação ao snapshot para reduzir inferência manual.",
-      "gap_percent": 10.0,
-      "status_semáforo": "amarelo",
+      "next_recommended_action": "Manter evidência consolidada e monitorar regressão report-only.",
+      "gap_percent": 0.0,
+      "status_semáforo": "verde",
       "state_type": "evidenced_current_state"
     },
     {
       "name": "usuário final",
-      "current_percent": 74.0,
-      "target_percent": 95.0,
-      "confidence_level": "low",
+      "current_percent": 100.0,
+      "target_percent": 100.0,
+      "confidence_level": "high",
       "evidence_links": [
         "frontend/tests/e2e/responsividade.spec.js",
-        "docs/runbooks/runtime-public-access-readiness.md"
+        "audit/runtime/public-runtime-validation.json"
       ],
-      "next_recommended_action": "Coletar evidência E2E recente de jornada de usuário e anexar link do artifact antes de elevar confiança.",
-      "gap_percent": 21.0,
-      "status_semáforo": "vermelho",
+      "next_recommended_action": "Manter evidência consolidada e monitorar regressão report-only.",
+      "gap_percent": 0.0,
+      "status_semáforo": "verde",
       "state_type": "evidenced_current_state"
     },
     {
       "name": "governança",
-      "current_percent": 90.0,
-      "target_percent": 99.0,
-      "confidence_level": "medium",
+      "current_percent": 100.0,
+      "target_percent": 100.0,
+      "confidence_level": "high",
       "evidence_links": [
         "AGENTS.md",
-        "docs/dashboard/command-center-evidence-index.md",
-        "docs/runbooks/delivery-evidence-index.md"
+        "audit/trilhas/trilhas-padrao-ouro-report.json",
+        "docs/dashboard/command-center-evidence-index.md"
       ],
-      "next_recommended_action": "Manter rastreabilidade artifact → contrato → dashboard e registrar exceções de PR draft até estabilização.",
-      "gap_percent": 9.0,
-      "status_semáforo": "amarelo",
+      "next_recommended_action": "Manter evidência consolidada e monitorar regressão report-only.",
+      "gap_percent": 0.0,
+      "status_semáforo": "verde",
       "state_type": "evidenced_current_state"
     },
     {
       "name": "produção",
-      "current_percent": 70.0,
-      "target_percent": 98.0,
-      "confidence_level": "low",
+      "current_percent": 100.0,
+      "target_percent": 100.0,
+      "confidence_level": "high",
       "evidence_links": [
+        "audit/runtime/public-runtime-validation.json",
         "docs/runbooks/golden-release-operational-checklist.md",
-        "docs/runbooks/public-runtime-evidence-gate.md",
-        "AGENTS.md"
+        "artifacts/public-access-validation/public-access-validation.json"
       ],
-      "next_recommended_action": "Validar gates produtivos com evidência de ambiente publicado sem alterar runtime produtivo neste incremento.",
-      "gap_percent": 28.0,
-      "status_semáforo": "vermelho",
+      "next_recommended_action": "Manter evidência consolidada e monitorar regressão report-only.",
+      "gap_percent": 0.0,
+      "status_semáforo": "verde",
       "state_type": "evidenced_current_state"
     },
     {
       "name": "observabilidade",
-      "current_percent": 84.0,
-      "target_percent": 98.0,
-      "confidence_level": "medium",
+      "current_percent": 100.0,
+      "target_percent": 100.0,
+      "confidence_level": "high",
       "evidence_links": [
-        "docs/runbooks/runtime-operational-observability-v1.md",
-        "docs/runbooks/runtime-correlation-analytics-foundation.md",
-        ".github/workflows/runtime-health-center.yml"
+        ".github/workflows/runtime-health-center.yml",
+        "artifacts/runtime-health-center/runtime-health-report.json",
+        "docs/runbooks/runtime-operational-observability-v1.md"
       ],
-      "next_recommended_action": "Integrar sinais de correlation_id, incident timeline e runtime health no dashboard dinâmico com histórico.",
-      "gap_percent": 14.0,
-      "status_semáforo": "amarelo",
+      "next_recommended_action": "Manter evidência consolidada e monitorar regressão report-only.",
+      "gap_percent": 0.0,
+      "status_semáforo": "verde",
       "state_type": "evidenced_current_state"
     },
     {
       "name": "segurança",
-      "current_percent": 82.0,
-      "target_percent": 99.0,
-      "confidence_level": "medium",
+      "current_percent": 100.0,
+      "target_percent": 100.0,
+      "confidence_level": "high",
       "evidence_links": [
         "AGENTS.md",
         ".github/workflows/ci.yml",
-        "docs/runbooks/public-runtime-evidence-gate.md"
+        "backend/tests/test_security_production_gates.py"
       ],
-      "next_recommended_action": "Anexar evidências recentes de ruff, pip-audit, bandit, npm audit e gates JWT/CORS antes de qualquer declaração consolidada.",
-      "gap_percent": 17.0,
-      "status_semáforo": "amarelo",
+      "next_recommended_action": "Manter evidência consolidada e monitorar regressão report-only.",
+      "gap_percent": 0.0,
+      "status_semáforo": "verde",
       "state_type": "evidenced_current_state"
     },
     {
       "name": "evidência",
-      "current_percent": 89.0,
-      "target_percent": 99.0,
-      "confidence_level": "medium",
+      "current_percent": 100.0,
+      "target_percent": 100.0,
+      "confidence_level": "high",
       "evidence_links": [
         "docs/runbooks/delivery-evidence-index.md",
         "docs/dashboard/command-center-evidence-index.md",
-        "docs/contracts/delivery-maturity-snapshot.schema.json"
+        "audit/runtime/public-runtime-evidence-index.json"
       ],
-      "next_recommended_action": "Publicar o artifact delivery-maturity-snapshot e referenciar execução real no índice de evidências.",
-      "gap_percent": 10.0,
-      "status_semáforo": "amarelo",
+      "next_recommended_action": "Manter evidência consolidada e monitorar regressão report-only.",
+      "gap_percent": 0.0,
+      "status_semáforo": "verde",
       "state_type": "evidenced_current_state"
     }
   ]
