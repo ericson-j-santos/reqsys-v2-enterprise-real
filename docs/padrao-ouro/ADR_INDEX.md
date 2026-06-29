@@ -71,6 +71,7 @@ Data: YYYY-MM-DD
 | --- | --- | --- | --- |
 | [ADR-020](../adr/ADR-020-connection-broker-permission-on-demand.md) | Connection Broker Permission on Demand | aceito | Permissões de conector sob demanda |
 | [ADR-021](../adr/ADR-021-figma-github-retorno-em-tela.md) | Figma-GitHub Retorno em Tela | aceito | Integração visual Figma |
+| [ADR-041](../adr/ADR-041-cofre-segredos-locais.md) | Cofre de Segredos Locais | aceito | AES-GCM + keyring, API REST, diagnóstico |
 | [ADR-033](../adr/ADR-033-product-intelligence-final-evidence-index.md) | Product Intelligence Final Evidence Index | aceito | Índice final de evidências PI |
 | [ADR-ESTATISTICAS](../adr/ADR-ESTATISTICAS-INTERNAS-EXTERNAS.md) | Estatísticas Internas/Externas | aceito | Abas de estatísticas |
 | [ADR-USER-FINAL-SHELL](../adr/ADR-USER-FINAL-SHELL-001.md) | User Final Shell | aceito | Shell visual final do usuário |

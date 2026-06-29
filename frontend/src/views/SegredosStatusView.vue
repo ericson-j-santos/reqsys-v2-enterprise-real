@@ -8,6 +8,37 @@
       chip-tooltip="Indica a origem predominante dos segredos configurados"
     >
       <template #actions>
+        <v-tooltip text="Grava um segredo criptografado no cofre local" location="top">
+          <template #activator="{ props }">
+            <v-btn
+              v-bind="props"
+              size="small"
+              color="success"
+              variant="outlined"
+              prepend-icon="mdi-lock-plus-outline"
+              data-testid="btn-gravar-segredo"
+              @click="abrirGravar()"
+            >
+              Gravar segredo
+            </v-btn>
+          </template>
+        </v-tooltip>
+        <v-tooltip text="Cria a master key do cofre (uma vez por ambiente)" location="top">
+          <template #activator="{ props }">
+            <v-btn
+              v-bind="props"
+              size="small"
+              color="secondary"
+              variant="outlined"
+              prepend-icon="mdi-cog-play-outline"
+              :loading="initLoading"
+              data-testid="btn-inicializar-vault"
+              @click="inicializarVault"
+            >
+              Inicializar cofre
+            </v-btn>
+          </template>
+        </v-tooltip>
         <v-tooltip text="Recarrega o diagnóstico de segredos do backend" location="top">
           <template #activator="{ props }">
             <v-btn
@@ -23,32 +54,25 @@
             </v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Abre o cofre para gerenciar segredos diretamente" location="top">
-          <template #activator="{ props }">
-            <v-btn
-              v-bind="props"
-              size="small"
-              color="amber"
-              variant="tonal"
-              prepend-icon="mdi-safe"
-              href="/cofre.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="btn-abrir-cofre"
-            >
-              Abrir cofre
-            </v-btn>
-          </template>
-        </v-tooltip>
       </template>
     </PageHeader>
 
     <v-alert v-if="erro" type="error" variant="tonal" class="mb-4" data-testid="alerta-erro">
       {{ erro }}
     </v-alert>
+    <v-alert
+      v-if="sucesso"
+      type="success"
+      variant="tonal"
+      class="mb-4"
+      closable
+      data-testid="alerta-sucesso"
+      @click:close="sucesso = ''"
+    >
+      {{ sucesso }}
+    </v-alert>
 
     <v-row>
-      <!-- Resumo / KPIs -->
       <v-col cols="12" md="4">
         <v-card class="table-card h-100">
           <v-card-title class="py-3 px-4">Resumo</v-card-title>
@@ -95,7 +119,6 @@
         </v-card>
       </v-col>
 
-      <!-- Tabela de segredos -->
       <v-col cols="12" md="8">
         <v-card class="table-card">
           <v-card-title class="py-3 px-4">Segredos monitorados</v-card-title>
@@ -109,6 +132,7 @@
                 <th>Origem</th>
                 <th>Resolvido</th>
                 <th>Cofre / Serviço</th>
+                <th class="actions-col"></th>
               </tr>
             </thead>
             <tbody>
@@ -144,15 +168,99 @@
                   </span>
                   <span v-else class="muted">—</span>
                 </td>
+                <td class="actions-col">
+                  <div class="row-actions">
+                    <v-tooltip text="Gravar no cofre" location="top">
+                      <template #activator="{ props }">
+                        <v-btn
+                          v-bind="props"
+                          icon="mdi-pencil-outline"
+                          size="x-small"
+                          variant="text"
+                          color="primary"
+                          :data-testid="`btn-gravar-${segredo.name}`"
+                          @click="abrirGravar(segredo.name)"
+                        />
+                      </template>
+                    </v-tooltip>
+                    <v-tooltip v-if="segredo.source === 'vault'" text="Remover do cofre" location="top">
+                      <template #activator="{ props }">
+                        <v-btn
+                          v-bind="props"
+                          icon="mdi-delete-outline"
+                          size="x-small"
+                          variant="text"
+                          color="error"
+                          :loading="removendoKey === segredo.name"
+                          :data-testid="`btn-remover-${segredo.name}`"
+                          @click="confirmarRemocao(segredo.name)"
+                        />
+                      </template>
+                    </v-tooltip>
+                  </div>
+                </td>
               </tr>
               <tr v-if="!segredos.length">
-                <td colspan="4" class="empty-cell">Nenhum diagnóstico retornado.</td>
+                <td colspan="5" class="empty-cell">Nenhum diagnóstico retornado.</td>
               </tr>
             </tbody>
           </v-table>
         </v-card>
       </v-col>
     </v-row>
+
+    <v-dialog v-model="dialogGravar" max-width="500" persistent>
+      <v-card>
+        <v-card-title class="pt-5 px-6">Gravar segredo no cofre</v-card-title>
+        <v-card-text class="px-6">
+          <v-text-field
+            v-model="form.key"
+            label="Chave (ex: JWT_SECRET)"
+            variant="outlined"
+            density="compact"
+            class="mb-3"
+            :error-messages="formErrors.key"
+          />
+          <v-text-field
+            v-model="form.value"
+            label="Valor"
+            variant="outlined"
+            density="compact"
+            :type="mostrarValor ? 'text' : 'password'"
+            :append-inner-icon="mostrarValor ? 'mdi-eye-off' : 'mdi-eye'"
+            :error-messages="formErrors.value"
+            @click:append-inner="mostrarValor = !mostrarValor"
+          />
+          <v-alert v-if="formErro" type="error" variant="tonal" density="compact" class="mt-2">
+            {{ formErro }}
+          </v-alert>
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5">
+          <v-spacer />
+          <v-btn variant="text" @click="fecharGravar">Cancelar</v-btn>
+          <v-btn color="success" variant="flat" :loading="gravando" data-testid="btn-confirmar-gravar" @click="gravarSegredo">
+            Gravar
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="dialogRemover" max-width="420">
+      <v-card>
+        <v-card-title class="pt-5 px-6">Remover segredo</v-card-title>
+        <v-card-text class="px-6">
+          Tem certeza que deseja remover <strong>{{ keyParaRemover }}</strong> do cofre?
+          A próxima leitura usará variável de ambiente ou valor padrão.
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5">
+          <v-spacer />
+          <v-btn variant="text" @click="dialogRemover = false">Cancelar</v-btn>
+          <v-btn color="error" variant="flat" :loading="!!removendoKey" data-testid="btn-confirmar-remover" @click="removerSegredo">
+            Remover
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </section>
 </template>
 
@@ -167,6 +275,17 @@ const { carregando, erro, run } = useAsyncLoader()
 
 const segredos = ref([])
 const total = ref(0)
+const sucesso = ref('')
+const initLoading = ref(false)
+const gravando = ref(false)
+const removendoKey = ref('')
+const dialogGravar = ref(false)
+const dialogRemover = ref(false)
+const keyParaRemover = ref('')
+const mostrarValor = ref(false)
+const form = ref({ key: '', value: '' })
+const formErrors = ref({ key: '', value: '' })
+const formErro = ref('')
 
 const countBySource = computed(() => {
   const counts = { env: 0, vault: 0, default: 0, absent: 0 }
@@ -209,6 +328,82 @@ async function carregar() {
   })
 }
 
+async function inicializarVault() {
+  initLoading.value = true
+  sucesso.value = ''
+  try {
+    const { data } = await api.post('/v1/cofre/init')
+    const status = data?.data?.status
+    sucesso.value = status === 'ja_inicializado'
+      ? 'Cofre já estava inicializado.'
+      : 'Cofre inicializado com sucesso.'
+  } catch (error) {
+    erro.value = error?.response?.data?.detail || error?.message || 'Erro ao inicializar cofre.'
+  } finally {
+    initLoading.value = false
+  }
+}
+
+function abrirGravar(keyName = '') {
+  form.value = { key: keyName, value: '' }
+  formErrors.value = { key: '', value: '' }
+  formErro.value = ''
+  mostrarValor.value = false
+  dialogGravar.value = true
+}
+
+function fecharGravar() {
+  dialogGravar.value = false
+}
+
+async function gravarSegredo() {
+  formErrors.value = { key: '', value: '' }
+  formErro.value = ''
+  if (!form.value.key.trim()) {
+    formErrors.value.key = 'Chave obrigatória'
+    return
+  }
+  if (!form.value.value.trim()) {
+    formErrors.value.value = 'Valor obrigatório'
+    return
+  }
+
+  gravando.value = true
+  try {
+    await api.post('/v1/cofre/segredos', {
+      key: form.value.key.trim(),
+      value: form.value.value,
+    })
+    sucesso.value = `Segredo "${form.value.key.trim()}" gravado no cofre.`
+    fecharGravar()
+    await carregar()
+  } catch (error) {
+    formErro.value = error?.response?.data?.detail || error?.message || 'Erro ao gravar segredo.'
+  } finally {
+    gravando.value = false
+  }
+}
+
+function confirmarRemocao(key) {
+  keyParaRemover.value = key
+  dialogRemover.value = true
+}
+
+async function removerSegredo() {
+  removendoKey.value = keyParaRemover.value
+  try {
+    await api.delete(`/v1/cofre/segredos/${keyParaRemover.value}`)
+    sucesso.value = `Segredo "${keyParaRemover.value}" removido do cofre.`
+    dialogRemover.value = false
+    await carregar()
+  } catch (error) {
+    erro.value = error?.response?.data?.detail || error?.message || 'Erro ao remover segredo.'
+  } finally {
+    removendoKey.value = ''
+    keyParaRemover.value = ''
+  }
+}
+
 onMounted(carregar)
 </script>
 
@@ -243,5 +438,16 @@ onMounted(carregar)
   text-align: center;
   color: var(--muted);
   padding: 24px 12px;
+}
+
+.actions-col {
+  width: 88px;
+  text-align: right;
+}
+
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
 }
 </style>
