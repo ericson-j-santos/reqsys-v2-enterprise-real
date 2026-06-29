@@ -7,6 +7,7 @@ from app.core.envelope import ok
 from app.db import get_db
 from app.models.requisito import Requisito
 from app.services.ai_quality import calcular_resumo_qualidade_ia
+from app.services.requisitos_metricas import calcular_metricas_requisitos
 
 router = APIRouter(prefix='/v1/dashboard', tags=['Dashboard'])
 
@@ -22,12 +23,9 @@ ENDPOINTS_PRINCIPAIS = [
 
 @router.get('/requisitos')
 def metricas(db: Session = Depends(get_db)):
-    total = db.query(Requisito).count()
+    metricas_requisitos = calcular_metricas_requisitos(db)
     return ok({
-        'total': total,
-        'em_analise': 2,
-        'aprovados': 1,
-        'pendentes': max(total - 1, 0),
+        **metricas_requisitos,
         'endpoints_disponiveis': ENDPOINTS_PRINCIPAIS,
         'credenciais_demo': {
             'email': 'ericsonjosedossantos@tieri659.onmicrosoft.com',

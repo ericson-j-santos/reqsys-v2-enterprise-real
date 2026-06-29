@@ -1,6 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from app.main import app
+from app.db import Base
 
 @pytest.fixture(scope="module")
 def client():
@@ -20,4 +23,16 @@ def auth_headers(token):
 @pytest.fixture
 def correlation_id():
     return "corr-test-00001"
+
+
+@pytest.fixture
+def db_session():
+    engine = create_engine('sqlite:///:memory:', connect_args={'check_same_thread': False})
+    Base.metadata.create_all(bind=engine)
+    session = sessionmaker(bind=engine, autoflush=False, autocommit=False)()
+    try:
+        yield session
+    finally:
+        session.close()
+        engine.dispose()
 
