@@ -19,16 +19,15 @@ def _criar_requisitos(db_session, quantidade: int) -> None:
     db_session.commit()
 
 
-def test_enriquecer_maturidade_eleva_bdd_e_conclusao(db_session):
+def test_enriquecer_maturidade_atinge_nivel_adequado(db_session):
     _criar_requisitos(db_session, 20)
 
     resultado = enriquecer_maturidade_requisitos(db_session)
 
     assert resultado.total == 20
-    assert resultado.cobertura_bdd_percentual >= 40
-    assert resultado.conclusao_percentual >= 40
-    assert resultado.distribuicao_status.get('aprovado', 0) >= 1
-    assert resultado.distribuicao_status.get('em_analise', 0) >= 1
+    assert resultado.cobertura_bdd_percentual >= 80
+    assert resultado.conclusao_percentual >= 80
+    assert resultado.distribuicao_status.get('aprovado', 0) >= 16
 
 
 def test_enriquecer_maturidade_e_idempotente(db_session):

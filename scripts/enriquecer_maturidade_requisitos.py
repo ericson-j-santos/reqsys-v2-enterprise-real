@@ -19,11 +19,22 @@ from app.services.requisitos_maturidade import enriquecer_maturidade_requisitos 
 def main() -> int:
     parser = argparse.ArgumentParser(description='Enriquecer maturidade dos requisitos no banco operacional.')
     parser.add_argument('--dry-run', action='store_true', help='Calcula impacto sem persistir alterações.')
+    parser.add_argument('--meta-bdd', type=float, default=None, help='Meta de cobertura BDD (0-1). Padrão: 0.80.')
+    parser.add_argument('--meta-aprovado', type=float, default=None, help='Meta de conclusão/aprovados (0-1). Padrão: 0.80.')
+    parser.add_argument('--meta-em-analise', type=float, default=None, help='Meta em análise (0-1). Padrão: 0.10.')
     args = parser.parse_args()
+
+    kwargs = {'aplicar': not args.dry_run}
+    if args.meta_bdd is not None:
+        kwargs['meta_bdd'] = args.meta_bdd
+    if args.meta_aprovado is not None:
+        kwargs['meta_aprovado'] = args.meta_aprovado
+    if args.meta_em_analise is not None:
+        kwargs['meta_em_analise'] = args.meta_em_analise
 
     db = SessionLocal()
     try:
-        resultado = enriquecer_maturidade_requisitos(db, aplicar=not args.dry_run)
+        resultado = enriquecer_maturidade_requisitos(db, **kwargs)
         payload = {
             'dry_run': args.dry_run,
             'total': resultado.total,
