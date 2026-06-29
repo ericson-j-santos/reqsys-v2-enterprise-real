@@ -4,7 +4,7 @@
   "title": "ReqSys Agent Output Padronizado",
   "description": "Contrato de saída estruturada para agentes especializados do ecossistema ReqSys.",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "required": [
     "schema_version",
     "correlation_id",
@@ -50,82 +50,168 @@
     "contexto": {
       "type": "object",
       "description": "Contexto analisado pelo agente (escopo, artefatos, branch, PR, etc.).",
-      "additionalProperties": true
+      "additionalProperties": false,
+      "properties": {
+        "repositorio": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "escopo": {
+          "type": "string"
+        },
+        "artefatos_consultados": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "diagnostico": {
       "type": "object",
       "description": "Diagnóstico estruturado específico do domínio do agente.",
-      "additionalProperties": true
+      "additionalProperties": false,
+      "properties": {
+        "estado_atual": {
+          "type": "string"
+        },
+        "gargalos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "debito_tecnico": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "riscos": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "descricao", "severidade"],
+        "required": [
+          "id",
+          "descricao",
+          "severidade"
+        ],
+        "additionalProperties": false,
         "properties": {
-          "id": { "type": "string" },
-          "descricao": { "type": "string" },
+          "id": {
+            "type": "string"
+          },
+          "descricao": {
+            "type": "string"
+          },
           "severidade": {
             "type": "string",
-            "enum": ["baixa", "media", "alta", "critica"]
+            "enum": [
+              "baixa",
+              "media",
+              "alta",
+              "critica"
+            ]
           },
-          "mitigacao": { "type": "string" }
-        },
-        "additionalProperties": true
+          "mitigacao": {
+            "type": "string"
+          }
+        }
       }
     },
     "acoes_recomendadas": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["prioridade", "descricao"],
+        "required": [
+          "prioridade",
+          "descricao"
+        ],
+        "additionalProperties": false,
         "properties": {
           "prioridade": {
             "type": "string",
-            "enum": ["P0", "P1", "P2", "P3"]
+            "enum": [
+              "P0",
+              "P1",
+              "P2",
+              "P3"
+            ]
           },
-          "descricao": { "type": "string" },
-          "owner": { "type": "string" },
+          "descricao": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
           "esforco": {
             "type": "string",
-            "enum": ["baixo", "medio", "alto"]
+            "enum": [
+              "baixo",
+              "medio",
+              "alto"
+            ]
           }
-        },
-        "additionalProperties": true
+        }
       }
     },
     "quick_wins": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["descricao"],
+        "required": [
+          "descricao"
+        ],
+        "additionalProperties": false,
         "properties": {
-          "descricao": { "type": "string" },
-          "impacto": { "type": "string" },
+          "descricao": {
+            "type": "string"
+          },
+          "impacto": {
+            "type": "string"
+          },
           "esforco": {
             "type": "string",
-            "enum": ["baixo", "medio"]
+            "enum": [
+              "baixo",
+              "medio"
+            ]
           }
-        },
-        "additionalProperties": true
+        }
       }
     },
     "proximo_incremento": {
       "type": "object",
       "description": "Próximo passo natural após esta análise.",
+      "additionalProperties": false,
       "properties": {
         "tipo": {
           "type": "string",
-          "enum": ["gap_fix", "hotfix", "new_front", "consolidate", "report_only"]
+          "enum": [
+            "gap_fix",
+            "hotfix",
+            "new_front",
+            "consolidate",
+            "report_only"
+          ]
         },
-        "descricao": { "type": "string" },
-        "agente_sugerido": { "type": "string" },
+        "descricao": {
+          "type": "string"
+        },
+        "agente_sugerido": {
+          "type": "string"
+        },
         "dependencias": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
-      },
-      "additionalProperties": true
+      }
     },
     "nivel_confianca": {
       "type": "number",
@@ -133,5 +219,6 @@
       "maximum": 1,
       "description": "Confiança do agente na análise (0.0 a 1.0)."
     }
-  }
+  },
+  "runtime_validation_required": true
 }
