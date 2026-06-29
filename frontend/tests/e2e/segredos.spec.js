@@ -24,10 +24,18 @@ test('botão Atualizar está visível', async ({ page }) => {
     await expect(btn.first()).toBeVisible()
 })
 
-test('botão Abrir cofre está visível', async ({ page }) => {
+test('botão Inicializar cofre está visível', async ({ page }) => {
     await irParaSegredos(page)
-    const btn = page.getByTestId('btn-abrir-cofre').or(
-        page.getByRole('link', { name: /abrir cofre/i })
+    const btn = page.getByTestId('btn-inicializar-vault').or(
+        page.getByRole('button', { name: /inicializar cofre/i })
+    )
+    await expect(btn.first()).toBeVisible()
+})
+
+test('botão Gravar segredo está visível', async ({ page }) => {
+    await irParaSegredos(page)
+    const btn = page.getByTestId('btn-gravar-segredo').or(
+        page.getByRole('button', { name: /gravar segredo/i })
     )
     await expect(btn.first()).toBeVisible()
 })

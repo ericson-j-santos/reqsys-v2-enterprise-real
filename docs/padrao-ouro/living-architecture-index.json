@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "updated_at": "2026-06-28T20:00:00Z",
+  "updated_at": "2026-06-29T12:00:00Z",
   "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
   "hub": "docs/padrao-ouro/README.md",
   "canonical_traceability_map": "docs/traceability/living-architecture-map.json",
@@ -18,7 +18,7 @@
         "purpose": "Routers FastAPI — superfície HTTP (auth, requisitos, agile, dashboard, integrações, IA, governança).",
         "ownership": "Backend Core",
         "extension_points": ["novo router em api/ + include_router em main.py"],
-        "key_routes": ["auth.py", "requisitos.py", "agile_runtime.py", "dashboard.py", "monitoramento_operacional.py", "runtime_analytics.py"]
+        "key_routes": ["auth.py", "requisitos.py", "agile_runtime.py", "dashboard.py", "cofre.py", "monitoramento_operacional.py", "runtime_analytics.py"]
       },
       {
         "id": "core",
@@ -217,6 +217,26 @@
         "docs/figma-github-retorno-em-tela.md"
       ],
       "copilot_topic": "Sincronizar Figma GitHub"
+    },
+    {
+      "id": "cofre-segredos",
+      "frente": "Cofre de Segredos Locais",
+      "topico": "seguranca",
+      "referencia": "ADR-041",
+      "status": "implementado",
+      "owner": "Security",
+      "frontend_route": "/segredos-status",
+      "frontend_view": "frontend/src/views/SegredosStatusView.vue",
+      "backend_router": "backend/app/api/cofre.py",
+      "backend_prefix": "/v1/cofre",
+      "diagnostico": "/v1/sistema/segredos-status",
+      "cli": "scripts/vault_setup.py",
+      "env_vars": ["REQSYS_VAULT_SERVICE_NAME", "VAULT_API_TOKEN"],
+      "docs": [
+        "docs/adr/ADR-041-cofre-segredos-locais.md",
+        "docs/runbooks/cofre-operacional.md",
+        "docs/COFRE_UNIFICACOES_DASHBOARD_REQSYS.md"
+      ]
     }
   ],
   "dashboards": [
@@ -229,7 +249,7 @@
   ],
   "ownership_matrix": [
     { "area": "Backend API", "owner": "Backend Core", "adr": "ADR-0001" },
-    { "area": "Segurança / JWT / CORS", "owner": "Security", "adr": "ADR-0002" },
+    { "area": "Cofre / Segredos", "owner": "Security", "adr": "ADR-041" },
     { "area": "CI/CD", "owner": "DevOps", "adr": "ADR-0004" },
     { "area": "Observabilidade", "owner": "Platform Engineering", "adr": "ADR-0005" },
     { "area": "Arquitetura Viva", "owner": "Architecture Governance", "adr": "ADR-035" },

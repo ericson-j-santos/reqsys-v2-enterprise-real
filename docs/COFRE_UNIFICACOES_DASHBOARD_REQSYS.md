@@ -1,68 +1,43 @@
-# Cofre, Unificações e Dashboard ReqSys
+# Cofre ReqSys — Implementação Canônica
 
-Data: 2026-05-03
+Data: 2026-06-29 (atualizado)
 
-## Mapeamento da aplicação de cofre
+## Localização atual
 
-A implementação de cofre está no projeto MVP Intelligence (fora do frontend do ReqSys), nos arquivos:
+A implementação canônica do cofre está no backend FastAPI do ReqSys:
 
-- `codigoszipados_OLD/mvp intelligence/mvp_intelligence/backend/services/vault.py`
-- `codigoszipados_OLD/mvp intelligence/mvp_intelligence/backend/routers/vault_router.py`
+| Camada | Arquivo |
+| --- | --- |
+| API REST | `backend/app/api/cofre.py` |
+| Serviço (AES-GCM + keyring) | `backend/app/core/secrets.py` |
+| Diagnóstico | `backend/app/api/sistema.py` → `GET /v1/sistema/segredos-status` |
+| CLI operacional | `scripts/vault_setup.py` |
+| UI principal | `frontend/src/views/SegredosStatusView.vue` |
+| Testes | `backend/tests/test_cofre_api.py`, `backend/tests/test_cofre_service.py` |
 
-### O que existe hoje no cofre
+> A implementação legada em `codigoszipados_OLD/mvp intelligence/` foi substituída e não deve ser usada.
 
-- Armazenamento seguro com keyring + AES-GCM.
-- Rotas REST para status, listagem de chaves, gravação, remoção e verificação.
-- Fallback seguro para ambiente sem backend de keyring funcional (retorna indisponível/503 sem erro 500).
+## Capacidades
 
-## Unificações posteriores já registradas
+- Armazenamento seguro com keyring + AES-256-GCM.
+- Rotas REST para init, status, gravação, remoção e leitura service-to-service.
+- Diagnóstico de origem dos segredos sem exposição de valores.
+- Gestão integrada na tela `/segredos-status` (inicializar, gravar, remover).
+- Fallback seguro quando keyring/cryptography indisponíveis (400/503, sem 500).
 
-Consolidação operacional entre ReqSys e MVP Intelligence já documentada em:
+## Documentação Padrão Ouro
 
-- `codigoszipados_OLD/mvp intelligence/mvp_intelligence/docs/STATUS_INTEGRADO_APLICACOES_2026-05-03.md`
+- [ADR-041 — Cofre de Segredos Locais](adr/ADR-041-cofre-segredos-locais.md)
+- [Runbook operacional](runbooks/cofre-operacional.md)
+- [Contract Catalog — Cofre](padrao-ouro/CONTRACT_CATALOG.md)
 
-Pontos consolidados:
+## Dashboard ReqSys
 
-- Domínios separados para cada aplicação.
-- Validação de saúde das APIs e frontends.
-- Comportamento esperado do vault em ambiente Linux/container.
-
-## Informação do dashboard do ReqSys
-
-Fonte backend do dashboard:
-
-- `backend/app/api/dashboard.py`
+Fonte backend: `backend/app/api/dashboard.py`
 
 Endpoints principais:
 
 - `GET /v1/dashboard/requisitos`
 - `GET /v1/dashboard/info`
 
-Dados retornados:
-
-- Métricas principais (total, em análise, aprovados, pendentes).
-- Endpoints críticos para operação.
-- Resumo do ambiente e status do sistema.
-- Links de documentação e health-check.
-
-## Melhorias aplicadas no dashboard do ReqSys
-
-Arquivos atualizados:
-
-- `frontend/src/views/DashboardView.vue`
-- `frontend/src/stores/requisitos.js`
-- `frontend/src/styles.css`
-- `frontend/tests/e2e/dashboard.spec.js`
-
-Melhorias entregues:
-
-- Correções de acentuação e textos em PT-BR.
-- Tooltips nas métricas e etapas do pipeline.
-- Layout responsivo para cards e cabeçalho.
-- Seção de informações do sistema alimentada por `/v1/dashboard/info`.
-- Teste E2E do dashboard cobrindo conteúdo principal + tooltip + viewport mobile.
-
-## Observação de validação
-
-A execução local do teste E2E depende do ambiente em `http://reqsys.localtest.me:8082` estar ativo.
-No momento do teste, o Docker local estava indisponível (daemon não iniciado), impedindo validação fim a fim automatizada nesse host.
+O dashboard consome métricas de requisitos; o diagnóstico de segredos fica em `/segredos-status` (governança).

@@ -43,6 +43,8 @@ Mapa navegável de módulos, fluxos, pipelines, ownership, eventos, dependência
 | `govbi.py` | `/api/govbi` | GovBI IA |
 | `rag_governado.py` | `/api/rag` | RAG governado |
 | `figma_github.py` | `/v1/integracoes/figma-github` | Sync Figma ↔ GitHub e status de vínculos |
+| `cofre.py` | `/v1/cofre` | Cofre local AES-GCM: init, status, gravar, remover, resolver |
+| `sistema.py` | `/v1/sistema` | Diagnóstico de segredos (`/segredos-status`) |
 | `webhooks.py` | `/v1/webhooks/figma` | Webhook Figma para sync bidirecional |
 
 ### Frentes de integração
@@ -50,8 +52,11 @@ Mapa navegável de módulos, fluxos, pipelines, ownership, eventos, dependência
 | Frente | Tópico | Rota | ADR | Status |
 | --- | --- | --- | --- | --- |
 | Figma GitHub — retorno em tela | integração | `/figma-github` | [ADR-021](../adr/ADR-021-figma-github-retorno-em-tela.md) | implementado |
+| Cofre de Segredos Locais | segurança | `/segredos-status` | [ADR-041](../adr/ADR-041-cofre-segredos-locais.md) | implementado |
 
 Tópico Copilot Studio associado: **Sincronizar Figma GitHub** (aciona `POST /v1/integracoes/figma-github/sync` e orienta consulta em `/figma-github`).
+
+Runbook cofre: [`docs/runbooks/cofre-operacional.md`](../runbooks/cofre-operacional.md).
 
 ---
 
@@ -99,6 +104,7 @@ Tópico Copilot Studio associado: **Sincronizar Figma GitHub** (aciona `POST /v1
 | --- | --- | --- |
 | Backend API | Backend Core | [ADR-0001](../adr/ADR-0001-arquitetura-padrao-ouro.md) |
 | Segurança / JWT / CORS | Security | [ADR-0002](../adr/ADR-0002-seguranca-gates-producao.md) |
+| Cofre / Segredos | Security | [ADR-041](../adr/ADR-041-cofre-segredos-locais.md) |
 | Ambientes dev/hml/prod | DevOps | [ADR-0003](../adr/ADR-0003-ambientes-dev-hml-prod.md) |
 | CI/CD | DevOps | [ADR-0004](../adr/ADR-0004-ci-cd-qualidade.md) |
 | Observabilidade | Platform Engineering | [ADR-0005](../adr/ADR-0005-observabilidade-auditoria.md) |

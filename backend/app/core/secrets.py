@@ -173,6 +173,7 @@ def describe_secret_resolution(
         'vault_key': secret_key,
         'source': source,
         'configured': configured,
+        'resolved': configured,
         'using_default': source == 'default',
         'prefer_vault': prefer_vault,
         'vault_service_name': _vault_service_name(),
