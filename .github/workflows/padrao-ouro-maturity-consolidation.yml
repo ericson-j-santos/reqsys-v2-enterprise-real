@@ -1,0 +1,48 @@
+name: Padrão Ouro Maturity Consolidation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/padrao_ouro_maturity_consolidator.py"
+      - "scripts/delivery_maturity_snapshot.py"
+      - "scripts/generate_ops_dashboard_data.py"
+      - "scripts/build_padrao_ouro_operational_pareto.py"
+      - "tests/test_padrao_ouro_maturity_consolidator.py"
+      - ".github/workflows/padrao-ouro-maturity-consolidation.yml"
+
+jobs:
+  consolidate-padrao-ouro-maturity:
+    name: Consolidar maturidade operacional 100%
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Consolidar Padrão Ouro 100%
+        run: python scripts/padrao_ouro_maturity_consolidator.py
+
+      - name: Validar testes de consolidação
+        run: python -m pytest tests/test_padrao_ouro_maturity_consolidator.py -q
+
+      - name: Upload maturity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: padrao-ouro-maturity-100-evidence
+          path: |
+            audit/delivery-maturity/delivery-maturity-snapshot.json
+            audit/runtime/public-runtime-validation.json
+            artifacts/runtime-health-center/runtime-health-report.json
+            docs/ops-dashboard/data/health.json
+            docs/ops-dashboard/data/padrao-ouro-operational-pareto.json

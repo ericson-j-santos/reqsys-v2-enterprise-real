@@ -1,31 +1,28 @@
 # Failure Pattern Engine — Relatorio
 
-Atualizado em UTC: `2026-06-28T00:08:29.826945+00:00`
+Atualizado em UTC: `2026-06-29T03:10:53.922880+00:00`
 
 ## Semaforo
 
-**Status:** VERMELHO
-**Score de risco:** 100%
-**Leitura:** Foram identificadas falhas conhecidas de alta severidade. Priorizar estabilizacao antes de prosseguir.
+**Status:** VERDE
+**Score de risco:** 0%
+**Leitura:** Nenhum padrao conhecido de falha foi identificado.
 
 ## Escopo analisado
 
-- `/workspace/artifacts/failure-pattern-engine/input-sample.log`
+- `/workspace/artifacts/failure-pattern-engine/input-clean.log`
 
 ## Estatisticas
 
 | Indicador | Valor |
 |---|---:|
-| Matches | 2 |
-| Categorias | 2 |
-| Severidades | 2 |
+| Matches | 0 |
+| Categorias | 0 |
+| Severidades | 0 |
 
 ## Matches encontrados
 
-| ID | Severidade | Categoria | Arquivo | Acao recomendada |
-|---|---|---|---|---|
-| FPE-GH-PERM-001 | high | permissions | `/workspace/artifacts/failure-pattern-engine/input-sample.log` | Validar permissions do workflow, escopo do GITHUB_TOKEN e uso de pull_request_target apenas quando houver justificativa e guardrails. |
-| FPE-GH-ARTIFACT-001 | medium | artifact | `/workspace/artifacts/failure-pattern-engine/input-sample.log` | Validar etapa de upload, nome do artifact, retention-days e permissao de leitura do workflow. |
+Nenhum padrao conhecido identificado.
 
 ## Limites operacionais
 
