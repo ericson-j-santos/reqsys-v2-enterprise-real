@@ -84,6 +84,30 @@ Location: /api/jobs/JOB-YYYYMMDDHHMMSS-XXXXXXXX
 }
 ```
 
+## OpenAPI gerado pelo runtime
+
+O contrato gerado pelo FastAPI deve permanecer versionado em:
+
+```text
+docs-site/assets/openapi/reqsys-runtime-openapi-v0.5.0.generated.json
+```
+
+Para exportar novamente:
+
+```bash
+cd runtime
+python scripts/export_openapi.py
+```
+
+Para validar drift entre runtime e contrato versionado:
+
+```bash
+cd runtime
+python scripts/export_openapi.py --check
+```
+
+O workflow `Runtime Async Jobs` executa essa validação junto com os testes.
+
 ## Testes
 
 ```bash
@@ -100,6 +124,7 @@ pytest
 - `httpx.AsyncClient` isolado em gateway outbound.
 - `correlation_id` propagado por header `X-Correlation-Id`.
 - Estados compatíveis com contrato OpenAPI `v0.4.0`.
+- Contrato OpenAPI gerado pelo FastAPI versionado para reduzir drift entre documentação e runtime.
 
 ## Próximo incremento recomendado
 
@@ -107,4 +132,3 @@ pytest
 - Persistir jobs em banco relacional.
 - Expor logs estruturados JSON com `correlation_id`.
 - Adicionar backoff real com atraso progressivo entre retentativas.
-- Sincronizar OpenAPI gerado automaticamente com `docs-site/assets/openapi`.
