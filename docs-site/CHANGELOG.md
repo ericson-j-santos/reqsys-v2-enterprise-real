@@ -2,6 +2,25 @@
 
 Todas as mudanças relevantes da documentação viva do ReqSys devem ser registradas neste arquivo.
 
+## [0.5.1] - 2026-06-28
+
+### Adicionado
+
+- Script `runtime/scripts/export_openapi.py` para exportar o OpenAPI gerado pelo FastAPI.
+- Contrato gerado e versionado `docs-site/assets/openapi/reqsys-runtime-openapi-v0.5.0.generated.json`.
+- Gate de CI para validar drift entre runtime e contrato OpenAPI versionado.
+- Testes específicos para garantir presença de metadados ReqSys e rotas de jobs no OpenAPI gerado.
+
+### Alterado
+
+- Workflow `Runtime Async Jobs` passa a validar testes e sincronização OpenAPI.
+- README do runtime passa a documentar exportação e validação do contrato gerado.
+
+### Próximo incremento recomendado
+
+- Promover o contrato gerado para contrato canônico `v0.6.0` após estabilizar naming dos operationIds e schemas.
+- Adicionar adapter Redis ou Azure Service Bus para substituir a fila local em ambiente DEV integrado.
+
 ## [0.5.0] - 2026-06-28
 
 ### Adicionado
