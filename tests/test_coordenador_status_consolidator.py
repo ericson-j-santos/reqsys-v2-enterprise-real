@@ -188,7 +188,7 @@ def test_write_report_publishes_json_and_summary(tmp_path: Path) -> None:
     payload = json.loads((tmp_path / "coordenador-status.json").read_text(encoding="utf-8"))
     summary = (tmp_path / "summary.md").read_text(encoding="utf-8")
 
-    assert payload["schema_version"] == "1.2.0"
+    assert payload["schema_version"] == "1.3.0"
     assert payload["increment_gate"]["new_front_allowed"] is True
     assert "## Increment gate" in summary
 
@@ -358,3 +358,23 @@ def test_consolidate_includes_contract_governance_without_blocking_increment_gat
         item["action"] == "sincronizar_contrato_openapi_backend"
         for item in report["recommended_actions"]
     )
+
+
+def test_consolidate_blocks_new_front_when_release_not_ready() -> None:
+    release_validation = {
+        "readiness": "blocked",
+        "release_readiness_score": 45.0,
+        "risk": "high",
+        "generated_at": "2026-06-29T10:00:00Z",
+    }
+    report = consolidate(
+        "owner/repo",
+        "main",
+        orchestrator_fixture("green"),
+        health_fixture("green"),
+        release_validation=release_validation,
+    )
+    assert "release_not_ready" in report["increment_gate"]["blockers"]
+    assert report["increment_gate"]["new_front_allowed"] is False
+    assert report["summary"]["release_readiness_score"] == 45.0
+    assert report["sources"]["release_validation"]["readiness"] == "blocked"

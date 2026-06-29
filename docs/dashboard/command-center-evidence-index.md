@@ -14,6 +14,7 @@ Catalogar as evidencias operacionais usadas pelo command center do ReqSys, mante
 | Maturidade operacional | `audit/maturity/operational-maturity-score.json` | Dashboard dinamico |
 | Descoberta de artifacts | `audit/artifact-discovery/operational-artifact-discovery-index.json` | Dashboard dinamico |
 | Readiness de release | `audit/release-readiness/golden-release-readiness.json` | Dashboard dinamico |
+| Release Validation Layer | `audit/release-validation/release-validation-layer.json` | Dashboard dinamico + coordenador |
 | Readiness do command center | `audit/command-center/command-center-readiness.json` | Dashboard dinamico |
 | Validacao de contratos | `audit/extended-contract-validation/extended-operational-contract-validation.json` | Dashboard dinamico |
 | Delivery readiness | `audit/delivery-readiness/delivery-readiness-report.json` | Operational Evidence Hub |

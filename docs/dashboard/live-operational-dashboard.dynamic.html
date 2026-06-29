@@ -53,6 +53,7 @@
       { key: 'maturity', label: 'Operational Maturity Score', href: '../audit/maturity/operational-maturity-score.json' },
       { key: 'discovery', label: 'Operational Artifact Discovery Index', href: '../audit/artifact-discovery/operational-artifact-discovery-index.json' },
       { key: 'release', label: 'Golden Release Readiness', href: '../audit/release-readiness/golden-release-readiness.json' },
+      { key: 'releaseValidation', label: 'Release Validation Layer', href: '../audit/release-validation/release-validation-layer.json' },
       { key: 'commandCenter', label: 'Command Center Readiness', href: '../audit/command-center/command-center-readiness.json' },
       { key: 'extendedContracts', label: 'Extended Operational Contract Validation', href: '../audit/extended-contract-validation/extended-operational-contract-validation.json' },
       { key: 'delivery', label: 'Delivery Status Report', href: '../audit/delivery/delivery-status-report.json' },
@@ -71,6 +72,7 @@
       maturity: { average_percent: 0, average_gap_pp: 0, risk: 'unknown', dimensions: [] },
       discovery: { artifact_count: 0, schema_coverage_percent: 0, dashboard_consumer_coverage_percent: 0, artifacts: [] },
       release: { score_percent: 0, readiness: 'unknown', risk: 'unknown', checks: [] },
+      releaseValidation: { release_readiness_score: 0, readiness: 'unknown', risk: 'unknown', quality_gates: [] },
       commandCenter: { score_percent: 0, status: 'unknown', source_coverage_percent: 0, checks: [] },
       extendedContracts: { status: 'unknown', contracts: [] },
       delivery: { tracked_prs: 0, merged_prs: 0, merge_rate_percent: 0, current_maturity_percent: 0, remaining_gap_pp: 0, groups: [] },
@@ -120,6 +122,7 @@
       const maturity = loaded.maturity.data;
       const discovery = loaded.discovery.data;
       const release = loaded.release.data;
+      const releaseValidation = loaded.releaseValidation.data;
       const commandCenter = loaded.commandCenter.data;
       const extendedContracts = loaded.extendedContracts.data;
       const delivery = loaded.delivery.data;
@@ -137,6 +140,8 @@
         card('Predictive risk score', predictive.risk_score || 0, '/100', predictive.risk_level),
         card('Maturity score', maturity.average_percent || 0, '%', maturity.risk),
         card('Release readiness', release.score_percent || 0, '%', release.risk),
+        card('Release validation score', releaseValidation.release_readiness_score || 0, '%', releaseValidation.risk),
+        card('Release validation state', releaseValidation.readiness || 'unknown', '', releaseValidation.readiness),
         card('Command center', commandCenter.score_percent || 0, '%', commandCenter.status),
         card('Contracts validation', extendedContracts.status || 'unknown', '', extendedContracts.status),
         card('Tracked PRs', delivery.tracked_prs || 0, '', delivery.status || 'stable'),
