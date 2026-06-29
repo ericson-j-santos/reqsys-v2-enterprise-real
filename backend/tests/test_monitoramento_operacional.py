@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.api.monitoramento_operacional import ItemMonitorado, _metric_line, classificar_estado_geral
+from app.core.config import settings
 from app.main import app
 
 
@@ -55,7 +56,12 @@ def test_runtime_observability_health_expoe_snapshot_governado():
     assert 0 <= data['risk_score'] <= 100
     assert data['uptime_seconds'] >= 0
     assert data['evidence']['no_secrets'] is True
-    assert data['evidence']['deploy_gate_relaxed'] is False
+    if settings.is_production:
+        assert data['evidence']['deploy_gate_relaxed'] is False
+    else:
+        assert data['evidence']['deploy_gate_relaxed'] is True
+        assert data['status'] == 'healthy'
+        assert data['status_raw'] in {'attention', 'degraded'}
 
 
 def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
@@ -90,7 +96,7 @@ def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
     assert {item['step'] for item in topology['items']} == {'health', 'readiness', 'metrics', 'monitoring'}
     assert data['guardrails']['no_secrets'] is True
     assert data['guardrails']['read_only'] is True
-    assert data['guardrails']['deploy_gate_relaxed'] is False
+    assert data['guardrails']['deploy_gate_relaxed'] is (not settings.is_production)
     runtime_card = next(card for card in data['cards'] if card['id'] == 'runtime-status')
     assert runtime_card['spa_drilldown']['path'] == '/monitoramento-operacional'
     assert runtime_card['spa_drilldown']['query']['secao'] == 'runtime'
@@ -104,9 +110,28 @@ def test_runtime_observability_readiness_e_liveness():
 
     assert readiness.status_code == 200
     assert liveness.status_code == 200
-    assert readiness.json()['data']['ready'] is False
-    assert readiness.json()['data']['readiness_reason'] == 'runtime_degraded'
+    if settings.is_production:
+        assert readiness.json()['data']['ready'] is False
+        assert readiness.json()['data']['readiness_reason'] == 'runtime_degraded'
+    else:
+        assert readiness.json()['data']['ready'] is True
+        assert readiness.json()['data']['readiness_reason'] == 'runtime_healthy'
+        assert readiness.json()['data']['evidence']['deploy_gate_relaxed'] is True
     assert liveness.json()['data']['alive'] is True
+
+
+def test_runtime_observability_readiness_strict_em_producao(monkeypatch):
+    monkeypatch.setattr(settings, 'app_environment', 'production')
+    client = TestClient(app)
+
+    readiness = client.get('/api/runtime/readiness')
+    data = readiness.json()['data']
+
+    assert readiness.status_code == 200
+    assert data['evidence']['deploy_gate_relaxed'] is False
+    assert data['ready'] is False
+    assert data['readiness_reason'] == 'runtime_degraded'
+    assert data['status'] == 'degraded'
 
 
 def test_runtime_observability_metrics_prometheus_text_plain():
