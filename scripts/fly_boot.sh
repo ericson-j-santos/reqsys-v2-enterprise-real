@@ -5,8 +5,14 @@ set -eu
 
 DATA_DIR="${REQSYS_DATA_DIR:-/data}"
 PORT="${PORT:-8000}"
-MAX_ATTEMPTS="${REQSYS_BOOT_MAX_ATTEMPTS:-30}"
 BOOT_FALLBACK="${REQSYS_BOOT_FALLBACK:-false}"
+if [ -n "${REQSYS_BOOT_MAX_ATTEMPTS:-}" ]; then
+  MAX_ATTEMPTS="${REQSYS_BOOT_MAX_ATTEMPTS}"
+elif [ "$BOOT_FALLBACK" = "true" ]; then
+  MAX_ATTEMPTS=8
+else
+  MAX_ATTEMPTS=30
+fi
 
 log() {
   printf '%s reqsys.boot %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
