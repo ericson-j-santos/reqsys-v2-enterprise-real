@@ -22,6 +22,8 @@ jobs:
     name: Semantic OpenAPI ↔ backend diff
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,7 +45,9 @@ jobs:
             --output artifacts/openapi/openapi-semantic-diff.json
 
       - name: Run unit tests
-        run: pip install pytest && pytest tests/test_openapi_semantic_diff.py -v --tb=short
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_openapi_semantic_diff.py -v --tb=short
 
       - name: Ensure semantic diff artifact fallback
         if: always()
