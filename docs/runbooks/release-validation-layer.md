@@ -74,6 +74,19 @@ Com artifacts locais ja presentes em `artifacts/coordenador-status/` e `audit/`.
 
 O `coordenador-status-consolidator` consome `release-validation-layer.json` quando disponivel e expoe `sources.release_validation` + `summary.release_readiness_score`.
 
+## Integracao promotion pipeline
+
+O `governed-promotion-pipeline.yml` consome `release-validation-layer-evidence` como pre-condicao:
+
+| Ambiente | Score minimo | Readiness permitido | Estado operacional |
+|---|---:|---|---|
+| homolog | 70% | ready, ready_with_observation, needs_review | bloqueia se red |
+| prod | 85% | ready, ready_with_observation | bloqueia se red ou yellow |
+
+- `dry_run=true`: simula e registra `promotion_would_block` sem executar promocao.
+- `dry_run=false`: bloqueia promocao real quando release validation falha ou artifact ausente.
+- Avaliacao: `scripts/evaluate_promotion_release_gate.py` → `artifacts/governed-promotion/release-validation-gate.json`.
+
 ## Rollback
 
 Desabilitar workflow `Release Validation Layer` ou remover consumo no coordenador. Nao afeta CI obrigatorio nem branch protection.
