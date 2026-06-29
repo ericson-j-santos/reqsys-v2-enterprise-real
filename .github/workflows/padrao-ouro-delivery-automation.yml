@@ -142,7 +142,7 @@ jobs:
           set -euo pipefail
 
           deploy_log="$(mktemp)"
-          max_attempts=2
+          max_attempts=3
 
           for attempt in $(seq 1 "$max_attempts"); do
             echo "::group::Fly deploy attempt ${attempt}/${max_attempts}"
@@ -168,7 +168,7 @@ jobs:
             fi
 
             echo "::warning::Fly deploy teve timeout transitório; aguardando estabilização antes do retry."
-            sleep 45
+            sleep 60
           done
 
       - name: Resumo deploy

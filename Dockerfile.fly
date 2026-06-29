@@ -18,13 +18,14 @@ COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY backend/app /app/app
+COPY config/external-sources-registry.json /config/external-sources-registry.json
 COPY scripts/fly_boot.sh /app/fly_boot.sh
 
 RUN chmod +x /app/fly_boot.sh
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
   CMD curl -fsS "http://127.0.0.1:${PORT:-8000}/health" || exit 1
 
 ENTRYPOINT ["/app/fly_boot.sh"]

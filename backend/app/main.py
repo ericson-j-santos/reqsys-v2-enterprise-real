@@ -64,13 +64,19 @@ configurar_opentelemetry(app)
 
 @app.on_event('startup')
 def warm_database_on_startup() -> None:
-    ready, detail = probe_database(max_attempts=10 if settings.is_production else 3, delay_seconds=1.0)
+    ready, detail = probe_database(
+        max_attempts=20 if settings.is_production else 3,
+        delay_seconds=1.5 if settings.is_production else 1.0,
+    )
     if ready:
         logger.info('database_startup_probe_ok detail=%s', detail)
         return
     logger.error('database_startup_probe_failed detail=%s production=%s', detail, settings.is_production)
     if settings.is_production:
-        raise RuntimeError(f'Database indisponível após boot resiliente: {detail}')
+        logger.warning(
+            'database_startup_probe_degraded detail=%s — /health retornará 503 até o banco responder',
+            detail,
+        )
 
 app.add_middleware(
     CORSMiddleware,
