@@ -45,13 +45,15 @@
       "schema_path": "docs/contracts/living-architecture-map.schema.json",
       "owner": "ReqSys Architecture Governance",
       "compatibility": "strict",
-      "runtime_validation_required": false,
+      "runtime_validation_required": true,
       "ci_validation_required": true,
       "breaking_change_policy": "major_version_required",
       "valid_examples": [
         "docs/traceability/living-architecture-map.json"
       ],
-      "invalid_examples": []
+      "invalid_examples": [
+        "examples/schema-governance/living-architecture-map.invalid-extra-field.example.json"
+      ]
     },
     {
       "domain": "ai-governance",
@@ -61,13 +63,15 @@
       "schema_path": "docs/contracts/agent-output.schema.json",
       "owner": "ReqSys Architecture Governance",
       "compatibility": "strict",
-      "runtime_validation_required": false,
+      "runtime_validation_required": true,
       "ci_validation_required": true,
       "breaking_change_policy": "major_version_required",
       "valid_examples": [
         "examples/agent-output/agent-output.example.json"
       ],
-      "invalid_examples": []
+      "invalid_examples": [
+        "examples/schema-governance/agent-output.invalid-extra-field.example.json"
+      ]
     }
   ]
 }
