@@ -1,6 +1,6 @@
 # Padrão Ouro — Infraestrutura de Documentação Viva (Tier 1)
 
-Data de referência: 2026-06-27
+Data de referência: 2026-06-29
 
 Este hub consolida a documentação operacional de **máximo ROI** para o ReqSys v2 Enterprise Real: múltiplos PRs paralelos, governança automatizada, CI orchestration, agentes e evolução contínua pós-merge.
 

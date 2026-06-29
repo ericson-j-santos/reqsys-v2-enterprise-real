@@ -58,12 +58,28 @@ Evitar durante um foco Padrão Ouro:
 | “evidência”, “artifact”, “runtime” | `RUNTIME_EVIDENCE_GRAPH.md` |
 | “contrato”, “schema”, “payload” | `CONTRACT_CATALOG.md` |
 
+## Modo consolidação (`state_yellow`)
+
+Quando o coordenador estiver em `state_yellow` (`new_front_allowed: false`), o foco muda para estabilização:
+
+| Tipo permitido | Quando usar |
+| --- | --- |
+| `consolidate` | Concluir CI/evidência/merge de incremento já aberto |
+| `gap_fix` | Corrigir gap documentado com escopo fechado (`OPS-GAP-*`) |
+| `hotfix` | Correção urgente e mínima com referência explícita |
+
+Neste modo, evite abrir frente paralela. Feche PRs duplicados apontando para o canônico em `main`.
+
 ## Comando de triagem recomendado
 
 Para nova frente, executar antes de alterar código:
 
 ```bash
-python scripts/agent_increment_gate.py --increment-type new_front --intent "foco padrao ouro"
+python3 scripts/agent_increment_gate.py --increment-type new_front --intent "foco padrao ouro"
 ```
 
-Quando a mudança for consolidação, correção de gap ou hotfix, usar o tipo de incremento correspondente definido no `AGENTS.md`.
+Quando a mudança for consolidação, correção de gap ou hotfix, usar o tipo correspondente:
+
+```bash
+python3 scripts/agent_increment_gate.py --increment-type consolidate --intent "foco padrao ouro"
+```

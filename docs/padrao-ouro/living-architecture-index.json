@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "updated_at": "2026-06-29T18:00:00Z",
+  "updated_at": "2026-06-29T20:00:00Z",
   "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
   "hub": "docs/padrao-ouro/README.md",
   "canonical_traceability_map": "docs/traceability/living-architecture-map.json",
@@ -324,7 +324,17 @@
       "Declarar fora de escopo",
       "Atualizar machine-readable quando ownership/workflow/contrato/módulo mudar",
       "Manter rollback simples"
-    ]
+    ],
+    "consolidation": {
+      "trigger": "coordenador state_yellow com new_front_allowed false",
+      "allowed_increment_types": ["consolidate", "gap_fix", "hotfix"],
+      "actions": [
+        "fechar PRs duplicados apontando para canônico em main",
+        "sincronizar índices Tier 1 antes de abrir nova frente",
+        "validar JSON e comandos focados no escopo"
+      ],
+      "exit_criteria": "gate, artefatos Tier 1 afetados e validação focada rastreáveis no PR"
+    }
   },
   "tier1_docs": {
     "living_architecture_index": "docs/padrao-ouro/LIVING_ARCHITECTURE_INDEX.md",
