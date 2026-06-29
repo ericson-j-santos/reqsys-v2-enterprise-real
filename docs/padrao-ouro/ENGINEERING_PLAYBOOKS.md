@@ -216,6 +216,8 @@ Data de referência: 2026-06-27
 
 - [`docs/ai-governance/INDEX.md`](../ai-governance/INDEX.md)
 - [`docs/ai-governance/08-IA/MULTIAGENT_STANDARD.md`](../ai-governance/08-IA/MULTIAGENT_STANDARD.md)
+- [`docs/ai-governance/08-IA/ARQUITETURA_MULTIAGENTE_ENTERPRISE.md`](../ai-governance/08-IA/ARQUITETURA_MULTIAGENTE_ENTERPRISE.md)
+- [`docs/ai-governance/08-IA/agents/README.md`](../ai-governance/08-IA/agents/README.md)
 - [`docs/ai-governance/09-CHECKLISTS/PR_CHECKLIST.md`](../ai-governance/09-CHECKLISTS/PR_CHECKLIST.md)
 
 ---
