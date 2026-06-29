@@ -22,6 +22,7 @@ from app.api import (
     govbi,
     hub_lowcode,
     ia,
+    connectors,
     monitoramento_operacional,
     operational_intelligence,
     pipeline,
@@ -102,6 +103,7 @@ app.include_router(codex_governado.router)
 app.include_router(webhooks.router)
 app.include_router(rastreabilidade.router)
 app.include_router(hub_lowcode.router)
+app.include_router(connectors.router)
 app.include_router(agents.router)
 app.include_router(monitoramento_operacional.router)
 app.include_router(runtime_analytics.router)

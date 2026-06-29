@@ -65,8 +65,8 @@ Quando o usuário pedir para **ver as telas**, **mostrar implementações recent
 
 ## Limitações conhecidas (ambiente dev local)
 
-- **Figma GitHub**: status pode falhar sem `GITHUB_TOKEN` / `FIGMA_*` configurados.
-- **Monitoramento**: runtime dashboard pode exibir "carregando" sem artefatos de governança publicados.
+- **Figma GitHub**: sem tokens externos, o backend entrega **modo degradado** com vínculos demonstrativos locais (`/api/v1/integracoes/figma-github`).
+- **Monitoramento**: requer backend ativo em `:8000`; conectores via `GET /api/connectors/health`. Métricas `n/a` indicam falha isolada do runtime dashboard — recarregar com backend no ar.
 - **GovBI**: proxy funciona; modo degradado é esperado se serviço externo estiver indisponível.
 
 ## Banco de informações (memória operacional)

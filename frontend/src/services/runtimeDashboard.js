@@ -1,10 +1,9 @@
 import { mapearCardsComDrilldown } from '../utils/runtimeDrilldown'
 import { estadoParaSemaforo } from '../utils/filtrosMonitoramento'
+import { api } from './api'
 
 export async function carregarRuntimeDashboard() {
-  const resposta = await fetch('/api/runtime/dashboard', { headers: { Accept: 'application/json' } })
-  if (!resposta.ok) throw new Error('Falha ao carregar runtime dashboard')
-  const payload = await resposta.json()
+  const { data: payload } = await api.get('/api/runtime/dashboard')
   const data = payload.data || null
   if (!data) return null
 

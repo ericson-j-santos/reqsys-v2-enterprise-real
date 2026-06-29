@@ -1,6 +1,7 @@
 import hashlib
 import json
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -8,6 +9,9 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.integracao_figma_github import IntegracaoFigmaGithub
 from app.services import figma_client, github_client
+
+DEMO_FILE_KEY = 'reqsys-demo-design'
+DEMO_REPO = 'reqsys-enterprise/design-sync'
 
 
 class FigmaGithubSyncError(RuntimeError):
@@ -36,6 +40,96 @@ class SyncResult:
 
 def sync_enabled() -> bool:
     return bool(settings.enable_figma_github_sync)
+
+
+def tokens_configurados() -> bool:
+    figma_ok = bool((settings.figma_access_token or '').strip())
+    from app.services.github_client import github_token_configurado
+
+    return figma_ok and github_token_configurado()
+
+
+def pode_usar_modo_degradado() -> bool:
+    return not settings.is_production
+
+
+def _demo_issue(number: int) -> dict[str, Any]:
+    return {
+        'number': number,
+        'html_url': f'https://github.com/{DEMO_REPO}/issues/{number}',
+        'title': f'[Figma Demo] Item sincronizado #{number}',
+        'body': build_marker(DEMO_FILE_KEY, '12:34', f'demo-comment-{number}'),
+        'state': 'open',
+    }
+
+
+def garantir_vinculos_demo(db: Session, file_key: str, repo: str) -> SyncResult:
+    """Cria vínculos demonstrativos locais sem chamar APIs externas."""
+    result = SyncResult()
+    if not pode_usar_modo_degradado():
+        result.warnings.append('Modo degradado indisponível em produção.')
+        return result
+
+    demos = [
+        {
+            'node_id': '12:34',
+            'comment_id': 'demo-comment-1',
+            'sync_kind': 'comment',
+            'summary': 'Ajustar contraste do botão principal (demo local)',
+            'issue_number': 101,
+        },
+        {
+            'node_id': '56:78',
+            'comment_id': None,
+            'sync_kind': 'frame',
+            'summary': 'FRAME: Dashboard Header (demo local)',
+            'issue_number': 102,
+        },
+    ]
+
+    for demo in demos:
+        existing = _find_link(db, file_key, repo, demo['node_id'], demo['comment_id'])
+        if existing:
+            result.skipped += 1
+            result.links.append({'id': existing.id, 'figma_file_key': file_key, 'github_issue_number': existing.github_issue_number})
+            continue
+
+        issue = _demo_issue(demo['issue_number'])
+        figma_hash = _hash_payload(demo)
+        github_hash = _hash_payload(issue)
+        link = _create_or_update_link(
+            db,
+            file_key,
+            repo,
+            demo['node_id'],
+            demo['comment_id'],
+            demo['sync_kind'],
+            issue,
+            figma_hash,
+            github_hash,
+            status='synced',
+            conflict_reason=None,
+        )
+        link.last_synced_at = datetime.now(UTC)
+        result.created += 1
+        result.links.append({'id': link.id, 'figma_file_key': file_key, 'github_issue_number': issue['number']})
+
+    result.warnings.append('MODO_DEGRADADO: tokens Figma/GitHub ausentes — vínculos demonstrativos locais.')
+    db.commit()
+    return result
+
+
+def sync_modo_degradado(
+    db: Session,
+    file_key: str,
+    repo: str,
+    node_ids: list[str] | None = None,
+    include_comments: bool = True,
+    include_frames: bool = True,
+    include_dev_resources: bool = True,
+) -> SyncResult:
+    del node_ids, include_comments, include_frames, include_dev_resources
+    return garantir_vinculos_demo(db, file_key, repo)
 
 
 def build_marker(file_key: str, node_id: str | None = None, comment_id: str | None = None) -> str:
@@ -202,7 +296,11 @@ def _sync_one_to_github(db: Session, file_key: str, repo: str, source: dict[str,
 
 def _collect_comment_sources(file_key: str) -> list[dict[str, Any]]:
     sources: list[dict[str, Any]] = []
-    for comment in figma_client.get_comments(file_key):
+    try:
+        comments = figma_client.get_comments(file_key)
+    except figma_client.FigmaError as exc:
+        raise FigmaGithubSyncError(str(exc)) from exc
+    for comment in comments:
         if comment.get('resolved_at'):
             continue
         message = comment.get('message') or comment.get('text') or ''

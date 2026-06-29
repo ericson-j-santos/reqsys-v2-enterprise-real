@@ -62,6 +62,16 @@ class TestClientesFigmaGithub:
 
 
 class TestSyncManual:
+    @pytest.fixture(autouse=True)
+    def _habilitar_tokens_sync(self, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, 'figma_access_token', 'figma-test-token')
+        monkeypatch.setattr(
+            'app.services.github_client.get_secret',
+            lambda key, default='': 'ghp-test-token' if key == 'GITHUB_TOKEN' else (default or ''),
+        )
+
     def test_sync_manual_bidirecional_cria_vinculo_e_issue_fake(self, client, monkeypatch, sync_case):
         from app.services import figma_client, github_client
 

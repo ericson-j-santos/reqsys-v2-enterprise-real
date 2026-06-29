@@ -150,6 +150,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { api } from '../services/api'
 
 const API_BASE = '/v1/integracoes/figma-github'
 
@@ -203,13 +204,14 @@ async function carregarStatus() {
   carregandoStatus.value = true
   limparAlertas()
   try {
-    const resposta = await fetch(`${API_BASE}/status`, { headers: { Accept: 'application/json' } })
-    if (!resposta.ok) throw new Error('Falha ao carregar status Figma/GitHub')
-    const payload = await resposta.json()
+    const { data: payload } = await api.get(`${API_BASE}/status`)
     itens.value = payload.data?.items || []
+    if (payload.data?.modo_degradado) {
+      mensagem.value = 'Modo degradado: vínculos demonstrativos locais (tokens Figma/GitHub ausentes).'
+    }
     ultimaAcao.value = new Date().toLocaleString('pt-BR')
   } catch (e) {
-    erro.value = e?.message || 'Erro inesperado ao carregar status Figma/GitHub'
+    erro.value = e?.response?.data?.detail || e?.message || 'Erro inesperado ao carregar status Figma/GitHub'
   } finally {
     carregandoStatus.value = false
   }
@@ -219,19 +221,16 @@ async function sincronizar() {
   sincronizando.value = true
   limparAlertas()
   try {
-    const resposta = await fetch(`${API_BASE}/sync`, {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify(montarPayload()),
-    })
-    const payload = await resposta.json().catch(() => ({}))
-    if (!resposta.ok) throw new Error(payload.detail || 'Falha ao executar sincronização Figma/GitHub')
+    const { data: payload } = await api.post(`${API_BASE}/sync`, montarPayload())
+    if (!payload.success) throw new Error(payload.errors?.[0]?.message || 'Falha ao executar sincronização Figma/GitHub')
     resultadoSync.value = payload.data || payload
-    mensagem.value = 'Sincronização solicitada e retorno recebido em tela.'
+    mensagem.value = payload.data?.modo_degradado
+      ? 'Sincronização degradada concluída com vínculos demonstrativos locais.'
+      : 'Sincronização solicitada e retorno recebido em tela.'
     ultimaAcao.value = new Date().toLocaleString('pt-BR')
     await carregarStatus()
   } catch (e) {
-    erro.value = e?.message || 'Erro inesperado ao sincronizar Figma/GitHub'
+    erro.value = e?.response?.data?.detail || e?.message || 'Erro inesperado ao sincronizar Figma/GitHub'
   } finally {
     sincronizando.value = false
   }

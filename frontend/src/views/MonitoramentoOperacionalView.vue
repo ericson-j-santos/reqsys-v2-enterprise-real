@@ -288,6 +288,7 @@ import {
 } from '../utils/filtrosMonitoramento'
 import { resolverDrilldownSpa } from '../utils/runtimeDrilldown'
 import { carregarRuntimeDashboard, formatarValorRuntimeCard, semaforoRuntimeCard } from '../services/runtimeDashboard'
+import { api } from '../services/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -469,11 +470,9 @@ async function carregarMonitoramento() {
 
 async function carregarConectores() {
   try {
-    const resposta = await fetch('/api/connectors/health', { headers: { Accept: 'application/json' } })
-    if (!resposta.ok) throw new Error('Health-check de conectores indisponível')
-    const payload = await resposta.json()
+    const { data: payload } = await api.get('/api/connectors/health')
     conectores.value = payload.data?.conectores || fallbackConectores
-    correlationId.value = payload.correlation_id || payload.data?.correlation_id || 'sem-correlacao'
+    correlationId.value = payload.meta?.correlation_id || payload.data?.correlation_id || 'sem-correlacao'
   } catch {
     conectores.value = fallbackConectores
     correlationId.value = 'fallback-sem-backend'
@@ -483,19 +482,29 @@ async function carregarConectores() {
 async function carregarTudo() {
   carregando.value = true
   erro.value = ''
+  const avisos = []
+
+  await carregarConectores()
+
   try {
-    const [dashboard] = await Promise.all([
-      carregarRuntimeDashboard(),
-      carregarMonitoramento(),
-      carregarConectores(),
-    ])
-    runtimeDashboard.value = dashboard
+    await carregarMonitoramento()
   } catch (e) {
-    erro.value = e?.message || 'Erro inesperado ao carregar monitoramento operacional'
-    await carregarConectores()
-  } finally {
-    carregando.value = false
+    avisos.push(e?.message || 'Falha ao carregar monitoramento operacional')
   }
+
+  try {
+    runtimeDashboard.value = await carregarRuntimeDashboard()
+  } catch (e) {
+    avisos.push(e?.message || 'Falha ao carregar runtime dashboard')
+  }
+
+  if (avisos.length) {
+    erro.value = avisos.join(' · ')
+  } else {
+    erro.value = ''
+  }
+
+  carregando.value = false
 }
 
 watch([filtroEstado, filtroSecao, filtroBusca], sincronizarUrlDosFiltros)
