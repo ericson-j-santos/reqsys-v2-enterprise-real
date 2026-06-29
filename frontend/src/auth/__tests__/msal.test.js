@@ -47,9 +47,9 @@ beforeEach(() => {
 })
 
 describe('getAuthCallbackUri', () => {
-  it('retorna a URL absoluta do callback de redirect', async () => {
+  it('retorna a origem publica absoluta registrada no Microsoft Entra ID', async () => {
     const { getAuthCallbackUri } = await import('../msal')
-    expect(getAuthCallbackUri()).toBe(`${window.location.origin}/auth/callback.html`)
+    expect(getAuthCallbackUri()).toBe(window.location.origin)
   })
 })
 
@@ -74,13 +74,13 @@ describe('getMsalInstance', () => {
     expect(mockInitialize).toHaveBeenCalledTimes(1)
   })
 
-  it('configura MSAL para redirect no callback registrado', async () => {
+  it('configura MSAL para redirect na origem publica registrada', async () => {
     const { getMsalInstance } = await import('../msal')
     await getMsalInstance()
     expect(mockConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
         auth: expect.objectContaining({
-          redirectUri: `${window.location.origin}/auth/callback.html`,
+          redirectUri: window.location.origin,
           navigateToLoginRequestUrl: false,
         }),
         cache: expect.objectContaining({
@@ -92,14 +92,14 @@ describe('getMsalInstance', () => {
 })
 
 describe('loginMicrosoftRedirect', () => {
-  it('chama loginRedirect com escopos, select_account, callback e redirectStartPage', async () => {
+  it('chama loginRedirect com escopos, select_account, redirect de origem e redirectStartPage', async () => {
     const { loginMicrosoftRedirect, SCOPES } = await import('../msal')
     await loginMicrosoftRedirect()
     expect(mockLoginRedirect).toHaveBeenCalledWith(
       expect.objectContaining({
         scopes: SCOPES,
         prompt: 'select_account',
-        redirectUri: `${window.location.origin}/auth/callback.html`,
+        redirectUri: window.location.origin,
         redirectStartPage: `${window.location.origin}/login`,
       })
     )
