@@ -3,10 +3,9 @@
 
 const KEY_VERIFIER = 'reqsys_pkce_verifier'
 const KEY_STATE    = 'reqsys_oauth_state'
-const CALLBACK_PATH = '/auth/callback.html'
 
 function getAuthCallbackUri() {
-  return new URL(CALLBACK_PATH, window.location.origin).toString()
+  return window.location.origin
 }
 
 function b64url(buffer) {
