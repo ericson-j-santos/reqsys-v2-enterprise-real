@@ -10,7 +10,9 @@
         "test:e2e": "playwright test",
         "test:e2e:stable": "node scripts/run-e2e-safe.js --reporter=line",
         "test:e2e:evidence": "E2E_EVIDENCE_MODE=1 playwright test tests/e2e/visual-evidence.spec.js",
-        "test:e2e:evidence:stg": "E2E_EVIDENCE_MODE=1 E2E_BASE_URL=https://reqsys-app-stg.fly.dev playwright test tests/e2e/visual-evidence.spec.js"
+        "test:e2e:evidence:stg": "E2E_EVIDENCE_MODE=1 E2E_BASE_URL=https://reqsys-app-stg.fly.dev playwright test tests/e2e/visual-evidence.spec.js",
+        "test:e2e:visual": "E2E_VISUAL_MODE=1 playwright test tests/e2e/visual-regression.spec.js",
+        "test:e2e:visual:update": "E2E_VISUAL_MODE=1 playwright test tests/e2e/visual-regression.spec.js --update-snapshots"
     },
     "dependencies": {
         "@azure/msal-browser": "^5.12.0",
