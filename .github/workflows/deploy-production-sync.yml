@@ -127,6 +127,11 @@ jobs:
           AZURE_CLIENT_ID_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
         run: |
           set -euo pipefail
+          if [ -z "${AZURE_TENANT_ID_SECRET:-}" ] || [ -z "${AZURE_CLIENT_ID_SECRET:-}" ]; then
+            echo "::warning::AZURE_TENANT_ID/AZURE_CLIENT_ID ausentes no GitHub — pulando apply (assumindo secrets já configurados no Fly)"
+            printf '%s\n' '{"success": true, "skipped": true, "reason": "github_azure_secrets_empty"}' > fly-auth-azure-report-production.json
+            exit 0
+          fi
           python scripts/configurar_fly_auth_azure.py \
             --fly-app reqsys-api \
             --app-env production \
