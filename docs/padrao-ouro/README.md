@@ -43,6 +43,30 @@ Troubleshooting CI/ops   → RUNTIME_EVIDENCE_GRAPH → timeline + artifacts
 Onboarding agente/IA     → README (este) → living-architecture-index.json
 ```
 
+
+## Foco operacional Padrão Ouro
+
+Use este foco quando o pedido for amplo (ex.: "foco padrão ouro") ou quando houver dúvida entre criar frente nova, corrigir gap ou consolidar evidência. A prioridade é aumentar maturidade sem abrir superfície desnecessária.
+
+| Prioridade | Fazer | Evidência mínima | Antiobjetivo |
+| --- | --- | --- | --- |
+| 1 | Localizar o domínio no Living Architecture Index e confirmar ownership antes de editar. | Link para módulo/owner ou trecho do índice usado. | Alterar arquivos fora do boundary sem justificativa. |
+| 2 | Preferir correção de gap, consolidação ou documentação operacional antes de criar novo módulo. | `agent_increment_gate` com tipo adequado ou justificativa de indisponibilidade do artifact local. | Criar frente paralela sem gate. |
+| 3 | Executar a menor validação reproduzível para o escopo tocado. | Comando local, exit code e limitação ambiental quando houver. | Declarar CI verde sem evidência. |
+| 4 | Atualizar contratos, ADRs, runbooks ou matriz de testes quando a mudança afetar operação. | Arquivo de documentação atualizado junto do diff funcional. | Deixar conhecimento apenas no PR/chat. |
+| 5 | Encerrar com commit convencional, PR com escopo/fora de escopo/riscos/rollback e próximos gates. | Commit + corpo de PR rastreável. | Misturar mudanças não relacionadas. |
+
+### Protocolo rápido para agentes
+
+```text
+1. Ler este README + living-architecture-index.json.
+2. Classificar o pedido: gap_fix, consolidate, hotfix, close_duplicate ou new_front.
+3. Rodar agent_increment_gate com o tipo classificado quando o artifact/status estiver disponível.
+4. Aplicar diff mínimo e manter rastreabilidade em docs/padrao-ouro ou runbooks.
+5. Validar o menor conjunto de comandos compatível com o escopo.
+6. Commitar e abrir PR com evidência objetiva.
+```
+
 ## Impacto esperado
 
 | Métrica | Ganho estimado |
