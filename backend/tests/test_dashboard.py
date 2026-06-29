@@ -68,6 +68,12 @@ class TestDashboardMetricas:
         data = resp.json()["data"]
         assert data["total"] >= 0
 
+    def test_metricas_soma_consistente_com_total(self, auth_headers):
+        resp = client.get("/v1/dashboard/requisitos", headers=auth_headers)
+        data = resp.json()["data"]
+        soma = data["em_analise"] + data["aprovados"] + data.get("rejeitados", 0) + data["pendentes"]
+        assert soma == data["total"]
+
 
 # ---------------------------------------------------------------------------
 # GET /v1/dashboard/info

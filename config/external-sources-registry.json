@@ -1,6 +1,6 @@
 {
-  "schema_version": "1.0.0",
-  "updated_at": "2026-06-28T00:00:00+00:00",
+  "schema_version": "1.1.0",
+  "updated_at": "2026-06-29T00:00:00+00:00",
   "policy": {
     "allow_mock_in_production": false,
     "default_ttl_minutes": 1440,
@@ -13,12 +13,18 @@
       "tipo": "externa",
       "origem": "github-api:actions/runs",
       "conector": "github-actions-connector",
-      "versaoConector": "planned-v1",
+      "versaoConector": "registry-v1",
       "ttlMinutos": 60,
       "confiabilidade": "media",
       "mock_as_real": false,
-      "autorizado": false,
-      "pendencia": "conector ainda nao auditado para producao"
+      "autorizado": true,
+      "pendencia": null,
+      "auditoria": {
+        "referencia": "docs/statistics/IMPLEMENTATION_NOTES.md",
+        "auditado_em": "2026-06-29T00:00:00+00:00",
+        "auditor": "reqsys-governance",
+        "escopo": "registry-only; conector read-only sem mock_as_real"
+      }
     },
     {
       "id": "github-pr-metrics",
@@ -26,12 +32,18 @@
       "tipo": "externa",
       "origem": "github-api:pulls",
       "conector": "github-pr-connector",
-      "versaoConector": "planned-v1",
+      "versaoConector": "registry-v1",
       "ttlMinutos": 120,
       "confiabilidade": "media",
       "mock_as_real": false,
-      "autorizado": false,
-      "pendencia": "conector ainda nao auditado para producao"
+      "autorizado": true,
+      "pendencia": null,
+      "auditoria": {
+        "referencia": "docs/statistics/IMPLEMENTATION_NOTES.md",
+        "auditado_em": "2026-06-29T00:00:00+00:00",
+        "auditor": "reqsys-governance",
+        "escopo": "registry-only; conector read-only sem mock_as_real"
+      }
     }
   ]
 }

@@ -52,7 +52,9 @@ def test_estatisticas_fonte_externa_usa_registry():
 
     assert externo['fonte']['origem'] == 'config/external-sources-registry.json'
     assert externo['fonte']['versaoConector'] == 'registry-v1'
-    assert res.json()['data']['resumo']['fontes_externas']['total'] >= 1
+    assert externo['valorAtual'] >= 2
+    assert externo['estadoAtual'] == 'adequado'
+    assert res.json()['data']['resumo']['fontes_externas']['autorizadas_validas'] >= 2
 
 
 def test_estatisticas_historico_endpoint():
