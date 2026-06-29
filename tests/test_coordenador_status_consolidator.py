@@ -323,11 +323,14 @@ def test_build_contract_governance_source_summarizes_drift() -> None:
             "artifacts": [{"name": "OpenAPI"}],
         },
         {"status": "passed", "summary": {"valid": True}},
-        {"status": "drift_detected", "summary": {"drift_count": 2, "missing_in_openapi": 2}},
+        {"status": "failed", "summary": {"missing_in_openapi": 2, "missing_in_backend": 0}},
+        {"status": "drift_detected", "summary": {"drift_count": 5, "missing_in_openapi": 5}},
     )
 
     assert source["available"] is True
-    assert source["semantic_drift_count"] == 2
+    assert source["canonical_drift_count"] == 2
+    assert source["semantic_drift_count"] == 5
+    assert source["canonical_drift_detector"] == "reqsys-openapi-routes-drift"
     assert source["sync_gap"] == "semantic_backend_route_sync_pending"
 
 
@@ -335,7 +338,8 @@ def test_consolidate_includes_contract_governance_without_blocking_increment_gat
     contract_governance = build_contract_governance_source(
         {"version": "0.3.0", "summary": {}, "traceability": {}, "artifacts": []},
         {"status": "passed", "summary": {"valid": True}},
-        {"status": "drift_detected", "summary": {"drift_count": 3, "missing_in_openapi": 3}},
+        {"status": "failed", "summary": {"missing_in_openapi": 3, "missing_in_backend": 0}},
+        {"status": "drift_detected", "summary": {"drift_count": 9, "missing_in_openapi": 9}},
     )
     report = consolidate(
         "owner/repo",
@@ -347,8 +351,9 @@ def test_consolidate_includes_contract_governance_without_blocking_increment_gat
 
     assert report["increment_gate"]["new_front_allowed"] is True
     assert report["summary"]["contract_governance_available"] is True
-    assert report["summary"]["openapi_semantic_drift_count"] == 3
-    assert report["sources"]["contract_governance"]["semantic_drift_count"] == 3
+    assert report["summary"]["openapi_canonical_drift_count"] == 3
+    assert report["summary"]["openapi_semantic_drift_count"] == 9
+    assert report["sources"]["contract_governance"]["canonical_drift_count"] == 3
     assert any(
         item["action"] == "sincronizar_contrato_openapi_backend"
         for item in report["recommended_actions"]

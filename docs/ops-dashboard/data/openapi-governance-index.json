@@ -24,7 +24,8 @@
   },
   "checks": [
     {"name": "Contract validation", "status": "passed", "detail": "required paths and schemas", "evidence": "docs/audit/openapi/openapi-contract-validation.json"},
-    {"name": "Routes drift (report-only)", "status": "passed", "detail": "governed backend routes aligned", "evidence": "docs/audit/openapi/openapi-routes-drift.json"},
+    {"name": "Routes drift (canonical strict)", "status": "passed", "detail": "governed backend routes aligned — gate bloqueante", "evidence": "docs/audit/openapi/openapi-routes-drift.json"},
+    {"name": "Semantic diff AST (advisory)", "status": "active", "detail": "workflow openapi-semantic-diff.yml", "evidence": "artifacts/openapi/openapi-semantic-diff.json"},
     {"name": "Spectral lint", "status": "active", "detail": "workflow openapi-spectral-lint.yml", "evidence": "artifacts/openapi/spectral-lint-report.json"},
     {"name": "Newman smoke", "status": "active", "detail": "workflow openapi-newman-ci.yml", "evidence": "docs/integrations/openapi/reqsys-runtime-postman.collection.json"},
     {"name": "Parallel lane B", "status": "passed", "detail": "evidence hub + ops-dashboard index", "evidence": "docs/ops-dashboard/data/openapi-governance-index.json"}
@@ -37,16 +38,17 @@
     ".github/workflows/openapi-contract-governance.yml",
     ".github/workflows/openapi-spectral-lint.yml",
     ".github/workflows/openapi-newman-ci.yml",
-    ".github/workflows/openapi-routes-drift.yml"
+    ".github/workflows/openapi-routes-drift.yml",
+    ".github/workflows/openapi-semantic-diff.yml"
   ],
   "lanes": {
-    "lane_a": "OpenAPI Evolution — ativa",
+    "lane_a": "OpenAPI Evolution — ativa (semantic diff advisory)",
     "lane_b": "Docs Runtime Governance — ativa",
-    "lane_c": "Contract Sync — ativa (report-only)",
+    "lane_c": "Contract Sync — ativa (strict gate canonico)",
     "lane_d": "Observabilidade Operacional — ativa"
   },
   "next_actions": [
-    "Semantic OpenAPI diff em PR dedicado",
-    "Hydratação automática pós-workflow no evidence hub"
+    "Manter routes-drift strict como unico gate bloqueante de drift OpenAPI",
+    "Usar semantic diff AST apenas como sinal advisory em PRs de contrato/API"
   ]
 }

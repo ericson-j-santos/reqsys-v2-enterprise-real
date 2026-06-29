@@ -42,29 +42,29 @@ VALID_INCREMENT_TYPES = frozenset(
 
 
 def resolve_contract_drift_count(report: dict[str, Any], explicit_path: str | None = None) -> int:
+    from scripts.validate_openapi_routes_drift import (  # noqa: PLC0415
+        CANONICAL_DRIFT_ARTIFACT,
+        contract_drift_count,
+    )
+
     sources = report.get("sources") or {}
     contract_governance = sources.get("contract_governance") or {}
-    if contract_governance.get("semantic_drift_count") is not None:
-        return int(contract_governance["semantic_drift_count"])
+    if contract_governance.get("canonical_drift_count") is not None:
+        return int(contract_governance["canonical_drift_count"])
 
-    semantic = contract_governance.get("semantic_diff") or {}
-    if semantic.get("drift_count") is not None:
-        return int(semantic["drift_count"])
+    routes_drift = contract_governance.get("routes_drift") or {}
+    if routes_drift.get("drift_count") is not None:
+        return int(routes_drift["drift_count"])
 
     candidate_paths: list[Path] = []
     if explicit_path:
         candidate_paths.append(Path(explicit_path))
-    candidate_paths.extend(
-        [
-            Path("artifacts/openapi/openapi-semantic-diff.json"),
-            Path("artifacts/openapi/openapi-semantic-diff-strict.json"),
-        ]
-    )
+    candidate_paths.append(Path(CANONICAL_DRIFT_ARTIFACT))
     for path in candidate_paths:
         if not path.exists():
             continue
         payload = json.loads(path.read_text(encoding="utf-8"))
-        return int((payload.get("summary") or {}).get("drift_count") or 0)
+        return contract_drift_count(payload)
     return 0
 
 
@@ -130,12 +130,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Bloqueia quando drift semantico OpenAPI > 0 (fail-closed)",
+        help="Bloqueia quando drift canonico OpenAPI (routes-drift) > 0 (fail-closed)",
     )
     parser.add_argument(
-        "--openapi-semantic-diff-json",
+        "--openapi-routes-drift-json",
         default="",
-        help="Caminho opcional do artifact openapi-semantic-diff.json",
+        help="Caminho opcional do artifact canonico openapi-routes-drift.json",
     )
     return parser
 
@@ -159,14 +159,15 @@ def main(argv: list[str] | None = None) -> int:
 
     drift_count = resolve_contract_drift_count(
         report,
-        args.openapi_semantic_diff_json.strip() or None,
+        args.openapi_routes_drift_json.strip() or None,
     )
     strict_blocked = bool(args.strict and drift_count > 0)
     if strict_blocked:
         allowed = False
         reason = "strict_contract_drift_blocked"
         detail = (
-            f"Modo --strict ativo: drift_count={drift_count}. "
+            f"Modo --strict ativo: canonical_drift_count={drift_count} "
+            "(detector canonico: validate_openapi_routes_drift). "
             "Sincronize contrato OpenAPI e rotas backend antes de prosseguir."
         )
 
@@ -175,6 +176,7 @@ def main(argv: list[str] | None = None) -> int:
         "reason": reason,
         "detail": detail,
         "strict_mode": bool(args.strict),
+        "canonical_drift_count": drift_count,
         "contract_drift_count": drift_count,
         "strict_blocked": strict_blocked,
         "increment_type": args.increment_type,

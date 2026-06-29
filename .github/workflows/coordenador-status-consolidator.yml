@@ -42,7 +42,14 @@ jobs:
           name: openapi-contract-validation
           path: artifacts/openapi
 
-      - name: Download OpenAPI semantic diff artifact
+      - name: Download OpenAPI routes drift artifact (canonical)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: openapi-routes-drift
+          path: artifacts/openapi
+
+      - name: Download OpenAPI semantic diff artifact (advisory)
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:

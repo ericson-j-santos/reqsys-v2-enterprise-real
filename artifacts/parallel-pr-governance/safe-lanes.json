@@ -94,7 +94,7 @@
       "label": "Contract Sync",
       "status": "active",
       "conflict_risk": "medium_low",
-      "capabilities": ["backend_routes_validation", "drift_detection", "evidence_artifacts"],
+      "capabilities": ["backend_routes_validation", "drift_detection", "strict_gate", "evidence_artifacts"],
       "exclusive_paths": [
         "scripts/validate_openapi_routes_drift.py",
         "tests/test_validate_openapi_routes_drift.py",

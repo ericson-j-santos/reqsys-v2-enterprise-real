@@ -4,7 +4,7 @@
 Compara paths e métodos HTTP do contrato OpenAPI com rotas estáticas
 extraídas de backend/app/api/*.py (sem subir a aplicação).
 
-Escopo P2 — report-only por padrão; use --strict para bloquear quando drift > 0.
+Escopo P2 — report-only (advisory). Gate bloqueante canonico: validate_openapi_routes_drift.py.
 """
 
 from __future__ import annotations
@@ -273,11 +273,6 @@ def main() -> int:
         default="runtime_contract",
         help="Escopo do diff semântico",
     )
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Falha (exit 1) quando drift_count > 0",
-    )
     args = parser.parse_args()
 
     report = build_semantic_diff(Path(args.contract), Path(args.api_dir), scope=args.scope)
@@ -287,8 +282,6 @@ def main() -> int:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
     if report["status"] == "failed":
-        return 1
-    if args.strict and report["summary"]["drift_count"] > 0:
         return 1
     return 0
 
