@@ -1,0 +1,27 @@
+name: Operational Runtime Governance
+
+on:
+  pull_request:
+    paths:
+      - 'docs/ops-dashboard/data/operational-runtime-governance-consolidation.json'
+      - 'docs/runbooks/operational-runtime-governance-consolidation.md'
+      - 'docs/contracts/runtime-contract-governance-pareto.md'
+      - 'docs/runbooks/power-platform-runtime-layer-pareto.md'
+      - 'scripts/validate_operational_runtime_governance.py'
+      - '.github/workflows/operational-runtime-governance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-operational-runtime-governance:
+    name: Validate operational runtime governance artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Pareto governance layer
+        run: python3 scripts/validate_operational_runtime_governance.py

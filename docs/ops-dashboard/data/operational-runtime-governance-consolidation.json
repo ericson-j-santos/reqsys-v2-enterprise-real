@@ -1,0 +1,150 @@
+{
+  "schema_version": "0.1.0",
+  "generated_at": "2026-06-29T09:00:00-03:00",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "strategy": "pareto_operational_runtime_governance",
+  "mode": "assisted_read_only_by_default",
+  "overall": {
+    "status": "yellow",
+    "maturity_percent_target": 85,
+    "confidence_level": "medium",
+    "operational_risk": "medium",
+    "primary_bottleneck": "ci_cd_stability_and_evidence_fragmentation"
+  },
+  "canonical_sources": [
+    {
+      "id": "runtime_health",
+      "path": "docs/ops-dashboard/data/health.json",
+      "type": "dashboard_data",
+      "required": true
+    },
+    {
+      "id": "pr_auto_recovery",
+      "path": "scripts/pr_auto_recovery.py",
+      "type": "diagnostic_script",
+      "required": true
+    },
+    {
+      "id": "openapi_governance_index",
+      "path": "docs/ops-dashboard/data/openapi-governance-index.json",
+      "type": "contract_index",
+      "required": true
+    },
+    {
+      "id": "artifact_contracts_index",
+      "path": "docs/contracts/artifact-contracts-index.md",
+      "type": "contract_documentation",
+      "required": true
+    },
+    {
+      "id": "observability_correlation_report",
+      "path": "artifacts/observability-correlation-report/observability-correlation-report.json",
+      "type": "observability_evidence",
+      "required": false
+    }
+  ],
+  "pareto_lanes": [
+    {
+      "id": "ci_recovery_runtime_stability",
+      "priority": 1,
+      "status": "yellow",
+      "impact": "very_high",
+      "risk": "low",
+      "target_outcome": "reduce_manual_ci_rework_and_increase_green_merge_rate",
+      "minimum_evidence": [
+        "critical_workflows_listed",
+        "failed_run_classification",
+        "recommended_action_per_pr",
+        "read_only_diagnostics_artifact"
+      ],
+      "next_actions": [
+        "extend_pr_auto_recovery_output_with_pareto_summary",
+        "publish_ci_runtime_status_json",
+        "render_failed_workflow_cards_in_ops_dashboard"
+      ]
+    },
+    {
+      "id": "governance_hub_consolidated",
+      "priority": 2,
+      "status": "yellow",
+      "impact": "very_high",
+      "risk": "low",
+      "target_outcome": "single_operational_semantic_layer_for_status_and_evidence",
+      "minimum_evidence": [
+        "environment_cards",
+        "executive_trend_history",
+        "deployment_health",
+        "gap_owner_registry"
+      ],
+      "next_actions": [
+        "render_this_index_in_ops_dashboard",
+        "link_all_canonical_sources",
+        "add_burndown_history_generation"
+      ]
+    },
+    {
+      "id": "runtime_observability_p1",
+      "priority": 3,
+      "status": "yellow",
+      "impact": "high",
+      "risk": "medium",
+      "target_outcome": "lower_mttr_with_correlation_and_error_fingerprints",
+      "minimum_evidence": [
+        "correlation_id_required",
+        "structured_logs_required",
+        "error_fingerprint_required",
+        "runtime_trace_boundary_documented"
+      ],
+      "next_actions": [
+        "standardize_runtime_event_contract",
+        "publish_trace_matrix",
+        "validate_log_redaction"
+      ]
+    },
+    {
+      "id": "contract_governance",
+      "priority": 4,
+      "status": "yellow",
+      "impact": "high",
+      "risk": "low",
+      "target_outcome": "avoid_silent_regression_and_api_drift",
+      "minimum_evidence": [
+        "openapi_schema_version",
+        "dto_drift_detection",
+        "breaking_change_policy",
+        "artifact_contract_index"
+      ],
+      "next_actions": [
+        "add_contract_drift_gate",
+        "publish_semantic_version_policy",
+        "link_openapi_to_docs_site"
+      ]
+    },
+    {
+      "id": "power_platform_runtime_layer",
+      "priority": 5,
+      "status": "planned",
+      "impact": "strategic",
+      "risk": "medium",
+      "target_outcome": "safe_reqsys_to_power_automate_runtime_bridge",
+      "minimum_evidence": [
+        "mock_get_post_payloads",
+        "openapi_connector_contract",
+        "alm_export_import_runbook",
+        "manual_approval_for_real_provisioning"
+      ],
+      "next_actions": [
+        "create_mock_connector_payloads",
+        "publish_power_automate_flow_templates",
+        "add_environment_guardrails"
+      ]
+    }
+  ],
+  "guardrails": {
+    "secrets_in_git": "forbidden",
+    "production_mutation_without_human_approval": "forbidden",
+    "workflow_auto_rerun": "allowed_only_when_idempotent_and_explicitly_scoped",
+    "dashboard_duplication": "forbidden_when_canonical_source_exists",
+    "contract_breaking_change_without_version_bump": "forbidden"
+  }
+}
