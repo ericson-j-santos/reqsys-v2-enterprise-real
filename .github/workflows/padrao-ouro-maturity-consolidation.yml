@@ -9,6 +9,9 @@ on:
       - "scripts/generate_ops_dashboard_data.py"
       - "scripts/build_padrao_ouro_operational_pareto.py"
       - "tests/test_padrao_ouro_maturity_consolidator.py"
+      - "tests/test_build_padrao_ouro_operational_pareto.py"
+      - "docs/contracts/padrao-ouro-operational-pareto.schema.json"
+      - "docs/ops-dashboard/index.html"
       - ".github/workflows/padrao-ouro-maturity-consolidation.yml"
 
 jobs:

@@ -1,27 +1,40 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-29T03:10:54.191565Z",
-  "state": "green",
+  "generated_at": "2026-06-29T03:48:13.835939Z",
+  "state": "yellow",
   "strategy": "pareto_operational_gold_base",
-  "current_score": 100.0,
+  "current_score": 95.88,
   "target_score": 98.0,
-  "gold_gap": 0,
+  "gold_gap": 2.12,
   "projected_score_after_recommended": 100.0,
-  "projected_gap_after_recommended": 0,
-  "statistical_confidence": 0.8,
+  "projected_gap_after_recommended": 0.0,
+  "statistical_confidence": 0.81,
+  "dimension_signals": {
+    "tests": 100.0,
+    "coverage": 74.29,
+    "mutation": 100.0,
+    "contract": 100.0,
+    "schema": 100.0,
+    "ci-watch": 100.0
+  },
+  "dimension_gaps": {
+    "coverage": 25.71
+  },
   "dominant_bottleneck": {
-    "dimension": "none",
-    "score": 100.0,
-    "gap_to_100": 0.0,
-    "share_of_trilha_d_remaining_gap": 0.0
+    "dimension": "coverage",
+    "score": 74.29,
+    "gap_to_100": 25.71,
+    "share_of_trilha_d_remaining_gap": 1.0
   },
   "summary": {
-    "actions_evaluated": 4,
-    "recommended_now": 0,
-    "expected_gain_now": 0,
-    "pareto_rule": "2 ações recomendadas concentram maior relação impacto/risco/esforço",
-    "next_increment": null
+    "actions_evaluated": 5,
+    "recommended_now": 3,
+    "expected_gain_now": 4.88,
+    "pareto_rule": "ações até 80% do ganho esperado acumulado (80/20)",
+    "next_increment": "coverage_targeted_tests",
+    "evidence_source": "trilha_d_history",
+    "consolidation_mode": false
   },
   "links": {
     "trilha_d_history": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/docs/ops-dashboard/data/trilha-d-history.json",
@@ -34,20 +47,20 @@
       "title": "Elevar coverage dos módulos críticos",
       "lane": "quality-governance",
       "dimension": "coverage",
-      "current_score": 74.29,
       "target_score": 82.0,
-      "expected_score_gain": 3.85,
       "effort_points": 3,
       "risk": "low",
       "confidence": 0.82,
-      "why_now": "coverage concentra 100% do gap restante da Trilha D contra 100 pontos",
+      "why_now": "coverage concentra o maior gap dimensional da Trilha D",
       "next_artifacts": [
         "backend/tests/test_*_critical_paths.py",
         "docs/ops-dashboard/data/trilha-d-history.json"
       ],
-      "pareto_score": 105.23,
+      "current_score": 74.29,
+      "expected_score_gain": 1.28,
+      "pareto_score": 702.74,
       "rank": 1,
-      "cumulative_expected_gain_pct": 38.69,
+      "cumulative_expected_gain_pct": 14.92,
       "recommended_now": true
     },
     {
@@ -55,9 +68,8 @@
       "title": "Expor histórico da Trilha D no dashboard",
       "lane": "runtime-dashboard",
       "dimension": "operational-visibility",
-      "current_score": 70.0,
       "target_score": 90.0,
-      "expected_score_gain": 2.4,
+      "fixed_gain": 2.4,
       "effort_points": 2,
       "risk": "low",
       "confidence": 0.78,
@@ -66,9 +78,35 @@
         "docs/ops-dashboard/data/trilha-d-history.json",
         "docs/ops-dashboard/index.html"
       ],
+      "active_when": "artifact_ingestion_pending",
+      "current_score": 60.0,
+      "expected_score_gain": 2.4,
       "pareto_score": 93.6,
       "rank": 2,
-      "cumulative_expected_gain_pct": 62.81,
+      "cumulative_expected_gain_pct": 42.89,
+      "recommended_now": true
+    },
+    {
+      "id": "operational_pareto_dashboard_card",
+      "title": "Expor ranking Pareto no dashboard operacional",
+      "lane": "runtime-dashboard",
+      "dimension": "operational-visibility",
+      "target_score": 95.0,
+      "fixed_gain": 1.2,
+      "effort_points": 2,
+      "risk": "low",
+      "confidence": 0.85,
+      "why_now": "fecha o ciclo evidência → priorização → ação visível ao operador",
+      "next_artifacts": [
+        "docs/ops-dashboard/data/padrao-ouro-operational-pareto.json",
+        "docs/ops-dashboard/index.html"
+      ],
+      "active_when": "always_when_gaps_remain",
+      "current_score": 60.0,
+      "expected_score_gain": 1.2,
+      "pareto_score": 51.0,
+      "rank": 3,
+      "cumulative_expected_gain_pct": 56.88,
       "recommended_now": true
     },
     {
@@ -76,9 +114,8 @@
       "title": "Automatizar refresh do histórico por artifact",
       "lane": "governance-automation",
       "dimension": "evidence-refresh",
-      "current_score": 60.0,
       "target_score": 85.0,
-      "expected_score_gain": 2.1,
+      "fixed_gain": 2.1,
       "effort_points": 5,
       "risk": "medium",
       "confidence": 0.7,
@@ -87,9 +124,12 @@
         "scripts/build_trilha_d_history.py",
         ".github/workflows/trilha-d-qualidade-governanca.yml"
       ],
+      "active_when": "artifact_ingestion_pending",
+      "current_score": 60.0,
+      "expected_score_gain": 2.1,
       "pareto_score": 24.11,
-      "rank": 3,
-      "cumulative_expected_gain_pct": 83.92,
+      "rank": 4,
+      "cumulative_expected_gain_pct": 81.35,
       "recommended_now": false
     },
     {
@@ -97,9 +137,8 @@
       "title": "Gate preditivo de regressão operacional",
       "lane": "predictive-governance",
       "dimension": "regression-risk",
-      "current_score": 55.0,
       "target_score": 80.0,
-      "expected_score_gain": 1.6,
+      "fixed_gain": 1.6,
       "effort_points": 5,
       "risk": "medium",
       "confidence": 0.64,
@@ -108,8 +147,11 @@
         "scripts/predict_operational_regression.py",
         "docs/ops-dashboard/data/padrao-ouro-operational-pareto.json"
       ],
+      "active_when": "always_when_gaps_remain",
+      "current_score": 60.0,
+      "expected_score_gain": 1.6,
       "pareto_score": 16.79,
-      "rank": 4,
+      "rank": 5,
       "cumulative_expected_gain_pct": 100.0,
       "recommended_now": false
     }
@@ -120,7 +162,8 @@
       "current_score",
       "target_score",
       "gold_gap",
-      "projected_score_after_recommended"
+      "projected_score_after_recommended",
+      "dominant_bottleneck"
     ],
     "ranking_fields": [
       "rank",
@@ -137,6 +180,6 @@
       "gap_to_100",
       "share_of_trilha_d_remaining_gap"
     ],
-    "refresh_strategy": "evidence_driven_when_from_evidence_enabled"
+    "refresh_strategy": "evidence_driven_from_trilha_d_history"
   }
 }

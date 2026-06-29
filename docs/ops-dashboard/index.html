@@ -177,6 +177,27 @@
     </section>
 
     <section class="card">
+      <h2>Padrão Ouro — Pareto operacional (80/20)</h2>
+      <p class="small">Priorização estatística dos gaps com maior impacto na evolução padrão ouro, derivada de <code>padrao-ouro-operational-pareto.json</code> e evidências da Trilha D.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Score atual</div><div id="pareto-score" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Gap padrão ouro</div><div id="pareto-gold-gap" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Gargalo dominante</div><div id="pareto-bottleneck" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Confiança estatística</div><div id="pareto-confidence" class="kpi-value">-</div></div>
+      </div>
+      <p class="small" id="pareto-rule">-</p>
+      <table>
+        <thead><tr><th>#</th><th>Ação</th><th>Score Pareto</th><th>Ganho esperado</th><th>Risco</th><th>Recomendada</th></tr></thead>
+        <tbody id="pareto-actions"><tr><td colspan="6">Carregando...</td></tr></tbody>
+      </table>
+      <div class="links" id="pareto-links"></div>
+      <details class="details">
+        <summary>Contrato pareto bruto</summary>
+        <pre id="pareto-details">{}</pre>
+      </details>
+    </section>
+
+    <section class="card">
       <h2>Links operacionais</h2>
       <div class="links" id="links"></div>
       <p class="small" id="generated"></p>
@@ -546,6 +567,72 @@
       });
     }
 
+    async function renderOperationalPareto() {
+      const fallback = {
+        state: 'unknown',
+        current_score: 0,
+        target_score: 98,
+        gold_gap: 0,
+        statistical_confidence: 0,
+        dominant_bottleneck: { dimension: 'none', score: 0, gap_to_100: 0 },
+        summary: { pareto_rule: '-', next_increment: '-' },
+        ranked_actions: [],
+      };
+      const response = await fetchOptionalJson('./data/padrao-ouro-operational-pareto.json', fallback);
+      const payload = response.data || fallback;
+      const bottleneck = payload.dominant_bottleneck || {};
+
+      document.getElementById('pareto-score').innerHTML = `${payload.current_score ?? '-'} <span class="small">/ ${payload.target_score ?? 98}</span>`;
+      document.getElementById('pareto-gold-gap').textContent = payload.gold_gap ?? '-';
+      document.getElementById('pareto-bottleneck').textContent = bottleneck.dimension
+        ? `${bottleneck.dimension} (${bottleneck.gap_to_100 ?? '-'} pts)`
+        : '-';
+      document.getElementById('pareto-confidence').textContent = payload.statistical_confidence != null
+        ? `${Math.round(payload.statistical_confidence * 100)}%`
+        : '-';
+      document.getElementById('pareto-rule').textContent = [
+        payload.summary?.pareto_rule || '-',
+        payload.summary?.next_increment ? `Próximo incremento: ${payload.summary.next_increment}` : '',
+        payload.projected_score_after_recommended != null ? `Projeção após Pareto: ${payload.projected_score_after_recommended}` : '',
+      ].filter(Boolean).join(' · ');
+
+      const actionsBody = document.getElementById('pareto-actions');
+      actionsBody.innerHTML = '';
+      const actions = payload.ranked_actions || [];
+      if (!actions.length) {
+        actionsBody.innerHTML = '<tr><td colspan="6">Nenhuma ação ranqueada; padrão ouro consolidado.</td></tr>';
+      } else {
+        actions.forEach((item) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${item.rank ?? '-'}</td>
+            <td>${item.title || item.id || '-'}<div class="small">${item.why_now || ''}</div></td>
+            <td>${item.pareto_score ?? '-'}</td>
+            <td>${item.expected_score_gain ?? '-'}</td>
+            <td><span class="status ${statusClass(item.risk)}">${item.risk || '-'}</span></td>
+            <td>${item.recommended_now ? '<span class="status passed">sim</span>' : '-'}</td>
+          `;
+          actionsBody.appendChild(tr);
+        });
+      }
+
+      const links = document.getElementById('pareto-links');
+      links.innerHTML = '';
+      addLink(links, 'padrao-ouro-operational-pareto.json', './data/padrao-ouro-operational-pareto.json');
+      if (payload.links?.trilha_d_history) addLink(links, 'Trilha D history', payload.links.trilha_d_history, true);
+      if (payload.links?.source) addLink(links, 'Builder Pareto', payload.links.source, true);
+
+      document.getElementById('pareto-details').textContent = shortJson({
+        available: response.available,
+        source: response.source,
+        fallback_error: response.error,
+        dimension_signals: payload.dimension_signals || {},
+        dimension_gaps: payload.dimension_gaps || {},
+        summary: payload.summary || {},
+        ranked_actions: actions,
+      });
+    }
+
     async function renderGovernanceEvidenceCards() {
       const fallback = {
         overall_status: 'unknown',
@@ -636,6 +723,7 @@
       await renderMergeIntelligence();
       await renderGovernanceEvidenceCards();
       await renderTrilhaDHistory();
+      await renderOperationalPareto();
       renderDomains(data.runtime_domain_drilldowns || []);
       const obs = data.observability_correlation_report || {};
       const obsSummary = obs.summary || {};
@@ -741,6 +829,7 @@
       document.getElementById('governance-evidence-cards').innerHTML = `<tr><td colspan="4">Fallback seguro: falha ao carregar governance evidence cards.</td></tr>`;
       document.getElementById('trilha-d-dimensions').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar histórico Trilha D.</td></tr>`;
       document.getElementById('trilha-d-history-rows').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar histórico Trilha D.</td></tr>`;
+      document.getElementById('pareto-actions').innerHTML = `<tr><td colspan="6">Fallback seguro: falha ao carregar Pareto operacional.</td></tr>`;
     });
   </script>
 </body>
