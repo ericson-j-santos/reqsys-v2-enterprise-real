@@ -2,6 +2,25 @@
 
 Todas as mudanças relevantes da documentação viva do ReqSys devem ser registradas neste arquivo.
 
+## [0.4.0] - 2026-06-28
+
+### Adicionado
+
+- Documento `docs-site/api/async-httpx-queue.md` com arquitetura assíncrona via API, fila, worker e `httpx.AsyncClient`.
+- Contrato OpenAPI versionado `docs-site/assets/openapi/reqsys-runtime-openapi-v0.4.0.json`.
+- Endpoints `POST /api/jobs` e `GET /api/jobs/{job_id}` no contrato de runtime.
+- Estados operacionais padronizados: `queued`, `processing`, `completed`, `retrying`, `failed` e `dead_letter`.
+- Governança mínima para `correlation_id`, retentativas, backoff, dead-letter e rastreabilidade.
+
+### Alterado
+
+- Navegação MkDocs passa a expor o workflow assíncrono HTTPX/Fila.
+- Manifesto `VERSION.json` atualizado para `0.4.0` e contrato OpenAPI `v0.4.0`.
+
+### Próximo incremento recomendado
+
+- Implementar fatia executável de runtime com DTOs Pydantic, repositório em memória DEV, worker local controlado por feature flag e testes unitários de transição de estados.
+
 ## [0.1.0] - 2026-06-28
 
 ### Adicionado
