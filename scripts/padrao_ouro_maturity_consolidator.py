@@ -299,6 +299,7 @@ def regenerate_downstream_reports() -> dict[str, Any]:
             sys.executable,
             "scripts/build_padrao_ouro_operational_pareto.py",
             "--from-evidence",
+            "--consolidation",
             "--runtime-health-report",
             "artifacts/runtime-health-center/runtime-health-report.json",
             "--delivery-maturity",
