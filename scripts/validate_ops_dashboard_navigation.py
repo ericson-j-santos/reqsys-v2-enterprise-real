@@ -15,6 +15,7 @@ REQUIRED_LINK_IDS = {
     "ops_dashboard_main",
     "trilha_d_history_dashboard",
     "operational_pareto_dashboard",
+    "executive_brief_dashboard",
     "operational_runtime_governance",
     "operational_evidence_hub",
     "runtime_governance_contract",
@@ -26,6 +27,10 @@ REQUIRED_LINK_IDS = {
 REQUIRED_DEEP_LINK_HREFS = {
     "trilha_d_history_dashboard": "./index.html#trilha-d-history-card",
     "operational_pareto_dashboard": "./index.html#operational-pareto-card",
+}
+
+REQUIRED_ARTIFACT_HREFS = {
+    "executive_brief_dashboard": "./data/executive-brief.json",
 }
 
 REQUIRED_HTML_TERMS = [
@@ -57,6 +62,12 @@ def validate_index() -> None:
         if not item.get("href") or not item.get("title") or not item.get("category"):
             fail(f"invalid navigation link: {item}")
     for link_id, expected_href in REQUIRED_DEEP_LINK_HREFS.items():
+        link = by_id.get(link_id)
+        if not link:
+            fail(f"missing required navigation link: {link_id}")
+        if link.get("href") != expected_href:
+            fail(f"unexpected href for {link_id}: {link.get('href')!r} (expected {expected_href!r})")
+    for link_id, expected_href in REQUIRED_ARTIFACT_HREFS.items():
         link = by_id.get(link_id)
         if not link:
             fail(f"missing required navigation link: {link_id}")

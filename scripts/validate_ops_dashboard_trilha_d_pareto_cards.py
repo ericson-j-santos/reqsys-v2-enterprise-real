@@ -97,6 +97,22 @@ def validate_data_contracts() -> None:
         if not isinstance(payload.get("current_score"), int | float):
             fail(f"current_score missing in {path.relative_to(ROOT)}")
 
+    trilha_d = json.loads(TRILHA_D_DATA.read_text(encoding="utf-8"))
+    pareto = json.loads(PARETO_DATA.read_text(encoding="utf-8"))
+    trilha_next = (trilha_d.get("summary") or {}).get("next_increment")
+    pareto_next = (pareto.get("summary") or {}).get("next_increment")
+    if trilha_next == "predictive_regression_gate" and pareto_next != "predictive_regression_gate":
+        fail(
+            "pareto next_increment diverges from trilha-d-history after dashboard consolidation: "
+            f"trilha_d={trilha_next!r} pareto={pareto_next!r}"
+        )
+    if isinstance(trilha_d.get("current_score"), int | float) and isinstance(pareto.get("current_score"), int | float):
+        if trilha_d["current_score"] != pareto["current_score"]:
+            fail(
+                "current_score diverges between trilha-d-history and pareto index: "
+                f"trilha_d={trilha_d['current_score']} pareto={pareto['current_score']}"
+            )
+
 
 def main() -> int:
     try:
