@@ -49,6 +49,25 @@ Media ponderada dos gates com fonte disponivel:
 - **≥ 70%** → `needs_review`
 - **Blockers ativos** → `blocked` (independente do score)
 
+## Matriz de decisao executiva
+
+| Estado | Condicao minima | Decisao recomendada | Acao obrigatoria |
+|---|---|---|---|
+| `ready` | Score >= 95%, sem blockers e fontes criticas presentes | Promover com aprovacao normal | Registrar evidencia e changelog |
+| `ready_with_observation` | Score >= 85%, sem blockers, com observacoes nao bloqueantes | Promover somente com aceite consciente | Registrar observacoes, dono e prazo |
+| `needs_review` | Score >= 70% ou fonte relevante ausente | Nao promover automaticamente | Abrir plano de correcao e nova validacao |
+| `blocked` | Qualquer blocker ativo | Bloquear promocao | Corrigir blocker, reexecutar gates e anexar evidencia |
+
+## Politica de fontes ausentes
+
+| Fonte ausente | Severidade padrao | Tratamento |
+|---|---|---|
+| `pr-evidence-gate.json` | Alta | Impede promocao quando houver PR relacionado |
+| `main-post-merge-validation.json` | Alta | Exige validacao pos-merge antes de release |
+| `golden-release-readiness.json` | Media | Permite apenas `ready_with_observation` quando demais gates estiverem verdes |
+| Evidencias OpenAPI | Alta para mudancas de contrato; media para docs-only | Exige revisao semantica quando houver API afetada |
+| `coordenador-status-evidence` | Alta | Exige validacao consolidada alternativa ou nova execucao do coordenador |
+
 ## Execucao local
 
 ```bash
@@ -69,6 +88,13 @@ Com artifacts locais ja presentes em `artifacts/coordenador-status/` e `audit/`.
 ## Modo
 
 `report_only` — nao faz deploy, nao relaxa gates obrigatorios, nao muta producao. Requer revisao humana antes de promover.
+
+## Limites operacionais
+
+- Nao substitui branch protection, CI obrigatorio ou aprovacao humana.
+- Nao deve transformar alerta report-only em permissao automatica de producao.
+- Nao deve mascarar falta de artifact critico como estado verde.
+- Nao deve ser usado como unica evidencia para mudancas de seguranca, autenticacao, banco ou contrato publico.
 
 ## Integracao coordenador
 
