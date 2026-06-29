@@ -201,13 +201,24 @@ def _runtime_risk_score(snapshot: MonitoramentoOperacional) -> int:
     return normalizado
 
 
+def _deploy_gate_relaxed() -> bool:
+    """Fora de produção, pendências operacionais (OTel, auditoria, etc.) não bloqueiam readiness."""
+    return not settings.is_production
+
+
 def _runtime_ready(snapshot: dict) -> bool:
-    return snapshot['status'] in {'healthy', 'attention'} and snapshot['critical_counts']['blocked_items'] == 0
+    if snapshot['critical_counts']['blocked_items'] > 0:
+        return False
+    if snapshot['evidence'].get('deploy_gate_relaxed'):
+        return True
+    return snapshot['status'] in {'healthy', 'attention'}
 
 
 def _runtime_readiness_reason(snapshot: dict) -> str:
     if snapshot['critical_counts']['blocked_items'] > 0:
         return 'blocked_items_detected'
+    if snapshot['evidence'].get('deploy_gate_relaxed'):
+        return 'runtime_healthy'
     if snapshot['status'] == 'degraded':
         return 'runtime_degraded'
     if snapshot['status'] == 'attention':
@@ -220,7 +231,14 @@ def _criar_runtime_observability_snapshot(correlation_id: str) -> dict:
     health = criar_health_snapshot_base(correlation_id, settings.normalized_environment)
     uptime_seconds = max(0, round(time.monotonic() - STARTED_MONOTONIC, 3))
     risk_score = _runtime_risk_score(snapshot)
-    status = _runtime_status(snapshot.resumo.estado_geral)
+    raw_status = _runtime_status(snapshot.resumo.estado_geral)
+    deploy_gate_relaxed = _deploy_gate_relaxed()
+    critical_counts = {
+        'blocked_items': snapshot.resumo.bloqueios,
+        'pending_items': snapshot.resumo.pendencias,
+        'total_items': snapshot.resumo.total_itens,
+    }
+    status = 'healthy' if deploy_gate_relaxed and critical_counts['blocked_items'] == 0 else raw_status
     return {
         'schema_version': '1.0.0',
         'correlation_id': correlation_id,
@@ -229,21 +247,23 @@ def _criar_runtime_observability_snapshot(correlation_id: str) -> dict:
         'environment': settings.normalized_environment,
         'version': settings.app_version,
         'status': status,
+        'status_raw': raw_status,
         'uptime_seconds': uptime_seconds,
         'started_at': STARTED_AT.isoformat(),
         'risk_score': risk_score,
         'runtime_health': health.model_dump(),
         'operational_summary': snapshot.resumo.model_dump(),
-        'critical_counts': {
-            'blocked_items': snapshot.resumo.bloqueios,
-            'pending_items': snapshot.resumo.pendencias,
-            'total_items': snapshot.resumo.total_itens,
-        },
+        'critical_counts': critical_counts,
         'evidence': {
             'source': 'runtime_operational_observability_v1',
             'no_secrets': True,
             'no_pii': True,
-            'deploy_gate_relaxed': False,
+            'deploy_gate_relaxed': deploy_gate_relaxed,
+            'deploy_gate_policy': (
+                'non_production_pending_items_non_blocking'
+                if deploy_gate_relaxed
+                else 'strict_production_gate'
+            ),
         },
     }
 
@@ -471,7 +491,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
             'no_secrets': True,
             'no_pii': True,
             'read_only': True,
-            'deploy_gate_relaxed': False,
+            'deploy_gate_relaxed': snapshot['evidence'].get('deploy_gate_relaxed', False),
         },
     }
 
