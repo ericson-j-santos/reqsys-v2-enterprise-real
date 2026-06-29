@@ -20,6 +20,8 @@ on:
       - "scripts/post_workflow_evidence_snapshot.py"
       - "scripts/validate_public_runtime.py"
       - "scripts/validate_publication_sync.py"
+      - "scripts/configurar_fly_auth_azure.py"
+      - "scripts/validar_login_multi_ambiente.py"
       - "scripts/runtime_public_validator.py"
       - "config/external-sources-registry.json"
       - "docs/ops-dashboard/**"
@@ -51,6 +53,7 @@ concurrency:
 env:
   CORRELATION_ID: padrao-ouro-delivery-${{ github.run_id }}-${{ github.run_attempt }}
   PUBLIC_API_URL: https://reqsys-api.fly.dev
+  PUBLIC_FRONTEND_URL: https://reqsys-app.fly.dev
 
 jobs:
   auto-open-pr:
@@ -122,12 +125,50 @@ jobs:
           path: artifacts/runtime/runtime-public-validation.json
           if-no-files-found: warn
 
-  deploy-fly-prod:
-    name: Deploy Fly.io produção (runtime)
+  configure-prod-secrets:
+    name: Configurar secrets auth produção
     runs-on: ubuntu-latest
     needs: validate-runtime
     if: >-
       needs.validate-runtime.result == 'success' &&
+      ((github.event_name == 'push' && github.ref_name == 'main') ||
+       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Aplicar secrets JWT/Azure no reqsys-api
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
+          VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
+          AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          python scripts/configurar_fly_auth_azure.py \
+            --fly-app reqsys-api \
+            --app-env production \
+            --app-public-url "$PUBLIC_FRONTEND_URL" \
+            --api-public-url "$PUBLIC_API_URL" \
+            --azure-tenant-id "$AZURE_TENANT_ID_SECRET" \
+            --azure-client-id "$AZURE_CLIENT_ID_SECRET" \
+            --cofre-tenant-key AZURE_TENANT_ID \
+            --cofre-client-key AZURE_CLIENT_ID \
+            | tee fly-auth-azure-report-production.json
+
+  deploy-fly-prod:
+    name: Deploy Fly.io produção (runtime)
+    runs-on: ubuntu-latest
+    needs: [validate-runtime, configure-prod-secrets]
+    if: >-
+      needs.validate-runtime.result == 'success' &&
+      needs.configure-prod-secrets.result == 'success' &&
       ((github.event_name == 'push' && github.ref_name == 'main') ||
        (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
        (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
@@ -221,7 +262,7 @@ jobs:
     if: >-
       always() &&
       needs.validate-runtime.result == 'success' &&
-      (needs.deploy-fly-prod.result == 'success' || needs.deploy-fly-prod.result == 'skipped') &&
+      needs.deploy-fly-prod.result == 'success' &&
       (needs.deploy-fly-frontend-prod.result == 'success' || needs.deploy-fly-frontend-prod.result == 'skipped') &&
       ((github.event_name == 'push' && github.ref_name == 'main') ||
        (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
@@ -241,8 +282,8 @@ jobs:
             --environment prod \
             --include-optional-evidence \
             --timeout 25 \
-            --probe-attempts 8 \
-            --probe-delay 20 \
+            --probe-attempts 4 \
+            --probe-delay 15 \
             --artifact-root . \
             --output artifacts/runtime/runtime-public-probe.json
 
@@ -272,6 +313,14 @@ jobs:
             --timeout 25 \
             --output publication-sync.json
 
+      - name: Validar login produção
+        run: |
+          set -euo pipefail
+          python scripts/validar_login_multi_ambiente.py \
+            --environment prod \
+            --timeout 25 \
+            --output login-validation-prod.json
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -280,12 +329,13 @@ jobs:
             artifacts/runtime/runtime-public-probe.json
             artifacts/runtime/runtime-public-validation.json
             publication-sync.json
+            login-validation-prod.json
           if-no-files-found: warn
 
   delivery-summary:
     name: Delivery summary
     runs-on: ubuntu-latest
-    needs: [auto-open-pr, validate-runtime, deploy-fly-prod, deploy-fly-frontend-prod, public-runtime-smoke]
+    needs: [auto-open-pr, validate-runtime, configure-prod-secrets, deploy-fly-prod, deploy-fly-frontend-prod, public-runtime-smoke]
     if: always()
     steps:
       - name: Resumo consolidado
@@ -297,6 +347,7 @@ jobs:
             echo "|---|---|"
             echo "| Auto-open PR | ${{ needs.auto-open-pr.result || 'skipped' }} |"
             echo "| Validate runtime | ${{ needs.validate-runtime.result || 'skipped' }} |"
+            echo "| Configure secrets | ${{ needs.configure-prod-secrets.result || 'skipped' }} |"
             echo "| Deploy Fly prod | ${{ needs.deploy-fly-prod.result || 'skipped' }} |"
             echo "| Deploy Fly frontend | ${{ needs.deploy-fly-frontend-prod.result || 'skipped' }} |"
             echo "| Public smoke | ${{ needs.public-runtime-smoke.result || 'skipped' }} |"

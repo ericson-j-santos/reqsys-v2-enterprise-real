@@ -29,6 +29,11 @@ on:
       - "frontend/fly.toml"
       - "Dockerfile.fly"
       - "scripts/fly_boot.sh"
+      - "scripts/configurar_fly_auth_azure.py"
+      - "scripts/validar_login_multi_ambiente.py"
+      - ".github/workflows/configurar-fly-auth-azure.yml"
+      - ".github/workflows/login-multi-ambiente-gate.yml"
+      - ".github/workflows/padrao-ouro-delivery-automation.yml"
 
 permissions:
   contents: read
@@ -222,63 +227,50 @@ jobs:
     if: >-
       always() &&
       (needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success')
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Aguardar estabilização do runtime
+        if: needs.deploy-backend.result == 'success'
         run: sleep 45
       - name: Smoke API /api/runtime/*
+        if: needs.deploy-backend.result == 'success'
         run: |
           python scripts/runtime_public_validator.py \
             --probe \
             --base-url "$PUBLIC_API_URL" \
             --environment prod \
             --include-optional-evidence \
-            --timeout 25 \
-            --probe-attempts 8 \
-            --probe-delay 20 \
+            --timeout 20 \
+            --probe-attempts 4 \
+            --probe-delay 15 \
             --artifact-root . \
             --output artifacts/runtime/runtime-public-probe.json
       - name: Validar publicação sincronizada
+        if: needs.deploy-backend.result == 'success'
         run: |
           python scripts/validate_publication_sync.py \
             --environment prod \
             --expected-sha "${{ github.sha }}" \
-            --timeout 25 \
+            --timeout 20 \
             --output publication-sync-post.json
-
-      - name: Validar login produção (Azure + demo bloqueado)
+      - name: Validar login produção
+        if: needs.deploy-backend.result == 'success'
+        run: |
+          python scripts/validar_login_multi_ambiente.py \
+            --environment prod \
+            --timeout 20 \
+            --output login-validation-prod.json
+      - name: Validar bundle frontend publicado
+        if: needs.deploy-frontend.result == 'success'
         run: |
           set -euo pipefail
-          python scripts/validar_login_azure_operacional.py \
-            --api-url "$PUBLIC_API_URL" \
-            --expected-redirect-uri "$PUBLIC_FRONTEND_URL" \
-            | tee login-azure-prod-report.json
           python scripts/validar_frontend_auth_redirect.py \
             --frontend-url "$PUBLIC_FRONTEND_URL" \
             | tee login-frontend-prod-report.json
-          python - <<'PY'
-          import json, os, sys, urllib.request, urllib.error
-          api = os.environ["PUBLIC_API_URL"].rstrip("/")
-          req = urllib.request.Request(
-              f"{api}/v1/auth/login",
-              data=json.dumps({"email": "ericsonjosedossantos@tieri659.onmicrosoft.com"}).encode(),
-              headers={"Content-Type": "application/json"},
-              method="POST",
-          )
-          try:
-              urllib.request.urlopen(req, timeout=25)
-              raise SystemExit("demo login deveria retornar 403 em produção")
-          except urllib.error.HTTPError as exc:
-              if exc.code != 403:
-                  raise SystemExit(f"demo login esperado 403, recebido {exc.code}") from exc
-          print("demo_login_blocked_ok")
-          PY
-        env:
-          PUBLIC_API_URL: https://reqsys-api.fly.dev
-          PUBLIC_FRONTEND_URL: https://reqsys-app.fly.dev
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -286,7 +278,7 @@ jobs:
           path: |
             publication-sync-post.json
             artifacts/runtime/runtime-public-probe.json
-            login-azure-prod-report.json
+            login-validation-prod.json
             login-frontend-prod-report.json
           if-no-files-found: warn
 
