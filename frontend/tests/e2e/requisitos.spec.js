@@ -5,7 +5,7 @@ test.describe.configure({ retries: 1 })
 
 async function irParaRequisitos(page) {
     await login(page)
-    await navegarMenu(page, { temaId: 'requisitos', tituloLink: /^Requisitos$/i })
+    await navegarMenu(page, { temaId: 'requisitos', subgrupoId: 'entrada', tituloLink: /^Requisitos$/i })
     await expect(page).toHaveURL(/\/requisitos/, { timeout: 15000 })
     await expect(page.getByRole('heading', { name: 'Requisitos' })).toBeVisible({ timeout: 10000 })
 }

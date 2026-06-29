@@ -19,7 +19,6 @@
       width="280"
       class="req-drawer"
     >
-      <!-- Brand -->
       <div class="pa-5 pb-3 req-brand-block">
         <div class="brand"><span class="brand-dot">R</span> ReqSys Enterprise</div>
         <div class="muted mt-1">SaaS Interno · v2 Enterprise</div>
@@ -43,17 +42,53 @@
             :data-testid="`nav-tema-${tema.id}`"
             class="nav-tema-tab"
           >
-            <v-icon :icon="tema.icon" size="16" class="mr-1" />
-            <span class="nav-tema-label">{{ tema.title }}</span>
+            <span class="nav-tema-tab-inner">
+              <v-icon :icon="tema.icon" size="16" />
+              <span class="nav-tema-label">{{ tema.title }}</span>
+              <span
+                v-if="badgeTema(tema.id).count > 0"
+                class="nav-tema-badge"
+                :class="`nav-tema-badge--${badgeTema(tema.id).level}`"
+                :data-testid="`nav-badge-${tema.id}`"
+                :title="`${badgeTema(tema.id).count} pendência(s)`"
+              >
+                {{ badgeLabel(badgeTema(tema.id).count) }}
+              </span>
+            </span>
           </v-tab>
         </v-tabs>
         <p class="nav-tema-topic muted">{{ temaAtual.topic }}</p>
       </div>
 
-      <!-- Sub-abas (rotas do tema) -->
+      <!-- Sub-abas do tema Requisitos (Entrada / Pipeline / Publicação) -->
+      <div
+        v-if="temaTemSubgrupos(temaAtivo)"
+        class="nav-subgrupos"
+        aria-label="Subtemas de Requisitos"
+      >
+        <v-tabs
+          v-model="subgrupoAtivo"
+          density="compact"
+          color="secondary"
+          class="nav-subgrupos-tabs"
+        >
+          <v-tab
+            v-for="sub in temaAtual.subgroups"
+            :key="sub.id"
+            :value="sub.id"
+            :data-testid="`nav-subgrupo-${sub.id}`"
+            class="nav-subgrupo-tab"
+          >
+            {{ sub.title }}
+          </v-tab>
+        </v-tabs>
+        <p v-if="subgrupoAtualInfo" class="nav-subgrupo-topic muted">{{ subgrupoAtualInfo.topic }}</p>
+      </div>
+
+      <!-- Sub-rotas do tema (ou do subgrupo ativo) -->
       <v-list density="compact" nav class="pt-1 req-nav-list" aria-label="Navegação do tema">
         <v-tooltip
-          v-for="item in temaAtual.items"
+          v-for="item in itensVisiveis"
           :key="item.to"
           :text="item.tip"
           location="right"
@@ -65,21 +100,18 @@
               :prepend-icon="item.icon"
               :title="item.title"
               class="nav-item"
-              :data-testid="`nav-item-${item.to.replace(/\//g, '').replace(/^$/, 'dashboard')}`"
+              :data-testid="`nav-item-${navItemTestId(item.to)}`"
               @click="mobile && (drawer = false)"
             />
           </template>
         </v-tooltip>
       </v-list>
 
-      <!-- User + logout -->
       <template #append>
         <v-divider />
         <div v-if="auth.usuario" class="user-info">
           <v-avatar size="30" color="amber" aria-hidden="true">
-            <span class="user-initials">
-              {{ initials(auth.usuario) }}
-            </span>
+            <span class="user-initials">{{ initials(auth.usuario) }}</span>
           </v-avatar>
           <div class="overflow-hidden">
             <div class="user-name">{{ auth.usuario.nome || auth.usuario.email }}</div>
@@ -111,7 +143,22 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../services/api'
-import { NAV_TEMAS, temaIdPorRota, temaPorId } from '../constants/navCatalog'
+import { carregarDadosPendenciasNav } from '../composables/navPendencias'
+import {
+  lerSubgrupoRequisitosPersistido,
+  lerTemaPersistido,
+  salvarSubgrupoRequisitosPersistido,
+  salvarTemaPersistido,
+} from '../composables/navTemaPersist'
+import {
+  NAV_TEMAS,
+  itensDoSubgrupo,
+  subgrupoAtual,
+  subgrupoIdPorRota,
+  temaIdPorRota,
+  temaPorId,
+  temaTemSubgrupos,
+} from '../constants/navCatalog'
 
 const { mobile } = useDisplay()
 const auth = useAuthStore()
@@ -119,7 +166,11 @@ const router = useRouter()
 const route = useRoute()
 const drawer = ref(!mobile.value)
 const environment = ref(import.meta.env.VITE_APP_ENVIRONMENT || '')
+const pendenciasPorTema = ref({})
+const navegacaoInicializada = ref(false)
+
 const temaAtivo = ref(temaIdPorRota(route.path))
+const subgrupoAtivo = ref(subgrupoIdPorRota(route.path) || lerSubgrupoRequisitosPersistido() || 'entrada')
 
 const environmentLabelShort = computed(() => {
   const value = (environment.value || 'dev').toLowerCase()
@@ -134,25 +185,82 @@ const ambienteDrawerLabel = computed(() => {
 
 const temaAtual = computed(() => temaPorId(temaAtivo.value))
 
+const subgrupoAtualInfo = computed(() =>
+  temaTemSubgrupos(temaAtivo.value) ? subgrupoAtual(temaAtivo.value, subgrupoAtivo.value) : null,
+)
+
+const itensVisiveis = computed(() => {
+  if (temaTemSubgrupos(temaAtivo.value)) {
+    return itensDoSubgrupo(temaAtivo.value, subgrupoAtivo.value)
+  }
+  return temaAtual.value.items
+})
+
 watch(mobile, (isMobile) => {
   drawer.value = !isMobile
+})
+
+watch(temaAtivo, (id) => {
+  salvarTemaPersistido(id)
+  if (temaTemSubgrupos(id) && !subgrupoAtivo.value) {
+    subgrupoAtivo.value = lerSubgrupoRequisitosPersistido() || temaAtual.value.subgroups[0].id
+  }
+})
+
+watch(subgrupoAtivo, (id) => {
+  if (temaTemSubgrupos(temaAtivo.value)) {
+    salvarSubgrupoRequisitosPersistido(id)
+  }
 })
 
 watch(
   () => route.path,
   (path) => {
     temaAtivo.value = temaIdPorRota(path)
+    if (temaTemSubgrupos(temaAtivo.value)) {
+      subgrupoAtivo.value = subgrupoIdPorRota(path) || subgrupoAtivo.value
+    }
   },
 )
 
 onMounted(async () => {
+  if (!navegacaoInicializada.value) {
+    const persistido = lerTemaPersistido()
+    const rotaTema = temaIdPorRota(route.path)
+    if (route.path === '/' && persistido && persistido !== rotaTema) {
+      temaAtivo.value = persistido
+      if (temaTemSubgrupos(persistido)) {
+        subgrupoAtivo.value = lerSubgrupoRequisitosPersistido() || 'entrada'
+      }
+    }
+    navegacaoInicializada.value = true
+  }
+
   try {
     const { data } = await api.get('/v1/auth/config')
     if (data?.data?.environment) environment.value = data.data.environment
   } catch {
-    // Mantem fallback do build quando a API publica nao estiver disponivel.
+    /* fallback build */
+  }
+
+  try {
+    pendenciasPorTema.value = await carregarDadosPendenciasNav(api)
+  } catch {
+    pendenciasPorTema.value = {}
   }
 })
+
+function badgeTema(temaId) {
+  return pendenciasPorTema.value[temaId] ?? { count: 0, level: null }
+}
+
+function badgeLabel(count) {
+  return count > 99 ? '99+' : String(count)
+}
+
+function navItemTestId(path) {
+  return path.replace(/\//g, '').replace(/^$/, 'dashboard')
+}
 
 function initials(u) {
   return (u.nome || u.email || '?')[0].toUpperCase()
@@ -197,17 +305,41 @@ function sair() {
 }
 .nav-tema-tab {
   min-width: auto !important;
-  padding-inline: 8px !important;
+  padding-inline: 6px !important;
   font-size: 11px;
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0;
 }
+.nav-tema-tab-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
 .nav-tema-label {
-  max-width: 72px;
+  max-width: 58px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.nav-tema-badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  color: #111;
+}
+.nav-tema-badge--amarelo {
+  background: var(--amber);
+}
+.nav-tema-badge--vermelho {
+  background: var(--red);
+  color: #fff;
 }
 .nav-tema-topic {
   margin: 6px 12px 4px;
@@ -215,8 +347,27 @@ function sair() {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.nav-subgrupos {
+  padding: 4px 8px 0;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+}
+.nav-subgrupos-tabs :deep(.v-tab) {
+  min-width: auto !important;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  padding-inline: 10px !important;
+}
+.nav-subgrupo-topic {
+  margin: 4px 12px 2px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .req-nav-list {
-  max-height: calc(100vh - 260px);
+  max-height: calc(100vh - 300px);
   overflow-y: auto;
   padding-inline: 4px;
 }

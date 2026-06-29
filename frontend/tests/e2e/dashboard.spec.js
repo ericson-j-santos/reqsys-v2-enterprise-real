@@ -55,7 +55,7 @@ test('menu lateral de navegação está presente', async ({ page }) => {
   await navegarMenu(page, { temaId: 'governanca', tituloLink: /^Relatórios SSRS$/ })
   await expect(page).toHaveURL(/\/relatorios/)
 
-  await navegarMenu(page, { temaId: 'requisitos', tituloLink: /^Rastreabilidade$/ })
+  await navegarMenu(page, { temaId: 'requisitos', subgrupoId: 'publicacao', tituloLink: /^Rastreabilidade$/ })
   await expect(page).toHaveURL(/\/rastreabilidade/)
 
   await navegarMenu(page, { temaId: 'governanca', tituloLink: /^Auditoria$/ })

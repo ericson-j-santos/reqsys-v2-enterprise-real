@@ -70,9 +70,12 @@ async function login(page, options = {}) {
 }
 
 /** Seleciona aba de tema no drawer e clica na rota (navegação por tema/sub-aba). */
-async function navegarMenu(page, { temaId, tituloLink }) {
+async function navegarMenu(page, { temaId, subgrupoId, tituloLink }) {
   if (temaId) {
     await page.getByTestId(`nav-tema-${temaId}`).click()
+  }
+  if (subgrupoId) {
+    await page.getByTestId(`nav-subgrupo-${subgrupoId}`).click()
   }
   await page.getByRole('link', { name: tituloLink }).click()
 }
