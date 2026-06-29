@@ -1,0 +1,146 @@
+name: Deploy Frontend Auth Diagnostics
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: Ambiente alvo
+        required: true
+        default: hml
+        type: choice
+        options:
+          - dev
+          - hml
+          - prod
+          - all
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/src/views/LoginView.vue'
+      - 'frontend/src/components/AuthDiagnosticsPanel.vue'
+      - 'frontend/src/auth/diagnostics.js'
+      - 'backend/app/api/auth.py'
+      - 'backend/app/core/config.py'
+      - '.github/workflows/deploy-frontend-auth-diagnostics.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-frontend-auth-diagnostics-${{ github.event.inputs.target_environment || 'auto' }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-matrix:
+    name: Resolver ambientes
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+    steps:
+      - id: resolve
+        env:
+          TARGET: ${{ github.event.inputs.target_environment || '' }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          targets = {
+              "dev": {
+                  "environment": "development",
+                  "frontend_app": "reqsys-app-dev",
+                  "frontend_config": "fly.dev.toml",
+                  "frontend_url": "https://reqsys-app-dev.fly.dev",
+                  "api_url": "https://reqsys-api-dev.fly.dev",
+              },
+              "hml": {
+                  "environment": "staging",
+                  "frontend_app": "reqsys-app-stg",
+                  "frontend_config": "fly.staging.toml",
+                  "frontend_url": "https://reqsys-app-stg.fly.dev",
+                  "api_url": "https://reqsys-api-stg.fly.dev",
+              },
+              "prod": {
+                  "environment": "production",
+                  "frontend_app": "reqsys-app",
+                  "frontend_config": "fly.toml",
+                  "frontend_url": "https://reqsys-app.fly.dev",
+                  "api_url": "https://reqsys-api.fly.dev",
+              },
+          }
+          selected = os.environ.get("TARGET") or ("hml" if os.environ.get("GITHUB_EVENT_NAME") == "push" else "hml")
+          include = list(targets.values()) if selected == "all" else [targets[selected]]
+          print(f"matrix={json.dumps({'include': include})}")
+          PY
+
+  validate-build:
+    name: Validar build frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_URL: https://reqsys-api-stg.fly.dev
+          VITE_PUBLIC_URL: https://reqsys-app-stg.fly.dev
+        run: npm ci && npm run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validar bundle sem callback.html
+        run: python scripts/validar_frontend_auth_redirect.py --dist-dir frontend/dist
+      - name: Testes unitarios de diagnostico
+        working-directory: frontend
+        run: npm run test:unit -- src/auth/__tests__/diagnostics.test.js
+
+  deploy-frontend:
+    name: Deploy frontend — ${{ matrix.frontend_app }}
+    runs-on: ubuntu-latest
+    needs: [resolve-matrix, validate-build]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.resolve-matrix.outputs.matrix) }}
+    environment: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy frontend
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        working-directory: frontend
+        run: flyctl deploy --remote-only --config "${{ matrix.frontend_config }}" --app "${{ matrix.frontend_app }}"
+
+  validate-runtime:
+    name: Validar diagnostico — ${{ matrix.frontend_app }}
+    runs-on: ubuntu-latest
+    needs: [resolve-matrix, deploy-frontend]
+    if: always() && needs.deploy-frontend.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.resolve-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validar auth config e bundle publicado
+        run: |
+          python scripts/validar_login_azure_operacional.py \
+            --api-url "${{ matrix.api_url }}" \
+            --expected-redirect-uri "${{ matrix.frontend_url }}" \
+            | tee "auth-config-${{ matrix.frontend_app }}.json"
+          python scripts/validar_frontend_auth_redirect.py \
+            --frontend-url "${{ matrix.frontend_url }}" \
+            | tee "auth-bundle-${{ matrix.frontend_app }}.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: auth-diagnostics-${{ matrix.frontend_app }}
+          path: |
+            auth-config-${{ matrix.frontend_app }}.json
+            auth-bundle-${{ matrix.frontend_app }}.json

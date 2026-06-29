@@ -70,6 +70,10 @@ class TestAuthConfig:
             assert data['auth_status'] == 'ready'
             assert data['missing_fields'] == []
             assert data['operator_action'] is None
+            assert 'auth_diagnostics' in data
+            assert data['auth_diagnostics']['environment_label']
+            assert data['auth_diagnostics']['canonical_redirect_uris']
+            assert data['auth_diagnostics']['entra_registration_hint']
         finally:
             settings.azure_tenant_id = original_tenant
             settings.azure_client_id = original_client

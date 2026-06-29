@@ -8,6 +8,8 @@
       <v-card-subtitle class="login-card-subtitle">Login corporativo - Tieri659</v-card-subtitle>
 
       <v-card-text>
+        <AuthDiagnosticsPanel v-if="azureConfig" :config="azureConfig" class="mb-4" />
+
         <v-btn
           v-if="azureDisponivel"
           block
@@ -22,7 +24,7 @@
         </v-btn>
 
         <v-alert
-          v-if="!azureDisponivel && !demoLoginDisponivel"
+          v-if="!azureDisponivel && !demoLoginDisponivel && !azureConfig"
           type="warning"
           variant="tonal"
           density="compact"
@@ -93,6 +95,8 @@ import { useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
 import { loginMicrosoftRedirect } from '../auth/msal'
+import { traduzirErroAzure } from '../auth/diagnostics'
+import AuthDiagnosticsPanel from '../components/AuthDiagnosticsPanel.vue'
 import { api } from '../services/api'
 
 const { width } = useDisplay()
@@ -117,10 +121,14 @@ const mensagemDiagnosticoAuth = computed(() => {
   return azureConfig.value?.operator_action || 'Verifique a configuracao do Azure AD no backend.'
 })
 
+function aplicarErroAzure(mensagem) {
+  erro.value = traduzirErroAzure(mensagem, redirectEsperado.value)
+}
+
 onMounted(async () => {
   const azureErr = sessionStorage.getItem('azure_login_error')
   if (azureErr) {
-    erro.value = azureErr
+    aplicarErroAzure(azureErr)
     sessionStorage.removeItem('azure_login_error')
   }
 
@@ -141,7 +149,7 @@ async function entrarMicrosoft() {
   try {
     await loginMicrosoftRedirect()
   } catch (e) {
-    erro.value = e.response?.data?.detail || e.message || 'Falha no login Microsoft'
+    aplicarErroAzure(e.response?.data?.detail || e.message || 'Falha no login Microsoft')
     carregandoAzure.value = false
   }
 }

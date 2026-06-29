@@ -141,6 +141,7 @@ def auth_config():
         'auth_status': 'ready' if azure_enabled else 'misconfigured',
         'missing_fields': missing_fields,
         'operator_action': None if azure_enabled else 'Configure AZURE_TENANT_ID e AZURE_CLIENT_ID no ambiente e registre o expected_redirect_uri no Microsoft Entra ID.',
+        'auth_diagnostics': settings.azure_auth_diagnostics,
     })
 
 

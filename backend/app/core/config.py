@@ -147,6 +147,49 @@ class Settings(BaseSettings):
         return (self.app_public_url or self.ambiente_atual_info.get('frontend', '')).rstrip('/')
 
     @property
+    def azure_auth_diagnostics(self) -> dict[str, object]:
+        """Metadados publicos para o painel de diagnostico de login no frontend."""
+        env = self.normalized_public_environment
+        labels = {
+            'desenvolvimento': 'Desenvolvimento',
+            'homologacao': 'Homologacao',
+            'producao': 'Producao',
+            'testes': 'Testes',
+        }
+        canonical_by_env: dict[str, list[str]] = {
+            'desenvolvimento': [
+                'https://reqsys-app-dev.fly.dev',
+                'https://tieridev.duckdns.org',
+                'http://localhost:5173',
+                'http://127.0.0.1:5173',
+            ],
+            'homologacao': [
+                'https://reqsys-app-stg.fly.dev',
+                'https://tierin.duckdns.org',
+                'https://reqsys-web-stg.fly.dev',
+            ],
+            'producao': [
+                'https://reqsys-app.fly.dev',
+                'https://tieriprod.duckdns.org',
+            ],
+            'testes': [
+                'http://localhost:8084',
+                'http://127.0.0.1:8084',
+            ],
+        }
+        canonical = list(canonical_by_env.get(env, canonical_by_env['desenvolvimento']))
+        expected = self.azure_expected_redirect_uri
+        if expected and expected not in canonical:
+            canonical.insert(0, expected)
+        return {
+            'environment_label': labels.get(env, env.title()),
+            'canonical_redirect_uris': canonical,
+            'entra_registration_hint': (
+                'Registre cada origem como SPA no Microsoft Entra ID, sem /auth/callback.html.'
+            ),
+        }
+
+    @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(',') if origin.strip()]
 
