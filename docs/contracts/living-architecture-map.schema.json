@@ -19,52 +19,313 @@
     "validation"
   ],
   "properties": {
-    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
-    "updated_at": { "type": "string", "format": "date-time" },
-    "repository": { "type": "string" },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "repository": {
+      "type": "string"
+    },
     "governance": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["owner", "mode", "canonical_runbook"],
+      "required": [
+        "owner",
+        "mode",
+        "canonical_runbook"
+      ],
       "properties": {
-        "owner": { "type": "string" },
-        "mode": { "type": "string", "enum": ["report_only", "enforced"] },
-        "canonical_runbook": { "type": "string" }
+        "owner": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "report_only",
+            "enforced"
+          ]
+        },
+        "canonical_runbook": {
+          "type": "string"
+        }
       }
     },
-    "workflows": { "type": "array", "items": { "$ref": "#/$defs/workflow" }, "minItems": 1 },
-    "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" }, "minItems": 1 },
-    "schemas": { "type": "array", "items": { "$ref": "#/$defs/schema" }, "minItems": 1 },
-    "dashboards": { "type": "array", "items": { "$ref": "#/$defs/dashboard" }, "minItems": 1 },
-    "runbooks": { "type": "array", "items": { "$ref": "#/$defs/runbook" }, "minItems": 1 },
-    "recent_prs": { "type": "array", "items": { "$ref": "#/$defs/recent_pr" } },
-    "ci_evidence": { "type": "array", "items": { "$ref": "#/$defs/ci_evidence" }, "minItems": 1 },
+    "workflows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/workflow"
+      },
+      "minItems": 1
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact"
+      },
+      "minItems": 1
+    },
+    "schemas": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/schema"
+      },
+      "minItems": 1
+    },
+    "dashboards": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dashboard"
+      },
+      "minItems": 1
+    },
+    "runbooks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/runbook"
+      },
+      "minItems": 1
+    },
+    "recent_prs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/recent_pr"
+      }
+    },
+    "ci_evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ci_evidence"
+      },
+      "minItems": 1
+    },
     "validation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["workflow", "mode", "checks"],
+      "required": [
+        "workflow",
+        "mode",
+        "checks"
+      ],
       "properties": {
-        "workflow": { "type": "string" },
-        "mode": { "type": "string", "enum": ["report_only", "enforced"] },
-        "checks": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+        "workflow": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "report_only",
+            "enforced"
+          ]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
       }
     }
   },
   "$defs": {
     "workflow": {
-      "type": "object", "additionalProperties": false,
-      "required": ["id", "name", "path", "purpose", "artifacts", "runbooks"],
-      "properties": { "id": {"type":"string"}, "name": {"type":"string"}, "path": {"type":"string"}, "purpose": {"type":"string"}, "artifacts": {"type":"array", "items":{"type":"string"}}, "runbooks": {"type":"array", "items":{"type":"string"}} }
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "path",
+        "purpose",
+        "artifacts",
+        "runbooks"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "runbooks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "artifact": {
-      "type": "object", "additionalProperties": false,
-      "required": ["id", "name", "producer_workflow", "contract", "consumer_dashboards", "retention_days"],
-      "properties": { "id": {"type":"string"}, "name": {"type":"string"}, "producer_workflow": {"type":"string"}, "contract": {"type":"string"}, "consumer_dashboards": {"type":"array", "items":{"type":"string"}}, "retention_days": {"type":"integer", "minimum": 1} }
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "producer_workflow",
+        "contract",
+        "consumer_dashboards",
+        "retention_days"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "producer_workflow": {
+          "type": "string"
+        },
+        "contract": {
+          "type": "string"
+        },
+        "consumer_dashboards": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "retention_days": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
     },
-    "schema": { "type":"object", "additionalProperties": false, "required":["id","path","domain","version"], "properties": {"id":{"type":"string"}, "path":{"type":"string"}, "domain":{"type":"string"}, "version":{"type":"string"}} },
-    "dashboard": { "type":"object", "additionalProperties": false, "required":["id","path","data_sources","runbooks"], "properties": {"id":{"type":"string"}, "path":{"type":"string"}, "data_sources":{"type":"array", "items":{"type":"string"}}, "runbooks":{"type":"array", "items":{"type":"string"}}} },
-    "runbook": { "type":"object", "additionalProperties": false, "required":["id","path","covers"], "properties": {"id":{"type":"string"}, "path":{"type":"string"}, "covers":{"type":"array", "items":{"type":"string"}}} },
-    "recent_pr": { "type":"object", "additionalProperties": false, "required":["id","url","evidence"], "properties": {"id":{"type":"string"}, "url":{"type":"string"}, "evidence":{"type":"array", "items":{"type":"string"}}} },
-    "ci_evidence": { "type":"object", "additionalProperties": false, "required":["id","path","source_workflow"], "properties": {"id":{"type":"string"}, "path":{"type":"string"}, "source_workflow":{"type":"string"}} }
-  }
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "domain",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "data_sources",
+        "runbooks"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "data_sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "runbooks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "runbook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "covers"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "covers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "recent_pr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "url",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ci_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "source_workflow"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "source_workflow": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "runtime_validation_required": true
 }
