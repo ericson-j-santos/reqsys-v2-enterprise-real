@@ -7,7 +7,8 @@ Este documento define a configuração mínima para o login Microsoft do ReqSys 
 | Ambiente | Frontend | API | Redirect URI esperado |
 |---|---|---|---|
 | Produção | `https://reqsys-app.fly.dev` | `https://reqsys-api.fly.dev` | `https://reqsys-app.fly.dev` |
-| Homologação | `https://reqsys-web-stg.fly.dev` | `https://reqsys-api-stg.fly.dev` | `https://reqsys-web-stg.fly.dev` |
+| Homologação | `https://reqsys-app-stg.fly.dev` | `https://reqsys-api-stg.fly.dev` | `https://reqsys-app-stg.fly.dev` |
+| Homologação legada | `https://reqsys-web-stg.fly.dev` | `https://reqsys-api-stg.fly.dev` | `https://reqsys-web-stg.fly.dev` |
 | Desenvolvimento | `https://reqsys-app-dev.fly.dev` | `https://reqsys-api-dev.fly.dev` | `https://reqsys-app-dev.fly.dev` |
 
 ## Variáveis obrigatórias
@@ -16,12 +17,12 @@ Este documento define a configuração mínima para o login Microsoft do ReqSys 
 |---|---|---|
 | `AZURE_TENANT_ID` | API/backend | ID do tenant Microsoft Entra ID |
 | `AZURE_CLIENT_ID` | API/backend | Application/client ID do App Registration SPA |
-| `APP_PUBLIC_URL` | API/backend | Origem pública do frontend |
+| `APP_PUBLIC_URL` | API/backend | Origem pública do frontend, sem caminho adicional |
 | `API_PUBLIC_URL` | API/backend | Origem pública da API |
 | `ALLOW_DEMO_LOGIN` | API/backend | `false` em produção |
 | `APP_ENV` | API/backend | `production`, `staging` ou `development` |
 
-`AZURE_CLIENT_SECRET` não deve ser necessário para o fluxo SPA `loginPopup + id_token`. Caso exista uso futuro de code exchange confidencial, deve ser tratado como segredo e nunca exposto no frontend.
+`AZURE_CLIENT_SECRET` não deve ser necessário para o fluxo SPA `loginRedirect + id_token`. Caso exista uso futuro de code exchange confidencial, deve ser tratado como segredo e nunca exposto no frontend.
 
 ## Configuração no Microsoft Entra ID
 
@@ -31,12 +32,14 @@ No App Registration usado pelo ReqSys:
 2. Adicione a plataforma **Single-page application (SPA)**.
 3. Registre exatamente as Redirect URIs abaixo, conforme ambientes usados:
    - `https://reqsys-app.fly.dev`
+   - `https://reqsys-app-stg.fly.dev`
    - `https://reqsys-web-stg.fly.dev`
    - `https://reqsys-app-dev.fly.dev`
    - `http://localhost:5173`
    - `http://localhost:8084`
-4. Em **ID tokens**, permita emissão de `id_token` se a configuração do tenant exigir.
-5. Salve e aguarde propagação.
+4. Não registre `/auth/callback.html` como redirect principal para o fluxo MSAL do frontend atual. O bundle versionado usa a origem pública do frontend para alinhar com `APP_PUBLIC_URL` e reduzir divergência por ambiente.
+5. Em **ID tokens**, permita emissão de `id_token` se a configuração do tenant exigir.
+6. Salve e aguarde propagação.
 
 ## Configuração no Fly.io
 
@@ -53,7 +56,20 @@ fly secrets set \
   -a reqsys-api
 ```
 
-Para homologação:
+Para homologação atual:
+
+```bash
+fly secrets set \
+  APP_ENV=staging \
+  ALLOW_DEMO_LOGIN=false \
+  APP_PUBLIC_URL=https://reqsys-app-stg.fly.dev \
+  API_PUBLIC_URL=https://reqsys-api-stg.fly.dev \
+  AZURE_TENANT_ID=<tenant-id> \
+  AZURE_CLIENT_ID=<client-id> \
+  -a reqsys-api-stg
+```
+
+Para homologação legada, se ainda houver tráfego ativo em `reqsys-web-stg`:
 
 ```bash
 fly secrets set \
@@ -89,6 +105,43 @@ Resultado esperado:
 }
 ```
 
+Para STG:
+
+```bash
+curl -s https://reqsys-api-stg.fly.dev/v1/auth/config
+```
+
+Resultado esperado para homologação atual:
+
+```json
+{
+  "success": true,
+  "data": {
+    "azure_enabled": true,
+    "auth_status": "ready",
+    "missing_fields": [],
+    "expected_redirect_uri": "https://reqsys-app-stg.fly.dev",
+    "demo_login_enabled": false
+  }
+}
+```
+
+## Correção objetiva para AADSTS50011
+
+Erro típico:
+
+```text
+AADSTS50011: The redirect URI 'https://reqsys-app-stg.fly.dev/auth/callback.html' specified in the request does not match the redirect URIs configured for the application.
+```
+
+Ação esperada:
+
+1. Confirmar que o frontend publicado usa bundle posterior à correção que envia `redirect_uri=https://reqsys-app-stg.fly.dev`.
+2. Confirmar que `APP_PUBLIC_URL=https://reqsys-app-stg.fly.dev` está aplicado na API STG.
+3. Confirmar que `https://reqsys-app-stg.fly.dev` está registrado no Microsoft Entra ID como SPA Redirect URI.
+4. Limpar cache do navegador ou testar em janela anônima.
+5. Reexecutar login Microsoft.
+
 ## Critério de pronto
 
 O login só pode ser considerado corrigido quando houver evidência de:
@@ -97,7 +150,7 @@ O login só pode ser considerado corrigido quando houver evidência de:
 |---|---|
 | `/v1/auth/config` | `azure_enabled=true` |
 | Produção sem demo | `demo_login_enabled=false` |
-| Redirect URI | Origem pública registrada no Entra ID |
+| Redirect URI | Origem pública registrada no Entra ID, sem `/auth/callback.html` |
 | Botão Microsoft | Visível na tela de login |
 | Login em janela anônima | Retorna sessão e redireciona para aplicação |
 | Logs | Sem token, senha, CPF, PII sensível ou connection string |
