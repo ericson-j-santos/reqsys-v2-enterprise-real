@@ -1,69 +1,149 @@
 {
   "schema_version": "1.0.0",
   "contract": "all-environments-readiness-validation",
-  "generated_at_epoch": 1782591300,
+  "generated_at_epoch": 1782766649,
   "summary": {
-    "overall_status": "unknown",
-    "average_readiness_percent": 0,
+    "overall_status": "degraded",
+    "average_readiness_percent": 62.5,
     "environments_total": 4,
-    "ready": 0,
-    "degraded": 0,
+    "ready": 2,
+    "degraded": 1,
     "unavailable": 0,
-    "local_only": 0,
+    "local_only": 1,
     "mode": "read_only_non_blocking"
   },
   "environments": [
     {
       "name": "desenvolvimento",
+      "canonical": "dev",
       "frontend": "https://reqsys-app-dev.fly.dev",
       "api": "https://reqsys-api-dev.fly.dev/docs",
       "notes": "Fly dev; local usa docker-compose.yml + docker-compose.dev.yml",
-      "status": "unknown",
-      "operational_risk": "medium",
-      "readiness_percent": 0,
-      "ok_checks": 0,
+      "status": "ready",
+      "operational_risk": "low",
+      "readiness_percent": 100.0,
+      "ok_checks": 2,
       "total_checks": 2,
       "skipped_checks": 0,
-      "checks": {}
+      "checks": {
+        "frontend": {
+          "url": "https://reqsys-app-dev.fly.dev",
+          "ok": true,
+          "status_code": 200,
+          "elapsed_ms": 226,
+          "content_type": "text/html",
+          "mode": "remote_probe",
+          "error": null
+        },
+        "api": {
+          "url": "https://reqsys-api-dev.fly.dev/docs",
+          "ok": true,
+          "status_code": 200,
+          "elapsed_ms": 220,
+          "content_type": "text/html; charset=utf-8",
+          "mode": "remote_probe",
+          "error": null
+        }
+      }
+    },
+    {
+      "name": "homologacao",
+      "canonical": "hml",
+      "frontend": "https://reqsys-app-stg.fly.dev",
+      "api": "https://reqsys-api-stg.fly.dev/docs",
+      "notes": "Fly staging",
+      "status": "ready",
+      "operational_risk": "low",
+      "readiness_percent": 100.0,
+      "ok_checks": 2,
+      "total_checks": 2,
+      "skipped_checks": 0,
+      "checks": {
+        "frontend": {
+          "url": "https://reqsys-app-stg.fly.dev",
+          "ok": true,
+          "status_code": 200,
+          "elapsed_ms": 220,
+          "content_type": "text/html",
+          "mode": "remote_probe",
+          "error": null
+        },
+        "api": {
+          "url": "https://reqsys-api-stg.fly.dev/docs",
+          "ok": true,
+          "status_code": 200,
+          "elapsed_ms": 207,
+          "content_type": "text/html; charset=utf-8",
+          "mode": "remote_probe",
+          "error": null
+        }
+      }
+    },
+    {
+      "name": "producao",
+      "canonical": "prod",
+      "frontend": "https://reqsys-app.fly.dev",
+      "api": "https://reqsys-api.fly.dev/docs",
+      "notes": "Fly producao; local usa docker-compose.yml + docker-compose.prod.yml",
+      "status": "degraded",
+      "operational_risk": "medium",
+      "readiness_percent": 50.0,
+      "ok_checks": 1,
+      "total_checks": 2,
+      "skipped_checks": 0,
+      "checks": {
+        "frontend": {
+          "url": "https://reqsys-app.fly.dev",
+          "ok": true,
+          "status_code": 200,
+          "elapsed_ms": 222,
+          "content_type": "text/html",
+          "mode": "remote_probe",
+          "error": null
+        },
+        "api": {
+          "url": "https://reqsys-api.fly.dev/docs",
+          "ok": false,
+          "status_code": null,
+          "elapsed_ms": 20071,
+          "content_type": null,
+          "mode": "remote_probe",
+          "error": "The read operation timed out"
+        }
+      }
     },
     {
       "name": "testes",
+      "canonical": "test",
       "frontend": "http://localhost:8084",
       "api": "http://localhost:8212/docs",
       "notes": "Docker test",
       "status": "local_only",
       "operational_risk": "medium",
-      "readiness_percent": 0,
+      "readiness_percent": 0.0,
       "ok_checks": 0,
       "total_checks": 2,
       "skipped_checks": 2,
-      "checks": {}
-    },
-    {
-      "name": "homologacao",
-      "frontend": "https://reqsys-web-stg.fly.dev",
-      "api": "https://reqsys-api-stg.fly.dev",
-      "notes": "Fly staging",
-      "status": "unknown",
-      "operational_risk": "medium",
-      "readiness_percent": 0,
-      "ok_checks": 0,
-      "total_checks": 2,
-      "skipped_checks": 0,
-      "checks": {}
-    },
-    {
-      "name": "producao",
-      "frontend": "https://reqsys-app.fly.dev",
-      "api": "https://reqsys-api.fly.dev/docs",
-      "notes": "Fly producao; local usa docker-compose.yml + docker-compose.prod.yml",
-      "status": "unknown",
-      "operational_risk": "medium",
-      "readiness_percent": 0,
-      "ok_checks": 0,
-      "total_checks": 2,
-      "skipped_checks": 0,
-      "checks": {}
+      "checks": {
+        "frontend": {
+          "url": "http://localhost:8084",
+          "ok": false,
+          "status_code": null,
+          "elapsed_ms": 0,
+          "content_type": null,
+          "mode": "local_skipped",
+          "error": "local endpoint skipped in CI/read-only validation"
+        },
+        "api": {
+          "url": "http://localhost:8212/docs",
+          "ok": false,
+          "status_code": null,
+          "elapsed_ms": 0,
+          "content_type": null,
+          "mode": "local_skipped",
+          "error": "local endpoint skipped in CI/read-only validation"
+        }
+      }
     }
   ],
   "guardrails": [
