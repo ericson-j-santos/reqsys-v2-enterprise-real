@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-"""Governed PR Increment Gate — bloqueia abertura de PRs quando new_front_allowed=false.
-
-Acopla o Agent Increment Gate ao fluxo de Governed PR Automation:
-  - Infere increment_type a partir de labels, corpo, titulo e branch do PR
-  - Avalia contra coordenador-status (increment_gate)
-  - Exit 0 = PR permitido; 1 = bloqueado
-
-Uso em CI (Governed PR Automation, evento pull_request):
-  python scripts/governed_pr_increment_gate.py \\
-    --title "$PR_TITLE" --body "$PR_BODY" --labels "increment:gap_fix" \\
-    --head-ref "$HEAD_REF" --live
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -29,16 +16,7 @@ if str(ROOT_DIR) not in sys.path:
 from scripts.agent_increment_gate import load_status_report  # noqa: E402
 from scripts.coordenador_status_consolidator import evaluate_increment_intent  # noqa: E402
 
-VALID_INCREMENT_TYPES = frozenset(
-    {
-        "new_front",
-        "gap_fix",
-        "close_duplicate",
-        "hotfix",
-        "consolidate",
-    }
-)
-
+VALID_INCREMENT_TYPES = frozenset({"new_front", "gap_fix", "close_duplicate", "hotfix", "consolidate"})
 INCREMENT_LABEL_PREFIX = "increment:"
 OPS_GAP_PATTERN = re.compile(r"OPS-GAP-\d+", re.IGNORECASE)
 INCREMENT_TYPE_PATTERN = re.compile(
@@ -61,6 +39,24 @@ OPS_EVIDENCE_HINTS = (
     "ci:",
     "fix(ci)",
     "chore(ci)",
+)
+STATE_GAP_HINTS = (
+    "state_yellow",
+    "critical_gaps",
+    "critical gaps",
+    "gap crítico",
+    "gaps críticos",
+    "falha não autocorrigível",
+    "falha nao autocorrigivel",
+    "non-autocorrigible",
+    "maturidade",
+    "bdd",
+    "conclusão",
+    "conclusao",
+    "aprovado",
+    "aprovados",
+    "coordenador-status",
+    "coordenador status",
 )
 
 
@@ -95,22 +91,16 @@ def _increment_from_body(body: str) -> tuple[str, str, str] | None:
     return None
 
 
-def _increment_from_text_heuristics(
-    title: str,
-    body: str,
-    head_ref: str,
-) -> tuple[str, str, str] | None:
+def _increment_from_text_heuristics(title: str, body: str, head_ref: str) -> tuple[str, str, str] | None:
     combined = f"{title}\n{body}\n{head_ref}".lower()
     head_lower = head_ref.lower()
 
     if "consolidar incremento" in combined or "concluir incremento" in combined:
         return "consolidate", "", "heuristic:consolidate"
-
     if "close duplicate" in combined or "fechar duplicado" in combined:
         pr_match = PR_NUMBER_PATTERN.search(body) or PR_NUMBER_PATTERN.search(title)
         reference = pr_match.group(1) if pr_match else ""
         return "close_duplicate", reference, "heuristic:close_duplicate"
-
     if "hotfix" in head_lower or re.search(r"\bhotfix\b", combined):
         gap_match = OPS_GAP_PATTERN.search(body) or OPS_GAP_PATTERN.search(title)
         reference = gap_match.group(0).upper() if gap_match else ""
@@ -120,10 +110,10 @@ def _increment_from_text_heuristics(
     if gap_match or "gap-fix" in head_lower or "gap_fix" in head_lower:
         reference = gap_match.group(0).upper() if gap_match else ""
         return "gap_fix", reference, "heuristic:gap_fix"
-
+    if any(hint in combined for hint in STATE_GAP_HINTS):
+        return "gap_fix", "", "heuristic:state_gap"
     if any(hint in combined for hint in OPS_EVIDENCE_HINTS):
         return "hotfix", "", "heuristic:ops_evidence"
-
     return None
 
 
@@ -133,7 +123,6 @@ def infer_increment_from_pr(
     labels: list[str] | None = None,
     head_ref: str = "",
 ) -> dict[str, Any]:
-    """Infere increment_type e referencia a partir de metadados do PR."""
     label_list = labels or []
     for resolver in (
         lambda: _increment_from_labels(label_list),
@@ -143,17 +132,8 @@ def infer_increment_from_pr(
         resolved = resolver()
         if resolved:
             increment_type, reference, source = resolved
-            return {
-                "increment_type": increment_type,
-                "reference": reference or None,
-                "inference_source": source,
-            }
-
-    return {
-        "increment_type": "new_front",
-        "reference": None,
-        "inference_source": "default:new_front",
-    }
+            return {"increment_type": increment_type, "reference": reference or None, "inference_source": source}
+    return {"increment_type": "new_front", "reference": None, "inference_source": "default:new_front"}
 
 
 def evaluate_pr_increment_gate(
@@ -170,13 +150,7 @@ def evaluate_pr_increment_gate(
     inferred = infer_increment_from_pr(title=title, body=body, labels=labels, head_ref=head_ref)
     resolved_type = increment_type or inferred["increment_type"]
     resolved_reference = reference if reference is not None else (inferred.get("reference") or "")
-
-    allowed, reason, detail = evaluate_increment_intent(
-        report,
-        resolved_type,
-        resolved_reference.strip(),
-    )
-
+    allowed, reason, detail = evaluate_increment_intent(report, resolved_type, resolved_reference.strip())
     gate = report.get("increment_gate") or {}
     return {
         "allowed": allowed,
@@ -197,38 +171,27 @@ def evaluate_pr_increment_gate(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Gate de incremento acoplado a abertura de PR (Governed PR Automation)."
-    )
+    parser = argparse.ArgumentParser(description="Gate de incremento acoplado a abertura de PR.")
     parser.add_argument("--title", default="", help="Titulo do PR")
     parser.add_argument("--body", default="", help="Corpo do PR")
-    parser.add_argument(
-        "--labels",
-        default="",
-        help="Labels separadas por virgula (ex.: increment:gap_fix,docs-only)",
-    )
+    parser.add_argument("--labels", default="", help="Labels separadas por virgula")
     parser.add_argument("--head-ref", default="", help="Branch head do PR")
     parser.add_argument("--pr-number", type=int, default=None, help="Numero do PR")
-    parser.add_argument(
-        "--increment-type",
-        default="",
-        choices=[*sorted(VALID_INCREMENT_TYPES), ""],
-        help="Override do tipo de incremento (opcional)",
-    )
-    parser.add_argument("--reference", default="", help="Override de referencia OPS-GAP-* ou PR")
-    parser.add_argument("--pr-json", default="", help="Metadados do PR em JSON (title, body, labels, head_ref)")
-    parser.add_argument("--status-json", default="", help="coordenador-status.json existente")
+    parser.add_argument("--increment-type", default="", choices=[*sorted(VALID_INCREMENT_TYPES), ""])
+    parser.add_argument("--reference", default="")
+    parser.add_argument("--pr-json", default="")
+    parser.add_argument("--status-json", default="")
     parser.add_argument("--orchestrator-json", default="")
     parser.add_argument("--health-json", default="")
     parser.add_argument("--watchdog-json", default="")
-    parser.add_argument("--live", action="store_true", help="Consolidar status ao vivo via GitHub API")
+    parser.add_argument("--live", action="store_true")
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", ""))
     parser.add_argument("--branch", default="main")
     parser.add_argument("--run-limit", type=int, default=50)
     parser.add_argument("--pr-limit", type=int, default=30)
     parser.add_argument("--health-limit", type=int, default=50)
     parser.add_argument("--output-dir", default="artifacts/governed-pr-increment-gate")
-    parser.add_argument("--json", action="store_true", help="Imprimir somente JSON de decisao")
+    parser.add_argument("--json", action="store_true")
     return parser
 
 
@@ -286,7 +249,6 @@ def main(argv: list[str] | None = None) -> int:
         increment_type=args.increment_type or None,
         reference=args.reference or None,
     )
-
     (output_dir / "governed-pr-increment-gate.json").write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -303,11 +265,7 @@ def main(argv: list[str] | None = None) -> int:
         if not payload["allowed"]:
             print("\nProximas acoes sugeridas:")
             for action in payload.get("recommended_actions", [])[:5]:
-                print(
-                    f"  - {action['priority']} {action['action']} "
-                    f"({action.get('reference', '')}): {action['detail']}"
-                )
-
+                print(f"  - {action['priority']} {action['action']} ({action.get('reference', '')}): {action['detail']}")
     return 0 if payload["allowed"] else 1
 
 

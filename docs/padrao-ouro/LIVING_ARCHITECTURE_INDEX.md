@@ -1,6 +1,6 @@
 # Living Architecture Index — ReqSys v2 Enterprise
 
-Data de referência: 2026-06-27
+Data de referência: 2026-06-29
 
 Mapa navegável de módulos, fluxos, pipelines, ownership, eventos, dependências e dashboards. Complementa o JSON machine-readable em [`living-architecture-index.json`](living-architecture-index.json) e o mapa canônico em [`docs/traceability/living-architecture-map.json`](../traceability/living-architecture-map.json).
 
@@ -8,6 +8,7 @@ Mapa navegável de módulos, fluxos, pipelines, ownership, eventos, dependência
 
 | Necessidade | Seção |
 | --- | --- |
+| Foco operacional / prioridades | [Foco Padrão Ouro](#foco-padrão-ouro) |
 | Onde estender o backend | [Módulos Backend](#módulos-backend) |
 | Onde estender o frontend | [Módulos Frontend](#módulos-frontend) |
 | Qual workflow usar | [Pipelines](#pipelines) |
@@ -16,6 +17,18 @@ Mapa navegável de módulos, fluxos, pipelines, ownership, eventos, dependência
 | Eventos e contratos | [Eventos](#eventos) |
 | Dependências entre camadas | [Dependências](#dependências) |
 | Dashboards operacionais | [Dashboards](#dashboards) |
+
+---
+
+## Foco Padrão Ouro
+
+Quando o pedido for amplo ou o coordenador estiver em `state_yellow`, priorize consolidação antes de abrir nova frente.
+
+| Recurso | Caminho | Uso |
+| --- | --- | --- |
+| Plano de execução | [`FOCO_PADRAO_OURO.md`](FOCO_PADRAO_OURO.md) | Prioridades P0–P4, loop operacional e definition of done |
+| Foco machine-readable | [`living-architecture-index.json`](living-architecture-index.json) → `operational_focus` | Prioridades, checklist de PR e modo de consolidação para agentes |
+| Playbook | [`ENGINEERING_PLAYBOOKS.md`](ENGINEERING_PLAYBOOKS.md#10-foco-padrão-ouro) | Fluxo executável com evidências obrigatórias |
 
 ---
 

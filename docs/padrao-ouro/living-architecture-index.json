@@ -350,7 +350,16 @@
       "Atualizar machine-readable quando ownership/workflow/contrato/módulo mudar",
       "Manter rollback simples"
     ],
-    "exit_criteria": "gate, artefatos Tier 1 afetados e validacao focada rastreaveis no PR"
+    "consolidation": {
+      "trigger": "coordenador state_yellow com new_front_allowed false",
+      "allowed_increment_types": ["consolidate", "gap_fix", "hotfix"],
+      "actions": [
+        "fechar PRs duplicados apontando para canônico em main",
+        "sincronizar índices Tier 1 antes de abrir nova frente",
+        "validar JSON e comandos focados no escopo"
+      ],
+      "exit_criteria": "gate, artefatos Tier 1 afetados e validação focada rastreáveis no PR"
+    }
   },
   "tier1_docs": {
     "living_architecture_index": "docs/padrao-ouro/LIVING_ARCHITECTURE_INDEX.md",
@@ -358,6 +367,7 @@
     "runtime_evidence_graph": "docs/padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md",
     "contract_catalog": "docs/padrao-ouro/CONTRACT_CATALOG.md",
     "engineering_playbooks": "docs/padrao-ouro/ENGINEERING_PLAYBOOKS.md",
-    "testing_playbook": "docs/padrao-ouro/TESTING_PLAYBOOK.md"
+    "testing_playbook": "docs/padrao-ouro/TESTING_PLAYBOOK.md",
+    "foco_padrao_ouro": "docs/padrao-ouro/FOCO_PADRAO_OURO.md"
   }
 }

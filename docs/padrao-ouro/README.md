@@ -18,10 +18,11 @@ Documentação aqui **não é texto morto** — é infraestrutura operacional vi
 | 4 | **Contract Catalog** | [`CONTRACT_CATALOG.md`](CONTRACT_CATALOG.md) | Inventário de schemas, eventos, APIs, payloads e pipelines. |
 | 5 | **Engineering Playbooks** | [`ENGINEERING_PLAYBOOKS.md`](ENGINEERING_PLAYBOOKS.md) | Fluxos operacionais para incrementos, CI, merge governado e evidências. |
 | 6 | **Testing Playbook** | [`TESTING_PLAYBOOK.md`](TESTING_PLAYBOOK.md) | Pirâmide, árvores, gates, convenções e comandos da camada de testes. |
+| 7 | **Foco Padrão Ouro** | [`FOCO_PADRAO_OURO.md`](FOCO_PADRAO_OURO.md) | Sequência prioritária para consolidar qualidade, rastreabilidade e prontidão de merge com diff mínimo. |
 
 ## Foco operacional Padrão Ouro
 
-Enquanto o coordenador estiver em `state_yellow`, o modo ativo é **consolidação**: priorizar estabilização e rastreabilidade sem abrir nova frente concorrente. Para manter o ciclo em **máximo ROI**, qualquer atuação deve priorizar a menor mudança capaz de fortalecer uma das frentes abaixo:
+Plano detalhado em [`FOCO_PADRAO_OURO.md`](FOCO_PADRAO_OURO.md). Para manter o ciclo em **máximo ROI**, qualquer atuação neste repositório deve priorizar a menor mudança capaz de fortalecer uma das frentes abaixo:
 
 | Prioridade | Frente | Evidência mínima | Critério de pronto |
 | --- | --- | --- | --- |
@@ -31,7 +32,9 @@ Enquanto o coordenador estiver em `state_yellow`, o modo ativo é **consolidaç�
 | P3 | Segurança operacional | Gates de produção, segredos, CORS, JWT, auditoria ou correlation ID revisados quando tocados | Nenhum segredo, PII ou relaxamento produtivo entra no PR. |
 | P4 | Documentação acionável | Playbook/runbook curto com comando validado ou pendência explícita | O próximo agente sabe o próximo passo sem depender de contexto de chat. |
 
-Direções práticas em modo consolidação:
+### Modo consolidação (`state_yellow`)
+
+Enquanto o coordenador estiver em `state_yellow`, priorize estabilização e rastreabilidade sem abrir nova frente concorrente:
 
 | # | Direção | Evidência esperada |
 | --- | --- | --- |
@@ -62,6 +65,7 @@ Critério de saída: uma mudança Padrão Ouro só é pronta quando a evidência
 ## Quando usar cada artefato
 
 ```text
+Foco Padrão Ouro      → FOCO_PADRAO_OURO → prioridades P0–P4
 Novo incremento / PR     → ENGINEERING_PLAYBOOKS → Agent Increment Gate
 Novo teste / gate CI     → TESTING_PLAYBOOK → Trilha D (quando qualidade)
 Decisão arquitetural     → ADR_INDEX → criar ADR em docs/adr/
@@ -69,6 +73,30 @@ Quebra silenciosa        → CONTRACT_CATALOG → validar schema/contrato
 Conflito entre branches  → LIVING_ARCHITECTURE_INDEX → boundaries/ownership
 Troubleshooting CI/ops   → RUNTIME_EVIDENCE_GRAPH → timeline + artifacts
 Onboarding agente/IA     → README (este) → living-architecture-index.json
+```
+
+
+## Protocolo rápido para agentes
+
+Use este protocolo quando o pedido for amplo (ex.: "foco padrão ouro") ou quando houver dúvida entre criar frente nova, corrigir gap ou consolidar evidência.
+
+| Prioridade | Fazer | Evidência mínima | Antiobjetivo |
+| --- | --- | --- | --- |
+| 1 | Localizar o domínio no Living Architecture Index e confirmar ownership antes de editar. | Link para módulo/owner ou trecho do índice usado. | Alterar arquivos fora do boundary sem justificativa. |
+| 2 | Preferir correção de gap, consolidação ou documentação operacional antes de criar novo módulo. | `agent_increment_gate` com tipo adequado ou justificativa de indisponibilidade do artifact local. | Criar frente paralela sem gate. |
+| 3 | Executar a menor validação reproduzível para o escopo tocado. | Comando local, exit code e limitação ambiental quando houver. | Declarar CI verde sem evidência. |
+| 4 | Atualizar contratos, ADRs, runbooks ou matriz de testes quando a mudança afetar operação. | Arquivo de documentação atualizado junto do diff funcional. | Deixar conhecimento apenas no PR/chat. |
+| 5 | Encerrar com commit convencional, PR com escopo/fora de escopo/riscos/rollback e próximos gates. | Commit + corpo de PR rastreável. | Misturar mudanças não relacionadas. |
+
+### Protocolo rápido para agentes
+
+```text
+1. Ler este README + living-architecture-index.json.
+2. Classificar o pedido: gap_fix, consolidate, hotfix, close_duplicate ou new_front.
+3. Rodar agent_increment_gate com o tipo classificado quando o artifact/status estiver disponível.
+4. Aplicar diff mínimo e manter rastreabilidade em docs/padrao-ouro ou runbooks.
+5. Validar o menor conjunto de comandos compatível com o escopo.
+6. Commitar e abrir PR com evidência objetiva.
 ```
 
 ## Impacto esperado
@@ -90,6 +118,7 @@ Atualizar este hub quando houver:
 - Novo ADR transversal.
 - Novo contrato/schema versionado.
 - Novo playbook operacional.
+- Mudança de prioridade operacional no foco Padrão Ouro.
 
 Validação report-only: workflow [`Living Architecture Traceability`](../../.github/workflows/living-architecture-traceability.yml).
 

@@ -8,6 +8,7 @@ Data de referência: 2026-06-27
 
 | Cenário | Playbook |
 | --- | --- |
+| Pedido amplo / foco Padrão Ouro | [Foco Padrão Ouro](#0-foco-padrão-ouro) |
 | Abrir novo incremento/PR | [Abrir incremento](#1-abrir-incremento) |
 | Corrigir CI vermelho | [Corrigir CI](#2-corrigir-ci) |
 | Adicionar / estruturar testes | [Testing layer](#8-camada-de-testes) |
@@ -17,6 +18,37 @@ Data de referência: 2026-06-27
 | Criar analytics | [Criar analytics](#6-criar-analytics) |
 | Onboarding agente | [Onboarding agente/IA](#7-onboarding-agenteia) |
 | Evidência visual de telas | [Evidência visual](#9-evidencia-visual-telas-recentes) |
+| Consolidar Padrão Ouro | [Foco Padrão Ouro](#10-foco-padrão-ouro) |
+
+---
+
+
+## 0. Foco Padrão Ouro
+
+**Objetivo:** Converter pedidos amplos em uma ação mínima, rastreável e alinhada ao Padrão Ouro antes de abrir novas frentes.
+
+### Quando aplicar
+
+- Pedido curto ou ambíguo como "foco padrão ouro".
+- Necessidade de escolher entre consolidar evidência, corrigir gap, hotfix ou nova frente.
+- Mudanças em documentação operacional, arquitetura viva, contratos, testes ou CI.
+
+### Passos
+
+```text
+1. Confirmar boundary no Living Architecture Index.
+2. Classificar incremento: gap_fix > consolidate > hotfix > close_duplicate > new_front.
+3. Executar agent_increment_gate quando houver artifact/status local; se indisponível, registrar a limitação.
+4. Fazer diff mínimo em arquivos existentes sempre que possível.
+5. Rodar validação focada no escopo alterado.
+6. Preparar PR com escopo, fora de escopo, evidências, riscos e rollback.
+```
+
+### Evidências mínimas
+
+- Arquivo Tier 1 ou runbook atualizado quando a decisão operacional mudar.
+- Comando de validação local com resultado.
+- Justificativa explícita para qualquer gate não executado por ausência de artifact, credencial ou ambiente.
 
 ---
 
@@ -353,3 +385,35 @@ triagem → ajuste mínimo → CI completo → evidência → merge controlado �
 - Hub Tier 1: [`docs/padrao-ouro/README.md`](README.md)
 - AGENTS.md: [`AGENTS.md`](../../AGENTS.md)
 - Índice canônico: [`docs/00_INDICE_CANONICO.md`](../00_INDICE_CANONICO.md)
+
+
+---
+
+## 10. Foco Padrão Ouro
+
+**Objetivo:** Priorizar melhorias pequenas que aumentem prontidão de merge, rastreabilidade e qualidade operacional sem abrir frentes paralelas desnecessárias.
+
+### Pré-condições
+
+- Ler [`FOCO_PADRAO_OURO.md`](FOCO_PADRAO_OURO.md).
+- Confirmar se a demanda é nova frente, consolidação, gap fix ou hotfix antes de alterar arquivos.
+
+### Passos
+
+```text
+1. Classificar a prioridade P0–P4 no plano de foco.
+2. Consultar ownership no Living Architecture Index.
+3. Fazer o menor diff que remova o risco ou aumente a rastreabilidade.
+4. Rodar o teste mais próximo do risco alterado.
+5. Registrar evidência, riscos, rollback e fora de escopo no PR.
+```
+
+### Evidências obrigatórias
+
+- Link ou citação do artefato Tier 1 atualizado.
+- Comando de validação executado ou limitação ambiental explícita.
+- Declaração de que bancos locais, segredos e artefatos temporários não foram incluídos.
+
+### Runbook
+
+- [`docs/padrao-ouro/FOCO_PADRAO_OURO.md`](FOCO_PADRAO_OURO.md)
