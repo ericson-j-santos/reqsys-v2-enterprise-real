@@ -8,6 +8,44 @@
       <v-card-subtitle>Login corporativo - Tieri659</v-card-subtitle>
 
       <v-card-text>
+        <v-alert
+          v-if="azureDisponivel && avisoRedirect"
+          type="warning"
+          variant="tonal"
+          density="compact"
+          class="mb-4"
+          data-testid="auth-redirect-warning"
+        >
+          <div class="font-weight-medium">Redirect URI divergente</div>
+          <div class="text-caption mt-1">
+            Esta pagina usa <strong>{{ redirectAtual }}</strong>, mas a API espera
+            <strong>{{ redirectEsperado }}</strong>.
+          </div>
+          <div class="text-caption mt-1">
+            Acesse pela URL canonica ou registre ambas as origens no Microsoft Entra ID.
+          </div>
+        </v-alert>
+
+        <v-alert
+          v-if="azureDisponivel"
+          type="info"
+          variant="tonal"
+          density="compact"
+          class="mb-4"
+          data-testid="auth-redirect-validation"
+        >
+          <div class="font-weight-medium">Validacao Microsoft Entra ID</div>
+          <div class="text-caption mt-1">
+            Redirect URI desta sessao: <strong>{{ redirectAtual }}</strong>
+          </div>
+          <div v-if="redirectEsperado" class="text-caption">
+            Redirect URI esperado pela API: <strong>{{ redirectEsperado }}</strong>
+          </div>
+          <div class="text-caption mt-1">
+            Status: {{ validacaoAuth.azurePronto ? 'pronto para login' : 'configuracao incompleta' }}
+          </div>
+        </v-alert>
+
         <v-btn
           v-if="azureDisponivel"
           block
@@ -92,6 +130,7 @@ import { useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
 import { loginMicrosoftRedirect } from '../auth/msal'
+import { redirectUriAtual, resumoValidacaoAuth, traduzirErroAzure } from '../auth/diagnostics'
 import { api } from '../services/api'
 
 const { width } = useDisplay()
@@ -112,14 +151,21 @@ const router = useRouter()
 
 const camposAusentes = computed(() => azureConfig.value?.missing_fields || [])
 const redirectEsperado = computed(() => azureConfig.value?.expected_redirect_uri || '')
+const redirectAtual = computed(() => redirectUriAtual())
+const validacaoAuth = computed(() => resumoValidacaoAuth(azureConfig.value))
+const avisoRedirect = computed(() => validacaoAuth.value.divergente)
 const mensagemDiagnosticoAuth = computed(() => {
   return azureConfig.value?.operator_action || 'Verifique a configuracao do Azure AD no backend.'
 })
 
+function aplicarErroAzure(mensagem) {
+  erro.value = traduzirErroAzure(mensagem, redirectEsperado.value)
+}
+
 onMounted(async () => {
   const azureErr = sessionStorage.getItem('azure_login_error')
   if (azureErr) {
-    erro.value = azureErr
+    aplicarErroAzure(azureErr)
     sessionStorage.removeItem('azure_login_error')
   }
 
@@ -140,7 +186,7 @@ async function entrarMicrosoft() {
   try {
     await loginMicrosoftRedirect()
   } catch (e) {
-    erro.value = e.response?.data?.detail || e.message || 'Falha no login Microsoft'
+    aplicarErroAzure(e.response?.data?.detail || e.message || 'Falha no login Microsoft')
     carregandoAzure.value = false
   }
 }
