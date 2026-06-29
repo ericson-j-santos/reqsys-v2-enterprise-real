@@ -1,0 +1,114 @@
+name: Release Validation Layer
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch monitorada"
+        required: false
+        default: "main"
+        type: string
+  workflow_run:
+    workflows:
+      - Coordenador Status Consolidator
+      - Golden Release Readiness
+      - Main Post-Merge Validation
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: release-validation-layer-${{ github.event.inputs.branch || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Consolidar Release Validation Layer
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download coordenador status artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: coordenador-status-evidence
+          path: artifacts/coordenador-status
+
+      - name: Download golden release readiness artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: golden-release-readiness-*
+          merge-multiple: true
+          path: audit/release-readiness
+
+      - name: Download OpenAPI contract artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: openapi-routes-drift
+          path: artifacts/openapi
+
+      - name: Download OpenAPI semantic diff artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: openapi-semantic-diff
+          path: artifacts/openapi
+
+      - name: Gerar release validation layer
+        shell: bash
+        env:
+          TARGET_BRANCH: ${{ github.event.inputs.branch || 'main' }}
+        run: |
+          set -euo pipefail
+          python scripts/release_validation_layer.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --branch "${TARGET_BRANCH}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --event-name "${GITHUB_EVENT_NAME}" \
+            --output-dir "audit/release-validation"
+
+      - name: Resumo executivo
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f audit/release-validation/release-validation-layer.json ]]; then
+            score=$(python -c "import json; print(json.load(open('audit/release-validation/release-validation-layer.json'))['release_readiness_score'])")
+            readiness=$(python -c "import json; print(json.load(open('audit/release-validation/release-validation-layer.json'))['readiness'])")
+            risk=$(python -c "import json; print(json.load(open('audit/release-validation/release-validation-layer.json'))['risk'])")
+            headline=$(python -c "import json; print(json.load(open('audit/release-validation/release-validation-layer.json'))['executive_dashboard']['headline'])")
+            echo "## Release Validation Layer" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Score: \`${score}%\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Readiness: \`${readiness}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Risk: \`${risk}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Headline: ${headline}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Artifact: \`release-validation-layer-evidence\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Release Validation Layer" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Falha ao gerar consolidado" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar artifact consolidado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-validation-layer-evidence
+          path: audit/release-validation/
+          if-no-files-found: error
+          retention-days: 30

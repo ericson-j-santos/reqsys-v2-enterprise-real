@@ -75,6 +75,7 @@ def build_increment_gate(
     orchestrator: dict[str, Any],
     health: dict[str, Any],
     watchdog: dict[str, Any] | None = None,
+    release_validation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     backlog = health.get("automatic_backlog") or []
     critical_gaps = sum(1 for item in backlog if str(item.get("id", "")).startswith("OPS-GAP-"))
@@ -92,6 +93,8 @@ def build_increment_gate(
         blockers.append("duplicate_open_prs")
     if open_prs > OPEN_PR_PRESSURE_THRESHOLD:
         blockers.append("open_pr_queue_pressure")
+    if release_validation and release_validation.get("readiness") == "blocked":
+        blockers.append("release_not_ready")
 
     allowed_types = ["gap_fix", "hotfix", "consolidate"]
     if duplicate_groups:
@@ -233,6 +236,16 @@ def build_recommended_actions(
                     f"Reduzir fila acima de {OPEN_PR_PRESSURE_THRESHOLD} PRs "
                     "antes de incrementos estruturais"
                 ),
+            }
+        )
+
+    if increment_gate.get("blockers") and "release_not_ready" in increment_gate["blockers"]:
+        actions.append(
+            {
+                "priority": "P1",
+                "action": "validar_release_validation_layer",
+                "reference": "release-validation-layer",
+                "detail": "Release readiness bloqueada — revisar quality gates e blockers antes de promover",
             }
         )
 
@@ -466,11 +479,12 @@ def consolidate(
     watchdog: dict[str, Any] | None = None,
     observability_hub: dict[str, Any] | None = None,
     contract_governance: dict[str, Any] | None = None,
+    release_validation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     global_state = merge_state(str(orchestrator.get("state") or "unknown"), str(health.get("state") or "unknown"))
     backlog = health.get("automatic_backlog") or []
     critical_gaps = sum(1 for item in backlog if str(item.get("id", "")).startswith("OPS-GAP-"))
-    increment_gate = build_increment_gate(global_state, orchestrator, health, watchdog)
+    increment_gate = build_increment_gate(global_state, orchestrator, health, watchdog, release_validation)
 
     runtime_score = health.get("runtime_score")
     if runtime_score is None:
@@ -478,8 +492,10 @@ def consolidate(
 
     duplicate_numbers = sorted(_duplicate_pr_numbers(watchdog))
 
+    release_score = (release_validation or {}).get("release_readiness_score")
+
     return {
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "correlation_id": str(health.get("correlation_id") or uuid4()),
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repository": repo,
@@ -523,6 +539,13 @@ def consolidate(
             },
             "contract_governance": contract_governance
             or {"available": False, "semantic_drift_count": 0},
+            "release_validation": {
+                "available": release_validation is not None,
+                "readiness": (release_validation or {}).get("readiness"),
+                "release_readiness_score": release_score,
+                "risk": (release_validation or {}).get("risk"),
+                "generated_at": (release_validation or {}).get("generated_at"),
+            },
         },
         "summary": {
             "open_prs": (orchestrator.get("summary") or {}).get("open_prs", 0),
@@ -538,6 +561,8 @@ def consolidate(
             "contract_governance_available": bool((contract_governance or {}).get("available")),
             "openapi_canonical_drift_count": int((contract_governance or {}).get("canonical_drift_count") or 0),
             "openapi_semantic_drift_count": int((contract_governance or {}).get("semantic_drift_count") or 0),
+            "release_readiness_score": release_score,
+            "release_readiness": (release_validation or {}).get("readiness"),
         },
         "automatic_backlog": backlog,
         "recommended_actions": build_recommended_actions(
@@ -563,9 +588,13 @@ def consolidate(
                 "openapi-contract-validation.json",
                 "openapi-routes-drift.json",
                 "openapi-semantic-diff.json",
+                "release-validation-layer.json",
             ],
             "dashboard_entrypoint": "summary.md",
         },
+        "release_validation": release_validation
+        if release_validation
+        else {"available": False, "readiness": None, "release_readiness_score": None},
     }
 
 
@@ -731,6 +760,11 @@ def parse_args() -> argparse.Namespace:
         help="Artifact advisory de diff semantico AST (Lane A P2)",
     )
     parser.add_argument(
+        "--release-validation-json",
+        default="audit/release-validation/release-validation-layer.json",
+        help="Optional Release Validation Layer JSON path",
+    )
+    parser.add_argument(
         "--fail-on-red",
         action="store_true",
         help="Exit 1 when consolidated state is red (default: always exit 0 after successful write)",
@@ -777,6 +811,9 @@ def main() -> int:
         routes_drift,
         semantic_diff,
     )
+    release_validation = (
+        load_json(Path(args.release_validation_json)) if Path(args.release_validation_json).exists() else None
+    )
 
     if args.orchestrator_json and args.health_json:
         orchestrator = load_json(Path(args.orchestrator_json))
@@ -810,6 +847,7 @@ def main() -> int:
         watchdog,
         observability_hub,
         contract_governance,
+        release_validation,
     )
 
     orchestrator_dir.mkdir(parents=True, exist_ok=True)

@@ -115,6 +115,7 @@ Todo artifact operacional JSON deve convergir para os campos mínimos:
 | `audit/pr-evidence-gate.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/pr-evidence-gate.yml |
 | `audit/predictive/runtime-predictive-analytics.json` | workflow | `docs/contracts/runtime-predictive-analytics.schema.json` | .github/workflows/runtime-predictive-analytics.yml |
 | `audit/release-readiness/golden-release-readiness.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/golden-release-readiness.yml |
+| `audit/release-validation/release-validation-layer.json` | workflow | `docs/contracts/release-validation-layer.schema.json` | .github/workflows/release-validation-layer.yml |
 | `audit/scheduled-operational-watch.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/scheduled-operational-watch.yml |
 | `audit/schema-validation/operational-artifact-schema-validation.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/operational-artifact-schema-validation.yml |
 | `auth-azure-operational-report.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/auth-azure-operational-gate.yml |
