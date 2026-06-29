@@ -262,16 +262,16 @@ def build_recommended_actions(
             )
 
     if contract_governance and contract_governance.get("available"):
-        drift_count = int(contract_governance.get("semantic_drift_count") or 0)
+        drift_count = int(contract_governance.get("canonical_drift_count") or 0)
         if drift_count > 0:
             actions.append(
                 {
                     "priority": "P2",
                     "action": "sincronizar_contrato_openapi_backend",
-                    "reference": f"drift_count={drift_count}",
+                    "reference": f"canonical_drift_count={drift_count}",
                     "detail": (
-                        "Drift semantico OpenAPI detectado — alinhar paths runtime/requisitos "
-                        f"(missing_in_openapi={contract_governance.get('semantic_diff', {}).get('missing_in_openapi', 0)})"
+                        "Drift canonico OpenAPI (routes-drift) detectado — alinhar paths runtime/requisitos "
+                        f"(missing_in_openapi={contract_governance.get('routes_drift', {}).get('missing_in_openapi', 0)})"
                     ),
                 }
             )
@@ -403,34 +403,52 @@ def evaluate_increment_intent(
 def build_contract_governance_source(
     contract_index: dict[str, Any] | None,
     openapi_validation: dict[str, Any] | None,
+    routes_drift: dict[str, Any] | None,
     semantic_diff: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    from scripts.validate_openapi_routes_drift import (  # noqa: PLC0415
+        CANONICAL_DRIFT_CONTRACT,
+        contract_drift_count,
+    )
+
     traceability = (contract_index or {}).get("traceability") or {}
     openapi_to_ci = traceability.get("openapi_to_ci") or {}
+    routes_summary = (routes_drift or {}).get("summary") or {}
     semantic_summary = (semantic_diff or {}).get("summary") or {}
-    drift_count = int(semantic_summary.get("drift_count") or 0)
+    canonical_drift_count = contract_drift_count(routes_drift)
+    semantic_drift_count = int(semantic_summary.get("drift_count") or 0)
     validation_status = str((openapi_validation or {}).get("status") or "unknown")
 
     return {
-        "available": bool(contract_index or openapi_validation or semantic_diff),
+        "available": bool(contract_index or openapi_validation or routes_drift or semantic_diff),
+        "canonical_drift_detector": CANONICAL_DRIFT_CONTRACT,
+        "canonical_drift_count": canonical_drift_count,
         "contract_index_version": (contract_index or {}).get("version"),
         "runtime_contract_sync": ((contract_index or {}).get("summary") or {}).get("runtime_contract_sync"),
         "openapi_validation_status": validation_status,
         "openapi_validation_passed": validation_status == "passed",
         "semantic_diff_status": (semantic_diff or {}).get("status"),
-        "semantic_drift_count": drift_count,
+        "semantic_drift_count": semantic_drift_count,
         "sync_gap": openapi_to_ci.get("gap"),
         "openapi_validation": {
             "available": bool(openapi_validation),
             "status": validation_status,
             "valid": ((openapi_validation or {}).get("summary") or {}).get("valid"),
         },
+        "routes_drift": {
+            "available": bool(routes_drift),
+            "status": (routes_drift or {}).get("status"),
+            "drift_count": canonical_drift_count,
+            "missing_in_backend": routes_summary.get("missing_in_backend", 0),
+            "missing_in_openapi": routes_summary.get("missing_in_openapi", 0),
+        },
         "semantic_diff": {
             "available": bool(semantic_diff),
             "status": (semantic_diff or {}).get("status"),
-            "drift_count": drift_count,
+            "drift_count": semantic_drift_count,
             "missing_in_backend": semantic_summary.get("missing_in_backend", 0),
             "missing_in_openapi": semantic_summary.get("missing_in_openapi", 0),
+            "mode": "advisory_only",
         },
         "contract_index": {
             "available": bool(contract_index),
@@ -518,6 +536,7 @@ def consolidate(
             "duplicate_pr_groups": increment_gate.get("duplicate_group_count", 0),
             "new_front_allowed": increment_gate.get("new_front_allowed", False),
             "contract_governance_available": bool((contract_governance or {}).get("available")),
+            "openapi_canonical_drift_count": int((contract_governance or {}).get("canonical_drift_count") or 0),
             "openapi_semantic_drift_count": int((contract_governance or {}).get("semantic_drift_count") or 0),
         },
         "automatic_backlog": backlog,
@@ -542,6 +561,7 @@ def consolidate(
                 "repository-health-report.json",
                 "contract-artifacts-index-v0.3.0.json",
                 "openapi-contract-validation.json",
+                "openapi-routes-drift.json",
                 "openapi-semantic-diff.json",
             ],
             "dashboard_entrypoint": "summary.md",
@@ -701,9 +721,14 @@ def parse_args() -> argparse.Namespace:
         help="Optional OpenAPI contract validation artifact path",
     )
     parser.add_argument(
+        "--openapi-routes-drift-json",
+        default="artifacts/openapi/openapi-routes-drift.json",
+        help="Artifact canonico de drift routes-drift (Lane C strict)",
+    )
+    parser.add_argument(
         "--openapi-semantic-diff-json",
         default="artifacts/openapi/openapi-semantic-diff.json",
-        help="Optional OpenAPI semantic diff artifact path",
+        help="Artifact advisory de diff semantico AST (Lane A P2)",
     )
     parser.add_argument(
         "--fail-on-red",
@@ -740,10 +765,18 @@ def main() -> int:
     openapi_validation = (
         load_json(Path(args.openapi_validation_json)) if Path(args.openapi_validation_json).exists() else None
     )
+    routes_drift = (
+        load_json(Path(args.openapi_routes_drift_json)) if Path(args.openapi_routes_drift_json).exists() else None
+    )
     semantic_diff = (
         load_json(Path(args.openapi_semantic_diff_json)) if Path(args.openapi_semantic_diff_json).exists() else None
     )
-    contract_governance = build_contract_governance_source(contract_index, openapi_validation, semantic_diff)
+    contract_governance = build_contract_governance_source(
+        contract_index,
+        openapi_validation,
+        routes_drift,
+        semantic_diff,
+    )
 
     if args.orchestrator_json and args.health_json:
         orchestrator = load_json(Path(args.orchestrator_json))

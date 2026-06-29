@@ -18,6 +18,23 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 
+CANONICAL_DRIFT_ARTIFACT = "artifacts/openapi/openapi-routes-drift.json"
+CANONICAL_DRIFT_CONTRACT = "reqsys-openapi-routes-drift"
+
+
+def contract_drift_count(report: dict[str, Any] | None) -> int:
+    """Contagem canônica de drift para gates strict (Lane C)."""
+    if not report:
+        return 0
+    summary = report.get("summary") or {}
+    missing = int(summary.get("missing_in_openapi") or 0) + int(summary.get("missing_in_backend") or 0)
+    if missing > 0:
+        return missing
+    if report.get("status") not in {None, "passed"}:
+        return max(len(report.get("errors") or []), 1)
+    return 0
+
+
 GOVERNED_PATHS: tuple[tuple[str, str], ...] = (
     ("GET", "/api/runtime/health"),
     ("GET", "/api/runtime/dashboard"),

@@ -36,18 +36,23 @@ def run_script(script: str, *args: str) -> int:
 def load_contract_artifacts(
     contract_index_path: Path,
     openapi_validation_path: Path,
+    openapi_routes_drift_path: Path,
     openapi_semantic_diff_path: Path,
 ) -> dict[str, Any]:
+    from scripts.validate_openapi_routes_drift import contract_drift_count  # noqa: PLC0415
+
     contract_index = load_json(contract_index_path, {})
     openapi_validation = load_json(openapi_validation_path, {})
+    routes_drift = load_json(openapi_routes_drift_path, {})
     semantic_diff = load_json(openapi_semantic_diff_path, {})
 
+    canonical_drift_count = contract_drift_count(routes_drift)
     semantic_drift_count = int((semantic_diff.get("summary") or {}).get("drift_count") or 0)
     validation_status = str(openapi_validation.get("status") or "unknown")
     traceability = contract_index.get("traceability") or {}
     openapi_to_ci = traceability.get("openapi_to_ci") or {}
 
-    hydrated = bool(contract_index) or bool(openapi_validation) or bool(semantic_diff)
+    hydrated = bool(contract_index) or bool(openapi_validation) or bool(routes_drift) or bool(semantic_diff)
     return {
         "hydrated": hydrated,
         "contract_index": {
@@ -63,12 +68,21 @@ def load_contract_artifacts(
             "valid": (openapi_validation.get("summary") or {}).get("valid"),
             "error_count": len(openapi_validation.get("errors") or []),
         },
+        "routes_drift": {
+            "available": bool(routes_drift),
+            "status": routes_drift.get("status"),
+            "drift_count": canonical_drift_count,
+            "missing_in_backend": (routes_drift.get("summary") or {}).get("missing_in_backend", 0),
+            "missing_in_openapi": (routes_drift.get("summary") or {}).get("missing_in_openapi", 0),
+            "mode": "canonical_strict_gate",
+        },
         "semantic_diff": {
             "available": bool(semantic_diff),
             "status": semantic_diff.get("status"),
             "drift_count": semantic_drift_count,
             "missing_in_backend": (semantic_diff.get("summary") or {}).get("missing_in_backend", 0),
             "missing_in_openapi": (semantic_diff.get("summary") or {}).get("missing_in_openapi", 0),
+            "mode": "advisory_only",
         },
         "summary": {
             "artifacts_available": sum(
@@ -76,10 +90,12 @@ def load_contract_artifacts(
                 for item in (
                     contract_index,
                     openapi_validation,
+                    routes_drift,
                     semantic_diff,
                 )
                 if item
             ),
+            "canonical_drift_count": canonical_drift_count,
             "semantic_drift_count": semantic_drift_count,
             "validation_passed": validation_status == "passed",
             "sync_gap": openapi_to_ci.get("gap"),
@@ -171,6 +187,7 @@ def build_correlation_chain(
                 "source": "contract-governance-artifacts",
                 "correlation_level": "contract",
                 "artifacts_available": summary.get("artifacts_available", 0),
+                "canonical_drift_count": summary.get("canonical_drift_count", 0),
                 "semantic_drift_count": summary.get("semantic_drift_count", 0),
                 "validation_passed": summary.get("validation_passed"),
                 "sync_gap": summary.get("sync_gap"),
@@ -254,7 +271,7 @@ def consolidate_hub(
         status, risk = "healthy", "low"
 
     contract_summary = (contract_artifacts or {}).get("summary") or {}
-    if contract_summary.get("semantic_drift_count", 0) > 0 and risk == "low":
+    if contract_summary.get("canonical_drift_count", 0) > 0 and risk == "low":
         status, risk = "watch", "medium"
 
     return {
@@ -280,6 +297,7 @@ def consolidate_hub(
             "ci_runtime_observability_correlation": len(correlation_chain) > 0,
             "contract_artifacts_hydrated": bool((contract_artifacts or {}).get("hydrated")),
             "openapi_validation_available": bool((contract_artifacts or {}).get("openapi_validation", {}).get("available")),
+            "routes_drift_available": bool((contract_artifacts or {}).get("routes_drift", {}).get("available")),
             "semantic_diff_available": bool((contract_artifacts or {}).get("semantic_diff", {}).get("available")),
         },
         "sources": {
@@ -319,12 +337,18 @@ def _recommended_actions(
     if alert.get("should_alert"):
         actions.append(f"Alerta governado {alert['alert_level']}: {alert['alert_type']} — {alert['action_policy']}")
     if contract_artifacts and contract_artifacts.get("hydrated"):
-        semantic = contract_artifacts.get("semantic_diff") or {}
-        if semantic.get("drift_count", 0) > 0:
+        routes = contract_artifacts.get("routes_drift") or {}
+        if routes.get("drift_count", 0) > 0:
             actions.append(
-                f"Revisar drift semântico OpenAPI: {semantic['drift_count']} divergências "
-                f"(missing_in_backend={semantic.get('missing_in_backend', 0)}, "
-                f"missing_in_openapi={semantic.get('missing_in_openapi', 0)})"
+                f"Revisar drift canonico OpenAPI (routes-drift): {routes['drift_count']} divergencias "
+                f"(missing_in_openapi={routes.get('missing_in_openapi', 0)}, "
+                f"missing_in_backend={routes.get('missing_in_backend', 0)})"
+            )
+        semantic = contract_artifacts.get("semantic_diff") or {}
+        if semantic.get("drift_count", 0) > 0 and routes.get("drift_count", 0) == 0:
+            actions.append(
+                f"Revisar diff semantico AST (advisory): {semantic['drift_count']} divergencias — "
+                "validar com routes-drift canonico antes de bloquear merge"
             )
         sync_gap = (contract_artifacts.get("summary") or {}).get("sync_gap")
         if sync_gap:
@@ -375,6 +399,10 @@ def main() -> int:
         default="artifacts/openapi/openapi-contract-validation.json",
     )
     parser.add_argument(
+        "--openapi-routes-drift-json",
+        default="artifacts/openapi/openapi-routes-drift.json",
+    )
+    parser.add_argument(
         "--openapi-semantic-diff-json",
         default="artifacts/openapi/openapi-semantic-diff.json",
     )
@@ -413,6 +441,7 @@ def main() -> int:
     contract_artifacts = load_contract_artifacts(
         Path(args.contract_artifacts_index),
         Path(args.openapi_validation_json),
+        Path(args.openapi_routes_drift_json),
         Path(args.openapi_semantic_diff_json),
     )
 
