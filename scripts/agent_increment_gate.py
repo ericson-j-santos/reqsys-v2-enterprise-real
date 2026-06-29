@@ -41,6 +41,33 @@ VALID_INCREMENT_TYPES = frozenset(
 )
 
 
+def resolve_contract_drift_count(report: dict[str, Any], explicit_path: str | None = None) -> int:
+    sources = report.get("sources") or {}
+    contract_governance = sources.get("contract_governance") or {}
+    if contract_governance.get("semantic_drift_count") is not None:
+        return int(contract_governance["semantic_drift_count"])
+
+    semantic = contract_governance.get("semantic_diff") or {}
+    if semantic.get("drift_count") is not None:
+        return int(semantic["drift_count"])
+
+    candidate_paths: list[Path] = []
+    if explicit_path:
+        candidate_paths.append(Path(explicit_path))
+    candidate_paths.extend(
+        [
+            Path("artifacts/openapi/openapi-semantic-diff.json"),
+            Path("artifacts/openapi/openapi-semantic-diff-strict.json"),
+        ]
+    )
+    for path in candidate_paths:
+        if not path.exists():
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return int((payload.get("summary") or {}).get("drift_count") or 0)
+    return 0
+
+
 def load_status_report(args: argparse.Namespace) -> dict[str, Any]:
     if args.status_json:
         return load_json(Path(args.status_json))
@@ -100,6 +127,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--health-limit", type=int, default=50)
     parser.add_argument("--output-dir", default="artifacts/agent-increment-gate")
     parser.add_argument("--json", action="store_true", help="Imprimir somente JSON de decisao")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Bloqueia quando drift semantico OpenAPI > 0 (fail-closed)",
+    )
+    parser.add_argument(
+        "--openapi-semantic-diff-json",
+        default="",
+        help="Caminho opcional do artifact openapi-semantic-diff.json",
+    )
     return parser
 
 
@@ -120,10 +157,26 @@ def main(argv: list[str] | None = None) -> int:
         args.reference.strip(),
     )
 
+    drift_count = resolve_contract_drift_count(
+        report,
+        args.openapi_semantic_diff_json.strip() or None,
+    )
+    strict_blocked = bool(args.strict and drift_count > 0)
+    if strict_blocked:
+        allowed = False
+        reason = "strict_contract_drift_blocked"
+        detail = (
+            f"Modo --strict ativo: drift_count={drift_count}. "
+            "Sincronize contrato OpenAPI e rotas backend antes de prosseguir."
+        )
+
     payload = {
         "allowed": allowed,
         "reason": reason,
         "detail": detail,
+        "strict_mode": bool(args.strict),
+        "contract_drift_count": drift_count,
+        "strict_blocked": strict_blocked,
         "increment_type": args.increment_type,
         "reference": args.reference or None,
         "intent": args.intent or None,
