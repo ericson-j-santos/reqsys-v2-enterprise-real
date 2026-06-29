@@ -23,6 +23,9 @@ on:
       - 'backend/fly.staging.toml'
       - 'backend/app/core/config.py'
       - 'scripts/validar_frontend_auth_redirect.py'
+      - 'scripts/gerar_indice_evidencia_visual.py'
+      - 'frontend/tests/e2e/visual-evidence.spec.js'
+      - 'frontend/tests/e2e/helpers/evidence.js'
       - '.github/workflows/deploy-staging-auth-fix.yml'
 
 permissions:
@@ -131,3 +134,54 @@ jobs:
           path: |
             auth-azure-staging-report.json
             frontend-auth-public-report.json
+
+  visual-evidence-staging:
+    name: Evidência visual staging (screenshots)
+    runs-on: ubuntu-latest
+    needs: [validate-runtime]
+    if: always() && needs.validate-runtime.result == 'success'
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Instalar dependências e Chromium
+        run: npm ci && npx playwright install --with-deps chromium
+
+      - name: Capturar telas em staging
+        env:
+          E2E_BASE_URL: https://reqsys-app-stg.fly.dev
+          E2E_API_URL: https://reqsys-api-stg.fly.dev
+          E2E_EVIDENCE_MODE: '1'
+        run: npx playwright test tests/e2e/visual-evidence.spec.js
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Gerar índice HTML das evidências
+        run: python ../scripts/gerar_indice_evidencia_visual.py --evidence-dir test-results/evidence
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: staging-visual-evidence
+          path: |
+            frontend/test-results/evidence/
+            frontend/playwright-report/evidence/
+          retention-days: 30
