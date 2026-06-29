@@ -110,6 +110,7 @@ def test_status_consolidado_agrega_pacotes_e_github(monkeypatch):
 def test_planner_webhook_config_salvar_e_listar_historico():
     db = SessionLocal()
     try:
+        svc.salvar_planner_webhook_config(db, webhook_url='', teams_webhook_url='')
         cfg = svc.obter_planner_webhook_config(db)
         assert cfg['configurado'] is False
 
@@ -167,3 +168,273 @@ def test_try_json_serializa_dict_e_none():
     assert svc._try_json(None) == '{}'
     assert svc._try_json('raw-text') == 'raw-text'
     assert '"a"' in svc._try_json({'a': 1})
+
+
+def _mock_credenciais_graph(monkeypatch):
+    monkeypatch.setattr(svc.settings, 'azure_tenant_id', 'tenant-id')
+    monkeypatch.setattr(svc.settings, 'azure_client_id', 'client-id')
+    monkeypatch.setattr(svc.settings, 'azure_client_secret', 'client-secret')
+    monkeypatch.setattr(svc.settings, 'sharepoint_site_id', 'site-id')
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_listar_pacotes_ia_com_mock_graph(mock_client_cls, monkeypatch):
+    _mock_credenciais_graph(monkeypatch)
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {
+        'value': [
+            {
+                'id': 'pkg-1',
+                'fields': {
+                    'Projeto': 'ReqSys',
+                    'Branch': 'main',
+                    'CommitHash': 'abcdef1234567890',
+                    'TechStack': 'python',
+                    'TotalArquivos': 10,
+                    'TamanhoPacoteMb': 1.5,
+                    'Status': 'ok',
+                    'ChaveIdempotencia': 'key-1',
+                    'DataGeracaoUtc': '2026-06-28T00:00:00Z',
+                    'ProcessadoEmUtc': '2026-06-28T01:00:00Z',
+                },
+            }
+        ]
+    }
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=MagicMock(raise_for_status=MagicMock(), json=lambda: {'access_token': 'token'}))
+    mock_client.get = AsyncMock(return_value=mock_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_pacotes_ia(limit=5))
+
+    assert resultado['configurado'] is True
+    assert len(resultado['itens']) == 1
+    assert resultado['itens'][0]['projeto'] == 'ReqSys'
+    assert resultado['itens'][0]['commit'] == 'abcdef123456'
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_listar_pacotes_ia_degrada_em_excecao(mock_client_cls, monkeypatch):
+    _mock_credenciais_graph(monkeypatch)
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(side_effect=RuntimeError('graph indisponivel'))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_pacotes_ia())
+
+    assert resultado['configurado'] is True
+    assert resultado['itens'] == []
+    assert 'graph indisponivel' in resultado['erro']
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_listar_flows_pa_com_mock_dataverse(mock_client_cls, monkeypatch):
+    _mock_credenciais_graph(monkeypatch)
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {
+        'value': [
+            {
+                'workflowid': 'flow-1',
+                'name': 'Flow Teste',
+                'statuscode': 2,
+                'createdon': '2026-06-28T00:00:00Z',
+                'modifiedon': '2026-06-28T01:00:00Z',
+            }
+        ]
+    }
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=MagicMock(raise_for_status=MagicMock(), json=lambda: {'access_token': 'token'}))
+    mock_client.get = AsyncMock(return_value=mock_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_flows_pa())
+
+    assert resultado['configurado'] is True
+    assert resultado['flows'][0]['nome'] == 'Flow Teste'
+    assert resultado['flows'][0]['estado'] == 'Started'
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_listar_ambientes_powerplatform_com_mock(mock_client_cls, monkeypatch):
+    _mock_credenciais_graph(monkeypatch)
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {
+        'value': [
+            {
+                'name': 'env-1',
+                'location': 'brazilsouth',
+                'properties': {'displayName': 'Dev', 'environmentSku': 'Standard', 'provisioningState': 'Succeeded'},
+            }
+        ]
+    }
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=MagicMock(raise_for_status=MagicMock(), json=lambda: {'access_token': 'token'}))
+    mock_client.get = AsyncMock(return_value=mock_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_ambientes_powerplatform())
+
+    assert resultado['configurado'] is True
+    assert resultado['ambientes'][0]['nome'] == 'Dev'
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_descobrir_planos_planner_com_mock(mock_client_cls, monkeypatch):
+    _mock_credenciais_graph(monkeypatch)
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {'value': [{'id': 'plan-1', 'title': 'Plano QA'}]}
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=MagicMock(raise_for_status=MagicMock(), json=lambda: {'access_token': 'token'}))
+    mock_client.get = AsyncMock(return_value=mock_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.descobrir_planos_planner('group-1'))
+
+    assert resultado['configurado'] is True
+    assert resultado['planos'][0]['titulo'] == 'Plano QA'
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_listar_runs_github_com_pat_e_erro_http(mock_client_cls, monkeypatch):
+    monkeypatch.setattr(svc.settings, 'github_alm_repo', 'acme/repo')
+    monkeypatch.setattr(svc.settings, 'github_pat', 'ghp_test')
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {'workflow_runs': []}
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_runs_github())
+    assert resultado['configurado'] is True
+    assert resultado['runs'] == []
+
+    mock_client.get = AsyncMock(side_effect=RuntimeError('github offline'))
+    resultado_erro = _run(svc.listar_runs_github())
+    assert resultado_erro['runs'] == []
+    assert 'github offline' in resultado_erro['erro']
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_publicar_tarefas_planner_sucesso(mock_client_cls):
+    db = SessionLocal()
+    try:
+        svc.salvar_planner_webhook_config(db, webhook_url='https://example.com/planner-hook', webhook_key='secret-key')
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {'criadas': 2, 'teams_notificado': True}
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        resultado = _run(
+            svc.publicar_tarefas_planner(
+                db,
+                tarefas_texto='Tarefa|Dev|2026-06-28|Backlog|Alta|Desc',
+                autor='tester',
+                correlation_id='corr-planner-ok',
+            )
+        )
+
+        assert resultado['ok'] is True
+        assert resultado['criadas'] == 2
+        assert resultado['teams_notificado'] is True
+    finally:
+        db.close()
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_publicar_tarefas_planner_http_status_error(mock_client_cls):
+    import httpx
+
+    db = SessionLocal()
+    try:
+        svc.salvar_planner_webhook_config(db, webhook_url='https://example.com/planner-hook')
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(
+            side_effect=httpx.HTTPStatusError('erro', request=MagicMock(), response=mock_resp)
+        )
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        resultado = _run(
+            svc.publicar_tarefas_planner(
+                db,
+                tarefas_texto='Tarefa|Dev|2026-06-28|Backlog|Alta|Desc',
+                autor='tester',
+                correlation_id='corr-planner-http',
+            )
+        )
+
+        assert resultado['ok'] is False
+        assert 'HTTP 500' in resultado['erro']
+    finally:
+        db.close()
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_testar_teams_webhook_sucesso_e_http_error(mock_client_cls):
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.status_code = 200
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    ok = _run(svc.testar_teams_webhook('https://example.com/teams'))
+    assert ok['ok'] is True
+    assert ok['status'] == 200
+
+    import httpx
+
+    mock_resp_err = MagicMock()
+    mock_resp_err.status_code = 403
+    mock_resp_err.text = 'forbidden'
+    mock_client.post = AsyncMock(
+        side_effect=httpx.HTTPStatusError('erro', request=MagicMock(), response=mock_resp_err)
+    )
+    erro = _run(svc.testar_teams_webhook('https://example.com/teams'))
+    assert erro['ok'] is False
+    assert 'HTTP 403' in erro['erro']
+
+
+def test_listar_historico_integracoes_filtra_status():
+    db = SessionLocal()
+    try:
+        svc.salvar_log_integracao(db, tipo='planner', status='sucesso', autor='a', correlation_id='c1')
+        svc.salvar_log_integracao(db, tipo='planner', status='erro', autor='a', correlation_id='c2')
+        historico = svc.listar_historico_integracoes(db, tipo='planner', status='erro', limit=5)
+        assert historico['total'] >= 1
+        assert all(evento['status'] == 'erro' for evento in historico['eventos'])
+    finally:
+        db.close()
