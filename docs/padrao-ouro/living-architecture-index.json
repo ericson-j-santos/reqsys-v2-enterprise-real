@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "updated_at": "2026-06-29T12:00:00Z",
+  "updated_at": "2026-06-29T12:30:00Z",
   "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
   "hub": "docs/padrao-ouro/README.md",
   "canonical_traceability_map": "docs/traceability/living-architecture-map.json",
@@ -315,6 +315,7 @@
     "runtime_evidence_graph": "docs/padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md",
     "contract_catalog": "docs/padrao-ouro/CONTRACT_CATALOG.md",
     "engineering_playbooks": "docs/padrao-ouro/ENGINEERING_PLAYBOOKS.md",
-    "testing_playbook": "docs/padrao-ouro/TESTING_PLAYBOOK.md"
+    "testing_playbook": "docs/padrao-ouro/TESTING_PLAYBOOK.md",
+    "foco_padrao_ouro": "docs/padrao-ouro/FOCO_PADRAO_OURO.md"
   }
 }

@@ -18,6 +18,7 @@ Documentação aqui **não é texto morto** — é infraestrutura operacional vi
 | 4 | **Contract Catalog** | [`CONTRACT_CATALOG.md`](CONTRACT_CATALOG.md) | Inventário de schemas, eventos, APIs, payloads e pipelines. |
 | 5 | **Engineering Playbooks** | [`ENGINEERING_PLAYBOOKS.md`](ENGINEERING_PLAYBOOKS.md) | Fluxos operacionais para incrementos, CI, merge governado e evidências. |
 | 6 | **Testing Playbook** | [`TESTING_PLAYBOOK.md`](TESTING_PLAYBOOK.md) | Pirâmide, árvores, gates, convenções e comandos da camada de testes. |
+| 7 | **Foco Padrão Ouro** | [`FOCO_PADRAO_OURO.md`](FOCO_PADRAO_OURO.md) | Sequência prioritária para consolidar qualidade, rastreabilidade e prontidão de merge com diff mínimo. |
 
 ## Índices machine-readable
 
@@ -32,6 +33,7 @@ Documentação aqui **não é texto morto** — é infraestrutura operacional vi
 ## Quando usar cada artefato
 
 ```text
+Foco Padrão Ouro      → FOCO_PADRAO_OURO → prioridades P0–P4
 Novo incremento / PR     → ENGINEERING_PLAYBOOKS → Agent Increment Gate
 Novo teste / gate CI     → TESTING_PLAYBOOK → Trilha D (quando qualidade)
 Decisão arquitetural     → ADR_INDEX → criar ADR em docs/adr/
@@ -60,6 +62,7 @@ Atualizar este hub quando houver:
 - Novo ADR transversal.
 - Novo contrato/schema versionado.
 - Novo playbook operacional.
+- Mudança de prioridade operacional no foco Padrão Ouro.
 
 Validação report-only: workflow [`Living Architecture Traceability`](../../.github/workflows/living-architecture-traceability.yml).
 
