@@ -3,10 +3,8 @@
     <!-- Mobile app bar -->
     <v-app-bar v-if="mobile" flat class="req-appbar" elevation="0" height="56">
       <v-app-bar-nav-icon color="white" aria-label="Abrir menu de navegação" @click="drawer = !drawer" />
-      <span class="brand-sm ml-1">◈ ReqSys</span>
-      <v-chip size="x-small" :color="environmentColor" variant="flat" class="ml-2 req-env-chip">
-        {{ environmentLabel }}
-      </v-chip>
+      <span class="brand-sm ml-1"><span class="brand-dot brand-dot--sm">R</span> ReqSys</span>
+      <span class="figma-pill figma-pill--compact ml-2">{{ environmentLabelShort }}</span>
       <v-spacer />
       <v-chip size="x-small" color="amber" variant="tonal" class="mr-2 req-role-chip">
         {{ auth.usuario?.papel || 'user' }}
@@ -23,11 +21,9 @@
     >
       <!-- Brand -->
       <div class="pa-5 pb-3 req-brand-block">
-        <div class="brand">◈ ReqSys</div>
+        <div class="brand"><span class="brand-dot">R</span> ReqSys Enterprise</div>
         <div class="muted mt-1">SaaS Interno · v2 Enterprise</div>
-        <v-chip size="x-small" :color="environmentColor" variant="flat" class="mt-2 req-env-chip">
-          {{ environmentLabel }}
-        </v-chip>
+        <span class="figma-pill figma-pill--compact mt-2 d-inline-block">Ambiente: {{ ambienteDrawerLabel }}</span>
       </div>
       <v-divider />
 
@@ -103,12 +99,15 @@ const environmentLabel = computed(() => {
   return value.toUpperCase()
 })
 
-const environmentColor = computed(() => {
-  const value = (environment.value || '').toLowerCase()
-  if (['prod', 'producao', 'production'].includes(value)) return 'red'
-  if (['staging', 'homolog', 'homologacao', 'hml'].includes(value)) return 'amber'
-  if (['dev', 'development', 'desenvolvimento'].includes(value)) return 'blue'
-  return 'grey'
+const environmentLabelShort = computed(() => {
+  const value = (environment.value || 'dev').toLowerCase()
+  if (['prod', 'producao', 'production'].includes(value)) return 'prod'
+  if (['staging', 'homolog', 'homologacao', 'hml'].includes(value)) return 'stg'
+  return 'dev'
+})
+
+const ambienteDrawerLabel = computed(() => {
+  return (environment.value || 'desenvolvimento').replace(/_/g, ' ')
 })
 
 watch(mobile, (isMobile) => {
@@ -160,13 +159,25 @@ function sair() {
 
 <style scoped>
 .req-appbar {
-  background: var(--accent) !important;
+  background: rgba(2, 6, 23, 0.92) !important;
 }
 .brand-sm {
-  color: #fff;
+  color: var(--text);
   font-weight: 800;
   font-size: 16px;
   letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.brand-dot--sm {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+.figma-pill--compact {
+  padding: 4px 10px;
+  font-size: 11px;
 }
 .req-brand-block {
   min-width: 0;
@@ -174,10 +185,6 @@ function sair() {
 .req-nav-list {
   max-height: calc(100vh - 176px);
   overflow-y: auto;
-}
-.req-env-chip {
-  font-weight: 700;
-  letter-spacing: 0;
 }
 .nav-item {
   border-radius: 8px;
@@ -196,7 +203,7 @@ function sair() {
 .user-initials {
   font-size: 12px;
   font-weight: 700;
-  color: #000;
+  color: #111;
 }
 .user-name {
   font-size: 13px;

@@ -2,22 +2,26 @@
   <section class="dashboard-operacional" data-testid="route-dashboard" aria-labelledby="titulo-dashboard">
     <div class="dashboard-header">
       <div>
-        <p class="eyebrow">ReqSys · Trilha C · Dashboard Operacional</p>
+        <p class="figma-eyebrow">ReqSys · Trilha C · Dashboard Operacional</p>
         <h1 id="titulo-dashboard">Dashboard de Requisitos</h1>
         <p class="muted dashboard-subtitle">
-          Visão consolidada com semáforo operacional, cards clicáveis e drill-down filtrado para requisitos,
-          pipeline, integrações e analytics.
+          Visão consolidada com semáforo operacional, cards clicáveis e drill-down filtrado.
         </p>
       </div>
       <div class="header-actions">
-        <v-chip size="small" color="amber" variant="tonal" data-testid="ambiente-chip">
-          {{ ambienteLabel }}
-        </v-chip>
-        <SemaforoChip :value="semaforoGeralValor" size="large" data-testid="dashboard-semaforo-geral" />
+        <span class="figma-pill" data-testid="ambiente-chip">Ambiente: {{ ambienteLabel }}</span>
+        <div
+          class="figma-semaforo-geral"
+          :class="`figma-semaforo-geral--${semaforoGeralValor}`"
+          data-testid="dashboard-semaforo-geral"
+        >
+          <span class="figma-semaforo-dot" :class="`figma-semaforo-dot--${semaforoGeralValor}`" />
+          Geral: {{ semaforoGeralLabel }}
+        </div>
         <v-btn
-          color="amber"
+          color="primary"
           variant="flat"
-          prepend-icon="mdi-refresh"
+          class="figma-btn-atualizar"
           :loading="carregando"
           data-testid="dashboard-atualizar"
           @click="carregarTudo"
@@ -29,118 +33,66 @@
 
     <p v-if="erro" class="erro" role="alert">{{ erro }}</p>
 
-    <v-row dense class="mt-2">
-      <v-col v-for="card in cards" :key="card.id" cols="12" sm="6" lg="3">
-        <OperationalMetricCard
-          :label="card.label"
-          :value="card.value"
-          :semaforo="card.semaforo"
-          :icon="card.icon"
-          :hint="card.hint"
-          :test-id="`metric-card-${card.id}`"
-          @drilldown="irPara(card.rota)"
-        />
-      </v-col>
-    </v-row>
+    <div class="metrics-grid">
+      <OperationalMetricCard
+        v-for="card in cards"
+        :key="card.id"
+        :label="card.label"
+        :value="card.value"
+        :semaforo="card.semaforo"
+        :icon="card.icon"
+        :hint="card.hint"
+        :test-id="`metric-card-${card.id}`"
+        @drilldown="irPara(card.rota)"
+      />
+    </div>
 
-    <v-row class="mt-2" dense>
-      <v-col cols="12" lg="7">
-        <v-card class="panel" elevation="0">
-          <v-card-title>Pipeline operacional</v-card-title>
-          <v-card-subtitle>Etapas clicáveis com drill-down para o analítico correspondente.</v-card-subtitle>
-          <v-card-text>
-            <v-timeline density="compact" side="end" truncate-line="both">
-              <v-timeline-item
-                v-for="step in pipelineSteps"
-                :key="step.titulo"
-                :dot-color="step.cor"
-              >
-                <div
-                  class="step-row step-row--clickable"
-                  role="button"
-                  tabindex="0"
-                  :data-testid="`pipeline-step-${step.id}`"
-                  @click="irPara(step.rota)"
-                  @keyup.enter="irPara(step.rota)"
-                  @keyup.space.prevent="irPara(step.rota)"
-                >
-                  <div>
-                    <strong>{{ step.titulo }}</strong>
-                    <div class="muted">{{ step.descricao }}</div>
-                  </div>
-                  <div class="step-actions">
-                    <v-tooltip :text="step.tooltip" location="top">
-                      <template #activator="{ props }">
-                        <v-icon v-bind="props" icon="mdi-help-circle-outline" size="16" class="step-help" @click.stop />
-                      </template>
-                    </v-tooltip>
-                    <v-btn size="small" variant="tonal" color="amber" @click.stop="irPara(step.rota)">
-                      Abrir analítico
-                    </v-btn>
-                  </div>
-                </div>
-              </v-timeline-item>
-            </v-timeline>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" lg="5">
-        <v-card class="panel" elevation="0" data-testid="dashboard-info-card">
-          <v-card-title>Informações do sistema</v-card-title>
-          <v-card-text>
-            <div class="info-line">
-              <span class="muted">Total de requisitos:</span>
-              <strong>{{ totalRequisitosInfo }}</strong>
+    <div class="lower-panels">
+      <section class="figma-panel pipeline-panel">
+        <h2>Pipeline operacional</h2>
+        <p class="panel-lead">Etapas clicáveis com drill-down para o analítico correspondente.</p>
+        <div class="timeline-steps">
+          <div
+            v-for="step in pipelineSteps"
+            :key="step.id"
+            class="timeline-step"
+            role="button"
+            tabindex="0"
+            :data-testid="`pipeline-step-${step.id}`"
+            @click="irPara(step.rota)"
+            @keyup.enter="irPara(step.rota)"
+            @keyup.space.prevent="irPara(step.rota)"
+          >
+            <div>
+              <strong>{{ step.titulo }}</strong>
+              <span>{{ step.descricao }}</span>
             </div>
-            <div class="info-line">
-              <span class="muted">Status:</span>
-              <SemaforoChip :value="statusSistemaSemaforo" size="x-small" />
-              <strong>{{ sistemaStatus }}</strong>
-            </div>
-            <div class="info-line">
-              <span class="muted">Atualizado em:</span>
-              <strong>{{ timestampLabel }}</strong>
-            </div>
+            <span class="step-btn">Abrir analítico</span>
+          </div>
+        </div>
+      </section>
 
-            <v-divider class="my-3" />
-
-            <div class="muted mb-2">Destinos analíticos</div>
-            <v-list density="compact" class="dashboard-list">
-              <v-list-item
-                v-for="destino in destinosAnaliticos"
-                :key="destino.path"
-                :prepend-icon="destino.icon"
-                :title="destino.title"
-                :subtitle="destino.subtitle"
-                role="button"
-                tabindex="0"
-                :data-testid="`destino-${destino.id}`"
-                @click="irPara({ path: destino.path, query: destino.query })"
-                @keyup.enter="irPara({ path: destino.path, query: destino.query })"
-              />
-            </v-list>
-
-            <v-divider class="my-3" />
-
-            <div class="muted mb-2">Endpoints críticos</div>
-            <v-list density="compact" class="dashboard-list">
-              <v-list-item
-                v-for="ep in endpointsCriticos"
-                :key="`${ep.metodo}-${ep.url}`"
-                :title="ep.titulo"
-                :subtitle="`${ep.metodo} ${ep.url}`"
-                prepend-icon="mdi-api"
-                role="button"
-                tabindex="0"
-                @click="irPara({ path: '/monitoramento-operacional', query: { secao: 'runtime' } })"
-                @keyup.enter="irPara({ path: '/monitoramento-operacional', query: { secao: 'runtime' } })"
-              />
-            </v-list>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
+      <section class="figma-panel info-panel" data-testid="dashboard-info-card">
+        <h2>Informações do sistema</h2>
+        <p class="panel-lead">Destinos analíticos e endpoints críticos.</p>
+        <div class="figma-list">
+          <div
+            v-for="item in painelDireito"
+            :key="item.id"
+            class="figma-list-item"
+            role="button"
+            tabindex="0"
+            :data-testid="item.testId"
+            @click="irPara(item.rota)"
+            @keyup.enter="irPara(item.rota)"
+            @keyup.space.prevent="irPara(item.rota)"
+          >
+            <strong>{{ item.title }}</strong>
+            <small>{{ item.subtitle }}</small>
+          </div>
+        </div>
+      </section>
+    </div>
   </section>
 </template>
 
@@ -148,10 +100,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import OperationalMetricCard from '../components/OperationalMetricCard.vue'
-import SemaforoChip from '../components/SemaforoChip.vue'
 import { useRequisitosStore } from '../stores/requisitos'
 import { api } from '../services/api'
-import { semaforoGeral } from '../utils/filtrosMonitoramento'
+import { semaforoGeral, normalizarSemaforo } from '../utils/filtrosMonitoramento'
 import { contarIntegracoesPorStatus } from '../utils/filtrosIntegracao'
 import { carregarHistoricoGovbi, contarConsultasGovbi } from '../utils/filtrosGovbi'
 import { achatarHistoricoPipeline, carregarHistoricoPipeline, contarEtapasPipeline } from '../utils/filtrosPipeline'
@@ -315,48 +266,84 @@ const resumoSemaforo = computed(() => {
 })
 
 const semaforoGeralValor = computed(() => semaforoGeral(resumoSemaforo.value))
+const semaforoGeralLabel = computed(() => normalizarSemaforo(semaforoGeralValor.value).label)
 
 const pipelineSteps = [
   {
     id: 'entrada',
     titulo: 'Entrada',
     descricao: 'SharePoint, Forms e planilhas Excel',
-    cor: 'blue',
-    tooltip: 'Fontes de entrada da demanda de negócio.',
     rota: { path: '/hub-lowcode' },
   },
   {
     id: 'normalizacao',
     titulo: 'Normalização e validação',
     descricao: 'Padronização e checagens de consistência',
-    cor: 'green',
-    tooltip: 'Aplicação de regras para garantir qualidade dos dados.',
     rota: { path: '/pipeline' },
   },
   {
     id: 'estruturacao',
     titulo: 'Estruturação do requisito',
     descricao: 'Requisito, histórias e backlog',
-    cor: 'orange',
-    tooltip: 'Transformação da demanda em artefatos rastreáveis.',
     rota: { path: '/requisitos' },
   },
   {
     id: 'publicacao',
     titulo: 'Publicação e auditoria',
     descricao: 'Redmine, Planner e trilha de auditoria',
-    cor: 'purple',
-    tooltip: 'Distribuição para execução e registro de governança.',
     rota: { path: '/painel-integracao' },
   },
 ]
 
-const destinosAnaliticos = [
-  { id: 'analytics', path: '/analytics', icon: 'mdi-chart-box-outline', title: 'Analytics navegável', subtitle: 'Hub executivo com runtime e drill-down' },
-  { id: 'monitoramento', path: '/monitoramento-operacional', query: { estado: 'vermelho' }, icon: 'mdi-alert-circle-outline', title: 'Incidentes críticos', subtitle: 'Itens em vermelho ou bloqueados' },
-  { id: 'estatisticas', path: '/estatisticas', icon: 'mdi-chart-line', title: 'Estatísticas auditáveis', subtitle: 'Indicadores com fonte e fórmula' },
-  { id: 'integracoes', path: '/painel-integracao', query: { status: 'erro' }, icon: 'mdi-connection', title: 'Erros de integração', subtitle: 'Eventos com falha e correlation_id' },
-]
+const painelDireito = computed(() => {
+  const endpoint = (dashboardInfo.value.endpoints_criticos || []).find(
+    (ep) => String(ep.url || '').includes('/dashboard/requisitos'),
+  ) || (dashboardInfo.value.endpoints_criticos || [])[0]
+
+  const items = [
+    {
+      id: 'analytics',
+      title: 'Analytics navegável',
+      subtitle: 'Hub executivo com runtime',
+      rota: { path: '/analytics' },
+      testId: 'destino-analytics',
+    },
+    {
+      id: 'monitoramento',
+      title: 'Incidentes críticos',
+      subtitle: 'Itens em vermelho ou bloqueados',
+      rota: { path: '/monitoramento-operacional', query: { estado: 'vermelho' } },
+      testId: 'destino-monitoramento',
+    },
+    {
+      id: 'estatisticas',
+      title: 'Estatísticas auditáveis',
+      subtitle: 'Indicadores com fonte e fórmula',
+      rota: { path: '/estatisticas' },
+      testId: 'destino-estatisticas',
+    },
+  ]
+
+  if (endpoint) {
+    items.push({
+      id: 'endpoint-critico',
+      title: `${endpoint.metodo} ${endpoint.url}`,
+      subtitle: endpoint.titulo || 'Endpoint crítico de métricas',
+      rota: { path: '/monitoramento-operacional', query: { secao: 'runtime' } },
+      testId: 'destino-endpoint-critico',
+    })
+  } else {
+    items.push({
+      id: 'endpoint-critico',
+      title: 'GET /v1/dashboard/requisitos',
+      subtitle: 'Endpoint crítico de métricas',
+      rota: { path: '/monitoramento-operacional', query: { secao: 'runtime' } },
+      testId: 'destino-endpoint-critico',
+    })
+  }
+
+  return items
+})
 
 function irPara(rota) {
   if (!rota?.path) return
@@ -365,26 +352,7 @@ function irPara(rota) {
 
 const dashboardInfo = computed(() => store.dashboardInfo || {})
 const resumo = computed(() => dashboardInfo.value.resumo || {})
-
-const totalRequisitosInfo = computed(() => resumo.value.total_requisitos ?? store.metricas.total ?? 0)
-const sistemaStatus = computed(() => resumo.value.sistema_status || 'indisponível')
-const statusSistemaSemaforo = computed(() => {
-  const status = String(sistemaStatus.value).toLowerCase()
-  if (status.includes('ok') || status.includes('healthy') || status.includes('dispon') || status.includes('operacional')) return 'verde'
-  if (status.includes('degrad') || status.includes('aten')) return 'amarelo'
-  if (status.includes('indispon') || status.includes('erro') || status.includes('crit')) return 'vermelho'
-  return 'desconhecido'
-})
-const ambienteLabel = computed(() => (resumo.value.ambiente || 'desconhecido').replace('_', ' '))
-const endpointsCriticos = computed(() => dashboardInfo.value.endpoints_criticos || [])
-
-const timestampLabel = computed(() => {
-  const raw = dashboardInfo.value.timestamp
-  if (!raw) return '—'
-  const date = new Date(raw)
-  if (Number.isNaN(date.getTime())) return raw
-  return date.toLocaleString('pt-BR')
-})
+const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento').replace(/_/g, ' '))
 </script>
 
 <style scoped>
@@ -399,7 +367,7 @@ const timestampLabel = computed(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
   flex-wrap: wrap;
 }
 
@@ -410,85 +378,102 @@ const timestampLabel = computed(() => {
   flex-wrap: wrap;
 }
 
-.eyebrow {
-  margin: 0 0 4px;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-h1 {
-  margin: 0;
-  font-size: clamp(24px, 4vw, 38px);
-  line-height: 1.05;
-}
-
 .dashboard-subtitle {
   max-width: 62ch;
+  margin-top: 8px;
+  font-size: 14px;
 }
 
-.muted {
-  color: var(--text-muted, #6b7280);
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-top: 24px;
 }
 
-.panel {
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 16px;
+.lower-panels {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 16px;
+  margin-top: 18px;
 }
 
-.erro {
-  border: 1px solid #d1242f;
-  border-radius: 8px;
-  color: #d1242f;
-  padding: 0.75rem;
+.pipeline-panel h2,
+.info-panel h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
 }
 
-.step-row {
+.panel-lead {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.timeline-steps {
+  display: grid;
+  gap: 12px;
+}
+
+.timeline-step {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  flex-wrap: wrap;
-}
-
-.step-row--clickable {
-  cursor: pointer;
-  border-radius: 10px;
-  padding: 4px 6px;
-  margin: -4px -6px;
-  transition: background 0.16s ease;
-}
-
-.step-row--clickable:hover,
-.step-row--clickable:focus-visible {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  outline-offset: 2px;
-}
-
-.step-actions {
-  display: flex;
   align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.timeline-step:hover,
+.timeline-step:focus-visible {
+  background: rgba(243, 146, 0, 0.08);
+  outline: none;
+}
+
+.timeline-step strong {
+  display: block;
+}
+
+.timeline-step span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.step-btn {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.figma-list {
+  display: grid;
   gap: 8px;
 }
 
-.step-help {
-  color: var(--muted);
-  cursor: help;
+.figma-btn-atualizar {
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  padding-inline: 14px !important;
 }
 
-.info-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
+.erro {
+  border: 1px solid var(--red);
+  border-radius: 8px;
+  color: var(--red);
+  padding: 0.75rem;
 }
 
-.dashboard-list {
-  background: transparent !important;
+@media (max-width: 1100px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .lower-panels {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 700px) {
@@ -498,6 +483,16 @@ h1 {
 
   .header-actions {
     width: 100%;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .figma-pill,
+  .figma-btn-atualizar {
+    width: 100%;
+    text-align: center;
   }
 }
 </style>

@@ -521,7 +521,7 @@ onMounted(async () => {
 .eyebrow { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 .erro { border: 1px solid #d1242f; border-radius: 8px; color: #d1242f; padding: 0.75rem; }
 .painel, .filtros { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 16px; }
-.runtime { background: linear-gradient(135deg, #f6f8fa, #ffffff); }
+.runtime { background: linear-gradient(135deg, var(--bg-gradient-top), var(--bg)); }
 .subcabecalho { display: flex; justify-content: flex-end; }
 .correlation { color: #57606a; font-size: 0.85rem; }
 .filtros-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
