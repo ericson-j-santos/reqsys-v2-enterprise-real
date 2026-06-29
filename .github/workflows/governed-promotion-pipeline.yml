@@ -51,11 +51,71 @@ jobs:
       target_branch: ${{ steps.policy.outputs.target_branch }}
       blocked_reason: ${{ steps.policy.outputs.blocked_reason }}
       risk_level: ${{ steps.policy.outputs.risk_level }}
+      release_readiness_score: ${{ steps.policy.outputs.release_readiness_score }}
+      release_readiness: ${{ steps.policy.outputs.release_readiness }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download Release Validation Layer artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: release-validation-layer-evidence
+          path: audit/release-validation
+
+      - name: Download coordenador status for fallback generation
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: coordenador-status-evidence
+          path: artifacts/coordenador-status
+
+      - name: Gerar release validation quando artifact ausente
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f audit/release-validation/release-validation-layer.json ]]; then
+            python scripts/release_validation_layer.py \
+              --repo "${GITHUB_REPOSITORY}" \
+              --branch main \
+              --run-id "${GITHUB_RUN_ID}" \
+              --event-name "${GITHUB_EVENT_NAME}" \
+              --output-dir audit/release-validation
+          fi
+
+      - name: Avaliar pre-condicao release validation
+        id: release_gate
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ github.event.inputs.target_environment }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/governed-promotion
+          set +e
+          python scripts/evaluate_promotion_release_gate.py \
+            --target-environment "$TARGET_ENVIRONMENT" \
+            --dry-run "$DRY_RUN" \
+            --output-json artifacts/governed-promotion/release-validation-gate.json
+          gate_exit=$?
+          set -e
+          gate=$(cat artifacts/governed-promotion/release-validation-gate.json)
+          echo "$gate"
+          echo "approved=$(echo "$gate" | jq -r '.approved')" >> "$GITHUB_OUTPUT"
+          echo "blocked_reason=$(echo "$gate" | jq -r '.blocked_reason // .promotion_block_reason // empty')" >> "$GITHUB_OUTPUT"
+          echo "release_readiness_score=$(echo "$gate" | jq -r '.release_readiness_score // empty')" >> "$GITHUB_OUTPUT"
+          echo "release_readiness=$(echo "$gate" | jq -r '.readiness // empty')" >> "$GITHUB_OUTPUT"
+          echo "promotion_would_block=$(echo "$gate" | jq -r '.promotion_would_block // false')" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Avaliar política de promoção
         id: policy
@@ -65,6 +125,11 @@ jobs:
           DRY_RUN: ${{ github.event.inputs.dry_run }}
           CHANGE_TICKET: ${{ github.event.inputs.change_ticket }}
           APPROVE_PROD_PROMOTION: ${{ github.event.inputs.approve_prod_promotion }}
+          RELEASE_GATE_APPROVED: ${{ steps.release_gate.outputs.approved }}
+          RELEASE_GATE_BLOCKED_REASON: ${{ steps.release_gate.outputs.blocked_reason }}
+          RELEASE_READINESS_SCORE: ${{ steps.release_gate.outputs.release_readiness_score }}
+          RELEASE_READINESS: ${{ steps.release_gate.outputs.release_readiness }}
+          PROMOTION_WOULD_BLOCK: ${{ steps.release_gate.outputs.promotion_would_block }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/governed-promotion
@@ -117,13 +182,25 @@ jobs:
             fi
           fi
 
+          if [ "$RELEASE_GATE_APPROVED" = "false" ]; then
+            if [ -z "$blocked_reason" ]; then
+              blocked_reason="$RELEASE_GATE_BLOCKED_REASON"
+            elif [ -n "$RELEASE_GATE_BLOCKED_REASON" ]; then
+              blocked_reason="$blocked_reason; $RELEASE_GATE_BLOCKED_REASON"
+            fi
+          fi
+
+          if [ "$PROMOTION_WOULD_BLOCK" = "true" ] && [ "$DRY_RUN" = "true" ]; then
+            risk_level="high"
+          fi
+
           approved="false"
           if [ -z "$blocked_reason" ]; then
             approved="true"
           fi
 
           jq -n \
-            --arg schema_version "1.0.0" \
+            --arg schema_version "1.1.0" \
             --arg correlation_id "$CORRELATION_ID" \
             --arg source_ref "$SOURCE_REF" \
             --arg target_environment "$TARGET_ENVIRONMENT" \
@@ -133,7 +210,11 @@ jobs:
             --arg risk_level "$risk_level" \
             --arg blocked_reason "$blocked_reason" \
             --arg change_ticket "$CHANGE_TICKET" \
-            '{schema_version:$schema_version,correlation_id:$correlation_id,source_ref:$source_ref,target_environment:$target_environment,target_branch:$target_branch,dry_run:($dry_run=="true"),approved:($approved=="true"),risk_level:$risk_level,blocked_reason:$blocked_reason,change_ticket:$change_ticket}' \
+            --arg release_readiness_score "$RELEASE_READINESS_SCORE" \
+            --arg release_readiness "$RELEASE_READINESS" \
+            --arg promotion_would_block "$PROMOTION_WOULD_BLOCK" \
+            --slurpfile release_gate artifacts/governed-promotion/release-validation-gate.json \
+            '{schema_version:$schema_version,correlation_id:$correlation_id,source_ref:$source_ref,target_environment:$target_environment,target_branch:$target_branch,dry_run:($dry_run=="true"),approved:($approved=="true"),risk_level:$risk_level,blocked_reason:$blocked_reason,change_ticket:$change_ticket,release_readiness_score:(if $release_readiness_score=="" then null else ($release_readiness_score|tonumber) end),release_readiness:(if $release_readiness=="" then null else $release_readiness end),promotion_would_block:($promotion_would_block=="true"),release_validation_gate:$release_gate[0]}' \
             > artifacts/governed-promotion/promotion-policy.json
 
           cat artifacts/governed-promotion/promotion-policy.json
@@ -142,6 +223,8 @@ jobs:
           echo "target_branch=$target_branch" >> "$GITHUB_OUTPUT"
           echo "blocked_reason=$blocked_reason" >> "$GITHUB_OUTPUT"
           echo "risk_level=$risk_level" >> "$GITHUB_OUTPUT"
+          echo "release_readiness_score=$RELEASE_READINESS_SCORE" >> "$GITHUB_OUTPUT"
+          echo "release_readiness=$RELEASE_READINESS" >> "$GITHUB_OUTPUT"
 
       - name: Publicar artifact de política
         uses: actions/upload-artifact@v4
@@ -175,7 +258,7 @@ jobs:
             --base "$TARGET_BRANCH" \
             --head "$SOURCE_REF" \
             --title "promotion(homolog): promover $SOURCE_REF" \
-            --body "Promoção governada para homolog. Correlation ID: $CORRELATION_ID. Artifact: governed-promotion-evidence." \
+            --body "Promoção governada para homolog. Correlation ID: $CORRELATION_ID. Artifacts: governed-promotion-evidence, release-validation-layer-evidence." \
             --draft
 
   summary:
@@ -198,5 +281,7 @@ jobs:
             echo "| Dry run | ${{ github.event.inputs.dry_run }} |"
             echo "| Aprovado | ${{ needs.promotion-policy.outputs.approved }} |"
             echo "| Risco | ${{ needs.promotion-policy.outputs.risk_level }} |"
+            echo "| Release readiness score | ${{ needs.promotion-policy.outputs.release_readiness_score }} |"
+            echo "| Release readiness | ${{ needs.promotion-policy.outputs.release_readiness }} |"
             echo "| Bloqueio | ${{ needs.promotion-policy.outputs.blocked_reason }} |"
           } >> "$GITHUB_STEP_SUMMARY"

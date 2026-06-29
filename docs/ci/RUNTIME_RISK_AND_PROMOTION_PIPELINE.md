@@ -82,6 +82,21 @@ blockers.txt
 
 Produção permanece bloqueada para promoção real neste incremento. Mesmo com confirmação textual, o workflow inicial não executa mudança real em produção.
 
+### Pré-condição Release Validation Layer
+
+Antes de aprovar promoção, o pipeline:
+
+1. Baixa `release-validation-layer-evidence` (ou regenera via script quando ausente).
+2. Executa `scripts/evaluate_promotion_release_gate.py`.
+3. Incorpora o resultado em `promotion-policy.json` (`release_validation_gate`, `release_readiness_score`).
+
+| Ambiente | Score mínimo | Readiness |
+|---|---:|---|
+| homolog | 70% | ready, ready_with_observation, needs_review |
+| prod | 85% | ready, ready_with_observation |
+
+Promoção real (`dry_run=false`) é bloqueada quando o artifact está ausente ou a release validation reprova.
+
 ## Evidência
 
 O promotion pipeline publica:
@@ -94,6 +109,7 @@ Conteúdo principal:
 
 ```text
 promotion-policy.json
+release-validation-gate.json
 changed-files.txt
 ```
 
