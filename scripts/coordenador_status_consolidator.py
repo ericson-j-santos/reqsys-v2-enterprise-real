@@ -76,6 +76,7 @@ def build_increment_gate(
     health: dict[str, Any],
     watchdog: dict[str, Any] | None = None,
     release_validation: dict[str, Any] | None = None,
+    runtime_validation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     backlog = health.get("automatic_backlog") or []
     critical_gaps = sum(1 for item in backlog if str(item.get("id", "")).startswith("OPS-GAP-"))
@@ -95,6 +96,13 @@ def build_increment_gate(
         blockers.append("open_pr_queue_pressure")
     if release_validation and release_validation.get("readiness") == "blocked":
         blockers.append("release_not_ready")
+    if runtime_validation:
+        for item in runtime_validation.get("blockers") or []:
+            if item.endswith("_failed") or item in {
+                "public_runtime_not_evidenced",
+                "operational_risk_below_gold_threshold",
+            }:
+                blockers.append(item)
 
     allowed_types = ["gap_fix", "hotfix", "consolidate"]
     if duplicate_groups:
@@ -480,11 +488,19 @@ def consolidate(
     observability_hub: dict[str, Any] | None = None,
     contract_governance: dict[str, Any] | None = None,
     release_validation: dict[str, Any] | None = None,
+    runtime_validation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     global_state = merge_state(str(orchestrator.get("state") or "unknown"), str(health.get("state") or "unknown"))
     backlog = health.get("automatic_backlog") or []
     critical_gaps = sum(1 for item in backlog if str(item.get("id", "")).startswith("OPS-GAP-"))
-    increment_gate = build_increment_gate(global_state, orchestrator, health, watchdog, release_validation)
+    increment_gate = build_increment_gate(
+        global_state,
+        orchestrator,
+        health,
+        watchdog,
+        release_validation,
+        runtime_validation,
+    )
 
     runtime_score = health.get("runtime_score")
     if runtime_score is None:
@@ -546,6 +562,17 @@ def consolidate(
                 "risk": (release_validation or {}).get("risk"),
                 "generated_at": (release_validation or {}).get("generated_at"),
             },
+            "runtime_validation": {
+                "available": runtime_validation is not None,
+                "state": (runtime_validation or {}).get("overall_state"),
+                "validation_score": (runtime_validation or {}).get("validation_score"),
+                "operational_risk_percent": (runtime_validation or {}).get("operational_risk_percent"),
+                "gold_standard_score": ((runtime_validation or {}).get("gold_standard_operational_risk") or {}).get(
+                    "overall_score"
+                ),
+                "public_runtime_ready": (runtime_validation or {}).get("public_runtime_ready"),
+                "post_merge_ready": (runtime_validation or {}).get("post_merge_ready"),
+            },
         },
         "summary": {
             "open_prs": (orchestrator.get("summary") or {}).get("open_prs", 0),
@@ -563,6 +590,11 @@ def consolidate(
             "openapi_semantic_drift_count": int((contract_governance or {}).get("semantic_drift_count") or 0),
             "release_readiness_score": release_score,
             "release_readiness": (release_validation or {}).get("readiness"),
+            "runtime_validation_score": (runtime_validation or {}).get("validation_score"),
+            "operational_risk_percent": (runtime_validation or {}).get("operational_risk_percent"),
+            "gold_standard_operational_risk": (
+                (runtime_validation or {}).get("gold_standard_operational_risk") or {}
+            ).get("overall_score"),
         },
         "automatic_backlog": backlog,
         "recommended_actions": build_recommended_actions(
@@ -765,6 +797,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional Release Validation Layer JSON path",
     )
     parser.add_argument(
+        "--runtime-validation-json",
+        default="artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json",
+        help="Optional Runtime Validation Consolidator snapshot path",
+    )
+    parser.add_argument(
         "--fail-on-red",
         action="store_true",
         help="Exit 1 when consolidated state is red (default: always exit 0 after successful write)",
@@ -814,6 +851,9 @@ def main() -> int:
     release_validation = (
         load_json(Path(args.release_validation_json)) if Path(args.release_validation_json).exists() else None
     )
+    runtime_validation = (
+        load_json(Path(args.runtime_validation_json)) if Path(args.runtime_validation_json).exists() else None
+    )
 
     if args.orchestrator_json and args.health_json:
         orchestrator = load_json(Path(args.orchestrator_json))
@@ -848,6 +888,7 @@ def main() -> int:
         observability_hub,
         contract_governance,
         release_validation,
+        runtime_validation,
     )
 
     orchestrator_dir.mkdir(parents=True, exist_ok=True)

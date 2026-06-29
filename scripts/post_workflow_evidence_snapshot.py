@@ -23,6 +23,7 @@ DEFAULT_INPUTS = {
     "ci_intelligence": Path("artifacts/operational-ci-intelligence/operational-ci-intelligence.json"),
     "coordenador_status": Path("artifacts/coordenador-status/coordenador-status.json"),
     "observability_hub": Path("artifacts/operational-observability-hub/operational-observability-hub.json"),
+    "runtime_validation": Path("artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json"),
 }
 
 
@@ -48,6 +49,13 @@ def compute_maturity_score(sources: dict[str, dict[str, Any] | None]) -> float:
     runtime = sources.get("runtime_health") or {}
     if runtime.get("maturity_percent") is not None:
         scores.append(float(runtime["maturity_percent"]))
+
+    validation = sources.get("runtime_validation") or {}
+    if validation.get("validation_score") is not None:
+        scores.append(float(validation["validation_score"]))
+    gold = (validation.get("gold_standard_operational_risk") or {}).get("overall_score")
+    if gold is not None:
+        scores.append(float(gold))
 
     ci = sources.get("ci_intelligence") or {}
     if ci.get("operational_score") is not None:
