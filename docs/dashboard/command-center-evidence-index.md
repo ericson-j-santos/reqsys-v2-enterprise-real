@@ -15,6 +15,7 @@ Catalogar as evidencias operacionais usadas pelo command center do ReqSys, mante
 | Descoberta de artifacts | `audit/artifact-discovery/operational-artifact-discovery-index.json` | Dashboard dinamico |
 | Readiness de release | `audit/release-readiness/golden-release-readiness.json` | Dashboard dinamico |
 | Release Validation Layer | `audit/release-validation/release-validation-layer.json` | Dashboard dinamico + coordenador |
+| Release executive dashboard | `audit/release-validation/executive-release-dashboard.json` | Dashboard dinamico + revisao executiva |
 | Readiness do command center | `audit/command-center/command-center-readiness.json` | Dashboard dinamico |
 | Validacao de contratos | `audit/extended-contract-validation/extended-operational-contract-validation.json` | Dashboard dinamico |
 | Delivery readiness | `audit/delivery-readiness/delivery-readiness-report.json` | Operational Evidence Hub |
@@ -39,17 +40,28 @@ Catalogar as evidencias operacionais usadas pelo command center do ReqSys, mante
 | `docs/contracts/operational-maturity-score.schema.json` | maturidade |
 | `docs/contracts/operational-artifact-discovery-index.schema.json` | descoberta |
 | `docs/contracts/release-readiness.schema.json` | readiness |
+| `docs/contracts/release-validation-layer.schema.json` | release validation layer |
 | `docs/contracts/command-center-readiness.schema.json` | command center |
 | `docs/contracts/contract-validation-report.schema.json` | validacao de contratos |
+
+## Rastreabilidade Release Validation Layer
+
+| Item | Fonte canonica | Evidencia esperada |
+|---|---|---|
+| Agregador | `scripts/release_validation_layer.py` | `audit/release-validation/release-validation-layer.json` |
+| Dashboard executivo | `scripts/release_validation_layer.py` | `audit/release-validation/executive-release-dashboard.json` |
+| Contrato | `docs/contracts/release-validation-layer.schema.json` | Validacao de schema em artifact-contract validation |
+| Runbook | `docs/runbooks/release-validation-layer.md` | Procedimento operacional e rollback |
+| Coordenador | `scripts/coordenador_status_consolidator.py` | `summary.release_readiness_score` e `sources.release_validation` |
 
 ## Maturidade de evidencia
 
 | Dimensao | Atual | Alvo | Gap |
 |---|---:|---:|---:|
-| Evidencias catalogadas | 96% | 99% | 3 p.p. |
-| Contratos associados | 95% | 99% | 4 p.p. |
+| Evidencias catalogadas | 97% | 99% | 2 p.p. |
+| Contratos associados | 96% | 99% | 3 p.p. |
 | Dashboard consumidor | 99% | 99% | 0 p.p. |
-| Runbooks relacionados | 96% | 99% | 3 p.p. |
+| Runbooks relacionados | 97% | 99% | 2 p.p. |
 
 ## Regras
 
@@ -57,3 +69,4 @@ Catalogar as evidencias operacionais usadas pelo command center do ReqSys, mante
 - Gates obrigatorios continuam sendo fonte decisoria principal para merge.
 - Estado alvo nao deve ser confundido com estado evidenciado.
 - Novos artifacts devem entrar neste indice na mesma rodada ou na rodada seguinte.
+- Todo artifact de release deve possuir fonte canonica, contrato, consumidor e procedimento de rollback rastreaveis.
