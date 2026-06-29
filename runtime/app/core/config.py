@@ -5,7 +5,7 @@ import os
 
 class RuntimeSettings(BaseModel):
     service_name: str = "reqsys-runtime"
-    schema_version: str = "0.5.0"
+    schema_version: str = "0.6.0"
     enable_async_worker: bool = False
     max_tentativas: int = 3
 
