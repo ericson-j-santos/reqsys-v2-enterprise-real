@@ -11,6 +11,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from scripts.agent_increment_gate import main as gate_main  # noqa: E402
 from scripts.coordenador_status_consolidator import (  # noqa: E402
+    build_contract_governance_source,
     build_increment_gate,
     consolidate,
     evaluate_increment_intent,
@@ -310,3 +311,45 @@ def test_consolidator_cli_imports_without_pythonpath(tmp_path: Path) -> None:
     assert completed.returncode == 0, completed.stderr
     payload = json.loads((output_dir / "coordenador-status.json").read_text(encoding="utf-8"))
     assert payload["state"] == "green"
+
+
+def test_build_contract_governance_source_summarizes_drift() -> None:
+    source = build_contract_governance_source(
+        {
+            "version": "0.3.0",
+            "status": "governed",
+            "summary": {"runtime_contract_sync": "partial"},
+            "traceability": {"openapi_to_ci": {"gap": "semantic_backend_route_sync_pending"}},
+            "artifacts": [{"name": "OpenAPI"}],
+        },
+        {"status": "passed", "summary": {"valid": True}},
+        {"status": "drift_detected", "summary": {"drift_count": 2, "missing_in_openapi": 2}},
+    )
+
+    assert source["available"] is True
+    assert source["semantic_drift_count"] == 2
+    assert source["sync_gap"] == "semantic_backend_route_sync_pending"
+
+
+def test_consolidate_includes_contract_governance_without_blocking_increment_gate() -> None:
+    contract_governance = build_contract_governance_source(
+        {"version": "0.3.0", "summary": {}, "traceability": {}, "artifacts": []},
+        {"status": "passed", "summary": {"valid": True}},
+        {"status": "drift_detected", "summary": {"drift_count": 3, "missing_in_openapi": 3}},
+    )
+    report = consolidate(
+        "owner/repo",
+        "main",
+        orchestrator_fixture("green"),
+        health_fixture("green"),
+        contract_governance=contract_governance,
+    )
+
+    assert report["increment_gate"]["new_front_allowed"] is True
+    assert report["summary"]["contract_governance_available"] is True
+    assert report["summary"]["openapi_semantic_drift_count"] == 3
+    assert report["sources"]["contract_governance"]["semantic_drift_count"] == 3
+    assert any(
+        item["action"] == "sincronizar_contrato_openapi_backend"
+        for item in report["recommended_actions"]
+    )

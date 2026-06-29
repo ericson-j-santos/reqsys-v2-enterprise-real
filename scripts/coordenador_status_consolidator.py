@@ -157,6 +157,7 @@ def build_recommended_actions(
     increment_gate: dict[str, Any],
     watchdog: dict[str, Any] | None = None,
     observability_hub: dict[str, Any] | None = None,
+    contract_governance: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
     actions: list[dict[str, str]] = []
     backlog = health.get("automatic_backlog") or []
@@ -257,6 +258,31 @@ def build_recommended_actions(
                     "action": "investigar_drift_multiambiente",
                     "reference": str(drift.get("drift_level")),
                     "detail": f"{drift.get('findings', 0)} achados de drift dev/hml/prod",
+                }
+            )
+
+    if contract_governance and contract_governance.get("available"):
+        drift_count = int(contract_governance.get("semantic_drift_count") or 0)
+        if drift_count > 0:
+            actions.append(
+                {
+                    "priority": "P2",
+                    "action": "sincronizar_contrato_openapi_backend",
+                    "reference": f"drift_count={drift_count}",
+                    "detail": (
+                        "Drift semantico OpenAPI detectado — alinhar paths runtime/requisitos "
+                        f"(missing_in_openapi={contract_governance.get('semantic_diff', {}).get('missing_in_openapi', 0)})"
+                    ),
+                }
+            )
+        sync_gap = contract_governance.get("sync_gap")
+        if sync_gap:
+            actions.append(
+                {
+                    "priority": "P3",
+                    "action": "tratar_gap_contrato_openapi",
+                    "reference": str(sync_gap),
+                    "detail": "Gap de rastreabilidade openapi_to_ci pendente no indice de artifacts",
                 }
             )
 
@@ -374,6 +400,46 @@ def evaluate_increment_intent(
     return False, "tipo_desconhecido", f"Tipo {increment_type} nao reconhecido."
 
 
+def build_contract_governance_source(
+    contract_index: dict[str, Any] | None,
+    openapi_validation: dict[str, Any] | None,
+    semantic_diff: dict[str, Any] | None,
+) -> dict[str, Any]:
+    traceability = (contract_index or {}).get("traceability") or {}
+    openapi_to_ci = traceability.get("openapi_to_ci") or {}
+    semantic_summary = (semantic_diff or {}).get("summary") or {}
+    drift_count = int(semantic_summary.get("drift_count") or 0)
+    validation_status = str((openapi_validation or {}).get("status") or "unknown")
+
+    return {
+        "available": bool(contract_index or openapi_validation or semantic_diff),
+        "contract_index_version": (contract_index or {}).get("version"),
+        "runtime_contract_sync": ((contract_index or {}).get("summary") or {}).get("runtime_contract_sync"),
+        "openapi_validation_status": validation_status,
+        "openapi_validation_passed": validation_status == "passed",
+        "semantic_diff_status": (semantic_diff or {}).get("status"),
+        "semantic_drift_count": drift_count,
+        "sync_gap": openapi_to_ci.get("gap"),
+        "openapi_validation": {
+            "available": bool(openapi_validation),
+            "status": validation_status,
+            "valid": ((openapi_validation or {}).get("summary") or {}).get("valid"),
+        },
+        "semantic_diff": {
+            "available": bool(semantic_diff),
+            "status": (semantic_diff or {}).get("status"),
+            "drift_count": drift_count,
+            "missing_in_backend": semantic_summary.get("missing_in_backend", 0),
+            "missing_in_openapi": semantic_summary.get("missing_in_openapi", 0),
+        },
+        "contract_index": {
+            "available": bool(contract_index),
+            "status": (contract_index or {}).get("status"),
+            "artifacts_count": len((contract_index or {}).get("artifacts") or []),
+        },
+    }
+
+
 def consolidate(
     repo: str,
     branch: str,
@@ -381,6 +447,7 @@ def consolidate(
     health: dict[str, Any],
     watchdog: dict[str, Any] | None = None,
     observability_hub: dict[str, Any] | None = None,
+    contract_governance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     global_state = merge_state(str(orchestrator.get("state") or "unknown"), str(health.get("state") or "unknown"))
     backlog = health.get("automatic_backlog") or []
@@ -436,6 +503,8 @@ def consolidate(
                 "correlation_id": (observability_hub or {}).get("correlation_id"),
                 "pareto_increment": (observability_hub or {}).get("pareto_increment"),
             },
+            "contract_governance": contract_governance
+            or {"available": False, "semantic_drift_count": 0},
         },
         "summary": {
             "open_prs": (orchestrator.get("summary") or {}).get("open_prs", 0),
@@ -448,10 +517,12 @@ def consolidate(
             "regression_state": (health.get("regression_detection") or {}).get("state"),
             "duplicate_pr_groups": increment_gate.get("duplicate_group_count", 0),
             "new_front_allowed": increment_gate.get("new_front_allowed", False),
+            "contract_governance_available": bool((contract_governance or {}).get("available")),
+            "openapi_semantic_drift_count": int((contract_governance or {}).get("semantic_drift_count") or 0),
         },
         "automatic_backlog": backlog,
         "recommended_actions": build_recommended_actions(
-            global_state, orchestrator, health, increment_gate, watchdog, observability_hub
+            global_state, orchestrator, health, increment_gate, watchdog, observability_hub, contract_governance
         ),
         "guardrails": {
             "merge": False,
@@ -469,6 +540,9 @@ def consolidate(
                 "operational-governance-orchestrator.json",
                 "runtime-health-validator.json",
                 "repository-health-report.json",
+                "contract-artifacts-index-v0.3.0.json",
+                "openapi-contract-validation.json",
+                "openapi-semantic-diff.json",
             ],
             "dashboard_entrypoint": "summary.md",
         },
@@ -617,6 +691,21 @@ def parse_args() -> argparse.Namespace:
         help="Optional operational observability hub JSON path",
     )
     parser.add_argument(
+        "--contract-artifacts-index",
+        default="docs/ops-dashboard/data/contract-artifacts-index-v0.3.0.json",
+        help="Optional contract artifacts index JSON path",
+    )
+    parser.add_argument(
+        "--openapi-validation-json",
+        default="artifacts/openapi/openapi-contract-validation.json",
+        help="Optional OpenAPI contract validation artifact path",
+    )
+    parser.add_argument(
+        "--openapi-semantic-diff-json",
+        default="artifacts/openapi/openapi-semantic-diff.json",
+        help="Optional OpenAPI semantic diff artifact path",
+    )
+    parser.add_argument(
         "--fail-on-red",
         action="store_true",
         help="Exit 1 when consolidated state is red (default: always exit 0 after successful write)",
@@ -647,6 +736,15 @@ def main() -> int:
         if default_hub.exists():
             observability_hub = load_json(default_hub)
 
+    contract_index = load_json(Path(args.contract_artifacts_index)) if Path(args.contract_artifacts_index).exists() else None
+    openapi_validation = (
+        load_json(Path(args.openapi_validation_json)) if Path(args.openapi_validation_json).exists() else None
+    )
+    semantic_diff = (
+        load_json(Path(args.openapi_semantic_diff_json)) if Path(args.openapi_semantic_diff_json).exists() else None
+    )
+    contract_governance = build_contract_governance_source(contract_index, openapi_validation, semantic_diff)
+
     if args.orchestrator_json and args.health_json:
         orchestrator = load_json(Path(args.orchestrator_json))
         health = load_json(Path(args.health_json))
@@ -671,7 +769,15 @@ def main() -> int:
         repo = args.repo
         branch = args.branch
 
-    report = consolidate(repo, branch, orchestrator, health, watchdog, observability_hub)
+    report = consolidate(
+        repo,
+        branch,
+        orchestrator,
+        health,
+        watchdog,
+        observability_hub,
+        contract_governance,
+    )
 
     orchestrator_dir.mkdir(parents=True, exist_ok=True)
     health_dir.mkdir(parents=True, exist_ok=True)
