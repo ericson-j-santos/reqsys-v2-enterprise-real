@@ -30,7 +30,7 @@ MERGE_READINESS_HISTORY_JSON = "docs/ops-dashboard/data/merge-readiness-history.
 CONTINUOUS_MONITORING_JSON = "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
 CONTINUOUS_MONITORING_HISTORY_JSON = "docs/ops-dashboard/data/continuous-trilha-d-monitoring-history.json"
 TRILHA_D_WORKFLOW_FILE = "trilha-d-qualidade-governanca.yml"
-COVERAGE_TARGETED_MIN_SCORE = 92.0
+COVERAGE_TARGETED_MIN_SCORE = 93.0
 COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
     "backend/tests/test_hub_lowcode_service_critical_paths.py",
     "backend/tests/test_wiki_publisher_critical_paths.py",
@@ -59,6 +59,18 @@ COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
     "backend/tests/test_codex_governado_service_critical_paths.py",
     "backend/tests/test_gemini_service_critical_paths.py",
     "backend/tests/test_github_launchpad_critical_paths.py",
+    "backend/tests/test_governance_evidence_index_critical_paths.py",
+    "backend/tests/test_trilha_d_history_index_critical_paths.py",
+    "backend/tests/test_continuous_trilha_d_monitoring_index_critical_paths.py",
+    "backend/tests/test_external_sources_registry_critical_paths.py",
+    "backend/tests/test_rbac_critical_paths.py",
+    "backend/tests/test_requisitos_api_critical_paths.py",
+    "backend/tests/test_runtime_boot_critical_paths.py",
+    "backend/tests/test_otel_critical_paths.py",
+    "backend/tests/test_figma_github_api_critical_paths.py",
+    "backend/tests/test_github_redmine_critical_paths.py",
+    "backend/tests/test_reqsys_orchestrator_critical_paths.py",
+    "backend/tests/test_actions_runtime_monitor_critical_paths.py",
 )
 DIMENSIONS = ("tests", "coverage", "mutation", "contract", "schema", "ci-watch")
 
