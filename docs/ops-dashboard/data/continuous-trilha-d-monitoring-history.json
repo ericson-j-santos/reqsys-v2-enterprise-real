@@ -1,35 +1,35 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T19:32:02.238180Z",
+  "generated_at": "2026-06-30T21:40:28.186959Z",
   "state": "green",
   "summary": {
     "continuous_trilha_d_monitoring_history_enabled": true,
-    "samples": 1,
+    "samples": 3,
     "green_rate": 1.0,
     "avg_alerts_active": 0.0,
     "monitoring_stabilized": true,
     "recommendation": "monitoramento_estavel"
   },
   "metrics": {
-    "samples": 1,
+    "samples": 3,
     "green_rate": 1.0,
     "yellow_rate": 0.0,
     "red_rate": 0.0,
     "avg_alerts_active": 0.0,
     "regression_alert_rate": 0.0,
-    "stable_samples": 1,
+    "stable_samples": 3,
     "alerting_samples": 0,
     "state_distribution": [
       {
         "state": "green",
-        "count": 1
+        "count": 3
       }
     ]
   },
   "latest_snapshot": {
-    "timestamp": "2026-06-30T19:32:02.238116Z",
-    "run_id": "local-refresh",
+    "timestamp": "2026-06-30T21:40:28.186922Z",
+    "run_id": "29000000001",
     "state": "green",
     "alerts_active": 0,
     "regression_alert": false,
@@ -37,7 +37,7 @@
     "recommendation": "monitoramento_estavel",
     "predictive_risk": "low",
     "trend": "improving",
-    "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml"
+    "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/29000000001"
   },
   "history": [
     {
@@ -51,6 +51,30 @@
       "predictive_risk": "low",
       "trend": "improving",
       "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml"
+    },
+    {
+      "timestamp": "2026-06-30T21:39:31.819981Z",
+      "run_id": "artifact-ingestion-refresh-4186",
+      "state": "green",
+      "alerts_active": 0,
+      "regression_alert": false,
+      "monitoring_enabled": true,
+      "recommendation": "monitoramento_estavel",
+      "predictive_risk": "low",
+      "trend": "improving",
+      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml"
+    },
+    {
+      "timestamp": "2026-06-30T21:40:28.186922Z",
+      "run_id": "29000000001",
+      "state": "green",
+      "alerts_active": 0,
+      "regression_alert": false,
+      "monitoring_enabled": true,
+      "recommendation": "monitoramento_estavel",
+      "predictive_risk": "low",
+      "trend": "improving",
+      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/29000000001"
     }
   ],
   "links": {

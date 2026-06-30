@@ -210,3 +210,42 @@ def test_mr_gitlab_merged():
     assert result[0]["tipo"] == "merge_request"
     assert result[0]["mr_merged"] is True
     assert result[0]["ambiente"] == "dev"
+
+
+def test_push_gitlab_agile_extrai_work_items():
+    from app.services.git_parser import processar_push_gitlab_agile
+
+    payload = {
+        "ref": "refs/heads/main",
+        "project": {"path_with_namespace": "grupo/projeto"},
+        "commits": [
+            {
+                "id": "c" * 40,
+                "message": "feat(AGI-123456789): story",
+                "author": {"name": "Dev"},
+                "url": "https://gitlab.com/grupo/projeto/-/commit/ccc",
+            }
+        ],
+    }
+    result = processar_push_gitlab_agile(payload)
+    assert len(result) == 1
+    assert result[0]["work_item_codigo"] == "AGI-123456789"
+    assert result[0]["provedor"] == "gitlab"
+
+
+def test_mr_gitlab_agile_extrai_work_items():
+    from app.services.git_parser import processar_mr_gitlab_agile
+
+    payload = {
+        "project": {"path_with_namespace": "grupo/projeto"},
+        "object_attributes": {
+            "iid": 3,
+            "title": "AGI-987654321 em MR",
+            "description": "Detalhes",
+            "url": "https://gitlab.com/grupo/projeto/-/merge_requests/3",
+            "source_branch": "feature",
+        },
+    }
+    result = processar_mr_gitlab_agile(payload)
+    assert len(result) == 1
+    assert result[0]["work_item_codigo"] == "AGI-987654321"

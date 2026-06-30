@@ -30,7 +30,7 @@ MERGE_READINESS_HISTORY_JSON = "docs/ops-dashboard/data/merge-readiness-history.
 CONTINUOUS_MONITORING_JSON = "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
 CONTINUOUS_MONITORING_HISTORY_JSON = "docs/ops-dashboard/data/continuous-trilha-d-monitoring-history.json"
 TRILHA_D_WORKFLOW_FILE = "trilha-d-qualidade-governanca.yml"
-COVERAGE_TARGETED_MIN_SCORE = 93.0
+COVERAGE_TARGETED_MIN_SCORE = 95.0
 COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
     "backend/tests/test_hub_lowcode_service_critical_paths.py",
     "backend/tests/test_wiki_publisher_critical_paths.py",
@@ -71,6 +71,14 @@ COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
     "backend/tests/test_github_redmine_critical_paths.py",
     "backend/tests/test_reqsys_orchestrator_critical_paths.py",
     "backend/tests/test_actions_runtime_monitor_critical_paths.py",
+    "backend/tests/test_runtime_analytics_critical_paths.py",
+    "backend/tests/test_monitoramento_operacional_api_critical_paths.py",
+    "backend/tests/test_govbi_api_critical_paths.py",
+    "backend/tests/test_runtime_remediation_critical_paths.py",
+    "backend/tests/test_hub_lowcode_api_critical_paths.py",
+    "backend/tests/test_ai_quality_critical_paths.py",
+    "backend/tests/test_main_critical_paths.py",
+    "backend/tests/test_async_workflow_jobs_critical_paths.py",
 )
 DIMENSIONS = ("tests", "coverage", "mutation", "contract", "schema", "ci-watch")
 
@@ -158,6 +166,22 @@ def build_sample_history() -> list[dict[str, Any]]:
                 "ci-watch": {"status": "passed", "score": 100.0},
             },
             "notes": ["coverage_parser_regression_tests_merged"],
+        },
+        {
+            "timestamp": "2026-06-30T21:21:13Z",
+            "source": "merged_pr",
+            "run_id": "pr-fase5-coverage-95",
+            "state": "green",
+            "average_score": 99.27,
+            "dimensions": {
+                "tests": {"status": "passed", "score": 100.0},
+                "coverage": {"status": "passed", "score": 95.6},
+                "mutation": {"status": "passed", "score": 100.0},
+                "contract": {"status": "passed", "score": 100.0},
+                "schema": {"status": "passed", "score": 100.0},
+                "ci-watch": {"status": "passed", "score": 100.0},
+            },
+            "notes": ["coverage_targeted_fase5_95_percent_gate"],
         },
     ]
 
