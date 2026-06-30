@@ -189,3 +189,32 @@ def test_govbi_perguntas_http_400_sem_json_cai_em_fallback(monkeypatch):
     data = response.json()
     assert data['statusFluxo'] == 'MODO_DEGRADADO'
     assert 'HTTP 400' in data['resultado']['linhas'][1]['valor']
+
+
+def test_govbi_perguntas_resposta_nao_dict_cai_em_fallback(monkeypatch):
+    class ClientComJsonLista:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, *args, **kwargs):
+            request = httpx.Request('POST', 'https://govbi-ia-hom.fly.dev/api/v1/perguntas')
+            return httpx.Response(200, request=request, json=['nao', 'dict'])
+
+    import app.api.govbi as govbi
+
+    monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientComJsonLista)
+
+    client = TestClient(app)
+    response = client.post(
+        '/api/govbi/perguntas',
+        json={'pergunta': 'Resposta inválida do serviço', 'formatoResposta': 'tabela', 'exibirSql': True},
+    )
+
+    assert response.status_code == 200
+    assert response.json()['statusFluxo'] == 'MODO_DEGRADADO'

@@ -1,5 +1,9 @@
 """Caminhos críticos — monitor de GitHub Actions runtime."""
 
+from unittest.mock import patch
+
+import pytest
+
 from app.services.actions_runtime_monitor import (
     WorkflowRunSnapshot,
     classificar_runs,
@@ -51,3 +55,40 @@ def test_classificar_runs_calcula_score_e_decisao():
     assert resultado['total_runs'] == 2
     assert resultado['score_saude'] == 50.0
     assert resultado['decisao'] == 'corrigir_falhas_de_actions_antes_de_novo_merge'
+
+
+def test_decidir_estado_operacao_estavel():
+    assert decidir_estado(96, [], []) == 'operacao_estavel'
+
+
+def test_decidir_estado_investigar_instabilidade():
+    assert decidir_estado(80, [], []) == 'investigar_instabilidade_operacional'
+
+
+@patch('app.services.actions_runtime_monitor.requests.get')
+def test_github_actions_client_listar_runs(mock_get, monkeypatch):
+    from app.services.actions_runtime_monitor import GitHubActionsClient
+
+    monkeypatch.setenv('GITHUB_TOKEN', 'ghp_test_token')
+    mock_get.return_value.json.return_value = {
+        'workflow_runs': [{'id': 1, 'name': 'CI', 'status': 'completed', 'conclusion': 'success'}],
+    }
+    mock_get.return_value.raise_for_status = lambda: None
+
+    client = GitHubActionsClient()
+    runs = client.listar_runs('owner/repo', branch='main', per_page=5)
+
+    assert len(runs) == 1
+    assert runs[0].workflow == 'CI'
+
+
+def test_github_actions_client_exige_token(monkeypatch):
+    from app.services.actions_runtime_monitor import GitHubActionsClient
+
+    monkeypatch.delenv('GITHUB_TOKEN', raising=False)
+    monkeypatch.delenv('REQSYS_GITHUB_TOKEN', raising=False)
+
+    client = GitHubActionsClient(token=None)
+
+    with pytest.raises(RuntimeError, match='GITHUB_TOKEN'):
+        client.listar_runs('owner/repo')
