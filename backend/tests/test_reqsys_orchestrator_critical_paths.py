@@ -1,6 +1,6 @@
 """Caminhos críticos adicionais — reqsys orchestrator."""
 
-from app.services.reqsys_orchestrator import OrchestratorDemand, classificar_demanda
+from app.services.reqsys_orchestrator import OrchestratorDemand, classificar_demanda, classificar_lote, classificar_lote
 
 
 def test_classificador_usa_coordenador_padrao_sem_match():
@@ -29,3 +29,15 @@ def test_classificador_score_medio_define_prioridade_media():
         descricao='Validar pipeline e deploy com evidência.',
     ))
     assert rota['prioridade_sugerida'] in {'media', 'alta', 'normal'}
+
+
+def test_classificar_lote_agrega_por_tema():
+    resultado = classificar_lote(
+        [
+            OrchestratorDemand(titulo='Pipeline deploy', descricao='Validar pipeline com evidência.'),
+            OrchestratorDemand(titulo='xyzqwerty', descricao='lorem ipsum dolor sit amet consectetur'),
+        ]
+    )
+    assert resultado['total'] == 2
+    assert isinstance(resultado['por_tema'], dict)
+    assert len(resultado['rotas']) == 2

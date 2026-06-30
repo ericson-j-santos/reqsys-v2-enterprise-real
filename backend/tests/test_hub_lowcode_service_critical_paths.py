@@ -234,7 +234,65 @@ def test_listar_pacotes_ia_degrada_em_excecao(mock_client_cls, monkeypatch):
 
 
 @patch('app.services.hub_lowcode.httpx.AsyncClient')
-def test_listar_flows_pa_com_mock_dataverse(mock_client_cls, monkeypatch):
+def test_listar_flows_pa_degrada_em_excecao(mock_client_cls, monkeypatch):
+    _mock_credenciais_graph(monkeypatch)
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=MagicMock(raise_for_status=MagicMock(), json=lambda: {'access_token': 'token'}))
+    mock_client.get = AsyncMock(side_effect=RuntimeError('dataverse offline'))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_flows_pa())
+
+    assert resultado['configurado'] is True
+    assert resultado['flows'] == []
+    assert 'dataverse offline' in resultado['erro']
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_listar_ambientes_powerplatform_degrada_em_excecao(mock_client_cls, monkeypatch):
+    _mock_credenciais_graph(monkeypatch)
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=MagicMock(raise_for_status=MagicMock(), json=lambda: {'access_token': 'token'}))
+    mock_client.get = AsyncMock(side_effect=RuntimeError('pa offline'))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_ambientes_powerplatform())
+
+    assert resultado['configurado'] is True
+    assert resultado['ambientes'] == []
+    assert 'pa offline' in resultado['erro']
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_listar_flows_pa_mapeia_status_stopped(mock_client_cls, monkeypatch):
+    _mock_credenciais_graph(monkeypatch)
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {
+        'value': [
+            {
+                'workflowid': 'flow-2',
+                'name': 'Flow Parado',
+                'statuscode': 1,
+                'createdon': '2026-06-28T00:00:00Z',
+                'modifiedon': '2026-06-28T01:00:00Z',
+            }
+        ]
+    }
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=MagicMock(raise_for_status=MagicMock(), json=lambda: {'access_token': 'token'}))
+    mock_client.get = AsyncMock(return_value=mock_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_flows_pa())
+
+    assert resultado['flows'][0]['estado'] == 'Stopped'
     _mock_credenciais_graph(monkeypatch)
 
     mock_resp = MagicMock()
@@ -401,7 +459,55 @@ def test_publicar_tarefas_planner_http_status_error(mock_client_cls):
 
 
 @patch('app.services.hub_lowcode.httpx.AsyncClient')
-def test_testar_teams_webhook_sucesso_e_http_error(mock_client_cls):
+def test_publicar_tarefas_planner_com_webhook_key(mock_client_cls):
+    db = SessionLocal()
+    try:
+        svc.salvar_planner_webhook_config(
+            db,
+            webhook_url='https://example.com/planner-hook',
+            webhook_key='secret-key',
+        )
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {'criadas': 1, 'teams_notificado': False}
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        resultado = _run(
+            svc.publicar_tarefas_planner(
+                db,
+                tarefas_texto='Tarefa|Dev|2026-06-28|Backlog|Alta|Desc',
+                autor='tester',
+                correlation_id='corr-planner-key',
+            )
+        )
+
+        assert resultado['ok'] is True
+        headers = mock_client.post.await_args.kwargs['headers']
+        assert headers['x-webhook-key'] == 'secret-key'
+    finally:
+        db.close()
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_descobrir_planos_planner_degrada_em_excecao(mock_client_cls, monkeypatch):
+    _mock_credenciais_graph(monkeypatch)
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=MagicMock(raise_for_status=MagicMock(), json=lambda: {'access_token': 'token'}))
+    mock_client.get = AsyncMock(side_effect=RuntimeError('planner offline'))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.descobrir_planos_planner('group-1'))
+
+    assert resultado['configurado'] is True
+    assert resultado['planos'] == []
+    assert 'planner offline' in resultado['erro']
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
     mock_resp.status_code = 200

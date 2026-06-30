@@ -1,23 +1,23 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T20:11:02.184083Z",
+  "generated_at": "2026-06-30T21:21:40.807196Z",
   "state": "green",
-  "current_score": 98.69,
+  "current_score": 99.27,
   "baseline_score": 88.33,
-  "delta_from_baseline": 10.36,
+  "delta_from_baseline": 10.94,
   "trend": "improving",
   "summary": {
-    "samples": 5,
-    "green_samples": 4,
+    "samples": 4,
+    "green_samples": 3,
     "failed_samples": 1,
-    "next_increment": "continuous_trilha_d_monitoring",
-    "artifact_ingestion_enabled": true,
-    "continuous_monitoring_enabled": true,
-    "continuous_trilha_d_monitoring_history_enabled": true,
-    "coverage_targeted_ready": true,
-    "governance_deep_links_enabled": true,
-    "artifact_ingestion_refresh_enabled": true
+    "next_increment": "artifact_ingestion_refresh",
+    "artifact_ingestion_enabled": false,
+    "continuous_monitoring_enabled": false,
+    "continuous_trilha_d_monitoring_history_enabled": false,
+    "coverage_targeted_ready": false,
+    "governance_deep_links_enabled": false,
+    "artifact_ingestion_refresh_enabled": false
   },
   "links": {
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
@@ -33,15 +33,15 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 5
+      "samples": 4
     },
     "coverage": {
       "current_status": "passed",
-      "current_score": 93.22,
-      "previous_score": 82.0,
-      "delta_from_baseline": 64.22,
+      "current_score": 95.6,
+      "previous_score": 74.29,
+      "delta_from_baseline": 66.6,
       "trend": "improving",
-      "samples": 5
+      "samples": 4
     },
     "mutation": {
       "current_status": "passed",
@@ -49,7 +49,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 5
+      "samples": 4
     },
     "contract": {
       "current_status": "passed",
@@ -57,7 +57,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 5
+      "samples": 4
     },
     "schema": {
       "current_status": "passed",
@@ -65,7 +65,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 5
+      "samples": 4
     },
     "ci-watch": {
       "current_status": "passed",
@@ -73,7 +73,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 5
+      "samples": 4
     }
   },
   "history": [
@@ -189,14 +189,21 @@
       "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/463"
     },
     {
-      "timestamp": "2026-06-30T12:59:47.062128Z",
-      "source": "github_actions_artifact",
-      "run_id": "ci-local-ingest-001",
-      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
+      "timestamp": "2026-06-30T21:21:13Z",
+      "source": "merged_pr",
+      "run_id": "pr-fase5-coverage-95",
       "state": "green",
-      "average_score": 97.0,
+      "average_score": 99.27,
       "dimensions": {
-        "ci-watch": {
+        "tests": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "coverage": {
+          "status": "passed",
+          "score": 95.6
+        },
+        "mutation": {
           "status": "passed",
           "score": 100.0
         },
@@ -204,65 +211,19 @@
           "status": "passed",
           "score": 100.0
         },
-        "coverage": {
-          "status": "passed",
-          "score": 82.0
-        },
-        "mutation": {
-          "status": "passed",
-          "score": 100.0
-        },
         "schema": {
           "status": "passed",
           "score": 100.0
         },
-        "tests": {
-          "status": "passed",
-          "score": 100.0
-        }
-      },
-      "notes": [
-        "continuar_incremento_qualidade",
-        "correlation_id=c227dcb7-570c-4bce-ac6c-0d4e1f235803"
-      ]
-    },
-    {
-      "timestamp": "2026-06-30T14:30:32.407869Z",
-      "source": "github_actions_artifact",
-      "run_id": "local",
-      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
-      "state": "green",
-      "average_score": 98.69,
-      "dimensions": {
         "ci-watch": {
           "status": "passed",
           "score": 100.0
-        },
-        "contract": {
-          "status": "passed",
-          "score": 100.0
-        },
-        "coverage": {
-          "status": "passed",
-          "score": 93.22
-        },
-        "mutation": {
-          "status": "passed",
-          "score": 100.0
-        },
-        "schema": {
-          "status": "passed",
-          "score": 100.0
-        },
-        "tests": {
-          "status": "passed",
-          "score": 100.0
         }
       },
       "notes": [
-        "continuar_incremento_qualidade",
-        "correlation_id=d2ad0af6-ef71-4b54-9ed3-56c11aede94b"
-      ]
+        "coverage_targeted_fase5_95_percent_gate"
+      ],
+      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/fase5-coverage-95"
     }
   ],
   "runtime_dashboard_contract": {
@@ -285,6 +246,6 @@
       "trend",
       "delta_from_baseline"
     ],
-    "refresh_strategy": "artifact_ingestion_on_trilha_d_consolidate"
+    "refresh_strategy": "workflow_runs_deep_links_enabled"
   }
 }

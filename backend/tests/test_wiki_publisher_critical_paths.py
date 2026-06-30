@@ -50,6 +50,23 @@ def test_consultar_status_wiki_sem_github_repo(_secret):
     assert resultado['github_version']['status'] == 'verificacao_desabilitada'
 
 
+@patch('app.services.wiki_publisher.get_secret')
+@patch('app.services.wiki_publisher.verificar_versao_github')
+def test_checar_github_quando_repo_configurado(mock_verificar, mock_secret):
+    from app.services.wiki_publisher import _checar_github
+
+    mock_secret.side_effect = lambda key, default='': {
+        'GITHUB_DOCS_REPO': 'acme/docs',
+        'GITHUB_DOCS_BASE_PATH': 'docs/requisitos',
+    }.get(key, default)
+    mock_verificar.return_value = {'status': 'sincronizado'}
+
+    resultado = _checar_github('REQ-TEST-001', 'hash123')
+
+    assert resultado == {'status': 'sincronizado'}
+    mock_verificar.assert_called_once()
+
+
 @patch('app.services.wiki_publisher.get_secret', return_value='')
 @patch('app.services.wiki_publisher._chamar_wiki_sync')
 @patch('app.services.wiki_publisher._checar_github', return_value=None)
@@ -221,6 +238,23 @@ def test_chamar_wiki_sync_service_http_error(mock_secret, mock_urlopen):
 
     assert resultado['publicado'] is False
     assert 'Erro HTTP 500' in resultado['mensagem']
+
+
+@patch('app.services.wiki_publisher.get_secret')
+@patch('app.services.wiki_publisher.verificar_versao_github')
+def test_checar_github_quando_repo_configurado(mock_verificar, mock_secret):
+    from app.services.wiki_publisher import _checar_github
+
+    mock_secret.side_effect = lambda key, default='': {
+        'GITHUB_DOCS_REPO': 'acme/docs',
+        'GITHUB_DOCS_BASE_PATH': 'docs/requisitos',
+    }.get(key, default)
+    mock_verificar.return_value = {'status': 'sincronizado'}
+
+    resultado = _checar_github('REQ-TEST-001', 'hash123')
+
+    assert resultado == {'status': 'sincronizado'}
+    mock_verificar.assert_called_once()
 
 
 @patch('app.services.wiki_publisher._checar_github')

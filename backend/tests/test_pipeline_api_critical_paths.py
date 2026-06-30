@@ -85,6 +85,23 @@ def test_publicar_redmine_requisito_inexistente(client):
     assert response.status_code == 404
 
 
+def test_listar_issues_github_com_integracao_habilitada(client, monkeypatch):
+    monkeypatch.setattr(pipeline_api, 'github_redmine_import_enabled', lambda: True)
+
+    with patch('app.api.pipeline.fetch_github_issues', return_value=[]):
+        response = client.post(
+            '/v1/integracoes/github/issues',
+            json={'repo': 'owner/repo', 'state': 'open', 'limit': 5},
+        )
+
+    assert response.status_code == 200
+    assert response.json()['data']['total'] == 0
+
+
+def test_inferir_rfs_retorna_lista_vazia_sem_termos():
+    assert pipeline_api.inferir_rfs('texto neutro sem palavras chave') == []
+
+
 def test_publicar_redmine_com_github_import_sem_repo(client, monkeypatch):
     monkeypatch.setattr(pipeline_api, 'github_redmine_import_enabled', lambda: True)
     criado = client.post(
@@ -107,3 +124,75 @@ def test_publicar_redmine_com_github_import_sem_repo(client, monkeypatch):
     )
 
     assert response.status_code == 422
+
+
+@patch('app.api.pipeline.publish_issues_to_redmine')
+@patch('app.api.pipeline.publish_requisito_to_redmine')
+@patch('app.api.pipeline.fetch_github_issues')
+def test_publicar_redmine_com_github_import_filtra_issues(
+    mock_fetch,
+    mock_publish_req,
+    mock_publish_issues,
+    client,
+    monkeypatch,
+):
+    monkeypatch.setattr(pipeline_api, 'github_redmine_import_enabled', lambda: True)
+    mock_fetch.return_value = [
+        {'number': 1, 'title': 'Issue 1'},
+        {'number': 2, 'title': 'Issue 2'},
+    ]
+    mock_publish_req.return_value = {'issue_principal_id': 10, 'subtarefas': [], 'warnings': []}
+    mock_publish_issues.return_value = {'published_count': 1, 'published_issues': [{'number': 1}], 'warnings': []}
+
+    criado = client.post(
+        '/v1/solicitacoes',
+        json={
+            'origem': 'portal',
+            'titulo': 'Publicar redmine com filtro',
+            'descricao': 'Descricao longa para publicacao redmine com import github.',
+            'solicitante': 'qa@reqsys.local',
+            'area': 'Integracoes',
+            'sistema': 'Redmine',
+            'urgencia': 'media',
+        },
+    )
+    requisito_id = criado.json()['data']['id']
+
+    response = client.post(
+        f'/v1/backlog/publicar-redmine/{requisito_id}',
+        json={
+            'use_github_import': True,
+            'github_repo': 'owner/repo',
+            'issue_numbers': [1],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['github_imported_count'] == 1
+    assert data['redmine_published_count'] == 1
+
+
+@patch('app.api.pipeline.fetch_github_issues', side_effect=pipeline_api.IntegracaoError('repo invalido'))
+def test_publicar_redmine_github_import_integracao_error(mock_fetch, client, monkeypatch):
+    monkeypatch.setattr(pipeline_api, 'github_redmine_import_enabled', lambda: True)
+    criado = client.post(
+        '/v1/solicitacoes',
+        json={
+            'origem': 'portal',
+            'titulo': 'Publicar redmine erro github',
+            'descricao': 'Descricao longa para validar erro de integracao github.',
+            'solicitante': 'qa@reqsys.local',
+            'area': 'Integracoes',
+            'sistema': 'Redmine',
+            'urgencia': 'media',
+        },
+    )
+    requisito_id = criado.json()['data']['id']
+
+    response = client.post(
+        f'/v1/backlog/publicar-redmine/{requisito_id}',
+        json={'use_github_import': True, 'github_repo': 'owner/repo'},
+    )
+
+    assert response.status_code == 400

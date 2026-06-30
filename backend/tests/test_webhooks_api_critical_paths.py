@@ -13,6 +13,19 @@ def _github_signature(body: bytes, secret: str) -> str:
     return f'sha256={digest}'
 
 
+def test_webhook_github_assinatura_ausente_com_secret(client, monkeypatch):
+    monkeypatch.setattr(settings, 'github_webhook_secret', 'segredo-github')
+
+    response = client.post(
+        '/v1/webhooks/github',
+        json={'zen': 'ping'},
+        headers={'X-GitHub-Event': 'ping', 'Content-Type': 'application/json'},
+    )
+
+    assert response.status_code == 401
+    assert 'ausente' in response.json()['detail'].lower()
+
+
 def test_webhook_github_rejeita_assinatura_invalida(client, monkeypatch):
     monkeypatch.setattr(settings, 'github_webhook_secret', 'segredo-github')
     body = json.dumps({'zen': 'ping'}).encode()
@@ -97,6 +110,52 @@ def test_webhook_gitlab_rejeita_token_invalido(client, monkeypatch):
     assert response.status_code == 401
 
 
+def test_webhook_github_pr_acao_nao_suportada(client, monkeypatch):
+    monkeypatch.setattr(settings, 'github_webhook_secret', '')
+    payload = {
+        'action': 'labeled',
+        'pull_request': {'number': 1, 'title': 'sem codigo'},
+        'repository': {'full_name': 'owner/repo'},
+    }
+
+    response = client.post(
+        '/v1/webhooks/github',
+        json=payload,
+        headers={'X-GitHub-Event': 'pull_request'},
+    )
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['processado'] is True
+    assert data['vinculos_criados'] == 0
+
+
+def test_webhook_gitlab_push_com_vinculos(client, monkeypatch):
+    monkeypatch.setattr(settings, 'gitlab_webhook_token', 'token-gitlab')
+    payload = {
+        'object_kind': 'push',
+        'ref': 'refs/heads/main',
+        'project': {'path_with_namespace': 'grupo/projeto'},
+        'commits': [
+            {
+                'id': 'a' * 40,
+                'message': 'feat: REQ-123456789 em commit',
+                'author': {'name': 'Dev'},
+                'url': 'https://gitlab.com/grupo/projeto/-/commit/aaa',
+            }
+        ],
+    }
+
+    response = client.post(
+        '/v1/webhooks/gitlab',
+        json=payload,
+        headers={'X-Gitlab-Event': 'Push Hook', 'X-Gitlab-Token': 'token-gitlab'},
+    )
+
+    assert response.status_code == 200
+    assert response.json()['data']['vinculos_criados'] >= 1
+
+
 def test_webhook_gitlab_merge_request_evento(client, monkeypatch):
     monkeypatch.setattr(settings, 'gitlab_webhook_token', 'token-gitlab')
     payload = {
@@ -118,6 +177,22 @@ def test_webhook_gitlab_merge_request_evento(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json()['data']['vinculos_criados'] == 0
+
+
+def test_webhook_figma_sync_bidirectional(client, monkeypatch):
+    monkeypatch.setattr(settings, 'figma_webhook_secret', '')
+    monkeypatch.setattr(settings, 'figma_github_default_repo', 'owner/repo')
+    sync_result = type('SyncResult', (), {'as_dict': lambda self: {'synced': True, 'direction': 'bidirectional'}})()
+
+    with patch('app.api.webhooks.figma_github_sync.sync_bidirectional', return_value=sync_result):
+        response = client.post(
+            '/v1/webhooks/figma',
+            json={'event_type': 'FILE_UPDATE', 'file_key': 'abc123'},
+        )
+
+    assert response.status_code == 200
+    assert response.json()['data']['processado'] is True
+    assert response.json()['data']['figma_github']['direction'] == 'bidirectional'
 
 
 def test_webhook_figma_sem_file_key_retorna_motivo(client, monkeypatch):

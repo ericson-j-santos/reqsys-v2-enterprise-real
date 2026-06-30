@@ -1,6 +1,8 @@
 """Testes de caminhos críticos — API Specs SDD."""
 
 import app.api.specs as specs_api
+from fastapi import HTTPException
+import pytest
 
 
 def _configurar_sdd_tmp(monkeypatch, tmp_path):
@@ -120,3 +122,73 @@ def test_specs_template_fallback_para_md_generico(client, monkeypatch, tmp_path)
 
     assert response.status_code == 200
     assert response.json()['data']['arquivos_criados'] == ['design.md']
+
+
+def test_specs_listar_templates_vazio_quando_diretorio_ausente(client, monkeypatch, tmp_path):
+    _configurar_sdd_tmp(monkeypatch, tmp_path)
+    response = client.get('/v1/specs/templates')
+    assert response.status_code == 200
+    assert response.json()['data'] == []
+
+
+def test_specs_get_arquivo_individual(client, monkeypatch, tmp_path):
+    specs_dir, _templates_dir = _configurar_sdd_tmp(monkeypatch, tmp_path)
+    feature_dir = specs_dir / 'feature-gamma'
+    feature_dir.mkdir(parents=True, exist_ok=True)
+    (feature_dir / 'tasks.md').write_text('conteudo tasks', encoding='utf-8')
+
+    response = client.get('/v1/specs/feature-gamma/tasks')
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['arquivo'] == 'tasks.md'
+    assert data['conteudo'] == 'conteudo tasks'
+
+
+def test_specs_atualizar_arquivo(client, monkeypatch, tmp_path):
+    specs_dir, _templates_dir = _configurar_sdd_tmp(monkeypatch, tmp_path)
+    feature_dir = specs_dir / 'feature-delta'
+    feature_dir.mkdir(parents=True, exist_ok=True)
+    (feature_dir / 'requirements.md').write_text('antes', encoding='utf-8')
+
+    response = client.put(
+        '/v1/specs/feature-delta/requirements',
+        json={'conteudo': 'depois'},
+    )
+
+    assert response.status_code == 200
+    assert (feature_dir / 'requirements.md').read_text(encoding='utf-8') == 'depois'
+
+
+def test_specs_safe_rejeita_path_traversal():
+    from pathlib import Path
+
+    with pytest.raises(HTTPException) as exc:
+        specs_api._safe(Path('/tmp/specs'), '..', 'etc', 'passwd')
+    assert exc.value.status_code == 400
+
+
+def test_specs_criar_exemplo_inexistente_retorna_404(client, monkeypatch, tmp_path):
+    specs_dir, templates_dir = _configurar_sdd_tmp(monkeypatch, tmp_path)
+    specs_dir.mkdir(parents=True, exist_ok=True)
+    (templates_dir / 'requirements.md').write_text('# Template', encoding='utf-8')
+
+    response = client.post(
+        '/v1/specs',
+        json={
+            'slug': 'nova',
+            'titulo': 'Nova',
+            'descricao': 'Exemplo ausente',
+            'exemplo_base': 'nao-existe',
+            'templates': [],
+        },
+    )
+
+    assert response.status_code == 404
+
+
+def test_specs_root_resolve_caminho_relativo(monkeypatch, tmp_path):
+    monkeypatch.setattr(specs_api.settings, 'sdd_specs_path', 'docs/specs-relative')
+    root = specs_api._sdd_root()
+    assert root.name == 'specs-relative'
+    assert root.is_absolute()

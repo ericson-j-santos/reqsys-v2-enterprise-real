@@ -80,3 +80,21 @@ def test_calcular_score_prontidao_nao_fica_negativo():
     pendencias = [_ for _ in range(3)]
 
     assert calcular_score_prontidao(bloqueios, alertas, pendencias) == 0
+
+
+def test_antecipar_demanda_sem_titulo_bloqueia():
+    dados = _contexto().dados.copy()
+    dados['titulo'] = ''
+    resultado = antecipar_validacoes(_contexto(dados=dados))
+
+    assert resultado.apto_para_iniciar is False
+    assert any(bloqueio.codigo == 'CAMPO_OBRIGATORIO_AUSENTE' for bloqueio in resultado.bloqueios)
+
+
+def test_antecipar_sem_permissao_bloqueia():
+    resultado = antecipar_validacoes(
+        _contexto(usuario=UsuarioExecucao(id='u1', perfil='viewer', escopos=[]))
+    )
+
+    assert resultado.apto_para_iniciar is False
+    assert any(bloqueio.codigo == 'PERMISSAO_INSUFICIENTE' for bloqueio in resultado.bloqueios)
