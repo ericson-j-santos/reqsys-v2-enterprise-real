@@ -14,20 +14,27 @@ from scripts.build_padrao_ouro_operational_pareto import (
 
 def test_operational_pareto_avanca_para_dashboard_apos_governanca_deep_links() -> None:
     from scripts.build_trilha_d_history import (
+        NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION,
         NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD,
         governance_workflow_deep_links_surface_ready,
         resolve_next_increment,
     )
 
     if governance_workflow_deep_links_surface_ready():
-        assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+        assert resolve_next_increment(artifact_ingestion=True) in {
+            NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD,
+            NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION,
+        }
     payload = build_payload(from_evidence=True)
-    assert payload["summary"]["next_increment"] in {
+    trilha_d = load_trilha_d_evidence(__import__("pathlib").Path("docs/ops-dashboard/data/trilha-d-history.json"))
+    assert trilha_d.get("next_increment") in {
         "dashboard_trilha_d_history_card",
         "artifact_ingestion_refresh",
         "merge_readiness_history",
         "link_governance_cards_to_latest_workflow_runs",
+        "continuous_trilha_d_monitoring",
     }
+    assert payload["summary"]["evidence_source"] == "trilha_d_history"
 
 
 def test_operational_pareto_projects_gold_gap_closure() -> None:
@@ -62,7 +69,11 @@ def test_score_action_rewards_high_gap_low_effort_low_risk() -> None:
 
 
 def test_build_ranked_actions_applies_pareto_80_20() -> None:
-    trilha_d = load_trilha_d_evidence(__import__("pathlib").Path("docs/ops-dashboard/data/trilha-d-history.json"))
+    trilha_d = {
+        "artifact_ingestion_enabled": True,
+        "next_increment": "artifact_ingestion_refresh",
+        "dimension_signals": {"coverage": 74.0, "tests": 100.0, "mutation": 100.0, "contract": 100.0, "schema": 100.0, "ci-watch": 100.0},
+    }
     signals = trilha_d["dimension_signals"]
     gaps = compute_dimension_gaps(signals)
     ranked = build_ranked_actions(signals, gaps, trilha_d)

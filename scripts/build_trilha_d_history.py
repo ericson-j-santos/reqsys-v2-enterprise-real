@@ -348,17 +348,20 @@ def governance_workflow_deep_links_surface_ready(repo_root: Path | None = None) 
     governance_index = root / "docs/ops-dashboard/data/governance-evidence-index.json"
     if not all(path.exists() for path in (workflow, index_html, monitoramento_view, governance_index)):
         return False
+    refresh_script = root / "scripts/refresh_trilha_d_artifact_ingestion.py"
+    refresh_text = refresh_script.read_text(encoding="utf-8") if refresh_script.exists() else ""
     workflow_text = workflow.read_text(encoding="utf-8")
     html_text = index_html.read_text(encoding="utf-8")
     view_text = monitoramento_view.read_text(encoding="utf-8")
+    marker_corpus = "\n".join((workflow_text, html_text, view_text, refresh_text))
     required_markers = (
-        "Atualizar deep links de governança",
-        "build_governance_evidence_index.py",
+        "Refresh artifact ingestion Trilha D",
+        "build_governance_evidence_index",
         "governance-deep-links-enabled",
         "governance_deep_links_enabled",
-        "--github-run-id",
+        "refresh_trilha_d_artifact_ingestion.py",
     )
-    if not all(marker in workflow_text or marker in html_text or marker in view_text for marker in required_markers):
+    if not all(marker in marker_corpus for marker in required_markers):
         return False
     try:
         payload = json.loads(governance_index.read_text(encoding="utf-8"))
@@ -386,14 +389,37 @@ def artifact_ingestion_surface_ready(repo_root: Path | None = None) -> bool:
     html_text = index_html.read_text(encoding="utf-8")
     view_text = monitoramento_view.read_text(encoding="utf-8")
     required_markers = (
-        "Atualizar histórico Trilha D (artifact ingestion)",
-        "--ingest-report",
+        "Refresh artifact ingestion Trilha D",
+        "refresh_trilha_d_artifact_ingestion.py",
         "artifact-ingestion-enabled",
         "artifact_ingestion_enabled",
     )
     if not all(marker in workflow_text or marker in html_text or marker in view_text for marker in required_markers):
         return False
-    return "--ingest-report" in workflow_text and "artifact-ingestion-enabled" in html_text
+    return "refresh_trilha_d_artifact_ingestion.py" in workflow_text and "artifact-ingestion-enabled" in html_text
+
+
+def artifact_ingestion_refresh_surface_ready(repo_root: Path | None = None) -> bool:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    refresh_script = root / "scripts/refresh_trilha_d_artifact_ingestion.py"
+    workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
+    index_html = root / "docs/ops-dashboard/index.html"
+    monitoramento_view = root / "frontend/src/views/MonitoramentoOperacionalView.vue"
+    if not all(path.exists() for path in (refresh_script, workflow, index_html, monitoramento_view)):
+        return False
+    workflow_text = workflow.read_text(encoding="utf-8")
+    html_text = index_html.read_text(encoding="utf-8")
+    view_text = monitoramento_view.read_text(encoding="utf-8")
+    required_markers = (
+        "refresh_trilha_d_artifact_ingestion.py",
+        "Validar superfície artifact ingestion refresh",
+        "Refresh artifact ingestion Trilha D",
+        "artifact-ingestion-refresh-enabled",
+        "artifact_ingestion_refresh_enabled",
+    )
+    if not all(marker in workflow_text or marker in html_text or marker in view_text for marker in required_markers):
+        return False
+    return "refresh_trilha_d_artifact_ingestion.py" in workflow_text
 
 
 def merge_readiness_history_surface_ready(repo_root: Path | None = None) -> bool:
@@ -437,11 +463,12 @@ def continuous_trilha_d_monitoring_surface_ready(repo_root: Path | None = None) 
     html_text = index_html.read_text(encoding="utf-8")
     view_text = monitoramento_view.read_text(encoding="utf-8")
     required_markers = (
-        "Atualizar monitoramento contínuo Trilha D",
+        "Validar superfície monitoramento contínuo",
         "build_continuous_trilha_d_monitoring.py",
         "continuous-trilha-d-monitoring-card",
         "continuous_monitoring_enabled",
         "continuous-trilha-d-monitoring.json",
+        "refresh_trilha_d_artifact_ingestion.py",
     )
     if not all(marker in workflow_text or marker in html_text or marker in view_text for marker in required_markers):
         return False
@@ -469,7 +496,9 @@ def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None =
         return NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
     if not merge_readiness_history_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION_REFRESH
-    return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+    if not artifact_ingestion_refresh_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+    return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
 
 
 def build_payload(
@@ -506,6 +535,7 @@ def build_payload(
             ),
             "coverage_targeted_ready": artifact_ingestion and coverage_targeted_surface_ready(),
             "governance_deep_links_enabled": artifact_ingestion and governance_workflow_deep_links_surface_ready(),
+            "artifact_ingestion_refresh_enabled": artifact_ingestion and artifact_ingestion_refresh_surface_ready(),
         },
         "links": {
             "actions": workflow_runs_url(),

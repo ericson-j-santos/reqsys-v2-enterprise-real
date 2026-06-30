@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-30T02:09:38.580211Z",
+  "generated_at": "2026-06-30T16:02:33.349832Z",
   "mode": "report_only",
   "risk": "low",
   "regression_predicted": false,
@@ -11,9 +11,9 @@
   "signals": {
     "insufficient_history": false,
     "overall_trend": "improving",
-    "current_score": 97.59,
+    "current_score": 98.69,
     "baseline_score": 88.33,
-    "delta_from_baseline": 9.26,
+    "delta_from_baseline": 10.36,
     "recent_failed_samples": 0,
     "regressing_dimensions": [],
     "critical_regressing_dimensions": [],
@@ -32,7 +32,7 @@
     },
     "coverage": {
       "trend": "improving",
-      "current_score": 85.56,
+      "current_score": 92.13,
       "touched_by_pr": false,
       "regressing": false
     },
