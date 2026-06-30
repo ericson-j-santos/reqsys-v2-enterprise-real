@@ -1,7 +1,7 @@
 name: Main Operational Validation Fast
 
-# Caminho rápido pós-merge: valida guardrails + malha P0 em um único job (~30-90s).
-# Substitui a cascata workflow_run que gerava dezenas de runs cancelados por merge.
+# Caminho ultra-rápido pós-merge: 1 job, modo lite, alvo <10s wall-clock no runner.
+# Script ~sub-segundo; overhead restante = checkout + upload único.
 
 on:
   push:
@@ -21,7 +21,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: main-operational-validation-fast-${{ github.ref }}
@@ -31,23 +30,21 @@ jobs:
   validate-fast:
     name: Validação operacional rápida (malha P0)
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 1
 
     steps:
-      - name: Checkout
+      - name: Checkout (sparse)
         uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          fetch-depth: 1
+          sparse-checkout: |
+            scripts
+            config
+            .github/workflows
+            tests/test_pr_ci_watch.py
+            docs/runbooks
 
-      - name: Instalar dependências mínimas
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install pytest
-
-      - name: Executar validação rápida
+      - name: Validar malha P0 (modo lite)
         id: fast
         env:
           REPO: ${{ github.repository }}
@@ -57,65 +54,39 @@ jobs:
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          python scripts/main_operational_validation_fast.py \
+          SECONDS=0
+          python3 scripts/main_operational_validation_fast.py \
             --repo "${REPO}" \
             --branch "${BRANCH}" \
             --sha "${SHA}" \
             --run-id "${RUN_ID}" \
             --workflow-url "${WORKFLOW_URL}" \
             --output-dir artifacts/main-operational-validation-fast \
+            --lite \
             --json | tee artifacts/main-operational-validation-fast/result.json
-
-      - name: Resumo executivo
-        if: always()
-        run: |
-          set -euo pipefail
+          job_elapsed="${SECONDS}"
           summary="artifacts/main-operational-validation-fast/main-operational-validation-fast.json"
-          if [[ -f "${summary}" ]]; then
-            elapsed=$(python -c "import json; print(json.load(open('${summary}'))['elapsed_ms'])")
-            state=$(python -c "import json; print(json.load(open('${summary}'))['overall_state'])")
-            mesh=$(python -c "import json; print(json.load(open('${summary}'))['mesh_integrated'])")
-            evidence=$(python -c "import json; print(json.load(open('${summary}'))['evidence_gate_consolidated'])")
-            {
-              echo "## Main Operational Validation Fast"
-              echo "- Elapsed: \`${elapsed} ms\`"
-              echo "- Overall state: \`${state}\`"
-              echo "- Mesh integrated: \`${mesh}\`"
-              echo "- Evidence gate consolidated: \`${evidence}\`"
-              echo "- Modo: \`fast_path\` — sem cascata workflow_run"
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
+          script_ms=$(python3 -c "import json; print(json.load(open('${summary}'))['elapsed_ms'])")
+          state=$(python3 -c "import json; print(json.load(open('${summary}'))['overall_state'])")
+          mesh=$(python3 -c "import json; print(json.load(open('${summary}'))['mesh_integrated'])")
+          evidence=$(python3 -c "import json; print(json.load(open('${summary}'))['evidence_gate_consolidated'])")
+          {
+            echo "## Main Operational Validation Fast"
+            echo "- Script elapsed: \`${script_ms} ms\`"
+            echo "- Job step elapsed: \`${job_elapsed}s\`"
+            echo "- Overall state: \`${state}\`"
+            echo "- Mesh integrated: \`${mesh}\`"
+            echo "- Evidence gate consolidated: \`${evidence}\`"
+            echo "- Modo: \`lite\` — JSON only, sem pytest/html/analytics"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Publicar artifacts consolidados
-        if: always()
+      - name: Publicar bundle único
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: main-operational-validation-fast
           path: |
-            artifacts/main-operational-validation-fast
-            artifacts/operational-runtime-mesh-hub
-            artifacts/operational-alert-intelligence
-            artifacts/unified-operational-event-bus
-            artifacts/unified-operational-signal-consolidator
-            artifacts/main-operational-health
-            reports/github-runtime-analytics
-          if-no-files-found: warn
-          retention-days: 15
-
-      - name: Publicar evidência de health (alias)
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: main-operational-health-evidence
-          path: artifacts/main-operational-health
+            artifacts/
+          compression-level: 0
           if-no-files-found: error
           retention-days: 15
-
-      - name: Publicar sinal operacional unificado (alias)
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unified-operational-signal
-          path: artifacts/unified-operational-signal-consolidator
-          if-no-files-found: error
-          retention-days: 30

@@ -32,22 +32,39 @@ from scripts.unified_operational_event_bus import build_payload as build_event_p
 from scripts.unified_operational_signal_consolidator import build_snapshot, write_report as write_signal_report
 
 
-def _write_mesh_report(payload: dict[str, Any], output_dir: Path) -> None:
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _write_mesh_report(payload: dict[str, Any], output_dir: Path, *, lite: bool = False) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / "operational-runtime-mesh-hub.json").write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    _write_json(output_dir / "operational-runtime-mesh-hub.json", payload)
+    if lite:
+        return
     (output_dir / "operational-runtime-mesh-hub.md").write_text(render_mesh_markdown(payload), encoding="utf-8")
     (output_dir / "operational-runtime-mesh-hub.html").write_text(render_mesh_html(payload), encoding="utf-8")
 
 
-def _mirror_artifacts(root: Path, name: str, src: Path) -> None:
-    target = root / "artifacts" / name
-    target.mkdir(parents=True, exist_ok=True)
-    for item in src.iterdir():
-        if item.is_file():
-            (target / item.name).write_text(item.read_text(encoding="utf-8"), encoding="utf-8")
+def _write_alert_report(payload: dict[str, Any], output_dir: Path, *, lite: bool = False) -> None:
+    if lite:
+        _write_json(output_dir / "operational-alert-intelligence.json", payload)
+        return
+    write_alert_report(payload, output_dir)
+
+
+def _write_event_report(payload: dict[str, Any], output_dir: Path, *, lite: bool = False) -> None:
+    if lite:
+        _write_json(output_dir / "unified-operational-event.json", payload)
+        return
+    write_event_report(payload, output_dir)
+
+
+def _write_signal_report(snapshot: dict[str, Any], output_dir: Path, *, lite: bool = False) -> None:
+    if lite:
+        _write_json(output_dir / "unified-operational-signal.json", snapshot)
+        return
+    write_signal_report(snapshot, output_dir)
 
 
 def _run_guardrail_checks(root: Path) -> list[str]:
@@ -102,12 +119,16 @@ def run_fast_validation(
     root: Path,
     output_dir: Path,
     skip_pytest: bool = False,
+    lite: bool = False,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     correlation_id = str(uuid4())
     errors = _run_guardrail_checks(root)
     if errors:
         raise RuntimeError("guardrails falharam: " + "; ".join(errors))
+
+    if lite:
+        skip_pytest = True
 
     if not skip_pytest:
         pytest_result = subprocess.run(
@@ -120,25 +141,27 @@ def run_fast_validation(
             raise RuntimeError(f"pytest pr_ci_watch falhou: {pytest_result.stdout}\n{pytest_result.stderr}")
 
     source_workflow = "Main Operational Validation Fast"
-    mesh_dir = output_dir / "operational-runtime-mesh-hub"
-    alert_dir = output_dir / "operational-alert-intelligence"
-    event_dir = output_dir / "unified-operational-event-bus"
-    signal_dir = output_dir / "unified-operational-signal-consolidator"
-    health_dir = output_dir / "main-operational-health"
+    artifacts_root = root / "artifacts"
+    mesh_dir = artifacts_root / "operational-runtime-mesh-hub"
+    alert_dir = artifacts_root / "operational-alert-intelligence"
+    event_dir = artifacts_root / "unified-operational-event-bus"
+    signal_dir = artifacts_root / "unified-operational-signal-consolidator"
+    health_dir = artifacts_root / "main-operational-health"
 
     mesh_payload = build_mesh_payload(
         source_workflow,
         "success",
         hydration_context=hydrate_context(root),
     )
-    _write_mesh_report(mesh_payload, mesh_dir)
+    _write_mesh_report(mesh_payload, mesh_dir, lite=lite)
 
-    write_alert_report(
+    _write_alert_report(
         build_alert_payload(source_workflow, "success", branch=branch, commit=sha, workflow_url=workflow_url),
         alert_dir,
+        lite=lite,
     )
 
-    write_event_report(
+    _write_event_report(
         build_event_payload(
             source_workflow,
             "success",
@@ -150,27 +173,23 @@ def run_fast_validation(
             event_name="push",
         ),
         event_dir,
+        lite=lite,
     )
 
-    analytics_script = root / "tools/product_intelligence/generate_github_runtime_analytics.py"
-    if analytics_script.exists():
-        subprocess.run([sys.executable, str(analytics_script)], cwd=root, check=False)
-
-    for name, src in [
-        ("operational-runtime-mesh-hub", mesh_dir),
-        ("operational-alert-intelligence", alert_dir),
-        ("unified-operational-event-bus", event_dir),
-    ]:
-        _mirror_artifacts(root, name, src)
+    if not lite:
+        analytics_script = root / "tools/product_intelligence/generate_github_runtime_analytics.py"
+        if analytics_script.exists():
+            subprocess.run([sys.executable, str(analytics_script)], cwd=root, check=False)
 
     snapshot = build_snapshot(repo, branch, root, correlation_id)
-    write_signal_report(snapshot, signal_dir)
+    _write_signal_report(snapshot, signal_dir, lite=lite)
 
     health_dir.mkdir(parents=True, exist_ok=True)
-    health_dir.joinpath("summary.md").write_text(
-        "# Main Operational Health (fast path)\n\nValidação síncrona pós-merge.\n",
-        encoding="utf-8",
-    )
+    if not lite:
+        health_dir.joinpath("summary.md").write_text(
+            "# Main Operational Health (fast path)\n\nValidação síncrona pós-merge.\n",
+            encoding="utf-8",
+        )
     health_dir.joinpath("evidence.json").write_text(
         json.dumps(
             {
@@ -183,6 +202,7 @@ def run_fast_validation(
                 "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "correlation_id": correlation_id,
                 "fast_path": True,
+                "lite": lite,
             },
             indent=2,
             ensure_ascii=False,
@@ -204,6 +224,7 @@ def run_fast_validation(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "elapsed_ms": elapsed_ms,
         "fast_path": True,
+        "lite": lite,
         "overall_state": snapshot.get("overall_state"),
         "mesh_integrated": snapshot.get("mesh_integrated"),
         "evidence_gate_consolidated": (snapshot.get("evidence_gate_consolidated") or {}).get("consolidated"),
@@ -212,25 +233,23 @@ def run_fast_validation(
         "mode": "report_only",
     }
     output_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / "main-operational-validation-fast.json").write_text(
-        json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
-    (output_dir / "main-operational-validation-fast.md").write_text(
-        "\n".join(
-            [
-                "# Main Operational Validation Fast",
-                "",
-                f"- Elapsed: **{elapsed_ms} ms**",
-                f"- Overall state: `{summary['overall_state']}`",
-                f"- Mesh integrated: `{summary['mesh_integrated']}`",
-                f"- Evidence gate consolidated: `{summary['evidence_gate_consolidated']}`",
-                f"- Maturity: `{summary['maturity_percent']}%`",
-            ]
+    _write_json(output_dir / "main-operational-validation-fast.json", summary)
+    if not lite:
+        (output_dir / "main-operational-validation-fast.md").write_text(
+            "\n".join(
+                [
+                    "# Main Operational Validation Fast",
+                    "",
+                    f"- Elapsed: **{elapsed_ms} ms**",
+                    f"- Overall state: `{summary['overall_state']}`",
+                    f"- Mesh integrated: `{summary['mesh_integrated']}`",
+                    f"- Evidence gate consolidated: `{summary['evidence_gate_consolidated']}`",
+                    f"- Maturity: `{summary['maturity_percent']}%`",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
         )
-        + "\n",
-        encoding="utf-8",
-    )
     return summary
 
 
@@ -244,6 +263,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--root", type=Path, default=ROOT_DIR)
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/main-operational-validation-fast"))
     parser.add_argument("--skip-pytest", action="store_true")
+    parser.add_argument(
+        "--lite",
+        action="store_true",
+        help="Modo ultra-rápido: só JSON essencial, sem pytest/html/analytics (alvo <1s script).",
+    )
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -260,6 +284,7 @@ def main(argv: list[str] | None = None) -> int:
             root=args.root,
             output_dir=args.output_dir,
             skip_pytest=args.skip_pytest,
+            lite=args.lite,
         )
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
