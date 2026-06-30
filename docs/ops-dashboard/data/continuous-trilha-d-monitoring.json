@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "generated_at": "2026-06-30T13:11:21.472169Z",
+  "state": "yellow",
+  "monitoring_enabled": true,
+  "regression_alert": false,
+  "alerts_active": 1,
+  "lane": "governance-automation",
+  "summary": {
+    "next_increment": "coverage_targeted_tests",
+    "artifact_ingestion_enabled": true,
+    "continuous_monitoring_enabled": true,
+    "recommendation": "investigar_alertas"
+  },
+  "signals": {
+    "current_score": 97.0,
+    "baseline_score": 88.33,
+    "delta_from_baseline": 8.67,
+    "trend": "improving",
+    "predictive_risk": "low",
+    "regression_predicted": false,
+    "recent_failed_samples": 0,
+    "regressing_dimensions": [],
+    "blocking_reasons": []
+  },
+  "alerts": [
+    {
+      "severity": "warning",
+      "code": "failed_samples_in_history",
+      "message": "Histórico Trilha D contém 1 amostra(s) com falha."
+    }
+  ],
+  "links": {
+    "trilha_d": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/docs/ops-dashboard/data/trilha-d-history.json",
+    "predictive_gate": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/docs/ops-dashboard/data/predictive-regression-gate.json",
+    "workflow": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
+    "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/build_continuous_trilha_d_monitoring.py",
+    "dashboard_data": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
+  },
+  "runtime_dashboard_contract": {
+    "card_fields": [
+      "state",
+      "monitoring_enabled",
+      "regression_alert",
+      "alerts_active"
+    ],
+    "alert_fields": [
+      "severity",
+      "code",
+      "message"
+    ],
+    "signal_fields": [
+      "trend",
+      "predictive_risk",
+      "regression_predicted",
+      "regressing_dimensions"
+    ],
+    "refresh_strategy": "artifact_ingestion_on_trilha_d_consolidate"
+  }
+}

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from scripts.build_trilha_d_history import (
     NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION,
+    NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING,
     NEXT_INCREMENT_AFTER_COVERAGE_TARGETED,
     NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS,
     NEXT_INCREMENT_AFTER_INGESTION,
@@ -13,6 +14,7 @@ from scripts.build_trilha_d_history import (
     NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD,
     artifact_ingestion_surface_ready,
     build_payload,
+    continuous_trilha_d_monitoring_surface_ready,
     coverage_targeted_critical_paths_ready,
     governance_deep_links_surface_ready,
     ingest_report_into_history,
@@ -157,7 +159,10 @@ def test_ingest_report_into_history_appends_sample(tmp_path: Path) -> None:
         "artifact_ingestion_on_trilha_d_consolidate",
         "workflow_runs_deep_links_enabled",
     }
-    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+    assert payload["summary"]["next_increment"] in {
+        NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION,
+        NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING,
+    }
     assert len(payload["history"]) == 2
     assert payload["history"][-1]["run_id"] == "run-ingest-1"
     assert payload["history"][-1]["workflow_run_url"]
@@ -174,7 +179,15 @@ def test_resolve_next_increment_when_pipeline_completo() -> None:
 
 def test_resolve_next_increment_when_artifact_ingestion_habilitado() -> None:
     assert artifact_ingestion_surface_ready() is True
-    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+    if continuous_trilha_d_monitoring_surface_ready():
+        assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
+    else:
+        assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+
+
+def test_resolve_next_increment_when_continuous_monitoring_habilitado() -> None:
+    assert continuous_trilha_d_monitoring_surface_ready() is True
+    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
 
 
 def test_resolve_next_increment_when_governance_pendente(monkeypatch) -> None:

@@ -41,11 +41,20 @@
       "artifact": "docs/ops-dashboard/data/predictive-regression-gate.json"
     },
     {
+      "id": "continuous_trilha_d_monitoring_dashboard",
+      "title": "Monitoramento Contínuo Trilha D",
+      "href": "./index.html#continuous-trilha-d-monitoring-card",
+      "category": "dashboard",
+      "priority": 5,
+      "status": "active",
+      "artifact": "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
+    },
+    {
       "id": "executive_brief_dashboard",
       "title": "Executive Brief — validação runtime",
       "href": "./data/executive-brief.json",
       "category": "dashboard",
-      "priority": 5,
+      "priority": 6,
       "status": "active",
       "artifact": "docs/ops-dashboard/data/executive-brief.json"
     },

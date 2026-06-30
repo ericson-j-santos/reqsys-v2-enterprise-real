@@ -1,7 +1,7 @@
 {
   "schema_version": "1.1.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T13:01:54.566850Z",
+  "generated_at": "2026-06-30T13:11:21.525853Z",
   "state": "yellow",
   "strategy": "pareto_operational_gold_base",
   "current_score": 97.0,
@@ -9,7 +9,7 @@
   "gold_gap": 1.0,
   "projected_score_after_recommended": 98.67,
   "projected_gap_after_recommended": 0.0,
-  "statistical_confidence": 0.76,
+  "statistical_confidence": 0.82,
   "dimension_signals": {
     "tests": 100.0,
     "coverage": 82.0,
@@ -32,7 +32,7 @@
     "recommended_now": 1,
     "expected_gain_now": 1.67,
     "pareto_rule": "ações até 80% do ganho esperado acumulado (80/20)",
-    "next_increment": "continuous_trilha_d_monitoring",
+    "next_increment": "coverage_targeted_tests",
     "evidence_source": "trilha_d_history",
     "consolidation_mode": false
   },
@@ -43,24 +43,23 @@
   },
   "ranked_actions": [
     {
-      "id": "continuous_trilha_d_monitoring",
-      "title": "Monitoramento contínuo Trilha D via artifacts",
-      "lane": "governance-automation",
+      "id": "coverage_targeted_tests",
+      "title": "Elevar coverage dos módulos críticos",
+      "lane": "quality-governance",
       "dimension": "coverage",
       "target_score": 92.0,
-      "fixed_gain": 1.8,
-      "effort_points": 2,
+      "effort_points": 3,
       "risk": "low",
-      "confidence": 0.76,
-      "why_now": "artifact ingestion habilitado — consolidar cobertura e refresh contínuo",
+      "confidence": 0.82,
+      "why_now": "coverage concentra o maior gap dimensional da Trilha D",
       "next_artifacts": [
-        "docs/ops-dashboard/data/trilha-d-history.json",
-        ".github/workflows/trilha-d-qualidade-governanca.yml"
+        "backend/tests/test_*_critical_paths.py",
+        "docs/ops-dashboard/data/trilha-d-history.json"
       ],
-      "active_when": "continuous_monitoring_pending",
+      "active_when": "coverage_gate_pending",
       "current_score": 82.0,
       "expected_score_gain": 1.67,
-      "pareto_score": 684.0,
+      "pareto_score": 492.0,
       "rank": 1,
       "cumulative_expected_gain_pct": 100.0,
       "recommended_now": true

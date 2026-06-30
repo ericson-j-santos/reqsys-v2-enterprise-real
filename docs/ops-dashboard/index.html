@@ -161,6 +161,7 @@
         <a class="link-btn" href="#trilha-d-history-card">Trilha D — Histórico</a>
         <a class="link-btn" href="#operational-pareto-card">Pareto Operacional</a>
         <a class="link-btn" href="#predictive-regression-card">Gate Preditivo</a>
+        <a class="link-btn" href="#continuous-trilha-d-monitoring-card">Monitoramento Contínuo</a>
       </div>
     </section>
 
@@ -231,6 +232,27 @@
       <details class="details">
         <summary>Contrato predictive-regression-gate bruto</summary>
         <pre id="predictive-details">{}</pre>
+      </details>
+    </section>
+
+    <section class="card" id="continuous-trilha-d-monitoring-card">
+      <h2>Monitoramento contínuo Trilha D</h2>
+      <p class="small">Alertas e regressão automática derivados do histórico e do gate preditivo, consumindo <code>continuous-trilha-d-monitoring.json</code>.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Estado</div><div id="continuous-monitoring-state" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Monitoramento ativo</div><div id="continuous-monitoring-enabled" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Alerta de regressão</div><div id="continuous-monitoring-regression-alert" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Alertas ativos</div><div id="continuous-monitoring-alerts-count" class="kpi-value">-</div></div>
+      </div>
+      <p class="small" id="continuous-monitoring-signals">-</p>
+      <table>
+        <thead><tr><th>Severidade</th><th>Código</th><th>Mensagem</th></tr></thead>
+        <tbody id="continuous-monitoring-alerts-rows"><tr><td colspan="3">Carregando...</td></tr></tbody>
+      </table>
+      <div class="links" id="continuous-monitoring-links"></div>
+      <details class="details">
+        <summary>Contrato continuous-trilha-d-monitoring bruto</summary>
+        <pre id="continuous-monitoring-details">{}</pre>
       </details>
     </section>
 
@@ -764,16 +786,86 @@
       });
     }
 
+    async function renderContinuousTrilhaDMonitoring() {
+      const fallback = {
+        state: 'unknown',
+        monitoring_enabled: false,
+        regression_alert: false,
+        alerts_active: 0,
+        signals: {},
+        alerts: [],
+        summary: {},
+      };
+      const response = await fetchOptionalJson('./data/continuous-trilha-d-monitoring.json', fallback);
+      const payload = response.data || fallback;
+      const signals = payload.signals || {};
+
+      document.getElementById('continuous-monitoring-state').innerHTML = `<span class="status ${statusClass(payload.state)}">${payload.state || 'unknown'}</span>`;
+      const monitoringEnabled = Boolean(payload.monitoring_enabled ?? payload.summary?.continuous_monitoring_enabled);
+      document.getElementById('continuous-monitoring-enabled').innerHTML = monitoringEnabled
+        ? '<span class="status passed">ativo</span>'
+        : '<span class="status warning">inativo</span>';
+      document.getElementById('continuous-monitoring-regression-alert').innerHTML = payload.regression_alert
+        ? '<span class="status warning">sim</span>'
+        : '<span class="status passed">não</span>';
+      document.getElementById('continuous-monitoring-alerts-count').textContent = payload.alerts_active ?? (payload.alerts || []).length;
+      document.getElementById('continuous-monitoring-signals').textContent = [
+        signals.trend ? `Tendência: ${signals.trend}` : '',
+        signals.predictive_risk ? `Risco preditivo: ${signals.predictive_risk}` : '',
+        signals.current_score != null ? `Score atual: ${signals.current_score}` : '',
+        Array.isArray(signals.regressing_dimensions) && signals.regressing_dimensions.length
+          ? `Dimensões regredindo: ${signals.regressing_dimensions.join(', ')}`
+          : '',
+        payload.summary?.recommendation ? `Recomendação: ${payload.summary.recommendation}` : '',
+      ].filter(Boolean).join(' · ') || 'Sem sinais adicionais; fallback governado ativo.';
+
+      const alertsBody = document.getElementById('continuous-monitoring-alerts-rows');
+      alertsBody.innerHTML = '';
+      const alerts = payload.alerts || [];
+      if (!alerts.length) {
+        alertsBody.innerHTML = '<tr><td colspan="3">Nenhum alerta ativo.</td></tr>';
+      } else {
+        alerts.forEach((alert) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><span class="status ${statusClass(alert.severity)}">${alert.severity || '-'}</span></td>
+            <td>${alert.code || '-'}</td>
+            <td>${alert.message || '-'}</td>
+          `;
+          alertsBody.appendChild(tr);
+        });
+      }
+
+      const links = document.getElementById('continuous-monitoring-links');
+      links.innerHTML = '';
+      addLink(links, 'continuous-trilha-d-monitoring.json', './data/continuous-trilha-d-monitoring.json');
+      if (payload.links?.trilha_d) addLink(links, 'Trilha D history', payload.links.trilha_d, true);
+      if (payload.links?.predictive_gate) addLink(links, 'Gate preditivo', payload.links.predictive_gate, true);
+      if (payload.links?.workflow) addLink(links, 'Workflow Trilha D', payload.links.workflow, true);
+      if (payload.links?.source) addLink(links, 'Script monitoramento', payload.links.source, true);
+
+      document.getElementById('continuous-monitoring-details').textContent = shortJson({
+        available: response.available,
+        source: response.source,
+        fallback_error: response.error,
+        signals,
+        alerts,
+        summary: payload.summary || {},
+      });
+    }
+
     function renderOperationalIntelligenceQuickLinks() {
       const trilhaScore = document.getElementById('trilha-d-score')?.textContent?.trim() || '-';
       const paretoScore = document.getElementById('pareto-score')?.textContent?.trim().split(/\s/)[0] || '-';
       const predictiveRisk = document.getElementById('predictive-risk')?.textContent?.trim() || '-';
+      const monitoringState = document.getElementById('continuous-monitoring-state')?.textContent?.trim() || '-';
       const quick = document.getElementById('operational-intelligence-quick-links');
       if (!quick) return;
       quick.innerHTML = '';
       addLink(quick, `Trilha D — score ${trilhaScore}`, '#trilha-d-history-card');
       addLink(quick, `Pareto — score ${paretoScore}`, '#operational-pareto-card');
       addLink(quick, `Gate preditivo — risco ${predictiveRisk}`, '#predictive-regression-card');
+      addLink(quick, `Monitoramento contínuo — ${monitoringState}`, '#continuous-trilha-d-monitoring-card');
       addLink(quick, 'Navegação operacional', './operational-navigation.html');
     }
 
@@ -869,6 +961,7 @@
       addLink(links, 'Trilha D — Histórico', '#trilha-d-history-card');
       addLink(links, 'Pareto Operacional', '#operational-pareto-card');
       addLink(links, 'Gate Preditivo', '#predictive-regression-card');
+      addLink(links, 'Monitoramento Contínuo Trilha D', '#continuous-trilha-d-monitoring-card');
       addLink(links, 'Runtime Executive Index', './data/runtime-executive-index.json');
       addLink(links, 'Merge Intelligence JSON', './data/merge-intelligence-index.json');
       addLink(links, 'Lane Priority JSON', './data/merge-lane-priority.json');
@@ -878,6 +971,7 @@
       await renderTrilhaDHistory();
       await renderOperationalPareto();
       await renderPredictiveRegressionGate();
+      await renderContinuousTrilhaDMonitoring();
       renderOperationalIntelligenceQuickLinks();
       renderDomains(data.runtime_domain_drilldowns || []);
       const obs = data.observability_correlation_report || {};
@@ -987,6 +1081,7 @@
       document.getElementById('pareto-actions').innerHTML = `<tr><td colspan="6">Fallback seguro: falha ao carregar Pareto operacional.</td></tr>`;
       document.getElementById('predictive-dimension-risks').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar gate preditivo.</td></tr>`;
       document.getElementById('predictive-blocking-reasons').innerHTML = '<tr><td>Fallback seguro: falha ao carregar gate preditivo.</td></tr>';
+      document.getElementById('continuous-monitoring-alerts-rows').innerHTML = '<tr><td colspan="3">Fallback seguro: falha ao carregar monitoramento contínuo.</td></tr>';
     });
   </script>
 </body>
