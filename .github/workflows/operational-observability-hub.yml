@@ -1,14 +1,11 @@
 name: Operational Observability Hub
 
+# workflow_run removido; schedule + dispatch + gh run list como fallback.
+
 on:
   workflow_dispatch:
   schedule:
     - cron: "35 12 * * 1-5"
-  workflow_run:
-    workflows:
-      - "Operational Center History"
-    types:
-      - completed
 
 permissions:
   actions: read

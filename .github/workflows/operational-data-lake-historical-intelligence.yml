@@ -1,15 +1,18 @@
 name: Operational Data Lake & Historical Intelligence
 
+# workflow_run removido; schedule + dispatch evitam cascata pós-merge.
+
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - "Governed Auto Remediation Engine"
-      - "Workflow Reliability Analytics"
-      - "Operational Stability Score"
-      - "CI Incident Intelligence"
-    types:
-      - completed
+  schedule:
+    - cron: "47 11 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operational-data-lake-historical-intelligence
+  cancel-in-progress: false
 
 jobs:
   operational-data-lake:
@@ -26,11 +29,11 @@ jobs:
 
       - name: Build historical operational intelligence
         env:
-          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name || 'scheduled-scan' }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'success' }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           echo "# Operational Data Lake & Historical Intelligence" > operational-historical-intelligence.md
           echo "" >> operational-historical-intelligence.md
