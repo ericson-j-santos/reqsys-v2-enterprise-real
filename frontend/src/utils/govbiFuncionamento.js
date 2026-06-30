@@ -134,7 +134,7 @@ export async function executarTestesApiGovbi(client) {
   const resultados = []
 
   try {
-    const { data } = await client.get('/api/govbi/health')
+    const { data } = await client.get('/govbi/health')
     const payload = data?.data ?? data
     const ok = payload?.service === 'govbi-proxy' && payload?.status === 'ok'
     resultados.push(criarResultado(
@@ -155,7 +155,7 @@ export async function executarTestesApiGovbi(client) {
   }
 
   try {
-    const { data } = await client.get('/api/govbi/funcionamento')
+    const { data } = await client.get('/govbi/funcionamento')
     const payload = data?.data ?? data
     const ok = Boolean(payload?.completo) && Number(payload?.percentual) === 100
     resultados.push(criarResultado(
@@ -176,7 +176,7 @@ export async function executarTestesApiGovbi(client) {
   }
 
   try {
-    await client.post('/api/govbi/perguntas', { pergunta: 'oi' })
+    await client.post('/govbi/perguntas', { pergunta: 'oi' })
     resultados.push(criarResultado(
       'api-validacao',
       'Validação de payload mínimo',
@@ -198,7 +198,7 @@ export async function executarTestesApiGovbi(client) {
   try {
     const correlationId = `govbi-func-${Date.now()}`
     const { data } = await client.post(
-      '/api/govbi/perguntas',
+      '/govbi/perguntas',
       {
         pergunta: 'Teste automatizado de funcionamento GovBI',
         formatoResposta: 'tabela',

@@ -20,6 +20,31 @@ function json(data) {
 }
 
 const handlers = [
+  { pattern: /\/api\/govbi\/health$/, body: { service: 'govbi-proxy', status: 'ok', timeout_seconds: 15 } },
+  { pattern: /\/api\/govbi\/funcionamento$/, body: {
+    executadoEm: '2026-06-29T12:00:00Z',
+    total: 5,
+    aprovados: 5,
+    reprovados: 0,
+    percentual: 100,
+    completo: true,
+    resultados: [],
+  } },
+  { pattern: /\/api\/govbi\/perguntas$/, body: {
+    statusFluxo: 'CONCLUIDO',
+    correlationId: 'corr-e2e-govbi',
+    resultado: { colunas: ['mes', 'total'], linhas: [{ mes: '2024-01', total: 3 }] },
+    explicacao: 'Mock E2E GovBI',
+    mascaramentoAplicado: true,
+    avisos: [],
+    nivelSensibilidade: 'BAIXA',
+    metrica: 'contagem_registros',
+    dimensoes: ['mes'],
+    filtros: {},
+    sqlGerado: 'SELECT mes, COUNT(*) FROM propostas GROUP BY mes',
+    requerAprovacao: false,
+    aprovacaoId: null,
+  } },
   { pattern: /\/api\/v1\/auth\/config$/, body: { azure_enabled: false, demo_login_enabled: true, environment: 'e2e_responsivo' } },
   { pattern: /\/api\/v1\/auth\/login$/, body: { access_token: 'token-e2e', token_type: 'bearer', usuario: usuarioAdmin } },
   { pattern: /\/api\/v1\/dashboard\/requisitos$/, body: { total: 12, em_analise: 3, aprovados: 7, pendentes: 2 } },
