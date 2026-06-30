@@ -75,12 +75,12 @@ jobs:
       - name: Validar drift repo ↔ runtime
         id: check
         run: |
-          set -euo pipefail
+          set -uo pipefail
           python scripts/validate_publication_sync.py \
             --environment prod \
             --expected-sha "${{ github.sha }}" \
             --timeout 8 \
-            --output publication-sync-pre.json
+            --output publication-sync-pre.json || true
           if python -c "import json; d=json.load(open('publication-sync-pre.json')); exit(0 if d.get('ok') else 1)"; then
             echo "prod_synced=true" >> "$GITHUB_OUTPUT"
             echo "Produção já sincronizada — deploy omitido no push (gate rápido)."
