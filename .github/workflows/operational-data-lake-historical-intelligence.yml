@@ -1,6 +1,7 @@
 name: Operational Data Lake & Historical Intelligence
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows:
       - "Governed Auto Remediation Engine"
@@ -17,6 +18,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Build historical operational intelligence
         env:
