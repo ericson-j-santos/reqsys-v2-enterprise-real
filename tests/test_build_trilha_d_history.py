@@ -17,6 +17,7 @@ from scripts.build_trilha_d_history import (
     artifact_ingestion_surface_ready,
     build_payload,
     continuous_trilha_d_monitoring_surface_ready,
+    continuous_trilha_d_monitoring_increment_ready,
     coverage_targeted_critical_paths_ready,
     coverage_targeted_surface_ready,
     governance_deep_links_surface_ready,
@@ -217,16 +218,22 @@ def test_resolve_next_increment_quando_merge_readiness_pendente(monkeypatch) -> 
 def test_resolve_next_increment_when_continuous_monitoring_habilitado() -> None:
     assert continuous_trilha_d_monitoring_surface_ready() is True
     expected = resolve_next_increment(artifact_ingestion=True)
-    if merge_readiness_history_surface_ready() and artifact_ingestion_refresh_surface_ready():
+    if continuous_trilha_d_monitoring_increment_ready() and merge_readiness_history_surface_ready() and artifact_ingestion_refresh_surface_ready():
         assert expected == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
-    elif merge_readiness_history_surface_ready():
+    elif continuous_trilha_d_monitoring_increment_ready() and merge_readiness_history_surface_ready():
         assert expected == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
-    elif governance_workflow_deep_links_surface_ready() and coverage_targeted_surface_ready():
+    elif continuous_trilha_d_monitoring_increment_ready() and governance_workflow_deep_links_surface_ready() and coverage_targeted_surface_ready():
         assert expected == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION_REFRESH
-    elif coverage_targeted_surface_ready():
+    elif continuous_trilha_d_monitoring_increment_ready() and coverage_targeted_surface_ready():
         assert expected == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    elif not continuous_trilha_d_monitoring_increment_ready():
+        assert expected == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
     else:
         assert expected == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
+
+
+def test_continuous_trilha_d_monitoring_increment_ready_detecta_arquivos() -> None:
+    assert continuous_trilha_d_monitoring_surface_ready() is True
 
 
 def test_coverage_targeted_surface_ready_detecta_arquivos_e_workflow() -> None:

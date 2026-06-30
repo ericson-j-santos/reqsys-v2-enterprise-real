@@ -163,6 +163,7 @@
         <a class="link-btn" href="#operational-pareto-card">Pareto Operacional</a>
         <a class="link-btn" href="#predictive-regression-card">Gate Preditivo</a>
         <a class="link-btn" href="#continuous-trilha-d-monitoring-card">Monitoramento Contínuo</a>
+        <a class="link-btn" href="#continuous-trilha-d-monitoring-history-card">Monitoramento — Histórico</a>
         <a class="link-btn" href="#merge-readiness-history-card">Merge Readiness — Histórico</a>
       </div>
     </section>
@@ -256,6 +257,29 @@
       <details class="details">
         <summary>Contrato continuous-trilha-d-monitoring bruto</summary>
         <pre id="continuous-monitoring-details">{}</pre>
+      </details>
+    </section>
+
+    <section class="card" id="continuous-trilha-d-monitoring-history-card">
+      <h2>Monitoramento contínuo — Histórico agregado</h2>
+      <p class="small">Tendência de alertas, estabilidade e regressão consumindo <code>continuous-trilha-d-monitoring-history.json</code>.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Estado</div><div id="continuous-monitoring-history-state" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Taxa green</div><div id="continuous-monitoring-green-rate" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Média alertas</div><div id="continuous-monitoring-avg-alerts" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Amostras</div><div id="continuous-monitoring-history-samples" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Histórico habilitado</div><div id="continuous-trilha-d-monitoring-history-enabled" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Monitoramento estabilizado</div><div id="monitoring-stabilized" class="kpi-value">-</div></div>
+      </div>
+      <p class="small" id="continuous-monitoring-history-summary">-</p>
+      <table>
+        <thead><tr><th>Timestamp</th><th>Estado</th><th>Alertas</th><th>Regressão</th><th>Recomendação</th><th>Execução</th></tr></thead>
+        <tbody id="continuous-monitoring-history-rows"><tr><td colspan="6">Carregando...</td></tr></tbody>
+      </table>
+      <div class="links" id="continuous-monitoring-history-links"></div>
+      <details class="details">
+        <summary>Contrato continuous-trilha-d-monitoring-history bruto</summary>
+        <pre id="continuous-monitoring-history-details">{}</pre>
       </details>
     </section>
 
@@ -883,6 +907,82 @@
       });
     }
 
+    async function renderContinuousTrilhaDMonitoringHistory() {
+      const fallback = {
+        state: 'unknown',
+        summary: {
+          continuous_trilha_d_monitoring_history_enabled: false,
+          samples: 0,
+          green_rate: 0,
+          avg_alerts_active: 0,
+          monitoring_stabilized: false,
+        },
+        metrics: {},
+        history: [],
+      };
+      const response = await fetchOptionalJson('./data/continuous-trilha-d-monitoring-history.json', fallback);
+      const payload = response.data || fallback;
+      const summary = payload.summary || {};
+
+      document.getElementById('continuous-monitoring-history-state').innerHTML = `<span class="status ${statusClass(payload.state)}">${payload.state || 'unknown'}</span>`;
+      document.getElementById('continuous-monitoring-green-rate').textContent = summary.green_rate != null
+        ? `${(summary.green_rate * 100).toFixed(1)}%`
+        : '-';
+      document.getElementById('continuous-monitoring-avg-alerts').textContent = summary.avg_alerts_active ?? '-';
+      document.getElementById('continuous-monitoring-history-samples').textContent = summary.samples ?? (payload.history || []).length;
+      document.getElementById('continuous-trilha-d-monitoring-history-enabled').innerHTML = summary.continuous_trilha_d_monitoring_history_enabled
+        ? '<span class="status passed">continuous_trilha_d_monitoring_history_enabled</span>'
+        : '<span class="status warning">inativo</span>';
+      document.getElementById('monitoring-stabilized').innerHTML = summary.monitoring_stabilized
+        ? '<span class="status passed">monitoring_stabilized</span>'
+        : '<span class="status warning">pendente</span>';
+      document.getElementById('continuous-monitoring-history-summary').textContent = [
+        summary.recommendation ? `Recomendação: ${summary.recommendation}` : '',
+        payload.metrics?.state_distribution?.length
+          ? `Distribuição: ${payload.metrics.state_distribution.map((item) => `${item.state}=${item.count}`).join(', ')}`
+          : '',
+      ].filter(Boolean).join(' · ') || 'Sem histórico adicional; fallback governado ativo.';
+
+      const rows = document.getElementById('continuous-monitoring-history-rows');
+      rows.innerHTML = '';
+      const history = (payload.history || []).slice().reverse();
+      if (!history.length) {
+        rows.innerHTML = '<tr><td colspan="6">Nenhuma amostra registrada.</td></tr>';
+      } else {
+        history.slice(0, 8).forEach((item) => {
+          const tr = document.createElement('tr');
+          const runLink = item.workflow_run_url
+            ? `<a href="${item.workflow_run_url}" target="_blank" rel="noopener">Ver execução</a>`
+            : '-';
+          tr.innerHTML = `
+            <td>${item.timestamp || '-'}</td>
+            <td><span class="status ${statusClass(item.state)}">${item.state || '-'}</span></td>
+            <td>${item.alerts_active ?? '-'}</td>
+            <td>${item.regression_alert ? 'sim' : 'não'}</td>
+            <td>${item.recommendation || '-'}</td>
+            <td>${runLink}</td>
+          `;
+          rows.appendChild(tr);
+        });
+      }
+
+      const links = document.getElementById('continuous-monitoring-history-links');
+      links.innerHTML = '';
+      addLink(links, 'continuous-trilha-d-monitoring-history.json', './data/continuous-trilha-d-monitoring-history.json');
+      if (payload.links?.monitoring) addLink(links, 'Monitoramento atual', payload.links.monitoring, true);
+      if (payload.links?.workflow) addLink(links, 'Workflow Trilha D', payload.links.workflow, true);
+      if (payload.links?.source) addLink(links, 'Script histórico', payload.links.source, true);
+
+      document.getElementById('continuous-monitoring-history-details').textContent = shortJson({
+        available: response.available,
+        source: response.source,
+        fallback_error: response.error,
+        summary,
+        metrics: payload.metrics || {},
+        latest_snapshot: payload.latest_snapshot || {},
+      });
+    }
+
     async function renderMergeReadinessHistory() {
       const fallback = {
         state: 'unknown',
@@ -964,6 +1064,8 @@
       addLink(quick, `Pareto — score ${paretoScore}`, '#operational-pareto-card');
       addLink(quick, `Gate preditivo — risco ${predictiveRisk}`, '#predictive-regression-card');
       addLink(quick, `Monitoramento contínuo — ${monitoringState}`, '#continuous-trilha-d-monitoring-card');
+      const monitoringHistoryState = document.getElementById('continuous-monitoring-history-state')?.textContent?.trim() || '-';
+      addLink(quick, `Monitoramento histórico — ${monitoringHistoryState}`, '#continuous-trilha-d-monitoring-history-card');
       const mergeHistoryState = document.getElementById('merge-readiness-history-state')?.textContent?.trim() || '-';
       addLink(quick, `Merge readiness — ${mergeHistoryState}`, '#merge-readiness-history-card');
       addLink(quick, 'Navegação operacional', './operational-navigation.html');
@@ -1067,6 +1169,7 @@
       addLink(links, 'Pareto Operacional', '#operational-pareto-card');
       addLink(links, 'Gate Preditivo', '#predictive-regression-card');
       addLink(links, 'Monitoramento Contínuo Trilha D', '#continuous-trilha-d-monitoring-card');
+      addLink(links, 'Monitoramento — Histórico', '#continuous-trilha-d-monitoring-history-card');
       addLink(links, 'Merge Readiness — Histórico', '#merge-readiness-history-card');
       addLink(links, 'Runtime Executive Index', './data/runtime-executive-index.json');
       addLink(links, 'Merge Intelligence JSON', './data/merge-intelligence-index.json');
@@ -1078,6 +1181,7 @@
       await renderOperationalPareto();
       await renderPredictiveRegressionGate();
       await renderContinuousTrilhaDMonitoring();
+      await renderContinuousTrilhaDMonitoringHistory();
       await renderMergeReadinessHistory();
       renderOperationalIntelligenceQuickLinks();
       renderDomains(data.runtime_domain_drilldowns || []);

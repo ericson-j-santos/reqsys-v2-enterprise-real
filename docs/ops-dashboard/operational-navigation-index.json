@@ -41,6 +41,15 @@
       "artifact": "docs/ops-dashboard/data/predictive-regression-gate.json"
     },
     {
+      "id": "continuous_trilha_d_monitoring_history_dashboard",
+      "title": "Monitoramento Contínuo — Histórico",
+      "href": "./index.html#continuous-trilha-d-monitoring-history-card",
+      "category": "dashboard",
+      "priority": 5.5,
+      "status": "active",
+      "artifact": "docs/ops-dashboard/data/continuous-trilha-d-monitoring-history.json"
+    },
+    {
       "id": "continuous_trilha_d_monitoring_dashboard",
       "title": "Monitoramento Contínuo Trilha D",
       "href": "./index.html#continuous-trilha-d-monitoring-card",

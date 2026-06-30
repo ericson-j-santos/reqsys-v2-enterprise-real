@@ -17,6 +17,7 @@ on:
       - 'scripts/trilha_d_coverage_dimension.py'
       - 'scripts/build_trilha_d_history.py'
       - 'scripts/build_continuous_trilha_d_monitoring.py'
+      - 'scripts/build_continuous_trilha_d_monitoring_history.py'
       - 'scripts/predict_operational_regression.py'
       - 'docs/contracts/trilha-d-qualidade-governanca.schema.json'
       - 'docs/runbooks/trilha-d-qualidade-governanca.md'
@@ -33,6 +34,7 @@ on:
       - 'scripts/trilha_d_coverage_dimension.py'
       - 'scripts/build_trilha_d_history.py'
       - 'scripts/build_continuous_trilha_d_monitoring.py'
+      - 'scripts/build_continuous_trilha_d_monitoring_history.py'
       - 'scripts/predict_operational_regression.py'
       - 'docs/contracts/trilha-d-qualidade-governanca.schema.json'
       - 'docs/runbooks/trilha-d-qualidade-governanca.md'
@@ -230,6 +232,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pytest tests/test_build_continuous_trilha_d_monitoring.py -q
+          python -m pytest tests/test_build_continuous_trilha_d_monitoring_history.py -q
 
       - name: Validar superfície coverage targeted
         if: always()
@@ -256,6 +259,7 @@ jobs:
             docs/ops-dashboard/data/padrao-ouro-operational-pareto.json
             docs/ops-dashboard/data/predictive-regression-gate.json
             docs/ops-dashboard/data/continuous-trilha-d-monitoring.json
+            docs/ops-dashboard/data/continuous-trilha-d-monitoring-history.json
             docs/ops-dashboard/data/governance-evidence-index.json
             docs/ops-dashboard/data/merge-readiness-history.json
           if-no-files-found: warn
@@ -287,12 +291,14 @@ jobs:
           SRC_PARETO="artifacts/trilha-d-ingest/docs/ops-dashboard/data/padrao-ouro-operational-pareto.json"
           SRC_PREDICTIVE="artifacts/trilha-d-ingest/docs/ops-dashboard/data/predictive-regression-gate.json"
           SRC_MONITORING="artifacts/trilha-d-ingest/docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
+          SRC_MONITORING_HISTORY="artifacts/trilha-d-ingest/docs/ops-dashboard/data/continuous-trilha-d-monitoring-history.json"
           SRC_GOVERNANCE="artifacts/trilha-d-ingest/docs/ops-dashboard/data/governance-evidence-index.json"
           SRC_MERGE_READINESS="artifacts/trilha-d-ingest/docs/ops-dashboard/data/merge-readiness-history.json"
           DEST_HISTORY="docs/ops-dashboard/data/trilha-d-history.json"
           DEST_PARETO="docs/ops-dashboard/data/padrao-ouro-operational-pareto.json"
           DEST_PREDICTIVE="docs/ops-dashboard/data/predictive-regression-gate.json"
           DEST_MONITORING="docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
+          DEST_MONITORING_HISTORY="docs/ops-dashboard/data/continuous-trilha-d-monitoring-history.json"
           DEST_GOVERNANCE="docs/ops-dashboard/data/governance-evidence-index.json"
           DEST_MERGE_READINESS="docs/ops-dashboard/data/merge-readiness-history.json"
           if [[ ! -f "${SRC_HISTORY}" ]]; then
@@ -315,6 +321,9 @@ jobs:
           if [[ -f "${SRC_MONITORING}" ]]; then
             cp "${SRC_MONITORING}" "${DEST_MONITORING}"
           fi
+          if [[ -f "${SRC_MONITORING_HISTORY}" ]]; then
+            cp "${SRC_MONITORING_HISTORY}" "${DEST_MONITORING_HISTORY}"
+          fi
           if [[ -f "${SRC_GOVERNANCE}" ]]; then
             cp "${SRC_GOVERNANCE}" "${DEST_GOVERNANCE}"
           fi
@@ -330,6 +339,9 @@ jobs:
           fi
           if [[ -f "${DEST_MONITORING}" ]]; then
             git add "${DEST_MONITORING}"
+          fi
+          if [[ -f "${DEST_MONITORING_HISTORY}" ]]; then
+            git add "${DEST_MONITORING_HISTORY}"
           fi
           if [[ -f "${DEST_GOVERNANCE}" ]]; then
             git add "${DEST_GOVERNANCE}"

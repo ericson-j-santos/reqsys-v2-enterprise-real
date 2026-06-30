@@ -49,11 +49,21 @@ def test_build_alerts_flags_regression_predicted() -> None:
 
 
 def test_build_alerts_flags_failed_samples_and_disabled_ingestion() -> None:
-    alerts = build_alerts(_history(artifact_ingestion=False, failed_samples=2), _predictive())
+    predictive = _predictive()
+    predictive["signals"]["recent_failed_samples"] = 2
+    alerts = build_alerts(_history(artifact_ingestion=False, failed_samples=2), predictive)
     codes = {alert["code"] for alert in alerts}
     assert "artifact_ingestion_disabled" in codes
-    assert "failed_samples_in_history" in codes
+    assert "recent_failed_samples" in codes
+    assert "failed_samples_in_history" not in codes
     assert resolve_monitoring_state(alerts) == "yellow"
+
+
+def test_build_alerts_ignores_cumulative_failed_samples_when_recent_is_zero() -> None:
+    predictive = _predictive()
+    alerts = build_alerts(_history(failed_samples=3), predictive)
+    assert alerts == []
+    assert resolve_monitoring_state(alerts) == "green"
 
 
 def test_build_payload_exposes_runtime_contract() -> None:

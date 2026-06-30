@@ -339,6 +339,15 @@
               :clickable="false"
             />
           </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Monitoramento estabilizado"
+              :value="continuousMonitoringResumo.monitoringStabilized"
+              :semaforo="continuousMonitoringResumo.monitoringStabilized === 'sim' ? 'verde' : 'amarelo'"
+              :clickable="false"
+              data-testid="monitoring-stabilized"
+            />
+          </v-col>
         </v-row>
         <v-alert
           v-if="continuousMonitoringResumo.continuous_monitoring_enabled"
@@ -565,11 +574,16 @@ const trilhaDDimensoesFiltradas = computed(() => {
 })
 const trilhaDHistorico = computed(() => trilhaDItems.value.history || [])
 const continuousMonitoring = computed(() => runtimeDashboard.value?.continuous_trilha_d_monitoring || {})
+const continuousMonitoringHistory = computed(() => runtimeDashboard.value?.continuous_trilha_d_monitoring_history || {})
 const continuousMonitoringResumo = computed(() => ({
   state: continuousMonitoring.value.state ?? 'desconhecido',
   monitoringEnabled: continuousMonitoring.value.monitoring_enabled ? 'ativo' : 'inativo',
   regressionAlert: continuousMonitoring.value.regression_alert ? 'sim' : 'não',
   alertsActive: continuousMonitoring.value.alerts_active ?? 0,
+  monitoringStabilized: (
+    continuousMonitoringHistory.value.summary?.monitoring_stabilized
+    ?? (continuousMonitoring.value.state === 'green' && Number(continuousMonitoring.value.alerts_active ?? 0) === 0)
+  ) ? 'sim' : 'não',
   continuous_monitoring_enabled: Boolean(
     continuousMonitoring.value.monitoring_enabled
     || continuousMonitoring.value.summary?.continuous_monitoring_enabled,

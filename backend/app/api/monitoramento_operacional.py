@@ -44,6 +44,9 @@ from app.services.continuous_trilha_d_monitoring_index import (
     mapear_cards_continuous_monitoring,
     mapear_secao_continuous_monitoring,
 )
+from app.services.continuous_trilha_d_monitoring_history_index import (
+    carregar_continuous_trilha_d_monitoring_history_index,
+)
 
 router = APIRouter(tags=['Monitoramento Operacional'])
 logger = logging.getLogger(__name__)
@@ -167,6 +170,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
     continuous_monitoring_index = carregar_continuous_trilha_d_monitoring_index()
     continuous_monitoring_cards = mapear_cards_continuous_monitoring(continuous_monitoring_index)
     continuous_monitoring_section = mapear_secao_continuous_monitoring(continuous_monitoring_index)
+    continuous_monitoring_history_index = carregar_continuous_trilha_d_monitoring_history_index()
     mesh_signal = carregar_operational_mesh_signal()
     mesh_cards = mapear_cards_operational_mesh(mesh_signal)
     mesh_section = mapear_secao_operational_mesh(mesh_signal)
@@ -271,6 +275,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
         'governance_evidence': governance_index,
         'trilha_d_history': trilha_d_index,
         'continuous_trilha_d_monitoring': continuous_monitoring_index,
+        'continuous_trilha_d_monitoring_history': continuous_monitoring_history_index,
         'operational_mesh': mesh_signal,
         'cross_runtime_analytics': cross_runtime,
         'sections': [

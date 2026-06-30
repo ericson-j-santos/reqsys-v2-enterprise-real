@@ -51,6 +51,7 @@ def test_refresh_artifacts_atualiza_jsons_downstream(tmp_path: Path) -> None:
     assert (repo_root / "docs/ops-dashboard/data/padrao-ouro-operational-pareto.json").exists()
     assert (repo_root / "docs/ops-dashboard/data/predictive-regression-gate.json").exists()
     assert (repo_root / "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json").exists()
+    assert (repo_root / "docs/ops-dashboard/data/continuous-trilha-d-monitoring-history.json").exists()
     assert (repo_root / "docs/ops-dashboard/data/governance-evidence-index.json").exists()
 
 

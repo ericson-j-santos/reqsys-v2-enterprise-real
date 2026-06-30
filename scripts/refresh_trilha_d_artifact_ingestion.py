@@ -23,6 +23,7 @@ DEFAULT_HISTORY = "docs/ops-dashboard/data/trilha-d-history.json"
 DEFAULT_PARETO = "docs/ops-dashboard/data/padrao-ouro-operational-pareto.json"
 DEFAULT_PREDICTIVE = "docs/ops-dashboard/data/predictive-regression-gate.json"
 DEFAULT_MONITORING = "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
+DEFAULT_MONITORING_HISTORY = "docs/ops-dashboard/data/continuous-trilha-d-monitoring-history.json"
 DEFAULT_GOVERNANCE = "docs/ops-dashboard/data/governance-evidence-index.json"
 DEFAULT_MERGE_READINESS_HISTORY = "docs/ops-dashboard/data/merge-readiness-history.json"
 
@@ -90,6 +91,21 @@ def refresh_artifacts(
         ]
     )
     refreshed.append(str(monitoring_path))
+
+    monitoring_history_path = repo_root / DEFAULT_MONITORING_HISTORY
+    from scripts.build_continuous_trilha_d_monitoring_history import main as monitoring_history_main
+
+    monitoring_history_main(
+        [
+            "--ingest-monitoring",
+            str(monitoring_path),
+            "--output",
+            str(monitoring_history_path),
+            "--run-id",
+            github_run_id or "",
+        ]
+    )
+    refreshed.append(str(monitoring_history_path))
 
     governance_path = repo_root / DEFAULT_GOVERNANCE
     from scripts.build_governance_evidence_index import main as governance_main
