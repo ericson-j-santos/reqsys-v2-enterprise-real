@@ -49,9 +49,16 @@ O workflow `Fly Enterprise Sync` executa:
 6. validação de publicação (`validate_publication_sync.py`) e login (`validar_login_multi_ambiente.py`);
 7. publicação de artifacts de evidência.
 
-### Automação em `main` (dev → hml)
+### Automação em `main` (gate rápido + deploy condicional)
 
-A cada push em `main` que altere `backend/`, `frontend/` ou IaC Fly, o workflow dispara **automaticamente** a promoção:
+A cada push em `main` que altere `backend/`, `frontend/` ou IaC Fly:
+
+1. **Gate rápido (~30–90s):** `validate_publication_sync` verifica se dev/hml/prod já estão no SHA da `main`.
+2. **Sem drift:** workflow termina em segundos — nenhum `flyctl deploy`.
+3. **Com drift:** promoção automática `dev → hml` (como antes, ~7–15 min).
+4. **Produção:** `Deploy Production Sync` usa o mesmo gate — deploy só quando `prod` estiver dessincronizado, ou via `workflow_dispatch` com `APROVO-PROD`.
+
+Para **forçar deploy** mesmo sincronizado: Actions → **Fly Enterprise Sync** → `deploy=true`.
 
 ```text
 dev (reqsys-api-dev / reqsys-app-dev) → hml (reqsys-api-stg / reqsys-app-stg)
