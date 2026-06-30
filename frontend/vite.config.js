@@ -1,5 +1,12 @@
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const packageJson = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8'))
+const appVersion = process.env.VITE_APP_VERSION || packageJson.version
 
 const backendProxyTarget = process.env.VITE_BACKEND_PROXY_TARGET || 'http://127.0.0.1:8000'
 const kbProxyTarget = process.env.VITE_KB_PROXY_TARGET || 'http://127.0.0.1:8080'
@@ -16,6 +23,9 @@ function rewriteBackendProxyPath(path) {
 
 export default defineConfig({
   plugins: [vue()],
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+  },
   test: {
     environment: 'jsdom',
     globals: true,

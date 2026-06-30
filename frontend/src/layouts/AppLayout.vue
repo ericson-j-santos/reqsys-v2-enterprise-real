@@ -26,7 +26,18 @@
     >
       <div class="pa-5 pb-3 req-brand-block">
         <div class="brand"><span class="brand-dot">R</span> ReqSys Enterprise</div>
-        <div class="muted mt-1">SaaS Interno · v2 Enterprise</div>
+        <div class="muted mt-1 version-line" data-testid="app-version-label">{{ versionLabel }}</div>
+        <v-chip
+          v-if="hasVersionDrift"
+          size="x-small"
+          color="warning"
+          variant="tonal"
+          class="mt-1"
+          prepend-icon="mdi-alert-outline"
+          data-testid="app-version-drift-chip"
+        >
+          Versões divergentes
+        </v-chip>
         <AmbienteNavigator
           :environment-hint="environment"
           compact
@@ -169,8 +180,10 @@ import {
   temaPorId,
   temaTemSubgrupos,
 } from '../constants/navCatalog'
+import { useAppVersion } from '../composables/useAppVersion'
 
 const { mobile } = useDisplay()
+const { versionLabel, hasVersionDrift } = useAppVersion()
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
@@ -295,6 +308,10 @@ function sair() {
 }
 .req-brand-block {
   min-width: 0;
+}
+.version-line {
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 .nav-temas {
   padding: 8px 8px 0;
