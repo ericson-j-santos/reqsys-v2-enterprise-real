@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T10:30:06.378608Z",
+  "generated_at": "2026-06-30T12:26:48.108063Z",
   "state": "green",
   "current_score": 95.88,
   "baseline_score": 88.33,
@@ -16,6 +16,8 @@
   },
   "links": {
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
+    "workflow_runs": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
+    "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
     "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/build_trilha_d_history.py",
     "dashboard_data": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/docs/ops-dashboard/data/trilha-d-history.json"
   },
@@ -104,7 +106,8 @@
       },
       "notes": [
         "baseline_before_coverage_parser_fix"
-      ]
+      ],
+      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/28306826456"
     },
     {
       "timestamp": "2026-06-28T01:39:18Z",
@@ -140,7 +143,8 @@
       },
       "notes": [
         "coverage_parser_fix_merged"
-      ]
+      ],
+      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/462"
     },
     {
       "timestamp": "2026-06-28T01:43:44Z",
@@ -176,7 +180,8 @@
       },
       "notes": [
         "coverage_parser_regression_tests_merged"
-      ]
+      ],
+      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/463"
     }
   ],
   "runtime_dashboard_contract": {
@@ -184,12 +189,14 @@
       "state",
       "current_score",
       "trend",
-      "delta_from_baseline"
+      "delta_from_baseline",
+      "workflow_run_url"
     ],
     "series_fields": [
       "timestamp",
       "average_score",
-      "state"
+      "state",
+      "workflow_run_url"
     ],
     "dimension_fields": [
       "current_status",
@@ -197,6 +204,6 @@
       "trend",
       "delta_from_baseline"
     ],
-    "refresh_strategy": "static_json_until_artifact_ingestion_is_enabled"
+    "refresh_strategy": "workflow_runs_deep_links_enabled"
   }
 }

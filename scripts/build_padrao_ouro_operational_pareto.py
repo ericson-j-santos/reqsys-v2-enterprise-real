@@ -81,7 +81,7 @@ ACTION_CATALOG: list[dict[str, Any]] = [
             "docs/ops-dashboard/data/trilha-d-history.json",
             "docs/ops-dashboard/index.html",
         ],
-        "active_when": "artifact_ingestion_pending",
+        "active_when": "trilha_d_dashboard_pending",
     },
     {
         "id": "artifact_ingestion_refresh",
@@ -226,6 +226,8 @@ def action_is_active(action: dict[str, Any], *, trilha_d: dict[str, Any], gaps_r
         return trilha_d.get("next_increment") == "coverage_targeted_tests"
     if active_when == "governance_deep_links_pending":
         return trilha_d.get("next_increment") == "link_governance_cards_to_latest_workflow_runs"
+    if active_when == "trilha_d_dashboard_pending":
+        return trilha_d.get("next_increment") == "dashboard_trilha_d_history_card"
     if active_when == "always_when_gaps_remain":
         return gaps_remain
     return True

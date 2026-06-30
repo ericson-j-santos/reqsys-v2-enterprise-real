@@ -291,24 +291,24 @@ function fillRecommendationIds(id) {
 
 async function loadMetrics() {
   const response = await api.get(`/v1/dashboard/ia?janela_dias=${windowDays.value}`)
-  metrics.value = response.data
+  metrics.value = response.data.data
 }
 
 async function loadIncidents() {
   loadingIncidents.value = true
   try {
-    const params = new URLSearchParams({ limit: '30' })
-    if (incidentSearch.value?.trim()) params.set('search', incidentSearch.value.trim())
-    const response = await api.get(`/v1/incidentes?${params.toString()}`)
-    incidents.value = response.data
+    const params = { limit: 30 }
+    if (incidentSearch.value?.trim()) params.search = incidentSearch.value.trim()
+    const response = await api.get('/v1/incidentes', { params })
+    incidents.value = response.data.data
   } finally {
     loadingIncidents.value = false
   }
 }
 
 async function loadRecommendations() {
-  const response = await api.get('/v1/recomendacoes?limit=20')
-  recommendations.value = response.data
+  const response = await api.get('/v1/recomendacoes', { params: { limit: 20 } })
+  recommendations.value = response.data.data
   if (!selectedRecommendation.value && recommendations.value.length) await selectRecommendation(recommendations.value[0].id)
 }
 
@@ -329,7 +329,7 @@ async function selectIncident(id) {
   if (!id) return
   try {
     const response = await api.get(`/v1/incidentes/${id}`)
-    selectedIncident.value = response.data
+    selectedIncident.value = response.data.data
     applyIncidentToForm(selectedIncident.value)
   } catch (error) {
     showError(error, 'Erro ao buscar requisito/incidente.')
@@ -348,9 +348,10 @@ async function generateRecommendation() {
       contexto_incidente: createForm.contexto_incidente,
       tipo_recomendacao: createForm.tipo_recomendacao,
     })
-    createForm.recomendacao = response.data.recomendacao
-    createForm.confianca_ia = response.data.confianca_ia
-    createForm.modelo = response.data.modelo
+    const payload = response.data.data
+    createForm.recomendacao = payload.recomendacao
+    createForm.confianca_ia = payload.confianca_ia
+    createForm.modelo = payload.modelo
   } catch (error) {
     showError(error, 'Erro ao gerar recomendação com IA.')
   } finally {
@@ -368,7 +369,7 @@ async function createRecommendation() {
     const response = await api.post('/v1/recomendacoes', { ...createForm })
     await loadRecommendations()
     await loadMetrics()
-    await selectRecommendation(response.data.id)
+    await selectRecommendation(response.data.data.id)
   } catch (error) {
     showError(error, 'Erro ao criar recomendação.')
   } finally {
@@ -378,8 +379,8 @@ async function createRecommendation() {
 
 async function selectRecommendation(id) {
   const response = await api.get(`/v1/recomendacoes/${id}`)
-  selectedRecommendation.value = response.data
-  fillRecommendationIds(response.data.id)
+  selectedRecommendation.value = response.data.data
+  fillRecommendationIds(response.data.data.id)
 }
 
 async function saveDecision() {

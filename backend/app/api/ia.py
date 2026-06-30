@@ -11,6 +11,7 @@ from app.services.gemini import (
     resumir_requisito,
     sugerir_descricao,
 )
+from app.services.recomendacoes_ia import gerar_texto_recomendacao
 
 router = APIRouter(prefix='/v1/ia', tags=['IA Assistente'])
 
@@ -29,6 +30,12 @@ class SugestaoDescricaoRequest(BaseModel):
 class ClassificacaoRequest(BaseModel):
     titulo: str
     descricao: str
+
+
+class GerarRecomendacaoRequest(BaseModel):
+    titulo: str
+    contexto_incidente: str = ''
+    tipo_recomendacao: str = 'hotfix'
 
 
 def _handle_ia_error(exc: GeminiIndisponivel):
@@ -86,6 +93,18 @@ def classificar(body: ClassificacaoRequest):
         return ok({'urgencia': resultado.urgencia, 'justificativa': resultado.justificativa, 'provedor': provedor})
     except GeminiIndisponivel as exc:
         _handle_ia_error(exc)
+
+
+@router.post('/gerar-recomendacao')
+def gerar_recomendacao(body: GerarRecomendacaoRequest):
+    """Gera texto de recomendação operacional com fallback heurístico local."""
+    return ok(
+        gerar_texto_recomendacao(
+            titulo=body.titulo,
+            contexto_incidente=body.contexto_incidente,
+            tipo_recomendacao=body.tipo_recomendacao,
+        )
+    )
 
 
 @router.get('/status')

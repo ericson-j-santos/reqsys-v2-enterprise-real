@@ -1,14 +1,14 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T10:30:06.345200+00:00",
+  "generated_at": "2026-06-30T12:26:48.076570+00:00",
   "overall_status": "green",
   "governance_evidence_score": 100,
   "summary": {
     "total_capabilities": 6,
     "implemented_capabilities": 6,
     "dashboard_ready_capabilities": 6,
-    "next_increment": "dashboard_trilha_d_history_card"
+    "next_increment": "artifact_ingestion_refresh"
   },
   "links": {
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",

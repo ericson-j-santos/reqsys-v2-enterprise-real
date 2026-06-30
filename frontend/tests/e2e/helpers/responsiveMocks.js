@@ -11,11 +11,21 @@ const usuarioAdmin = {
   ],
 }
 
-function json(data) {
+function envelope(payload) {
+  return {
+    success: true,
+    data: payload,
+    errors: [],
+    meta: { correlation_id: 'corr-e2e-responsivo' },
+  }
+}
+
+function json(body) {
+  const payload = body && body.success !== undefined ? body : envelope(body)
   return {
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ data }),
+    body: JSON.stringify(payload),
   }
 }
 
@@ -61,9 +71,56 @@ const handlers = [
   { pattern: /\/api\/v1\/relatorios\/ssrs$/, body: [] },
   { pattern: /\/api\/v1\/sistema\/segredos-status$/, body: { origem: 'env', total: 0, itens: [] } },
   { pattern: /\/api\/v1\/ia\/status$/, body: { status: 'ok' } },
-  { pattern: /\/api\/v1\/dashboard\/ia/, body: { resumo: {}, series: [] } },
-  { pattern: /\/api\/v1\/incidentes/, body: [] },
-  { pattern: /\/api\/v1\/recomendacoes/, body: [] },
+  { pattern: /\/api\/v1\/dashboard\/ia/, body: {
+    amostras_total: 2,
+    janela_dias: 30,
+    metricas: {
+      taxa_aceitacao: { valor: { taxa: 0.5, aceitas: 1, total: 2 } },
+      eficacia_pos_correcao: { valor: { taxa: 1, positivas: 1, aplicadas: 1 } },
+      calibracao: { valor: { brier_score: 0.12 } },
+    },
+  } },
+  { pattern: /\/api\/v1\/incidentes\/\d+$/, body: {
+    id: 1,
+    titulo: 'Incidente E2E',
+    resumo_contexto: 'Contexto demonstrativo para recomendações IA.',
+    modulo: 'Plataforma',
+    funcionalidade: 'CI/CD',
+    severidade: 'alta',
+    score_atual: 0.8,
+  } },
+  { pattern: /\/api\/v1\/incidentes/, body: [{
+    id: 1,
+    titulo: 'Incidente E2E',
+    resumo_contexto: 'Contexto demonstrativo para recomendações IA.',
+    modulo: 'Plataforma',
+    funcionalidade: 'CI/CD',
+    severidade: 'alta',
+    score_atual: 0.8,
+  }] },
+  { pattern: /\/api\/v1\/recomendacoes\/\d+$/, body: {
+    id: 1,
+    id_incidente: 1,
+    titulo: 'Recomendação E2E',
+    tipo_recomendacao: 'hotfix',
+    confianca_ia: 0.8,
+    recomendacao: 'Aplicar hotfix com validação regressiva.',
+    decisao: null,
+    outcome: null,
+  } },
+  { pattern: /\/api\/v1\/recomendacoes/, body: [{
+    id: 1,
+    id_incidente: 1,
+    titulo: 'Recomendação E2E',
+    tipo_recomendacao: 'hotfix',
+    confianca_ia: 0.8,
+    recomendacao: 'Aplicar hotfix com validação regressiva.',
+  }] },
+  { pattern: /\/api\/v1\/ia\/gerar-recomendacao$/, body: {
+    recomendacao: 'Executar hotfix com rollback documentado.',
+    confianca_ia: 0.72,
+    modelo: 'reqsys-heuristica-local',
+  } },
   { pattern: /\/api\/v1\/auditoria\/eventos/, body: {
     dados: [{
       id: 1,
