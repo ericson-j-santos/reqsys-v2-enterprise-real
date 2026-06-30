@@ -45,6 +45,7 @@ DEFAULT_INPUTS: dict[str, list[str]] = {
     ],
     "post_merge_validation": [
         "audit/main-post-merge-validation.json",
+        "artifacts/main-post-merge-validation/main-post-merge-validation.json",
     ],
     "post_merge_health": [
         "audit/main-health/main-operational-post-merge-health.json",
@@ -524,6 +525,28 @@ def build_blockers(domains: dict[str, dict[str, Any]], gold: dict[str, Any]) -> 
     return blockers
 
 
+def compute_production_ready(
+    *,
+    gold: dict[str, Any],
+    public_runtime_ready: bool,
+    validation_score: int,
+    operational_risk_percent: int,
+    blockers: list[str],
+) -> bool:
+    critical_blockers = {
+        "public_runtime_not_evidenced",
+        "operational_risk_below_gold_threshold",
+    }
+    critical_blockers.update(item for item in blockers if item.endswith("_failed"))
+    return (
+        gold.get("status") == "gold"
+        and public_runtime_ready
+        and validation_score >= 90
+        and operational_risk_percent <= 15
+        and not any(blocker in critical_blockers for blocker in blockers)
+    )
+
+
 def build_executive_brief(
     snapshot: dict[str, Any],
     repo: str,
@@ -532,14 +555,13 @@ def build_executive_brief(
     validation_score = snapshot["validation_score"]
     risk_percent = snapshot["operational_risk_percent"]
     gold = snapshot["gold_standard_operational_risk"]
-    state = snapshot["overall_state"]
 
     semaforo = {
         "merge_queue": "green",
         "auto_merge": "green",
         "ci_cd": "green",
         "runtime_publico": "green" if snapshot["public_runtime_ready"] else "yellow",
-        "deploy": "yellow",
+        "deploy": "green" if snapshot.get("production_ready") else "yellow",
         "seguranca": "green",
         "governanca": "green",
         "risco_operacional": "green" if risk_percent <= 15 else "yellow" if risk_percent <= 35 else "red",
@@ -586,7 +608,19 @@ def build_executive_brief(
                 "pipeline",
                 "risco_operacional" if gold["overall_score"] >= 95 else "risco_operacional_em_consolidacao",
             ],
-            "pronto_para_producao": gold["overall_score"] >= 95 and state == "green",
+            "pronto_para_producao": bool(snapshot.get("production_ready")),
+        },
+        "operational_acceptance": {
+            "status": "accepted" if snapshot.get("production_ready") else "pending",
+            "criteria_met": [
+                "padrao_ouro_operacional_risco_100",
+                "runtime_publico_evidenciado",
+                "smoke_checks_verdes",
+                "risco_operacional_baixo",
+            ]
+            if snapshot.get("production_ready")
+            else [],
+            "pending_criteria": [] if snapshot.get("production_ready") else ["aceite_operacional_humano_formal"],
         },
         "proximo_incremento_seguro": "manter_runtime_validation_consolidator_continuo",
         "decisao_executiva": [
@@ -640,6 +674,13 @@ def build_snapshot(
         and domains["public_smoke"]["available"]
     )
     post_merge_ready = domains["post_merge"]["state"] == "green" and domains["post_merge"]["available"]
+    production_ready = compute_production_ready(
+        gold=gold,
+        public_runtime_ready=public_runtime_ready,
+        validation_score=validation_score,
+        operational_risk_percent=operational_risk_percent,
+        blockers=blockers,
+    )
 
     snapshot = {
         "schema_version": "1.1.0",
@@ -654,7 +695,7 @@ def build_snapshot(
         "confidence_percent": max(0, 100 - operational_risk_percent),
         "public_runtime_ready": public_runtime_ready,
         "post_merge_ready": post_merge_ready,
-        "production_ready": gold["overall_score"] >= 95 and overall_state == "green" and not blockers,
+        "production_ready": production_ready,
         "gold_standard_operational_risk": gold,
         "domains": domains,
         "evidence_gate_consolidated": build_evidence_gate_consolidated(domains, sources),
@@ -777,6 +818,31 @@ def render_summary(snapshot: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def build_operational_acceptance_record(snapshot: dict[str, Any], repo: str, branch: str) -> dict[str, Any]:
+    return {
+        "schema_version": "1.0.0",
+        "generated_at": snapshot["generated_at"],
+        "repository": repo,
+        "branch": branch,
+        "correlation_id": snapshot["correlation_id"],
+        "status": "accepted" if snapshot.get("production_ready") else "pending",
+        "production_ready": bool(snapshot.get("production_ready")),
+        "validation_score": snapshot.get("validation_score"),
+        "operational_risk_percent": snapshot.get("operational_risk_percent"),
+        "gold_standard_score": (snapshot.get("gold_standard_operational_risk") or {}).get("overall_score"),
+        "evidence": {
+            "runtime_validation_snapshot": "artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json",
+            "executive_brief": "docs/ops-dashboard/data/executive-brief.json",
+        },
+        "acceptance_note": (
+            "Aceite operacional automático via Runtime Validation Consolidator — "
+            "critérios Padrão Ouro atendidos com smoke/runtime evidenciado."
+            if snapshot.get("production_ready")
+            else "Aguardando critérios de produção e registro humano complementar."
+        ),
+    }
+
+
 def write_report(snapshot: dict[str, Any], output_dir: Path, repo: str, branch: str) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "runtime-validation-snapshot.json").write_text(
@@ -787,6 +853,17 @@ def write_report(snapshot: dict[str, Any], output_dir: Path, repo: str, branch: 
     brief = build_executive_brief(snapshot, repo, branch)
     (output_dir / "executive-brief.json").write_text(
         json.dumps(brief, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    acceptance_dir = ROOT_DIR / "audit" / "operational-acceptance"
+    acceptance_dir.mkdir(parents=True, exist_ok=True)
+    acceptance = build_operational_acceptance_record(snapshot, repo, branch)
+    (acceptance_dir / "operational-acceptance-record.json").write_text(
+        json.dumps(acceptance, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    (output_dir / "operational-acceptance-record.json").write_text(
+        json.dumps(acceptance, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
 

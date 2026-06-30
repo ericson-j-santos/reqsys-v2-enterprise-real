@@ -40,6 +40,24 @@ python3 scripts/runtime_validation_consolidator.py \
 | `runtime-validation-snapshot.json` | Contrato machine-readable |
 | `summary.md` | Leitura humana / menu operacional |
 | `executive-brief.json` | Indicadores executivos e semáforo |
+| `operational-acceptance-record.json` | Aceite operacional automático (Padrão Ouro) |
+
+## Aceite operacional (Padrão Ouro)
+
+Quando `production_ready=true`, o consolidator grava automaticamente:
+
+- `audit/operational-acceptance/operational-acceptance-record.json`
+- `operational_acceptance` no `executive-brief.json` com `status: accepted`
+
+Critérios (`compute_production_ready`):
+
+- `gold_standard_operational_risk.status` = `gold`
+- `public_runtime_ready` = true
+- `validation_score` ≥ 90
+- `operational_risk_percent` ≤ 15
+- Sem bloqueadores críticos (`*_failed`, `public_runtime_not_evidenced`, risco abaixo do limiar)
+
+`post_merge_validation_incomplete` **não** bloqueia aceite operacional — permanece como ação P1 recomendada.
 
 ## Integrações
 

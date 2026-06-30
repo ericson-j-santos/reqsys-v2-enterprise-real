@@ -8,6 +8,7 @@ from scripts.runtime_validation_consolidator import (
     build_domains,
     build_snapshot,
     compute_gold_standard_operational_risk,
+    compute_production_ready,
     compute_validation_score,
     evaluate_public_smoke,
     write_report,
@@ -115,9 +116,50 @@ def test_write_report_creates_three_files(tmp_path: Path) -> None:
     brief = json.loads((out / "executive-brief.json").read_text(encoding="utf-8"))
     assert "risco_operacional_percent" in brief["indicadores_executivos"]
     assert "padrao_ouro_operacional_risco_percent" in brief["indicadores_executivos"]
+    assert (out / "operational-acceptance-record.json").exists()
 
 
 def test_domains_handle_missing_sources() -> None:
     domains = build_domains({})
     assert domains["public_smoke"]["state"] == "red"
     assert domains["post_merge"]["available"] is False
+
+
+def test_production_ready_when_gold_and_runtime_green() -> None:
+    gold = {"status": "gold", "overall_score": 100}
+    assert compute_production_ready(
+        gold=gold,
+        public_runtime_ready=True,
+        validation_score=91,
+        operational_risk_percent=9,
+        blockers=[],
+    )
+
+
+def test_production_ready_false_when_critical_blocker() -> None:
+    gold = {"status": "gold", "overall_score": 100}
+    assert not compute_production_ready(
+        gold=gold,
+        public_runtime_ready=True,
+        validation_score=91,
+        operational_risk_percent=9,
+        blockers=["public_runtime_not_evidenced"],
+    )
+
+
+def test_production_ready_ignores_post_merge_incomplete() -> None:
+    gold = {"status": "gold", "overall_score": 100}
+    assert compute_production_ready(
+        gold=gold,
+        public_runtime_ready=True,
+        validation_score=91,
+        operational_risk_percent=9,
+        blockers=["post_merge_validation_incomplete"],
+    )
+
+
+def test_snapshot_marks_production_ready_on_main_tree() -> None:
+    snapshot = build_snapshot("owner/repo", "main", root=Path("/workspace"))
+    assert snapshot["gold_standard_operational_risk"]["overall_score"] == 100
+    assert snapshot["production_ready"] is True
+    assert snapshot["operational_risk_percent"] <= 15

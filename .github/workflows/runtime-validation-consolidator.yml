@@ -15,6 +15,7 @@ on:
       - Public Runtime Evidence Gate
       - Main Post-Merge Validation
       - Runtime Health Validator
+      - Padrão Ouro Delivery Automation
     types:
       - completed
 
@@ -73,6 +74,14 @@ jobs:
           name: unified-operational-signal
           path: artifacts/unified-operational-signal-consolidator
 
+      - name: Download Main Post-Merge Validation artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: main-post-merge-validation-*
+          merge-multiple: true
+          path: audit
+
       - name: Gerar runtime-validation-snapshot.json
         shell: bash
         env:
@@ -96,11 +105,13 @@ jobs:
             score=$(python3 -c "import json; print(json.load(open('${snapshot}'))['validation_score'])")
             risk=$(python3 -c "import json; print(json.load(open('${snapshot}'))['operational_risk_percent'])")
             gold=$(python3 -c "import json; d=json.load(open('${snapshot}')); print(d['gold_standard_operational_risk']['overall_score'])")
+            prod=$(python3 -c "import json; print(json.load(open('${snapshot}'))['production_ready'])")
             echo "## Runtime Validation Consolidator" >> "$GITHUB_STEP_SUMMARY"
             echo "- State: \`${state}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Validation score: \`${score}%\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Operational risk: \`${risk}%\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Padrão Ouro risco operacional: \`${gold}%\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Production ready: \`${prod}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Artifact: \`runtime-validation-evidence\`" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "## Runtime Validation Consolidator" >> "$GITHUB_STEP_SUMMARY"
@@ -115,5 +126,6 @@ jobs:
           path: |
             artifacts/runtime-validation-consolidator
             docs/ops-dashboard/data/executive-brief.json
+            audit/operational-acceptance
           if-no-files-found: error
           retention-days: 30
