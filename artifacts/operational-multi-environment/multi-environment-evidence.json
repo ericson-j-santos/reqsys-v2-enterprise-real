@@ -1,25 +1,25 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-28T14:45:43Z",
+  "generated_at": "2026-06-30T12:32:24Z",
   "source": "operational-multi-environment-evidence",
   "status": "degraded",
   "confidence_level": "high",
-  "maturity_percent": 0.0,
-  "operational_risk": "high",
-  "commit_sha": "local",
-  "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7",
+  "maturity_percent": 62.5,
+  "operational_risk": "medium",
+  "commit_sha": "53e0721f",
+  "correlation_id": "b144b9bf-e508-4743-b85e-0d56eba88727",
   "mode": "report_only",
   "summary": {
     "environments_total": 4,
-    "ready": 0,
-    "degraded": 0,
-    "url_matrix_misaligned": 3,
+    "ready": 2,
+    "degraded": 1,
+    "url_matrix_misaligned": 0,
     "promotion_order": [
       "dev",
       "hml",
       "prod"
     ],
-    "overall_probe_status": "unknown"
+    "overall_probe_status": "degraded"
   },
   "environments": [
     {
@@ -27,13 +27,13 @@
       "probe_available": true,
       "fly_matrix_available": true,
       "probe_name": "desenvolvimento",
-      "status": "unknown",
-      "readiness_percent": 0,
-      "operational_risk": "medium",
+      "status": "ready",
+      "readiness_percent": 100.0,
+      "operational_risk": "low",
       "frontend_url": "https://reqsys-app-dev.fly.dev",
       "api_url": "https://reqsys-api-dev.fly.dev/docs",
       "fly_api_url": "https://reqsys-api-dev.fly.dev",
-      "fly_frontend_url": "https://reqsys-dev.fly.dev",
+      "fly_frontend_url": "https://reqsys-app-dev.fly.dev",
       "app_env": "development",
       "smoke_endpoints": [
         "/health",
@@ -41,41 +41,41 @@
         "/api/runtime/readiness",
         "/api/runtime/liveness"
       ],
-      "url_matrix_aligned": false
+      "url_matrix_aligned": true
     },
     {
       "canonical": "hml",
       "probe_available": true,
       "fly_matrix_available": true,
       "probe_name": "homologacao",
-      "status": "unknown",
-      "readiness_percent": 0,
-      "operational_risk": "medium",
-      "frontend_url": "https://reqsys-web-stg.fly.dev",
-      "api_url": "https://reqsys-api-stg.fly.dev",
-      "fly_api_url": "https://reqsys-api-hml.fly.dev",
-      "fly_frontend_url": "https://reqsys-hml.fly.dev",
-      "app_env": "homolog",
+      "status": "ready",
+      "readiness_percent": 100.0,
+      "operational_risk": "low",
+      "frontend_url": "https://reqsys-app-stg.fly.dev",
+      "api_url": "https://reqsys-api-stg.fly.dev/docs",
+      "fly_api_url": "https://reqsys-api-stg.fly.dev",
+      "fly_frontend_url": "https://reqsys-app-stg.fly.dev",
+      "app_env": "staging",
       "smoke_endpoints": [
         "/health",
         "/api/runtime/health",
         "/api/runtime/readiness",
         "/api/runtime/liveness"
       ],
-      "url_matrix_aligned": false
+      "url_matrix_aligned": true
     },
     {
       "canonical": "prod",
       "probe_available": true,
       "fly_matrix_available": true,
       "probe_name": "producao",
-      "status": "unknown",
-      "readiness_percent": 0,
+      "status": "degraded",
+      "readiness_percent": 50.0,
       "operational_risk": "medium",
       "frontend_url": "https://reqsys-app.fly.dev",
       "api_url": "https://reqsys-api.fly.dev/docs",
-      "fly_api_url": "https://reqsys-api-prod.fly.dev",
-      "fly_frontend_url": "https://reqsys-prod.fly.dev",
+      "fly_api_url": "https://reqsys-api.fly.dev",
+      "fly_frontend_url": "https://reqsys-app.fly.dev",
       "app_env": "production",
       "smoke_endpoints": [
         "/health",
@@ -84,7 +84,7 @@
         "/api/runtime/liveness",
         "/api/runtime/metrics"
       ],
-      "url_matrix_aligned": false
+      "url_matrix_aligned": true
     },
     {
       "canonical": "test",
@@ -92,7 +92,7 @@
       "fly_matrix_available": false,
       "probe_name": "testes",
       "status": "local_only",
-      "readiness_percent": 0,
+      "readiness_percent": 0.0,
       "operational_risk": "medium",
       "frontend_url": "http://localhost:8084",
       "api_url": "http://localhost:8212/docs",
