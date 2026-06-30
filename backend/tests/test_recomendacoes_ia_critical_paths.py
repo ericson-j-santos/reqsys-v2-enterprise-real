@@ -138,3 +138,89 @@ def test_recomendacoes_api_rejeita_decisao_sem_recomendacao(client):
         json={'aceita': True, 'motivo_decisao': 'teste', 'decidido_por': 'qa@reqsys.local'},
     )
     assert response.status_code == 400
+
+
+def test_recomendacoes_api_listar_e_obter(client):
+    criado = client.post(
+        '/v1/requisitos',
+        json={
+            'titulo': 'Listagem recomendacoes',
+            'descricao': 'Cobertura de listagem e leitura por id.',
+            'urgencia': 'media',
+            'area': 'QA',
+            'sistema': 'API',
+            'solicitante': 'qa@reqsys.local',
+            'impacto_regulatorio': False,
+        },
+    )
+    incidente_id = criado.json()['data']['id']
+
+    criacao = client.post(
+        '/v1/recomendacoes',
+        json={
+            'id_incidente': incidente_id,
+            'titulo': 'Recomendacao listagem',
+            'contexto_incidente': 'contexto',
+            'tipo_recomendacao': 'hotfix',
+            'confianca_ia': 0.7,
+            'recomendacao': 'Aplicar patch',
+            'modelo': 'reqsys-heuristica-local',
+        },
+    )
+    assert criacao.status_code == 201
+    recomendacao_id = criacao.json()['data']['id']
+
+    listagem = client.get('/v1/recomendacoes?limit=5')
+    assert listagem.status_code == 200
+    ids = [item['id'] for item in listagem.json()['data']]
+    assert recomendacao_id in ids
+
+    detalhe = client.get(f'/v1/recomendacoes/{recomendacao_id}')
+    assert detalhe.status_code == 200
+    assert detalhe.json()['data']['titulo'] == 'Recomendacao listagem'
+
+
+def test_recomendacoes_api_rejeita_criacao_com_incidente_inexistente(client):
+    response = client.post(
+        '/v1/recomendacoes',
+        json={
+            'id_incidente': 999999,
+            'titulo': 'Sem incidente',
+            'tipo_recomendacao': 'hotfix',
+            'recomendacao': 'Nao deve persistir',
+        },
+    )
+    assert response.status_code == 404
+
+
+def test_recomendacoes_api_rejeita_outcome_duplicado(client):
+    criado = client.post(
+        '/v1/requisitos',
+        json={
+            'titulo': 'Outcome duplicado',
+            'descricao': 'Validacao de outcome ja registrado.',
+            'urgencia': 'baixa',
+            'area': 'QA',
+            'sistema': 'API',
+            'solicitante': 'qa@reqsys.local',
+            'impacto_regulatorio': False,
+        },
+    )
+    incidente_id = criado.json()['data']['id']
+    criacao = client.post(
+        '/v1/recomendacoes',
+        json={
+            'id_incidente': incidente_id,
+            'titulo': 'Recomendacao outcome',
+            'tipo_recomendacao': 'hotfix',
+            'recomendacao': 'Corrigir fluxo',
+        },
+    )
+    recomendacao_id = criacao.json()['data']['id']
+    payload = {'foi_aplicada': True, 'versao_aplicada': 'v1.0.0'}
+
+    primeiro = client.post(f'/v1/recomendacoes/{recomendacao_id}/outcome', json=payload)
+    assert primeiro.status_code == 200
+
+    duplicado = client.post(f'/v1/recomendacoes/{recomendacao_id}/outcome', json=payload)
+    assert duplicado.status_code == 400

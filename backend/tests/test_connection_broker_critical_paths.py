@@ -49,6 +49,26 @@ def test_resumo_conectores_estado_desconhecido_quando_vazio():
     assert resumo['total'] == 0
 
 
+def test_listar_conectores_sem_registry_retorna_lista_vazia(tmp_path, monkeypatch):
+    monkeypatch.setattr(broker, 'REGISTRY_PATH', tmp_path / 'ausente.json')
+
+    assert broker.listar_conectores() == []
+
+
+def test_resumo_conectores_estado_amarelo_quando_apenas_pendentes():
+    resumo = broker.resumo_conectores([{'status': 'missing_permission'}, {'status': 'expired'}])
+
+    assert resumo['pendentes'] == 2
+    assert resumo['estado_geral'] == 'amarelo'
+
+
+def test_resumo_conectores_estado_verde_quando_apenas_prontos():
+    resumo = broker.resumo_conectores([{'status': 'ready'}, {'status': 'ready'}])
+
+    assert resumo['prontos'] == 2
+    assert resumo['estado_geral'] == 'verde'
+
+
 def test_montar_health_payload_expoe_registry_version(monkeypatch):
     registry_path = Path(broker.REGISTRY_PATH)
     if not registry_path.is_file():

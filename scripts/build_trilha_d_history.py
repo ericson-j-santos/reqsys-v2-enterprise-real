@@ -38,6 +38,9 @@ COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
     "backend/tests/test_relatorios_critical_paths.py",
     "backend/tests/test_figma_client_critical_paths.py",
     "backend/tests/test_async_workflows_api_critical_paths.py",
+    "backend/tests/test_rag_governado_api_critical_paths.py",
+    "backend/tests/test_sistema_api_critical_paths.py",
+    "backend/tests/test_estatisticas_historico_critical_paths.py",
 )
 DIMENSIONS = ("tests", "coverage", "mutation", "contract", "schema", "ci-watch")
 
