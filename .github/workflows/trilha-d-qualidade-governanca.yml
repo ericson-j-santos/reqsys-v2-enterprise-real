@@ -245,11 +245,30 @@ jobs:
 
       - name: Validar superfície coverage targeted
         if: always()
+        working-directory: backend
+        env:
+          DATABASE_URL: sqlite:///./reqsys_test.db
+          JWT_SECRET_KEY: ci-secret-key-for-testing-only
+          JWT_SECRET: ci-secret-key-for-testing-only-minimum-32-characters
+          JWT_ISSUER: reqsys-ci
+          JWT_AUDIENCE: reqsys-ci-tests
+          JWT_EXP_MINUTES: "60"
+          ALLOW_DEMO_LOGIN: "true"
+          APP_ENV: test
+          AZURE_TENANT_ID: 00000000-0000-0000-0000-000000000000
+          AZURE_CLIENT_ID: 11111111-1111-1111-1111-111111111111
+          AZURE_AUTHORITY: https://login.microsoftonline.com/00000000-0000-0000-0000-000000000000
+          REDMINE_URL: https://placeholder.example.com
+          REDMINE_API_KEY: placeholder
+          ENABLE_GITHUB_REDMINE_IMPORT: "false"
+          SSRS_BASE_URL: ""
+          GITHUB_WEBHOOK_SECRET: ""
+          GITLAB_WEBHOOK_TOKEN: ""
         run: |
           set -euo pipefail
           # COVERAGE_TARGETED_MIN_SCORE=95.0 — gate alinhado a scripts/build_trilha_d_history.py
           # Suíte: test_*_critical_paths
-          python -m pytest backend/tests/ -q -k "critical_paths"
+          python -m pytest tests/ -q -k "critical_paths"
 
       - name: Validar superfície deep links governança
         if: always()
