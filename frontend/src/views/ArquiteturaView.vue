@@ -169,11 +169,22 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="env in ambientesFlyio" :key="env.nome">
-              <td><v-chip size="x-small" :color="env.cor" variant="tonal">{{ env.nome }}</v-chip></td>
-              <td><code class="small-code">{{ env.frontend }}</code></td>
-              <td><code class="small-code">{{ env.backend }}</code></td>
-              <td><code class="small-code">{{ env.duckdns }}</code></td>
+            <tr
+              v-for="env in ambientesFlyio"
+              :key="env.id"
+              class="ambiente-row"
+              tabindex="0"
+              role="link"
+              :aria-label="`Abrir ambiente ${env.label}`"
+              :data-testid="`ambiente-linha-${env.shortId}`"
+              @click="abrirAmbienteFlyio(env.id)"
+              @keydown.enter.prevent="abrirAmbienteFlyio(env.id)"
+              @keydown.space.prevent="abrirAmbienteFlyio(env.id)"
+            >
+              <td><v-chip size="x-small" :color="env.color" variant="tonal">{{ env.label }}</v-chip></td>
+              <td><code class="small-code">{{ env.frontendHost }}</code></td>
+              <td><code class="small-code">{{ env.backendHost }}</code></td>
+              <td><code class="small-code">{{ env.duckdnsHost }}</code></td>
             </tr>
           </tbody>
         </v-table>
@@ -476,7 +487,8 @@ npm run dev</pre>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { AMBIENTES_OPERACIONAIS, irParaAmbiente } from '../constants/ambientesOperacionais'
 
 const aba = ref('web')
 
@@ -510,11 +522,18 @@ const backendModulos = [
   { nome: 'Figma GitHub',    prefixo: '/v1/integracoes/figma-github', endpoints: '2', desc: 'Sync bidirecional Figma ↔ GitHub e consulta de vínculos em tela' },
 ]
 
-const ambientesFlyio = [
-  { nome: 'prod',    cor: 'success', frontend: 'reqsys-app.fly.dev',     backend: 'reqsys-api.fly.dev',     duckdns: 'tieriprod.duckdns.org' },
-  { nome: 'staging', cor: 'warning', frontend: 'reqsys-app-stg.fly.dev', backend: 'reqsys-api-stg.fly.dev', duckdns: 'tierin.duckdns.org'    },
-  { nome: 'dev',     cor: 'info',    frontend: 'reqsys-app-dev.fly.dev', backend: 'reqsys-api-dev.fly.dev', duckdns: 'tieridev.duckdns.org'  },
-]
+const ambientesFlyio = computed(() =>
+  AMBIENTES_OPERACIONAIS.filter((item) => !item.onlyLocal).map((item) => ({
+    ...item,
+    frontendHost: item.frontend.replace(/^https?:\/\//, ''),
+    backendHost: item.backend.replace(/^https?:\/\//, ''),
+    duckdnsHost: item.duckdns.replace(/^https?:\/\//, ''),
+  })),
+)
+
+function abrirAmbienteFlyio(id) {
+  irParaAmbiente(id, { path: '/arquitetura', preserveRoute: false })
+}
 
 const solutionComps = [
   {
@@ -791,6 +810,20 @@ const scripts = [
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
+}
+
+.env-table .ambiente-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.env-table .ambiente-row:hover {
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.env-table .ambiente-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 /* ─── Code blocks ─── */
