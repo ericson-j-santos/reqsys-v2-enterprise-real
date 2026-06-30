@@ -39,6 +39,19 @@ OPS_EVIDENCE_HINTS = (
     "ci:",
     "fix(ci)",
     "chore(ci)",
+    "allow_demo_login",
+    "demo_login",
+    "demo login",
+    "fly-enterprise",
+    "fly enterprise",
+)
+FLY_OPS_HINTS = (
+    "allow_demo_login",
+    "demo_login",
+    "demo login",
+    "fly-enterprise-sync",
+    "fly enterprise sync",
+    "fly-dev",
 )
 STATE_GAP_HINTS = (
     "state_yellow",
@@ -105,6 +118,11 @@ def _increment_from_text_heuristics(title: str, body: str, head_ref: str) -> tup
         gap_match = OPS_GAP_PATTERN.search(body) or OPS_GAP_PATTERN.search(title)
         reference = gap_match.group(0).upper() if gap_match else ""
         return "hotfix", reference, "heuristic:hotfix"
+
+    if any(hint in combined for hint in FLY_OPS_HINTS) or re.search(r"fix\s*\(\s*ops\s*\)", combined):
+        gap_match = OPS_GAP_PATTERN.search(body) or OPS_GAP_PATTERN.search(title)
+        reference = gap_match.group(0).upper() if gap_match else "OPS-GAP-FLY-DEMO-LOGIN"
+        return "hotfix", reference, "heuristic:fly_ops"
 
     gap_match = OPS_GAP_PATTERN.search(body) or OPS_GAP_PATTERN.search(title)
     if gap_match or "gap-fix" in head_lower or "gap_fix" in head_lower:

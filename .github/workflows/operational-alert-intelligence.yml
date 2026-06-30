@@ -13,6 +13,8 @@ on:
       - "Operational Observability Hub"
     types:
       - completed
+  schedule:
+    - cron: "21 10 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -20,7 +22,7 @@ permissions:
 
 concurrency:
   group: operational-alert-intelligence
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   governance-gate:

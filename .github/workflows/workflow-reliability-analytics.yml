@@ -2,6 +2,8 @@ name: Workflow Reliability Analytics
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "29 10 * * 1-5"
   workflow_run:
     workflows:
       - "Operational Stability Score"
@@ -11,9 +13,67 @@ on:
     types:
       - completed
 
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-reliability-analytics
+  cancel-in-progress: false
+
 jobs:
-  workflow-reliability-analytics:
+  governance-gate:
+    name: Classificar fonte e suprimir ruído mesh
     runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.govern.outputs.should_run }}
+      source_workflow: ${{ steps.govern.outputs.source_workflow }}
+      source_conclusion: ${{ steps.govern.outputs.source_conclusion }}
+    steps:
+      - name: Avaliar fonte do evento
+        id: govern
+        env:
+          RUN_NAME: ${{ github.event.workflow_run.name || 'manual' }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'success' }}
+        run: |
+          set -euo pipefail
+          MESH_NOISE=(
+            "Operational Realtime Event Mesh"
+            "Realtime Operational Mesh"
+            "Realtime Operational Streaming Layer"
+            "Live Operational Control Center"
+            "Operational Alert Intelligence"
+            "Operational Runtime Mesh Hub"
+            "Unified Operational Event Bus"
+            "Governed Auto Remediation Engine"
+            "Workflow Reliability Analytics"
+          )
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "source_workflow=${RUN_NAME}" >> "$GITHUB_OUTPUT"
+            echo "source_conclusion=${RUN_CONCLUSION}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          should_run=true
+          for item in "${MESH_NOISE[@]}"; do
+            if [ "$RUN_NAME" = "$item" ]; then
+              should_run=false
+              break
+            fi
+          done
+
+          {
+            echo "should_run=${should_run}"
+            echo "source_workflow=${RUN_NAME}"
+            echo "source_conclusion=${RUN_CONCLUSION}"
+          } >> "$GITHUB_OUTPUT"
+
+  workflow-reliability-analytics:
+    name: Gerar analytics de confiabilidade
+    runs-on: ubuntu-latest
+    needs: governance-gate
+    if: needs.governance-gate.outputs.should_run == 'true'
 
     steps:
       - name: Checkout
@@ -26,11 +86,11 @@ jobs:
 
       - name: Generate workflow reliability analytics
         env:
-          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_NAME: ${{ needs.governance-gate.outputs.source_workflow }}
+          WORKFLOW_CONCLUSION: ${{ needs.governance-gate.outputs.source_conclusion }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           echo "# Workflow Reliability Analytics" > workflow-reliability-analytics.md
           echo "" >> workflow-reliability-analytics.md
@@ -119,3 +179,16 @@ jobs:
           name: workflow-reliability-analytics
           path: workflow-reliability-analytics.md
           if-no-files-found: error
+
+  skip-cascade:
+    name: Skip governado (cascata mesh suprimida)
+    runs-on: ubuntu-latest
+    needs: governance-gate
+    if: needs.governance-gate.outputs.should_run != 'true'
+    steps:
+      - name: Registrar skip esperado
+        run: |
+          echo "## Workflow Reliability Analytics — skip governado" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Fonte: \`${{ needs.governance-gate.outputs.source_workflow }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Motivo: cascata mesh suprimida para evitar ruído operacional" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Classificação: \`governed_skip\`" >> "$GITHUB_STEP_SUMMARY"
