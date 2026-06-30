@@ -381,6 +381,92 @@
       </v-card-text>
     </v-card>
 
+    <v-card
+      class="painel merge-readiness-history mt-4"
+      elevation="0"
+      :data-section="secaoAtiva === 'merge-readiness-history' ? 'active' : undefined"
+    >
+      <v-card-title id="titulo-merge-readiness-history">Merge readiness — histórico</v-card-title>
+      <v-card-subtitle>Tendência de bloqueios, tamanho de PR e domínios misturados via merge-readiness-history.json.</v-card-subtitle>
+      <v-card-text>
+        <v-row>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Estado histórico"
+              :value="mergeReadinessHistoryResumo.state"
+              :semaforo="mergeReadinessHistoryResumo.state"
+              :clickable="false"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Taxa bloqueio"
+              :value="mergeReadinessHistoryResumo.blockedRate"
+              :clickable="false"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Média arquivos"
+              :value="mergeReadinessHistoryResumo.avgChangedFiles"
+              :clickable="false"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Amostras"
+              :value="mergeReadinessHistoryResumo.samples"
+              :clickable="false"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Merge estabilizado"
+              :value="mergeReadinessHistoryResumo.mergeReadinessStabilized"
+              :semaforo="mergeReadinessHistoryResumo.mergeReadinessStabilized === 'sim' ? 'verde' : 'amarelo'"
+              :clickable="false"
+              data-testid="merge-readiness-stabilized"
+            />
+          </v-col>
+        </v-row>
+        <v-alert
+          v-if="mergeReadinessHistoryResumo.merge_readiness_history_enabled"
+          type="success"
+          variant="tonal"
+          density="compact"
+          class="mt-3"
+          data-testid="merge-readiness-history-enabled"
+        >
+          Histórico merge-readiness habilitado via gate operacional.
+        </v-alert>
+        <v-table density="compact" class="mt-4" aria-label="Histórico merge readiness">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Status</th>
+              <th>Arquivos</th>
+              <th>Behind</th>
+              <th>Domínios</th>
+              <th>Run</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="entry in mergeReadinessHistorico" :key="`${entry.timestamp}-${entry.run_id}`">
+              <td>{{ entry.timestamp || '—' }}</td>
+              <td>{{ entry.status || '—' }}</td>
+              <td>{{ entry.changed_files ?? '—' }}</td>
+              <td>{{ entry.behind_by ?? '—' }}</td>
+              <td>{{ (entry.domains || []).join(', ') || '—' }}</td>
+              <td>{{ entry.run_id || '—' }}</td>
+            </tr>
+            <tr v-if="!mergeReadinessHistorico.length">
+              <td colspan="6" class="small text-medium-emphasis">Nenhuma amostra histórica disponível.</td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card-text>
+    </v-card>
+
     <v-card class="filtros mt-4" elevation="0">
       <v-card-title>Filtros do analítico</v-card-title>
       <v-card-text>
@@ -511,6 +597,7 @@ const opcoesSecao = [
   { title: 'Malha operacional', value: 'malha-operacional' },
   { title: 'Trilha D', value: 'trilha-d' },
   { title: 'Monitoramento Trilha D', value: 'trilha-d-monitoring' },
+  { title: 'Merge readiness — Histórico', value: 'merge-readiness-history' },
 ]
 
 const filtrosAtivos = computed(() => normalizarFiltrosMonitoramento({
@@ -590,6 +677,16 @@ const continuousMonitoringResumo = computed(() => ({
   ),
 }))
 const continuousMonitoringAlertas = computed(() => continuousMonitoring.value.alerts || [])
+const mergeReadinessHistory = computed(() => runtimeDashboard.value?.merge_readiness_history || {})
+const mergeReadinessHistorico = computed(() => mergeReadinessHistory.value.history || [])
+const mergeReadinessHistoryResumo = computed(() => ({
+  state: mergeReadinessHistory.value.state ?? 'desconhecido',
+  blockedRate: mergeReadinessHistory.value.summary?.blocked_rate ?? 'n/a',
+  avgChangedFiles: mergeReadinessHistory.value.summary?.avg_changed_files ?? 'n/a',
+  samples: mergeReadinessHistory.value.summary?.samples ?? mergeReadinessHistorico.value.length,
+  mergeReadinessStabilized: mergeReadinessHistory.value.summary?.merge_readiness_stabilized ? 'sim' : 'não',
+  merge_readiness_history_enabled: Boolean(mergeReadinessHistory.value.summary?.merge_readiness_history_enabled),
+}))
 const meshSection = computed(() => runtimeDashboard.value?.sections?.find((section) => section.id === 'operational-mesh-chain') || null)
 const meshItems = computed(() => meshSection.value?.items || {})
 const meshTimeline = computed(() => meshItems.value.timeline || [])

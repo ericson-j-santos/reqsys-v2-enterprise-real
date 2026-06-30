@@ -75,7 +75,7 @@ class OpsDashboardDataTests(unittest.TestCase):
 
         payload = build_dashboard_payload(watchdog, "example/repo", runtime, evidence_graph, public_runtime, {}, delivery_finalization)
 
-        self.assertEqual(payload["schema_version"], "1.2.0")
+        self.assertEqual(payload["schema_version"], "1.3.0")
         self.assertTrue(payload["runtime_sources"]["runtime_health_report_available"])
         self.assertTrue(payload["runtime_sources"]["runtime_operational_evidence_graph_available"])
         self.assertTrue(payload["runtime_sources"]["public_runtime_validation_available"])

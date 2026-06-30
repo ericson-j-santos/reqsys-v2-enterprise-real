@@ -1,25 +1,26 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T14:00:06.110828Z",
-  "state": "red",
+  "generated_at": "2026-06-30T22:57:29.802735Z",
+  "state": "green",
   "summary": {
     "merge_readiness_history_enabled": true,
-    "samples": 2,
-    "blocked_rate": 0.5,
-    "avg_changed_files": 13.0,
-    "recommendation": "reduzir_divergencia_branch"
+    "samples": 3,
+    "blocked_rate": 0.0,
+    "avg_changed_files": 6.0,
+    "merge_readiness_stabilized": true,
+    "recommendation": "merge_readiness_estavel"
   },
   "metrics": {
-    "samples": 2,
-    "blocked_rate": 0.5,
-    "avg_changed_files": 13.0,
-    "avg_workflow_files": 1.0,
-    "avg_behind_by": 0.5,
+    "samples": 3,
+    "blocked_rate": 0.0,
+    "avg_changed_files": 6.0,
+    "avg_workflow_files": 0.0,
+    "avg_behind_by": 0.0,
     "top_domains": [
       {
         "domain": "backend",
-        "count": 2
+        "count": 1
       },
       {
         "domain": "tests",
@@ -28,84 +29,84 @@
       {
         "domain": "docs",
         "count": 1
-      },
-      {
-        "domain": "ci-workflows",
-        "count": 1
       }
     ],
-    "top_blocking_codes": [
-      {
-        "code": "branch_behind",
-        "count": 1
-      }
-    ],
-    "ready_samples": 1,
-    "blocked_samples": 1
+    "top_blocking_codes": [],
+    "ready_samples": 3,
+    "blocked_samples": 0
   },
   "latest_snapshot": {
-    "timestamp": "2026-06-30T14:00:06.110569Z",
-    "run_id": "seed-blocked-002",
-    "correlation_id": "seed-merge-002",
-    "status": "blocked",
+    "timestamp": "2026-06-30T12:00:00Z",
+    "run_id": "seed-ready-003",
+    "correlation_id": "seed-merge-003",
+    "status": "ready",
     "base_ref": "main",
-    "ahead_by": 2,
-    "behind_by": 1,
-    "changed_files": 18,
-    "workflow_files": 2,
+    "ahead_by": 1,
+    "behind_by": 0,
+    "changed_files": 7,
+    "workflow_files": 0,
     "domains": [
-      "backend",
-      "docs",
-      "ci-workflows"
+      "docs"
     ],
-    "blocking_count": 1,
-    "warning_count": 1,
-    "blocking_codes": [
-      "branch_behind"
-    ],
-    "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/merge-readiness.yml"
+    "blocking_count": 0,
+    "warning_count": 0,
+    "blocking_codes": [],
+    "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/seed-ready-003"
   },
   "history": [
     {
-      "timestamp": "2026-06-30T13:59:58.966046Z",
+      "timestamp": "2026-06-30T10:00:00Z",
       "run_id": "seed-ready-001",
       "correlation_id": "seed-merge-001",
       "status": "ready",
       "base_ref": "main",
       "ahead_by": 1,
       "behind_by": 0,
-      "changed_files": 8,
+      "changed_files": 5,
       "workflow_files": 0,
       "domains": [
-        "backend",
+        "backend"
+      ],
+      "blocking_count": 0,
+      "warning_count": 0,
+      "blocking_codes": [],
+      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/seed-ready-001"
+    },
+    {
+      "timestamp": "2026-06-30T11:00:00Z",
+      "run_id": "seed-ready-002",
+      "correlation_id": "seed-merge-002",
+      "status": "ready",
+      "base_ref": "main",
+      "ahead_by": 2,
+      "behind_by": 0,
+      "changed_files": 6,
+      "workflow_files": 0,
+      "domains": [
         "tests"
       ],
       "blocking_count": 0,
       "warning_count": 0,
       "blocking_codes": [],
-      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/merge-readiness.yml"
+      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/seed-ready-002"
     },
     {
-      "timestamp": "2026-06-30T14:00:06.110569Z",
-      "run_id": "seed-blocked-002",
-      "correlation_id": "seed-merge-002",
-      "status": "blocked",
+      "timestamp": "2026-06-30T12:00:00Z",
+      "run_id": "seed-ready-003",
+      "correlation_id": "seed-merge-003",
+      "status": "ready",
       "base_ref": "main",
-      "ahead_by": 2,
-      "behind_by": 1,
-      "changed_files": 18,
-      "workflow_files": 2,
+      "ahead_by": 1,
+      "behind_by": 0,
+      "changed_files": 7,
+      "workflow_files": 0,
       "domains": [
-        "backend",
-        "docs",
-        "ci-workflows"
+        "docs"
       ],
-      "blocking_count": 1,
-      "warning_count": 1,
-      "blocking_codes": [
-        "branch_behind"
-      ],
-      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/merge-readiness.yml"
+      "blocking_count": 0,
+      "warning_count": 0,
+      "blocking_codes": [],
+      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/seed-ready-003"
     }
   ],
   "links": {

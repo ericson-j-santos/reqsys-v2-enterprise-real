@@ -23,10 +23,10 @@ def test_pr_evidence_gate_lists_artifacts_only_after_gate_passes():
     assert "if (includeArtifacts && run.status === 'completed')" in text
     assert 'runSummaries = await listRuns(headSha, false);' in text
     assert "if (gate.status === 'passed')" in text
-    assert 'runSummaries = await listRuns(headSha, true);' in text
+    assert 'artifactRuns = await listRuns(headSha, true);' in text
 
     polling_index = text.index('runSummaries = await listRuns(headSha, false);')
-    artifact_index = text.index('runSummaries = await listRuns(headSha, true);')
+    artifact_index = text.index('artifactRuns = await listRuns(headSha, true);')
     assert polling_index < artifact_index
 
 

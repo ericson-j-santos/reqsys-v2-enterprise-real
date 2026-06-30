@@ -88,11 +88,25 @@ def test_ingest_gate_report_persiste_historico(tmp_path: Path):
 def test_build_payload_estado_amarelo_com_bloqueios_parciais():
     payload = build_payload(
         [
-            {"status": "ready", "changed_files": 2, "workflow_files": 0, "behind_by": 0, "domains": []},
-            {"status": "ready", "changed_files": 3, "workflow_files": 0, "behind_by": 0, "domains": []},
-            {"status": "blocked", "changed_files": 4, "workflow_files": 1, "behind_by": 1, "domains": ["docs"]},
+            {"status": "ready", "changed_files": 2, "workflow_files": 0, "behind_by": 0, "domains": [], "blocking_count": 0},
+            {"status": "ready", "changed_files": 3, "workflow_files": 0, "behind_by": 0, "domains": [], "blocking_count": 0},
+            {"status": "blocked", "changed_files": 4, "workflow_files": 1, "behind_by": 1, "domains": ["docs"], "blocking_count": 1},
         ]
     )
 
     assert payload["state"] == "yellow"
     assert round(payload["summary"]["blocked_rate"], 2) == 0.33
+    assert payload["summary"]["merge_readiness_stabilized"] is False
+
+
+def test_build_payload_merge_readiness_estabilizado():
+    payload = build_payload(
+        [
+            {"status": "ready", "changed_files": 4, "workflow_files": 0, "behind_by": 0, "domains": ["backend"], "blocking_count": 0},
+            {"status": "ready", "changed_files": 5, "workflow_files": 0, "behind_by": 0, "domains": ["tests"], "blocking_count": 0},
+            {"status": "ready", "changed_files": 6, "workflow_files": 0, "behind_by": 0, "domains": ["docs"], "blocking_count": 0},
+        ]
+    )
+
+    assert payload["state"] == "green"
+    assert payload["summary"]["merge_readiness_stabilized"] is True

@@ -159,6 +159,12 @@ def build_payload(
     elif metrics["blocked_rate"] > 0:
         state = "yellow"
 
+    merge_readiness_stabilized = (
+        latest.get("status") == "ready"
+        and int(latest.get("behind_by") or 0) == 0
+        and int(latest.get("blocking_count") or 0) == 0
+    )
+
     return {
         "schema_version": "1.0.0",
         "repo": REPO,
@@ -169,6 +175,7 @@ def build_payload(
             "samples": metrics["samples"],
             "blocked_rate": metrics["blocked_rate"],
             "avg_changed_files": metrics["avg_changed_files"],
+            "merge_readiness_stabilized": merge_readiness_stabilized,
             "recommendation": "reduzir_divergencia_branch" if metrics["avg_behind_by"] > 0 else "merge_readiness_estavel",
         },
         "metrics": metrics,
