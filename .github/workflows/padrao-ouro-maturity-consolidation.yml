@@ -9,6 +9,7 @@ on:
       - "scripts/generate_ops_dashboard_data.py"
       - "scripts/build_padrao_ouro_operational_pareto.py"
       - "scripts/build_trilha_d_history.py"
+      - "scripts/validate_ops_dashboard_navigation.py"
       - "scripts/validate_ops_dashboard_trilha_d_pareto_cards.py"
       - "scripts/validate_ops_dashboard_runtime_validation.py"
       - "scripts/runtime_validation_consolidator.py"
@@ -51,7 +52,7 @@ jobs:
       - name: Validar testes de consolidação
         run: |
           python -m pytest tests/test_padrao_ouro_maturity_consolidator.py -q
-          python -m pytest tests/test_build_padrao_ouro_operational_pareto.py tests/test_build_trilha_d_history.py tests/test_ops_dashboard_trilha_d_pareto_cards.py -q
+          python -m pytest tests/test_build_padrao_ouro_operational_pareto.py tests/test_build_trilha_d_history.py tests/test_ops_dashboard_trilha_d_pareto_cards.py tests/test_validate_ops_dashboard_runtime_validation.py -q
           python3 scripts/validate_ops_dashboard_navigation.py
           python3 scripts/validate_ops_dashboard_trilha_d_pareto_cards.py
           python3 scripts/validate_ops_dashboard_runtime_validation.py
