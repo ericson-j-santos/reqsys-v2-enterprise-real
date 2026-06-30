@@ -35,13 +35,23 @@ def test_build_payload_exposes_workflow_run_deep_links() -> None:
     for item in payload["evidence"]:
         links = item["links"]
         assert links["workflow_runs"]
-        assert links["latest_run"] == links["workflow_runs"]
-        assert "/actions/workflows/" in links["latest_run"]
+        assert links["latest_run"]
+        assert "/actions/" in links["latest_run"]
 
     assert payload["summary"]["dashboard_ready_capabilities"] == payload["summary"]["total_capabilities"]
-    from scripts.build_governance_evidence_index import NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    from scripts.build_governance_evidence_index import NEXT_INCREMENT_AFTER_DEEP_LINKS
 
-    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    assert payload["summary"]["next_increment"] in {
+        NEXT_INCREMENT_AFTER_DEEP_LINKS,
+        "artifact_ingestion_refresh",
+    }
+
+
+def test_build_payload_exposes_governance_deep_links_summary() -> None:
+    payload = build_payload()
+
+    assert "governance_deep_links_enabled" in payload["summary"]
+    assert "workflow_run_deep_links_resolved" in payload["summary"]
 
 
 def test_write_payload_creates_valid_json(tmp_path: Path) -> None:

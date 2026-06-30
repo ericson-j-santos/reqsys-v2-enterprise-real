@@ -18,6 +18,7 @@ from scripts.build_trilha_d_history import (
     coverage_targeted_critical_paths_ready,
     coverage_targeted_surface_ready,
     governance_deep_links_surface_ready,
+    governance_workflow_deep_links_surface_ready,
     ingest_report_into_history,
     merge_history,
     ops_dashboard_pareto_surface_ready,
@@ -164,6 +165,7 @@ def test_ingest_report_into_history_appends_sample(tmp_path: Path) -> None:
         NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION,
         NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING,
         NEXT_INCREMENT_AFTER_COVERAGE_TARGETED,
+        NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD,
     }
     assert len(payload["history"]) == 2
     assert payload["history"][-1]["run_id"] == "run-ingest-1"
@@ -181,20 +183,26 @@ def test_resolve_next_increment_when_pipeline_completo() -> None:
 
 def test_resolve_next_increment_when_artifact_ingestion_habilitado() -> None:
     assert artifact_ingestion_surface_ready() is True
-    if coverage_targeted_surface_ready():
-        assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    expected = resolve_next_increment(artifact_ingestion=True)
+    if governance_workflow_deep_links_surface_ready() and coverage_targeted_surface_ready():
+        assert expected == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+    elif coverage_targeted_surface_ready():
+        assert expected == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
     elif continuous_trilha_d_monitoring_surface_ready():
-        assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
+        assert expected == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
     else:
-        assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+        assert expected == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
 
 
 def test_resolve_next_increment_when_continuous_monitoring_habilitado() -> None:
     assert continuous_trilha_d_monitoring_surface_ready() is True
-    if coverage_targeted_surface_ready():
-        assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    expected = resolve_next_increment(artifact_ingestion=True)
+    if governance_workflow_deep_links_surface_ready() and coverage_targeted_surface_ready():
+        assert expected == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+    elif coverage_targeted_surface_ready():
+        assert expected == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
     else:
-        assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
+        assert expected == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
 
 
 def test_coverage_targeted_surface_ready_detecta_arquivos_e_workflow() -> None:
@@ -204,7 +212,7 @@ def test_coverage_targeted_surface_ready_detecta_arquivos_e_workflow() -> None:
 
 def test_resolve_next_increment_when_governance_pendente(monkeypatch) -> None:
     monkeypatch.setattr("scripts.build_trilha_d_history.trilha_d_history_dashboard_surface_ready", lambda repo_root=None: False)
-    monkeypatch.setattr("scripts.build_trilha_d_history.governance_deep_links_surface_ready", lambda repo_root=None: False)
+    monkeypatch.setattr("scripts.build_trilha_d_history.governance_workflow_deep_links_surface_ready", lambda repo_root=None: False)
     assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
 
 
@@ -214,6 +222,7 @@ def test_resolve_next_increment_when_pareto_pendente(monkeypatch) -> None:
 
 
 def test_resolve_next_increment_when_trilha_d_dashboard_pendente(monkeypatch) -> None:
+    monkeypatch.setattr("scripts.build_trilha_d_history.governance_workflow_deep_links_surface_ready", lambda repo_root=None: True)
     monkeypatch.setattr("scripts.build_trilha_d_history.trilha_d_history_dashboard_surface_ready", lambda repo_root=None: False)
     assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS
 
