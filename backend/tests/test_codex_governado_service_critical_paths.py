@@ -125,3 +125,34 @@ def test_resumo_operacional_retorna_metricas(db_session):
     assert 'total' in resumo
     assert 'recentes' in resumo
     assert isinstance(resumo['recentes'], list)
+
+
+def test_registrar_auditoria_sem_db_apenas_audita():
+    with patch('app.services.codex_governado.auditar') as mock_auditar:
+        svc.registrar_auditoria(
+            None,
+            correlation_id='corr-audit',
+            usuario='qa@reqsys.local',
+            provider='mock',
+            status='ok',
+            bloqueado=False,
+        )
+    mock_auditar.assert_called_once()
+
+
+def test_registrar_auditoria_persiste_no_banco(db_session):
+    svc.registrar_auditoria(
+        db_session,
+        correlation_id='corr-audit-db',
+        usuario='qa@reqsys.local',
+        provider='mock',
+        status='ok',
+        bloqueado=False,
+        motivo='teste',
+        fingerprint='fp-1',
+        latencia_ms=12,
+        reqsys_publicado=True,
+        score_confianca=80,
+    )
+    resumo = svc.resumo_operacional(db_session, limite=5)
+    assert resumo['total'] >= 1

@@ -12,6 +12,33 @@ from app.models.requisito import Requisito
 from app.services import recomendacoes_ia as svc
 
 
+def test_listar_incidentes_com_busca(db_session):
+    requisito = Requisito(
+        codigo='REQ-IA-SEARCH',
+        titulo='Busca por pipeline',
+        descricao='Contexto para filtro de incidentes por termo.',
+        urgencia='media',
+        area='Plataforma',
+        sistema='Pipeline',
+        solicitante='ops@reqsys.local',
+        status='aberto',
+    )
+    db_session.add(requisito)
+    db_session.commit()
+
+    resultados = svc.listar_incidentes(db_session, search='pipeline', limit=10)
+    assert any(item['titulo'] == 'Busca por pipeline' for item in resultados)
+
+
+def test_obter_incidente_inexistente_retorna_none(db_session):
+    assert svc.obter_incidente(db_session, 999999) is None
+
+
+def test_serializar_decisao_e_outcome_none():
+    assert svc._serializar_decisao(None) is None
+    assert svc._serializar_outcome(None) is None
+
+
 def test_serializar_incidente_mapeia_campos_do_requisito(db_session):
     requisito = Requisito(
         codigo='REQ-IA-002',

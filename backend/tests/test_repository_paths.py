@@ -38,3 +38,30 @@ def test_resolve_repo_file_allows_missing_file_when_not_required():
 
     assert isinstance(path, Path)
     assert path.name == 'arquivo-inexistente.reqsys'
+
+
+def test_resolve_repo_file_rejeita_partes_vazias():
+    with pytest.raises(ValueError):
+        resolve_repo_file()
+
+
+def test_get_repository_root_via_sentinela_pyproject(tmp_path, monkeypatch):
+    fake_repo = tmp_path / 'fake-repo'
+    fake_repo.mkdir()
+    (fake_repo / 'pyproject.toml').write_text('[project]\nname="reqsys"\n', encoding='utf-8')
+    (fake_repo / 'backend').mkdir()
+
+    resolved = get_repository_root(start=fake_repo / 'backend' / 'app')
+
+    assert resolved == fake_repo
+
+
+def test_get_repository_root_via_git_e_backend(tmp_path):
+    fake_repo = tmp_path / 'git-repo'
+    fake_repo.mkdir()
+    (fake_repo / '.git').mkdir()
+    (fake_repo / 'backend').mkdir()
+
+    resolved = get_repository_root(start=fake_repo / 'backend')
+
+    assert resolved == fake_repo
