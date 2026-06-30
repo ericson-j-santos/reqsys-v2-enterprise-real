@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys — Navegação Operacional</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb; --blue:#38bdf8; --green:#22c55e; --border:#334155; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:24px; border-bottom:1px solid var(--border); background:linear-gradient(135deg,#111827,#1e293b); }
+    main { max-width:1180px; margin:0 auto; padding:24px; }
+    h1 { margin:0 0 8px; }
+    .subtitle, .small { color:var(--muted); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; }
+    .card { border:1px solid var(--border); background:var(--panel); border-radius:14px; padding:18px; box-shadow:0 10px 24px rgba(0,0,0,.25); }
+    .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+    .title { font-size:20px; font-weight:700; margin:8px 0; }
+    .status { display:inline-block; padding:5px 9px; border-radius:999px; font-weight:700; font-size:12px; background:rgba(34,197,94,.16); color:var(--green); border:1px solid rgba(34,197,94,.45); }
+    a { color:var(--blue); text-decoration:none; }
+    code { color:#dbeafe; }
+    pre { white-space:pre-wrap; word-break:break-word; background:#020617; padding:12px; border-radius:10px; border:1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ReqSys — Navegação Operacional</h1>
+    <p class="subtitle">Índice estático para acesso rápido ao Ops Dashboard, Evidence Hub, Pareto Layer, contratos e runbooks operacionais.</p>
+  </header>
+  <main>
+    <section class="grid" id="cards"></section>
+    <section class="card">
+      <h2>Contrato de navegação</h2>
+      <pre id="raw">{}</pre>
+    </section>
+  </main>
+  <script>
+    const DATA_PATH = './operational-navigation-index.json';
+    const fallback = {
+      schema_version: '0.1.0',
+      mode: 'fallback_navigation',
+      links: [
+        { id: 'ops_dashboard_main', title: 'Ops Dashboard Principal', href: './index.html', category: 'dashboard', status: 'active' },
+        { id: 'operational_runtime_governance', title: 'Operational Runtime Governance Pareto Layer', href: './operational-runtime-governance.html', category: 'dashboard', status: 'active' },
+        { id: 'operational_evidence_hub', title: 'Operational Evidence Hub', href: '../dashboard/operational-evidence-hub.html', category: 'dashboard', status: 'active' }
+      ]
+    };
+
+    async function loadData() {
+      try {
+        const response = await fetch(DATA_PATH, { cache: 'no-store' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return { available: true, data: await response.json(), error: null };
+      } catch (error) {
+        return { available: false, data: fallback, error: error.message };
+      }
+    }
+
+    function renderCard(link) {
+      return `<article class="card">
+        <div class="label">${link.category || 'link'} · prioridade ${link.priority || '-'}</div>
+        <div class="title">${link.title || link.id}</div>
+        <p class="small"><code>${link.href || '-'}</code></p>
+        <p><span class="status">${link.status || 'active'}</span></p>
+        <p><a href="${link.href}">Abrir</a></p>
+      </article>`;
+    }
+
+    async function render() {
+      const result = await loadData();
+      const payload = result.data || fallback;
+      const links = payload.links || [];
+      document.getElementById('cards').innerHTML = links.map(renderCard).join('') || '<article class="card">Nenhum link publicado.</article>';
+      document.getElementById('raw').textContent = JSON.stringify({ available: result.available, error: result.error, payload }, null, 2);
+    }
+
+    render().catch((error) => {
+      document.getElementById('cards').innerHTML = '<article class="card">Falha ao carregar navegação.</article>';
+      document.getElementById('raw').textContent = JSON.stringify({ error: error.message }, null, 2);
+    });
+  </script>
+</body>
+</html>

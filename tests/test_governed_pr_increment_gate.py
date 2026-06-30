@@ -48,6 +48,15 @@ def test_infer_increment_defaults_to_new_front() -> None:
     assert inferred["inference_source"] == "default:new_front"
 
 
+def test_infer_increment_state_gap_from_maturity_pr_title() -> None:
+    inferred = infer_increment_from_pr(
+        title="feat: elevar maturidade BDD e conclusão para nível adequado (>=80%)",
+        head_ref="cursor/maturidade-adequado-80-8c6a",
+    )
+    assert inferred["increment_type"] == "gap_fix"
+    assert inferred["inference_source"] == "heuristic:state_gap"
+
+
 def test_infer_increment_ops_environments_as_hotfix() -> None:
     inferred = infer_increment_from_pr(
         title="feat: validate readiness for all environments",
@@ -81,6 +90,18 @@ def test_evaluate_pr_increment_gate_allows_ops_hotfix_when_yellow() -> None:
     assert result["allowed"] is True
     assert result["increment_type"] == "hotfix"
     assert result["inference"]["inference_source"] == "heuristic:ops_evidence"
+
+
+def test_evaluate_pr_increment_gate_allows_state_gap_when_yellow() -> None:
+    report = consolidate("owner/repo", "main", orchestrator_fixture("yellow"), health_fixture("green"))
+    result = evaluate_pr_increment_gate(
+        report,
+        title="feat: elevar maturidade BDD e conclusão para nível adequado (>=80%)",
+        head_ref="cursor/maturidade-adequado-80-8c6a",
+    )
+    assert result["allowed"] is True
+    assert result["increment_type"] == "gap_fix"
+    assert result["inference"]["inference_source"] == "heuristic:state_gap"
 
 
 def test_evaluate_pr_increment_gate_blocks_new_front_when_red() -> None:

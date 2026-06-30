@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-28T01:45:00Z",
+  "generated_at": "2026-06-30T10:30:06.378608Z",
   "state": "green",
   "current_score": 95.88,
   "baseline_score": 88.33,
@@ -11,7 +11,8 @@
     "samples": 3,
     "green_samples": 2,
     "failed_samples": 1,
-    "next_increment": "artifact_ingestion_refresh"
+    "next_increment": "artifact_ingestion_refresh",
+    "artifact_ingestion_enabled": false
   },
   "links": {
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
@@ -76,14 +77,34 @@
       "state": "failed",
       "average_score": 88.33,
       "dimensions": {
-        "tests": { "status": "passed", "score": 100.0 },
-        "coverage": { "status": "failed", "score": 29.0 },
-        "mutation": { "status": "passed", "score": 100.0 },
-        "contract": { "status": "passed", "score": 100.0 },
-        "schema": { "status": "passed", "score": 100.0 },
-        "ci-watch": { "status": "passed", "score": 100.0 }
+        "tests": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "coverage": {
+          "status": "failed",
+          "score": 29.0
+        },
+        "mutation": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "contract": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "schema": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "ci-watch": {
+          "status": "passed",
+          "score": 100.0
+        }
       },
-      "notes": ["baseline_before_coverage_parser_fix"]
+      "notes": [
+        "baseline_before_coverage_parser_fix"
+      ]
     },
     {
       "timestamp": "2026-06-28T01:39:18Z",
@@ -92,14 +113,34 @@
       "state": "green",
       "average_score": 95.88,
       "dimensions": {
-        "tests": { "status": "passed", "score": 100.0 },
-        "coverage": { "status": "passed", "score": 74.29 },
-        "mutation": { "status": "passed", "score": 100.0 },
-        "contract": { "status": "passed", "score": 100.0 },
-        "schema": { "status": "passed", "score": 100.0 },
-        "ci-watch": { "status": "passed", "score": 100.0 }
+        "tests": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "coverage": {
+          "status": "passed",
+          "score": 74.29
+        },
+        "mutation": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "contract": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "schema": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "ci-watch": {
+          "status": "passed",
+          "score": 100.0
+        }
       },
-      "notes": ["coverage_parser_fix_merged"]
+      "notes": [
+        "coverage_parser_fix_merged"
+      ]
     },
     {
       "timestamp": "2026-06-28T01:43:44Z",
@@ -108,20 +149,54 @@
       "state": "green",
       "average_score": 95.88,
       "dimensions": {
-        "tests": { "status": "passed", "score": 100.0 },
-        "coverage": { "status": "passed", "score": 74.29 },
-        "mutation": { "status": "passed", "score": 100.0 },
-        "contract": { "status": "passed", "score": 100.0 },
-        "schema": { "status": "passed", "score": 100.0 },
-        "ci-watch": { "status": "passed", "score": 100.0 }
+        "tests": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "coverage": {
+          "status": "passed",
+          "score": 74.29
+        },
+        "mutation": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "contract": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "schema": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "ci-watch": {
+          "status": "passed",
+          "score": 100.0
+        }
       },
-      "notes": ["coverage_parser_regression_tests_merged"]
+      "notes": [
+        "coverage_parser_regression_tests_merged"
+      ]
     }
   ],
   "runtime_dashboard_contract": {
-    "card_fields": ["state", "current_score", "trend", "delta_from_baseline"],
-    "series_fields": ["timestamp", "average_score", "state"],
-    "dimension_fields": ["current_status", "current_score", "trend", "delta_from_baseline"],
+    "card_fields": [
+      "state",
+      "current_score",
+      "trend",
+      "delta_from_baseline"
+    ],
+    "series_fields": [
+      "timestamp",
+      "average_score",
+      "state"
+    ],
+    "dimension_fields": [
+      "current_status",
+      "current_score",
+      "trend",
+      "delta_from_baseline"
+    ],
     "refresh_strategy": "static_json_until_artifact_ingestion_is_enabled"
   }
 }

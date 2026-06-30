@@ -21,6 +21,21 @@ const SEMAFORO_MAP = {
   adequado: { key: 'verde', label: 'Adequado', color: 'green', icon: 'mdi-circle' },
   avancado: { key: 'verde', label: 'Avançado', color: 'green', icon: 'mdi-circle' },
   nao_medido: { key: 'amarelo', label: 'Não medido', color: 'amber', icon: 'mdi-circle' },
+  implemented: { key: 'verde', label: 'Implementado', color: 'green', icon: 'mdi-circle' },
+  dry_run: { key: 'amarelo', label: 'Dry-run', color: 'amber', icon: 'mdi-circle' },
+  green: { key: 'verde', label: 'Verde', color: 'green', icon: 'mdi-circle' },
+  passed: { key: 'verde', label: 'Aprovado', color: 'green', icon: 'mdi-circle' },
+  improving: { key: 'verde', label: 'Melhorando', color: 'green', icon: 'mdi-circle' },
+  yellow: { key: 'amarelo', label: 'Amarelo', color: 'amber', icon: 'mdi-circle' },
+  stable: { key: 'amarelo', label: 'Estável', color: 'amber', icon: 'mdi-circle' },
+  failed: { key: 'vermelho', label: 'Falhou', color: 'red', icon: 'mdi-circle' },
+  regressing: { key: 'vermelho', label: 'Regredindo', color: 'red', icon: 'mdi-circle' },
+  ready: { key: 'verde', label: 'Pronto', color: 'green', icon: 'mdi-circle' },
+  blocked: { key: 'vermelho', label: 'Bloqueado', color: 'red', icon: 'mdi-circle' },
+  misconfigured: { key: 'vermelho', label: 'Misconfigurado', color: 'red', icon: 'mdi-circle' },
+  missing_permission: { key: 'amarelo', label: 'Permissão ausente', color: 'amber', icon: 'mdi-circle' },
+  insufficient_permission: { key: 'amarelo', label: 'Permissão insuficiente', color: 'amber', icon: 'mdi-circle' },
+  expired: { key: 'amarelo', label: 'Expirado', color: 'amber', icon: 'mdi-circle' },
 }
 
 function normalizarTexto(valor) {

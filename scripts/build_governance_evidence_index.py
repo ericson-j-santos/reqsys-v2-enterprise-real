@@ -15,6 +15,22 @@ from typing import Any
 
 REPO = "ericson-j-santos/reqsys-v2-enterprise-real"
 DEFAULT_OUTPUT = "docs/ops-dashboard/data/governance-evidence-index.json"
+NEXT_INCREMENT_AFTER_DEEP_LINKS = "dashboard_trilha_d_history_card"
+
+
+def workflow_runs_url(workflow_file: str) -> str:
+    return f"https://github.com/{REPO}/actions/workflows/{workflow_file}"
+
+
+def enrich_links(workflow_file: str, *, source: str | None = None) -> dict[str, str]:
+    links = {
+        "workflow": workflow_runs_url(workflow_file),
+        "workflow_runs": workflow_runs_url(workflow_file),
+        "latest_run": workflow_runs_url(workflow_file),
+    }
+    if source:
+        links["source"] = source
+    return links
 
 
 def utc_now() -> str:
@@ -33,10 +49,10 @@ def evidence_items() -> list[dict[str, Any]]:
             "status": "implemented",
             "dashboard_ready": True,
             "drilldown_fields": ["risk", "lane", "parallel_safe", "blocking_reasons", "signals"],
-            "links": {
-                "workflow": f"https://github.com/{REPO}/actions/workflows/pr-conflict-guard.yml",
-                "source": f"https://github.com/{REPO}/blob/main/scripts/conflict_prediction_gate.py",
-            },
+            "links": enrich_links(
+                "pr-conflict-guard.yml",
+                source=f"https://github.com/{REPO}/blob/main/scripts/conflict_prediction_gate.py",
+            ),
         },
         {
             "id": "runtime_merge_queue",
@@ -48,10 +64,10 @@ def evidence_items() -> list[dict[str, Any]]:
             "status": "implemented",
             "dashboard_ready": True,
             "drilldown_fields": ["eligible", "state", "lane", "blocking_reasons", "evidence"],
-            "links": {
-                "workflow": f"https://github.com/{REPO}/actions/workflows/governed-merge-queue.yml",
-                "source": f"https://github.com/{REPO}/blob/main/scripts/runtime_merge_queue_gate.py",
-            },
+            "links": enrich_links(
+                "governed-merge-queue.yml",
+                source=f"https://github.com/{REPO}/blob/main/scripts/runtime_merge_queue_gate.py",
+            ),
         },
         {
             "id": "preview_environment",
@@ -63,10 +79,10 @@ def evidence_items() -> list[dict[str, Any]]:
             "status": "dry_run",
             "dashboard_ready": True,
             "drilldown_fields": ["mode", "pr", "environment", "url", "status", "checks", "correlation_id"],
-            "links": {
-                "workflow": f"https://github.com/{REPO}/actions/workflows/preview-environment-contract.yml",
-                "source": f"https://github.com/{REPO}/blob/main/.github/workflows/preview-environment-contract.yml",
-            },
+            "links": enrich_links(
+                "preview-environment-contract.yml",
+                source=f"https://github.com/{REPO}/blob/main/.github/workflows/preview-environment-contract.yml",
+            ),
         },
         {
             "id": "governed_pr_automation",
@@ -78,10 +94,10 @@ def evidence_items() -> list[dict[str, Any]]:
             "status": "implemented",
             "dashboard_ready": True,
             "drilldown_fields": ["allowed", "reason", "increment_type", "blockers", "recommended_actions"],
-            "links": {
-                "workflow": f"https://github.com/{REPO}/actions/workflows/governed-pr-automation.yml",
-                "source": f"https://github.com/{REPO}/blob/main/scripts/governed_pr_increment_gate.py",
-            },
+            "links": enrich_links(
+                "governed-pr-automation.yml",
+                source=f"https://github.com/{REPO}/blob/main/scripts/governed_pr_increment_gate.py",
+            ),
         },
         {
             "id": "predictive_regression",
@@ -100,24 +116,25 @@ def evidence_items() -> list[dict[str, Any]]:
                 "dimension_risks",
                 "recommendation",
             ],
-            "links": {
-                "workflow": f"https://github.com/{REPO}/actions/workflows/predictive-regression-guard.yml",
-                "source": f"https://github.com/{REPO}/blob/main/scripts/predict_operational_regression.py",
-            },
+            "links": enrich_links(
+                "predictive-regression-guard.yml",
+                source=f"https://github.com/{REPO}/blob/main/scripts/predict_operational_regression.py",
+            ),
         },
         {
             "id": "pr_evidence_gate",
             "title": "PR Evidence Gate",
             "workflow": "PR Evidence Gate",
             "script": None,
-            "artifact": "pr-evidence",
-            "json_path": None,
+            "artifact": "pr-evidence-gate",
+            "json_path": "artifacts/pr-evidence-gate/pr-evidence-gate.json",
             "status": "implemented",
-            "dashboard_ready": False,
+            "dashboard_ready": True,
             "drilldown_fields": ["pr", "head_sha", "checks", "evidence"],
-            "links": {
-                "workflow": f"https://github.com/{REPO}/actions",
-            },
+            "links": enrich_links(
+                "pr-evidence-gate.yml",
+                source=f"https://github.com/{REPO}/blob/main/.github/workflows/pr-evidence-gate.yml",
+            ),
         },
     ]
 
@@ -138,7 +155,7 @@ def build_payload() -> dict[str, Any]:
             "total_capabilities": len(items),
             "implemented_capabilities": implemented,
             "dashboard_ready_capabilities": dashboard_ready,
-            "next_increment": "link_governance_cards_to_latest_workflow_runs",
+            "next_increment": NEXT_INCREMENT_AFTER_DEEP_LINKS,
         },
         "links": {
             "actions": f"https://github.com/{REPO}/actions",
@@ -147,9 +164,9 @@ def build_payload() -> dict[str, Any]:
         },
         "evidence": items,
         "runtime_dashboard_contract": {
-            "card_fields": ["title", "workflow", "status", "artifact", "dashboard_ready"],
-            "drilldown_fields": ["links", "json_path", "drilldown_fields"],
-            "refresh_strategy": "static_json_until_artifact_ingestion_is_enabled",
+            "card_fields": ["title", "workflow", "status", "artifact", "dashboard_ready", "latest_run"],
+            "drilldown_fields": ["links", "json_path", "drilldown_fields", "latest_run"],
+            "refresh_strategy": "workflow_runs_deep_links_enabled",
         },
     }
 

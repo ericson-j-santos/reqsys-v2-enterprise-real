@@ -71,6 +71,21 @@ ALLOWLISTED_REMEDIATION_WORKFLOWS = {
     "Fast CI - Operational Guardrails",
 }
 
+# Workflows com cancel-in-progress governado — cancelled indica supersessão, não gap.
+CONCURRENCY_MESH_SUPPRESSED_WORKFLOWS = frozenset(
+    {
+        "Operational Runtime Mesh Hub",
+        "Unified Operational Event Bus",
+        "Operational Alert Intelligence",
+        "Workflow Reliability Analytics",
+        "Operational Data Lake & Historical Intelligence",
+        "Operational Executive Dashboard Generator",
+        "Governed Auto Remediation Engine",
+        "Operational Stability Score",
+        "CI Incident Intelligence",
+    }
+)
+
 EVIDENCE_GATE_WORKFLOW_NAMES = {
     "PR Evidence Gate",
     "PR Governed CI Validation",
@@ -383,6 +398,11 @@ def build_retry_policy(plan: list[dict[str, Any]], runs: list[WorkflowRun], mode
 def build_remediation_plan(runs: list[WorkflowRun]) -> list[dict[str, Any]]:
     plan: list[dict[str, Any]] = []
     for run in runs:
+        if (
+            run.conclusion == "cancelled"
+            and run.name in CONCURRENCY_MESH_SUPPRESSED_WORKFLOWS
+        ):
+            continue
         if run.health == "yellow":
             allowed, reason = evaluate_governed_retry(run)
             if allowed:

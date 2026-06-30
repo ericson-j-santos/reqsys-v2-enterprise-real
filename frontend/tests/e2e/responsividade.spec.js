@@ -21,6 +21,8 @@ const ROTAS_RESPONSIVAS = [
   { path: '/hub-lowcode', testId: 'route-hub-lowcode' },
   { path: '/painel-integracao', testId: 'route-painel-integracao' },
   { path: '/arquitetura', testId: 'route-arquitetura' },
+  { path: '/figma-github', testId: 'route-figma-github' },
+  { path: '/governanca', testId: 'route-governanca' },
   { path: '/govbi-ia', testId: 'route-govbi-ia' },
   { path: '/monitoramento-operacional', testId: 'route-monitoramento-operacional' },
   { path: '/analytics', testId: 'route-analytics' },
@@ -33,7 +35,7 @@ const VIEWPORTS = [
   { name: 'desktop', width: 1366, height: 768 },
 ]
 
-test.describe('responsividade padrão ouro — 19 rotas', () => {
+test.describe('responsividade padrão ouro — 21 rotas', () => {
   test.beforeEach(async ({ page }) => {
     await mockResponsiveApis(page)
   })
@@ -61,7 +63,8 @@ test.describe('responsividade padrão ouro — 19 rotas', () => {
     await loginDemo(page)
 
     await page.locator('button[aria-label="Abrir menu de navegação"]').click()
-    const menuLink = page.locator('.req-drawer a[href="/requisitos"]').first()
+    await page.getByTestId('nav-tema-requisitos').click()
+    const menuLink = page.getByTestId('nav-item-requisitos')
     await expect(menuLink).toBeVisible()
     await menuLink.click()
     await expect(page).toHaveURL(/\/requisitos$/)

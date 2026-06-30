@@ -5,9 +5,13 @@ on:
     paths:
       - 'tools/product_intelligence/**'
       - '.github/workflows/evidence-analytics-drilldown-runtime.yml'
+  workflow_dispatch:
   push:
     branches:
       - main
+    paths:
+      - 'tools/product_intelligence/**'
+      - '.github/workflows/evidence-analytics-drilldown-runtime.yml'
 
 jobs:
   evidence-analytics-drilldown-runtime:

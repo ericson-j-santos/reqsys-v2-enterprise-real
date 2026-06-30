@@ -76,6 +76,7 @@ jobs:
           AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
         run: |
+          set -euo pipefail
           TENANT_INPUT="${{ inputs.azure_tenant_id }}"
           CLIENT_INPUT="${{ inputs.azure_client_id }}"
           TENANT_VALUE="${TENANT_INPUT:-$AZURE_TENANT_ID_SECRET}"
@@ -141,6 +142,7 @@ jobs:
           AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
         run: |
+          set -euo pipefail
           python scripts/configurar_fly_auth_azure.py \
             --fly-app "${{ matrix.fly_app }}" \
             --app-env "${{ matrix.environment }}" \

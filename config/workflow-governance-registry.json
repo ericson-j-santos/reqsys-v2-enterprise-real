@@ -87,7 +87,8 @@
       ],
       "retained_aggregators": [
         "unified-operational-event-bus.yml",
-        "operational-alert-intelligence.yml"
+        "operational-alert-intelligence.yml",
+        "unified-operational-signal-consolidator.yml"
       ]
     }
   }

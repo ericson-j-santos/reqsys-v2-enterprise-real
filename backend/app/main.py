@@ -16,6 +16,7 @@ from app.api import (
     auth,
     codex_governado,
     cofre,
+    connectors,
     dashboard,
     estatisticas,
     figma_github,
@@ -64,13 +65,19 @@ configurar_opentelemetry(app)
 
 @app.on_event('startup')
 def warm_database_on_startup() -> None:
-    ready, detail = probe_database(max_attempts=10 if settings.is_production else 3, delay_seconds=1.0)
+    ready, detail = probe_database(
+        max_attempts=20 if settings.is_production else 3,
+        delay_seconds=1.5 if settings.is_production else 1.0,
+    )
     if ready:
         logger.info('database_startup_probe_ok detail=%s', detail)
         return
     logger.error('database_startup_probe_failed detail=%s production=%s', detail, settings.is_production)
     if settings.is_production:
-        raise RuntimeError(f'Database indisponível após boot resiliente: {detail}')
+        logger.warning(
+            'database_startup_probe_degraded detail=%s — /health retornará 503 até o banco responder',
+            detail,
+        )
 
 app.add_middleware(
     CORSMiddleware,
@@ -97,6 +104,7 @@ app.include_router(processos.router)
 app.include_router(wiki.router)
 app.include_router(specs.router)
 app.include_router(cofre.router)
+app.include_router(connectors.router)
 app.include_router(ia.router)
 app.include_router(codex_governado.router)
 app.include_router(webhooks.router)
@@ -143,7 +151,13 @@ def _runtime_payload(status: str, check: str) -> dict[str, str]:
 
 
 def _build_sha() -> str:
-    return os.getenv('GITHUB_SHA') or os.getenv('FLY_IMAGE_REF') or 'unknown'
+    github_sha = (os.getenv('GITHUB_SHA') or '').strip()
+    if github_sha and github_sha != 'unknown':
+        return github_sha
+    image_ref = (os.getenv('FLY_IMAGE_REF') or '').strip()
+    if image_ref:
+        return image_ref
+    return 'unknown'
 
 
 def _runtime_contracts() -> dict:

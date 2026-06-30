@@ -43,10 +43,34 @@ O workflow `Fly Enterprise Sync` executa:
 
 1. validação da matriz IaC com `scripts/validate_fly_enterprise_sync.py`;
 2. resolução do ambiente alvo;
-3. política de deploy, com confirmação textual obrigatória para produção;
-4. deploy opcional com `flyctl deploy --config <infra/env/fly.toml>`;
+3. política de deploy, com confirmação textual obrigatória para produção em `workflow_dispatch`;
+4. deploy com `flyctl deploy --config <backend/fly.*.toml>` e `--build-arg GITHUB_SHA`;
 5. smoke test público com `scripts/validate_public_runtime.py`;
-6. publicação de artifacts de evidência.
+6. validação de publicação (`validate_publication_sync.py`) e login (`validar_login_multi_ambiente.py`);
+7. publicação de artifacts de evidência.
+
+### Automação em `main` (dev → hml)
+
+A cada push em `main` que altere `backend/`, `frontend/` ou IaC Fly, o workflow dispara **automaticamente** a promoção:
+
+```text
+dev (reqsys-api-dev / reqsys-app-dev) → hml (reqsys-api-stg / reqsys-app-stg)
+```
+
+- **Produção** continua no workflow dedicado `Deploy Production Sync` (gate `APROVO-PROD` em dispatch manual).
+- A ordem `max-parallel: 1` garante que homologação só deploya após desenvolvimento.
+- Homologação reutiliza o skip de secrets Azure quando `AZURE_TENANT_ID`/`AZURE_CLIENT_ID` não estão no GitHub (secrets já no Fly).
+- **Desenvolvimento** aplica `flyctl secrets set ALLOW_DEMO_LOGIN=true` antes do deploy (secrets Fly sobrescrevem o TOML e o gate de login exige demo `200` em dev).
+
+### Dispatch manual
+
+Actions → **Fly Enterprise Sync** → Run workflow:
+
+| Campo | Uso |
+|---|---|
+| `target_environment` | `dev`, `hml` ou `prod` |
+| `deploy` | `true` para deploy; `false` para smoke read-only |
+| `approve_prod_deploy` | `APROVO-PROD` obrigatório apenas para `prod` |
 
 ## Drift detection versionado
 

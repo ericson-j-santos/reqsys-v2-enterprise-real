@@ -1,5 +1,5 @@
-from datetime import UTC, datetime
 import logging
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -62,6 +62,31 @@ def _normalizar_resposta(data: dict[str, Any], correlation_id: str) -> dict[str,
     }
 
 
+def _erro_negocio_govbi(pergunta: str, correlation_id: str, data: dict[str, Any]) -> dict[str, Any]:
+    mensagem = data.get('mensagem') or data.get('erro') or 'Requisição rejeitada pelo serviço GovBI externo.'
+    return {
+        'avisos': [mensagem],
+        'nivelSensibilidade': 'BAIXA',
+        'statusFluxo': 'ERRO',
+        'metrica': 'analise_exploratoria',
+        'dimensoes': ['periodo'],
+        'filtros': {},
+        'correlationId': correlation_id,
+        'sqlGerado': '',
+        'resultado': {
+            'colunas': ['item', 'valor', 'status'],
+            'linhas': [
+                {'item': 'Pergunta recebida', 'valor': pergunta, 'status': 'VALIDADA'},
+                {'item': 'Serviço GovBI', 'valor': mensagem, 'status': 'ERRO_NEGOCIO'},
+            ],
+        },
+        'mascaramentoAplicado': True,
+        'requerAprovacao': False,
+        'aprovacaoId': None,
+        'explicacao': 'Erro de negócio retornado pelo serviço GovBI externo e normalizado pelo backend ReqSys.',
+    }
+
+
 def _fallback_governado(pergunta: str, correlation_id: str, detalhe: str) -> dict[str, Any]:
     return {
         'avisos': [
@@ -115,6 +140,18 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
 
         return _normalizar_resposta(data, correlation_id)
     except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 400:
+            try:
+                data = exc.response.json()
+                if isinstance(data, dict) and (data.get('erro') or data.get('mensagem')):
+                    logger.info(
+                        'govbi_erro_negocio correlation_id=%s erro=%s',
+                        correlation_id,
+                        data.get('erro'),
+                    )
+                    return _erro_negocio_govbi(payload.pergunta, correlation_id, data)
+            except Exception:  # noqa: BLE001 - segue para fallback operacional
+                pass
         detalhe = f'HTTP {exc.response.status_code} ao consultar GovBI externo'
         logger.warning('govbi_http_status_error correlation_id=%s status=%s', correlation_id, exc.response.status_code)
         return _fallback_governado(payload.pergunta, correlation_id, detalhe)

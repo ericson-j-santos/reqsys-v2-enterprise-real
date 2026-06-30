@@ -25,6 +25,8 @@ def test_codex_status_expoe_guard_rails():
     data = res.json()["data"]
     assert data["servico"] == "codex-governado"
     assert "rate_limit" in data["guard_rails"]
+    assert "ollama_gateway" in data["providers"]
+    assert data.get("provider_canonico_local") == "ollama_gateway"
 
 
 def test_codex_operational_summary_retorna_dashboard():

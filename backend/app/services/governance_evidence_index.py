@@ -65,6 +65,7 @@ def mapear_cards_governance(index: dict[str, Any]) -> list[dict[str, Any]]:
                 'artifact': item.get('artifact'),
                 'json_path': item.get('json_path'),
                 'dashboard_ready': bool(item.get('dashboard_ready')),
+                'latest_run': (item.get('links') or {}).get('latest_run'),
                 'drilldown_fields': item.get('drilldown_fields') or [],
                 'links': item.get('links') or {},
                 'spa_drilldown': {

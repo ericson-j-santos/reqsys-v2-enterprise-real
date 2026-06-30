@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-29T22:05:36Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "branch": "main",
+  "title": "ReqSys — Executive Brief",
+  "semaforo_executivo": {
+    "merge_queue": "green",
+    "auto_merge": "green",
+    "ci_cd": "green",
+    "runtime_publico": "green",
+    "deploy": "yellow",
+    "seguranca": "green",
+    "governanca": "green",
+    "risco_operacional": "green"
+  },
+  "indicadores_executivos": {
+    "progresso_tecnico_percent": 91,
+    "operacional_percent": 95,
+    "usuario_final_percent": 100,
+    "governanca_percent": 97,
+    "producao_percent": 100,
+    "confianca_percent": 91,
+    "risco_operacional_percent": 9,
+    "estabilidade_ci_percent": 65,
+    "throughput_paralelo": "alto",
+    "padrao_ouro_operacional_risco_percent": 100
+  },
+  "estado_unico": {
+    "implementado": [
+      "coordenacao_operacional_central",
+      "runtime_evidence_gate",
+      "auto_merge_governado",
+      "runtime_validation_consolidator"
+    ],
+    "validado": [
+      "ci_principal",
+      "gates_seguranca",
+      "runtime_validation_snapshot"
+    ],
+    "evidenciado": [
+      "runtime_publico",
+      "smoke_checks",
+      "health_snapshot_unico"
+    ],
+    "consolidado": [
+      "governanca",
+      "pipeline",
+      "risco_operacional"
+    ],
+    "pronto_para_producao": false
+  },
+  "proximo_incremento_seguro": "manter_runtime_validation_consolidator_continuo",
+  "decisao_executiva": [
+    "continuar_paralelizacao_governada",
+    "priorizar_validacao_runtime_continua",
+    "consolidar_evidencia_operacional_automatica_pos_merge"
+  ],
+  "correlation_id": "10466d18-3c70-4993-b212-55004cafac4f",
+  "source_artifact": "runtime-validation-snapshot.json"
+}

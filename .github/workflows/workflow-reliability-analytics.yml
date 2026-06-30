@@ -1,6 +1,7 @@
 name: Workflow Reliability Analytics
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows:
       - "Operational Stability Score"
@@ -17,6 +18,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Generate workflow reliability analytics
         env:

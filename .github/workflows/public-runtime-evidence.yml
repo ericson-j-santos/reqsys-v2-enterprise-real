@@ -79,6 +79,45 @@ jobs:
             --output artifacts/runtime/public-runtime-validation.json \
             --readiness-output artifacts/runtime/ops-readiness-report.json
 
+      - name: Ensure validation artifacts exist
+        if: always()
+        run: |
+          mkdir -p artifacts/runtime
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          
+          validation_path = Path("artifacts/runtime/public-runtime-validation.json")
+          readiness_path = Path("artifacts/runtime/ops-readiness-report.json")
+          base_url = "${{ steps.inputs.outputs.public_url }}"
+          
+          if not validation_path.exists():
+              placeholder = {
+                  "schema_version": "1.3.0",
+                  "contract": "public-runtime-smoke-readiness",
+                  "environment": "prod",
+                  "base_url": base_url,
+                  "total": 0,
+                  "ok": 0,
+                  "failed": 0,
+                  "success_percentual": 0.0,
+                  "readiness": {
+                      "operational_status": "unavailable",
+                      "readiness_percent": 0,
+                      "blocking_issues": ["validator nao produziu artifact"],
+                  },
+                  "results": [],
+              }
+              validation_path.write_text(json.dumps(placeholder, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          
+          if not readiness_path.exists():
+              payload = json.loads(validation_path.read_text(encoding="utf-8"))
+              readiness_path.write_text(
+                  json.dumps(payload.get("readiness", {}), ensure_ascii=False, indent=2) + "\n",
+                  encoding="utf-8",
+              )
+          PY
+
       - name: Build executive summary
         if: always()
         run: |

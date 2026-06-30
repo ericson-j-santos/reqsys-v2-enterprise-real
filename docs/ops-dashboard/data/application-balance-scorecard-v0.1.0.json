@@ -1,0 +1,141 @@
+{
+  "schema_version": "0.1.0",
+  "artifact": "application-balance-scorecard",
+  "generated_at": "2026-06-30T13:00:00-03:00",
+  "environment": "repository-mainline-planning",
+  "objective": "Orientar incrementos pequenos para equilibrar a aplicação ReqSys entre experiência do usuário, estabilidade operacional, governança, integração e evidências de entrega.",
+  "status_model": {
+    "green": "equilibrado e evidenciado",
+    "yellow": "funcional com lacuna ou evidência parcial",
+    "red": "bloqueio, regressão ou ausência de evidência mínima"
+  },
+  "weights": {
+    "frontend_ux": 20,
+    "runtime_operacional": 20,
+    "backend_api_contracts": 15,
+    "ci_cd_quality_gates": 15,
+    "governanca_evidencias": 15,
+    "documentacao_rastreabilidade": 10,
+    "seguranca_lgpd": 5
+  },
+  "domains": [
+    {
+      "id": "frontend_ux",
+      "name": "Frontend, UX e responsividade",
+      "weight": 20,
+      "status": "yellow",
+      "current_signal": "Há cobertura responsiva e drill-downs operacionais, mas o equilíbrio exige reduzir telas com fallback apenas visual e ampliar evidência de jornadas principais.",
+      "target_state": "Rotas críticas com UX consistente, navegação previsível, estados vazio/erro/carregando e validação responsiva mobile/tablet/desktop.",
+      "next_increment": "Adicionar matriz de jornadas críticas por rota e vincular cada rota a evidência E2E ou teste unitário de utilitário.",
+      "evidence_expected": [
+        "tests/e2e/responsividade.spec.js atualizado quando houver nova rota crítica",
+        "data-testid estável por tela operacional",
+        "registro de fallback e estado vazio por jornada"
+      ]
+    },
+    {
+      "id": "runtime_operacional",
+      "name": "Runtime operacional e observabilidade",
+      "weight": 20,
+      "status": "yellow",
+      "current_signal": "A malha operacional e o runtime health estão avançados; o ponto de equilíbrio é consolidar sinais em uma leitura executiva única sem criar novas superfícies concorrentes.",
+      "target_state": "Health, readiness, runtime score, incident timeline e operational risk consolidados em artefatos compatíveis entre dashboard, API e documentação.",
+      "next_increment": "Normalizar vocabulário de runtime_score, maturity_percent, operational_risk e readiness_status em um contrato único de leitura.",
+      "evidence_expected": [
+        "artifact JSON versionado",
+        "validação estática de schema",
+        "runbook com regra de interpretação por semáforo"
+      ]
+    },
+    {
+      "id": "backend_api_contracts",
+      "name": "Backend e contratos de API",
+      "weight": 15,
+      "status": "yellow",
+      "current_signal": "Há FastAPI, OpenAPI versionado e backend .NET em evolução; o equilíbrio depende de matriz explícita de paridade entre implementações e contratos publicados.",
+      "target_state": "Endpoints críticos com contrato canônico, versionamento, exemplo de payload, validação de erro e rastreabilidade de compatibilidade FastAPI/.NET.",
+      "next_increment": "Criar matriz de paridade API por módulo: autenticação, requisitos, dashboard, runtime, conectores e auditoria.",
+      "evidence_expected": [
+        "OpenAPI canônico referenciado",
+        "teste de contrato por endpoint crítico",
+        "decisão clara sobre fonte de verdade por módulo"
+      ]
+    },
+    {
+      "id": "ci_cd_quality_gates",
+      "name": "CI/CD e quality gates",
+      "weight": 15,
+      "status": "yellow",
+      "current_signal": "Existem gates de merge-readiness, CI watch e evidências runtime; ainda há risco de múltiplos PRs advisory/draft com divergência da main.",
+      "target_state": "PRs pequenos, atualizados com main, com gate local barato antes de workflows pesados e evidência objetiva antes de link final.",
+      "next_increment": "Adicionar checklist machine-readable de PR balanceado para limitar mistura de domínios e exigir evidência mínima conforme tipo de incremento.",
+      "evidence_expected": [
+        "changed_files dentro do limite",
+        "increment_type permitido",
+        "CI verde ou bloqueio documentado"
+      ]
+    },
+    {
+      "id": "governanca_evidencias",
+      "name": "Governança e evidências",
+      "weight": 15,
+      "status": "yellow",
+      "current_signal": "A governança está forte, porém dispersa entre muitos artefatos. O equilíbrio exige trilha única entre decisão, evidência, risco e próximo incremento.",
+      "target_state": "Cada incremento deve registrar objetivo, risco, rollback, evidência, impacto em segurança, impacto em analytics e próxima ação recomendada.",
+      "next_increment": "Consolidar índice executivo de evidências por domínio com links para artefatos e status de validação.",
+      "evidence_expected": [
+        "CHANGELOG atualizado",
+        "documentação operacional atualizada",
+        "rollback conhecido"
+      ]
+    },
+    {
+      "id": "documentacao_rastreabilidade",
+      "name": "Documentação e rastreabilidade",
+      "weight": 10,
+      "status": "green",
+      "current_signal": "Há documentação viva, runbooks e índices operacionais recorrentes.",
+      "target_state": "Documentação navegável, versionada e alinhada a contratos machine-readable.",
+      "next_increment": "Reduzir duplicidade e criar mapas de decisão por domínio quando surgirem novas frentes.",
+      "evidence_expected": [
+        "documento markdown versionado",
+        "artifact JSON correspondente",
+        "referência em changelog"
+      ]
+    },
+    {
+      "id": "seguranca_lgpd",
+      "name": "Segurança, LGPD e operação assistida",
+      "weight": 5,
+      "status": "yellow",
+      "current_signal": "Há diretrizes de mascaramento, cofre local, confirmação humana e auditoria; próximos incrementos devem manter escrita produtiva bloqueada por padrão.",
+      "target_state": "PII mascarada, secrets fora do repositório, ações produtivas governadas e logs com correlation_id sem vazamento de dados sensíveis.",
+      "next_increment": "Adicionar validação automática de ausência de secrets e PII em artefatos operacionais publicados.",
+      "evidence_expected": [
+        "sem secrets hardcoded",
+        "logs sem PII bruta",
+        "confirmação humana para ações críticas"
+      ]
+    }
+  ],
+  "computed_summary": {
+    "weighted_green_percent": 10,
+    "weighted_yellow_percent": 90,
+    "weighted_red_percent": 0,
+    "balance_index_percent": 64,
+    "confidence": "medium",
+    "primary_bottleneck": "evidências ainda dispersas entre runtime, CI, contratos de API e jornadas UX",
+    "recommended_pareto_path": [
+      "normalizar contrato único de score/readiness/risco",
+      "criar matriz de paridade API FastAPI/.NET",
+      "vincular jornadas críticas do frontend a evidências E2E",
+      "reduzir PRs draft/advisory divergentes da main"
+    ]
+  },
+  "guardrails": [
+    "Não abrir nova superfície funcional sem contrato, teste ou evidência mínima.",
+    "Não misturar frontend, backend, workflow e documentação ampla no mesmo PR quando não houver necessidade arquitetural.",
+    "Não publicar link final como estável antes de CI verde ou bloqueio explicitamente documentado.",
+    "Não registrar PII bruta, secrets ou tokens em artifacts de dashboard."
+  ]
+}

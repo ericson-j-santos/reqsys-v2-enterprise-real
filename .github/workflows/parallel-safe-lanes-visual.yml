@@ -1,0 +1,25 @@
+name: Parallel Safe Lanes Visual
+
+on:
+  pull_request:
+    paths:
+      - 'docs/ops-dashboard/parallel-safe-lanes.html'
+      - 'docs/ops-dashboard/data/parallel-safe-lanes-governance.json'
+      - 'scripts/validate_parallel_safe_lanes_visual.py'
+      - '.github/workflows/parallel-safe-lanes-visual.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-parallel-safe-lanes-visual:
+    name: Validate Parallel Safe Lanes Visual
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate visual page
+        run: python3 scripts/validate_parallel_safe_lanes_visual.py

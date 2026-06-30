@@ -61,7 +61,9 @@
     select { background: #020617; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 8px; }
     .details { margin-top: 8px; }
     pre { white-space: pre-wrap; word-break: break-word; background: #020617; padding: 12px; border-radius: 10px; border: 1px solid var(--border); }
-    @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+    #trilha-d-history-card,
+    #operational-pareto-card,
+    #operational-intelligence-nav { scroll-margin-top: 24px; }
     @media (max-width: 600px) { main, header { padding: 16px; } .grid { grid-template-columns: 1fr; } table { font-size: 13px; } }
   </style>
 </head>
@@ -142,8 +144,8 @@
         <div><div class="kpi-label">Próximo incremento</div><div id="gov-evidence-next" class="small">-</div></div>
       </div>
       <table>
-        <thead><tr><th>Capacidade</th><th>Status</th><th>Dashboard</th><th>Artifact / Workflow</th></tr></thead>
-        <tbody id="governance-evidence-cards"><tr><td colspan="4">Carregando...</td></tr></tbody>
+        <thead><tr><th>Capacidade</th><th>Status</th><th>Dashboard</th><th>Artifact / Workflow</th><th>Última execução</th></tr></thead>
+        <tbody id="governance-evidence-cards"><tr><td colspan="5">Carregando...</td></tr></tbody>
       </table>
       <div class="links" id="governance-evidence-links"></div>
       <details class="details">
@@ -152,8 +154,17 @@
       </details>
     </section>
 
-    <section class="card">
-      <h2>Trilha D — Histórico operacional</h2>
+    <section class="card" id="operational-intelligence-nav">
+      <h2>Navegação — Trilha D, Pareto e Gate Preditivo</h2>
+      <p class="small">Atalhos para histórico, priorização 80/20 e gate preditivo de regressão operacional no próprio dashboard.</p>
+      <div class="links" id="operational-intelligence-quick-links">
+        <a class="link-btn" href="#trilha-d-history-card">Trilha D — Histórico</a>
+        <a class="link-btn" href="#operational-pareto-card">Pareto Operacional</a>
+        <a class="link-btn" href="#predictive-regression-card">Gate Preditivo</a>
+      </div>
+    </section>
+
+    <section class="card" id="trilha-d-history-card">
       <p class="small">Evolução de score, dimensões e amostras históricas consumindo <code>trilha-d-history.json</code>.</p>
       <div class="grid">
         <div><div class="kpi-label">Score atual</div><div id="trilha-d-score" class="kpi-value">-</div></div>
@@ -176,7 +187,7 @@
       </details>
     </section>
 
-    <section class="card">
+    <section class="card" id="operational-pareto-card">
       <h2>Padrão Ouro — Pareto operacional (80/20)</h2>
       <p class="small">Priorização estatística dos gaps com maior impacto na evolução padrão ouro, derivada de <code>padrao-ouro-operational-pareto.json</code> e evidências da Trilha D.</p>
       <div class="grid">
@@ -194,6 +205,31 @@
       <details class="details">
         <summary>Contrato pareto bruto</summary>
         <pre id="pareto-details">{}</pre>
+      </details>
+    </section>
+
+    <section class="card" id="predictive-regression-card">
+      <h2>Gate preditivo de regressão operacional</h2>
+      <p class="small">Sinalização determinística de risco de regressão a partir do histórico da Trilha D, consumindo <code>predictive-regression-gate.json</code>.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Risco</div><div id="predictive-risk" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Regressão prevista</div><div id="predictive-regression-predicted" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Merge paralelo seguro</div><div id="predictive-parallel-safe" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Recomendação</div><div id="predictive-recommendation" class="kpi-value">-</div></div>
+      </div>
+      <p class="small" id="predictive-signals">-</p>
+      <table>
+        <thead><tr><th>Dimensão</th><th>Tendência</th><th>Score</th><th>Regredindo</th><th>Tocada pelo PR</th></tr></thead>
+        <tbody id="predictive-dimension-risks"><tr><td colspan="5">Carregando...</td></tr></tbody>
+      </table>
+      <table>
+        <thead><tr><th>Motivo de bloqueio / alerta</th></tr></thead>
+        <tbody id="predictive-blocking-reasons"><tr><td>Carregando...</td></tr></tbody>
+      </table>
+      <div class="links" id="predictive-links"></div>
+      <details class="details">
+        <summary>Contrato predictive-regression-gate bruto</summary>
+        <pre id="predictive-details">{}</pre>
       </details>
     </section>
 
@@ -633,6 +669,102 @@
       });
     }
 
+    async function renderPredictiveRegressionGate() {
+      const fallback = {
+        mode: 'report_only',
+        risk: 'unknown',
+        regression_predicted: false,
+        parallel_safe: true,
+        recommendation: '-',
+        blocking_reasons: [],
+        signals: {},
+        dimension_risks: {},
+      };
+      const response = await fetchOptionalJson('./data/predictive-regression-gate.json', fallback);
+      const payload = response.data || fallback;
+      const signals = payload.signals || {};
+
+      document.getElementById('predictive-risk').innerHTML = `<span class="status ${statusClass(payload.risk)}">${payload.risk || 'unknown'}</span>`;
+      document.getElementById('predictive-regression-predicted').innerHTML = payload.regression_predicted
+        ? '<span class="status warning">sim</span>'
+        : '<span class="status passed">não</span>';
+      document.getElementById('predictive-parallel-safe').innerHTML = payload.parallel_safe
+        ? '<span class="status passed">sim</span>'
+        : '<span class="status failed">não</span>';
+      document.getElementById('predictive-recommendation').textContent = payload.recommendation || '-';
+      document.getElementById('predictive-signals').textContent = [
+        signals.overall_trend ? `Tendência geral: ${signals.overall_trend}` : '',
+        signals.current_score != null ? `Score atual: ${signals.current_score}` : '',
+        signals.recent_failed_samples != null ? `Falhas recentes: ${signals.recent_failed_samples}` : '',
+        Array.isArray(signals.regressing_dimensions) && signals.regressing_dimensions.length
+          ? `Dimensões regredindo: ${signals.regressing_dimensions.join(', ')}`
+          : '',
+        payload.mode ? `Modo: ${payload.mode}` : '',
+      ].filter(Boolean).join(' · ') || 'Sem sinais adicionais; fallback governado ativo.';
+
+      const dimensionsBody = document.getElementById('predictive-dimension-risks');
+      dimensionsBody.innerHTML = '';
+      const dimensionRisks = Object.entries(payload.dimension_risks || {});
+      if (!dimensionRisks.length) {
+        dimensionsBody.innerHTML = '<tr><td colspan="5">Nenhuma dimensão avaliada; fallback governado ativo.</td></tr>';
+      } else {
+        dimensionRisks.forEach(([name, item]) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${name}</td>
+            <td>${item.trend || '-'}</td>
+            <td>${item.current_score ?? '-'}</td>
+            <td>${item.regressing ? '<span class="status warning">sim</span>' : '-'}</td>
+            <td>${item.touched_by_pr ? '<span class="status warning">sim</span>' : '-'}</td>
+          `;
+          dimensionsBody.appendChild(tr);
+        });
+      }
+
+      const reasonsBody = document.getElementById('predictive-blocking-reasons');
+      reasonsBody.innerHTML = '';
+      const reasons = payload.blocking_reasons || [];
+      if (!reasons.length) {
+        reasonsBody.innerHTML = '<tr><td>Nenhum motivo de alerta registrado.</td></tr>';
+      } else {
+        reasons.forEach((reason) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${reason}</td>`;
+          reasonsBody.appendChild(tr);
+        });
+      }
+
+      const links = document.getElementById('predictive-links');
+      links.innerHTML = '';
+      addLink(links, 'predictive-regression-gate.json', './data/predictive-regression-gate.json');
+      if (payload.links?.trilha_d) addLink(links, 'Trilha D history', payload.links.trilha_d, true);
+      if (payload.links?.guard_workflow) addLink(links, 'PR guard workflow', payload.links.guard_workflow, true);
+      if (payload.links?.workflow) addLink(links, 'Workflow Trilha D', payload.links.workflow, true);
+      if (payload.links?.source) addLink(links, 'Script gate', payload.links.source, true);
+
+      document.getElementById('predictive-details').textContent = shortJson({
+        available: response.available,
+        source: response.source,
+        fallback_error: response.error,
+        signals,
+        blocking_reasons: reasons,
+        dimension_risks: payload.dimension_risks || {},
+      });
+    }
+
+    function renderOperationalIntelligenceQuickLinks() {
+      const trilhaScore = document.getElementById('trilha-d-score')?.textContent?.trim() || '-';
+      const paretoScore = document.getElementById('pareto-score')?.textContent?.trim().split(/\s/)[0] || '-';
+      const predictiveRisk = document.getElementById('predictive-risk')?.textContent?.trim() || '-';
+      const quick = document.getElementById('operational-intelligence-quick-links');
+      if (!quick) return;
+      quick.innerHTML = '';
+      addLink(quick, `Trilha D — score ${trilhaScore}`, '#trilha-d-history-card');
+      addLink(quick, `Pareto — score ${paretoScore}`, '#operational-pareto-card');
+      addLink(quick, `Gate preditivo — risco ${predictiveRisk}`, '#predictive-regression-card');
+      addLink(quick, 'Navegação operacional', './operational-navigation.html');
+    }
+
     async function renderGovernanceEvidenceCards() {
       const fallback = {
         overall_status: 'unknown',
@@ -658,10 +790,14 @@
       body.innerHTML = '';
       const evidence = payload.evidence || [];
       if (!evidence.length) {
-        body.innerHTML = '<tr><td colspan="4">Nenhuma capacidade listada; fallback governado ativo.</td></tr>';
+        body.innerHTML = '<tr><td colspan="5">Nenhuma capacidade listada; fallback governado ativo.</td></tr>';
       } else {
         evidence.forEach((item) => {
           const tr = document.createElement('tr');
+          const latestRun = item.links?.latest_run || item.links?.workflow_runs || '';
+          const latestRunCell = latestRun
+            ? `<a href="${latestRun}" target="_blank" rel="noopener noreferrer">Ver workflow runs</a>`
+            : '<span class="small">-</span>';
           tr.innerHTML = `
             <td>${item.title || item.id || '-'}</td>
             <td><span class="status ${statusClass(item.status)}">${item.status || '-'}</span></td>
@@ -670,6 +806,7 @@
               <div>${item.workflow || '-'}</div>
               <div class="small">${item.artifact || item.json_path || '-'}</div>
             </td>
+            <td>${latestRunCell}</td>
           `;
           body.appendChild(tr);
         });
@@ -716,6 +853,10 @@
         addLink(links, label, url, true);
       });
       addLink(links, 'Operational Evidence Hub', '../dashboard/operational-evidence-hub.html');
+      addLink(links, 'Navegação Operacional', './operational-navigation.html');
+      addLink(links, 'Trilha D — Histórico', '#trilha-d-history-card');
+      addLink(links, 'Pareto Operacional', '#operational-pareto-card');
+      addLink(links, 'Gate Preditivo', '#predictive-regression-card');
       addLink(links, 'Runtime Executive Index', './data/runtime-executive-index.json');
       addLink(links, 'Merge Intelligence JSON', './data/merge-intelligence-index.json');
       addLink(links, 'Lane Priority JSON', './data/merge-lane-priority.json');
@@ -724,6 +865,8 @@
       await renderGovernanceEvidenceCards();
       await renderTrilhaDHistory();
       await renderOperationalPareto();
+      await renderPredictiveRegressionGate();
+      renderOperationalIntelligenceQuickLinks();
       renderDomains(data.runtime_domain_drilldowns || []);
       const obs = data.observability_correlation_report || {};
       const obsSummary = obs.summary || {};
@@ -826,10 +969,12 @@
       document.getElementById('merge-details').textContent = shortJson({ error: error.message });
       document.getElementById('runtime-executive-cards').innerHTML = `<tr><td colspan="4">Fallback seguro: falha ao carregar runtime executive index.</td></tr>`;
       document.getElementById('runtime-executive-details').textContent = shortJson({ error: error.message });
-      document.getElementById('governance-evidence-cards').innerHTML = `<tr><td colspan="4">Fallback seguro: falha ao carregar governance evidence cards.</td></tr>`;
+      document.getElementById('governance-evidence-cards').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar governance evidence cards.</td></tr>`;
       document.getElementById('trilha-d-dimensions').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar histórico Trilha D.</td></tr>`;
       document.getElementById('trilha-d-history-rows').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar histórico Trilha D.</td></tr>`;
       document.getElementById('pareto-actions').innerHTML = `<tr><td colspan="6">Fallback seguro: falha ao carregar Pareto operacional.</td></tr>`;
+      document.getElementById('predictive-dimension-risks').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar gate preditivo.</td></tr>`;
+      document.getElementById('predictive-blocking-reasons').innerHTML = '<tr><td>Fallback seguro: falha ao carregar gate preditivo.</td></tr>';
     });
   </script>
 </body>

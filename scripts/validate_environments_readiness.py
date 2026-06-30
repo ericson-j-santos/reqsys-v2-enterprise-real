@@ -19,6 +19,15 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_MANIFEST = ROOT / "infra" / "fly-environments.json"
+
+_DISPLAY_NAMES: dict[str, tuple[str, str]] = {
+    "dev": ("desenvolvimento", "Fly dev; local usa docker-compose.yml + docker-compose.dev.yml"),
+    "hml": ("homologacao", "Fly staging"),
+    "prod": ("producao", "Fly producao; local usa docker-compose.yml + docker-compose.prod.yml"),
+}
+
 
 @dataclass(frozen=True)
 class EnvironmentTarget:
@@ -26,34 +35,42 @@ class EnvironmentTarget:
     frontend: str
     api: str
     notes: str
+    canonical: str | None = None
 
 
-ENVIRONMENTS = [
-    EnvironmentTarget(
-        name="desenvolvimento",
-        frontend="https://reqsys-app-dev.fly.dev",
-        api="https://reqsys-api-dev.fly.dev/docs",
-        notes="Fly dev; local usa docker-compose.yml + docker-compose.dev.yml",
-    ),
-    EnvironmentTarget(
-        name="testes",
-        frontend="http://localhost:8084",
-        api="http://localhost:8212/docs",
-        notes="Docker test",
-    ),
-    EnvironmentTarget(
-        name="homologacao",
-        frontend="https://reqsys-web-stg.fly.dev",
-        api="https://reqsys-api-stg.fly.dev",
-        notes="Fly staging",
-    ),
-    EnvironmentTarget(
-        name="producao",
-        frontend="https://reqsys-app.fly.dev",
-        api="https://reqsys-api.fly.dev/docs",
-        notes="Fly producao; local usa docker-compose.yml + docker-compose.prod.yml",
-    ),
-]
+def load_environment_targets(manifest_path: Path = DEFAULT_MANIFEST) -> list[EnvironmentTarget]:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    environments = manifest.get("environments") or {}
+    targets: list[EnvironmentTarget] = []
+
+    for canonical in ("dev", "hml", "prod"):
+        cfg = environments.get(canonical) or {}
+        display_name, notes = _DISPLAY_NAMES[canonical]
+        api_url = str(cfg.get("api_url") or "").rstrip("/")
+        frontend_url = str(cfg.get("frontend_url") or "").rstrip("/")
+        targets.append(
+            EnvironmentTarget(
+                name=display_name,
+                frontend=frontend_url,
+                api=f"{api_url}/docs" if api_url else "",
+                notes=notes,
+                canonical=canonical,
+            )
+        )
+
+    targets.append(
+        EnvironmentTarget(
+            name="testes",
+            frontend="http://localhost:8084",
+            api="http://localhost:8212/docs",
+            notes="Docker test",
+            canonical="test",
+        )
+    )
+    return targets
+
+
+ENVIRONMENTS = load_environment_targets()
 
 
 def is_local_url(url: str) -> bool:
@@ -151,6 +168,7 @@ def validate_all_environments(timeout_seconds: float = 5.0, skip_local: bool = T
         environments.append(
             {
                 "name": target.name,
+                "canonical": target.canonical,
                 "frontend": target.frontend,
                 "api": target.api,
                 "notes": target.notes,

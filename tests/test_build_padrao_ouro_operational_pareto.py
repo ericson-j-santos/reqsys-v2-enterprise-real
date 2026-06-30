@@ -12,24 +12,25 @@ from scripts.build_padrao_ouro_operational_pareto import (
 )
 
 
-def test_operational_pareto_prioritizes_coverage_first() -> None:
-    payload = build_payload()
+def test_operational_pareto_advances_to_governance_after_coverage_critical_paths() -> None:
+    from scripts.build_trilha_d_history import NEXT_INCREMENT_AFTER_COVERAGE_TARGETED, resolve_next_increment
 
-    assert payload["state"] == "yellow"
+    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    payload = build_payload(from_evidence=True)
+
     assert payload["dominant_bottleneck"]["dimension"] == "coverage"
-    assert payload["dominant_bottleneck"]["share_of_trilha_d_remaining_gap"] == 1.0
-    assert payload["ranked_actions"][0]["id"] == "coverage_targeted_tests"
-    assert payload["ranked_actions"][0]["recommended_now"] is True
+    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    assert payload["ranked_actions"][0]["id"] == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
 
 
 def test_operational_pareto_projects_gold_gap_closure() -> None:
     payload = build_payload()
 
-    assert payload["current_score"] == 95.88
+    assert payload["current_score"] == 97.59
     assert payload["target_score"] == 98.0
-    assert payload["gold_gap"] == 2.12
+    assert payload["gold_gap"] == 0.41
     assert payload["summary"]["evidence_source"] == "trilha_d_history"
-    assert payload["dimension_gaps"]["coverage"] == 25.71
+    assert payload["dimension_gaps"]["coverage"] == 14.44
     assert payload["projected_score_after_recommended"] >= payload["current_score"]
 
 

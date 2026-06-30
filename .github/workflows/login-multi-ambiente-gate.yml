@@ -1,0 +1,110 @@
+name: Login Multi-Ambiente Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente alvo (vazio = todos)"
+        required: false
+        type: choice
+        options:
+          - ""
+          - dev
+          - hml
+          - prod
+  pull_request:
+    paths:
+      - "backend/app/api/auth.py"
+      - "backend/app/core/config.py"
+      - "frontend/src/auth/**"
+      - "scripts/validar_login_*.py"
+      - "scripts/validar_frontend_auth_redirect.py"
+      - ".github/workflows/login-multi-ambiente-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/app/api/auth.py"
+      - "scripts/validar_login_multi_ambiente.py"
+      - ".github/workflows/login-multi-ambiente-gate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validar-login:
+    name: Validar login (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, hml, prod]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Executar validação de login
+        if: ${{ github.event.inputs.environment == '' || github.event.inputs.environment == matrix.environment }}
+        run: |
+          python scripts/validar_login_multi_ambiente.py \
+            --environment "${{ matrix.environment }}" \
+            --timeout 25 \
+            --output "login-validation-${{ matrix.environment }}.json"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: login-validation-${{ matrix.environment }}
+          path: login-validation-${{ matrix.environment }}.json
+          if-no-files-found: warn
+
+  resumo:
+    name: Resumo login multi-ambiente
+    runs-on: ubuntu-latest
+    needs: validar-login
+    if: always()
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: login-validation-*
+          merge-multiple: true
+
+      - name: Consolidar evidência
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          files = sorted(Path(".").glob("login-validation-*.json"))
+          environments = []
+          blocking = []
+          for path in files:
+              payload = json.loads(path.read_text(encoding="utf-8"))
+              environments.extend(payload.get("environments") or [])
+              blocking.extend(payload.get("blocking_issues") or [])
+          ready = sum(1 for item in environments if item.get("login_ready"))
+          total = len(environments)
+          summary = {
+              "environments_total": total,
+              "login_ready": ready,
+              "overall_status": "ready" if total and ready == total else "degraded" if ready else "unavailable",
+              "blocking_issues": blocking,
+          }
+          Path("login-validation-summary.json").write_text(
+              json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(summary, ensure_ascii=False, indent=2))
+          if not files:
+              raise SystemExit("Nenhum artifact login-validation-* encontrado")
+          if blocking:
+              raise SystemExit(f"Login multi-ambiente com bloqueios: {blocking}")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: login-validation-summary
+          path: login-validation-summary.json

@@ -1,0 +1,184 @@
+{
+  "schema_version": "1.0.0",
+  "correlation_id": "d5cc14f7-e6b8-49b5-a2be-e69cfe76a24b",
+  "generated_at": "2026-06-29T21:44:54Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "branch": "main",
+  "mode": "report_only",
+  "overall_state": "yellow",
+  "validation_score": 91,
+  "operational_risk_percent": 9,
+  "confidence_percent": 91,
+  "public_runtime_ready": true,
+  "post_merge_ready": false,
+  "production_ready": false,
+  "gold_standard_operational_risk": {
+    "target_percent": 100,
+    "overall_score": 100,
+    "remaining_gap": 0,
+    "source_coverage_percent": 67,
+    "domain_average_score": 91,
+    "green_domain_percent": 86,
+    "workflow_presence_percent": 100,
+    "status": "gold"
+  },
+  "domains": {
+    "public_smoke": {
+      "id": "public_smoke",
+      "label": "Public Runtime Smoke",
+      "state": "green",
+      "score": 100,
+      "available": true,
+      "detail": "4/4 endpoints OK (100.0%)",
+      "strict_vs_scheduled": {
+        "strict_gate_passed": null,
+        "scheduled_mode": false
+      }
+    },
+    "public_readiness": {
+      "id": "public_readiness",
+      "label": "Public Runtime Readiness",
+      "state": "green",
+      "score": 100,
+      "available": true,
+      "detail": "readiness 100.0% · blocking=0",
+      "readiness_percent": 100.0,
+      "blocking_issue_count": 0
+    },
+    "post_merge": {
+      "id": "post_merge",
+      "label": "Post-Merge Validation",
+      "state": "yellow",
+      "score": 72,
+      "available": false,
+      "detail": "Artifacts pós-merge pendentes — workflows wired, evidência CI em consolidação"
+    },
+    "health_validator": {
+      "id": "health_validator",
+      "label": "Runtime Health Validator",
+      "state": "green",
+      "score": 65,
+      "available": true,
+      "detail": "Runtime operacional saudável"
+    },
+    "trilha_a": {
+      "id": "trilha_a",
+      "label": "Trilha A — Runtime Público",
+      "state": "green",
+      "score": 100,
+      "available": true,
+      "detail": "tracks 2/3 · validator_ok=True"
+    },
+    "evidence_gate": {
+      "id": "evidence_gate",
+      "label": "Evidence Gate",
+      "state": "green",
+      "score": 100,
+      "available": true,
+      "detail": "public-runtime-evidence strict_gate_passed=True"
+    },
+    "health_center": {
+      "id": "health_center",
+      "label": "Runtime Health Center",
+      "state": "green",
+      "score": 100,
+      "available": true,
+      "detail": "maturity=97% gold_depth=100 risk=medium",
+      "gold_standard_depth": 100,
+      "operational_risk": "medium"
+    }
+  },
+  "sources": {
+    "public_runtime": {
+      "available": true,
+      "path": "audit/runtime/public-runtime-validation.json",
+      "candidates": [
+        "audit/runtime/public-runtime-validation.json",
+        "artifacts/runtime/public-runtime-validation.json"
+      ]
+    },
+    "ops_readiness": {
+      "available": true,
+      "path": "audit/runtime/ops-readiness-report.json",
+      "candidates": [
+        "audit/runtime/ops-readiness-report.json"
+      ]
+    },
+    "public_evidence_index": {
+      "available": true,
+      "path": "audit/runtime/public-runtime-evidence-index.json",
+      "candidates": [
+        "audit/runtime/public-runtime-evidence-index.json",
+        "artifacts/public-runtime-evidence/public-runtime-evidence.json"
+      ]
+    },
+    "trilha_a": {
+      "available": true,
+      "path": "audit/trilha-a/trilha-a-runtime-publico-report.json",
+      "candidates": [
+        "audit/trilha-a/trilha-a-runtime-publico-report.json"
+      ]
+    },
+    "runtime_health_validator": {
+      "available": true,
+      "path": "artifacts/runtime-health-validator/runtime-health-validator.json",
+      "candidates": [
+        "artifacts/runtime-health-validator/runtime-health-validator.json"
+      ]
+    },
+    "runtime_health_center": {
+      "available": true,
+      "path": "artifacts/runtime-health-center/runtime-health-report.json",
+      "candidates": [
+        "artifacts/runtime-health-center/runtime-health-report.json"
+      ]
+    },
+    "post_merge_validation": {
+      "available": false,
+      "path": null,
+      "candidates": [
+        "audit/main-post-merge-validation.json"
+      ]
+    },
+    "post_merge_health": {
+      "available": false,
+      "path": null,
+      "candidates": [
+        "audit/main-health/main-operational-post-merge-health.json"
+      ]
+    },
+    "pr_evidence_gate": {
+      "available": false,
+      "path": null,
+      "candidates": [
+        "audit/pr-evidence-gate.json"
+      ]
+    }
+  },
+  "blockers": [
+    "post_merge_validation_incomplete"
+  ],
+  "recommended_actions": [
+    {
+      "priority": "P1",
+      "action": "consolidar_pos_merge_validation",
+      "reference": "main-post-merge-validation",
+      "detail": "Executar workflow Main Post-Merge Validation no SHA de main"
+    }
+  ],
+  "guardrails": {
+    "merge": false,
+    "deploy": false,
+    "production_change": false,
+    "secret_capture": false,
+    "report_only": true
+  },
+  "evidence_consolidation": {
+    "artifact": "runtime-validation-evidence",
+    "files": [
+      "runtime-validation-snapshot.json",
+      "summary.md",
+      "executive-brief.json"
+    ]
+  }
+}

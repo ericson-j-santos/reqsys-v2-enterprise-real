@@ -1,0 +1,54 @@
+name: Ops Dashboard Trilha D / Pareto Cards
+
+on:
+  pull_request:
+    paths:
+      - 'docs/ops-dashboard/index.html'
+      - 'docs/ops-dashboard/operational-navigation-index.json'
+      - 'docs/ops-dashboard/data/trilha-d-history.json'
+      - 'docs/ops-dashboard/data/padrao-ouro-operational-pareto.json'
+      - 'docs/ops-dashboard/data/predictive-regression-gate.json'
+      - 'docs/ops-dashboard/data/executive-brief.json'
+      - 'docs/ops-dashboard/data/runtime-executive-index.json'
+      - 'scripts/validate_ops_dashboard_trilha_d_pareto_cards.py'
+      - 'scripts/predict_operational_regression.py'
+      - 'scripts/validate_ops_dashboard_runtime_validation.py'
+      - 'scripts/validate_ops_dashboard_navigation.py'
+      - 'scripts/runtime_validation_consolidator.py'
+      - 'tests/test_ops_dashboard_trilha_d_pareto_cards.py'
+      - 'tests/test_validate_ops_dashboard_runtime_validation.py'
+      - '.github/workflows/ops-dashboard-trilha-d-pareto-cards.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-ops-dashboard-trilha-d-pareto-cards:
+    name: Validate Trilha D / Pareto Dashboard Cards
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test runner
+        run: python -m pip install pytest
+
+      - name: Validate navigation artifacts
+        run: python3 scripts/validate_ops_dashboard_navigation.py
+
+      - name: Validate Trilha D / Pareto cards
+        run: python3 scripts/validate_ops_dashboard_trilha_d_pareto_cards.py
+
+      - name: Validate runtime validation contracts
+        run: python3 scripts/validate_ops_dashboard_runtime_validation.py
+
+      - name: Run card contract tests
+        run: |
+          python3 -m pytest tests/test_ops_dashboard_trilha_d_pareto_cards.py tests/test_validate_ops_dashboard_runtime_validation.py -q

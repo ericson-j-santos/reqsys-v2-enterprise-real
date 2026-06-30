@@ -33,6 +33,7 @@ REQUIRED_FLY_SNIPPETS = (
     'ALLOW_DEMO_LOGIN = "false"',
     'REQSYS_BOOT_FALLBACK = "true"',
     'REQSYS_BOOT_FALLBACK_DATABASE_URL = "sqlite:////tmp/reqsys-fallback.db"',
+    'REQSYS_BOOT_MAX_ATTEMPTS = "8"',
     'force_https = true',
     'path = "/health"',
 )
