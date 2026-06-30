@@ -78,3 +78,26 @@ def test_operational_navigation_index_links_trilha_d_and_pareto() -> None:
     by_id = {item["id"]: item for item in payload["links"]}
     assert by_id["trilha_d_history_dashboard"]["href"] == "./index.html#trilha-d-history-card"
     assert by_id["operational_pareto_dashboard"]["href"] == "./index.html#operational-pareto-card"
+
+
+def test_validate_data_contracts_skips_cross_check_in_consolidation_mode(tmp_path, monkeypatch) -> None:
+    import json
+
+    from scripts import validate_ops_dashboard_trilha_d_pareto_cards as validator
+
+    trilha_d = {
+        "schema_version": "1.0.0",
+        "current_score": 97.59,
+        "summary": {"next_increment": "predictive_regression_gate"},
+    }
+    pareto = {
+        "schema_version": "1.1.0",
+        "current_score": 100.0,
+        "summary": {"next_increment": None, "consolidation_mode": True},
+    }
+    monkeypatch.setattr(validator, "TRILHA_D_DATA", tmp_path / "trilha-d-history.json")
+    monkeypatch.setattr(validator, "PARETO_DATA", tmp_path / "pareto.json")
+    (tmp_path / "trilha-d-history.json").write_text(json.dumps(trilha_d), encoding="utf-8")
+    (tmp_path / "pareto.json").write_text(json.dumps(pareto), encoding="utf-8")
+
+    validator.validate_data_contracts()

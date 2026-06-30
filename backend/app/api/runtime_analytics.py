@@ -13,6 +13,10 @@ from app.core.runtime_analytics import (
     DurableRuntimeAnalyticsStore,
     build_runtime_analytics,
 )
+from app.services.operational_mesh_signal import (
+    carregar_cross_runtime_analytics_report,
+    carregar_operational_mesh_signal,
+)
 
 router = APIRouter(tags=['Runtime Analytics'])
 logger = logging.getLogger(__name__)
@@ -43,13 +47,34 @@ def _evidence_snapshot_baseline() -> dict:
 
 
 def _evidence_artifacts_payload() -> dict:
+    mesh = carregar_operational_mesh_signal()
+    analytics = carregar_cross_runtime_analytics_report()
+    ingestion_mode = 'artifact_hydration' if mesh.get('hydrated') else 'contract_stub'
+    items = [_evidence_snapshot_baseline()]
+    if mesh.get('hydrated'):
+        items.append(
+            {
+                'artifact_name': 'unified-operational-signal',
+                'source_workflow': 'Unified Operational Signal Consolidator',
+                'status': mesh.get('overall_state'),
+                'mesh_integrated': mesh.get('mesh_integrated'),
+                'maturity_percent': mesh.get('maturity_percent'),
+                'ingestion_status': 'hydrated',
+            }
+        )
     return {
-        'schema_version': '1.0.0',
+        'schema_version': '1.1.0',
         'source': 'github-actions-artifacts',
         'artifact_name': 'public-runtime-evidence',
-        'ingestion_mode': 'contract_stub',
-        'items': [_evidence_snapshot_baseline()],
-        'next_step': 'connect GitHub Actions artifact reader to hydrate real historical snapshots',
+        'ingestion_mode': ingestion_mode,
+        'items': items,
+        'operational_mesh': mesh if mesh.get('hydrated') else None,
+        'cross_runtime_analytics': analytics if analytics.get('hydrated') else None,
+        'next_step': (
+            'manter_malha_operacional_integrada'
+            if mesh.get('mesh_integrated')
+            else 'executar_unified_operational_signal_consolidator'
+        ),
     }
 
 
@@ -86,6 +111,17 @@ def obter_runtime_analytics(
     correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
     snapshot = _criar_runtime_observability_snapshot(correlation_id)
     analytics = build_runtime_analytics(STORE, snapshot)
+    mesh = carregar_operational_mesh_signal()
+    cross_runtime = carregar_cross_runtime_analytics_report()
+    analytics['operational_mesh'] = {
+        'hydrated': bool(mesh.get('hydrated')),
+        'overall_state': mesh.get('overall_state'),
+        'mesh_integrated': mesh.get('mesh_integrated'),
+        'maturity_percent': mesh.get('maturity_percent'),
+        'evidence_gate_consolidated': (mesh.get('evidence_gate_consolidated') or {}).get('consolidated'),
+        'endpoint': '/api/runtime/operational-mesh',
+    }
+    analytics['cross_runtime_analytics'] = cross_runtime
     analytics['operational_telemetry'] = {
         'correlation_id': correlation_id,
         'distributed_tracing': {

@@ -43,8 +43,13 @@ Unificar os eventos operacionais do ecossistema de CI/CD em um payload padroniza
 - Não altera runtime produtivo.
 - Não cria backend persistente.
 
+## Implementação
+
+- Script canônico: `scripts/unified_operational_event_bus.py`
+- Workflow: `.github/workflows/unified-operational-event-bus.yml`
+- Artifact: `artifacts/unified-operational-event-bus/unified-operational-event.json`
+- Consumidor downstream: `scripts/unified_operational_signal_consolidator.py`
+
 ## Encerramento do eixo operacional
 
-Este incremento fecha a base operacional enterprise do eixo CI/CD, conectando dashboards, histórico, alertas e event mesh em uma fundação única de eventos.
-
-Após este incremento, a recomendação é congelar expansão operacional e iniciar a transição para ReqSys Product Intelligence Layer.
+Este incremento integra dashboards, histórico, alertas e event mesh via `Unified Operational Signal Consolidator`, consumido pelo Coordenador Principal e pelo Evidence Gate consolidado. Runbook: `docs/runbooks/consolidacao-operacional-p0.md`.

@@ -663,8 +663,9 @@ async function perguntar() {
     diagnosticoOperacional.value = {
       tipo: 'warning',
       titulo: 'GovBI IA em modo degradado local',
-      mensagem: `O proxy backend não respondeu corretamente. A tela exibiu um plano governado local. Detalhe: ${detalhe}`,
+      mensagem: `O proxy backend não respondeu. Exibido plano governado local. Detalhe: ${detalhe}`,
     }
+    erro.value = ''
     registrarConsultaHistorico({
       pergunta: perguntaNormalizada,
       statusFluxo: 'MODO_DEGRADADO',
@@ -801,7 +802,7 @@ function gerarRespostaFallback(perguntaOriginal, detalheErro) {
         },
         {
           item: 'Próxima ação',
-          valor: 'Validar endpoint /govbi/perguntas, proxy Vite, timeout e logs Fly.io.',
+          valor: 'Validar endpoint /govbi/perguntas, proxy Vite e logs do backend.',
           status: 'ACAO_OPERACIONAL',
         },
       ],

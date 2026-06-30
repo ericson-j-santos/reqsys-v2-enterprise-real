@@ -1,11 +1,18 @@
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const packageJson = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8'))
+const appVersion = process.env.VITE_APP_VERSION || packageJson.version
 
 const backendProxyTarget = process.env.VITE_BACKEND_PROXY_TARGET || 'http://127.0.0.1:8000'
 const kbProxyTarget = process.env.VITE_KB_PROXY_TARGET || 'http://127.0.0.1:8080'
 
 /** Rotas FastAPI que já incluem o prefixo /api no backend — não remover no proxy dev. */
-const BACKEND_API_PREFIXES = ['govbi', 'rag', 'requisitos', 'workflows', 'runtime']
+const BACKEND_API_PREFIXES = ['govbi', 'rag', 'requisitos', 'workflows', 'runtime', 'connectors']
 
 function rewriteBackendProxyPath(path) {
   if (new RegExp(`^/api/(${BACKEND_API_PREFIXES.join('|')})\\b`).test(path)) {
@@ -16,6 +23,9 @@ function rewriteBackendProxyPath(path) {
 
 export default defineConfig({
   plugins: [vue()],
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+  },
   test: {
     environment: 'jsdom',
     globals: true,

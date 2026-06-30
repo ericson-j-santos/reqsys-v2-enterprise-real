@@ -13,9 +13,64 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+
+HYDRATION_CANDIDATES: dict[str, list[str]] = {
+    "coordenador_status": ["artifacts/coordenador-status/coordenador-status.json"],
+    "runtime_validation": [
+        "artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json"
+    ],
+    "observability_hub": [
+        "artifacts/operational-observability-hub/operational-observability-hub.json"
+    ],
+}
 
 
-def build_payload(source_workflow: str, source_conclusion: str) -> dict:
+def _load_json(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
+def hydrate_context(root: Path) -> dict[str, Any]:
+    loaded: dict[str, Any] = {}
+    for name, paths in HYDRATION_CANDIDATES.items():
+        for relative in paths:
+            payload = _load_json(root / relative)
+            if payload is not None:
+                loaded[name] = payload
+                break
+    return loaded
+
+
+def _risk_from_hydration(context: dict[str, Any]) -> str | None:
+    coord = context.get("coordenador_status") or {}
+    validation = context.get("runtime_validation") or {}
+    hub = context.get("observability_hub") or {}
+
+    if coord.get("state") == "red" or validation.get("overall_state") == "red":
+        return "HIGH"
+    if coord.get("state") == "yellow" or validation.get("overall_state") == "yellow":
+        return "MEDIUM"
+    risk = str(hub.get("operational_risk") or "").upper()
+    if risk in {"HIGH", "MEDIUM"}:
+        return risk
+    if validation.get("validation_score", 0) >= 85:
+        return "LOW"
+    return None
+
+
+def build_payload(
+    source_workflow: str,
+    source_conclusion: str,
+    *,
+    hydration_context: dict[str, Any] | None = None,
+) -> dict:
     alert_level = "INFO"
     alert_type = "OPERATIONAL_SIGNAL"
     action_policy = "OBSERVE"
@@ -31,6 +86,23 @@ def build_payload(source_workflow: str, source_conclusion: str) -> dict:
         alert_level = "LOW"
         alert_type = "CANCELLED_RUN"
         action_policy = "VERIFY_CONTEXT"
+
+    hydration_context = hydration_context or {}
+    hydrated_risk = _risk_from_hydration(hydration_context)
+    if hydrated_risk == "HIGH":
+        operational_risk = "HIGH"
+        alert_level = "HIGH"
+        action_policy = "MANUAL_REVIEW_REQUIRED"
+    elif hydrated_risk == "MEDIUM" and operational_risk == "LOW":
+        operational_risk = "MEDIUM"
+        alert_level = "MEDIUM"
+
+    validation = hydration_context.get("runtime_validation") or {}
+    coord = hydration_context.get("coordenador_status") or {}
+    hub = hydration_context.get("observability_hub") or {}
+    realtime_readiness = "99%"
+    if validation.get("validation_score") is not None:
+        realtime_readiness = f"{min(100, int(validation['validation_score']))}%"
 
     return {
         "schema_version": "1.0.0",
@@ -49,12 +121,18 @@ def build_payload(source_workflow: str, source_conclusion: str) -> dict:
             "workflow": source_workflow,
             "conclusion": source_conclusion,
         },
+        "hydration": {
+            "enabled": bool(hydration_context),
+            "coordenador_state": coord.get("state"),
+            "validation_score": validation.get("validation_score"),
+            "observability_status": hub.get("status"),
+        },
         "mesh": {
             "event_mesh": stream_status,
             "streaming_layer": "INITIALIZED",
             "control_center": "OPERATIONAL",
             "operational_risk": operational_risk,
-            "realtime_readiness": "99%",
+            "realtime_readiness": realtime_readiness,
         },
         "alert_intelligence": {
             "alert_level": alert_level,
@@ -135,9 +213,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-workflow", default="manual")
     parser.add_argument("--source-conclusion", default="success")
     parser.add_argument("--out-dir", type=Path, default=Path("artifacts/operational-runtime-mesh-hub"))
+    parser.add_argument("--root", type=Path, default=ROOT_DIR, help="Repo root for artifact hydration")
+    parser.add_argument("--no-hydrate", action="store_true", help="Skip local artifact hydration")
     args = parser.parse_args(argv)
 
-    payload = build_payload(args.source_workflow, args.source_conclusion)
+    hydration_context = {} if args.no_hydrate else hydrate_context(args.root)
+    payload = build_payload(
+        args.source_workflow,
+        args.source_conclusion,
+        hydration_context=hydration_context,
+    )
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     (args.out_dir / "operational-runtime-mesh-hub.json").write_text(

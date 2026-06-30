@@ -107,6 +107,7 @@ Inventário centralizado de **schemas, eventos, APIs, payloads, outputs e pipeli
 | `/v1/webhooks/figma` | `webhooks.py` | Webhook Figma (assinatura `X-Figma-Signature`) |
 | `/v1/cofre` | `cofre.py` | Cofre local AES-GCM — ver [ADR-041](../adr/ADR-041-cofre-segredos-locais.md) |
 | `/v1/sistema` | `sistema.py` | Diagnóstico de segredos (`GET /segredos-status`) |
+| `/v1/codex` | `codex_governado.py` | Análise governada com LLM — ver ADR-023, ADR-024 |
 
 ### Frentes de integração registradas
 
@@ -114,6 +115,18 @@ Inventário centralizado de **schemas, eventos, APIs, payloads, outputs e pipeli
 | --- | --- | --- | --- |
 | `figma-github` | Figma GitHub — retorno em tela | integração | `ENABLE_FIGMA_GITHUB_SYNC` |
 | `cofre-segredos` | Cofre de Segredos Locais | segurança | `REQSYS_VAULT_SERVICE_NAME`, `VAULT_API_TOKEN` |
+| `codex-governado` | Codex VS Code/LLM Local + Online | IA · codificação | `CODEX_OLLAMA_GATEWAY_URL`, `CODEX_OLLAMA_GATEWAY_API_KEY` |
+
+### Contrato Codex (`/v1/codex`)
+
+| Endpoint | Auth | Request | Response `data` |
+| --- | --- | --- | --- |
+| `POST /analyze` | JWT | `{ provider, contexto, entrada, correlation_id?, publicar_no_reqsys? }` | Resultado com `correlation_id`, `resumo`, `reqsys_payload` |
+| `GET /status` | JWT | — | `{ servico, providers, guard_rails }` |
+| `GET /operational-summary` | JWT | `?limite=10` | `{ dashboard: { total, bloqueados, latencia_media, ... } }` |
+
+Providers: `mock`, `ollama`, `ollama_gateway`, `openai`, `claude`. Provider canônico local: `ollama_gateway`. Runbook: [`docs/runbooks/codex-vscode-local-inicio-rapido.md`](../runbooks/codex-vscode-local-inicio-rapido.md).
+
 
 ### Contrato Cofre (`/v1/cofre`)
 

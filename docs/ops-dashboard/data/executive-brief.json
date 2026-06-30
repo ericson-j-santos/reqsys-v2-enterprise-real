@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-29T21:44:54Z",
+  "generated_at": "2026-06-29T22:05:36Z",
   "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
   "branch": "main",
   "title": "ReqSys — Executive Brief",
@@ -56,6 +56,6 @@
     "priorizar_validacao_runtime_continua",
     "consolidar_evidencia_operacional_automatica_pos_merge"
   ],
-  "correlation_id": "d5cc14f7-e6b8-49b5-a2be-e69cfe76a24b",
+  "correlation_id": "10466d18-3c70-4993-b212-55004cafac4f",
   "source_artifact": "runtime-validation-snapshot.json"
 }

@@ -1,0 +1,113 @@
+name: Unified Operational Signal Consolidator
+
+# Fecha o loop mesh hub → alert intelligence → event bus → consolidador único.
+
+on:
+  workflow_run:
+    workflows:
+      - "Unified Operational Event Bus"
+      - "Operational Runtime Mesh Hub"
+      - "Operational Alert Intelligence"
+      - "Runtime Validation Consolidator"
+      - "Coordenador Status Consolidator"
+    types:
+      - completed
+  schedule:
+    - cron: "37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unified-operational-signal-consolidator
+  cancel-in-progress: true
+
+jobs:
+  consolidate-signals:
+    name: Consolidar malha operacional unificada
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download mesh hub artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: operational-runtime-mesh-hub
+          path: artifacts/operational-runtime-mesh-hub
+
+      - name: Download alert intelligence artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: operational-alert-intelligence
+          path: artifacts/operational-alert-intelligence
+
+      - name: Download event bus artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: unified-operational-event-bus
+          path: artifacts/unified-operational-event-bus
+
+      - name: Download runtime validation artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: runtime-validation-evidence
+          path: artifacts/runtime-validation-consolidator
+
+      - name: Download coordenador status artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: coordenador-status-evidence
+          path: artifacts/coordenador-status
+
+      - name: Gerar analytics cross-runtime
+        run: |
+          set -euo pipefail
+          python tools/product_intelligence/generate_github_runtime_analytics.py
+
+      - name: Consolidar sinais operacionais
+        run: |
+          set -euo pipefail
+          python scripts/unified_operational_signal_consolidator.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --branch "${GITHUB_REF_NAME}" \
+            --output-dir artifacts/unified-operational-signal-consolidator
+
+      - name: Resumo executivo
+        if: always()
+        run: |
+          set -euo pipefail
+          snapshot="artifacts/unified-operational-signal-consolidator/unified-operational-signal.json"
+          if [[ -f "${snapshot}" ]]; then
+            state=$(python3 -c "import json; print(json.load(open('${snapshot}'))['overall_state'])")
+            mesh=$(python3 -c "import json; print(json.load(open('${snapshot}'))['mesh_integrated'])")
+            evidence=$(python3 -c "import json; print(json.load(open('${snapshot}'))['evidence_gate_consolidated']['consolidated'])")
+            echo "## Unified Operational Signal Consolidator" >> "$GITHUB_STEP_SUMMARY"
+            echo "- State: \`${state}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Mesh integrated: \`${mesh}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Evidence gate consolidated: \`${evidence}\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload consolidated signal artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unified-operational-signal
+          path: |
+            artifacts/unified-operational-signal-consolidator
+            reports/github-runtime-analytics
+          if-no-files-found: error
+          retention-days: 30

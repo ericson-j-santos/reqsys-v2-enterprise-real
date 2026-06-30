@@ -5,103 +5,101 @@ const ESTADOS_ALVO = new Set(['adequado', 'avancado', 'excelencia'])
 const TENDENCIAS = new Set(['subindo', 'estavel', 'caindo', 'indefinida'])
 const CONFIABILIDADES = new Set(['alta', 'media', 'baixa'])
 
-export const estatisticasInternasIniciais = [
+/** Indicadores de exemplo usados apenas em testes de validação de contrato. */
+export const indicadoresExemploValidacao = [
   {
-    id: 'maturidade-evidenciada',
-    nome: 'Maturidade evidenciada',
-    descricao: 'Maturidade consolidada somente com evidências reais e pendências explícitas.',
-    categoria: 'Governança',
-    valorAtual: 68,
-    unidade: '%',
-    tendencia: 'estavel',
-    estadoAtual: 'adequado',
+    id: 'total-requisitos',
+    nome: 'Total de requisitos',
+    descricao: 'Quantidade total de requisitos cadastrados.',
+    categoria: 'Requisitos',
+    valorAtual: 0,
+    unidade: 'itens',
+    tendencia: 'indefinida',
+    estadoAtual: 'nao_medido',
     estadoAlvo: 'avancado',
-    formula: 'média ponderada dos critérios validados / critérios totais',
+    formula: 'count(requisitos.id)',
     fonte: {
-      id: 'reqsys-governanca-local',
+      id: 'reqsys-db-requisitos',
       tipo: 'interna',
-      nome: 'Governança ReqSys',
-      origem: 'frontend-runtime-fallback',
+      nome: 'Banco operacional ReqSys',
+      origem: 'backend-db:requisitos',
       coletadoEm: new Date().toISOString(),
-      confiabilidade: 'media',
-      versaoConector: 'fallback-v1'
+      confiabilidade: 'alta',
+      versaoConector: 'backend-v2',
     },
-    evidencias: ['ADR versionada', 'especificação da aba estatísticas', 'guard rails documentados'],
-    pendencias: ['API /v1/estatisticas indisponível no momento da carga']
+    evidencias: ['endpoint backend /v1/estatisticas'],
+    pendencias: ['API indisponível no momento da carga'],
   },
   {
     id: 'requisitos-com-bdd',
     nome: 'Requisitos com BDD',
     descricao: 'Percentual de requisitos com critérios de aceite em formato testável.',
     categoria: 'Requisitos',
-    valorAtual: 42,
+    valorAtual: 0,
     unidade: '%',
-    tendencia: 'subindo',
-    estadoAtual: 'atencao',
+    tendencia: 'indefinida',
+    estadoAtual: 'nao_medido',
     estadoAlvo: 'avancado',
     formula: 'requisitos com BDD / total de requisitos',
     fonte: {
-      id: 'reqsys-requisitos-local',
+      id: 'reqsys-db-requisitos-bdd',
       tipo: 'interna',
-      nome: 'Requisitos ReqSys',
-      origem: 'frontend-runtime-fallback',
+      nome: 'Banco operacional ReqSys',
+      origem: 'backend-db:requisitos.descricao',
       coletadoEm: new Date().toISOString(),
-      confiabilidade: 'media',
-      versaoConector: 'fallback-v1'
+      confiabilidade: 'alta',
+      versaoConector: 'backend-v2',
     },
-    evidencias: ['modelo de requisitos rastreáveis'],
-    pendencias: ['API /v1/estatisticas indisponível no momento da carga']
+    evidencias: ['marcadores BDD avaliados no backend'],
+    pendencias: ['API indisponível no momento da carga'],
   },
   {
-    id: 'guard-rails-violados',
-    nome: 'Guard rails violados',
-    descricao: 'Quantidade de bloqueios ou violações de governança identificadas no ciclo atual.',
+    id: 'guard-rails-producao',
+    nome: 'Guard rails de produção',
+    descricao: 'Validação de gates produtivos versionados.',
     categoria: 'Segurança',
     valorAtual: 0,
-    unidade: 'itens',
-    tendencia: 'estavel',
-    estadoAtual: 'adequado',
+    unidade: '%',
+    tendencia: 'indefinida',
+    estadoAtual: 'nao_medido',
     estadoAlvo: 'avancado',
-    formula: 'total de violações críticas abertas no período',
+    formula: 'gates versionados e testes de production gates presentes',
     fonte: {
-      id: 'reqsys-security-local',
+      id: 'reqsys-security-gates',
       tipo: 'interna',
-      nome: 'Guard Rails ReqSys',
-      origem: 'frontend-runtime-fallback',
+      nome: 'Production Security Gates',
+      origem: 'backend:settings.validate_production_gates',
       coletadoEm: new Date().toISOString(),
-      confiabilidade: 'media',
-      versaoConector: 'fallback-v1'
+      confiabilidade: 'alta',
+      versaoConector: 'backend-v2',
     },
-    evidencias: ['gates documentados para dados externos e mocks'],
-    pendencias: ['API /v1/estatisticas indisponível no momento da carga']
-  }
-]
-
-export const estatisticasExternasIniciais = [
+    evidencias: ['Settings.validate_production_gates'],
+    pendencias: ['API indisponível no momento da carga'],
+  },
   {
     id: 'fontes-externas-validas',
     nome: 'Fontes externas válidas',
-    descricao: 'Fontes externas cadastradas com origem, data de coleta, confiabilidade e validade.',
+    descricao: 'Fontes externas autorizadas e dentro do TTL.',
     categoria: 'Fontes externas',
     valorAtual: 0,
     unidade: 'fontes',
     tendencia: 'indefinida',
     estadoAtual: 'nao_medido',
     estadoAlvo: 'adequado',
-    formula: 'fontes externas dentro do TTL / total de fontes externas cadastradas',
+    formula: 'fontes externas válidas / total cadastradas',
     fonte: {
       id: 'external-sources-registry',
       tipo: 'externa',
       nome: 'Registry de fontes externas',
-      origem: 'pendente-conector',
+      origem: 'backend:external_sources_registry',
       coletadoEm: new Date().toISOString(),
       ttlMinutos: 1440,
-      confiabilidade: 'baixa',
-      versaoConector: 'planejado-v2'
+      confiabilidade: 'media',
+      versaoConector: 'registry-v1',
     },
     evidencias: ['contrato de fonte externa definido'],
-    pendencias: ['implementar registry de fontes externas', 'definir conectores autorizados']
-  }
+    pendencias: ['API indisponível no momento da carga'],
+  },
 ]
 
 export function validarIndicador(indicador) {
@@ -152,11 +150,19 @@ export async function carregarEstatisticas() {
     const resposta = await api.get('/v1/estatisticas')
     const payload = resposta.data?.data
     if (Array.isArray(payload?.indicadores)) {
-      return payload.indicadores
+      return {
+        modoOffline: false,
+        indicadores: payload.indicadores,
+        mensagem: '',
+      }
     }
   } catch (erro) {
-    console.warn('Falha ao carregar /v1/estatisticas; usando fallback local controlado.', erro)
+    console.warn('Falha ao carregar /v1/estatisticas; modo offline ativado.', erro)
   }
 
-  return [...estatisticasInternasIniciais, ...estatisticasExternasIniciais]
+  return {
+    modoOffline: true,
+    indicadores: [],
+    mensagem: 'API /v1/estatisticas indisponível. Os indicadores analíticos não serão exibidos até a conexão ser restabelecida.',
+  }
 }

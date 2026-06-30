@@ -6,6 +6,24 @@ on:
       - "infra/**"
       - "scripts/validate_fly_enterprise_sync.py"
       - "scripts/validate_public_runtime.py"
+      - "scripts/validate_publication_sync.py"
+      - ".github/workflows/fly-enterprise-sync.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - "backend/**"
+      - "frontend/**"
+      - "backend/fly.dev.toml"
+      - "backend/fly.staging.toml"
+      - "frontend/fly.dev.toml"
+      - "frontend/fly.staging.toml"
+      - "Dockerfile.fly"
+      - "scripts/fly_boot.sh"
+      - "scripts/validate_fly_enterprise_sync.py"
+      - "scripts/validate_public_runtime.py"
+      - "scripts/validate_publication_sync.py"
+      - "scripts/validar_login_multi_ambiente.py"
       - ".github/workflows/fly-enterprise-sync.yml"
   workflow_dispatch:
     inputs:
@@ -32,21 +50,13 @@ env:
   CORRELATION_ID: fly-enterprise-sync-${{ github.run_id }}-${{ github.run_attempt }}
 
 concurrency:
-  group: fly-enterprise-sync-${{ github.event.inputs.target_environment || github.ref }}
+  group: fly-enterprise-sync-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.event.inputs.target_environment) || 'main-nonprod' }}
   cancel-in-progress: false
 
 jobs:
-  validate-iac:
+  validate-manifest:
     name: Validate Fly IaC matrix
     runs-on: ubuntu-latest
-    outputs:
-      api_url: ${{ steps.env.outputs.api_url }}
-      frontend_url: ${{ steps.env.outputs.frontend_url }}
-      fly_config: ${{ steps.env.outputs.fly_config }}
-      frontend_fly_config: ${{ steps.env.outputs.frontend_fly_config }}
-      fly_app: ${{ steps.env.outputs.fly_app }}
-      frontend_app: ${{ steps.env.outputs.frontend_app }}
-      deploy_allowed: ${{ steps.policy.outputs.deploy_allowed }}
     steps:
       - uses: actions/checkout@v4
 
@@ -57,43 +67,6 @@ jobs:
       - name: Validate enterprise Fly sync manifest
         run: python scripts/validate_fly_enterprise_sync.py --output fly-enterprise-sync-validation.json
 
-      - name: Resolve target environment
-        id: env
-        env:
-          TARGET_ENVIRONMENT: ${{ github.event.inputs.target_environment || 'dev' }}
-        run: |
-          set -euo pipefail
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json, os
-          data = json.load(open('infra/fly-environments.json', encoding='utf-8'))
-          env = os.environ['TARGET_ENVIRONMENT']
-          cfg = data['environments'][env]
-          print(f"api_url={cfg['api_url']}")
-          print(f"frontend_url={cfg['frontend_url']}")
-          print(f"fly_config={cfg['fly_config']}")
-          print(f"frontend_fly_config={cfg['frontend_fly_config']}")
-          print(f"fly_app={cfg['api_app']}")
-          print(f"frontend_app={cfg['frontend_app']}")
-          PY
-
-      - name: Enforce deployment policy
-        id: policy
-        env:
-          TARGET_ENVIRONMENT: ${{ github.event.inputs.target_environment || 'dev' }}
-          DEPLOY: ${{ github.event.inputs.deploy || 'false' }}
-          APPROVE_PROD_DEPLOY: ${{ github.event.inputs.approve_prod_deploy }}
-        run: |
-          set -euo pipefail
-          deploy_allowed=false
-          if [ "$DEPLOY" = "true" ]; then
-            deploy_allowed=true
-            if [ "$TARGET_ENVIRONMENT" = "prod" ] && [ "$APPROVE_PROD_DEPLOY" != "APROVO-PROD" ]; then
-              echo "Produção exige approve_prod_deploy=APROVO-PROD" >&2
-              exit 1
-            fi
-          fi
-          echo "deploy_allowed=$deploy_allowed" >> "$GITHUB_OUTPUT"
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -101,67 +74,263 @@ jobs:
           path: fly-enterprise-sync-validation.json
           if-no-files-found: error
 
-  deploy-backend:
-    name: Deploy API Fly app
+  plan-environments:
+    name: Planejar ambientes alvo
     runs-on: ubuntu-latest
-    needs: validate-iac
-    if: ${{ github.event_name == 'workflow_dispatch' && needs.validate-iac.outputs.deploy_allowed == 'true' }}
-    environment: ${{ github.event.inputs.target_environment }}
+    needs: validate-manifest
+    outputs:
+      should_deploy: ${{ steps.plan.outputs.should_deploy }}
+      targets: ${{ steps.plan.outputs.targets }}
+    steps:
+      - id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DEPLOY_INPUT: ${{ github.event.inputs.deploy || 'false' }}
+          TARGET_INPUT: ${{ github.event.inputs.target_environment || 'dev' }}
+          APPROVE_PROD: ${{ github.event.inputs.approve_prod_deploy || '' }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "targets=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$DEPLOY_INPUT" != "true" ]; then
+              echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+              echo "targets=[]" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$TARGET_INPUT" = "prod" ] && [ "$APPROVE_PROD" != "APROVO-PROD" ]; then
+              echo "Produção exige approve_prod_deploy=APROVO-PROD" >&2
+              exit 1
+            fi
+            case "$TARGET_INPUT" in
+              dev) GH_ENV=dev ;;
+              hml) GH_ENV=staging ;;
+              prod) GH_ENV=production ;;
+              *) echo "Ambiente inválido: $TARGET_INPUT" >&2; exit 1 ;;
+            esac
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "targets=[{\"target_environment\":\"$TARGET_INPUT\",\"github_environment\":\"$GH_ENV\"}]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # push main: promoção automática dev → hml (prod fica no Deploy Production Sync)
+          echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          printf '%s\n' 'targets=[{"target_environment":"dev","github_environment":"dev"},{"target_environment":"hml","github_environment":"staging"}]' >> "$GITHUB_OUTPUT"
+
+  sync-environment:
+    name: Sync (${{ matrix.target_environment }})
+    runs-on: ubuntu-latest
+    needs: [validate-manifest, plan-environments]
+    if: needs.plan-environments.outputs.should_deploy == 'true'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include: ${{ fromJSON(needs.plan-environments.outputs.targets) }}
+    environment: ${{ matrix.github_environment }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Deploy API with canonical config
+
+      - name: Resolver configuração canônica
+        id: env
+        env:
+          TARGET_ENVIRONMENT: ${{ matrix.target_environment }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          data = json.load(open("infra/fly-environments.json", encoding="utf-8"))
+          env = os.environ["TARGET_ENVIRONMENT"]
+          cfg = data["environments"][env]
+          print(f"api_url={cfg['api_url']}")
+          print(f"frontend_url={cfg['frontend_url']}")
+          print(f"fly_config={cfg['fly_config']}")
+          print(f"frontend_fly_config={cfg['frontend_fly_config']}")
+          print(f"fly_app={cfg['api_app']}")
+          print(f"frontend_app={cfg['frontend_app']}")
+          print(f"app_env={cfg['app_env']}")
+          PY
+
+      - name: Configurar secrets Azure (homologação)
+        if: matrix.target_environment == 'hml'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_CONFIG: ${{ needs.validate-iac.outputs.fly_config }}
-          FLY_APP: ${{ needs.validate-iac.outputs.fly_app }}
+          COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
+          VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
+          AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${AZURE_TENANT_ID_SECRET:-}" ] || [ -z "${AZURE_CLIENT_ID_SECRET:-}" ]; then
+            echo "::warning::AZURE_TENANT_ID/AZURE_CLIENT_ID ausentes no GitHub — pulando apply (assumindo secrets já no Fly)"
+            printf '%s\n' '{"success": true, "skipped": true, "reason": "github_azure_secrets_empty"}' > "fly-auth-azure-report-${{ matrix.target_environment }}.json"
+            exit 0
+          fi
+          python scripts/configurar_fly_auth_azure.py \
+            --fly-app "${{ steps.env.outputs.fly_app }}" \
+            --app-env staging \
+            --app-public-url "${{ steps.env.outputs.frontend_url }}" \
+            --api-public-url "${{ steps.env.outputs.api_url }}" \
+            --azure-tenant-id "$AZURE_TENANT_ID_SECRET" \
+            --azure-client-id "$AZURE_CLIENT_ID_SECRET" \
+            --cofre-tenant-key AZURE_TENANT_ID \
+            --cofre-client-key AZURE_CLIENT_ID \
+            | tee "fly-auth-azure-report-${{ matrix.target_environment }}.json"
+
+      - name: Deploy API Fly app
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_CONFIG: ${{ steps.env.outputs.fly_config }}
+          FLY_APP: ${{ steps.env.outputs.fly_app }}
         working-directory: backend
         run: |
           set -euo pipefail
           config="${FLY_CONFIG#backend/}"
-          flyctl deploy --remote-only --config "$config" --app "$FLY_APP" --build-arg "GITHUB_SHA=${{ github.sha }}"
+          deploy_log="$(mktemp)"
+          max_attempts=3
+          for attempt in $(seq 1 "$max_attempts"); do
+            echo "::group::API deploy attempt ${attempt}/${max_attempts}"
+            set +e
+            flyctl deploy --remote-only \
+              --config "$config" \
+              --app "$FLY_APP" \
+              --build-arg "GITHUB_SHA=${{ github.sha }}" 2>&1 | tee "$deploy_log"
+            status="${PIPESTATUS[0]}"
+            set -e
+            echo "::endgroup::"
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+            if ! grep -Eiq "timeout reached waiting for health checks|request canceled|failed to get VM" "$deploy_log"; then
+              exit "$status"
+            fi
+            if [ "$attempt" -eq "$max_attempts" ]; then
+              exit "$status"
+            fi
+            sleep 60
+          done
 
-  deploy-frontend:
-    name: Deploy frontend Fly app
-    runs-on: ubuntu-latest
-    needs: validate-iac
-    if: ${{ github.event_name == 'workflow_dispatch' && needs.validate-iac.outputs.deploy_allowed == 'true' }}
-    environment: ${{ github.event.inputs.target_environment }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Deploy frontend with canonical config
+      - name: Deploy frontend Fly app
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FRONTEND_FLY_CONFIG: ${{ needs.validate-iac.outputs.frontend_fly_config }}
-          FRONTEND_APP: ${{ needs.validate-iac.outputs.frontend_app }}
+          FRONTEND_FLY_CONFIG: ${{ steps.env.outputs.frontend_fly_config }}
+          FRONTEND_APP: ${{ steps.env.outputs.frontend_app }}
         working-directory: frontend
         run: |
           set -euo pipefail
           config="${FRONTEND_FLY_CONFIG#frontend/}"
           flyctl deploy --remote-only --config "$config" --app "$FRONTEND_APP"
 
-  runtime-smoke:
-    name: Runtime smoke evidence
+      - name: Aguardar estabilização do runtime
+        run: sleep 30
+
+      - name: Smoke runtime público
+        run: |
+          python scripts/validate_public_runtime.py \
+            --base-url "${{ steps.env.outputs.api_url }}" \
+            --include-optional-evidence \
+            --output "public-runtime-validation-${{ matrix.target_environment }}.json"
+
+      - name: Validar publicação sincronizada
+        continue-on-error: true
+        run: |
+          python scripts/validate_publication_sync.py \
+            --environment "${{ matrix.target_environment }}" \
+            --expected-sha "${{ github.sha }}" \
+            --timeout 25 \
+            --output "publication-sync-${{ matrix.target_environment }}.json" || true
+          if ! python -c "import json; d=json.load(open('publication-sync-${{ matrix.target_environment }}.json')); exit(0 if d.get('ok') else 1)"; then
+            echo "::warning::Publication sync com drift — deploy concluído; verificar build_sha no runtime"
+          fi
+
+      - name: Validar login do ambiente
+        if: always()
+        run: |
+          python scripts/validar_login_multi_ambiente.py \
+            --environment "${{ matrix.target_environment }}" \
+            --timeout 25 \
+            --output "login-validation-${{ matrix.target_environment }}.json"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fly-enterprise-sync-${{ matrix.target_environment }}
+          path: |
+            public-runtime-validation-${{ matrix.target_environment }}.json
+            publication-sync-${{ matrix.target_environment }}.json
+            login-validation-${{ matrix.target_environment }}.json
+            fly-auth-azure-report-${{ matrix.target_environment }}.json
+          if-no-files-found: warn
+
+  runtime-smoke-readonly:
+    name: Runtime smoke (read-only)
     runs-on: ubuntu-latest
-    needs: [validate-iac, deploy-backend, deploy-frontend]
+    needs: [validate-manifest, plan-environments]
     if: >-
-      always() &&
       github.event_name == 'workflow_dispatch' &&
-      (
-        github.event.inputs.deploy == false ||
-        needs.deploy-backend.result == 'success' ||
-        needs.deploy-frontend.result == 'success'
-      )
+      github.event.inputs.deploy != 'true'
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Resolver URL do ambiente
+        id: env
+        env:
+          TARGET_ENVIRONMENT: ${{ github.event.inputs.target_environment }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          data = json.load(open("infra/fly-environments.json", encoding="utf-8"))
+          env = os.environ["TARGET_ENVIRONMENT"]
+          cfg = data["environments"][env]
+          print(f"api_url={cfg['api_url']}")
+          PY
+
       - name: Validate public runtime endpoints
-        run: python scripts/validate_public_runtime.py --base-url "${{ needs.validate-iac.outputs.api_url }}" --include-optional-evidence --output public-runtime-validation.json
+        run: python scripts/validate_public_runtime.py --base-url "${{ steps.env.outputs.api_url }}" --include-optional-evidence --output public-runtime-validation.json
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: fly-runtime-smoke-${{ github.event.inputs.target_environment }}
           path: public-runtime-validation.json
+
+  summary:
+    name: Resumo Fly Enterprise Sync
+    runs-on: ubuntu-latest
+    needs: [validate-manifest, plan-environments, sync-environment, runtime-smoke-readonly]
+    if: always()
+    steps:
+      - name: Resumo
+        env:
+          SHOULD_DEPLOY: ${{ needs.plan-environments.outputs.should_deploy }}
+          SYNC_RESULT: ${{ needs.sync-environment.result }}
+          SMOKE_RESULT: ${{ needs.runtime-smoke-readonly.result }}
+        run: |
+          {
+            echo "## Fly Enterprise Sync"
+            echo "- Correlation ID: \`$CORRELATION_ID\`"
+            echo "- SHA: \`${{ github.sha }}\`"
+            echo "- Evento: \`${{ github.event_name }}\`"
+            echo "| Etapa | Resultado |"
+            echo "|---|---|"
+            echo "| Validar manifesto | ${{ needs.validate-manifest.result }} |"
+            echo "| Deploy automático | ${SHOULD_DEPLOY} |"
+            echo "| Sync ambientes | ${SYNC_RESULT:-skipped} |"
+            echo "| Smoke read-only | ${SMOKE_RESULT:-skipped} |"
+          } >> "$GITHUB_STEP_SUMMARY"
