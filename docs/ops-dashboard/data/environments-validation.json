@@ -1,13 +1,13 @@
 {
   "schema_version": "1.0.0",
   "contract": "all-environments-readiness-validation",
-  "generated_at_epoch": 1782766649,
+  "generated_at_epoch": 1782779947,
   "summary": {
     "overall_status": "degraded",
-    "average_readiness_percent": 62.5,
+    "average_readiness_percent": 75.0,
     "environments_total": 4,
-    "ready": 2,
-    "degraded": 1,
+    "ready": 3,
+    "degraded": 0,
     "unavailable": 0,
     "local_only": 1,
     "mode": "read_only_non_blocking"
@@ -30,7 +30,7 @@
           "url": "https://reqsys-app-dev.fly.dev",
           "ok": true,
           "status_code": 200,
-          "elapsed_ms": 226,
+          "elapsed_ms": 227,
           "content_type": "text/html",
           "mode": "remote_probe",
           "error": null
@@ -39,7 +39,7 @@
           "url": "https://reqsys-api-dev.fly.dev/docs",
           "ok": true,
           "status_code": 200,
-          "elapsed_ms": 220,
+          "elapsed_ms": 203,
           "content_type": "text/html; charset=utf-8",
           "mode": "remote_probe",
           "error": null
@@ -63,7 +63,7 @@
           "url": "https://reqsys-app-stg.fly.dev",
           "ok": true,
           "status_code": 200,
-          "elapsed_ms": 220,
+          "elapsed_ms": 217,
           "content_type": "text/html",
           "mode": "remote_probe",
           "error": null
@@ -72,7 +72,7 @@
           "url": "https://reqsys-api-stg.fly.dev/docs",
           "ok": true,
           "status_code": 200,
-          "elapsed_ms": 207,
+          "elapsed_ms": 347,
           "content_type": "text/html; charset=utf-8",
           "mode": "remote_probe",
           "error": null
@@ -85,10 +85,10 @@
       "frontend": "https://reqsys-app.fly.dev",
       "api": "https://reqsys-api.fly.dev/docs",
       "notes": "Fly producao; local usa docker-compose.yml + docker-compose.prod.yml",
-      "status": "degraded",
-      "operational_risk": "medium",
-      "readiness_percent": 50.0,
-      "ok_checks": 1,
+      "status": "ready",
+      "operational_risk": "low",
+      "readiness_percent": 100.0,
+      "ok_checks": 2,
       "total_checks": 2,
       "skipped_checks": 0,
       "checks": {
@@ -96,19 +96,19 @@
           "url": "https://reqsys-app.fly.dev",
           "ok": true,
           "status_code": 200,
-          "elapsed_ms": 222,
+          "elapsed_ms": 350,
           "content_type": "text/html",
           "mode": "remote_probe",
           "error": null
         },
         "api": {
           "url": "https://reqsys-api.fly.dev/docs",
-          "ok": false,
-          "status_code": null,
-          "elapsed_ms": 20071,
-          "content_type": null,
+          "ok": true,
+          "status_code": 200,
+          "elapsed_ms": 206,
+          "content_type": "text/html; charset=utf-8",
           "mode": "remote_probe",
-          "error": "The read operation timed out"
+          "error": null
         }
       }
     },
