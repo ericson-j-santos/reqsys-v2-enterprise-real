@@ -1,15 +1,15 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T13:31:50.150050Z",
+  "generated_at": "2026-06-30T13:49:39.475607Z",
   "state": "green",
-  "current_score": 97.0,
+  "current_score": 97.84,
   "baseline_score": 88.33,
-  "delta_from_baseline": 8.67,
+  "delta_from_baseline": 9.51,
   "trend": "improving",
   "summary": {
-    "samples": 4,
-    "green_samples": 3,
+    "samples": 5,
+    "green_samples": 4,
     "failed_samples": 1,
     "next_increment": "artifact_ingestion_refresh",
     "artifact_ingestion_enabled": true,
@@ -31,15 +31,15 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 4
+      "samples": 5
     },
     "coverage": {
       "current_status": "passed",
-      "current_score": 82.0,
-      "previous_score": 74.29,
-      "delta_from_baseline": 53.0,
+      "current_score": 87.02,
+      "previous_score": 82.0,
+      "delta_from_baseline": 58.02,
       "trend": "improving",
-      "samples": 4
+      "samples": 5
     },
     "mutation": {
       "current_status": "passed",
@@ -47,7 +47,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 4
+      "samples": 5
     },
     "contract": {
       "current_status": "passed",
@@ -55,7 +55,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 4
+      "samples": 5
     },
     "schema": {
       "current_status": "passed",
@@ -63,7 +63,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 4
+      "samples": 5
     },
     "ci-watch": {
       "current_status": "passed",
@@ -71,7 +71,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 4
+      "samples": 5
     }
   },
   "history": [
@@ -222,6 +222,44 @@
       "notes": [
         "continuar_incremento_qualidade",
         "correlation_id=c227dcb7-570c-4bce-ac6c-0d4e1f235803"
+      ]
+    },
+    {
+      "timestamp": "2026-06-30T13:49:36.246625Z",
+      "source": "github_actions_artifact",
+      "run_id": "local",
+      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
+      "state": "green",
+      "average_score": 97.84,
+      "dimensions": {
+        "ci-watch": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "contract": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "coverage": {
+          "status": "passed",
+          "score": 87.02
+        },
+        "mutation": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "schema": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "tests": {
+          "status": "passed",
+          "score": 100.0
+        }
+      },
+      "notes": [
+        "continuar_incremento_qualidade",
+        "correlation_id=8cd40a0a-cedb-4f61-8667-8ea5e3a50069"
       ]
     }
   ],
