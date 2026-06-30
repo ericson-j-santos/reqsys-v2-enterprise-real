@@ -6,7 +6,7 @@ Definir o pacote mínimo governado para criação e inicialização do repositó
 
 ## Pendência P0
 
-O repositório externo ainda precisa ser criado manualmente no GitHub, pois a criação de repositório depende de permissão administrativa/humana.
+Repositório externo **criado**. Publicar v0.2.0 via `scripts/sincronizar_ollama_gateway_repo.sh` (requer permissão de push no repo externo).
 
 ## Repositório alvo
 

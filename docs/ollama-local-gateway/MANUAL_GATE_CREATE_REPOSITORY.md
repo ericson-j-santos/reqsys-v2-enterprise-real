@@ -1,31 +1,31 @@
-# Gate manual — criar reqsys-ollama-local-gateway
+# Gate manual — reqsys-ollama-local-gateway
 
 ## Estado
 
-A criacao do repositorio externo continua sendo uma acao humana, pois depende de permissao administrativa do GitHub nao disponivel nesta execucao.
+Repositório **criado e acessível**: `ericson-j-santos/reqsys-ollama-local-gateway`
 
-## Repositorio alvo
+Pendência restante: publicar v0.2.0 (`POST /v1/chat`) via PR no repositório externo.
 
-`ericson-j-santos/reqsys-ollama-local-gateway`
+## Publicação
 
-## Configuracoes minimas
+```bash
+bash scripts/sincronizar_ollama_gateway_repo.sh
+```
 
-| Campo | Valor recomendado |
-|---|---|
-| Owner | `ericson-j-santos` |
-| Nome | `reqsys-ollama-local-gateway` |
-| Visibilidade | Privado |
-| Branch padrao | `main` |
-| Actions | Habilitado |
+Requer permissão de escrita no repositório externo (owner ou token com `contents: write`).
 
-## Depois da criacao
+## Integração ReqSys
 
-Copiar o conteudo de `docs/ollama-local-gateway/bootstrap-files/` para a raiz do novo repositorio e abrir o PR inicial.
+Provider `ollama_gateway` integrado ao Codex governado. Configuração:
 
-## Criterio de conclusao da issue #125
+```env
+CODEX_OLLAMA_GATEWAY_URL=http://localhost:8008
+CODEX_OLLAMA_GATEWAY_API_KEY=placeholder-local-dev
+```
 
-- Repositorio existe.
-- CI inicial verde.
-- SECURITY.md e CODEOWNERS presentes.
-- Branch protection configurada.
-- Environments `dev`, `hml`, `prod` criados.
+## Critério de conclusão da issue #95
+
+- [x] Repositório externo existe
+- [x] Bootstrap v0.2.0 com `/v1/chat` no monólito ReqSys
+- [x] Provider `ollama_gateway` no backend ReqSys
+- [ ] PR mergeado no repositório externo (requer token com permissão de push)

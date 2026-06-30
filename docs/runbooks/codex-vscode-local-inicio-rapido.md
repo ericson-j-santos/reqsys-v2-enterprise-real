@@ -24,7 +24,22 @@ ollama pull qwen2.5-coder:7b
 ollama pull deepseek-coder:6.7b
 ```
 
-### 2. Subir ReqSys (backend + frontend)
+### 2. Subir gateway Ollama (provider recomendado)
+
+```bash
+cd docs/ollama-local-gateway/bootstrap-files
+pip install -e .[dev]
+REQSYS_AUTH_REQUIRED=false uvicorn reqsys_ollama_gateway.main:app --host 127.0.0.1 --port 8008
+```
+
+Configure no ReqSys:
+
+```env
+CODEX_OLLAMA_GATEWAY_URL=http://127.0.0.1:8008
+CODEX_OLLAMA_GATEWAY_API_KEY=placeholder-local-dev
+```
+
+### 3. Subir ReqSys (backend + frontend)
 
 ```bash
 bash scripts/iniciar_codex_local.sh
@@ -32,7 +47,7 @@ bash scripts/iniciar_codex_local.sh
 
 Acesse `http://127.0.0.1:5173/`, faça login demo e abra `/codex`.
 
-### 3. Configurar VS Code + Continue
+### 4. Configurar VS Code + Continue
 
 1. Instale a extensão **Continue** no VS Code.
 2. Copie a config:
@@ -50,6 +65,7 @@ cp infra/codex-local/continue/config.yaml ~/.continue/config.yaml
 | Modo | Onde | Quando usar |
 | --- | --- | --- |
 | VS Code + Continue + Ollama | Editor local | Codificação diária gratuita |
+| Gateway `ollama_gateway` | `:8008/v1/chat` | Provider canônico local governado |
 | Tela `/codex` no ReqSys | SPA Vue | Análise governada com JWT e auditoria |
 | Codex Online (GitHub Pages) | Browser estático | Demo online ou endpoint remoto |
 

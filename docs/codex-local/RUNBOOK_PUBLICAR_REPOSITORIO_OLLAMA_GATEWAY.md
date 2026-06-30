@@ -6,82 +6,24 @@ Padronizar a criação e publicação do repositório independente `ericson-j-sa
 
 ## Estado atual evidenciado
 
-- Repositório esperado: `ericson-j-santos/reqsys-ollama-local-gateway`
-- Resultado atual da validação: `404 Not Found`
-- Natureza do bloqueio: ação manual humana no GitHub
+- Repositório: `ericson-j-santos/reqsys-ollama-local-gateway` — **existe e acessível**
+- Versão publicada alvo: `0.2.0` com `POST /v1/chat`
 - Issue relacionada: `#95`
-- PR relacionado no repositório principal: `#96`
+- Provider ReqSys: `ollama_gateway` integrado ao Codex governado
 
 ## Decisão arquitetural
 
 O gateway independente não substitui o Codex Local/Online do ReqSys. Ele deve atuar como provider local via HTTP para permitir uso de modelos Ollama em ambiente controlado.
 
-## Ação manual obrigatória
+## Publicação automatizada
 
-Criar manualmente o repositório GitHub:
-
-```text
-ericson-j-santos/reqsys-ollama-local-gateway
+```bash
+bash scripts/sincronizar_ollama_gateway_repo.sh
 ```
 
-Configuração recomendada:
+O script valida o bootstrap (`pytest` + `ruff`), publica no repositório externo e abre branch para PR.
 
-| Configuração | Valor recomendado |
-|---|---|
-| Owner | `ericson-j-santos` |
-| Nome | `reqsys-ollama-local-gateway` |
-| Branch padrão | `main` |
-| README inicial | Sim |
-| Visibilidade | Definir conforme estratégia de publicação |
-| Actions | Habilitado |
-| Issues | Habilitado |
-| Branch protection | Habilitar após primeiro push |
-| Licença | Definir explicitamente antes de uso externo |
-
-## Estrutura mínima recomendada do repositório independente
-
-```text
-reqsys-ollama-local-gateway/
-├── README.md
-├── CHANGELOG.md
-├── LICENSE
-├── .env.example
-├── .gitignore
-├── pyproject.toml
-├── src/
-│   └── reqsys_ollama_gateway/
-│       ├── __init__.py
-│       ├── main.py
-│       ├── config.py
-│       ├── audit.py
-│       ├── schemas.py
-│       └── ollama_client.py
-├── tests/
-│   ├── test_health.py
-│   ├── test_chat_contract.py
-│   └── test_audit.py
-├── docs/
-│   ├── ADR-001-provider-local-ollama.md
-│   └── SECURITY.md
-└── .github/
-    └── workflows/
-        └── ci.yml
-```
-
-## Gates mínimos antes de considerar pronto
-
-- `pytest` verde.
-- `ruff` verde.
-- Nenhuma chamada real ao Ollama nos testes unitários.
-- `.env.example` sem segredo real.
-- Logs com `correlation_id`.
-- Nenhum token, senha, CPF, PII ou connection string em log.
-- Endpoint de health check sem expor informações sensíveis.
-- CORS sem wildcard em produção.
-- Documentação de execução local.
-- CI com artifact de evidência.
-
-## Comandos sugeridos após criação manual do repositório
+## Comandos sugeridos após merge no repositório externo
 
 ```bash
 git clone https://github.com/ericson-j-santos/reqsys-ollama-local-gateway.git
@@ -108,4 +50,4 @@ Depois, abrir PR para `main` no repositório independente.
 
 ## Status operacional
 
-Enquanto o repositório independente não existir, esta frente permanece com bloqueio manual humano.
+Repositório externo criado. Use `scripts/sincronizar_ollama_gateway_repo.sh` para publicar atualizações. O ReqSys consome o gateway via provider `ollama_gateway`.
