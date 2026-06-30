@@ -25,6 +25,20 @@ def test_build_payload_contains_core_evidence_items() -> None:
     assert "preview_environment" in evidence_ids
     assert "governed_pr_automation" in evidence_ids
     assert "predictive_regression" in evidence_ids
+    assert "pr_evidence_gate" in evidence_ids
+
+
+def test_build_payload_exposes_workflow_run_deep_links() -> None:
+    payload = build_payload()
+
+    for item in payload["evidence"]:
+        links = item["links"]
+        assert links["workflow_runs"]
+        assert links["latest_run"] == links["workflow_runs"]
+        assert "/actions/workflows/" in links["latest_run"]
+
+    assert payload["summary"]["dashboard_ready_capabilities"] == payload["summary"]["total_capabilities"]
+    assert payload["summary"]["next_increment"] == "dashboard_trilha_d_history_card"
 
 
 def test_write_payload_creates_valid_json(tmp_path: Path) -> None:

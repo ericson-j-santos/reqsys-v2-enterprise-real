@@ -25,6 +25,7 @@ def test_mapear_cards_governance_respeita_dashboard_ready():
     assert all(card['type'] == 'governance_evidence' for card in cards)
     assert all(card['dashboard_ready'] for card in cards)
     assert any(card['id'] == 'governance-conflict_prediction' for card in cards)
+    assert all(card.get('latest_run') for card in cards)
 
 
 def test_mapear_secao_governance_expoe_resumo():

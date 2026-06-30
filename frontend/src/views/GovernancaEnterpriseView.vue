@@ -1,5 +1,5 @@
 <template>
-  <section class="page governance-page">
+  <section class="page governance-page" data-testid="route-governanca">
     <div class="page-header governance-hero">
       <div>
         <div class="eyebrow">Padrão Ouro Enterprise</div>
