@@ -22,6 +22,17 @@
       <div class="pa-5 pb-3 req-brand-block">
         <div class="brand"><span class="brand-dot">R</span> ReqSys Enterprise</div>
         <div class="muted mt-1 version-line" data-testid="app-version-label">{{ versionLabel }}</div>
+        <v-chip
+          v-if="hasVersionDrift"
+          size="x-small"
+          color="warning"
+          variant="tonal"
+          class="mt-1"
+          prepend-icon="mdi-alert-outline"
+          data-testid="app-version-drift-chip"
+        >
+          Versões divergentes
+        </v-chip>
         <span class="figma-pill figma-pill--compact mt-2 d-inline-block">Ambiente: {{ ambienteDrawerLabel }}</span>
       </div>
       <v-divider />
@@ -162,7 +173,7 @@ import {
 import { useAppVersion } from '../composables/useAppVersion'
 
 const { mobile } = useDisplay()
-const { versionLabel } = useAppVersion()
+const { versionLabel, hasVersionDrift } = useAppVersion()
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
