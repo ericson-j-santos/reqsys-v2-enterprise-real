@@ -79,15 +79,34 @@ describe('ambientesOperacionais', () => {
   it('navega para produção quando confirmação é aceita', () => {
     const assign = vi.fn()
     const confirm = vi.fn(() => true)
+    const interceptar = vi.fn()
     vi.stubGlobal('window', {
       location: { assign },
       confirm,
+      __reqsysInterceptarNavegacaoAmbiente: interceptar,
     })
 
     const resultado = irParaAmbiente('producao', { path: '/governanca', preserveRoute: false })
 
     expect(resultado).toBe(true)
-    expect(assign).toHaveBeenCalledWith('https://reqsys-app.fly.dev/governanca')
+    expect(interceptar).toHaveBeenCalledWith('https://reqsys-app.fly.dev/governanca')
+    expect(assign).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('usa interceptador de navegação quando disponível no browser', () => {
+    const assign = vi.fn()
+    const interceptar = vi.fn()
+    vi.stubGlobal('window', {
+      location: { assign },
+      __reqsysInterceptarNavegacaoAmbiente: interceptar,
+    })
+
+    const resultado = irParaAmbiente('homologacao', { path: '/governanca', preserveRoute: false })
+
+    expect(resultado).toBe(true)
+    expect(interceptar).toHaveBeenCalledWith('https://reqsys-app-stg.fly.dev/governanca')
+    expect(assign).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
   })
 })

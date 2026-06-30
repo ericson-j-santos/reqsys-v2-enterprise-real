@@ -127,6 +127,11 @@ export function irParaAmbiente(ambienteId, opcoes = {}) {
     if (!confirmado) return false
   }
 
+  if (typeof window.__reqsysInterceptarNavegacaoAmbiente === 'function') {
+    window.__reqsysInterceptarNavegacaoAmbiente(url)
+    return true
+  }
+
   window.location.assign(url)
   return true
 }

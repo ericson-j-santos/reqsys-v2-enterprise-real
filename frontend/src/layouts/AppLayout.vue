@@ -9,6 +9,7 @@
         compact
         :show-prefix="false"
         class="ml-2"
+        test-id="ambiente-navigator-appbar"
       />
       <v-spacer />
       <v-chip size="x-small" color="amber" variant="tonal" class="mr-2 req-role-chip">
@@ -42,6 +43,7 @@
           :environment-hint="environment"
           compact
           class="mt-2 d-inline-block"
+          test-id="ambiente-navigator-drawer"
         />
       </div>
       <v-divider />

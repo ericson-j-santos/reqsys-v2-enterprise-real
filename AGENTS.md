@@ -189,6 +189,7 @@ Para mudanÃ§as relevantes, atualizar pelo menos um dos itens abaixo:
 - Preferir alteraÃ§Ã£o mÃ­nima em arquivos existentes.
 - NÃ£o fazer merge em lote de PRs antigos sem revalidar contra a `main` atual.
 - NÃ£o depender de revisÃ£o automÃ¡tica como Ãºnica evidÃªncia. CI e inspeÃ§Ã£o tÃ©cnica continuam obrigatÃ³rios.
+- Para mudanÃ§as de frontend com fluxo visual ou navegaÃ§Ã£o, incluir cobertura E2E Playwright em `frontend/tests/e2e/` (alÃ©m de unitÃ¡rios quando aplicÃ¡vel).
 
 ## DecisÃ£o canÃ´nica atual
 
