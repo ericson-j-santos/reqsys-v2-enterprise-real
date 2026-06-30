@@ -14,9 +14,9 @@
     {
       "id": "OPS-GAP-PAGES-SHOWCASE",
       "title": "GitHub Pages showcase com validação ou publicação inconsistente",
-      "status": "open",
+      "status": "resolved",
       "scope": "github-pages",
-      "detail": "Workflow Deploy ReqSys Public Showcase falha em scan de termos ou não republica após merge.",
+      "detail": "Deploy ReqSys Public Showcase verde em 2026-06-30; scan de termos restrito a index.html/assets (#614).",
       "allowed_increment_types": ["hotfix", "gap_fix"]
     },
     {
