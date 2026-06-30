@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 
-from app.api.monitoramento_operacional import ItemMonitorado, _metric_line, classificar_estado_geral
+from app.api.monitoramento_operacional import _metric_line
+from app.schemas.monitoramento_operacional import ItemMonitorado
+from app.services.monitoramento_snapshot import classificar_estado_geral
 from app.core.config import settings
 from app.main import app
 
@@ -37,6 +39,14 @@ def test_monitoramento_operacional_estado_geral_reflete_pendencias():
 
     assert data['resumo']['estado_geral'] in {'amarelo', 'vermelho', 'bloqueado'}
     assert data['resumo']['pendencias'] > 0
+
+
+def test_monitoramento_operacional_expoe_modo_coleta():
+    res = TestClient(app).get('/monitoramento-operacional')
+    data = res.json()['data']
+
+    assert data['modo_coleta'] in {'live', 'hibrido', 'preview'}
+    assert isinstance(data.get('coleta_detalhes'), dict)
 
 
 def test_runtime_observability_health_expoe_snapshot_governado():

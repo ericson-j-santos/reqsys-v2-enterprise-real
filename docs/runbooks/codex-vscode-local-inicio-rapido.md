@@ -2,9 +2,9 @@
 
 ## Objetivo
 
-Colocar em operação o assistente de codificação gratuito/local integrado ao ReqSys, usando VS Code + extensão Continue + Ollama.
+Colocar em operação o assistente de codificação gratuito/local integrado ao ReqSys.
 
-## Início rápido (1 comando)
+## Início rápido
 
 ```bash
 docker compose -f infra/codex-local/docker-compose.ollama.yml up -d
@@ -12,13 +12,11 @@ ollama pull qwen2.5-coder:7b
 bash scripts/iniciar_codex_local.sh
 ```
 
-Sobe automaticamente:
-
 | Serviço | Porta | Função |
 |---|---|---|
 | Ollama | `11434` | Modelos locais |
 | Gateway | `8008` | Provider `ollama_gateway` |
-| Backend ReqSys | `8000` | API Codex governada |
+| Backend | `8000` | API Codex governada |
 | Frontend | `5173` | Tela `/codex` |
 
 Acesse `http://127.0.0.1:5173/codex` (login demo com e-mail).
@@ -30,15 +28,22 @@ mkdir -p ~/.continue
 cp infra/codex-local/continue/config.yaml ~/.continue/config.yaml
 ```
 
-Use `Ctrl+L` (chat) com **Qwen2.5 Coder**.
+## Sync repo externo (automatizado)
 
-## Sync repo externo (opcional)
+1. Configure o secret no ReqSys (uma vez):
 
 ```bash
-GH_TOKEN=<pat-com-write> bash scripts/sincronizar_ollama_gateway_repo.sh
+gh secret set OLLAMA_GATEWAY_SYNC_TOKEN -R ericson-j-santos/reqsys-v2-enterprise-real
+# Cole um PAT com contents:write no repo reqsys-ollama-local-gateway
 ```
 
-Ou workflow **Ollama Gateway Bootstrap** com secret `OLLAMA_GATEWAY_SYNC_TOKEN`.
+2. Dispare o workflow:
+
+```bash
+gh workflow run ollama-gateway-bootstrap.yml -R ericson-j-santos/reqsys-v2-enterprise-real
+```
+
+O sync também roda automaticamente em push na `main` quando o bootstrap muda e o secret está configurado.
 
 ## Validação
 

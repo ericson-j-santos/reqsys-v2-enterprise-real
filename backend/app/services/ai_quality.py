@@ -7,6 +7,7 @@ from sqlalchemy import func
 from app.models.ai_quality import QualidadeIASnapshot
 from app.models.auditoria import AuditoriaEvento
 from app.models.requisito import Requisito
+from app.services.requisitos_metricas import calcular_metricas_requisitos
 
 
 def _safe_pct(value: int, total: int) -> float:
@@ -20,19 +21,11 @@ def _clip(score: float) -> float:
 
 
 def calcular_resumo_qualidade_ia(db):
-    total = db.query(Requisito).count()
-
-    aprovados = (
-        db.query(Requisito)
-        .filter(func.lower(Requisito.status).in_(['aprovado', 'aprovados', 'concluido', 'concluida']))
-        .count()
-    )
-    em_analise = (
-        db.query(Requisito)
-        .filter(func.lower(Requisito.status).like('%analise%'))
-        .count()
-    )
-    pendentes = max(total - aprovados, 0)
+    metricas_requisitos = calcular_metricas_requisitos(db)
+    total = metricas_requisitos['total']
+    aprovados = metricas_requisitos['aprovados']
+    em_analise = metricas_requisitos['em_analise']
+    pendentes = metricas_requisitos['pendentes']
 
     cobertura_dados = (
         db.query(Requisito)

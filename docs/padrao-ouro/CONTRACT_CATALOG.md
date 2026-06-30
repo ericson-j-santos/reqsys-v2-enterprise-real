@@ -125,7 +125,7 @@ Inventário centralizado de **schemas, eventos, APIs, payloads, outputs e pipeli
 | `GET /status` | JWT | — | `{ servico, providers, guard_rails }` |
 | `GET /operational-summary` | JWT | `?limite=10` | `{ dashboard: { total, bloqueados, latencia_media, ... } }` |
 
-Providers: `mock`, `ollama`, `ollama_gateway`, `openai`, `claude`. Provider canônico local: `ollama_gateway`. [`docs/runbooks/codex-vscode-local-inicio-rapido.md`](../runbooks/codex-vscode-local-inicio-rapido.md).
+Providers: `mock`, `ollama`, `ollama_gateway`, `openai`, `claude`. Provider canônico local: `ollama_gateway`. Runbook: [`docs/runbooks/codex-vscode-local-inicio-rapido.md`](../runbooks/codex-vscode-local-inicio-rapido.md).
 
 
 ### Contrato Cofre (`/v1/cofre`)

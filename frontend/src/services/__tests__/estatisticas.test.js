@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   calcularResumoEstatisticas,
   carregarEstatisticas,
-  estatisticasExternasIniciais,
-  estatisticasInternasIniciais,
+  indicadoresExemploValidacao,
   validarIndicador
 } from '../estatisticas'
 import { api } from '../api'
@@ -15,11 +14,9 @@ vi.mock('../api', () => ({
 }))
 
 describe('estatisticas', () => {
-  it('mantem indicadores iniciais com contrato valido', () => {
-    const indicadores = [...estatisticasInternasIniciais, ...estatisticasExternasIniciais]
-
-    expect(indicadores.length).toBeGreaterThan(0)
-    expect(indicadores.flatMap((indicador) => validarIndicador(indicador))).toEqual([])
+  it('mantem indicadores de exemplo com contrato valido', () => {
+    expect(indicadoresExemploValidacao.length).toBeGreaterThan(0)
+    expect(indicadoresExemploValidacao.flatMap((indicador) => validarIndicador(indicador))).toEqual([])
   })
 
   it('bloqueia indicador sem fonte e formula', () => {
@@ -38,7 +35,7 @@ describe('estatisticas', () => {
   })
 
   it('calcula resumo consolidado sem promover estado alvo como atual', () => {
-    const resumo = calcularResumoEstatisticas([...estatisticasInternasIniciais, ...estatisticasExternasIniciais])
+    const resumo = calcularResumoEstatisticas(indicadoresExemploValidacao)
 
     expect(resumo.total).toBe(4)
     expect(resumo.externos).toBe(1)
@@ -71,18 +68,20 @@ describe('estatisticas', () => {
     }
     api.get.mockResolvedValueOnce({ data: { data: { indicadores: [indicadorApi] } } })
 
-    const indicadores = await carregarEstatisticas()
+    const resultado = await carregarEstatisticas()
 
     expect(api.get).toHaveBeenCalledWith('/v1/estatisticas')
-    expect(indicadores).toEqual([indicadorApi])
+    expect(resultado.modoOffline).toBe(false)
+    expect(resultado.indicadores).toEqual([indicadorApi])
   })
 
-  it('usa fallback controlado quando API falha', async () => {
+  it('ativa modo offline sem KPIs inventados quando API falha', async () => {
     api.get.mockRejectedValueOnce(new Error('api indisponivel'))
 
-    const indicadores = await carregarEstatisticas()
+    const resultado = await carregarEstatisticas()
 
-    expect(indicadores.length).toBe(4)
-    expect(indicadores.some((item) => item.fonte.origem === 'frontend-runtime-fallback')).toBe(true)
+    expect(resultado.modoOffline).toBe(true)
+    expect(resultado.indicadores).toEqual([])
+    expect(resultado.mensagem).toMatch(/indisponível/i)
   })
 })

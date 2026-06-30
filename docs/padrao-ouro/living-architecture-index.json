@@ -318,6 +318,7 @@
       "env_vars": ["CODEX_OLLAMA_GATEWAY_URL", "CODEX_OLLAMA_GATEWAY_API_KEY", "CODEX_OLLAMA_MODEL"],
       "external_repo": "ericson-j-santos/reqsys-ollama-local-gateway",
       "sync_script": "scripts/sincronizar_ollama_gateway_repo.sh",
+      "sync_workflow": ".github/workflows/ollama-gateway-bootstrap.yml",
       "docs": [
         "docs/adrs/ADR-022-codex-local-online-integrado-reqsys.md",
         "docs/adrs/ADR-023-codex-backend-governado.md",
