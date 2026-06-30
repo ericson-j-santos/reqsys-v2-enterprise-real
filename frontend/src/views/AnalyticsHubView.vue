@@ -56,6 +56,40 @@
     <v-row class="mt-2" dense>
       <v-col cols="12" lg="7">
         <v-card class="panel" elevation="0">
+          <v-card-title>Malha operacional unificada</v-card-title>
+          <v-card-subtitle>P1 — consumo de unified-operational-signal.json via /api/runtime/dashboard</v-card-subtitle>
+          <v-card-text>
+            <v-alert v-if="!meshResumo.hydrated" type="info" variant="tonal" density="compact" class="mb-3">
+              Malha parcial — aguardando artifact do Signal Consolidator no CI.
+            </v-alert>
+            <v-row dense>
+              <v-col v-for="card in meshCards" :key="card.id" cols="12" sm="6">
+                <OperationalMetricCard
+                  :label="card.title"
+                  :value="formatarValor(card)"
+                  :semaforo="semaforoCard(card)"
+                  icon="mdi-graph-outline"
+                  :test-id="`analytics-mesh-${card.id}`"
+                  @drilldown="irPara(card.rotaSpa)"
+                />
+              </v-col>
+            </v-row>
+            <v-timeline density="compact" side="end" class="mt-4">
+              <v-timeline-item
+                v-for="item in meshTimeline"
+                :key="item.step"
+                :dot-color="corTimeline(item.status)"
+              >
+                <strong>{{ item.label }}</strong>
+                <div class="muted">{{ item.detail || item.state }}</div>
+              </v-timeline-item>
+            </v-timeline>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <v-col cols="12" lg="5">
+        <v-card class="panel" elevation="0">
           <v-card-title>Topologia operacional</v-card-title>
           <v-card-text>
             <v-timeline density="compact" side="end">
@@ -82,7 +116,7 @@
         </v-card>
       </v-col>
 
-      <v-col cols="12" lg="5">
+      <v-col cols="12" lg="12">
         <v-card class="panel" elevation="0">
           <v-card-title>Destinos analíticos</v-card-title>
           <v-list density="comfortable">
@@ -120,6 +154,13 @@ const { carregarMonitoramento, resumoSemaforo, carregando, erro } = useMonitoram
 
 const runtimeCards = computed(() => runtimeDashboard.value?.cards || [])
 const workflowTopology = computed(() => runtimeDashboard.value?.sections?.find((s) => s.id === 'workflow-topology')?.items || [])
+const meshTimeline = computed(() => runtimeDashboard.value?.sections?.find((s) => s.id === 'operational-mesh-chain')?.items?.timeline || [])
+const meshCards = computed(() => (runtimeDashboard.value?.cards || []).filter((card) => ['operational-mesh-integrated', 'operational-mesh-maturity', 'evidence-gate-consolidated', 'cross-runtime-score'].includes(card.id)))
+const meshResumo = computed(() => ({
+  hydrated: Boolean(runtimeDashboard.value?.operational_mesh?.hydrated),
+  integrated: runtimeDashboard.value?.operational_mesh?.mesh_integrated ?? false,
+  maturity: runtimeDashboard.value?.operational_mesh?.maturity_percent ?? 'n/a',
+}))
 
 const semaforoGeralValor = computed(() => {
   const resumo = resumoSemaforo()
@@ -181,6 +222,7 @@ const cardsResumo = computed(() => [
 ])
 
 const destinosAnaliticos = [
+  { path: '/monitoramento-operacional', query: { secao: 'malha-operacional' }, icon: 'mdi-graph-outline', title: 'Malha operacional', subtitle: 'Mesh hub, alert intelligence e event bus' },
   { path: '/monitoramento-operacional', query: { estado: 'vermelho' }, icon: 'mdi-alert-circle-outline', title: 'Incidentes críticos', subtitle: 'Itens em vermelho ou bloqueados' },
   { path: '/monitoramento-operacional', query: { secao: 'conectores' }, icon: 'mdi-lan-connect', title: 'Connection Broker', subtitle: 'Health-check de conectores' },
   { path: '/estatisticas', query: { estado: 'critico' }, icon: 'mdi-chart-line', title: 'Indicadores críticos', subtitle: 'Estatísticas com estado crítico' },

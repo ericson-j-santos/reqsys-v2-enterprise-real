@@ -27,6 +27,13 @@ from app.services.governance_evidence_index import (
     mapear_secao_governance,
 )
 from app.services.monitoramento_snapshot import criar_snapshot_operacional
+from app.services.operational_mesh_signal import (
+    carregar_cross_runtime_analytics_report,
+    carregar_operational_mesh_signal,
+    mapear_cards_operational_mesh,
+    mapear_secao_operational_mesh,
+    montar_payload_operational_mesh,
+)
 from app.services.trilha_d_history_index import (
     carregar_trilha_d_history_index,
     mapear_cards_trilha_d,
@@ -152,8 +159,12 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
     trilha_d_index = carregar_trilha_d_history_index()
     trilha_d_cards = mapear_cards_trilha_d(trilha_d_index)
     trilha_d_section = mapear_secao_trilha_d(trilha_d_index)
+    mesh_signal = carregar_operational_mesh_signal()
+    mesh_cards = mapear_cards_operational_mesh(mesh_signal)
+    mesh_section = mapear_secao_operational_mesh(mesh_signal)
+    cross_runtime = carregar_cross_runtime_analytics_report()
     return {
-        'schema_version': '1.3.0',
+        'schema_version': '1.4.0',
         'title': 'ReqSys Runtime Operational Dashboard',
         'description': 'Schema-driven dashboard para runtime publico, health, readiness e metricas operacionais.',
         'generated_at': snapshot['generated_at'],
@@ -165,6 +176,8 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
         'artifacts': {
             'runtime-correlation-report.json': '/api/runtime/analytics',
             'runtime-observability-report.json': '/api/runtime/analytics',
+            'unified-operational-signal.json': '/api/runtime/operational-mesh',
+            'github-runtime-analytics.json': '/api/runtime/analytics',
         },
         'data_source': {
             'kind': 'runtime_snapshot',
@@ -244,9 +257,12 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
             },
             *governance_cards,
             *trilha_d_cards,
+            *mesh_cards,
         ],
         'governance_evidence': governance_index,
         'trilha_d_history': trilha_d_index,
+        'operational_mesh': mesh_signal,
+        'cross_runtime_analytics': cross_runtime,
         'sections': [
             {
                 'id': 'workflow-topology',
@@ -338,6 +354,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
             },
             governance_section,
             trilha_d_section,
+            mesh_section,
             {
                 'id': 'correlation-analytics',
                 'title': 'Correlation Analytics',
@@ -404,6 +421,17 @@ def obter_api_runtime_dashboard(
     correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
     snapshot = _criar_runtime_observability_snapshot(correlation_id)
     return ok(_criar_runtime_dashboard_schema(snapshot), correlation_id)
+
+
+@router.get('/api/runtime/operational-mesh')
+def obter_api_runtime_operational_mesh(
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+    x_request_id: str | None = Header(default=None, alias='X-Request-ID'),
+):
+    correlation_id = _resolver_correlation_id(x_correlation_id, x_request_id)
+    payload = montar_payload_operational_mesh()
+    payload['correlation_id'] = correlation_id
+    return ok(payload, correlation_id)
 
 
 @router.get('/api/runtime/readiness')

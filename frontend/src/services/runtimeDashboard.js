@@ -27,6 +27,11 @@ export function semaforoRuntimeCard(card) {
     if (card.value === 'dry_run') return 'amarelo'
     return 'desconhecido'
   }
+  if (card.type === 'operational_mesh') {
+    if (card.value === 'integrated' || card.value === 'consolidated') return 'verde'
+    if (card.value === 'partial') return 'amarelo'
+    return 'desconhecido'
+  }
   if (card.type === 'trilha_d_history' || card.type === 'trilha_d_dimension') {
     if (card.severity === 'healthy') return 'verde'
     if (card.severity === 'unhealthy') return 'vermelho'

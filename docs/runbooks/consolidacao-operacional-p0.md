@@ -75,7 +75,14 @@ python scripts/coordenador_status_consolidator.py \
 - `cross_runtime_analytics.sources_hydrated >= 3`
 - Coordenador expõe `sources.operational_mesh` e `summary.evidence_gate_consolidated`
 
-## Fora de escopo (P1+)
+## P1 — Consumo SPA (implementado)
+
+- Endpoint: `GET /api/runtime/operational-mesh`
+- Dashboard schema `1.4.0` expõe `operational_mesh`, `cross_runtime_analytics` e seção `operational-mesh-chain`
+- Views: `/analytics` e `/monitoramento-operacional` (seção `malha-operacional`)
+- Telemetria central: `GET /api/runtime/analytics` inclui `operational_mesh` e `cross_runtime_analytics`
+
+## Fora de escopo (P1+ restante)
 
 - WebSocket / realtime streaming
 - Auto-remediation hooks

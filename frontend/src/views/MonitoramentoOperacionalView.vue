@@ -110,6 +110,46 @@
       </v-card-text>
     </v-card>
 
+    <v-card class="painel malha-operacional mt-4" elevation="0" data-testid="operational-mesh-panel" :data-section="secaoAtiva === 'malha-operacional' ? 'active' : undefined">
+      <v-card-title id="titulo-malha-operacional">Malha Operacional Unificada</v-card-title>
+      <v-card-subtitle>
+        Cadeia mesh hub → alert intelligence → event bus → signal consolidator
+        ({{ meshResumo.hydrated ? 'artifact hidratado' : 'aguardando CI' }}).
+      </v-card-subtitle>
+      <v-card-text>
+        <v-alert v-if="!meshResumo.hydrated" type="warning" variant="tonal" class="mb-3" density="compact">
+          Artifact <code>unified-operational-signal.json</code> ainda não disponível localmente.
+          Execute o workflow <strong>Unified Operational Signal Consolidator</strong> no CI.
+        </v-alert>
+        <v-row dense>
+          <v-col v-for="card in meshCards" :key="card.id" cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              :label="card.title"
+              :value="formatarValorCard(card)"
+              :semaforo="semaforoCard(card)"
+              icon="mdi-graph-outline"
+              :test-id="`mesh-card-${card.id}`"
+              @drilldown="irPara(card.rotaSpa)"
+            />
+          </v-col>
+        </v-row>
+        <v-list class="timeline mt-4" aria-label="Cadeia operacional mesh">
+          <v-list-item
+            v-for="item in meshTimeline"
+            :key="item.step"
+            class="timeline-item"
+            @click="abrirTopologia(item)"
+          >
+            <template #prepend>
+              <SemaforoChip :value="item.status" size="x-small" />
+            </template>
+            <v-list-item-title>{{ item.label }}</v-list-item-title>
+            <v-list-item-subtitle>{{ item.detail || item.state || item.status }}</v-list-item-subtitle>
+          </v-list-item>
+        </v-list>
+      </v-card-text>
+    </v-card>
+
     <v-card class="painel governanca mt-4" elevation="0" :data-section="secaoAtiva === 'governanca' ? 'active' : undefined">
       <v-card-title id="titulo-governanca">Governança e Evidências</v-card-title>
       <v-card-subtitle>Cards de capacidades governadas consumindo governance-evidence-index.json.</v-card-subtitle>
@@ -338,6 +378,7 @@ const opcoesSecao = [
   { title: 'Métricas', value: 'metrics' },
   { title: 'Timeline', value: 'timeline' },
   { title: 'Governança', value: 'governanca' },
+  { title: 'Malha operacional', value: 'malha-operacional' },
   { title: 'Trilha D', value: 'trilha-d' },
 ]
 
@@ -396,6 +437,17 @@ const trilhaDDimensoesFiltradas = computed(() => {
   return Object.fromEntries(Object.entries(trilhaDDimensoes.value).filter(([key]) => key === dimensao))
 })
 const trilhaDHistorico = computed(() => trilhaDItems.value.history || [])
+const meshSection = computed(() => runtimeDashboard.value?.sections?.find((section) => section.id === 'operational-mesh-chain') || null)
+const meshItems = computed(() => meshSection.value?.items || {})
+const meshTimeline = computed(() => meshItems.value.timeline || [])
+const meshCards = computed(() => (runtimeDashboard.value?.cards || []).filter((card) => String(card.id || '').startsWith('operational-mesh-') || card.id === 'evidence-gate-consolidated' || card.id === 'cross-runtime-score'))
+const meshResumo = computed(() => ({
+  hydrated: Boolean(runtimeDashboard.value?.operational_mesh?.hydrated),
+  integrated: runtimeDashboard.value?.operational_mesh?.mesh_integrated ?? false,
+  maturity: runtimeDashboard.value?.operational_mesh?.maturity_percent ?? 'n/a',
+  state: runtimeDashboard.value?.operational_mesh?.overall_state ?? 'unknown',
+  correlationId: meshItems.value.summary?.correlation_id || runtimeDashboard.value?.operational_mesh?.correlation_id || 'n/a',
+}))
 const traceChain = computed(() => correlationAnalytics.value?.operational_trace_chains?.[0]?.chain?.join(' → ') || runtimeTopologyPreview.value?.trace_chain?.join(' → ') || 'n/a')
 
 const totalPorStatus = computed(() => conectores.value.reduce((acc, item) => {
