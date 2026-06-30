@@ -33,10 +33,10 @@ describe('govbiFuncionamento', () => {
   it('executa testes de API com cliente mockado', async () => {
     const client = {
       get: vi.fn(async (url) => {
-        if (url === '/api/govbi/health') {
+        if (url === '/govbi/health') {
           return { data: { data: { service: 'govbi-proxy', status: 'ok', timeout_seconds: 15 } } }
         }
-        if (url === '/api/govbi/funcionamento') {
+        if (url === '/govbi/funcionamento') {
           return {
             data: {
               data: {
@@ -51,12 +51,12 @@ describe('govbiFuncionamento', () => {
         throw new Error(`GET inesperado: ${url}`)
       }),
       post: vi.fn(async (url, body) => {
-        if (url === '/api/govbi/perguntas' && body?.pergunta === 'oi') {
+        if (url === '/govbi/perguntas' && body?.pergunta === 'oi') {
           const error = new Error('validation')
           error.response = { status: 422 }
           throw error
         }
-        if (url === '/api/govbi/perguntas') {
+        if (url === '/govbi/perguntas') {
           return {
             data: {
               statusFluxo: 'MODO_DEGRADADO',
@@ -82,7 +82,7 @@ describe('govbiFuncionamento', () => {
   it('agrega local + API no funcionamento completo', async () => {
     const client = {
       get: vi.fn(async (url) => {
-        if (url === '/api/govbi/health') {
+        if (url === '/govbi/health') {
           return { data: { data: { service: 'govbi-proxy', status: 'ok', timeout_seconds: 15 } } }
         }
         return {

@@ -434,9 +434,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
 import PageHeader from '../components/PageHeader.vue'
 import OperationalMetricCard from '../components/OperationalMetricCard.vue'
+import { api } from '../services/api'
 import {
   calcularMetricasGovbi,
   carregarHistoricoGovbi,
@@ -453,13 +453,9 @@ import { executarFuncionamentoGovbi } from '../utils/govbiFuncionamento'
 const route = useRoute()
 const router = useRouter()
 
-const REQSYS_API_URL = import.meta.env.VITE_API_URL || window.location.origin
 const GOVBI_TIMEOUT_MS = Number(import.meta.env.VITE_GOVBI_TIMEOUT_MS || 15000)
 
-const govbiApi = axios.create({
-  baseURL: REQSYS_API_URL,
-  timeout: GOVBI_TIMEOUT_MS,
-})
+const govbiApi = api
 
 const pergunta = ref('')
 const exibirSql = ref(true)
@@ -636,7 +632,7 @@ async function perguntar() {
   try {
     const correlationId = criarCorrelationId()
     const { data } = await govbiApi.post(
-      '/api/govbi/perguntas',
+      '/govbi/perguntas',
       {
         pergunta: perguntaNormalizada,
         formatoResposta: 'tabela',
@@ -646,6 +642,7 @@ async function perguntar() {
         headers: {
           'X-Correlation-Id': correlationId,
         },
+        timeout: GOVBI_TIMEOUT_MS,
       }
     )
 
@@ -666,8 +663,9 @@ async function perguntar() {
     diagnosticoOperacional.value = {
       tipo: 'warning',
       titulo: 'GovBI IA em modo degradado local',
-      mensagem: `O proxy backend não respondeu corretamente. A tela exibiu um plano governado local. Detalhe: ${detalhe}`,
+      mensagem: `O proxy backend não respondeu. Exibido plano governado local. Detalhe: ${detalhe}`,
     }
+    erro.value = ''
     registrarConsultaHistorico({
       pergunta: perguntaNormalizada,
       statusFluxo: 'MODO_DEGRADADO',
@@ -726,6 +724,14 @@ function corStatusHistorico(status) {
 }
 
 function montarDiagnosticoSucesso(respostaNormalizada) {
+  if (respostaNormalizada.statusFluxo === 'ERRO') {
+    return {
+      tipo: 'error',
+      titulo: 'Consulta GovBI rejeitada',
+      mensagem: respostaNormalizada.avisos?.[0] || 'O serviço GovBI externo rejeitou a consulta.',
+    }
+  }
+
   if (respostaNormalizada.statusFluxo === 'MODO_DEGRADADO') {
     return {
       tipo: 'warning',
@@ -796,7 +802,7 @@ function gerarRespostaFallback(perguntaOriginal, detalheErro) {
         },
         {
           item: 'Próxima ação',
-          valor: 'Validar endpoint /api/govbi/perguntas, CORS, timeout e logs Fly.io.',
+          valor: 'Validar endpoint /govbi/perguntas, proxy Vite e logs do backend.',
           status: 'ACAO_OPERACIONAL',
         },
       ],
@@ -816,8 +822,8 @@ function extrairDetalheErro(e) {
   const mensagem = mensagemServidor || e.message || 'erro desconhecido'
 
   if (status) return `HTTP ${status}${statusText ? ` ${statusText}` : ''} - ${mensagem}`
-  if (e.code === 'ECONNABORTED') return `timeout após ${GOVBI_TIMEOUT_MS}ms em ${REQSYS_API_URL}`
-  if (e.request) return `sem resposta de ${REQSYS_API_URL} - ${mensagem}`
+  if (e.code === 'ECONNABORTED') return `timeout após ${GOVBI_TIMEOUT_MS}ms`
+  if (e.request) return `sem resposta do backend - ${mensagem}`
   return mensagem
 }
 

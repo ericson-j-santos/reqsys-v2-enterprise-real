@@ -240,6 +240,18 @@
       "domain": "observability",
       "producers": ["operational-observability-hub.yml"],
       "consumers": ["coordenador-status-consolidator", "ops-dashboard", "operational-alert-intelligence"]
+    },
+    {
+      "id": "runtime-validation-snapshot",
+      "schema": "docs/contracts/runtime-validation-snapshot.schema.json",
+      "domain": "runtime",
+      "producers": ["runtime-validation-consolidator.yml"],
+      "consumers": [
+        "coordenador-status-consolidator",
+        "build_runtime_executive_index",
+        "post-workflow-evidence-snapshot",
+        "ops-dashboard"
+      ]
     }
   ],
   "dependencies": [
@@ -288,6 +300,32 @@
         "docs/runbooks/cofre-operacional.md",
         "docs/COFRE_UNIFICACOES_DASHBOARD_REQSYS.md"
       ]
+    },
+    {
+      "id": "codex-governado",
+      "frente": "Codex VS Code/LLM Local + Online",
+      "topico": "ia-codificacao",
+      "referencia": "ADR-022",
+      "status": "implementado",
+      "owner": "Backend Core",
+      "frontend_route": "/codex",
+      "frontend_view": "frontend/src/views/CodexView.vue",
+      "static_app": "tools/codex-local-online/index.html",
+      "vscode_config": "infra/codex-local/continue/config.yaml",
+      "backend_router": "backend/app/api/codex_governado.py",
+      "backend_prefix": "/v1/codex",
+      "ollama_compose": "infra/codex-local/docker-compose.ollama.yml",
+      "env_vars": ["CODEX_OLLAMA_GATEWAY_URL", "CODEX_OLLAMA_GATEWAY_API_KEY", "CODEX_OLLAMA_MODEL"],
+      "external_repo": "ericson-j-santos/reqsys-ollama-local-gateway",
+      "sync_script": "scripts/sincronizar_ollama_gateway_repo.sh",
+      "sync_workflow": ".github/workflows/ollama-gateway-bootstrap.yml",
+      "docs": [
+        "docs/adrs/ADR-022-codex-local-online-integrado-reqsys.md",
+        "docs/adrs/ADR-023-codex-backend-governado.md",
+        "docs/runbooks/codex-vscode-local-inicio-rapido.md",
+        "docs/codex-local/DECISAO_MODELOS_CODIFICACAO.md"
+      ],
+      "workflow": ".github/workflows/codex-local-online.yml"
     }
   ],
   "dashboards": [
@@ -307,6 +345,7 @@
     { "area": "Trilhas Padrão Ouro", "owner": "Architecture Governance", "adr": "ADR-040" },
     { "area": "Product Intelligence", "owner": "Product Intelligence", "adr": "ADR-033" },
     { "area": "Governança PR/Agentes", "owner": "Platform Engineering", "adr": "ADR-030" },
+    { "area": "Codex / LLM Local", "owner": "Backend Core", "adr": "ADR-022" },
     { "area": "Camada de Testes", "owner": "Quality Governance", "adr": "ADR-0004" }
   ],
   "operational_focus": {

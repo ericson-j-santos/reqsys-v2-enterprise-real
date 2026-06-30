@@ -27,12 +27,21 @@ PARETO_DOM_IDS = [
     "pareto-details",
 ]
 
+REQUIRED_SECTION_IDS = [
+    "operational-intelligence-nav",
+    "trilha-d-history-card",
+    "operational-pareto-card",
+]
+
 REQUIRED_FUNCTIONS = [
     "renderTrilhaDHistory",
     "renderOperationalPareto",
+    "renderOperationalIntelligenceQuickLinks",
     "trilha-d-history.json",
     "padrao-ouro-operational-pareto.json",
 ]
+
+NAV_INDEX = ROOT / "docs/ops-dashboard/operational-navigation-index.json"
 
 
 def test_ops_dashboard_exposes_trilha_d_history_card() -> None:
@@ -51,3 +60,44 @@ def test_ops_dashboard_wires_trilha_d_and_pareto_renderers() -> None:
     text = INDEX_HTML.read_text(encoding="utf-8")
     for required in REQUIRED_FUNCTIONS:
         assert required in text, f"missing required renderer/data reference: {required}"
+
+
+def test_ops_dashboard_exposes_anchor_sections_for_deep_links() -> None:
+    text = INDEX_HTML.read_text(encoding="utf-8")
+    for section_id in REQUIRED_SECTION_IDS:
+        assert f'id="{section_id}"' in text, f"missing section anchor: {section_id}"
+
+
+def test_operational_navigation_index_links_trilha_d_and_pareto() -> None:
+    import json
+
+    payload = json.loads(NAV_INDEX.read_text(encoding="utf-8"))
+    link_ids = {item.get("id") for item in payload.get("links") or []}
+    assert "trilha_d_history_dashboard" in link_ids
+    assert "operational_pareto_dashboard" in link_ids
+    by_id = {item["id"]: item for item in payload["links"]}
+    assert by_id["trilha_d_history_dashboard"]["href"] == "./index.html#trilha-d-history-card"
+    assert by_id["operational_pareto_dashboard"]["href"] == "./index.html#operational-pareto-card"
+
+
+def test_validate_data_contracts_skips_cross_check_in_consolidation_mode(tmp_path, monkeypatch) -> None:
+    import json
+
+    from scripts import validate_ops_dashboard_trilha_d_pareto_cards as validator
+
+    trilha_d = {
+        "schema_version": "1.0.0",
+        "current_score": 97.59,
+        "summary": {"next_increment": "predictive_regression_gate"},
+    }
+    pareto = {
+        "schema_version": "1.1.0",
+        "current_score": 100.0,
+        "summary": {"next_increment": None, "consolidation_mode": True},
+    }
+    monkeypatch.setattr(validator, "TRILHA_D_DATA", tmp_path / "trilha-d-history.json")
+    monkeypatch.setattr(validator, "PARETO_DATA", tmp_path / "pareto.json")
+    (tmp_path / "trilha-d-history.json").write_text(json.dumps(trilha_d), encoding="utf-8")
+    (tmp_path / "pareto.json").write_text(json.dumps(pareto), encoding="utf-8")
+
+    validator.validate_data_contracts()

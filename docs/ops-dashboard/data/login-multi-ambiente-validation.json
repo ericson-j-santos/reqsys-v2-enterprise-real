@@ -1,0 +1,146 @@
+{
+  "schema_version": "1.0.0",
+  "contract": "multi-environment-login-validation",
+  "validated_at_epoch": 1782766700,
+  "summary": {
+    "environments_total": 3,
+    "login_ready": 2,
+    "login_failed": 1,
+    "overall_status": "degraded"
+  },
+  "environments": [
+    {
+      "environment": "dev",
+      "app_env": "development",
+      "api_url": "https://reqsys-api-dev.fly.dev",
+      "frontend_url": "https://reqsys-app-dev.fly.dev",
+      "expect_demo_allowed": true,
+      "operational_status": "ready",
+      "login_ready": true,
+      "checks": {
+        "azure_config": {
+          "validated_at": "2026-06-29T20:57:30.226453+00:00",
+          "endpoint": "https://reqsys-api-dev.fly.dev/v1/auth/config",
+          "success": true,
+          "errors": [],
+          "warnings": [
+            "demo_login_enabled está true; isso é bloqueante em produção"
+          ],
+          "data": {
+            "azure_enabled": true,
+            "auth_status": "ready",
+            "missing_fields": [],
+            "expected_redirect_uri": "https://reqsys-app-dev.fly.dev",
+            "demo_login_enabled": true,
+            "environment": "desenvolvimento"
+          }
+        },
+        "frontend_redirect": {
+          "mode": "public",
+          "frontend_url": "https://reqsys-app-dev.fly.dev",
+          "scanned_files": [
+            "https://reqsys-app-dev.fly.dev/assets/index-BuPeeTPk.js"
+          ],
+          "success": true,
+          "errors": []
+        },
+        "demo_login": {
+          "name": "demo_login",
+          "ok": true,
+          "status_code": 200,
+          "detail": null,
+          "has_token": true
+        }
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "environment": "hml",
+      "app_env": "staging",
+      "api_url": "https://reqsys-api-stg.fly.dev",
+      "frontend_url": "https://reqsys-app-stg.fly.dev",
+      "expect_demo_allowed": false,
+      "operational_status": "ready",
+      "login_ready": true,
+      "checks": {
+        "azure_config": {
+          "validated_at": "2026-06-29T20:57:31.965962+00:00",
+          "endpoint": "https://reqsys-api-stg.fly.dev/v1/auth/config",
+          "success": true,
+          "errors": [],
+          "warnings": [],
+          "data": {
+            "azure_enabled": true,
+            "auth_status": "ready",
+            "missing_fields": [],
+            "expected_redirect_uri": "https://reqsys-app-stg.fly.dev",
+            "demo_login_enabled": false,
+            "environment": "homologacao"
+          }
+        },
+        "frontend_redirect": {
+          "mode": "public",
+          "frontend_url": "https://reqsys-app-stg.fly.dev",
+          "scanned_files": [
+            "https://reqsys-app-stg.fly.dev/assets/index-Bewl1p0d.js"
+          ],
+          "success": true,
+          "errors": []
+        },
+        "demo_login": {
+          "name": "demo_login",
+          "ok": true,
+          "status_code": 403,
+          "detail": null,
+          "has_token": false
+        }
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "environment": "prod",
+      "app_env": "production",
+      "api_url": "https://reqsys-api.fly.dev",
+      "frontend_url": "https://reqsys-app.fly.dev",
+      "expect_demo_allowed": false,
+      "operational_status": "degraded",
+      "login_ready": false,
+      "checks": {
+        "azure_config": {
+          "success": false,
+          "errors": [
+            "The read operation timed out"
+          ]
+        },
+        "frontend_redirect": {
+          "mode": "public",
+          "frontend_url": "https://reqsys-app.fly.dev",
+          "scanned_files": [
+            "https://reqsys-app.fly.dev/assets/index-BEjnLhYh.js"
+          ],
+          "success": true,
+          "errors": []
+        },
+        "demo_login": {
+          "name": "demo_login",
+          "ok": false,
+          "status_code": null,
+          "detail": "The read operation timed out",
+          "has_token": false
+        }
+      },
+      "errors": [
+        "azure_config: The read operation timed out",
+        "demo_login deve estar bloqueado fora de dev: The read operation timed out"
+      ],
+      "warnings": []
+    }
+  ],
+  "ok": false,
+  "blocking_issues": [
+    "prod: azure_config: The read operation timed out",
+    "prod: demo_login deve estar bloqueado fora de dev: The read operation timed out"
+  ]
+}

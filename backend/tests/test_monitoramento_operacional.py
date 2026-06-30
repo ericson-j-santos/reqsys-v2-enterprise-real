@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 
-from app.api.monitoramento_operacional import ItemMonitorado, _metric_line, classificar_estado_geral
+from app.api.monitoramento_operacional import _metric_line
+from app.schemas.monitoramento_operacional import ItemMonitorado
+from app.services.monitoramento_snapshot import classificar_estado_geral
 from app.core.config import settings
 from app.main import app
 
@@ -39,6 +41,14 @@ def test_monitoramento_operacional_estado_geral_reflete_pendencias():
     assert data['resumo']['pendencias'] > 0
 
 
+def test_monitoramento_operacional_expoe_modo_coleta():
+    res = TestClient(app).get('/monitoramento-operacional')
+    data = res.json()['data']
+
+    assert data['modo_coleta'] in {'live', 'hibrido', 'preview'}
+    assert isinstance(data.get('coleta_detalhes'), dict)
+
+
 def test_runtime_observability_health_expoe_snapshot_governado():
     correlation_id = 'corr-runtime-observability-test'
     res = TestClient(app).get('/api/runtime/health', headers={'X-Correlation-ID': correlation_id})
@@ -75,14 +85,14 @@ def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
     section_ids = {section['id'] for section in data['sections']}
 
     assert body['meta']['correlation_id'] == correlation_id
-    assert data['schema_version'] == '1.3.0'
+    assert data['schema_version'] == '1.4.0'
     assert data['correlation_id'] == correlation_id
     assert data['layout']['responsive'] is True
     assert data['data_source']['endpoint'] == '/api/runtime/health'
-    assert {'runtime-status', 'risk-score', 'pending-items', 'uptime', 'readiness-percent', 'fly-duckdns-status', 'governance-evidence-score', 'trilha-d-score'} <= card_ids
+    assert {'runtime-status', 'risk-score', 'pending-items', 'uptime', 'readiness-percent', 'fly-duckdns-status', 'governance-evidence-score', 'trilha-d-score', 'operational-mesh-integrated', 'cross-runtime-score'} <= card_ids
     assert any(card['id'].startswith('governance-') for card in data['cards'])
     assert any(card['id'].startswith('trilha-d-dim-') for card in data['cards'])
-    assert {'workflow-topology', 'public-smoke', 'operational-timeline', 'environment-evidence', 'incident-summary', 'risk-summary', 'environment-drift-summary', 'governance-evidence', 'trilha-d-history'} <= section_ids
+    assert {'workflow-topology', 'public-smoke', 'operational-timeline', 'environment-evidence', 'incident-summary', 'risk-summary', 'environment-drift-summary', 'governance-evidence', 'trilha-d-history', 'operational-mesh-chain'} <= section_ids
     governance = next(section for section in data['sections'] if section['id'] == 'governance-evidence')
     assert governance['type'] == 'governance_cards'
     assert governance['items']['evidence']

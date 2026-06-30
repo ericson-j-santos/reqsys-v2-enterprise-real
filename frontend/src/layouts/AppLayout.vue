@@ -4,7 +4,12 @@
     <v-app-bar v-if="mobile" flat class="req-appbar" elevation="0" height="56">
       <v-app-bar-nav-icon color="white" aria-label="Abrir menu de navegação" @click="drawer = !drawer" />
       <span class="brand-sm ml-1"><span class="brand-dot brand-dot--sm">R</span> ReqSys</span>
-      <span class="figma-pill figma-pill--compact ml-2">{{ environmentLabelShort }}</span>
+      <AmbienteNavigator
+        :environment-hint="environment"
+        compact
+        :show-prefix="false"
+        class="ml-2"
+      />
       <v-spacer />
       <v-chip size="x-small" color="amber" variant="tonal" class="mr-2 req-role-chip">
         {{ auth.usuario?.papel || 'user' }}
@@ -21,8 +26,23 @@
     >
       <div class="pa-5 pb-3 req-brand-block">
         <div class="brand"><span class="brand-dot">R</span> ReqSys Enterprise</div>
-        <div class="muted mt-1">SaaS Interno · v2 Enterprise</div>
-        <span class="figma-pill figma-pill--compact mt-2 d-inline-block">Ambiente: {{ ambienteDrawerLabel }}</span>
+        <div class="muted mt-1 version-line" data-testid="app-version-label">{{ versionLabel }}</div>
+        <v-chip
+          v-if="hasVersionDrift"
+          size="x-small"
+          color="warning"
+          variant="tonal"
+          class="mt-1"
+          prepend-icon="mdi-alert-outline"
+          data-testid="app-version-drift-chip"
+        >
+          Versões divergentes
+        </v-chip>
+        <AmbienteNavigator
+          :environment-hint="environment"
+          compact
+          class="mt-2 d-inline-block"
+        />
       </div>
       <v-divider />
 
@@ -143,6 +163,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../services/api'
+import AmbienteNavigator from '../components/AmbienteNavigator.vue'
 import { carregarDadosPendenciasNav } from '../composables/navPendencias'
 import {
   lerSubgrupoRequisitosPersistido,
@@ -159,8 +180,10 @@ import {
   temaPorId,
   temaTemSubgrupos,
 } from '../constants/navCatalog'
+import { useAppVersion } from '../composables/useAppVersion'
 
 const { mobile } = useDisplay()
+const { versionLabel, hasVersionDrift } = useAppVersion()
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
@@ -171,17 +194,6 @@ const navegacaoInicializada = ref(false)
 
 const temaAtivo = ref(temaIdPorRota(route.path))
 const subgrupoAtivo = ref(subgrupoIdPorRota(route.path) || lerSubgrupoRequisitosPersistido() || 'entrada')
-
-const environmentLabelShort = computed(() => {
-  const value = (environment.value || 'dev').toLowerCase()
-  if (['prod', 'producao', 'production'].includes(value)) return 'prod'
-  if (['staging', 'homolog', 'homologacao', 'hml'].includes(value)) return 'stg'
-  return 'dev'
-})
-
-const ambienteDrawerLabel = computed(() => {
-  return (environment.value || 'desenvolvimento').replace(/_/g, ' ')
-})
 
 const temaAtual = computed(() => temaPorId(temaAtivo.value))
 
@@ -296,6 +308,10 @@ function sair() {
 }
 .req-brand-block {
   min-width: 0;
+}
+.version-line {
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 .nav-temas {
   padding: 8px 8px 0;

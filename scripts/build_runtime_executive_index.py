@@ -215,6 +215,37 @@ def summarize_evidence_gate(health: dict[str, Any], evidence_gate_report: dict[s
     }
 
 
+def summarize_runtime_validation(validation: dict[str, Any] | None = None) -> dict[str, Any]:
+    validation = validation or {}
+    if not validation:
+        return {
+            "available": False,
+            "status": "unknown",
+            "validation_score": 0,
+            "operational_risk_percent": 100,
+            "gold_standard_score": 0,
+            "public_runtime_ready": False,
+            "post_merge_ready": False,
+            "risk": "medium",
+            "source_artifact": "runtime-validation-snapshot",
+        }
+    state = normalize_status(validation.get("overall_state"))
+    risk_percent = int(validation.get("operational_risk_percent") or 0)
+    gold = (validation.get("gold_standard_operational_risk") or {}).get("overall_score") or 0
+    return {
+        "available": True,
+        "status": state,
+        "validation_score": int(validation.get("validation_score") or 0),
+        "operational_risk_percent": risk_percent,
+        "gold_standard_score": int(gold),
+        "public_runtime_ready": bool(validation.get("public_runtime_ready")),
+        "post_merge_ready": bool(validation.get("post_merge_ready")),
+        "production_ready": bool(validation.get("production_ready")),
+        "risk": "low" if risk_percent <= 15 else "medium" if risk_percent <= 35 else "high",
+        "source_artifact": "runtime-validation-snapshot",
+    }
+
+
 def build_runtime_executive_index(
     health: dict[str, Any],
     merge_index: dict[str, Any] | None = None,
@@ -223,6 +254,7 @@ def build_runtime_executive_index(
     evidence_gate_report: dict[str, Any] | None = None,
     finalization_report: dict[str, Any] | None = None,
     conflict_risk_report: dict[str, Any] | None = None,
+    runtime_validation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     merge_index = merge_index or {}
     lane_priority = lane_priority or {}
@@ -233,6 +265,7 @@ def build_runtime_executive_index(
     merge_summary = summarize_merge_intelligence(merge_index, lane_priority, conflict_risk_report)
     evidence_summary = summarize_evidence_gate(health, evidence_gate_report)
     finalization_summary = summarize_finalization(health, finalization_report)
+    validation_summary = summarize_runtime_validation(runtime_validation)
 
     consolidated_risk = worst_risk(
         health_summary["risk"],
@@ -240,6 +273,7 @@ def build_runtime_executive_index(
         merge_summary["risk_level"],
         evidence_summary["risk"],
         finalization_summary["risk"],
+        validation_summary["risk"] if validation_summary["available"] else None,
     )
 
     score_values = [
@@ -249,6 +283,8 @@ def build_runtime_executive_index(
         100 if evidence_summary["risk"] == "low" else 60 if evidence_summary["risk"] == "medium" else 20,
         safe_number(finalization_summary["final_score"], default=0),
     ]
+    if validation_summary["available"]:
+        score_values.append(safe_number(validation_summary["validation_score"], default=0))
     executive_score = round(sum(score_values) / len(score_values), 2)
 
     return {
@@ -268,6 +304,7 @@ def build_runtime_executive_index(
             "merge_intelligence": merge_summary,
             "evidence_gate": evidence_summary,
             "finalization": finalization_summary,
+            "runtime_validation": validation_summary,
         },
         "links": {
             "ops_dashboard": "docs/ops-dashboard/index.html",
@@ -279,6 +316,8 @@ def build_runtime_executive_index(
             "conflict_risk_report": "docs/ops-dashboard/data/conflict-risk-report.json",
             "pr_evidence_gate": "audit/pr-evidence-gate.json",
             "delivery_finalization_report": "artifacts/delivery-finalization/delivery-finalization-report.json",
+            "runtime_validation_snapshot": "artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json",
+            "executive_brief": "docs/ops-dashboard/data/executive-brief.json",
             "actions": f"https://github.com/{repo_name}/actions" if repo_name != "unknown" else "",
             "pulls": f"https://github.com/{repo_name}/pulls" if repo_name != "unknown" else "",
         },
@@ -300,6 +339,10 @@ def main() -> int:
     parser.add_argument("--evidence-gate", default="audit/pr-evidence-gate.json")
     parser.add_argument("--delivery-finalization", default="artifacts/delivery-finalization/delivery-finalization-report.json")
     parser.add_argument("--conflict-risk-report", default="docs/ops-dashboard/data/conflict-risk-report.json")
+    parser.add_argument(
+        "--runtime-validation",
+        default="artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json",
+    )
     parser.add_argument("--repo", default="")
     parser.add_argument("--output", default="docs/ops-dashboard/data/runtime-executive-index.json")
     args = parser.parse_args()
@@ -312,6 +355,7 @@ def main() -> int:
         load_json(args.evidence_gate),
         load_json(args.delivery_finalization),
         load_json(args.conflict_risk_report),
+        load_json(args.runtime_validation),
     )
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)

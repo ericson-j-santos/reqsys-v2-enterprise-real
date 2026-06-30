@@ -1,0 +1,119 @@
+name: Runtime Validation Consolidator
+
+on:
+  schedule:
+    - cron: "27 * * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch monitorada"
+        required: false
+        default: "main"
+        type: string
+  workflow_run:
+    workflows:
+      - Public Runtime Evidence Gate
+      - Main Post-Merge Validation
+      - Runtime Health Validator
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: runtime-validation-consolidator-${{ github.event.inputs.branch || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  consolidate:
+    name: Consolidar validação runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success' ||
+      github.event.workflow_run.conclusion == 'failure'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download Public Runtime Evidence artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: public-runtime-evidence
+          path: audit/runtime
+
+      - name: Download Runtime Health Validator artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: runtime-health-validator-evidence
+          path: artifacts/runtime-health-validator
+
+      - name: Download Runtime Health Center artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: runtime-health-center-evidence
+          path: artifacts/runtime-health-center
+
+      - name: Download unified operational signal artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: unified-operational-signal
+          path: artifacts/unified-operational-signal-consolidator
+
+      - name: Gerar runtime-validation-snapshot.json
+        shell: bash
+        env:
+          TARGET_BRANCH: ${{ github.event.inputs.branch || 'main' }}
+        run: |
+          set -euo pipefail
+          python3 scripts/runtime_validation_consolidator.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --branch "${TARGET_BRANCH}" \
+            --output-dir "artifacts/runtime-validation-consolidator" \
+            --publish-executive-brief "docs/ops-dashboard/data/executive-brief.json"
+
+      - name: Resumo executivo
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json"
+          if [[ -f "${snapshot}" ]]; then
+            state=$(python3 -c "import json; print(json.load(open('${snapshot}'))['overall_state'])")
+            score=$(python3 -c "import json; print(json.load(open('${snapshot}'))['validation_score'])")
+            risk=$(python3 -c "import json; print(json.load(open('${snapshot}'))['operational_risk_percent'])")
+            gold=$(python3 -c "import json; d=json.load(open('${snapshot}')); print(d['gold_standard_operational_risk']['overall_score'])")
+            echo "## Runtime Validation Consolidator" >> "$GITHUB_STEP_SUMMARY"
+            echo "- State: \`${state}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Validation score: \`${score}%\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Operational risk: \`${risk}%\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Padrão Ouro risco operacional: \`${gold}%\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Artifact: \`runtime-validation-evidence\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Runtime Validation Consolidator" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Falha ao gerar snapshot" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar artifact consolidado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-validation-evidence
+          path: |
+            artifacts/runtime-validation-consolidator
+            docs/ops-dashboard/data/executive-brief.json
+          if-no-files-found: error
+          retention-days: 30

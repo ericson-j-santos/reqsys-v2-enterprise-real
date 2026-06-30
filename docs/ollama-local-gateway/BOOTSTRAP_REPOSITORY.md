@@ -6,7 +6,7 @@ Definir o pacote mínimo governado para criação e inicialização do repositó
 
 ## Pendência P0
 
-O repositório externo ainda precisa ser criado manualmente no GitHub, pois a criação de repositório depende de permissão administrativa/humana.
+**Resolvida no ReqSys.** O gateway roda localmente via `bash scripts/iniciar_codex_local.sh` (porta `8008`). Sync para o repo externo é opcional via `scripts/sincronizar_ollama_gateway_repo.sh`.
 
 ## Repositório alvo
 

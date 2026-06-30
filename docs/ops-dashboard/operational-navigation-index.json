@@ -1,6 +1,6 @@
 {
   "schema_version": "0.1.0",
-  "generated_at": "2026-06-29T09:00:00-03:00",
+  "generated_at": "2026-06-29T20:15:00Z",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
   "mode": "static_navigation_index",
   "purpose": "integrate_ops_dashboard_operational_evidence_hub_and_pareto_runtime_governance",
@@ -14,11 +14,38 @@
       "status": "active"
     },
     {
+      "id": "trilha_d_history_dashboard",
+      "title": "Trilha D — Histórico operacional",
+      "href": "./index.html#trilha-d-history-card",
+      "category": "dashboard",
+      "priority": 2,
+      "status": "active",
+      "artifact": "docs/ops-dashboard/data/trilha-d-history.json"
+    },
+    {
+      "id": "operational_pareto_dashboard",
+      "title": "Pareto Operacional (80/20)",
+      "href": "./index.html#operational-pareto-card",
+      "category": "dashboard",
+      "priority": 3,
+      "status": "active",
+      "artifact": "docs/ops-dashboard/data/padrao-ouro-operational-pareto.json"
+    },
+    {
+      "id": "executive_brief_dashboard",
+      "title": "Executive Brief — validação runtime",
+      "href": "./data/executive-brief.json",
+      "category": "dashboard",
+      "priority": 4,
+      "status": "active",
+      "artifact": "docs/ops-dashboard/data/executive-brief.json"
+    },
+    {
       "id": "operational_runtime_governance",
       "title": "Operational Runtime Governance Pareto Layer",
       "href": "./operational-runtime-governance.html",
       "category": "dashboard",
-      "priority": 2,
+      "priority": 5,
       "status": "active"
     },
     {
@@ -26,7 +53,7 @@
       "title": "Operational Evidence Hub",
       "href": "../dashboard/operational-evidence-hub.html",
       "category": "dashboard",
-      "priority": 3,
+      "priority": 6,
       "status": "active"
     },
     {
@@ -34,7 +61,7 @@
       "title": "Runtime Governance Contract JSON",
       "href": "./data/operational-runtime-governance-consolidation.json",
       "category": "contract",
-      "priority": 4,
+      "priority": 7,
       "status": "active"
     },
     {
@@ -42,7 +69,7 @@
       "title": "Operational Runtime Governance Runbook",
       "href": "../runbooks/operational-runtime-governance-consolidation.md",
       "category": "runbook",
-      "priority": 5,
+      "priority": 8,
       "status": "active"
     },
     {
@@ -50,7 +77,7 @@
       "title": "Runtime Contract Governance Pareto Policy",
       "href": "../contracts/runtime-contract-governance-pareto.md",
       "category": "contract_policy",
-      "priority": 6,
+      "priority": 9,
       "status": "active"
     },
     {
@@ -58,7 +85,7 @@
       "title": "Power Platform Runtime Layer Pareto Runbook",
       "href": "../runbooks/power-platform-runtime-layer-pareto.md",
       "category": "runbook",
-      "priority": 7,
+      "priority": 10,
       "status": "active"
     }
   ],

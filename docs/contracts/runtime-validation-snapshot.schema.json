@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/runtime-validation-snapshot.schema.json",
+  "title": "ReqSys Runtime Validation Snapshot",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "correlation_id",
+    "generated_at",
+    "repository",
+    "branch",
+    "mode",
+    "overall_state",
+    "validation_score",
+    "operational_risk_percent",
+    "gold_standard_operational_risk",
+    "domains",
+    "blockers",
+    "guardrails"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "correlation_id": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string" },
+    "branch": { "type": "string" },
+    "mode": { "type": "string", "enum": ["report_only"] },
+    "overall_state": { "type": "string", "enum": ["green", "yellow", "red", "unknown"] },
+    "validation_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "operational_risk_percent": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "confidence_percent": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "public_runtime_ready": { "type": "boolean" },
+    "post_merge_ready": { "type": "boolean" },
+    "production_ready": { "type": "boolean" },
+    "gold_standard_operational_risk": {
+      "type": "object",
+      "required": ["target_percent", "overall_score", "remaining_gap", "status"],
+      "properties": {
+        "target_percent": { "type": "integer", "const": 100 },
+        "overall_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "remaining_gap": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "status": { "type": "string", "enum": ["gold", "consolidating", "evolving"] }
+      }
+    },
+    "domains": { "type": "object" },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "guardrails": { "type": "object" }
+  }
+}
