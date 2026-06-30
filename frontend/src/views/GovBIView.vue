@@ -648,10 +648,13 @@ async function perguntar() {
 
     resposta.value = normalizarRespostaGovBI(data, perguntaNormalizada)
     diagnosticoOperacional.value = montarDiagnosticoSucesso(resposta.value)
+    const fonteHistorico = resposta.value.fonteAnalitica === 'reqsys-sqlite'
+      ? 'local-db'
+      : (resposta.value.statusFluxo === 'MODO_DEGRADADO' ? 'fallback' : 'backend')
     registrarConsultaHistorico({
       pergunta: perguntaNormalizada,
       statusFluxo: resposta.value.statusFluxo,
-      fonte: resposta.value.statusFluxo === 'MODO_DEGRADADO' ? 'fallback' : 'backend',
+      fonte: fonteHistorico,
       latenciaMs: Date.now() - inicio,
       correlationId: resposta.value.correlationId,
       fallback: resposta.value.statusFluxo === 'MODO_DEGRADADO',
@@ -724,6 +727,14 @@ function corStatusHistorico(status) {
 }
 
 function montarDiagnosticoSucesso(respostaNormalizada) {
+  if (respostaNormalizada.fonteAnalitica === 'reqsys-sqlite') {
+    return {
+      tipo: 'success',
+      titulo: 'Consulta analítica local (SQLite)',
+      mensagem: 'Dados reais do banco operacional ReqSys — GovBI externo não respondeu ou não tinha métrica compatível.',
+    }
+  }
+
   if (respostaNormalizada.statusFluxo === 'ERRO') {
     return {
       tipo: 'error',
@@ -766,6 +777,7 @@ function normalizarRespostaGovBI(data, perguntaOriginal) {
     requerAprovacao: Boolean(data?.requerAprovacao),
     aprovacaoId: data?.aprovacaoId || null,
     explicacao: data?.explicacao || 'Resposta normalizada pelo ReqSys para manter contrato estável da UI.',
+    fonteAnalitica: data?.fonteAnalitica || 'govbi-externo',
   }
 }
 

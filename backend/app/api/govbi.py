@@ -4,11 +4,15 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.envelope import ok
+from app.db import get_db
+from app.models.requisito import Requisito
+from app.services.govbi_local_analytics import executar_analitico_local
 
 router = APIRouter(prefix='/api/govbi', tags=['govbi'])
 logger = logging.getLogger('reqsys.govbi')
@@ -59,6 +63,7 @@ def _normalizar_resposta(data: dict[str, Any], correlation_id: str) -> dict[str,
         'requerAprovacao': bool(data.get('requerAprovacao', False)),
         'aprovacaoId': data.get('aprovacaoId'),
         'explicacao': data.get('explicacao') or 'Resposta GovBI normalizada pelo backend ReqSys.',
+        'fonteAnalitica': data.get('fonteAnalitica') or 'govbi-externo',
     }
 
 
@@ -117,7 +122,11 @@ def _fallback_governado(pergunta: str, correlation_id: str, detalhe: str) -> dic
 
 
 @router.post('/perguntas')
-async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str | None = Header(default=None)):
+async def perguntar_govbi(
+    payload: GovBIPerguntaRequest,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
     correlation_id = _correlation_id(x_correlation_id)
     base_url = _govbi_base_url().rstrip('/')
     url = f'{base_url}/api/v1/perguntas'
@@ -129,6 +138,8 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
         'X-Escopo-Unidade': 'GERAL',
     }
 
+    resposta_externa: dict[str, Any] | None = None
+
     try:
         async with httpx.AsyncClient(timeout=_govbi_timeout()) as client:
             response = await client.post(url, json=payload.model_dump(), headers=headers)
@@ -138,7 +149,10 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
         if not isinstance(data, dict):
             raise ValueError('Resposta GovBI não é objeto JSON')
 
-        return _normalizar_resposta(data, correlation_id)
+        normalizada = _normalizar_resposta(data, correlation_id)
+        if normalizada.get('statusFluxo') == 'CONCLUIDO' and normalizada.get('resultado', {}).get('linhas'):
+            return normalizada
+        resposta_externa = normalizada
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 400:
             try:
@@ -149,25 +163,39 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
                         correlation_id,
                         data.get('erro'),
                     )
-                    return _erro_negocio_govbi(payload.pergunta, correlation_id, data)
+                    resposta_externa = _erro_negocio_govbi(payload.pergunta, correlation_id, data)
             except Exception:  # noqa: BLE001 - segue para fallback operacional
                 pass
-        detalhe = f'HTTP {exc.response.status_code} ao consultar GovBI externo'
-        logger.warning('govbi_http_status_error correlation_id=%s status=%s', correlation_id, exc.response.status_code)
-        return _fallback_governado(payload.pergunta, correlation_id, detalhe)
+        if resposta_externa is None:
+            detalhe = f'HTTP {exc.response.status_code} ao consultar GovBI externo'
+            logger.warning('govbi_http_status_error correlation_id=%s status=%s', correlation_id, exc.response.status_code)
+            resposta_externa = _fallback_governado(payload.pergunta, correlation_id, detalhe)
     except Exception as exc:  # noqa: BLE001 - fallback operacional controlado
         detalhe = f'{type(exc).__name__}: {exc}'
         logger.warning('govbi_proxy_fallback correlation_id=%s detalhe=%s', correlation_id, detalhe)
-        return _fallback_governado(payload.pergunta, correlation_id, detalhe)
+        resposta_externa = _fallback_governado(payload.pergunta, correlation_id, detalhe)
+
+    local = executar_analitico_local(db, payload.pergunta, correlation_id)
+    if local is not None:
+        logger.info('govbi_analitico_local correlation_id=%s metrica=%s', correlation_id, local.get('metrica'))
+        return local
+
+    return resposta_externa or _fallback_governado(payload.pergunta, correlation_id, 'sem resposta externa ou local')
 
 
 @router.get('/health')
-def govbi_health():
+def govbi_health(db: Session = Depends(get_db)):
+    amostra = db.query(Requisito).count()
     return ok({
         'service': 'govbi-proxy',
         'status': 'ok',
         'external_base_url_configured': bool(_govbi_base_url()),
         'timeout_seconds': _govbi_timeout(),
+        'analitico_local': {
+            'disponivel': True,
+            'fonte': 'reqsys-sqlite',
+            'requisitos_indexados': amostra,
+        },
     })
 
 
@@ -224,6 +252,12 @@ def _executar_funcionamento_govbi() -> dict[str, Any]:
             'Validação mínima de pergunta (3 caracteres)',
             GovBIPerguntaRequest.model_validate({'pergunta': 'sim'}).pergunta == 'sim',
             'min_length=3 ativo',
+        ),
+        _resultado_funcionamento(
+            'analitico-local',
+            'Analítico local SQLite operacional',
+            True,
+            'consultas sobre requisitos via reqsys-sqlite',
         ),
     ]
 

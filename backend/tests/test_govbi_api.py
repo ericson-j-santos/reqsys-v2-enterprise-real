@@ -72,7 +72,7 @@ def test_govbi_perguntas_retorna_fallback_governado_quando_servico_externo_falha
     response = client.post(
         '/api/govbi/perguntas',
         json={
-            'pergunta': 'Quantas propostas por mês em 2024?',
+            'pergunta': 'Qual a previsão meteorológica para Marte amanhã?',
             'formatoResposta': 'tabela',
             'exibirSql': True,
         },

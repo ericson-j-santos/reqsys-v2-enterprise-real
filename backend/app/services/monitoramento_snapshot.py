@@ -4,7 +4,7 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.schemas.monitoramento_operacional import (
@@ -14,16 +14,6 @@ from app.schemas.monitoramento_operacional import (
 )
 from app.services.actions_runtime_monitor import GitHubActionsClient, classificar_runs
 from app.services.connection_broker import listar_conectores, resumo_conectores
-
-DEFAULT_GOVBI_BASE_URL = 'https://govbi-ia-hom.fly.dev'
-
-
-def _govbi_base_url() -> str:
-    return getattr(settings, 'govbi_base_url', '') or DEFAULT_GOVBI_BASE_URL
-
-
-def _govbi_timeout() -> float:
-    return float(getattr(settings, 'govbi_timeout_seconds', 15.0) or 15.0)
 
 
 def classificar_estado_geral(itens: list[ItemMonitorado]) -> str:
@@ -58,16 +48,32 @@ def _estado_conectores() -> tuple[str, dict[str, Any]]:
     return 'desconhecido', resumo
 
 
-def _estado_govbi() -> tuple[str, dict[str, Any]]:
-    base_url = _govbi_base_url().rstrip('/')
-    detalhes: dict[str, Any] = {'base_url': base_url, 'fonte': 'probe-http'}
+def _estado_govbi(db: Session | None = None) -> tuple[str, dict[str, Any]]:
+    detalhes: dict[str, Any] = {'fonte': 'reqsys-proxy-local'}
     try:
-        with httpx.Client(timeout=min(_govbi_timeout(), 5.0)) as client:
-            response = client.get(f'{base_url}/health')
-        detalhes['http_status'] = response.status_code
-        if response.status_code < 500:
+        if db is None:
+            from app.db import SessionLocal
+
+            with SessionLocal() as session:
+                return _estado_govbi(session)
+
+        from app.models.requisito import Requisito
+        from app.services.govbi_local_analytics import executar_analitico_local
+
+        total = db.query(Requisito).count()
+        probe = executar_analitico_local(db, 'total de requisitos', 'monitoramento-probe')
+        detalhes.update(
+            {
+                'analitico_local': 'disponivel' if probe else 'indisponivel',
+                'requisitos_indexados': total,
+                'probe_status': probe.get('statusFluxo') if probe else None,
+            }
+        )
+        if probe and probe.get('statusFluxo') == 'CONCLUIDO':
             return 'verde', detalhes
-        return 'amarelo', detalhes
+        if total > 0:
+            return 'amarelo', detalhes
+        return 'amarelo', {**detalhes, 'motivo': 'banco sem requisitos para analítico local'}
     except Exception as exc:  # noqa: BLE001 - sinal operacional
         detalhes['erro'] = f'{type(exc).__name__}'
         return 'vermelho', detalhes
