@@ -1,17 +1,11 @@
 name: Governed Auto Remediation Engine
 
+# Push main: Main Operational Validation Fast. workflow_run removido (anti-cascata).
+
 on:
   workflow_dispatch:
   schedule:
     - cron: "31 10 * * 1-5"
-  workflow_run:
-    workflows:
-      - "Workflow Reliability Analytics"
-      - "Operational Stability Score"
-      - "CI Incident Intelligence"
-      - "Testes Monitorador APIs Python"
-    types:
-      - completed
 
 permissions:
   actions: read

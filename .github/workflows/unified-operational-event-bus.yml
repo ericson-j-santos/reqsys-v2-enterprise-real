@@ -1,19 +1,11 @@
 name: Unified Operational Event Bus
 
+# Cascata workflow_run desativada — consumo via Main Operational Validation Fast.
+# Mantido schedule + dispatch para auditoria retroativa.
+
 on:
-  workflow_run:
-    workflows:
-      - "Operational Runtime Mesh Hub"
-      - "Operational Alert Intelligence"
-      - "Operational Executive Dashboard Generator"
-      - "Operational Data Lake & Historical Intelligence"
-      - "Governed Auto Remediation Engine"
-      - "Workflow Reliability Analytics"
-      - "Operational Stability Score"
-      - "CI Incident Intelligence"
-      - "Post Merge Operational Summary"
-    types:
-      - completed
+  schedule:
+    - cron: "43 10 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -21,7 +13,7 @@ permissions:
 
 concurrency:
   group: unified-operational-event-bus
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   governance-gate:

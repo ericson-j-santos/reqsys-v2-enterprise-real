@@ -1,18 +1,8 @@
 name: Operational Alert Intelligence
 
+# Push main: Main Operational Validation Fast. workflow_run removido (anti-cascata).
+
 on:
-  workflow_run:
-    workflows:
-      - "Operational Runtime Mesh Hub"
-      - "Operational Executive Dashboard Generator"
-      - "Operational Data Lake & Historical Intelligence"
-      - "Workflow Reliability Analytics"
-      - "Operational Stability Score"
-      - "CI Incident Intelligence"
-      - "Post Merge Operational Summary"
-      - "Operational Observability Hub"
-    types:
-      - completed
   schedule:
     - cron: "21 10 * * 1-5"
   workflow_dispatch:

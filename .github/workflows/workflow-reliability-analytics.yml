@@ -1,17 +1,11 @@
 name: Workflow Reliability Analytics
 
+# Push main: Main Operational Validation Fast. workflow_run removido (anti-cascata).
+
 on:
   workflow_dispatch:
   schedule:
     - cron: "29 10 * * 1-5"
-  workflow_run:
-    workflows:
-      - "Operational Stability Score"
-      - "CI Incident Intelligence"
-      - "Post Merge Operational Summary"
-      - "Testes Monitorador APIs Python"
-    types:
-      - completed
 
 permissions:
   contents: read

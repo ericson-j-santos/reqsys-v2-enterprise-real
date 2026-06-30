@@ -1,5 +1,8 @@
 name: Main Smoke CI
 
+# Pós-merge: guardrails + py_compile. Pytest do watcher roda no PR (Fast CI - Operational Guardrails).
+# Malha P0 rápida: Main Operational Validation Fast (--lite).
+
 on:
   push:
     branches:
@@ -17,7 +20,7 @@ jobs:
   main-smoke:
     name: Main smoke / post-merge evidence
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 3
 
     steps:
       - name: Checkout
@@ -47,14 +50,6 @@ jobs:
           set -euo pipefail
           python -m py_compile scripts/pr_ci_watch.py
 
-      - name: Executar testes rapidos do watcher
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          python -m pip install pytest
-          python -m pytest tests/test_pr_ci_watch.py -q
-
       - name: Gerar evidencia pos-merge
         if: always()
         shell: bash
@@ -68,8 +63,8 @@ jobs:
             printf '## Escopo\n\n'
             printf -- '- Verifica presenca dos workflows operacionais criticos.\n'
             printf -- '- Verifica guardrail de exclusao de run no PR CI Watch.\n'
-            printf -- '- Valida sintaxe do watcher Python.\n'
-            printf -- '- Executa testes rapidos do watcher.\n'
+            printf -- '- Valida sintaxe do watcher Python (py_compile).\n'
+            printf -- '- Testes do watcher: gate no PR via Fast CI - Operational Guardrails.\n'
             printf -- '- Nao executa deploy.\n'
             printf -- '- Nao altera producao.\n'
           } > artifacts/main-smoke-ci/summary.md

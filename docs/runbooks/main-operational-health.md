@@ -21,12 +21,14 @@ O workflow valida:
 - `PR Scope Labeler` em modo read-only;
 - `Main Smoke CI` com artifact de evidencia;
 - guardrail `--exclude-run-id` no PR CI Watch;
-- sintaxe Python do watcher;
-- testes rapidos do watcher.
+- sintaxe Python do watcher (`py_compile`);
+- existencia do teste do watcher (execucao no PR via `Fast CI - Operational Guardrails`).
 
 ## Fora de escopo
 
 Este workflow nao:
+
+- executa `pytest` do watcher (delegado ao CI de PR);
 
 - executa deploy;
 - altera producao;
@@ -56,7 +58,7 @@ Conteudo:
 | Smoke pos-merge | Presente | `main-smoke-ci-evidence` no YAML | Corrigir Main Smoke CI |
 | PR CI Watch | Guardrail ativo | `--exclude-run-id` | Corrigir watcher antes de novos merges |
 | Python watcher | Sintaxe valida | `py_compile` | Corrigir script |
-| Testes watcher | Verdes | `pytest` | Corrigir regressao |
+| Testes watcher | Verdes no PR | `Fast CI - Operational Guardrails` | Corrigir regressao antes do merge |
 | Producao | Inalterada | `deploy=false` | Interromper esteira se houver mutacao |
 
 ## Decisao operacional
