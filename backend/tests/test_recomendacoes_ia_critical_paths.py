@@ -125,3 +125,16 @@ def test_calcular_dashboard_ia_sem_amostras(db_session):
 
     assert payload['amostras_total'] == 0
     assert payload['metricas']['taxa_aceitacao']['valor']['taxa'] == 0.0
+
+
+def test_recomendacoes_api_retorna_404_quando_inexistente(client):
+    response = client.get('/v1/recomendacoes/999999')
+    assert response.status_code == 404
+
+
+def test_recomendacoes_api_rejeita_decisao_sem_recomendacao(client):
+    response = client.post(
+        '/v1/recomendacoes/999999/decisao',
+        json={'aceita': True, 'motivo_decisao': 'teste', 'decidido_por': 'qa@reqsys.local'},
+    )
+    assert response.status_code == 400

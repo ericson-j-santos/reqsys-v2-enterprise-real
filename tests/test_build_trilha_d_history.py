@@ -16,6 +16,7 @@ from scripts.build_trilha_d_history import (
     build_payload,
     continuous_trilha_d_monitoring_surface_ready,
     coverage_targeted_critical_paths_ready,
+    coverage_targeted_surface_ready,
     governance_deep_links_surface_ready,
     ingest_report_into_history,
     merge_history,
@@ -162,6 +163,7 @@ def test_ingest_report_into_history_appends_sample(tmp_path: Path) -> None:
     assert payload["summary"]["next_increment"] in {
         NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION,
         NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING,
+        NEXT_INCREMENT_AFTER_COVERAGE_TARGETED,
     }
     assert len(payload["history"]) == 2
     assert payload["history"][-1]["run_id"] == "run-ingest-1"
@@ -179,7 +181,9 @@ def test_resolve_next_increment_when_pipeline_completo() -> None:
 
 def test_resolve_next_increment_when_artifact_ingestion_habilitado() -> None:
     assert artifact_ingestion_surface_ready() is True
-    if continuous_trilha_d_monitoring_surface_ready():
+    if coverage_targeted_surface_ready():
+        assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    elif continuous_trilha_d_monitoring_surface_ready():
         assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
     else:
         assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
@@ -187,7 +191,15 @@ def test_resolve_next_increment_when_artifact_ingestion_habilitado() -> None:
 
 def test_resolve_next_increment_when_continuous_monitoring_habilitado() -> None:
     assert continuous_trilha_d_monitoring_surface_ready() is True
-    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
+    if coverage_targeted_surface_ready():
+        assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    else:
+        assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
+
+
+def test_coverage_targeted_surface_ready_detecta_arquivos_e_workflow() -> None:
+    assert coverage_targeted_critical_paths_ready() is True
+    assert coverage_targeted_surface_ready() is True
 
 
 def test_resolve_next_increment_when_governance_pendente(monkeypatch) -> None:

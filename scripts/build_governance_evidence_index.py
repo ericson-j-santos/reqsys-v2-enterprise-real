@@ -9,9 +9,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from scripts.build_trilha_d_history import coverage_targeted_surface_ready
 
 REPO = "ericson-j-santos/reqsys-v2-enterprise-real"
 DEFAULT_OUTPUT = "docs/ops-dashboard/data/governance-evidence-index.json"
@@ -19,6 +26,7 @@ NEXT_INCREMENT_AFTER_DEEP_LINKS = "dashboard_trilha_d_history_card"
 NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD = "artifact_ingestion_refresh"
 NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION = "continuous_trilha_d_monitoring"
 NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING = "coverage_targeted_tests"
+NEXT_INCREMENT_AFTER_COVERAGE_TARGETED = "link_governance_cards_to_latest_workflow_runs"
 
 
 def resolve_governance_next_increment(repo_root: Path | None = None) -> str:
@@ -52,6 +60,8 @@ def resolve_governance_next_increment(repo_root: Path | None = None) -> str:
             and "continuous-monitoring-enabled" in index_html.read_text(encoding="utf-8")
             and "build_continuous_trilha_d_monitoring.py" in workflow.read_text(encoding="utf-8")
         ):
+            if coverage_targeted_surface_ready(root):
+                return NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
             return NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
         return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
     next_increment = summary.get("next_increment")

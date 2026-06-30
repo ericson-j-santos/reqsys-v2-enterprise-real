@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T13:11:21.442517Z",
+  "generated_at": "2026-06-30T13:23:20.239288Z",
   "state": "green",
   "current_score": 97.0,
   "baseline_score": 88.33,
@@ -11,9 +11,10 @@
     "samples": 4,
     "green_samples": 3,
     "failed_samples": 1,
-    "next_increment": "coverage_targeted_tests",
+    "next_increment": "link_governance_cards_to_latest_workflow_runs",
     "artifact_ingestion_enabled": true,
-    "continuous_monitoring_enabled": true
+    "continuous_monitoring_enabled": true,
+    "coverage_targeted_ready": true
   },
   "links": {
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
