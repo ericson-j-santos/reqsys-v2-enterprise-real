@@ -1,14 +1,18 @@
 name: Operational Stability Score
 
+# Push main: Main Operational Validation Fast. workflow_run removido (anti-cascata).
+
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - "CI Incident Intelligence"
-      - "Post Merge Operational Summary"
-      - "Testes Monitorador APIs Python"
-    types:
-      - completed
+  schedule:
+    - cron: "41 10 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operational-stability-score
+  cancel-in-progress: false
 
 jobs:
   operational-stability-score:
@@ -25,11 +29,11 @@ jobs:
 
       - name: Generate operational stability score
         env:
-          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name || 'scheduled-scan' }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'success' }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           echo "# Operational Stability Score" > operational-stability-score.md
           echo "" >> operational-stability-score.md

@@ -1,14 +1,18 @@
 name: Operational Executive Dashboard Generator
 
+# workflow_run removido; schedule + dispatch evitam cascata pós-merge.
+
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - "Operational Data Lake & Historical Intelligence"
-      - "Governed Auto Remediation Engine"
-      - "Workflow Reliability Analytics"
-    types:
-      - completed
+  schedule:
+    - cron: "53 11 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operational-executive-dashboard-generator
+  cancel-in-progress: false
 
 jobs:
   operational-executive-dashboard:
