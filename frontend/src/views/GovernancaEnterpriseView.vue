@@ -123,8 +123,19 @@
                 <tr><th>Ambiente</th><th>Frontend</th><th>Backend</th><th>Uso</th></tr>
               </thead>
               <tbody>
-                <tr v-for="env in ambientes" :key="env.nome">
-                  <td><v-chip :color="env.cor" variant="tonal" size="x-small">{{ env.nome }}</v-chip></td>
+                <tr
+                  v-for="env in ambientes"
+                  :key="env.id"
+                  class="ambiente-row"
+                  tabindex="0"
+                  role="link"
+                  :aria-label="`Abrir ambiente ${env.label}`"
+                  :data-testid="`ambiente-linha-${env.shortId}`"
+                  @click="abrirAmbiente(env.id)"
+                  @keydown.enter.prevent="abrirAmbiente(env.id)"
+                  @keydown.space.prevent="abrirAmbiente(env.id)"
+                >
+                  <td><v-chip :color="env.color" variant="tonal" size="x-small">{{ env.label }}</v-chip></td>
                   <td><code>{{ env.frontend }}</code></td>
                   <td><code>{{ env.backend }}</code></td>
                   <td>{{ env.uso }}</td>
@@ -135,13 +146,43 @@
         </v-card>
       </v-window-item>
     </v-window>
+
+    <ConfirmacaoAmbienteProducaoDialog
+      v-model="confirmacaoProdAberta"
+      :url="destinoPendente?.url || ''"
+      @confirmar="confirmarNavegacaoProd"
+      @cancelar="cancelarNavegacaoProd"
+    />
   </section>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import ConfirmacaoAmbienteProducaoDialog from '../components/ConfirmacaoAmbienteProducaoDialog.vue'
+import { useNavegacaoAmbiente } from '../composables/useNavegacaoAmbiente'
+import { AMBIENTES_OPERACIONAIS } from '../constants/ambientesOperacionais'
 
 const aba = ref('ciclo')
+
+const ambientes = computed(() =>
+  AMBIENTES_OPERACIONAIS.filter((item) => !item.onlyLocal).map((item) => ({
+    ...item,
+    frontend: `${item.frontend}/governanca`,
+    backend: item.backend,
+  })),
+)
+
+const {
+  confirmacaoProdAberta,
+  destinoPendente,
+  solicitarNavegacao,
+  confirmarNavegacaoProd,
+  cancelarNavegacaoProd,
+} = useNavegacaoAmbiente()
+
+function abrirAmbiente(id) {
+  solicitarNavegacao(id, { path: '/governanca', preserveRoute: false })
+}
 
 const kpis = [
   { titulo: 'Baseline', valor: '100%', desc: 'Governança padrão ouro documentada e navegável.' },
@@ -176,11 +217,6 @@ const iaAuditavel = [
   { icone: 'mdi-clipboard-text-clock', titulo: 'Auditoria', desc: 'Pergunta, resposta, fonte, usuário, ambiente e correlation_id devem ser registrados.' },
 ]
 
-const ambientes = [
-  { nome: 'produção', cor: 'success', frontend: 'https://reqsys-app.fly.dev/governanca', backend: 'https://reqsys-api.fly.dev', uso: 'Acesso final após deploy.' },
-  { nome: 'homologação', cor: 'warning', frontend: 'https://reqsys-app-stg.fly.dev/governanca', backend: 'https://reqsys-api-stg.fly.dev', uso: 'Validação pré-produção.' },
-  { nome: 'dev', cor: 'info', frontend: 'https://reqsys-app-dev.fly.dev/governanca', backend: 'https://reqsys-api-dev.fly.dev', uso: 'Evolução e testes técnicos.' },
-]
 </script>
 
 <style scoped>
@@ -198,6 +234,9 @@ const ambientes = [
 .step-index { width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center; font-size: 12px; font-weight: 800; background: rgba(59, 130, 246, .14); margin-bottom: 8px; }
 .step-title { font-size: 13px; font-weight: 800; }
 .governance-table code { font-size: 11px; white-space: nowrap; }
+.ambiente-row { cursor: pointer; transition: background 0.15s ease; }
+.ambiente-row:hover { background: rgba(245, 158, 11, 0.08); }
+.ambiente-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .analytics-flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .analytics-node { border: 1px solid rgba(148, 163, 184, .24); border-radius: 999px; padding: 9px 12px; font-size: 13px; font-weight: 800; }
 @media (max-width: 700px) { .hero-actions { justify-content: flex-start; } .analytics-node { width: 100%; border-radius: 12px; } }
