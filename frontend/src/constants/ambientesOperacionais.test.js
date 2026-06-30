@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   AMBIENTES_OPERACIONAIS,
-  ambientesNavegaveis,
   ambientePorId,
+  ambienteRequerConfirmacao,
+  ambientesNavegaveis,
   detectarAmbientePorHostname,
+  irParaAmbiente,
   montarUrlAmbiente,
   normalizarAmbienteId,
   resolverAmbienteAtual,
@@ -50,5 +52,42 @@ describe('ambientesOperacionais', () => {
   it('expõe catálogo com URLs canônicas', () => {
     expect(ambientePorId('prod')?.frontend).toBe('https://reqsys-app.fly.dev')
     expect(AMBIENTES_OPERACIONAIS).toHaveLength(4)
+  })
+
+  it('exige confirmação apenas para produção', () => {
+    expect(ambienteRequerConfirmacao('prod')).toBe(true)
+    expect(ambienteRequerConfirmacao('desenvolvimento')).toBe(false)
+    expect(ambienteRequerConfirmacao('homologacao')).toBe(false)
+  })
+
+  it('cancela navegação para produção quando confirmação é recusada', () => {
+    const assign = vi.fn()
+    const confirm = vi.fn(() => false)
+    vi.stubGlobal('window', {
+      location: { assign },
+      confirm,
+    })
+
+    const resultado = irParaAmbiente('producao', { path: '/governanca', preserveRoute: false })
+
+    expect(resultado).toBe(false)
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(assign).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('navega para produção quando confirmação é aceita', () => {
+    const assign = vi.fn()
+    const confirm = vi.fn(() => true)
+    vi.stubGlobal('window', {
+      location: { assign },
+      confirm,
+    })
+
+    const resultado = irParaAmbiente('producao', { path: '/governanca', preserveRoute: false })
+
+    expect(resultado).toBe(true)
+    expect(assign).toHaveBeenCalledWith('https://reqsys-app.fly.dev/governanca')
+    vi.unstubAllGlobals()
   })
 })

@@ -111,9 +111,22 @@ export function montarUrlAmbiente(ambiente, { path = '/', preserveRoute = true }
   return `${base}${suffix}`
 }
 
+export function ambienteRequerConfirmacao(ambienteId) {
+  return normalizarAmbienteId(ambienteId) === 'producao'
+}
+
 export function irParaAmbiente(ambienteId, opcoes = {}) {
-  const url = montarUrlAmbiente(ambienteId, opcoes)
+  const { skipConfirm = false, ...resto } = opcoes
+  const url = montarUrlAmbiente(ambienteId, resto)
   if (!url || typeof window === 'undefined') return false
+
+  if (!skipConfirm && ambienteRequerConfirmacao(ambienteId)) {
+    const confirmado = window.confirm(
+      `Você está prestes a abrir o ambiente de PRODUÇÃO.\n\n${url}\n\nDeseja continuar?`,
+    )
+    if (!confirmado) return false
+  }
+
   window.location.assign(url)
   return true
 }

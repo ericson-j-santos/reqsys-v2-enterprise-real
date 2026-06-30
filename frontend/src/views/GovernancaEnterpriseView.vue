@@ -146,12 +146,21 @@
         </v-card>
       </v-window-item>
     </v-window>
+
+    <ConfirmacaoAmbienteProducaoDialog
+      v-model="confirmacaoProdAberta"
+      :url="destinoPendente?.url || ''"
+      @confirmar="confirmarNavegacaoProd"
+      @cancelar="cancelarNavegacaoProd"
+    />
   </section>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue'
-import { AMBIENTES_OPERACIONAIS, irParaAmbiente } from '../constants/ambientesOperacionais'
+import ConfirmacaoAmbienteProducaoDialog from '../components/ConfirmacaoAmbienteProducaoDialog.vue'
+import { useNavegacaoAmbiente } from '../composables/useNavegacaoAmbiente'
+import { AMBIENTES_OPERACIONAIS } from '../constants/ambientesOperacionais'
 
 const aba = ref('ciclo')
 
@@ -163,8 +172,16 @@ const ambientes = computed(() =>
   })),
 )
 
+const {
+  confirmacaoProdAberta,
+  destinoPendente,
+  solicitarNavegacao,
+  confirmarNavegacaoProd,
+  cancelarNavegacaoProd,
+} = useNavegacaoAmbiente()
+
 function abrirAmbiente(id) {
-  irParaAmbiente(id, { path: '/governanca', preserveRoute: false })
+  solicitarNavegacao(id, { path: '/governanca', preserveRoute: false })
 }
 
 const kpis = [

@@ -29,17 +29,26 @@
         </template>
         <v-list-item-title>{{ item.frontend.replace(/^https?:\/\//, '') }}</v-list-item-title>
         <v-list-item-subtitle v-if="item.id === ambienteAtualId">Você está aqui</v-list-item-subtitle>
+        <v-list-item-subtitle v-else-if="item.id === 'producao'">Requer confirmação</v-list-item-subtitle>
         <v-list-item-subtitle v-else>Abrir esta instância</v-list-item-subtitle>
       </v-list-item>
     </v-list>
   </v-menu>
+
+  <ConfirmacaoAmbienteProducaoDialog
+    v-model="confirmacaoProdAberta"
+    :url="destinoPendente?.url || ''"
+    @confirmar="confirmarNavegacaoProd"
+    @cancelar="cancelarNavegacaoProd"
+  />
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import ConfirmacaoAmbienteProducaoDialog from './ConfirmacaoAmbienteProducaoDialog.vue'
+import { useNavegacaoAmbiente } from '../composables/useNavegacaoAmbiente'
 import {
   ambientesNavegaveis,
-  irParaAmbiente,
   labelAmbiente,
   resolverAmbienteAtual,
 } from '../constants/ambientesOperacionais'
@@ -61,9 +70,17 @@ const ambienteAtualLabel = computed(() => labelAmbiente(ambienteAtualId.value))
 
 const opcoes = computed(() => ambientesNavegaveis({ hostname }))
 
+const {
+  confirmacaoProdAberta,
+  destinoPendente,
+  solicitarNavegacao,
+  confirmarNavegacaoProd,
+  cancelarNavegacaoProd,
+} = useNavegacaoAmbiente()
+
 function selecionar(id) {
   if (id === ambienteAtualId.value) return
-  irParaAmbiente(id, { preserveRoute: true })
+  solicitarNavegacao(id, { preserveRoute: true })
 }
 </script>
 
