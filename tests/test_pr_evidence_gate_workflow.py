@@ -7,10 +7,18 @@ def read_workflow() -> str:
     return WORKFLOW.read_text(encoding='utf-8')
 
 
+def test_pr_evidence_gate_has_router_job_always_active():
+    text = read_workflow()
+
+    assert 'name: Evidence Router' in text
+    assert 'needs: evidence-router' in text
+    assert "needs.evidence-router.outputs.run_gate == 'true'" in text
+
+
 def test_pr_evidence_gate_keeps_full_wait_window_after_fast_poll_change():
     text = read_workflow()
 
-    assert "MAX_WAIT_SECONDS: '180'" in text
+    assert "MAX_WAIT_SECONDS: '300'" in text
     assert "POLL_SECONDS: '15'" in text
     assert "MAX_WAIT_SECONDS: '45'" not in text
     assert "POLL_SECONDS: '5'" not in text
@@ -23,10 +31,11 @@ def test_pr_evidence_gate_lists_artifacts_only_after_gate_passes():
     assert "if (includeArtifacts && run.status === 'completed')" in text
     assert 'runSummaries = await listRuns(headSha, false);' in text
     assert "if (gate.status === 'passed')" in text
-    assert 'artifactRuns = await listRuns(headSha, true);' in text
+    assert 'const artifactRuns = await listRuns(headSha, true);' in text
+    assert 'runSummaries = artifactRuns;' in text
 
     polling_index = text.index('runSummaries = await listRuns(headSha, false);')
-    artifact_index = text.index('artifactRuns = await listRuns(headSha, true);')
+    artifact_index = text.index('const artifactRuns = await listRuns(headSha, true);')
     assert polling_index < artifact_index
 
 
@@ -56,7 +65,7 @@ def test_pr_evidence_gate_resolves_pr_from_workflow_run_payload():
 def test_pr_evidence_gate_skips_workflow_run_without_pull_request():
     text = read_workflow()
 
-    assert 'name: Resolver contexto' in text
+    assert 'name: Evidence Router' in text
     assert 'workflow_run_without_pull_request' in text
     assert 'name: Registrar skip seguro sem PR' in text
     assert 'if: steps.ctx.outputs.enabled == \'false\'' in text

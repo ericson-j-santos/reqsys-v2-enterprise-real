@@ -64,3 +64,27 @@ def test_operational_runtime_mesh_hub_suppresses_info_alerts():
 
 def test_mesh_redundant_files_constant_count():
     assert len(MESH_REDUNDANT_FILES) == 4
+
+
+def test_detect_risk_patterns_ignores_jobs_without_if_conditions(tmp_path):
+    registry = load_registry(REGISTRY_PATH)
+    workflow = tmp_path / "always-on.yml"
+    workflow.write_text(
+        """
+name: Always On Gate
+on:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  router:
+    runs-on: ubuntu-latest
+  gate:
+    needs: router
+    if: needs.router.outputs.run == 'true'
+    runs-on: ubuntu-latest
+""".strip(),
+        encoding="utf-8",
+    )
+    spec = parse_workflow_file(workflow)
+    patterns = detect_risk_patterns(spec, registry)
+    assert "all_jobs_conditional" not in patterns
