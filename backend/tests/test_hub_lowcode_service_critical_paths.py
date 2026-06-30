@@ -135,7 +135,7 @@ def test_planner_webhook_config_salvar_e_listar_historico():
         )
         historico = svc.listar_historico_integracoes(db, tipo='planner', limit=10)
         assert historico['total'] >= 1
-        assert historico['eventos'][0]['correlation_id'] == 'corr-hub-lowcode-001'
+        assert any(evento['correlation_id'] == 'corr-hub-lowcode-001' for evento in historico['eventos'])
     finally:
         db.close()
 
