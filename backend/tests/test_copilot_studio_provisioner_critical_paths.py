@@ -99,3 +99,43 @@ def test_provisionar_webhook_sucesso_mockado(monkeypatch):
 
     assert resultado['configured'] is True
     assert resultado['provisioned'] is True
+
+
+def test_provisionar_dataverse_sem_credenciais_entra(monkeypatch):
+    monkeypatch.setattr(provisioner.settings, 'copilotstudio_environment_url', 'https://org.crm.dynamics.com/')
+    monkeypatch.setattr(provisioner.settings, 'azure_tenant_id', '')
+
+    resultado = _run(
+        provisioner.provisionar_copilot_studio(
+            _request(mode='dataverse_import', environment_url='https://org.crm.dynamics.com/'),
+        )
+    )
+
+    assert resultado['configured'] is False
+    assert 'Entra ID' in resultado['message']
+
+
+def test_provisionar_webhook_resposta_nao_json(monkeypatch):
+    monkeypatch.setattr(provisioner.settings, 'copilotstudio_provisioning_webhook_url', 'https://flow.example/hook')
+
+    fake_response = type(
+        'Resp',
+        (),
+        {
+            'status_code': 200,
+            'json': lambda self: (_ for _ in ()).throw(ValueError('not json')),
+            'text': 'plain text ok',
+            'raise_for_status': lambda self: None,
+        },
+    )()
+
+    with patch.object(provisioner.httpx, 'AsyncClient') as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.post.return_value = fake_response
+        mock_client_cls.return_value = mock_client
+
+        resultado = _run(provisioner.provisionar_copilot_studio(_request(mode='webhook')))
+
+    assert resultado['provisioned'] is True
+    assert resultado['details']['webhook_response']['text'] == 'plain text ok'
