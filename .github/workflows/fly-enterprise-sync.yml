@@ -51,7 +51,7 @@ env:
 
 concurrency:
   group: fly-enterprise-sync-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.event.inputs.target_environment) || 'main-nonprod' }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   validate-manifest:
