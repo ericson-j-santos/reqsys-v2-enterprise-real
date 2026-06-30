@@ -18,7 +18,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from scripts.build_trilha_d_history import coverage_targeted_surface_ready
+from scripts.build_trilha_d_history import coverage_targeted_surface_ready, resolve_next_increment
 
 REPO = "ericson-j-santos/reqsys-v2-enterprise-real"
 DEFAULT_OUTPUT = "docs/ops-dashboard/data/governance-evidence-index.json"
@@ -44,52 +44,18 @@ TRILHA_D_WORKFLOW_EVIDENCE_IDS = frozenset({"continuous_trilha_d_monitoring", "p
 
 def resolve_governance_next_increment(repo_root: Path | None = None) -> str:
     root = repo_root or Path(__file__).resolve().parents[1]
-    history_json = root / "docs/ops-dashboard/data/trilha-d-history.json"
-    index_html = root / "docs/ops-dashboard/index.html"
-    monitoramento_view = root / "frontend/src/views/MonitoramentoOperacionalView.vue"
-    workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
-    if not history_json.exists() or not index_html.exists() or not monitoramento_view.exists() or not workflow.exists():
-        return NEXT_INCREMENT_AFTER_DEEP_LINKS
-    html_text = index_html.read_text(encoding="utf-8")
-    view_text = monitoramento_view.read_text(encoding="utf-8")
-    workflow_text = workflow.read_text(encoding="utf-8")
-    if "artifact-ingestion-enabled" not in html_text or "artifact_ingestion_enabled" not in view_text:
-        return NEXT_INCREMENT_AFTER_DEEP_LINKS
-    if "--ingest-report" not in workflow_text:
-        return NEXT_INCREMENT_AFTER_DEEP_LINKS
-    try:
-        payload = json.loads(history_json.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return NEXT_INCREMENT_AFTER_DEEP_LINKS
-    summary = payload.get("summary") or {}
-    if summary.get("artifact_ingestion_enabled"):
-        index_html = root / "docs/ops-dashboard/index.html"
-        workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
-        monitoring_json = root / "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
-        if (
-            index_html.exists()
-            and workflow.exists()
-            and monitoring_json.exists()
-            and "continuous-monitoring-enabled" in index_html.read_text(encoding="utf-8")
-            and "build_continuous_trilha_d_monitoring.py" in workflow.read_text(encoding="utf-8")
-        ):
-            if coverage_targeted_surface_ready(root):
-                governance_index = root / "docs/ops-dashboard/data/governance-evidence-index.json"
-                if governance_index.exists():
-                    try:
-                        governance_payload = json.loads(governance_index.read_text(encoding="utf-8"))
-                        if governance_workflow_deep_links_ready(governance_payload.get("evidence") or []):
-                            return NEXT_INCREMENT_AFTER_DEEP_LINKS
-                    except json.JSONDecodeError:
-                        pass
-                return NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
-            return NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
-        return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
-    next_increment = summary.get("next_increment")
-    if next_increment == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION:
-        return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
-    if next_increment == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD:
-        return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+    history_json = root / DEFAULT_TRILHA_D_HISTORY
+    if history_json.exists():
+        try:
+            payload = json.loads(history_json.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            payload = {}
+        summary = payload.get("summary") or {}
+        if summary.get("artifact_ingestion_enabled"):
+            return resolve_next_increment(artifact_ingestion=True, repo_root=root)
+        next_increment = summary.get("next_increment")
+        if isinstance(next_increment, str) and next_increment:
+            return next_increment
     return NEXT_INCREMENT_AFTER_DEEP_LINKS
 
 
@@ -336,11 +302,7 @@ def build_payload(
                 if isinstance((item.get("links") or {}).get("latest_run"), str)
                 and "/actions/runs/" in item["links"]["latest_run"]
             ),
-            "next_increment": (
-                NEXT_INCREMENT_AFTER_DEEP_LINKS
-                if deep_links_ready
-                else resolve_governance_next_increment()
-            ),
+            "next_increment": resolve_governance_next_increment(),
         },
         "links": {
             "actions": f"https://github.com/{REPO}/actions",
