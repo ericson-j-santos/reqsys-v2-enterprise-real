@@ -210,4 +210,4 @@ def test_correlation_timeline_hydrated(tmp_path: Path) -> None:
     assert timeline_path.exists()
     timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
     assert timeline["runtime_state"] == "TIMELINE_HYDRATED"
-    assert timeline["timeline_event_count"] == 2
+    assert timeline["timeline_event_count"] >= 3

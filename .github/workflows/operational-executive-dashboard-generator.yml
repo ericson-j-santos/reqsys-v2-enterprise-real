@@ -1,6 +1,7 @@
 name: Operational Executive Dashboard Generator
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows:
       - "Operational Data Lake & Historical Intelligence"
@@ -17,13 +18,44 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve workflow context
+        id: ctx
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WR_NAME: ${{ github.event.workflow_run.name || 'manual-dispatch' }}
+          WR_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'success' }}
+          WR_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          WR_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          WR_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          echo "workflow_name=${WR_NAME}" >> "$GITHUB_OUTPUT"
+          echo "workflow_conclusion=${WR_CONCLUSION}" >> "$GITHUB_OUTPUT"
+          echo "workflow_url=${WR_URL}" >> "$GITHUB_OUTPUT"
+          echo "head_branch=${WR_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "head_sha=${WR_SHA}" >> "$GITHUB_OUTPUT"
+          if [ "${EVENT_NAME}" = "workflow_run" ] && [ "${WR_CONCLUSION}" != "success" ]; then
+            echo "mode=report_only" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=Upstream workflow_run concluiu como ${WR_CONCLUSION}; dashboard gerado em modo report_only." >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=active" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report expected upstream degradation
+        if: steps.ctx.outputs.mode == 'report_only'
+        run: |
+          echo "## Operational Executive Dashboard — report_only" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ${skip_reason}" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          skip_reason: ${{ steps.ctx.outputs.skip_reason }}
+
       - name: Generate executive operational dashboard
         env:
-          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_NAME: ${{ steps.ctx.outputs.workflow_name }}
+          WORKFLOW_CONCLUSION: ${{ steps.ctx.outputs.workflow_conclusion }}
+          WORKFLOW_URL: ${{ steps.ctx.outputs.workflow_url }}
+          HEAD_BRANCH: ${{ steps.ctx.outputs.head_branch }}
+          HEAD_SHA: ${{ steps.ctx.outputs.head_sha }}
         run: |
           cat <<'HTML' > operational-executive-dashboard.html
           <!DOCTYPE html>
