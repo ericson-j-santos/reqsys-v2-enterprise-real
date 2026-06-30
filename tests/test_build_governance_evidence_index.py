@@ -39,12 +39,12 @@ def test_build_payload_exposes_workflow_run_deep_links() -> None:
         assert "/actions/" in links["latest_run"]
 
     assert payload["summary"]["dashboard_ready_capabilities"] == payload["summary"]["total_capabilities"]
-    from scripts.build_governance_evidence_index import NEXT_INCREMENT_AFTER_DEEP_LINKS
+    from scripts.build_governance_evidence_index import resolve_governance_next_increment
+    from scripts.build_trilha_d_history import resolve_next_increment
 
-    assert payload["summary"]["next_increment"] in {
-        NEXT_INCREMENT_AFTER_DEEP_LINKS,
-        "artifact_ingestion_refresh",
-    }
+    assert payload["summary"]["next_increment"] == resolve_governance_next_increment()
+    if json.loads(Path("docs/ops-dashboard/data/trilha-d-history.json").read_text(encoding="utf-8")).get("summary", {}).get("artifact_ingestion_enabled"):
+        assert payload["summary"]["next_increment"] == resolve_next_increment(artifact_ingestion=True)
 
 
 def test_build_payload_exposes_governance_deep_links_summary() -> None:
