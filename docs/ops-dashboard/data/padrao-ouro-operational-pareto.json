@@ -1,38 +1,41 @@
 {
   "schema_version": "1.1.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T22:58:18.777998Z",
+  "generated_at": "2026-06-30T23:26:28.692030Z",
   "state": "green",
   "strategy": "pareto_operational_gold_base",
-  "current_score": 100.0,
+  "current_score": 99.27,
   "target_score": 98.0,
   "gold_gap": 0.0,
-  "projected_score_after_recommended": 100.0,
+  "projected_score_after_recommended": 99.27,
   "projected_gap_after_recommended": 0.0,
   "statistical_confidence": 1.0,
   "dimension_signals": {
     "tests": 100.0,
-    "coverage": 100.0,
+    "coverage": 95.6,
     "mutation": 100.0,
     "contract": 100.0,
     "schema": 100.0,
     "ci-watch": 100.0
   },
-  "dimension_gaps": {},
+  "dimension_gaps": {
+    "coverage": 4.4
+  },
   "dominant_bottleneck": {
-    "dimension": "none",
-    "score": 100.0,
-    "gap_to_100": 0.0,
-    "share_of_trilha_d_remaining_gap": 0.0
+    "dimension": "coverage",
+    "score": 95.6,
+    "gap_to_100": 4.4,
+    "share_of_trilha_d_remaining_gap": 1.0
   },
   "summary": {
     "actions_evaluated": 0,
     "recommended_now": 0,
-    "expected_gain_now": 0.0,
+    "expected_gain_now": 0,
     "pareto_rule": "ações até 80% do ganho esperado acumulado (80/20)",
     "next_increment": "continuous_trilha_d_monitoring",
     "evidence_source": "trilha_d_history",
-    "consolidation_mode": true
+    "consolidation_mode": false,
+    "operational_cycle_complete": true
   },
   "links": {
     "trilha_d_history": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/docs/ops-dashboard/data/trilha-d-history.json",
@@ -64,6 +67,6 @@
       "gap_to_100",
       "share_of_trilha_d_remaining_gap"
     ],
-    "refresh_strategy": "consolidation_snapshot"
+    "refresh_strategy": "evidence_driven_from_trilha_d_history"
   }
 }

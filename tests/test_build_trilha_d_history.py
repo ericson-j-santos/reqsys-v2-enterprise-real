@@ -26,6 +26,7 @@ from scripts.build_trilha_d_history import (
     merge_history,
     merge_readiness_history_surface_ready,
     merge_readiness_history_increment_ready,
+    operational_cycle_complete,
     ops_dashboard_pareto_surface_ready,
     ops_dashboard_predictive_gate_surface_ready,
     report_to_history_entry,
@@ -213,6 +214,10 @@ def test_merge_readiness_history_surface_ready_detecta_arquivos() -> None:
 
 def test_merge_readiness_history_increment_ready_detecta_arquivos() -> None:
     assert merge_readiness_history_increment_ready() is True
+
+
+def test_operational_cycle_complete_quando_pipeline_fechado() -> None:
+    assert operational_cycle_complete(artifact_ingestion=True) is True
 
 
 def test_resolve_next_increment_quando_merge_readiness_pendente(monkeypatch) -> None:

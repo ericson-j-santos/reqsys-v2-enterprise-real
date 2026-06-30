@@ -538,6 +538,19 @@ def merge_readiness_history_increment_ready(repo_root: Path | None = None) -> bo
     return bool(summary.get("merge_readiness_stabilized"))
 
 
+def operational_cycle_complete(*, artifact_ingestion: bool, repo_root: Path | None = None) -> bool:
+    if not artifact_ingestion:
+        return False
+    return (
+        artifact_ingestion_surface_ready(repo_root)
+        and continuous_trilha_d_monitoring_increment_ready(repo_root)
+        and coverage_targeted_surface_ready(repo_root)
+        and governance_workflow_deep_links_surface_ready(repo_root)
+        and artifact_ingestion_refresh_surface_ready(repo_root)
+        and merge_readiness_history_increment_ready(repo_root)
+    )
+
+
 def continuous_trilha_d_monitoring_surface_ready(repo_root: Path | None = None) -> bool:
     root = repo_root or Path(__file__).resolve().parents[1]
     workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
@@ -669,6 +682,10 @@ def build_payload(
             "governance_deep_links_enabled": artifact_ingestion and governance_workflow_deep_links_surface_ready(),
             "artifact_ingestion_refresh_enabled": artifact_ingestion and artifact_ingestion_refresh_surface_ready(),
             "merge_readiness_history_enabled": artifact_ingestion and merge_readiness_history_increment_ready(),
+            "operational_cycle_complete": artifact_ingestion and operational_cycle_complete(
+                artifact_ingestion=artifact_ingestion,
+                repo_root=Path(__file__).resolve().parents[1],
+            ),
         },
         "links": {
             "actions": workflow_runs_url(),

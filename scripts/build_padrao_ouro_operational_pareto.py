@@ -220,6 +220,7 @@ def load_trilha_d_evidence(path: Path) -> dict[str, Any]:
         "dimension_summary": dimension_summary,
         "next_increment": summary.get("next_increment"),
         "artifact_ingestion_enabled": bool(summary.get("artifact_ingestion_enabled")),
+        "operational_cycle_complete": bool(summary.get("operational_cycle_complete")),
         "state": payload.get("state"),
     }
 
@@ -412,6 +413,8 @@ def build_payload(
         2,
     )
     ranked = build_ranked_actions(signals, gaps, trilha_d)
+    if trilha_d.get("operational_cycle_complete"):
+        ranked = []
     recommended = [item for item in ranked if item["recommended_now"]]
     expected_gain_now = round(sum(float(item["expected_score_gain"]) for item in recommended), 2)
     projected_score = clamp(current_score + (0.0 if current_score >= 100.0 else expected_gain_now))
@@ -453,6 +456,7 @@ def build_payload(
             "next_increment": pareto_next_increment,
             "evidence_source": "trilha_d_history" if trilha_d_history.exists() else "fallback_signals",
             "consolidation_mode": consolidation,
+            "operational_cycle_complete": bool(trilha_d.get("operational_cycle_complete")),
         },
         "links": {
             "trilha_d_history": f"https://github.com/{REPO}/blob/main/docs/ops-dashboard/data/trilha-d-history.json",
