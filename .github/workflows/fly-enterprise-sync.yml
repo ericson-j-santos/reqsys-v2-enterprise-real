@@ -74,13 +74,58 @@ jobs:
           path: fly-enterprise-sync-validation.json
           if-no-files-found: error
 
+  publication-sync-gate:
+    name: Publication sync gate (fast)
+    runs-on: ubuntu-latest
+    needs: validate-manifest
+    if: github.event_name == 'push'
+    timeout-minutes: 2
+    outputs:
+      drift_detected: ${{ steps.check.outputs.drift_detected }}
+      skip_reason: ${{ steps.check.outputs.skip_reason }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verificar drift dev/hml (read-only)
+        id: check
+        run: |
+          set -euo pipefail
+          python scripts/validate_publication_sync.py \
+            --timeout 8 \
+            --output publication-sync-gate.json
+          if python -c "import json; d=json.load(open('publication-sync-gate.json')); exit(0 if d.get('ok') else 1)"; then
+            echo "drift_detected=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=already_synced" >> "$GITHUB_OUTPUT"
+            echo "Ambientes dev/hml/prod já sincronizados — deploy omitido (gate rápido)."
+          else
+            echo "drift_detected=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=drift_detected" >> "$GITHUB_OUTPUT"
+            echo "::warning::Drift detectado — promoção dev→hml será executada."
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: publication-sync-gate
+          path: publication-sync-gate.json
+          if-no-files-found: warn
+
   plan-environments:
     name: Planejar ambientes alvo
     runs-on: ubuntu-latest
-    needs: validate-manifest
+    needs: [validate-manifest, publication-sync-gate]
+    if: >-
+      always() &&
+      needs.validate-manifest.result == 'success' &&
+      (needs.publication-sync-gate.result == 'success' || needs.publication-sync-gate.result == 'skipped')
     outputs:
       should_deploy: ${{ steps.plan.outputs.should_deploy }}
       targets: ${{ steps.plan.outputs.targets }}
+      skip_reason: ${{ steps.plan.outputs.skip_reason }}
     steps:
       - id: plan
         env:
@@ -93,6 +138,7 @@ jobs:
           if [ "$EVENT_NAME" = "pull_request" ]; then
             echo "should_deploy=false" >> "$GITHUB_OUTPUT"
             echo "targets=[]" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=pull_request" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -100,6 +146,7 @@ jobs:
             if [ "$DEPLOY_INPUT" != "true" ]; then
               echo "should_deploy=false" >> "$GITHUB_OUTPUT"
               echo "targets=[]" >> "$GITHUB_OUTPUT"
+              echo "skip_reason=dispatch_read_only" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             if [ "$TARGET_INPUT" = "prod" ] && [ "$APPROVE_PROD" != "APROVO-PROD" ]; then
@@ -117,8 +164,15 @@ jobs:
             exit 0
           fi
 
-          # push main: promoção automática dev → hml (prod fica no Deploy Production Sync)
+          # push main: deploy só quando publication-sync-gate detectar drift
+          if [ "${{ needs.publication-sync-gate.outputs.drift_detected }}" != "true" ]; then
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "targets=[]" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=${{ needs.publication-sync-gate.outputs.skip_reason || 'already_synced' }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          echo "skip_reason=drift_deploy" >> "$GITHUB_OUTPUT"
           printf '%s\n' 'targets=[{"target_environment":"dev","github_environment":"dev"},{"target_environment":"hml","github_environment":"staging"}]' >> "$GITHUB_OUTPUT"
 
   sync-environment:
@@ -243,7 +297,7 @@ jobs:
           flyctl deploy --remote-only --config "$config" --app "$FRONTEND_APP"
 
       - name: Aguardar estabilização do runtime
-        run: sleep 30
+        run: sleep 10
 
       - name: Smoke runtime público
         run: |
@@ -324,23 +378,27 @@ jobs:
   summary:
     name: Resumo Fly Enterprise Sync
     runs-on: ubuntu-latest
-    needs: [validate-manifest, plan-environments, sync-environment, runtime-smoke-readonly]
+    needs: [validate-manifest, publication-sync-gate, plan-environments, sync-environment, runtime-smoke-readonly]
     if: always()
     steps:
       - name: Resumo
         env:
           SHOULD_DEPLOY: ${{ needs.plan-environments.outputs.should_deploy }}
+          SKIP_REASON: ${{ needs.plan-environments.outputs.skip_reason }}
           SYNC_RESULT: ${{ needs.sync-environment.result }}
           SMOKE_RESULT: ${{ needs.runtime-smoke-readonly.result }}
+          GATE_RESULT: ${{ needs.publication-sync-gate.result }}
         run: |
           {
             echo "## Fly Enterprise Sync"
             echo "- Correlation ID: \`$CORRELATION_ID\`"
             echo "- SHA: \`${{ github.sha }}\`"
             echo "- Evento: \`${{ github.event_name }}\`"
+            echo "- Skip reason: \`${SKIP_REASON:-n/a}\`"
             echo "| Etapa | Resultado |"
             echo "|---|---|"
             echo "| Validar manifesto | ${{ needs.validate-manifest.result }} |"
+            echo "| Publication sync gate | ${GATE_RESULT:-skipped} |"
             echo "| Deploy automático | ${SHOULD_DEPLOY} |"
             echo "| Sync ambientes | ${SYNC_RESULT:-skipped} |"
             echo "| Smoke read-only | ${SMOKE_RESULT:-skipped} |"

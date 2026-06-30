@@ -65,18 +65,29 @@ jobs:
     runs-on: ubuntu-latest
     needs: gate
     if: always() && needs.gate.result == 'success'
+    outputs:
+      prod_synced: ${{ steps.check.outputs.prod_synced }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Validar drift repo ↔ runtime
-        continue-on-error: true
+        id: check
         run: |
+          set -euo pipefail
           python scripts/validate_publication_sync.py \
             --environment prod \
             --expected-sha "${{ github.sha }}" \
+            --timeout 8 \
             --output publication-sync-pre.json
+          if python -c "import json; d=json.load(open('publication-sync-pre.json')); exit(0 if d.get('ok') else 1)"; then
+            echo "prod_synced=true" >> "$GITHUB_OUTPUT"
+            echo "Produção já sincronizada — deploy omitido no push (gate rápido)."
+          else
+            echo "prod_synced=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Drift em produção — deploy será executado."
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -87,8 +98,14 @@ jobs:
   validate-runtime:
     name: Validar config Fly/runtime
     runs-on: ubuntu-latest
-    needs: gate
-    if: always() && needs.gate.result == 'success'
+    needs: [gate, pre-sync-check]
+    if: >-
+      always() &&
+      needs.gate.result == 'success' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        needs.pre-sync-check.outputs.prod_synced != 'true'
+      )
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -106,14 +123,14 @@ jobs:
   configure-prod-secrets:
     name: Configurar secrets auth produção
     runs-on: ubuntu-latest
-    needs: [gate, validate-runtime]
+    needs: [gate, pre-sync-check, validate-runtime]
     if: >-
       always() &&
       needs.gate.result == 'success' &&
       needs.validate-runtime.result == 'success' &&
       (
         (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
-        (github.event_name == 'push')
+        (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
       )
     environment: production
     timeout-minutes: 10
@@ -158,7 +175,7 @@ jobs:
   deploy-backend:
     name: Deploy API produção
     runs-on: ubuntu-latest
-    needs: [gate, validate-runtime, configure-prod-secrets]
+    needs: [gate, pre-sync-check, validate-runtime, configure-prod-secrets]
     if: >-
       always() &&
       needs.gate.result == 'success' &&
@@ -166,7 +183,7 @@ jobs:
       needs.configure-prod-secrets.result == 'success' &&
       (
         (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
-        (github.event_name == 'push')
+        (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
       )
     environment: production
     timeout-minutes: 25
@@ -205,14 +222,14 @@ jobs:
   deploy-frontend:
     name: Deploy frontend produção
     runs-on: ubuntu-latest
-    needs: [gate, validate-runtime]
+    needs: [gate, pre-sync-check, validate-runtime]
     if: >-
       always() &&
       needs.gate.result == 'success' &&
       needs.validate-runtime.result == 'success' &&
       (
         (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_frontend == true) ||
-        (github.event_name == 'push')
+        (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
       )
     environment: production
     timeout-minutes: 20
@@ -240,7 +257,7 @@ jobs:
           python-version: "3.12"
       - name: Aguardar estabilização do runtime
         if: needs.deploy-backend.result == 'success'
-        run: sleep 45
+        run: sleep 10
       - name: Smoke API /api/runtime/*
         if: needs.deploy-backend.result == 'success'
         run: |
@@ -301,7 +318,7 @@ jobs:
             echo "- SHA alvo: \`${{ github.sha }}\`"
             echo "| Job | Resultado |"
             echo "|---|---|"
-            echo "| Pré-sync | ${{ needs.pre-sync-check.result || 'skipped' }} |"
+            echo "| Pré-sync | ${{ needs.pre-sync-check.result || 'skipped' }} (prod_synced=${{ needs.pre-sync-check.outputs.prod_synced || 'n/a' }}) |"
             echo "| Validate runtime | ${{ needs.validate-runtime.result || 'skipped' }} |"
             echo "| Configure secrets | ${{ needs.configure-prod-secrets.result || 'skipped' }} |"
             echo "| Deploy API | ${{ needs.deploy-backend.result || 'skipped' }} |"
