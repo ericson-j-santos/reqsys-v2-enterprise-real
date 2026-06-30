@@ -39,6 +39,11 @@ def normalize_env_name(name: str) -> str:
     return ENV_ALIAS.get(name.strip().lower(), name.strip().lower())
 
 
+def normalize_api_base(url: str) -> str:
+    """Compare probe OpenAPI docs URL with manifest api_url base."""
+    return url.rstrip("/").removesuffix("/docs")
+
+
 def build_env_entry(
     canonical: str,
     probe: dict[str, Any] | None,
@@ -70,7 +75,9 @@ def build_env_entry(
             }
         )
     if probe and fly_env:
-        api_match = (probe.get("api") or "").rstrip("/") == (fly_env.get("api_url") or "").rstrip("/")
+        api_match = normalize_api_base(probe.get("api") or "") == normalize_api_base(
+            fly_env.get("api_url") or ""
+        )
         frontend_match = (probe.get("frontend") or "").rstrip("/") == (
             fly_env.get("frontend_url") or ""
         ).rstrip("/")
@@ -90,7 +97,9 @@ def consolidate(
     for env in environments_validation.get("environments") or []:
         if not isinstance(env, dict):
             continue
-        canonical = normalize_env_name(str(env.get("name") or ""))
+        canonical = str(env.get("canonical") or "").strip().lower()
+        if not canonical:
+            canonical = normalize_env_name(str(env.get("name") or ""))
         probes_by_canonical[canonical] = env
 
     fly_envs = (fly_matrix.get("environments") or {}) if isinstance(fly_matrix, dict) else {}

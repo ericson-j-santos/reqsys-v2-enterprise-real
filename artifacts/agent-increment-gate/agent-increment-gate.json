@@ -1,0 +1,45 @@
+{
+  "allowed": true,
+  "reason": "consolidar_incremento_ativo",
+  "detail": "Concluir CI/evidencia/merge de incremento ja aberto — nao abre nova frente.",
+  "strict_mode": false,
+  "canonical_drift_count": 0,
+  "contract_drift_count": 0,
+  "strict_blocked": false,
+  "increment_type": "consolidate",
+  "reference": null,
+  "intent": "consolidacao operacional pre-sync ambientes",
+  "coordenador_state": "yellow",
+  "coordenador_decision": "bloquear_novas_frentes_ate_consolidar",
+  "increment_gate": {
+    "new_front_allowed": false,
+    "blockers": [
+      "state_yellow"
+    ],
+    "open_pr_threshold": 5,
+    "open_prs": 2,
+    "duplicate_group_count": 0,
+    "critical_gaps": 0,
+    "allowed_increment_types": [
+      "gap_fix",
+      "hotfix",
+      "consolidate"
+    ],
+    "policy": "Nao abrir frentes novas sem incremento objetivo. Ciclo: triagem -> ajuste minimo -> CI -> evidencia -> merge."
+  },
+  "recommended_actions": [
+    {
+      "priority": "P1",
+      "action": "bloquear_nova_frente",
+      "reference": "state_yellow",
+      "detail": "Resolver bloqueios antes de abrir branch/PR novo"
+    }
+  ],
+  "operational_cycle": [
+    "triagem",
+    "ajuste_minimo",
+    "ci_completo",
+    "evidencia",
+    "merge_controlado"
+  ]
+}
