@@ -40,6 +40,21 @@ describe('filtrosGovbi', () => {
     expect(resultado[0].correlationId).toBe('corr-govbi-2')
   })
 
+  it('aceita fonte transporte para erros de conectividade', () => {
+    const transporte = criarRegistroConsultaGovbi({
+      pergunta: 'Timeout backend',
+      statusFluxo: 'ERRO',
+      fonte: 'transporte',
+      latenciaMs: 15000,
+      correlationId: 'corr-govbi-transporte',
+      fallback: true,
+      erro: 'sem resposta do backend',
+    })
+    const resultado = filtrarConsultasGovbi([transporte], { status: 'ERRO', fonte: 'transporte' })
+    expect(resultado).toHaveLength(1)
+    expect(resultado[0].statusFluxo).toBe('ERRO')
+  })
+
   it('identifica filtros ativos e gera query', () => {
     expect(possuiFiltroAtivo({})).toBe(false)
     expect(possuiFiltroAtivo({ correlation_id: 'corr' })).toBe(true)

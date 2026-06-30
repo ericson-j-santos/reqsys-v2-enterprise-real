@@ -57,6 +57,7 @@ export const NAV_TEMAS = [
       { to: '/qualidade-ia', icon: 'mdi-brain', title: 'Qualidade IA', tip: 'Score e tendência de qualidade do módulo de IA.' },
       { to: '/recomendacoes-ia', icon: 'mdi-robot-outline', title: 'Recomendações IA', tip: 'Recomendações geradas por IA com decisão e outcome.' },
       { to: '/govbi-ia', icon: 'mdi-database-search', title: 'GovBI IA', tip: 'Consultas analíticas em linguagem natural governada.' },
+      { to: '/codex', icon: 'mdi-code-braces', title: 'Codex', tip: 'Análise de código com LLM local (Ollama) ou mock, governada pelo ReqSys.' },
     ],
   },
   {

@@ -97,9 +97,26 @@
     <v-card class="technical-footer mt-4" variant="tonal" data-testid="user-final-technical-footer">
       <div>
         <strong>Rodapé técnico</strong>
-        <span class="muted">Versão frontend {{ frontendVersion }} · ambiente {{ environment.id }} · correlation_id {{ correlationId }}</span>
+        <span class="muted">
+          {{ versionSummary }}
+          <template v-if="apiBuildShaShort"> · build {{ apiBuildShaShort }}</template>
+          · ambiente {{ environment.id }}
+          · correlation_id {{ correlationId }}
+        </span>
       </div>
-      <v-chip size="small" color="green" variant="tonal">sem dado sensível</v-chip>
+      <div class="footer-chips">
+        <v-chip
+          v-if="hasVersionDrift"
+          size="small"
+          color="warning"
+          variant="tonal"
+          prepend-icon="mdi-alert-outline"
+          data-testid="user-final-version-drift-chip"
+        >
+          Versões divergentes
+        </v-chip>
+        <v-chip size="small" color="green" variant="tonal">sem dado sensível</v-chip>
+      </div>
     </v-card>
   </section>
 </template>
@@ -107,11 +124,18 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAppVersion } from '../composables/useAppVersion'
 
 const route = useRoute()
 const router = useRouter()
-const frontendVersion = '3.1.0'
+const { frontendVersion, apiVersion, apiBuildShaShort, versionsAligned, hasVersionDrift } = useAppVersion()
 const correlationId = `ufs-${Date.now().toString(36)}`
+
+const versionSummary = computed(() => {
+  if (!apiVersion.value) return `Versão frontend v${frontendVersion}`
+  if (versionsAligned.value) return `Versão v${frontendVersion} (frontend e API alinhadas)`
+  return `Versão frontend v${frontendVersion} · API v${apiVersion.value}`
+})
 
 const shellNavItems = [
   { label: 'Início', route: '/home', icon: 'mdi-home-outline' },
@@ -183,6 +207,7 @@ function goTo(target) {
 .transparent-list { background: transparent; }
 .technical-footer { padding: 14px 18px; flex-wrap: wrap; }
 .technical-footer span { display: block; margin-top: 2px; }
+.footer-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 760px) {
   .user-final-page { padding: 12px; }
   .user-final-hero { flex-direction: column; padding: 18px; }

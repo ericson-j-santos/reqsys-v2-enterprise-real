@@ -18,7 +18,7 @@ def test_operational_pareto_prioritizes_visibility_after_coverage_target() -> No
     assert payload["state"] == "yellow"
     assert payload["dominant_bottleneck"]["dimension"] == "coverage"
     assert payload["dominant_bottleneck"]["share_of_trilha_d_remaining_gap"] == 1.0
-    assert payload["ranked_actions"][0]["id"] == "operational_pareto_dashboard_card"
+    assert payload["ranked_actions"][0]["id"] == "predictive_regression_gate"
     assert payload["ranked_actions"][0]["recommended_now"] is True
 
 

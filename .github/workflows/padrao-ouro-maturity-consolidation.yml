@@ -8,9 +8,19 @@ on:
       - "scripts/delivery_maturity_snapshot.py"
       - "scripts/generate_ops_dashboard_data.py"
       - "scripts/build_padrao_ouro_operational_pareto.py"
+      - "scripts/build_trilha_d_history.py"
+      - "scripts/validate_ops_dashboard_navigation.py"
+      - "scripts/validate_ops_dashboard_trilha_d_pareto_cards.py"
+      - "scripts/validate_ops_dashboard_runtime_validation.py"
+      - "scripts/runtime_validation_consolidator.py"
       - "tests/test_padrao_ouro_maturity_consolidator.py"
       - "tests/test_build_padrao_ouro_operational_pareto.py"
+      - "tests/test_build_trilha_d_history.py"
+      - "tests/test_ops_dashboard_trilha_d_pareto_cards.py"
+      - "tests/test_validate_ops_dashboard_runtime_validation.py"
       - "docs/contracts/padrao-ouro-operational-pareto.schema.json"
+      - "docs/contracts/runtime-validation-snapshot.schema.json"
+      - "docs/ops-dashboard/data/executive-brief.json"
       - "docs/ops-dashboard/index.html"
       - ".github/workflows/padrao-ouro-maturity-consolidation.yml"
 
@@ -33,11 +43,19 @@ jobs:
           . .venv/bin/activate
           pip install -r requirements.txt
 
+      - name: Install root test runner
+        run: python -m pip install pytest
+
       - name: Consolidar Padrão Ouro 100%
         run: python scripts/padrao_ouro_maturity_consolidator.py
 
       - name: Validar testes de consolidação
-        run: python -m pytest tests/test_padrao_ouro_maturity_consolidator.py -q
+        run: |
+          python -m pytest tests/test_padrao_ouro_maturity_consolidator.py -q
+          python -m pytest tests/test_build_padrao_ouro_operational_pareto.py tests/test_build_trilha_d_history.py tests/test_ops_dashboard_trilha_d_pareto_cards.py tests/test_validate_ops_dashboard_runtime_validation.py -q
+          python3 scripts/validate_ops_dashboard_navigation.py
+          python3 scripts/validate_ops_dashboard_trilha_d_pareto_cards.py
+          python3 scripts/validate_ops_dashboard_runtime_validation.py
 
       - name: Upload maturity evidence
         uses: actions/upload-artifact@v4

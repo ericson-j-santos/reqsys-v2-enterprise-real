@@ -1,5 +1,5 @@
 const STATUS_VALIDOS = new Set(['CONCLUIDO', 'MODO_DEGRADADO', 'PENDENTE_APROVACAO', 'ERRO'])
-const FONTES_VALIDAS = new Set(['backend', 'fallback', 'proxy'])
+const FONTES_VALIDAS = new Set(['backend', 'fallback', 'proxy', 'transporte'])
 
 function normalizarTexto(valor) {
   return String(valor ?? '')

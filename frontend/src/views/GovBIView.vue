@@ -659,22 +659,22 @@ async function perguntar() {
     })
   } catch (e) {
     const detalhe = extrairDetalheErro(e)
-    resposta.value = null
+    resposta.value = gerarRespostaTransporteIndisponivel(perguntaNormalizada, detalhe)
     diagnosticoOperacional.value = {
       tipo: 'error',
       titulo: 'Falha de transporte com o backend ReqSys',
-      mensagem: `O proxy GovBI não respondeu. Verifique conectividade com /govbi/perguntas. Detalhe: ${detalhe}`,
+      mensagem: `O proxy GovBI não respondeu. Plano operacional exibido sem dados analíticos reais. Detalhe: ${detalhe}`,
     }
-    erro.value = detalhe
+    erro.value = ''
     registrarConsultaHistorico({
       pergunta: perguntaNormalizada,
       statusFluxo: 'ERRO',
       fonte: 'transporte',
       latenciaMs: Date.now() - inicio,
-      correlationId: criarCorrelationId(),
-      fallback: false,
+      correlationId: resposta.value.correlationId,
+      fallback: true,
       erro: detalhe,
-      explicacao: 'Erro de transporte — backend indisponível; modo degradado GovBI não aplicável sem resposta HTTP.',
+      explicacao: resposta.value.explicacao,
     })
   } finally {
     carregando.value = false
@@ -769,6 +769,52 @@ function normalizarRespostaGovBI(data, perguntaOriginal) {
   }
 }
 
+/** Plano operacional quando o backend não responde — não confundir com MODO_DEGRADADO do proxy GovBI. */
+function gerarRespostaTransporteIndisponivel(perguntaOriginal, detalheErro) {
+  const metrica = inferirMetrica(perguntaOriginal)
+  const dimensoes = inferirDimensoes(perguntaOriginal)
+  const correlationId = criarCorrelationId()
+
+  return {
+    avisos: [
+      'Backend ReqSys indisponível — erro de transporte, não modo degradado GovBI.',
+      'Tabela abaixo é plano operacional local, sem execução contra base real.',
+      'Use o Correlation ID para rastrear a ocorrência nos logs do backend.',
+    ],
+    nivelSensibilidade: 'BAIXA',
+    statusFluxo: 'ERRO',
+    metrica,
+    dimensoes,
+    filtros: inferirFiltros(perguntaOriginal),
+    correlationId,
+    sqlGerado: montarSqlSeguro(metrica, dimensoes),
+    resultado: {
+      colunas: ['item', 'valor', 'status'],
+      linhas: [
+        {
+          item: 'Pergunta recebida',
+          valor: perguntaOriginal,
+          status: 'VALIDADA_LOCALMENTE',
+        },
+        {
+          item: 'Proxy GovBI',
+          valor: detalheErro,
+          status: 'TRANSPORTE_INDISPONIVEL',
+        },
+        {
+          item: 'Próxima ação',
+          valor: 'Validar endpoint /govbi/perguntas, proxy Vite e logs do backend.',
+          status: 'ACAO_OPERACIONAL',
+        },
+      ],
+    },
+    mascaramentoAplicado: true,
+    requerAprovacao: false,
+    aprovacaoId: null,
+    explicacao: 'Plano operacional local por falha de transporte — distinto do fallback MODO_DEGRADADO emitido pelo backend.',
+  }
+}
+
 function extrairDetalheErro(e) {
   const status = e.response?.status
   const statusText = e.response?.statusText
@@ -798,6 +844,21 @@ function inferirDimensoes(texto) {
   if (t.includes('situação') || t.includes('situacao') || t.includes('status')) dimensoes.push('situacao')
   if (t.includes('trimestre')) dimensoes.push('trimestre')
   return dimensoes.length ? dimensoes : ['periodo']
+}
+
+function inferirFiltros(texto) {
+  const filtros = {}
+  const ano = texto.match(/20\d{2}/)?.[0]
+  if (ano) filtros.ano = ano
+  if (texto.toLowerCase().includes('último trimestre') || texto.toLowerCase().includes('ultimo trimestre')) {
+    filtros.periodo_relativo = 'ultimo_trimestre'
+  }
+  return filtros
+}
+
+function montarSqlSeguro(metrica, dimensoes) {
+  const dimensaoSelect = dimensoes.join(', ') || 'periodo'
+  return `-- SQL ilustrativo governado; não executado contra base real\nSELECT ${dimensaoSelect}, COUNT(*) AS ${metrica}\nFROM fonte_governada\nWHERE 1 = 1\nGROUP BY ${dimensaoSelect};`
 }
 
 function criarCorrelationId() {
