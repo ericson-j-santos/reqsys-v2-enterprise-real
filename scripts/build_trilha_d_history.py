@@ -19,6 +19,7 @@ REFRESH_STRATEGY_ARTIFACT = "artifact_ingestion_on_trilha_d_consolidate"
 REFRESH_STRATEGY_STATIC = "static_json_until_artifact_ingestion_is_enabled"
 NEXT_INCREMENT_AFTER_INGESTION = "consolidate_operational_pareto_cycle"
 NEXT_INCREMENT_AFTER_PARETO_DASHBOARD = "predictive_regression_gate"
+NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD = "coverage_targeted_tests"
 DIMENSIONS = ("tests", "coverage", "mutation", "contract", "schema", "ci-watch")
 
 
@@ -194,9 +195,26 @@ def ops_dashboard_pareto_surface_ready(repo_root: Path | None = None) -> bool:
     return all(marker in text for marker in required_markers)
 
 
+def ops_dashboard_predictive_gate_surface_ready(repo_root: Path | None = None) -> bool:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    index_html = root / "docs/ops-dashboard/index.html"
+    gate_json = root / "docs/ops-dashboard/data/predictive-regression-gate.json"
+    if not index_html.exists() or not gate_json.exists():
+        return False
+    text = index_html.read_text(encoding="utf-8")
+    required_markers = (
+        'id="predictive-regression-card"',
+        "renderPredictiveRegressionGate",
+        "predictive-regression-gate.json",
+    )
+    return all(marker in text for marker in required_markers)
+
+
 def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None = None) -> str:
     if not artifact_ingestion:
         return "artifact_ingestion_refresh"
+    if ops_dashboard_predictive_gate_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD
     if ops_dashboard_pareto_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_PARETO_DASHBOARD
     return NEXT_INCREMENT_AFTER_INGESTION

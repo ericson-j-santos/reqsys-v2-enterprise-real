@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Trilha D history and Operational Pareto cards in the Ops Dashboard.
+"""Validate Trilha D history, Operational Pareto and Predictive Regression cards in the Ops Dashboard.
 
 Read-only validator for static HTML/JSON artifacts. Does not perform network calls.
 """
@@ -15,6 +15,7 @@ INDEX_HTML = ROOT / "docs/ops-dashboard/index.html"
 NAV_INDEX = ROOT / "docs/ops-dashboard/operational-navigation-index.json"
 TRILHA_D_DATA = ROOT / "docs/ops-dashboard/data/trilha-d-history.json"
 PARETO_DATA = ROOT / "docs/ops-dashboard/data/padrao-ouro-operational-pareto.json"
+PREDICTIVE_DATA = ROOT / "docs/ops-dashboard/data/predictive-regression-gate.json"
 
 TRILHA_D_DOM_IDS = [
     "trilha-d-score",
@@ -38,23 +39,39 @@ PARETO_DOM_IDS = [
     "pareto-details",
 ]
 
+PREDICTIVE_DOM_IDS = [
+    "predictive-risk",
+    "predictive-regression-predicted",
+    "predictive-parallel-safe",
+    "predictive-recommendation",
+    "predictive-signals",
+    "predictive-dimension-risks",
+    "predictive-blocking-reasons",
+    "predictive-links",
+    "predictive-details",
+]
+
 REQUIRED_SECTION_IDS = [
     "operational-intelligence-nav",
     "trilha-d-history-card",
     "operational-pareto-card",
+    "predictive-regression-card",
 ]
 
 REQUIRED_FUNCTIONS = [
     "renderTrilhaDHistory",
     "renderOperationalPareto",
+    "renderPredictiveRegressionGate",
     "renderOperationalIntelligenceQuickLinks",
     "trilha-d-history.json",
     "padrao-ouro-operational-pareto.json",
+    "predictive-regression-gate.json",
 ]
 
 REQUIRED_NAV_LINK_IDS = {
     "trilha_d_history_dashboard",
     "operational_pareto_dashboard",
+    "predictive_regression_dashboard",
 }
 
 
@@ -66,7 +83,7 @@ def validate_index_html() -> None:
     if not INDEX_HTML.exists():
         fail(f"missing dashboard page: {INDEX_HTML.relative_to(ROOT)}")
     text = INDEX_HTML.read_text(encoding="utf-8")
-    for dom_id in [*TRILHA_D_DOM_IDS, *PARETO_DOM_IDS, *REQUIRED_SECTION_IDS]:
+    for dom_id in [*TRILHA_D_DOM_IDS, *PARETO_DOM_IDS, *PREDICTIVE_DOM_IDS, *REQUIRED_SECTION_IDS]:
         if f'id="{dom_id}"' not in text:
             fail(f"missing DOM id: {dom_id}")
     for required in REQUIRED_FUNCTIONS:
@@ -85,15 +102,20 @@ def validate_navigation_links() -> None:
     by_id = {item["id"]: item for item in payload["links"]}
     assert by_id["trilha_d_history_dashboard"]["href"] == "./index.html#trilha-d-history-card"
     assert by_id["operational_pareto_dashboard"]["href"] == "./index.html#operational-pareto-card"
+    assert by_id["predictive_regression_dashboard"]["href"] == "./index.html#predictive-regression-card"
 
 
 def validate_data_contracts() -> None:
-    for path in (TRILHA_D_DATA, PARETO_DATA):
+    for path in (TRILHA_D_DATA, PARETO_DATA, PREDICTIVE_DATA):
         if not path.exists():
             fail(f"missing data contract: {path.relative_to(ROOT)}")
         payload = json.loads(path.read_text(encoding="utf-8"))
         if not payload.get("schema_version"):
             fail(f"schema_version missing in {path.relative_to(ROOT)}")
+        if path == PREDICTIVE_DATA:
+            if payload.get("risk") is None:
+                fail("risk missing in predictive-regression-gate.json")
+            continue
         if not isinstance(payload.get("current_score"), int | float):
             fail(f"current_score missing in {path.relative_to(ROOT)}")
 
@@ -105,7 +127,11 @@ def validate_data_contracts() -> None:
 
     trilha_next = (trilha_d.get("summary") or {}).get("next_increment")
     pareto_next = pareto_summary.get("next_increment")
-    if trilha_next == "predictive_regression_gate" and pareto_next != "predictive_regression_gate":
+    aligned_pairs = {
+        "predictive_regression_gate",
+        "coverage_targeted_tests",
+    }
+    if trilha_next in aligned_pairs and pareto_next != trilha_next:
         fail(
             "pareto next_increment diverges from trilha-d-history after dashboard consolidation: "
             f"trilha_d={trilha_next!r} pareto={pareto_next!r}"
