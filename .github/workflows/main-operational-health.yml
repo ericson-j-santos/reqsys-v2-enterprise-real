@@ -33,7 +33,7 @@ jobs:
   operational-health:
     name: Main operational health / evidence
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
 
     steps:
       - name: Checkout
@@ -75,14 +75,6 @@ jobs:
           set -euo pipefail
           python -m py_compile scripts/pr_ci_watch.py
 
-      - name: Executar testes rapidos do watcher
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          python -m pip install pytest
-          python -m pytest tests/test_pr_ci_watch.py -q
-
       - name: Gerar evidencia operacional
         if: always()
         shell: bash
@@ -98,7 +90,9 @@ jobs:
             printf -- '- Confirma PR Scope Labeler em modo read-only.\n'
             printf -- '- Confirma Main Smoke CI com artifact de evidencia.\n'
             printf -- '- Confirma guardrails do PR CI Watch.\n'
-            printf -- '- Valida sintaxe e testes rapidos do watcher.\n'
+            printf -- '- Valida sintaxe do watcher (py_compile).\n'
+            printf -- '- Testes do watcher: gate no PR via Fast CI - Operational Guardrails.\n'
+            printf -- '- Malha P0 rapida: Main Operational Validation Fast (--lite).\n'
             printf -- '- Nao executa deploy.\n'
             printf -- '- Nao altera producao.\n'
           } > artifacts/main-operational-health/summary.md
