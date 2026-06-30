@@ -1,14 +1,14 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T21:40:28.186351Z",
+  "generated_at": "2026-06-30T23:25:14.945248Z",
   "state": "green",
   "monitoring_enabled": true,
   "regression_alert": false,
   "alerts_active": 0,
   "lane": "governance-automation",
   "summary": {
-    "next_increment": "link_governance_cards_to_latest_workflow_runs",
+    "next_increment": "continuous_trilha_d_monitoring",
     "artifact_ingestion_enabled": true,
     "continuous_monitoring_enabled": true,
     "recommendation": "monitoramento_estavel"
