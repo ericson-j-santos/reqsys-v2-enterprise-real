@@ -5,6 +5,7 @@ on:
     paths:
       - 'docs/ollama-local-gateway/**'
       - 'scripts/sincronizar_ollama_gateway_repo.sh'
+      - 'scripts/configurar_ollama_gateway_sync.sh'
       - 'backend/app/services/codex_governado.py'
       - 'backend/tests/test_codex_governado*.py'
       - '.github/workflows/ollama-gateway-bootstrap.yml'
@@ -13,6 +14,7 @@ on:
     paths:
       - 'docs/ollama-local-gateway/**'
       - 'scripts/sincronizar_ollama_gateway_repo.sh'
+      - 'scripts/configurar_ollama_gateway_sync.sh'
       - 'backend/app/services/codex_governado.py'
       - 'backend/tests/test_codex_governado*.py'
       - '.github/workflows/ollama-gateway-bootstrap.yml'
@@ -56,40 +58,26 @@ jobs:
   sync-external:
     name: Publicar repo externo
     needs: validate-bootstrap
-    if: |
-      (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
-      secrets.OLLAMA_GATEWAY_SYNC_TOKEN != ''
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Instalar gh CLI
-        run: |
-          type -p gh >/dev/null || (sudo apt-get update && sudo apt-get install -y gh)
       - name: Sync para reqsys-ollama-local-gateway
         env:
           GH_TOKEN: ${{ secrets.OLLAMA_GATEWAY_SYNC_TOKEN }}
         run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "## Sync externo ignorado" >> "$GITHUB_STEP_SUMMARY"
+            echo "Configure OLLAMA_GATEWAY_SYNC_TOKEN para publicar automaticamente." >> "$GITHUB_STEP_SUMMARY"
+            echo "Comando: bash scripts/configurar_ollama_gateway_sync.sh" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          type -p gh >/dev/null || (sudo apt-get update && sudo apt-get install -y gh)
           BRANCH="${{ github.event.inputs.branch || 'feat/gateway-sync' }}"
           bash scripts/sincronizar_ollama_gateway_repo.sh "$BRANCH"
-      - name: Evidencia sync
-        run: |
           echo "## Sync externo" >> "$GITHUB_STEP_SUMMARY"
           echo "- Repo: ericson-j-santos/reqsys-ollama-local-gateway" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Branch: ${{ github.event.inputs.branch || 'feat/gateway-sync' }}" >> "$GITHUB_STEP_SUMMARY"
-
-  sync-skipped:
-    name: Sync externo (secret ausente)
-    needs: validate-bootstrap
-    if: |
-      (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
-      secrets.OLLAMA_GATEWAY_SYNC_TOKEN == ''
-    runs-on: ubuntu-latest
-    steps:
-      - name: Registrar pendencia
-        run: |
-          echo "## Sync externo ignorado" >> "$GITHUB_STEP_SUMMARY"
-          echo "Configure OLLAMA_GATEWAY_SYNC_TOKEN para publicar automaticamente." >> "$GITHUB_STEP_SUMMARY"
-          echo "Comando: gh secret set OLLAMA_GATEWAY_SYNC_TOKEN -R ericson-j-santos/reqsys-v2-enterprise-real" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Branch: $BRANCH" >> "$GITHUB_STEP_SUMMARY"
