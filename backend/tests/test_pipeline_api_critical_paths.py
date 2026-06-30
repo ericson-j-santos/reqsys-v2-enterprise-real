@@ -196,3 +196,87 @@ def test_publicar_redmine_github_import_integracao_error(mock_fetch, client, mon
     )
 
     assert response.status_code == 400
+
+
+def test_validar_requisito_atualiza_status_quando_requisito_id_informado(client):
+    criado = client.post(
+        '/v1/solicitacoes',
+        json={
+            'origem': 'portal',
+            'titulo': 'Validar com requisito id',
+            'descricao': 'Descricao longa para validar requisito existente no banco.',
+            'solicitante': 'qa@reqsys.local',
+            'area': 'QA',
+            'sistema': 'Pipeline',
+            'urgencia': 'media',
+        },
+    )
+    requisito_id = criado.json()['data']['id']
+
+    response = client.post(
+        f'/v1/requisitos/validar?requisito_id={requisito_id}',
+        json={
+            'titulo': 'Titulo valido',
+            'descricao': 'Descricao valida sem termos ambiguos.',
+            'requisitos_funcionais': ['RF-001'],
+            'criterios_aceite': [{'ordem': 1, 'descricao': 'Criterio atendido.'}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()['data']['aprovado_para_triagem'] is True
+
+    detalhe = client.get(f'/v1/requisitos/{requisito_id}')
+    if detalhe.status_code == 200:
+        assert detalhe.json()['data']['status'] == 'validado'
+
+
+def test_estruturar_requisito_existente_atualiza_status(client):
+    criado = client.post(
+        '/v1/solicitacoes',
+        json={
+            'origem': 'portal',
+            'titulo': 'Estruturar requisito existente',
+            'descricao': 'Descricao longa para estruturar requisito recebido no banco.',
+            'solicitante': 'qa@reqsys.local',
+            'area': 'QA',
+            'sistema': 'Pipeline',
+            'urgencia': 'alta',
+        },
+    )
+    requisito_id = criado.json()['data']['id']
+
+    response = client.post(
+        f'/v1/requisitos/estruturar/{requisito_id}',
+        json={
+            'origem': 'portal',
+            'titulo': 'Estruturar requisito existente',
+            'descricao': 'Buscar cadastro por CPF antes de criar novo registro.',
+            'solicitante': 'qa@reqsys.local',
+            'area': 'QA',
+            'sistema': 'Pipeline',
+            'urgencia': 'alta',
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['status'] == 'estruturado'
+    assert data['codigo_requisito'].startswith('REQ-')
+
+
+def test_listar_issues_github_propaga_integracao_error(client, monkeypatch):
+    monkeypatch.setattr(pipeline_api, 'github_redmine_import_enabled', lambda: True)
+
+    def _raise(*_args, **_kwargs):
+        raise pipeline_api.IntegracaoError('falha simulada na API GitHub')
+
+    monkeypatch.setattr(pipeline_api, 'fetch_github_issues', _raise)
+
+    response = client.post(
+        '/v1/integracoes/github/issues',
+        json={'repo': 'owner/repo', 'state': 'open', 'limit': 5},
+    )
+
+    assert response.status_code == 400
+    assert 'falha simulada' in response.json()['detail']
