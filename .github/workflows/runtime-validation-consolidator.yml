@@ -10,13 +10,6 @@ on:
         required: false
         default: "main"
         type: string
-  workflow_run:
-    workflows:
-      - Public Runtime Evidence Gate
-      - Main Post-Merge Validation
-      - Runtime Health Validator
-    types:
-      - completed
 
 permissions:
   actions: read
@@ -31,10 +24,6 @@ jobs:
     name: Consolidar validação runtime
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success' ||
-      github.event.workflow_run.conclusion == 'failure'
 
     steps:
       - name: Checkout
