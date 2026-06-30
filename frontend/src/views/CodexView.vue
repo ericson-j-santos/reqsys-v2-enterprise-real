@@ -136,7 +136,7 @@ import { computed, onMounted, ref } from 'vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../services/api'
 
-const providers = ['mock', 'ollama', 'openai', 'claude']
+const providers = ['mock', 'ollama', 'ollama_gateway', 'openai', 'claude']
 const provider = ref('mock')
 const contexto = ref('')
 const entrada = ref('')

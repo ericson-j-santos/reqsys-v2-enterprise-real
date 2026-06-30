@@ -19,7 +19,7 @@ from app.models.codex_auditoria import CodexAuditoria
 logger = logging.getLogger('reqsys.codex_governado')
 audit_logger = logging.getLogger('reqsys.audit.codex_governado')
 
-Provider = Literal['mock', 'ollama', 'openai', 'claude']
+Provider = Literal['mock', 'ollama', 'ollama_gateway', 'openai', 'claude']
 
 _PADROES_SENSIVEIS = [
     re.compile(r'(senha|password|passwd)\s*[:=]', re.I),
@@ -91,6 +91,29 @@ def _post_json(url: str, payload: dict[str, Any], headers: dict[str, str] | None
     return resposta.json()
 
 
+def _extrair_resposta_textual(data: dict[str, Any]) -> str:
+    candidatos = [
+        data.get('response'),
+        data.get('resposta'),
+        data.get('resultado'),
+        data.get('answer'),
+        data.get('content'),
+    ]
+    envelope = data.get('data')
+    if isinstance(envelope, dict):
+        candidatos.extend([
+            envelope.get('response'),
+            envelope.get('resposta'),
+            envelope.get('resultado'),
+            envelope.get('answer'),
+            envelope.get('content'),
+        ])
+    for candidato in candidatos:
+        if candidato:
+            return str(candidato)
+    raise RuntimeError('Resposta do provider sem conteudo utilizavel')
+
+
 def chamar_ollama(prompt: str) -> str:
     base_url = (settings.codex_ollama_base_url or 'http://localhost:11434').rstrip('/')
     payload = {
@@ -101,6 +124,30 @@ def chamar_ollama(prompt: str) -> str:
     }
     data = _post_json(f'{base_url}/api/generate', payload)
     return str(data.get('response') or '')
+
+
+def chamar_ollama_gateway(prompt: str, contexto: str, entrada: str, correlation_id: str) -> str:
+    if not settings.codex_ollama_gateway_url:
+        raise RuntimeError('CODEX_OLLAMA_GATEWAY_URL ausente')
+
+    base_url = settings.codex_ollama_gateway_url.rstrip('/')
+    model = settings.codex_ollama_gateway_model or settings.codex_ollama_model
+    payload = {
+        'model': model,
+        'task_type': 'code',
+        'prompt': prompt,
+        'contexto': contexto,
+        'entrada': entrada,
+        'correlation_id': correlation_id,
+        'source': 'reqsys-codex-local-online',
+    }
+    headers = {'Content-Type': 'application/json'}
+    if settings.codex_ollama_gateway_api_key:
+        headers['X-API-Key'] = settings.codex_ollama_gateway_api_key
+
+    timeout = max(1, int(settings.codex_ollama_gateway_timeout_seconds))
+    data = _post_json(f'{base_url}/v1/chat', payload, headers=headers, timeout=timeout)
+    return _extrair_resposta_textual(data)
 
 
 def chamar_openai(prompt: str) -> str:
@@ -155,6 +202,8 @@ def executar_provider(provider: Provider, prompt: str, contexto: str, entrada: s
         return resposta_mock(contexto, entrada, correlation_id)
     if provider == 'ollama':
         return chamar_ollama(prompt)
+    if provider == 'ollama_gateway':
+        return chamar_ollama_gateway(prompt, contexto, entrada, correlation_id)
     if provider == 'openai':
         return chamar_openai(prompt)
     if provider == 'claude':
@@ -182,6 +231,8 @@ def calcular_score_confianca(provider: str, bloqueado: bool, reqsys_publicado: b
     score = 70
     if provider != 'mock':
         score += 10
+    if provider == 'ollama_gateway':
+        score += 5
     if reqsys_publicado:
         score += 10
     return min(score, 95)

@@ -115,7 +115,7 @@ Inventário centralizado de **schemas, eventos, APIs, payloads, outputs e pipeli
 | --- | --- | --- | --- |
 | `figma-github` | Figma GitHub — retorno em tela | integração | `ENABLE_FIGMA_GITHUB_SYNC` |
 | `cofre-segredos` | Cofre de Segredos Locais | segurança | `REQSYS_VAULT_SERVICE_NAME`, `VAULT_API_TOKEN` |
-| `codex-governado` | Codex VS Code/LLM Local + Online | IA · codificação | `CODEX_OLLAMA_BASE_URL`, `CODEX_OLLAMA_MODEL` |
+| `codex-governado` | Codex VS Code/LLM Local + Online | IA · codificação | `CODEX_OLLAMA_GATEWAY_URL`, `CODEX_OLLAMA_GATEWAY_API_KEY` |
 
 ### Contrato Codex (`/v1/codex`)
 
@@ -125,7 +125,7 @@ Inventário centralizado de **schemas, eventos, APIs, payloads, outputs e pipeli
 | `GET /status` | JWT | — | `{ servico, providers, guard_rails }` |
 | `GET /operational-summary` | JWT | `?limite=10` | `{ dashboard: { total, bloqueados, latencia_media, ... } }` |
 
-Providers: `mock`, `ollama`, `openai`, `claude`. Runbook: [`docs/runbooks/codex-vscode-local-inicio-rapido.md`](../runbooks/codex-vscode-local-inicio-rapido.md).
+Providers: `mock`, `ollama`, `ollama_gateway`, `openai`, `claude`. Provider canônico local: `ollama_gateway`. Runbook: [`docs/runbooks/codex-vscode-local-inicio-rapido.md`](../runbooks/codex-vscode-local-inicio-rapido.md).
 
 
 ### Contrato Cofre (`/v1/cofre`)

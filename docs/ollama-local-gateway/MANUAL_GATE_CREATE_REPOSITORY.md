@@ -1,31 +1,29 @@
-# Gate manual — criar reqsys-ollama-local-gateway
+# Gate — reqsys-ollama-local-gateway
 
-## Estado
+## Estado: resolvido no ReqSys
 
-A criacao do repositorio externo continua sendo uma acao humana, pois depende de permissao administrativa do GitHub nao disponivel nesta execucao.
-
-## Repositorio alvo
-
-`ericson-j-santos/reqsys-ollama-local-gateway`
-
-## Configuracoes minimas
-
-| Campo | Valor recomendado |
+| Item | Status |
 |---|---|
-| Owner | `ericson-j-santos` |
-| Nome | `reqsys-ollama-local-gateway` |
-| Visibilidade | Privado |
-| Branch padrao | `main` |
-| Actions | Habilitado |
+| Repositório externo existe | ✅ `ericson-j-santos/reqsys-ollama-local-gateway` |
+| Bootstrap v0.2.0 com `/v1/chat` | ✅ `docs/ollama-local-gateway/bootstrap-files/` |
+| Provider `ollama_gateway` no ReqSys | ✅ |
+| Stack local one-command | ✅ `bash scripts/iniciar_codex_local.sh` |
+| CI validação bootstrap | ✅ `.github/workflows/ollama-gateway-bootstrap.yml` |
 
-## Depois da criacao
+## Publicação no repo externo (opcional)
 
-Copiar o conteudo de `docs/ollama-local-gateway/bootstrap-files/` para a raiz do novo repositorio e abrir o PR inicial.
+Execução local (requer token com `contents:write` no repo externo):
 
-## Criterio de conclusao da issue #125
+```bash
+GH_TOKEN=<seu-pat> bash scripts/sincronizar_ollama_gateway_repo.sh
+```
 
-- Repositorio existe.
-- CI inicial verde.
-- SECURITY.md e CODEOWNERS presentes.
-- Branch protection configurada.
-- Environments `dev`, `hml`, `prod` criados.
+Ou via GitHub Actions: workflow **Ollama Gateway Bootstrap** → `workflow_dispatch` com secret `OLLAMA_GATEWAY_SYNC_TOKEN` configurado no repositório ReqSys.
+
+## Critério de conclusão issue #95
+
+- [x] Repositório externo existe
+- [x] Bootstrap v0.2.0 no monólito ReqSys
+- [x] Provider `ollama_gateway` integrado
+- [x] Uso local sem dependência do push externo
+- [ ] PR mergeado no repo externo (opcional — sync com token de owner)

@@ -7,6 +7,9 @@ on:
       - 'docs/adrs/ADR-022-codex-local-online-integrado-reqsys.md'
       - 'docs/runbooks/codex-local-online.md'
       - 'docs/runbooks/codex-vscode-local-inicio-rapido.md'
+      - 'docs/ollama-local-gateway/**'
+      - 'scripts/sincronizar_ollama_gateway_repo.sh'
+      - 'scripts/iniciar_codex_local.sh'
       - '.github/workflows/codex-local-online.yml'
   push:
     branches: [ main ]
@@ -15,6 +18,9 @@ on:
       - 'docs/adrs/ADR-022-codex-local-online-integrado-reqsys.md'
       - 'docs/runbooks/codex-local-online.md'
       - 'docs/runbooks/codex-vscode-local-inicio-rapido.md'
+      - 'docs/ollama-local-gateway/**'
+      - 'scripts/sincronizar_ollama_gateway_repo.sh'
+      - 'scripts/iniciar_codex_local.sh'
       - '.github/workflows/codex-local-online.yml'
   workflow_dispatch:
 

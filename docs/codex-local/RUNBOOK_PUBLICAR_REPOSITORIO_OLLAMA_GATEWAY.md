@@ -2,110 +2,35 @@
 
 ## Objetivo
 
-Padronizar a criação e publicação do repositório independente `ericson-j-santos/reqsys-ollama-local-gateway`, mantendo o ReqSys como produto principal e o gateway como provider local governado.
+Manter sincronizado o repositório `ericson-j-santos/reqsys-ollama-local-gateway` com o bootstrap canônico do ReqSys.
 
-## Estado atual evidenciado
+## Estado atual
 
-- Repositório esperado: `ericson-j-santos/reqsys-ollama-local-gateway`
-- Resultado atual da validação: `404 Not Found`
-- Natureza do bloqueio: ação manual humana no GitHub
-- Issue relacionada: `#95`
-- PR relacionado no repositório principal: `#96`
-
-## Decisão arquitetural
-
-O gateway independente não substitui o Codex Local/Online do ReqSys. Ele deve atuar como provider local via HTTP para permitir uso de modelos Ollama em ambiente controlado.
-
-## Ação manual obrigatória
-
-Criar manualmente o repositório GitHub:
-
-```text
-ericson-j-santos/reqsys-ollama-local-gateway
-```
-
-Configuração recomendada:
-
-| Configuração | Valor recomendado |
+| Item | Status |
 |---|---|
-| Owner | `ericson-j-santos` |
-| Nome | `reqsys-ollama-local-gateway` |
-| Branch padrão | `main` |
-| README inicial | Sim |
-| Visibilidade | Definir conforme estratégia de publicação |
-| Actions | Habilitado |
-| Issues | Habilitado |
-| Branch protection | Habilitar após primeiro push |
-| Licença | Definir explicitamente antes de uso externo |
+| Repositório externo | ✅ Existe |
+| Bootstrap v0.2.0 no ReqSys | ✅ `docs/ollama-local-gateway/bootstrap-files/` |
+| Uso local sem sync externo | ✅ `bash scripts/iniciar_codex_local.sh` |
+| Provider `ollama_gateway` | ✅ Integrado |
 
-## Estrutura mínima recomendada do repositório independente
-
-```text
-reqsys-ollama-local-gateway/
-├── README.md
-├── CHANGELOG.md
-├── LICENSE
-├── .env.example
-├── .gitignore
-├── pyproject.toml
-├── src/
-│   └── reqsys_ollama_gateway/
-│       ├── __init__.py
-│       ├── main.py
-│       ├── config.py
-│       ├── audit.py
-│       ├── schemas.py
-│       └── ollama_client.py
-├── tests/
-│   ├── test_health.py
-│   ├── test_chat_contract.py
-│   └── test_audit.py
-├── docs/
-│   ├── ADR-001-provider-local-ollama.md
-│   └── SECURITY.md
-└── .github/
-    └── workflows/
-        └── ci.yml
-```
-
-## Gates mínimos antes de considerar pronto
-
-- `pytest` verde.
-- `ruff` verde.
-- Nenhuma chamada real ao Ollama nos testes unitários.
-- `.env.example` sem segredo real.
-- Logs com `correlation_id`.
-- Nenhum token, senha, CPF, PII ou connection string em log.
-- Endpoint de health check sem expor informações sensíveis.
-- CORS sem wildcard em produção.
-- Documentação de execução local.
-- CI com artifact de evidência.
-
-## Comandos sugeridos após criação manual do repositório
+## Sync para repo externo
 
 ```bash
-git clone https://github.com/ericson-j-santos/reqsys-ollama-local-gateway.git
-cd reqsys-ollama-local-gateway
-
-git checkout -b bootstrap/gateway-inicial
-# copiar/adaptar pacote independente gerado pelo ReqSys
-python -m pytest -q
-ruff check .
-
-git add .
-git commit -m "feat: bootstrap do ReqSys Ollama Local Gateway"
-git push -u origin bootstrap/gateway-inicial
+GH_TOKEN=<pat-com-write-no-repo-externo> bash scripts/sincronizar_ollama_gateway_repo.sh
 ```
 
-Depois, abrir PR para `main` no repositório independente.
+Ou GitHub Actions → **Ollama Gateway Bootstrap** → `workflow_dispatch` (secret `OLLAMA_GATEWAY_SYNC_TOKEN`).
 
-## Próximo passo após publicação
+## Arquitetura
 
-1. Vincular o PR do novo repositório à issue `#95` do ReqSys.
-2. Atualizar o PR `#96` com o link do repositório independente.
-3. Validar consumo do gateway via provider `ollama_gateway` no ReqSys.
-4. Manter isolamento arquitetural: o ReqSys consome o gateway por API; não duplicar produto dentro do monólito.
+O gateway não substitui o Codex no ReqSys. É provider local via HTTP (`POST /v1/chat`).
 
-## Status operacional
+```
+ReqSys /codex → ollama_gateway → Gateway :8008 → Ollama :11434
+```
 
-Enquanto o repositório independente não existir, esta frente permanece com bloqueio manual humano.
+## Referências
+
+- `docs/ollama-local-gateway/MANUAL_GATE_CREATE_REPOSITORY.md`
+- `docs/codex-local/DECISAO_GATEWAY_OLLAMA_PROVIDER.md`
+- Issue #95
