@@ -21,6 +21,7 @@ NEXT_INCREMENT_AFTER_INGESTION = "consolidate_operational_pareto_cycle"
 NEXT_INCREMENT_AFTER_PARETO_DASHBOARD = "predictive_regression_gate"
 NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD = "coverage_targeted_tests"
 NEXT_INCREMENT_AFTER_COVERAGE_TARGETED = "link_governance_cards_to_latest_workflow_runs"
+NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS = "dashboard_trilha_d_history_card"
 COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
     "backend/tests/test_hub_lowcode_service_critical_paths.py",
     "backend/tests/test_wiki_publisher_critical_paths.py",
@@ -221,9 +222,40 @@ def coverage_targeted_critical_paths_ready(repo_root: Path | None = None) -> boo
     return all((root / relative_path).exists() for relative_path in COVERAGE_TARGETED_CRITICAL_PATH_TESTS)
 
 
+def governance_deep_links_surface_ready(repo_root: Path | None = None) -> bool:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    index_html = root / "docs/ops-dashboard/index.html"
+    monitoramento_view = root / "frontend/src/views/MonitoramentoOperacionalView.vue"
+    governance_index = root / "docs/ops-dashboard/data/governance-evidence-index.json"
+    if not index_html.exists() or not monitoramento_view.exists() or not governance_index.exists():
+        return False
+    html_text = index_html.read_text(encoding="utf-8")
+    view_text = monitoramento_view.read_text(encoding="utf-8")
+    required_markers = (
+        "Última execução",
+        "latest_run",
+        "Ver workflow runs",
+    )
+    if not all(marker in html_text or marker in view_text for marker in required_markers):
+        return False
+    try:
+        payload = json.loads(governance_index.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    evidence = payload.get("evidence") or []
+    if not evidence:
+        return False
+    return all(
+        isinstance((item.get("links") or {}).get("latest_run"), str) and item.get("dashboard_ready")
+        for item in evidence
+    )
+
+
 def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None = None) -> str:
     if not artifact_ingestion:
         return "artifact_ingestion_refresh"
+    if governance_deep_links_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS
     if coverage_targeted_critical_paths_ready(repo_root):
         return NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
     if ops_dashboard_predictive_gate_surface_ready(repo_root):

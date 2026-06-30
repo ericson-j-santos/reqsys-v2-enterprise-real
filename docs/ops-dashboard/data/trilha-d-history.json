@@ -1,18 +1,18 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T02:31:01.441567Z",
+  "generated_at": "2026-06-30T10:30:06.378608Z",
   "state": "green",
-  "current_score": 97.59,
+  "current_score": 95.88,
   "baseline_score": 88.33,
-  "delta_from_baseline": 9.26,
+  "delta_from_baseline": 7.55,
   "trend": "improving",
   "summary": {
-    "samples": 5,
-    "green_samples": 4,
+    "samples": 3,
+    "green_samples": 2,
     "failed_samples": 1,
-    "next_increment": "link_governance_cards_to_latest_workflow_runs",
-    "artifact_ingestion_enabled": true
+    "next_increment": "artifact_ingestion_refresh",
+    "artifact_ingestion_enabled": false
   },
   "links": {
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
@@ -26,15 +26,15 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 5
+      "samples": 3
     },
     "coverage": {
       "current_status": "passed",
-      "current_score": 85.56,
-      "previous_score": 85.56,
-      "delta_from_baseline": 56.56,
+      "current_score": 74.29,
+      "previous_score": 74.29,
+      "delta_from_baseline": 45.29,
       "trend": "improving",
-      "samples": 5
+      "samples": 3
     },
     "mutation": {
       "current_status": "passed",
@@ -42,7 +42,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 5
+      "samples": 3
     },
     "contract": {
       "current_status": "passed",
@@ -50,7 +50,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 5
+      "samples": 3
     },
     "schema": {
       "current_status": "passed",
@@ -58,7 +58,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 5
+      "samples": 3
     },
     "ci-watch": {
       "current_status": "passed",
@@ -66,7 +66,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 5
+      "samples": 3
     }
   },
   "history": [
@@ -177,80 +177,6 @@
       "notes": [
         "coverage_parser_regression_tests_merged"
       ]
-    },
-    {
-      "timestamp": "2026-06-29T19:27:47.966281Z",
-      "source": "github_actions_artifact",
-      "run_id": "pr-561",
-      "state": "green",
-      "average_score": 97.59,
-      "dimensions": {
-        "ci-watch": {
-          "status": "passed",
-          "score": 100.0
-        },
-        "contract": {
-          "status": "passed",
-          "score": 100.0
-        },
-        "coverage": {
-          "status": "passed",
-          "score": 85.56
-        },
-        "mutation": {
-          "status": "passed",
-          "score": 100.0
-        },
-        "schema": {
-          "status": "passed",
-          "score": 100.0
-        },
-        "tests": {
-          "status": "passed",
-          "score": 100.0
-        }
-      },
-      "notes": [
-        "continuar_incremento_qualidade",
-        "correlation_id=pr-561-coverage-targeted-tests"
-      ]
-    },
-    {
-      "timestamp": "2026-06-29T20:12:03.401572Z",
-      "source": "github_actions_artifact",
-      "run_id": "main-post-merge-561",
-      "state": "green",
-      "average_score": 97.59,
-      "dimensions": {
-        "ci-watch": {
-          "status": "passed",
-          "score": 100.0
-        },
-        "contract": {
-          "status": "passed",
-          "score": 100.0
-        },
-        "coverage": {
-          "status": "passed",
-          "score": 85.56
-        },
-        "mutation": {
-          "status": "passed",
-          "score": 100.0
-        },
-        "schema": {
-          "status": "passed",
-          "score": 100.0
-        },
-        "tests": {
-          "status": "passed",
-          "score": 100.0
-        }
-      },
-      "notes": [
-        "continuar_incremento_qualidade",
-        "correlation_id=main-post-merge-561"
-      ]
     }
   ],
   "runtime_dashboard_contract": {
@@ -271,6 +197,6 @@
       "trend",
       "delta_from_baseline"
     ],
-    "refresh_strategy": "artifact_ingestion_on_trilha_d_consolidate"
+    "refresh_strategy": "static_json_until_artifact_ingestion_is_enabled"
   }
 }

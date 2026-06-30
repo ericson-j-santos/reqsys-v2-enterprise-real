@@ -172,7 +172,7 @@
         <div class="analitico mt-4">
           <v-table density="compact">
             <thead>
-              <tr><th>Capacidade</th><th>Status</th><th>Dashboard</th><th>Workflow / Artifact</th></tr>
+              <tr><th>Capacidade</th><th>Status</th><th>Dashboard</th><th>Workflow / Artifact</th><th>Última execução</th></tr>
             </thead>
             <tbody>
               <tr v-for="item in governanceEvidenceFiltrada" :key="item.id">
@@ -182,6 +182,18 @@
                 <td>
                   <div>{{ item.workflow || '-' }}</div>
                   <div class="small text-medium-emphasis">{{ item.artifact || item.json_path || '-' }}</div>
+                </td>
+                <td>
+                  <a
+                    v-if="item.links?.latest_run"
+                    :href="item.links.latest_run"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="governance-run-link"
+                  >
+                    Ver workflow runs
+                  </a>
+                  <span v-else class="small text-medium-emphasis">-</span>
                 </td>
               </tr>
             </tbody>
@@ -559,7 +571,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.monitoramento-operacional { display: grid; gap: 1rem; padding: 0.25rem; }
+.governance-run-link { color: var(--accent); text-decoration: underline; font-weight: 600; }
 .cabecalho { display: grid; gap: 1rem; align-items: center; }
 .cabecalho-acoes { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .eyebrow { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
