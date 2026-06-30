@@ -20,6 +20,12 @@ REFRESH_STRATEGY_STATIC = "static_json_until_artifact_ingestion_is_enabled"
 NEXT_INCREMENT_AFTER_INGESTION = "consolidate_operational_pareto_cycle"
 NEXT_INCREMENT_AFTER_PARETO_DASHBOARD = "predictive_regression_gate"
 NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD = "coverage_targeted_tests"
+NEXT_INCREMENT_AFTER_COVERAGE_TARGETED = "link_governance_cards_to_latest_workflow_runs"
+COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
+    "backend/tests/test_hub_lowcode_service_critical_paths.py",
+    "backend/tests/test_wiki_publisher_critical_paths.py",
+    "backend/tests/test_power_automate_provisioning_critical_paths.py",
+)
 DIMENSIONS = ("tests", "coverage", "mutation", "contract", "schema", "ci-watch")
 
 
@@ -210,9 +216,16 @@ def ops_dashboard_predictive_gate_surface_ready(repo_root: Path | None = None) -
     return all(marker in text for marker in required_markers)
 
 
+def coverage_targeted_critical_paths_ready(repo_root: Path | None = None) -> bool:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    return all((root / relative_path).exists() for relative_path in COVERAGE_TARGETED_CRITICAL_PATH_TESTS)
+
+
 def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None = None) -> str:
     if not artifact_ingestion:
         return "artifact_ingestion_refresh"
+    if coverage_targeted_critical_paths_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
     if ops_dashboard_predictive_gate_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD
     if ops_dashboard_pareto_surface_ready(repo_root):

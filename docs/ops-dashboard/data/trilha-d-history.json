@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T02:09:38.604786Z",
+  "generated_at": "2026-06-30T02:31:01.441567Z",
   "state": "green",
   "current_score": 97.59,
   "baseline_score": 88.33,
@@ -11,7 +11,7 @@
     "samples": 5,
     "green_samples": 4,
     "failed_samples": 1,
-    "next_increment": "coverage_targeted_tests",
+    "next_increment": "link_governance_cards_to_latest_workflow_runs",
     "artifact_ingestion_enabled": true
   },
   "links": {

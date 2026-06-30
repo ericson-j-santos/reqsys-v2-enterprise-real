@@ -130,6 +130,7 @@ def validate_data_contracts() -> None:
     aligned_pairs = {
         "predictive_regression_gate",
         "coverage_targeted_tests",
+        "link_governance_cards_to_latest_workflow_runs",
     }
     if trilha_next in aligned_pairs and pareto_next != trilha_next:
         fail(

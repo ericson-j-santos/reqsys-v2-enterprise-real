@@ -47,6 +47,24 @@ ACTION_CATALOG: list[dict[str, Any]] = [
             "backend/tests/test_*_critical_paths.py",
             "docs/ops-dashboard/data/trilha-d-history.json",
         ],
+        "active_when": "coverage_gate_pending",
+    },
+    {
+        "id": "link_governance_cards_to_latest_workflow_runs",
+        "title": "Deep links dos cards de governança para workflow runs",
+        "lane": "governance-automation",
+        "dimension": "operational-visibility",
+        "target_score": 95.0,
+        "fixed_gain": 1.0,
+        "effort_points": 2,
+        "risk": "low",
+        "confidence": 0.75,
+        "why_now": "fecha evidência de governança com execuções reais no dashboard",
+        "next_artifacts": [
+            "docs/ops-dashboard/data/governance-evidence-index.json",
+            "docs/ops-dashboard/index.html",
+        ],
+        "active_when": "governance_deep_links_pending",
     },
     {
         "id": "dashboard_trilha_d_history_card",
@@ -204,6 +222,10 @@ def action_is_active(action: dict[str, Any], *, trilha_d: dict[str, Any], gaps_r
         return trilha_d.get("next_increment") == "consolidate_operational_pareto_cycle"
     if active_when == "predictive_gate_pending":
         return trilha_d.get("next_increment") == "predictive_regression_gate"
+    if active_when == "coverage_gate_pending":
+        return trilha_d.get("next_increment") == "coverage_targeted_tests"
+    if active_when == "governance_deep_links_pending":
+        return trilha_d.get("next_increment") == "link_governance_cards_to_latest_workflow_runs"
     if active_when == "always_when_gaps_remain":
         return gaps_remain
     return True

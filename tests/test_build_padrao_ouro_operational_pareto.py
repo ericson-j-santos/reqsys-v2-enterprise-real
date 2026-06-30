@@ -12,14 +12,15 @@ from scripts.build_padrao_ouro_operational_pareto import (
 )
 
 
-def test_operational_pareto_prioritizes_coverage_after_predictive_gate_surface() -> None:
-    payload = build_payload()
+def test_operational_pareto_advances_to_governance_after_coverage_critical_paths() -> None:
+    from scripts.build_trilha_d_history import NEXT_INCREMENT_AFTER_COVERAGE_TARGETED, resolve_next_increment
 
-    assert payload["state"] == "yellow"
+    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    payload = build_payload(from_evidence=True)
+
     assert payload["dominant_bottleneck"]["dimension"] == "coverage"
-    assert payload["dominant_bottleneck"]["share_of_trilha_d_remaining_gap"] == 1.0
-    assert payload["ranked_actions"][0]["id"] == "coverage_targeted_tests"
-    assert payload["ranked_actions"][0]["recommended_now"] is True
+    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    assert payload["ranked_actions"][0]["id"] == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
 
 
 def test_operational_pareto_projects_gold_gap_closure() -> None:

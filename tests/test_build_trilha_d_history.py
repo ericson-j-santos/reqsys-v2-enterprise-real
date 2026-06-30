@@ -4,9 +4,11 @@ import json
 from pathlib import Path
 
 from scripts.build_trilha_d_history import (
+    NEXT_INCREMENT_AFTER_COVERAGE_TARGETED,
     NEXT_INCREMENT_AFTER_PARETO_DASHBOARD,
     NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD,
     build_payload,
+    coverage_targeted_critical_paths_ready,
     ingest_report_into_history,
     merge_history,
     ops_dashboard_pareto_surface_ready,
@@ -144,17 +146,22 @@ def test_ingest_report_into_history_appends_sample(tmp_path: Path) -> None:
 
     assert payload["summary"]["artifact_ingestion_enabled"] is True
     assert payload["runtime_dashboard_contract"]["refresh_strategy"] == "artifact_ingestion_on_trilha_d_consolidate"
-    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD
+    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
     assert len(payload["history"]) == 2
     assert payload["history"][-1]["run_id"] == "run-ingest-1"
 
 
 def test_resolve_next_increment_advances_after_pareto_dashboard_surface() -> None:
     assert ops_dashboard_pareto_surface_ready() is True
-    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD
+    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
     assert resolve_next_increment(artifact_ingestion=False) == "artifact_ingestion_refresh"
 
 
 def test_resolve_next_increment_advances_after_predictive_gate_surface() -> None:
     assert ops_dashboard_predictive_gate_surface_ready() is True
-    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD
+    assert coverage_targeted_critical_paths_ready() is True
+    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+
+
+def test_coverage_targeted_critical_paths_ready_detects_required_files() -> None:
+    assert coverage_targeted_critical_paths_ready() is True
