@@ -27,11 +27,17 @@ NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION = "continuous_trilha_d_monitoring"
 NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING = "coverage_targeted_tests"
 CONTINUOUS_MONITORING_JSON = "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
 TRILHA_D_WORKFLOW_FILE = "trilha-d-qualidade-governanca.yml"
+COVERAGE_TARGETED_MIN_SCORE = 82.0
 COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
     "backend/tests/test_hub_lowcode_service_critical_paths.py",
     "backend/tests/test_wiki_publisher_critical_paths.py",
     "backend/tests/test_power_automate_provisioning_critical_paths.py",
     "backend/tests/test_recomendacoes_ia_critical_paths.py",
+    "backend/tests/test_incidentes_api_critical_paths.py",
+    "backend/tests/test_connection_broker_critical_paths.py",
+    "backend/tests/test_relatorios_critical_paths.py",
+    "backend/tests/test_figma_client_critical_paths.py",
+    "backend/tests/test_async_workflows_api_critical_paths.py",
 )
 DIMENSIONS = ("tests", "coverage", "mutation", "contract", "schema", "ci-watch")
 
@@ -248,6 +254,33 @@ def coverage_targeted_critical_paths_ready(repo_root: Path | None = None) -> boo
     return all((root / relative_path).exists() for relative_path in COVERAGE_TARGETED_CRITICAL_PATH_TESTS)
 
 
+def coverage_targeted_surface_ready(repo_root: Path | None = None) -> bool:
+    if not coverage_targeted_critical_paths_ready(repo_root):
+        return False
+    root = repo_root or Path(__file__).resolve().parents[1]
+    workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
+    if not workflow.exists():
+        return False
+    workflow_text = workflow.read_text(encoding="utf-8")
+    required_markers = (
+        "Validar superfície coverage targeted",
+        "test_*_critical_paths",
+        f"COVERAGE_TARGETED_MIN_SCORE",
+    )
+    if not all(marker in workflow_text for marker in required_markers):
+        return False
+    history_json = root / "docs/ops-dashboard/data/trilha-d-history.json"
+    if history_json.exists():
+        try:
+            payload = json.loads(history_json.read_text(encoding="utf-8"))
+            coverage_score = (payload.get("dimension_summary") or {}).get("coverage", {}).get("current_score")
+            if isinstance(coverage_score, int | float) and coverage_score < COVERAGE_TARGETED_MIN_SCORE:
+                return False
+        except json.JSONDecodeError:
+            return False
+    return True
+
+
 def trilha_d_history_dashboard_surface_ready(repo_root: Path | None = None) -> bool:
     root = repo_root or Path(__file__).resolve().parents[1]
     index_html = root / "docs/ops-dashboard/index.html"
@@ -357,9 +390,11 @@ def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None =
         return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
     if not artifact_ingestion_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
-    if continuous_trilha_d_monitoring_surface_ready(repo_root):
+    if not continuous_trilha_d_monitoring_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+    if not coverage_targeted_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
-    return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+    return NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
 
 
 def build_payload(
@@ -394,6 +429,7 @@ def build_payload(
             "continuous_monitoring_enabled": (
                 artifact_ingestion and continuous_trilha_d_monitoring_surface_ready()
             ),
+            "coverage_targeted_ready": artifact_ingestion and coverage_targeted_surface_ready(),
         },
         "links": {
             "actions": workflow_runs_url(),

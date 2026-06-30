@@ -39,9 +39,9 @@ def test_build_payload_exposes_workflow_run_deep_links() -> None:
         assert "/actions/workflows/" in links["latest_run"]
 
     assert payload["summary"]["dashboard_ready_capabilities"] == payload["summary"]["total_capabilities"]
-    from scripts.build_governance_evidence_index import NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
+    from scripts.build_governance_evidence_index import NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
 
-    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
+    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
 
 
 def test_write_payload_creates_valid_json(tmp_path: Path) -> None:

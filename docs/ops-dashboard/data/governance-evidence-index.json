@@ -1,14 +1,14 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T13:11:21.497756+00:00",
+  "generated_at": "2026-06-30T13:23:20.278928+00:00",
   "overall_status": "green",
   "governance_evidence_score": 100,
   "summary": {
     "total_capabilities": 7,
     "implemented_capabilities": 7,
     "dashboard_ready_capabilities": 7,
-    "next_increment": "coverage_targeted_tests"
+    "next_increment": "link_governance_cards_to_latest_workflow_runs"
   },
   "links": {
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
