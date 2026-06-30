@@ -21,9 +21,14 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: 'Branch destino no repo externo'
+        description: 'Branch destino no repo externo (use main para espelho direto)'
         required: false
-        default: 'feat/gateway-sync'
+        default: 'main'
+      force_sync:
+        description: 'Forcar sync mesmo sem mudancas no bootstrap'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -67,17 +72,26 @@ jobs:
           python-version: '3.12'
       - name: Sync para reqsys-ollama-local-gateway
         env:
-          GH_TOKEN: ${{ secrets.OLLAMA_GATEWAY_SYNC_TOKEN }}
+          OLLAMA_GATEWAY_SYNC_TOKEN: ${{ secrets.OLLAMA_GATEWAY_SYNC_TOKEN }}
+          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
         run: |
-          if [ -z "${GH_TOKEN:-}" ]; then
+          set -euo pipefail
+          if [ -n "${OLLAMA_GATEWAY_SYNC_TOKEN}" ]; then
+            export GH_TOKEN="${OLLAMA_GATEWAY_SYNC_TOKEN}"
+            echo "Token: OLLAMA_GATEWAY_SYNC_TOKEN"
+          elif [ -n "${GH_PAT_ACTIONS}" ]; then
+            export GH_TOKEN="${GH_PAT_ACTIONS}"
+            echo "Token: GH_PAT_ACTIONS (fallback canonico)"
+          else
             echo "## Sync externo ignorado" >> "$GITHUB_STEP_SUMMARY"
-            echo "Configure OLLAMA_GATEWAY_SYNC_TOKEN para publicar automaticamente." >> "$GITHUB_STEP_SUMMARY"
-            echo "Comando: bash scripts/configurar_ollama_gateway_sync.sh" >> "$GITHUB_STEP_SUMMARY"
+            echo "Configure GH_PAT_ACTIONS ou OLLAMA_GATEWAY_SYNC_TOKEN." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           type -p gh >/dev/null || (sudo apt-get update && sudo apt-get install -y gh)
-          BRANCH="${{ github.event.inputs.branch || 'feat/gateway-sync' }}"
-          bash scripts/sincronizar_ollama_gateway_repo.sh "$BRANCH"
+          BRANCH="${{ github.event.inputs.branch || 'main' }}"
+          export OLLAMA_GATEWAY_SYNC_BRANCH="${BRANCH}"
+          bash scripts/sincronizar_ollama_gateway_repo.sh "${BRANCH}"
           echo "## Sync externo" >> "$GITHUB_STEP_SUMMARY"
           echo "- Repo: ericson-j-santos/reqsys-ollama-local-gateway" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Branch: $BRANCH" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Branch: ${BRANCH}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Token: ${GH_TOKEN:+configurado}" >> "$GITHUB_STEP_SUMMARY"

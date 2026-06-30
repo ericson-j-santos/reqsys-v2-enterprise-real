@@ -6,7 +6,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BOOTSTRAP="$ROOT/docs/ollama-local-gateway/bootstrap-files"
 REPO="ericson-j-santos/reqsys-ollama-local-gateway"
 WORKDIR="$(mktemp -d)"
-BRANCH="${1:-feat/gateway-v0.2.0-chat}"
+BRANCH="${1:-${OLLAMA_GATEWAY_SYNC_BRANCH:-main}}"
+
+cleanup() { rm -rf "$WORKDIR" "${BOOTSTRAP}/.venv-sync" 2>/dev/null || true; }
+trap cleanup EXIT
 
 echo "==> Validando bootstrap local..."
 cd "$BOOTSTRAP"
@@ -15,16 +18,24 @@ python3 -m venv .venv-sync
 pip install -q -e .[dev]
 pytest -q
 ruff check .
-rm -rf .venv-sync
+
+if [ -z "${GH_TOKEN:-}" ]; then
+  echo "GH_TOKEN ausente — configure GH_PAT_ACTIONS ou OLLAMA_GATEWAY_SYNC_TOKEN no ReqSys."
+  exit 1
+fi
+
+gh auth setup-git 2>/dev/null || true
 
 echo "==> Clonando $REPO..."
-if [ -n "${GH_TOKEN:-}" ]; then
-  gh auth setup-git 2>/dev/null || true
-fi
 gh repo clone "$REPO" "$WORKDIR/repo" -- --depth=1
 
 cd "$WORKDIR/repo"
-git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
+if [ "$BRANCH" = "main" ]; then
+  git checkout main
+else
+  git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
+fi
+
 find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
 cp -a "$BOOTSTRAP"/. ./
 rm -rf .venv .venv-sync .venv-test
@@ -35,22 +46,22 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
-git commit -m "feat: gateway v0.2.0 com /v1/chat, audit e testes
+git commit -m "chore: sync bootstrap v0.2.0 do ReqSys
 
-- Endpoint POST /v1/chat consumido pelo provider ollama_gateway do ReqSys
-- Cliente Ollama com timeout configuravel
-- Auditoria com mascaramento de PII
-- Autenticacao via X-API-Key
-- Testes de health, chat e audit"
+- POST /v1/chat para provider ollama_gateway
+- Auditoria, testes e ADR-001
+- Origem: ericson-j-santos/reqsys-v2-enterprise-real"
 
 git push -u origin "$BRANCH"
-echo ""
 echo "Publicado em: https://github.com/$REPO/tree/$BRANCH"
-if gh pr list -R "$REPO" --head "$BRANCH" --json number --jq 'length' 2>/dev/null | grep -qv '^0$'; then
-  echo "PR ja existe para branch $BRANCH"
+
+if [ "$BRANCH" != "main" ]; then
+  if ! gh pr list -R "$REPO" --head "$BRANCH" --json number --jq 'length' 2>/dev/null | grep -qv '^0$'; then
+    gh pr create -R "$REPO" --base main --head "$BRANCH" \
+      --title "chore: sync bootstrap gateway do ReqSys" \
+      --body "Espelho automatizado do bootstrap ReqSys. Ref: issue #95" \
+      && echo "PR criado no repo externo."
+  fi
 else
-  gh pr create -R "$REPO" --base main --head "$BRANCH" \
-    --title "feat: gateway v0.2.0 com /v1/chat" \
-    --body "Bootstrap sincronizado do ReqSys. Inclui POST /v1/chat, audit, testes e ADR-001. Ref: issue #95" \
-    2>/dev/null && echo "PR criado no repo externo." || echo "Abra PR manualmente para main."
+  echo "Espelho direto na main do repo externo concluido."
 fi

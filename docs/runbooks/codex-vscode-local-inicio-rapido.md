@@ -30,20 +30,22 @@ cp infra/codex-local/continue/config.yaml ~/.continue/config.yaml
 
 ## Sync repo externo (automatizado)
 
-1. Configure o secret no ReqSys (uma vez):
+O CI usa `GH_PAT_ACTIONS` automaticamente (fallback quando `OLLAMA_GATEWAY_SYNC_TOKEN` não existe).
 
 ```bash
-gh secret set OLLAMA_GATEWAY_SYNC_TOKEN -R ericson-j-santos/reqsys-v2-enterprise-real
-# Cole um PAT com contents:write no repo reqsys-ollama-local-gateway
+# Dispara sync imediato (usa GH_PAT_ACTIONS no CI)
+bash scripts/configurar_ollama_gateway_sync.sh
 ```
 
-2. Dispare o workflow:
+Opcional — PAT dedicado:
 
 ```bash
-gh workflow run ollama-gateway-bootstrap.yml -R ericson-j-santos/reqsys-v2-enterprise-real
+OLLAMA_GATEWAY_SYNC_TOKEN=<pat> bash scripts/configurar_ollama_gateway_sync.sh
 ```
 
-O sync também roda automaticamente em push na `main` quando o bootstrap muda e o secret está configurado.
+Após a primeira publicação, o repo externo mantém espelho via workflow `sync-from-reqsys.yml` (a cada 6h).
+
+O sync push também roda em alterações na `main` em `docs/ollama-local-gateway/`.
 
 ## Validação
 
