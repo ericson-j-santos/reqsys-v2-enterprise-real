@@ -97,7 +97,11 @@
     <v-card class="technical-footer mt-4" variant="tonal" data-testid="user-final-technical-footer">
       <div>
         <strong>Rodapé técnico</strong>
-        <span class="muted">Versão frontend {{ frontendVersion }} · ambiente {{ environment.id }} · correlation_id {{ correlationId }}</span>
+        <span class="muted">
+          {{ versionSummary }}
+          · ambiente {{ environment.id }}
+          · correlation_id {{ correlationId }}
+        </span>
       </div>
       <v-chip size="small" color="green" variant="tonal">sem dado sensível</v-chip>
     </v-card>
@@ -107,11 +111,18 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAppVersion } from '../composables/useAppVersion'
 
 const route = useRoute()
 const router = useRouter()
-const frontendVersion = '3.1.0'
+const { frontendVersion, apiVersion, versionsAligned } = useAppVersion()
 const correlationId = `ufs-${Date.now().toString(36)}`
+
+const versionSummary = computed(() => {
+  if (!apiVersion.value) return `Versão frontend v${frontendVersion}`
+  if (versionsAligned.value) return `Versão v${frontendVersion} (frontend e API alinhadas)`
+  return `Versão frontend v${frontendVersion} · API v${apiVersion.value}`
+})
 
 const shellNavItems = [
   { label: 'Início', route: '/home', icon: 'mdi-home-outline' },

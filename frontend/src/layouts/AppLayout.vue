@@ -21,7 +21,7 @@
     >
       <div class="pa-5 pb-3 req-brand-block">
         <div class="brand"><span class="brand-dot">R</span> ReqSys Enterprise</div>
-        <div class="muted mt-1">SaaS Interno · v2 Enterprise</div>
+        <div class="muted mt-1 version-line" data-testid="app-version-label">{{ versionLabel }}</div>
         <span class="figma-pill figma-pill--compact mt-2 d-inline-block">Ambiente: {{ ambienteDrawerLabel }}</span>
       </div>
       <v-divider />
@@ -159,8 +159,10 @@ import {
   temaPorId,
   temaTemSubgrupos,
 } from '../constants/navCatalog'
+import { useAppVersion } from '../composables/useAppVersion'
 
 const { mobile } = useDisplay()
+const { versionLabel } = useAppVersion()
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
@@ -296,6 +298,10 @@ function sair() {
 }
 .req-brand-block {
   min-width: 0;
+}
+.version-line {
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 .nav-temas {
   padding: 8px 8px 0;
