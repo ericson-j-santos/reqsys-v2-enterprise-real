@@ -278,7 +278,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          # COVERAGE_TARGETED_MIN_SCORE=82.0 — gate alinhado a scripts/build_trilha_d_history.py
+          # COVERAGE_TARGETED_MIN_SCORE=87.0 — gate alinhado a scripts/build_trilha_d_history.py
           # Suíte: test_*_critical_paths
           python -m pytest backend/tests/ -q -k "critical_paths"
 
