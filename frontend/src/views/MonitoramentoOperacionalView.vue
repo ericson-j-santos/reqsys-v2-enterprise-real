@@ -16,6 +16,17 @@
 
     <p v-if="erro" class="erro" role="alert">{{ erro }}</p>
 
+    <v-alert
+      v-if="modoColeta === 'preview'"
+      type="info"
+      variant="tonal"
+      class="mt-2"
+      role="status"
+      data-testid="monitoramento-modo-preview"
+    >
+      <strong>Preview estático parcial</strong> — {{ coletaDetalhes.mensagem || 'Alguns sinais operacionais ainda não estão conectados (ex.: CI GitHub).' }}
+    </v-alert>
+
     <v-row dense>
       <v-col v-for="card in cardsResumo" :key="card.id" cols="12" sm="6" md="4" lg="2">
         <OperationalMetricCard
@@ -126,7 +137,7 @@
             <tbody>
               <tr v-for="item in governanceEvidenceFiltrada" :key="item.id">
                 <td>{{ item.title || item.id }}</td>
-                <td><SemaforoChip :value="statusGovernancaParaSemaforo(item.status)" size="x-small" /></td>
+                <td><SemaforoChip :value="estadoParaSemaforo(item.status)" size="x-small" /></td>
                 <td>{{ item.dashboard_ready ? 'ready' : 'pending' }}</td>
                 <td>
                   <div>{{ item.workflow || '-' }}</div>
@@ -170,7 +181,7 @@
           <tbody>
             <tr v-for="(item, dimension) in trilhaDDimensoesFiltradas" :key="dimension">
               <td>{{ dimension }}</td>
-              <td><SemaforoChip :estado="statusTrilhaDParaSemaforo(item.current_status)" :label="item.current_status || 'n/a'" /></td>
+              <td><SemaforoChip :estado="estadoParaSemaforo(item.current_status)" :label="item.current_status || 'n/a'" /></td>
               <td>{{ item.current_score }}</td>
               <td>{{ item.trend }}</td>
               <td>{{ item.delta_from_baseline }}</td>
@@ -190,7 +201,7 @@
           <tbody>
             <tr v-for="entry in trilhaDHistorico" :key="`${entry.timestamp}-${entry.run_id}`">
               <td>{{ entry.timestamp }}</td>
-              <td><SemaforoChip :estado="statusTrilhaDParaSemaforo(entry.state)" :label="entry.state || 'n/a'" /></td>
+              <td><SemaforoChip :estado="estadoParaSemaforo(entry.state)" :label="entry.state || 'n/a'" /></td>
               <td>{{ entry.average_score }}</td>
               <td>{{ entry.source }}</td>
               <td>{{ entry.run_id }}</td>
@@ -216,8 +227,9 @@
       <v-card-subtitle>Health-check operacional dos conectores e capabilities usados por agentes e automações.</v-card-subtitle>
       <v-card-text>
         <div class="subcabecalho mb-3">
-          <span class="correlation">Correlação: {{ correlationId }}</span>
+          <span class="correlation">Correlação: {{ correlationId || '—' }}</span>
         </div>
+        <p v-if="erroConectores" class="erro" role="alert">{{ erroConectores }}</p>
 
         <v-row dense>
           <v-col cols="12" sm="6" md="3">
@@ -244,7 +256,7 @@
                 <td>{{ conector.ambiente }}</td>
                 <td>{{ conector.conector }}</td>
                 <td>{{ conector.capability }}</td>
-                <td><SemaforoChip :value="statusParaSemaforo(conector.status)" size="x-small" /></td>
+                <td><SemaforoChip :value="estadoParaSemaforo(conector.status)" size="x-small" /></td>
                 <td>{{ conector.criticidade }}</td>
                 <td>{{ conector.acao_sugerida }}</td>
               </tr>
@@ -283,24 +295,33 @@ import OperationalMetricCard from '../components/OperationalMetricCard.vue'
 import SemaforoChip from '../components/SemaforoChip.vue'
 import {
   criarQueryFiltrosMonitoramento,
+  estadoParaSemaforo,
   filtrarItensMonitoramento,
   normalizarFiltrosMonitoramento,
 } from '../utils/filtrosMonitoramento'
+import { useMonitoramentoOperacional } from '../composables/useMonitoramentoOperacional'
 import { resolverDrilldownSpa } from '../utils/runtimeDrilldown'
 import { carregarRuntimeDashboard, formatarValorRuntimeCard, semaforoRuntimeCard } from '../services/runtimeDashboard'
 
 const route = useRoute()
 const router = useRouter()
-const resumo = ref({})
-const itens = ref([])
+const {
+  resumo,
+  itens,
+  modoColeta,
+  coletaDetalhes,
+  carregando,
+  erro,
+  carregarMonitoramento,
+} = useMonitoramentoOperacional()
 const conectores = ref([])
 const runtimeDashboard = ref(null)
-const correlationId = ref('local-fallback')
+const correlationId = ref('')
+const erroConectores = ref('')
+
 const filtroEstado = ref(route.query.estado || '')
 const filtroSecao = ref(route.query.secao || '')
 const filtroBusca = ref(route.query.busca || '')
-const carregando = ref(false)
-const erro = ref('')
 
 const opcoesEstado = [
   { title: 'Verde', value: 'verde' },
@@ -318,13 +339,6 @@ const opcoesSecao = [
   { title: 'Timeline', value: 'timeline' },
   { title: 'Governança', value: 'governanca' },
   { title: 'Trilha D', value: 'trilha-d' },
-]
-
-const fallbackConectores = [
-  { ambiente: 'dev', conector: 'repository_provider', capability: 'repository.read', status: 'ready', criticidade: 'high', acao_sugerida: 'Executar com auditoria.' },
-  { ambiente: 'homolog', conector: 'repository_provider', capability: 'repository.write', status: 'missing_permission', criticidade: 'critical', acao_sugerida: 'Solicitar autorização contextual antes da escrita.' },
-  { ambiente: 'prod', conector: 'document_provider', capability: 'document.read', status: 'ready', criticidade: 'medium', acao_sugerida: 'Manter health-check periódico.' },
-  { ambiente: 'prod', conector: 'communication_provider', capability: 'message.compose', status: 'blocked', criticidade: 'high', acao_sugerida: 'Exigir confirmação humana antes do envio.' },
 ]
 
 const filtrosAtivos = computed(() => normalizarFiltrosMonitoramento({
@@ -398,25 +412,6 @@ const cardsResumo = computed(() => [
   { id: 'criticos', label: 'Conectores críticos', value: conectoresCriticos.value.length, semaforo: conectoresCriticos.value.length > 0 ? 'amarelo' : 'verde', icon: 'mdi-alert-decagram-outline', filtros: { secao: 'conectores' } },
 ])
 
-function statusGovernancaParaSemaforo(status) {
-  if (status === 'implemented') return 'verde'
-  if (status === 'dry_run') return 'amarelo'
-  return 'desconhecido'
-}
-
-function statusTrilhaDParaSemaforo(status) {
-  if (status === 'green' || status === 'passed' || status === 'improving') return 'verde'
-  if (status === 'yellow' || status === 'stable') return 'amarelo'
-  if (status === 'failed' || status === 'regressing') return 'vermelho'
-  return 'desconhecido'
-}
-
-function statusParaSemaforo(status) {
-  if (status === 'ready') return 'verde'
-  if (['blocked', 'unavailable', 'misconfigured'].includes(status)) return 'vermelho'
-  return 'amarelo'
-}
-
 function formatarValorCard(card) {
   return formatarValorRuntimeCard(card)
 }
@@ -459,24 +454,21 @@ function sincronizarUrlDosFiltros() {
   router.replace({ path: '/monitoramento-operacional', query })
 }
 
-async function carregarMonitoramento() {
-  const resposta = await fetch('/api/monitoramento-operacional', { headers: { Accept: 'application/json' } })
-  if (!resposta.ok) throw new Error('Falha ao carregar monitoramento operacional')
-  const payload = await resposta.json()
-  resumo.value = payload.data?.resumo || {}
-  itens.value = payload.data?.itens || []
-}
-
 async function carregarConectores() {
+  erroConectores.value = ''
   try {
     const resposta = await fetch('/api/connectors/health', { headers: { Accept: 'application/json' } })
     if (!resposta.ok) throw new Error('Health-check de conectores indisponível')
     const payload = await resposta.json()
-    conectores.value = payload.data?.conectores || fallbackConectores
-    correlationId.value = payload.correlation_id || payload.data?.correlation_id || 'sem-correlacao'
-  } catch {
-    conectores.value = fallbackConectores
-    correlationId.value = 'fallback-sem-backend'
+    conectores.value = payload.data?.conectores || []
+    correlationId.value = payload.correlation_id || payload.data?.correlation_id || payload.meta?.correlation_id || ''
+    if (!conectores.value.length) {
+      erroConectores.value = 'Nenhum conector registrado no Connection Broker.'
+    }
+  } catch (e) {
+    conectores.value = []
+    correlationId.value = ''
+    erroConectores.value = e?.message || 'Falha ao carregar health-check de conectores.'
   }
 }
 
