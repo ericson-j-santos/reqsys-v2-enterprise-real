@@ -132,3 +132,14 @@ def test_runtime_operational_mesh_endpoint():
     assert response.status_code == 200
     data = response.json()['data']
     assert data['correlation_id'] == 'corr-mesh'
+
+
+def test_runtime_dashboard_expoe_merge_readiness_history():
+    response = client.get('/api/runtime/dashboard')
+    assert response.status_code == 200
+    body = response.json()['data']
+    section_ids = [section['id'] for section in body.get('sections') or []]
+    card_ids = [card['id'] for card in body.get('cards') or []]
+    assert 'merge-readiness-history' in section_ids
+    assert 'merge-readiness-history' in card_ids
+    assert body.get('merge_readiness_history', {}).get('summary')

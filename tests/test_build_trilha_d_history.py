@@ -25,6 +25,7 @@ from scripts.build_trilha_d_history import (
     ingest_report_into_history,
     merge_history,
     merge_readiness_history_surface_ready,
+    merge_readiness_history_increment_ready,
     ops_dashboard_pareto_surface_ready,
     ops_dashboard_predictive_gate_surface_ready,
     report_to_history_entry,
@@ -64,9 +65,9 @@ def test_build_payload_tracks_coverage_improvement() -> None:
 
     assert payload["state"] == "green"
     assert payload["trend"] == "improving"
-    assert payload["summary"]["samples"] == 3
+    assert payload["summary"]["samples"] == 4
     assert payload["dimension_summary"]["coverage"]["trend"] == "improving"
-    assert payload["dimension_summary"]["coverage"]["delta_from_baseline"] == 45.29
+    assert payload["dimension_summary"]["coverage"]["delta_from_baseline"] == 66.6
     assert "workflow_run_url" in payload["runtime_dashboard_contract"]["series_fields"]
     assert payload["history"][0]["workflow_run_url"]
 
@@ -208,6 +209,10 @@ def test_resolve_next_increment_when_artifact_ingestion_habilitado() -> None:
 
 def test_merge_readiness_history_surface_ready_detecta_arquivos() -> None:
     assert merge_readiness_history_surface_ready() is True
+
+
+def test_merge_readiness_history_increment_ready_detecta_arquivos() -> None:
+    assert merge_readiness_history_increment_ready() is True
 
 
 def test_resolve_next_increment_quando_merge_readiness_pendente(monkeypatch) -> None:

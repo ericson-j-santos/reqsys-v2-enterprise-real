@@ -473,19 +473,22 @@ def merge_readiness_history_surface_ready(repo_root: Path | None = None) -> bool
     root = repo_root or Path(__file__).resolve().parents[1]
     workflow = root / ".github/workflows/merge-readiness.yml"
     index_html = root / "docs/ops-dashboard/index.html"
+    monitoramento_view = root / "frontend/src/views/MonitoramentoOperacionalView.vue"
     history_json = root / MERGE_READINESS_HISTORY_JSON
     build_script = root / "scripts/build_merge_readiness_history.py"
-    if not all(path.exists() for path in (workflow, index_html, history_json, build_script)):
+    if not all(path.exists() for path in (workflow, index_html, monitoramento_view, history_json, build_script)):
         return False
     workflow_text = workflow.read_text(encoding="utf-8")
     html_text = index_html.read_text(encoding="utf-8")
+    view_text = monitoramento_view.read_text(encoding="utf-8")
     required_markers = (
         "build_merge_readiness_history.py",
         "merge-readiness-history-card",
         "merge_readiness_history_enabled",
+        "merge-readiness-history",
         "--ingest-report",
     )
-    if not all(marker in workflow_text or marker in html_text for marker in required_markers):
+    if not all(marker in workflow_text or marker in html_text or marker in view_text for marker in required_markers):
         return False
     try:
         payload = json.loads(history_json.read_text(encoding="utf-8"))
@@ -495,6 +498,44 @@ def merge_readiness_history_surface_ready(repo_root: Path | None = None) -> bool
     if not history:
         return False
     return bool(payload.get("summary", {}).get("merge_readiness_history_enabled"))
+
+
+def merge_readiness_history_increment_ready(repo_root: Path | None = None) -> bool:
+    if not merge_readiness_history_surface_ready(repo_root):
+        return False
+    root = repo_root or Path(__file__).resolve().parents[1]
+    workflow = root / ".github/workflows/merge-readiness.yml"
+    index_html = root / "docs/ops-dashboard/index.html"
+    monitoramento_view = root / "frontend/src/views/MonitoramentoOperacionalView.vue"
+    history_json = root / MERGE_READINESS_HISTORY_JSON
+    build_script = root / "scripts/build_merge_readiness_history.py"
+    if not all(path.exists() for path in (workflow, index_html, monitoramento_view, history_json, build_script)):
+        return False
+    workflow_text = workflow.read_text(encoding="utf-8")
+    html_text = index_html.read_text(encoding="utf-8")
+    view_text = monitoramento_view.read_text(encoding="utf-8")
+    required_markers = (
+        "build_merge_readiness_history.py",
+        "merge-readiness-history",
+        "merge_readiness_history_enabled",
+        "merge_readiness_stabilized",
+        "merge-readiness-history.json",
+    )
+    if not all(marker in workflow_text or marker in html_text or marker in view_text for marker in required_markers):
+        return False
+    try:
+        history_payload = json.loads(history_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    history = history_payload.get("history") or []
+    if not history:
+        return False
+    summary = history_payload.get("summary") or {}
+    if not summary.get("merge_readiness_history_enabled"):
+        return False
+    if len(history) < 3:
+        return False
+    return bool(summary.get("merge_readiness_stabilized"))
 
 
 def continuous_trilha_d_monitoring_surface_ready(repo_root: Path | None = None) -> bool:
@@ -582,6 +623,8 @@ def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None =
         return NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
     if not merge_readiness_history_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION_REFRESH
+    if not merge_readiness_history_increment_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION_REFRESH
     if not artifact_ingestion_refresh_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
     return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
@@ -625,6 +668,7 @@ def build_payload(
             "coverage_targeted_ready": artifact_ingestion and coverage_targeted_surface_ready(),
             "governance_deep_links_enabled": artifact_ingestion and governance_workflow_deep_links_surface_ready(),
             "artifact_ingestion_refresh_enabled": artifact_ingestion and artifact_ingestion_refresh_surface_ready(),
+            "merge_readiness_history_enabled": artifact_ingestion and merge_readiness_history_increment_ready(),
         },
         "links": {
             "actions": workflow_runs_url(),

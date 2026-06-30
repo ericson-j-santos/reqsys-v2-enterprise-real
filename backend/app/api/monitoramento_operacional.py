@@ -24,6 +24,11 @@ from app.schemas.monitoramento_operacional import MonitoramentoOperacional
 from app.services.continuous_trilha_d_monitoring_history_index import (
     carregar_continuous_trilha_d_monitoring_history_index,
 )
+from app.services.merge_readiness_history_index import (
+    carregar_merge_readiness_history_index,
+    mapear_cards_merge_readiness_history,
+    mapear_secao_merge_readiness_history,
+)
 from app.services.continuous_trilha_d_monitoring_index import (
     carregar_continuous_trilha_d_monitoring_index,
     mapear_cards_continuous_monitoring,
@@ -171,6 +176,9 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
     continuous_monitoring_cards = mapear_cards_continuous_monitoring(continuous_monitoring_index)
     continuous_monitoring_section = mapear_secao_continuous_monitoring(continuous_monitoring_index)
     continuous_monitoring_history_index = carregar_continuous_trilha_d_monitoring_history_index()
+    merge_readiness_history_index = carregar_merge_readiness_history_index()
+    merge_readiness_history_cards = mapear_cards_merge_readiness_history(merge_readiness_history_index)
+    merge_readiness_history_section = mapear_secao_merge_readiness_history(merge_readiness_history_index)
     mesh_signal = carregar_operational_mesh_signal()
     mesh_cards = mapear_cards_operational_mesh(mesh_signal)
     mesh_section = mapear_secao_operational_mesh(mesh_signal)
@@ -270,12 +278,14 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
             *governance_cards,
             *trilha_d_cards,
             *continuous_monitoring_cards,
+            *merge_readiness_history_cards,
             *mesh_cards,
         ],
         'governance_evidence': governance_index,
         'trilha_d_history': trilha_d_index,
         'continuous_trilha_d_monitoring': continuous_monitoring_index,
         'continuous_trilha_d_monitoring_history': continuous_monitoring_history_index,
+        'merge_readiness_history': merge_readiness_history_index,
         'operational_mesh': mesh_signal,
         'cross_runtime_analytics': cross_runtime,
         'sections': [
@@ -370,6 +380,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
             governance_section,
             trilha_d_section,
             continuous_monitoring_section,
+            merge_readiness_history_section,
             mesh_section,
             {
                 'id': 'correlation-analytics',
