@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 _REPO_SENTINELS = (
     '.git',
     '.github',
