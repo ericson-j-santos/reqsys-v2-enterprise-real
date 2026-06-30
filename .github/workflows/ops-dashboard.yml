@@ -113,6 +113,15 @@ jobs:
           test -f artifacts/ops-dashboard/data/runtime-executive-index.json
           test -f artifacts/ops-dashboard/data/strategic-governance-index.json
           test -f artifacts/ops-dashboard/data/conflict-risk-report.json
+          test -f artifacts/ops-dashboard/data/executive-brief.json
+
+      - name: Validate ops dashboard contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/validate_ops_dashboard_navigation.py
+          python3 scripts/validate_ops_dashboard_trilha_d_pareto_cards.py
+          python3 scripts/validate_ops_dashboard_runtime_validation.py
 
       - name: Publish ops dashboard artifact
         uses: actions/upload-artifact@v4
