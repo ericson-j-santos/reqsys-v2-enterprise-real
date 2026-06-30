@@ -8,7 +8,6 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
-from app.services import github_redmine as module
 from app.services.github_redmine import (
     IntegracaoError,
     _parse_repo,

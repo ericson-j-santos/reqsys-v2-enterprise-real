@@ -21,6 +21,14 @@ from app.core.runtime_remediation import (
 )
 from app.core.security import require_admin
 from app.schemas.monitoramento_operacional import MonitoramentoOperacional
+from app.services.continuous_trilha_d_monitoring_history_index import (
+    carregar_continuous_trilha_d_monitoring_history_index,
+)
+from app.services.continuous_trilha_d_monitoring_index import (
+    carregar_continuous_trilha_d_monitoring_index,
+    mapear_cards_continuous_monitoring,
+    mapear_secao_continuous_monitoring,
+)
 from app.services.governance_evidence_index import (
     carregar_governance_evidence_index,
     mapear_cards_governance,
@@ -38,14 +46,6 @@ from app.services.trilha_d_history_index import (
     carregar_trilha_d_history_index,
     mapear_cards_trilha_d,
     mapear_secao_trilha_d,
-)
-from app.services.continuous_trilha_d_monitoring_index import (
-    carregar_continuous_trilha_d_monitoring_index,
-    mapear_cards_continuous_monitoring,
-    mapear_secao_continuous_monitoring,
-)
-from app.services.continuous_trilha_d_monitoring_history_index import (
-    carregar_continuous_trilha_d_monitoring_history_index,
 )
 
 router = APIRouter(tags=['Monitoramento Operacional'])
