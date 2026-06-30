@@ -23,7 +23,7 @@ def test_runtime_evidence_artifacts_contract_is_ready_for_historical_ingestion()
 
     assert response.status_code == 200
     data = response.json()['data']
-    assert data['schema_version'] == '1.0.0'
+    assert data['schema_version'] == '1.1.0'
     assert data['artifact_name'] == 'public-runtime-evidence'
     assert data['ingestion_mode'] == 'contract_stub'
     assert data['items'][0]['ingestion_status'] == 'contract_ready'
