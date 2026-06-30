@@ -32,7 +32,7 @@
       "title": "Ruído operacional na runtime intelligence mesh",
       "status": "resolved",
       "scope": "operational-mesh",
-      "detail": "Cascata workflow_run substituída por Main Operational Validation Fast (job único, segundos).",
+      "detail": "Cascata workflow_run substituída por Main Operational Validation Fast; mesh hub e signal consolidator com cancel-in-progress=false e supressão de workflow_run residual.",
       "allowed_increment_types": ["hotfix", "gap_fix"]
     }
   ]

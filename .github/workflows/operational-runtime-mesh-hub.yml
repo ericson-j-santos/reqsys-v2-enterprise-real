@@ -21,7 +21,7 @@ permissions:
 
 concurrency:
   group: operational-runtime-mesh-hub
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   governance-gate:
@@ -52,6 +52,9 @@ jobs:
             "Unified Operational Event Bus"
             "Operational Alert Intelligence"
             "Operational Runtime Mesh Hub"
+            "Unified Operational Signal Consolidator"
+            "Workflow Reliability Analytics"
+            "Governed Auto Remediation Engine"
           )
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -62,14 +65,22 @@ jobs:
             url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             should_run=true
             noise_suppressed=false
-          else
-            source="${RUN_NAME}"
-            conclusion="${RUN_CONCLUSION}"
-            branch="${RUN_BRANCH}"
-            sha="${RUN_SHA}"
-            url="${RUN_URL}"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            source="scheduled-scan"
+            conclusion="success"
+            branch="${GITHUB_REF_NAME}"
+            sha="${GITHUB_SHA}"
+            url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             should_run=true
             noise_suppressed=false
+          else
+            source="${RUN_NAME:-unknown-workflow-run}"
+            conclusion="${RUN_CONCLUSION:-cancelled}"
+            branch="${RUN_BRANCH:-}"
+            sha="${RUN_SHA:-}"
+            url="${RUN_URL:-}"
+            should_run=false
+            noise_suppressed=true
             for item in "${MESH_NOISE[@]}"; do
               if [ "$source" = "$item" ]; then
                 should_run=false
@@ -77,6 +88,10 @@ jobs:
                 break
               fi
             done
+            if [ "$conclusion" = "cancelled" ]; then
+              should_run=false
+              noise_suppressed=true
+            fi
           fi
 
           {

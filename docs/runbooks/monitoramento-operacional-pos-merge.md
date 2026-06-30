@@ -16,7 +16,7 @@ Runbook para validar estabilidade após merges operacionais (#618, #624) sem rei
 
 - **Main Operational Health**: verde após fix grep acentuação (#614); último run `success` no merge #618.
 - **Main Operational Validation Fast**: verde após #624 (`mkdir -p` antes do `tee`); ~5s wall-clock, `overall_state=green`.
-- **Mesh hub**: últimos `workflow_run` cancelados datam de antes do #618; pós-merge dispara via schedule/dispatch apenas.
+- **Mesh hub**: `workflow_run` removido no #618; `cancel-in-progress=false` evita runs `cancelled` em schedule/dispatch concorrentes.
 - **GitHub Pages showcase**: verde em 2026-06-30 (`deploy-reqsys-showcase-pages`).
 
 ## Comandos de verificação local

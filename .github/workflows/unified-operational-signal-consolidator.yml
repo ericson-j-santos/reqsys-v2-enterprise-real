@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: unified-operational-signal-consolidator
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   consolidate-signals:
