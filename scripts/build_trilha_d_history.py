@@ -25,6 +25,8 @@ NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS = "dashboard_trilha_d_history_card"
 NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD = "artifact_ingestion_refresh"
 NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION = "continuous_trilha_d_monitoring"
 NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING = "coverage_targeted_tests"
+NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION_REFRESH = "merge_readiness_history"
+MERGE_READINESS_HISTORY_JSON = "docs/ops-dashboard/data/merge-readiness-history.json"
 CONTINUOUS_MONITORING_JSON = "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
 TRILHA_D_WORKFLOW_FILE = "trilha-d-qualidade-governanca.yml"
 COVERAGE_TARGETED_MIN_SCORE = 82.0
@@ -389,6 +391,34 @@ def artifact_ingestion_surface_ready(repo_root: Path | None = None) -> bool:
     return "--ingest-report" in workflow_text and "artifact-ingestion-enabled" in html_text
 
 
+def merge_readiness_history_surface_ready(repo_root: Path | None = None) -> bool:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    workflow = root / ".github/workflows/merge-readiness.yml"
+    index_html = root / "docs/ops-dashboard/index.html"
+    history_json = root / MERGE_READINESS_HISTORY_JSON
+    build_script = root / "scripts/build_merge_readiness_history.py"
+    if not all(path.exists() for path in (workflow, index_html, history_json, build_script)):
+        return False
+    workflow_text = workflow.read_text(encoding="utf-8")
+    html_text = index_html.read_text(encoding="utf-8")
+    required_markers = (
+        "build_merge_readiness_history.py",
+        "merge-readiness-history-card",
+        "merge_readiness_history_enabled",
+        "--ingest-report",
+    )
+    if not all(marker in workflow_text or marker in html_text for marker in required_markers):
+        return False
+    try:
+        payload = json.loads(history_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    history = payload.get("history") or []
+    if not history:
+        return False
+    return bool(payload.get("summary", {}).get("merge_readiness_history_enabled"))
+
+
 def continuous_trilha_d_monitoring_surface_ready(repo_root: Path | None = None) -> bool:
     root = repo_root or Path(__file__).resolve().parents[1]
     workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
@@ -432,6 +462,8 @@ def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None =
         return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
     if not coverage_targeted_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
+    if not merge_readiness_history_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION_REFRESH
     return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
 
 

@@ -163,6 +163,7 @@
         <a class="link-btn" href="#operational-pareto-card">Pareto Operacional</a>
         <a class="link-btn" href="#predictive-regression-card">Gate Preditivo</a>
         <a class="link-btn" href="#continuous-trilha-d-monitoring-card">Monitoramento Contínuo</a>
+        <a class="link-btn" href="#merge-readiness-history-card">Merge Readiness — Histórico</a>
       </div>
     </section>
 
@@ -254,6 +255,28 @@
       <details class="details">
         <summary>Contrato continuous-trilha-d-monitoring bruto</summary>
         <pre id="continuous-monitoring-details">{}</pre>
+      </details>
+    </section>
+
+    <section class="card" id="merge-readiness-history-card">
+      <h2>Merge Readiness — Histórico agregado</h2>
+      <p class="small">Tendência de bloqueios, tamanho de PR e domínios misturados consumindo <code>merge-readiness-history.json</code>.</p>
+      <div class="grid">
+        <div><div class="kpi-label">Estado</div><div id="merge-readiness-history-state" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Taxa bloqueio</div><div id="merge-readiness-blocked-rate" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Média arquivos</div><div id="merge-readiness-avg-files" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Amostras</div><div id="merge-readiness-samples" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Histórico habilitado</div><div id="merge-readiness-history-enabled" class="kpi-value">-</div></div>
+      </div>
+      <p class="small" id="merge-readiness-history-summary">-</p>
+      <table>
+        <thead><tr><th>Timestamp</th><th>Status</th><th>Arquivos</th><th>Behind</th><th>Domínios</th><th>Execução</th></tr></thead>
+        <tbody id="merge-readiness-history-rows"><tr><td colspan="6">Carregando...</td></tr></tbody>
+      </table>
+      <div class="links" id="merge-readiness-history-links"></div>
+      <details class="details">
+        <summary>Contrato merge-readiness-history bruto</summary>
+        <pre id="merge-readiness-history-details">{}</pre>
       </details>
     </section>
 
@@ -855,6 +878,75 @@
       });
     }
 
+    async function renderMergeReadinessHistory() {
+      const fallback = {
+        state: 'unknown',
+        summary: { merge_readiness_history_enabled: false, samples: 0, blocked_rate: 0, avg_changed_files: 0 },
+        metrics: {},
+        history: [],
+      };
+      const response = await fetchOptionalJson('./data/merge-readiness-history.json', fallback);
+      const payload = response.data || fallback;
+      const summary = payload.summary || {};
+
+      document.getElementById('merge-readiness-history-state').innerHTML = `<span class="status ${statusClass(payload.state)}">${payload.state || 'unknown'}</span>`;
+      document.getElementById('merge-readiness-blocked-rate').textContent = summary.blocked_rate != null
+        ? `${(summary.blocked_rate * 100).toFixed(1)}%`
+        : '-';
+      document.getElementById('merge-readiness-avg-files').textContent = summary.avg_changed_files ?? '-';
+      document.getElementById('merge-readiness-samples').textContent = summary.samples ?? (payload.history || []).length;
+      document.getElementById('merge-readiness-history-enabled').innerHTML = summary.merge_readiness_history_enabled
+        ? '<span class="status passed">merge_readiness_history_enabled</span>'
+        : '<span class="status warning">inativo</span>';
+      document.getElementById('merge-readiness-history-summary').textContent = [
+        summary.recommendation ? `Recomendação: ${summary.recommendation}` : '',
+        payload.metrics?.top_blocking_codes?.length
+          ? `Bloqueios frequentes: ${payload.metrics.top_blocking_codes.map((item) => item.code).join(', ')}`
+          : '',
+        payload.metrics?.top_domains?.length
+          ? `Domínios frequentes: ${payload.metrics.top_domains.map((item) => item.domain).join(', ')}`
+          : '',
+      ].filter(Boolean).join(' · ') || 'Sem histórico adicional; fallback governado ativo.';
+
+      const rows = document.getElementById('merge-readiness-history-rows');
+      rows.innerHTML = '';
+      const history = (payload.history || []).slice().reverse();
+      if (!history.length) {
+        rows.innerHTML = '<tr><td colspan="6">Nenhuma amostra registrada.</td></tr>';
+      } else {
+        history.slice(0, 8).forEach((item) => {
+          const tr = document.createElement('tr');
+          const runLink = item.workflow_run_url
+            ? `<a href="${item.workflow_run_url}" target="_blank" rel="noopener">Ver execução</a>`
+            : '-';
+          tr.innerHTML = `
+            <td>${item.timestamp || '-'}</td>
+            <td><span class="status ${statusClass(item.status)}">${item.status || '-'}</span></td>
+            <td>${item.changed_files ?? '-'}</td>
+            <td>${item.behind_by ?? '-'}</td>
+            <td>${Array.isArray(item.domains) ? item.domains.join(', ') : '-'}</td>
+            <td>${runLink}</td>
+          `;
+          rows.appendChild(tr);
+        });
+      }
+
+      const links = document.getElementById('merge-readiness-history-links');
+      links.innerHTML = '';
+      addLink(links, 'merge-readiness-history.json', './data/merge-readiness-history.json');
+      if (payload.links?.workflow) addLink(links, 'Workflow merge-readiness', payload.links.workflow, true);
+      if (payload.links?.source) addLink(links, 'Script histórico', payload.links.source, true);
+
+      document.getElementById('merge-readiness-history-details').textContent = shortJson({
+        available: response.available,
+        source: response.source,
+        fallback_error: response.error,
+        summary,
+        metrics: payload.metrics || {},
+        latest_snapshot: payload.latest_snapshot || {},
+      });
+    }
+
     function renderOperationalIntelligenceQuickLinks() {
       const trilhaScore = document.getElementById('trilha-d-score')?.textContent?.trim() || '-';
       const paretoScore = document.getElementById('pareto-score')?.textContent?.trim().split(/\s/)[0] || '-';
@@ -867,6 +959,8 @@
       addLink(quick, `Pareto — score ${paretoScore}`, '#operational-pareto-card');
       addLink(quick, `Gate preditivo — risco ${predictiveRisk}`, '#predictive-regression-card');
       addLink(quick, `Monitoramento contínuo — ${monitoringState}`, '#continuous-trilha-d-monitoring-card');
+      const mergeHistoryState = document.getElementById('merge-readiness-history-state')?.textContent?.trim() || '-';
+      addLink(quick, `Merge readiness — ${mergeHistoryState}`, '#merge-readiness-history-card');
       addLink(quick, 'Navegação operacional', './operational-navigation.html');
     }
 
@@ -968,6 +1062,7 @@
       addLink(links, 'Pareto Operacional', '#operational-pareto-card');
       addLink(links, 'Gate Preditivo', '#predictive-regression-card');
       addLink(links, 'Monitoramento Contínuo Trilha D', '#continuous-trilha-d-monitoring-card');
+      addLink(links, 'Merge Readiness — Histórico', '#merge-readiness-history-card');
       addLink(links, 'Runtime Executive Index', './data/runtime-executive-index.json');
       addLink(links, 'Merge Intelligence JSON', './data/merge-intelligence-index.json');
       addLink(links, 'Lane Priority JSON', './data/merge-lane-priority.json');
@@ -978,6 +1073,7 @@
       await renderOperationalPareto();
       await renderPredictiveRegressionGate();
       await renderContinuousTrilhaDMonitoring();
+      await renderMergeReadinessHistory();
       renderOperationalIntelligenceQuickLinks();
       renderDomains(data.runtime_domain_drilldowns || []);
       const obs = data.observability_correlation_report || {};

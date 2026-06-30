@@ -84,6 +84,23 @@ ACTION_CATALOG: list[dict[str, Any]] = [
         "active_when": "trilha_d_dashboard_pending",
     },
     {
+        "id": "merge_readiness_history",
+        "title": "Histórico agregado de merge-readiness",
+        "lane": "governance-automation",
+        "dimension": "merge-readiness",
+        "target_score": 90.0,
+        "fixed_gain": 1.5,
+        "effort_points": 3,
+        "risk": "low",
+        "confidence": 0.74,
+        "why_now": "mede retrabalho por divergência de branch e PRs grandes antes do CI pesado",
+        "next_artifacts": [
+            "docs/ops-dashboard/data/merge-readiness-history.json",
+            ".github/workflows/merge-readiness.yml",
+        ],
+        "active_when": "merge_readiness_history_pending",
+    },
+    {
         "id": "artifact_ingestion_refresh",
         "title": "Automatizar refresh do histórico por artifact",
         "lane": "governance-automation",
@@ -235,6 +252,8 @@ def action_is_active(action: dict[str, Any], *, trilha_d: dict[str, Any], gaps_r
     active_when = action.get("active_when")
     if active_when == "artifact_ingestion_pending":
         return not trilha_d.get("artifact_ingestion_enabled") or trilha_d.get("next_increment") == "artifact_ingestion_refresh"
+    if active_when == "merge_readiness_history_pending":
+        return trilha_d.get("next_increment") == "merge_readiness_history"
     if active_when == "continuous_monitoring_pending":
         return trilha_d.get("next_increment") == "continuous_trilha_d_monitoring"
     if active_when == "pareto_dashboard_pending":
