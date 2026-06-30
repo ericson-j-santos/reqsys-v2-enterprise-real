@@ -8,23 +8,9 @@ on:
       - "scripts/validate_public_runtime.py"
       - "scripts/validate_publication_sync.py"
       - ".github/workflows/fly-enterprise-sync.yml"
+  # Sem filtro de paths no push: todo merge em main passa pelo gate rápido.
   push:
     branches: [main]
-    paths:
-      - "infra/**"
-      - "backend/**"
-      - "frontend/**"
-      - "backend/fly.dev.toml"
-      - "backend/fly.staging.toml"
-      - "frontend/fly.dev.toml"
-      - "frontend/fly.staging.toml"
-      - "Dockerfile.fly"
-      - "scripts/fly_boot.sh"
-      - "scripts/validate_fly_enterprise_sync.py"
-      - "scripts/validate_public_runtime.py"
-      - "scripts/validate_publication_sync.py"
-      - "scripts/validar_login_multi_ambiente.py"
-      - ".github/workflows/fly-enterprise-sync.yml"
   workflow_dispatch:
     inputs:
       target_environment:

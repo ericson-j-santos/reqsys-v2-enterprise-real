@@ -17,23 +17,9 @@ on:
         description: "Confirmação obrigatória para produção: APROVO-PROD"
         required: true
         type: string
+  # Sem filtro de paths no push: valida prod a cada merge.
   push:
     branches: [main]
-    paths:
-      - ".github/workflows/deploy-production-sync.yml"
-      - "scripts/validate_publication_sync.py"
-      - "frontend/**"
-      - "backend/**"
-      - "fly.toml"
-      - "backend/fly.toml"
-      - "frontend/fly.toml"
-      - "Dockerfile.fly"
-      - "scripts/fly_boot.sh"
-      - "scripts/configurar_fly_auth_azure.py"
-      - "scripts/validar_login_multi_ambiente.py"
-      - ".github/workflows/configurar-fly-auth-azure.yml"
-      - ".github/workflows/login-multi-ambiente-gate.yml"
-      - ".github/workflows/padrao-ouro-delivery-automation.yml"
 
 permissions:
   contents: read
