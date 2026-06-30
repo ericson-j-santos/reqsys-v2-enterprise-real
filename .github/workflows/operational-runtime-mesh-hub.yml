@@ -1,22 +1,10 @@
 name: Operational Runtime Mesh Hub
 
 # Hub central consolidado da runtime intelligence mesh.
-# Substitui cascatas entre: Operational Realtime Event Mesh, Realtime Operational Mesh,
-# Realtime Operational Streaming Layer e Live Operational Control Center.
+# Push main: Main Operational Validation Fast executa malha completa em um job.
+# workflow_run removido para eliminar cascata e cancelamentos no merge.
 
 on:
-  workflow_run:
-    workflows:
-      - "Post Merge Operational Summary"
-      - "Testes Monitorador APIs Python"
-      - "CI Incident Intelligence"
-      - "Governed Auto Remediation Engine"
-      - "Operational Data Lake & Historical Intelligence"
-      - "Operational Executive Dashboard Generator"
-      - "Operational Stability Score"
-      - "Workflow Reliability Analytics"
-    types:
-      - completed
   schedule:
     - cron: "23 11 * * 1-5"
   workflow_dispatch:

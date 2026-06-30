@@ -1,17 +1,10 @@
 name: Unified Operational Signal Consolidator
 
-# Fecha o loop mesh hub → alert intelligence → event bus → consolidador único.
+# Fecha o loop mesh → alert → event bus → consolidador.
+# Push main: Main Operational Validation Fast (síncrono, segundos).
+# Schedule horário como fallback de evidência.
 
 on:
-  workflow_run:
-    workflows:
-      - "Unified Operational Event Bus"
-      - "Operational Runtime Mesh Hub"
-      - "Operational Alert Intelligence"
-      - "Runtime Validation Consolidator"
-      - "Coordenador Status Consolidator"
-    types:
-      - completed
   schedule:
     - cron: "37 * * * *"
   workflow_dispatch:

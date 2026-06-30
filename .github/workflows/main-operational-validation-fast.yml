@@ -1,0 +1,121 @@
+name: Main Operational Validation Fast
+
+# Caminho rápido pós-merge: valida guardrails + malha P0 em um único job (~30-90s).
+# Substitui a cascata workflow_run que gerava dezenas de runs cancelados por merge.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/**"
+      - "scripts/**"
+      - "tests/test_pr_ci_watch.py"
+      - "tests/test_unified_operational_signal_consolidator.py"
+      - "tests/test_main_operational_validation_fast.py"
+      - "config/operational-gaps-registry.json"
+      - "tools/product_intelligence/**"
+      - "docs/runbooks/main-operational-health.md"
+      - "docs/runbooks/consolidacao-operacional-p0.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: main-operational-validation-fast-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-fast:
+    name: Validação operacional rápida (malha P0)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências mínimas
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+
+      - name: Executar validação rápida
+        id: fast
+        env:
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python scripts/main_operational_validation_fast.py \
+            --repo "${REPO}" \
+            --branch "${BRANCH}" \
+            --sha "${SHA}" \
+            --run-id "${RUN_ID}" \
+            --workflow-url "${WORKFLOW_URL}" \
+            --output-dir artifacts/main-operational-validation-fast \
+            --json | tee artifacts/main-operational-validation-fast/result.json
+
+      - name: Resumo executivo
+        if: always()
+        run: |
+          set -euo pipefail
+          summary="artifacts/main-operational-validation-fast/main-operational-validation-fast.json"
+          if [[ -f "${summary}" ]]; then
+            elapsed=$(python -c "import json; print(json.load(open('${summary}'))['elapsed_ms'])")
+            state=$(python -c "import json; print(json.load(open('${summary}'))['overall_state'])")
+            mesh=$(python -c "import json; print(json.load(open('${summary}'))['mesh_integrated'])")
+            evidence=$(python -c "import json; print(json.load(open('${summary}'))['evidence_gate_consolidated'])")
+            {
+              echo "## Main Operational Validation Fast"
+              echo "- Elapsed: \`${elapsed} ms\`"
+              echo "- Overall state: \`${state}\`"
+              echo "- Mesh integrated: \`${mesh}\`"
+              echo "- Evidence gate consolidated: \`${evidence}\`"
+              echo "- Modo: \`fast_path\` — sem cascata workflow_run"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar artifacts consolidados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-operational-validation-fast
+          path: |
+            artifacts/main-operational-validation-fast
+            artifacts/operational-runtime-mesh-hub
+            artifacts/operational-alert-intelligence
+            artifacts/unified-operational-event-bus
+            artifacts/unified-operational-signal-consolidator
+            artifacts/main-operational-health
+            reports/github-runtime-analytics
+          if-no-files-found: warn
+          retention-days: 15
+
+      - name: Publicar evidência de health (alias)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-operational-health-evidence
+          path: artifacts/main-operational-health
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Publicar sinal operacional unificado (alias)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unified-operational-signal
+          path: artifacts/unified-operational-signal-consolidator
+          if-no-files-found: error
+          retention-days: 30

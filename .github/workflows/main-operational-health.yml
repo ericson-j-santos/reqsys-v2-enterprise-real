@@ -1,6 +1,22 @@
 name: Main Operational Health
 
+# Validação diária + disparo imediato em push operacional.
+# Caminho rápido pós-merge: Main Operational Validation Fast (~segundos).
+
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/main-operational-health.yml"
+      - ".github/workflows/main-smoke-ci.yml"
+      - ".github/workflows/pr-scope-labeler.yml"
+      - ".github/workflows/pr-ci-watch.yml"
+      - ".github/workflows/ci-fast-operational.yml"
+      - "scripts/pr_ci_watch.py"
+      - "tests/test_pr_ci_watch.py"
+      - "docs/runbooks/main-smoke-ci.md"
+      - "docs/runbooks/pr-ci-watch.md"
   schedule:
     - cron: "17 9 * * 1-5"
   workflow_dispatch:
