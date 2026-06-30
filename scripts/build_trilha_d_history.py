@@ -29,7 +29,7 @@ NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION_REFRESH = "merge_readiness_history"
 MERGE_READINESS_HISTORY_JSON = "docs/ops-dashboard/data/merge-readiness-history.json"
 CONTINUOUS_MONITORING_JSON = "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
 TRILHA_D_WORKFLOW_FILE = "trilha-d-qualidade-governanca.yml"
-COVERAGE_TARGETED_MIN_SCORE = 82.0
+COVERAGE_TARGETED_MIN_SCORE = 87.0
 COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
     "backend/tests/test_hub_lowcode_service_critical_paths.py",
     "backend/tests/test_wiki_publisher_critical_paths.py",
@@ -43,6 +43,11 @@ COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
     "backend/tests/test_rag_governado_api_critical_paths.py",
     "backend/tests/test_sistema_api_critical_paths.py",
     "backend/tests/test_estatisticas_historico_critical_paths.py",
+    "backend/tests/test_specs_api_critical_paths.py",
+    "backend/tests/test_webhooks_api_critical_paths.py",
+    "backend/tests/test_copilot_studio_provisioner_critical_paths.py",
+    "backend/tests/test_agile_runtime_api_critical_paths.py",
+    "backend/tests/test_pipeline_api_critical_paths.py",
 )
 DIMENSIONS = ("tests", "coverage", "mutation", "contract", "schema", "ci-watch")
 
