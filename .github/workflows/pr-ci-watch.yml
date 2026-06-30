@@ -36,7 +36,7 @@ permissions:
 
 concurrency:
   group: pr-ci-watch-${{ github.event.pull_request.number || github.event.workflow_run.head_sha || github.event.inputs.pr_number || github.run_id }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   pr-ci-watch:
@@ -72,6 +72,24 @@ jobs:
             echo "sha=${{ github.event.inputs.sha }}" >> "$GITHUB_OUTPUT"
             echo "comment=${{ github.event.inputs.comment }}" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            WR_CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+            if [ "${WR_CONCLUSION}" = "cancelled" ]; then
+              echo "enabled=false" >> "$GITHUB_OUTPUT"
+              echo "reason=workflow_run_cancelled_upstream" >> "$GITHUB_OUTPUT"
+              echo "pr_number=0" >> "$GITHUB_OUTPUT"
+              echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+              echo "comment=false" >> "$GITHUB_OUTPUT"
+              cat > "${REPORT_DIR}/pr-ci-watch.json" << JSON
+          {
+            "status": "skipped",
+            "reason": "workflow_run_cancelled_upstream",
+            "workflow_run_id": "${{ github.event.workflow_run.id }}",
+            "workflow_name": "${{ github.event.workflow_run.name }}",
+            "conclusion": "cancelled"
+          }
+          JSON
+              exit 0
+            fi
             PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
             SHA="${{ github.event.workflow_run.head_sha }}"
 
