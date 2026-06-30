@@ -2,6 +2,27 @@
 
 Todas as mudanças relevantes da documentação viva do ReqSys devem ser registradas neste arquivo.
 
+## [0.6.0] - 2026-06-28
+
+### Adicionado
+
+- Contrato OpenAPI canônico gerado pelo runtime em `docs-site/assets/openapi/reqsys-runtime-openapi-v0.6.0.json`.
+- Metadado `x-reqsys-contract-mode=canonical-generated` no contrato gerado.
+- Manifesto `VERSION.json` apontando para o contrato gerado pelo FastAPI como fonte canônica.
+
+### Alterado
+
+- Runtime passa a expor versão `0.6.0`.
+- `MetadataEntrada.versao_contrato` passa a usar `0.6.0` como padrão.
+- `runtime/scripts/export_openapi.py` passa a exportar o contrato canônico `v0.6.0`.
+- Testes do exportador passam a validar o contrato canônico `v0.6.0`.
+- README do runtime passa a referenciar o OpenAPI canônico `v0.6.0`.
+
+### Próximo incremento recomendado
+
+- Adicionar adapter Redis ou Azure Service Bus para substituir a fila local em ambiente integrado.
+- Persistir jobs em banco com trilha de auditoria e retenção governada.
+
 ## [0.5.1] - 2026-06-28
 
 ### Adicionado

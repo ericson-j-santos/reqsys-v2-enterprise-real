@@ -9,13 +9,14 @@ from typing import Any
 from app.main import app
 
 
-DEFAULT_OUTPUT = "../docs-site/assets/openapi/reqsys-runtime-openapi-v0.5.0.generated.json"
+DEFAULT_OUTPUT = "../docs-site/assets/openapi/reqsys-runtime-openapi-v0.6.0.json"
 
 
 def gerar_openapi() -> dict[str, Any]:
     schema = app.openapi()
     schema.setdefault("info", {})["x-reqsys-generated-by"] = "runtime/scripts/export_openapi.py"
     schema.setdefault("info", {})["x-reqsys-contract-source"] = "runtime-fastapi"
+    schema.setdefault("info", {})["x-reqsys-contract-mode"] = "canonical-generated"
     return schema
 
 
@@ -29,9 +30,9 @@ def carregar_json(path: Path) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Exporta o OpenAPI gerado pelo FastAPI runtime.")
-    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Arquivo de saída do contrato OpenAPI.")
-    parser.add_argument("--check", action="store_true", help="Valida se o arquivo versionado está sincronizado.")
+    parser = argparse.ArgumentParser(description="Exporta o OpenAPI canônico gerado pelo FastAPI runtime.")
+    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Arquivo de saída do contrato OpenAPI canônico.")
+    parser.add_argument("--check", action="store_true", help="Valida se o arquivo canônico está sincronizado.")
     args = parser.parse_args()
 
     runtime_dir = Path(__file__).resolve().parents[1]

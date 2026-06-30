@@ -23,7 +23,7 @@ class TipoOperacao(str, Enum):
 
 
 class MetadataEntrada(BaseModel):
-    versao_contrato: str = Field(default="0.5.0")
+    versao_contrato: str = Field(default="0.6.0")
     correlation_id: str | None = Field(default=None, min_length=3, max_length=120)
 
 

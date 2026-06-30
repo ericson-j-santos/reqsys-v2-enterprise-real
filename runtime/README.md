@@ -61,7 +61,7 @@ Content-Type: application/json
     "status": "aprovado"
   },
   "metadata": {
-    "versao_contrato": "0.5.0",
+    "versao_contrato": "0.6.0",
     "correlation_id": "power-automate-0001"
   }
 }
@@ -84,12 +84,12 @@ Location: /api/jobs/JOB-YYYYMMDDHHMMSS-XXXXXXXX
 }
 ```
 
-## OpenAPI gerado pelo runtime
+## OpenAPI canônico gerado pelo runtime
 
-O contrato gerado pelo FastAPI deve permanecer versionado em:
+O contrato canônico gerado pelo FastAPI deve permanecer versionado em:
 
 ```text
-docs-site/assets/openapi/reqsys-runtime-openapi-v0.5.0.generated.json
+docs-site/assets/openapi/reqsys-runtime-openapi-v0.6.0.json
 ```
 
 Para exportar novamente:
@@ -123,8 +123,8 @@ pytest
 - Worker local controlado por `ENABLE_ASYNC_WORKER`.
 - `httpx.AsyncClient` isolado em gateway outbound.
 - `correlation_id` propagado por header `X-Correlation-Id`.
-- Estados compatíveis com contrato OpenAPI `v0.4.0`.
-- Contrato OpenAPI gerado pelo FastAPI versionado para reduzir drift entre documentação e runtime.
+- Estados compatíveis com contrato OpenAPI canônico `v0.6.0`.
+- Contrato OpenAPI canônico gerado pelo FastAPI para reduzir drift entre documentação e runtime.
 
 ## Próximo incremento recomendado
 
