@@ -80,6 +80,28 @@ def test_infer_increment_hotfix_from_branch() -> None:
     assert inferred["increment_type"] == "hotfix"
 
 
+def test_infer_increment_fly_demo_login_as_hotfix() -> None:
+    inferred = infer_increment_from_pr(
+        title="fix(ops): garantir ALLOW_DEMO_LOGIN=true no deploy automático de dev",
+        head_ref="cursor/fly-dev-demo-login-7df8",
+    )
+    assert inferred["increment_type"] == "hotfix"
+    assert inferred["reference"] == "OPS-GAP-FLY-DEMO-LOGIN"
+    assert inferred["inference_source"] == "heuristic:fly_ops"
+
+
+def test_evaluate_pr_increment_gate_allows_fly_demo_login_hotfix() -> None:
+    report = consolidate("owner/repo", "main", orchestrator_fixture("yellow"), health_fixture("green"))
+    result = evaluate_pr_increment_gate(
+        report,
+        title="fix(ops): garantir ALLOW_DEMO_LOGIN=true no deploy automático de dev",
+        head_ref="cursor/fly-dev-demo-login-7df8",
+    )
+    assert result["allowed"] is True
+    assert result["increment_type"] == "hotfix"
+    assert result["reference"] == "OPS-GAP-FLY-DEMO-LOGIN"
+
+
 def test_evaluate_pr_increment_gate_allows_ops_hotfix_when_yellow() -> None:
     report = consolidate("owner/repo", "main", orchestrator_fixture("yellow"), health_fixture("green"))
     result = evaluate_pr_increment_gate(

@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Gaps operacionais documentados com referência OPS-GAP-* para gate de incremento e hotfix governado.",
+  "gaps": [
+    {
+      "id": "OPS-GAP-FLY-DEMO-LOGIN",
+      "title": "Demo login Fly dev ausente após deploy",
+      "status": "resolved",
+      "scope": "fly-enterprise-sync",
+      "detail": "Secrets Fly sobrescrevem fly.dev.toml; deploy dev deve garantir ALLOW_DEMO_LOGIN=true antes do smoke de login.",
+      "reference_pr": 589,
+      "allowed_increment_types": ["hotfix", "gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-PAGES-SHOWCASE",
+      "title": "GitHub Pages showcase com validação ou publicação inconsistente",
+      "status": "open",
+      "scope": "github-pages",
+      "detail": "Workflow Deploy ReqSys Public Showcase falha em scan de termos ou não republica após merge.",
+      "allowed_increment_types": ["hotfix", "gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-MAIN-OPERATIONAL-HEALTH",
+      "title": "Main Operational Health degradado",
+      "status": "open",
+      "scope": "ci-evidence",
+      "detail": "Workflow de saúde operacional da main falha em guardrails ou evidência agregada.",
+      "allowed_increment_types": ["hotfix", "gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-MESH-NOISE",
+      "title": "Ruído operacional na runtime intelligence mesh",
+      "status": "open",
+      "scope": "operational-mesh",
+      "detail": "Cascatas workflow_run, cancelamentos e No jobs were run em workflows informativos.",
+      "allowed_increment_types": ["hotfix", "gap_fix"]
+    }
+  ]
+}

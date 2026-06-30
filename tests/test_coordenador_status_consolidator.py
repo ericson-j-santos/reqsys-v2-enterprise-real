@@ -169,6 +169,13 @@ def test_evaluate_increment_intent_allows_gap_fix_with_reference() -> None:
     assert reason == "gap_fix_referenciado"
 
 
+def test_evaluate_increment_intent_allows_documented_gap_reference() -> None:
+    report = consolidate("owner/repo", "main", orchestrator_fixture("yellow"), health_fixture("green"))
+    allowed, reason, _ = evaluate_increment_intent(report, "gap_fix", "OPS-GAP-PAGES-SHOWCASE")
+    assert allowed is True
+    assert reason == "gap_fix_referenciado"
+
+
 def test_evaluate_increment_intent_allows_close_duplicate() -> None:
     report = consolidate(
         "owner/repo",

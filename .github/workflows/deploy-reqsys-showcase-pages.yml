@@ -2,11 +2,15 @@ name: Deploy ReqSys Public Showcase
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "19 10 * * 1-5"
   push:
     branches:
       - main
     paths:
       - 'docs/public-showcase/reqsys-linkedin/**'
+      - 'docs/index.html'
+      - 'docs/assets/**'
       - '.github/workflows/deploy-reqsys-showcase-pages.yml'
 
 permissions:
@@ -35,7 +39,14 @@ jobs:
           set -euo pipefail
           test -f docs/public-showcase/reqsys-linkedin/index.html
           test -f docs/public-showcase/reqsys-linkedin/assets/styles.css
-          if grep -RniE '(token|secret|password|client_secret|tenant|cpf|cnpj|connection string)' docs/public-showcase/reqsys-linkedin; then
+          # README.md lista termos proibidos como documentação; validar só HTML/CSS/SVG publicáveis.
+          scan_targets=(
+            docs/public-showcase/reqsys-linkedin/index.html
+            docs/public-showcase/reqsys-linkedin/assets
+          )
+          if grep -RniE \
+            '(api[_-]?key|client[_-]?secret|password\s*[:=]|bearer\s+[a-z0-9._-]{20,}|connection\s+string|cpf|cnpj)' \
+            "${scan_targets[@]}"; then
             echo 'Sensitive-looking term found in public showcase. Review required.'
             exit 1
           fi

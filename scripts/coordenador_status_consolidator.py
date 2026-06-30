@@ -38,6 +38,27 @@ INCREMENT_POLICY = (
     "Ciclo: triagem -> ajuste minimo -> CI -> evidencia -> merge."
 )
 
+DOCUMENTED_GAPS_REGISTRY = ROOT_DIR / "config" / "operational-gaps-registry.json"
+
+
+def _load_documented_gaps() -> list[dict[str, Any]]:
+    if not DOCUMENTED_GAPS_REGISTRY.exists():
+        return []
+    payload = json.loads(DOCUMENTED_GAPS_REGISTRY.read_text(encoding="utf-8"))
+    return payload.get("gaps") or []
+
+
+def _documented_gap_ids(*, include_resolved: bool = False) -> set[str]:
+    ids: set[str] = set()
+    for item in _load_documented_gaps():
+        gap_id = str(item.get("id") or "")
+        if not gap_id.startswith("OPS-GAP-"):
+            continue
+        status = str(item.get("status") or "open").lower()
+        if status == "open" or include_resolved:
+            ids.add(gap_id)
+    return ids
+
 
 def merge_state(*states: str) -> str:
     ranked = sorted(states, key=lambda item: STATE_RANK.get(item, 1), reverse=True)
@@ -398,6 +419,9 @@ def evaluate_increment_intent(
         for item in report.get("automatic_backlog") or []
         if item.get("id")
     }
+    documented_gap_ids = _documented_gap_ids(include_resolved=True)
+    active_gap_ids = backlog_ids | _documented_gap_ids(include_resolved=False)
+    known_gap_ids = backlog_ids | documented_gap_ids
     duplicate_numbers = _duplicate_numbers_from_report(report)
 
     if increment_type not in allowed_types:
@@ -415,7 +439,7 @@ def evaluate_increment_intent(
 
     if increment_type == "gap_fix":
         if not reference:
-            gaps = [item_id for item_id in backlog_ids if item_id.startswith("OPS-GAP-")]
+            gaps = [item_id for item_id in active_gap_ids if item_id.startswith("OPS-GAP-")]
             if not gaps:
                 return False, "gap_fix_sem_referencia", "Informe --reference OPS-GAP-* existente no backlog."
             return (
@@ -423,7 +447,7 @@ def evaluate_increment_intent(
                 "gap_fix_generico",
                 f"Referencie um gap explicito. Gaps ativos: {', '.join(sorted(gaps))}.",
             )
-        if reference in backlog_ids:
+        if reference in known_gap_ids:
             return True, "gap_fix_referenciado", f"Correcao alinhada ao backlog ({reference})."
         return False, "gap_fix_invalido", f"Referencia {reference} nao encontrada no backlog atual."
 

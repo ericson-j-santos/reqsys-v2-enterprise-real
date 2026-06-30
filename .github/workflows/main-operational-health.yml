@@ -46,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -qi -- "read-only" .github/workflows/pr-scope-labeler.yml
-          grep -qi -- "sem mutação de labels" .github/workflows/pr-scope-labeler.yml
+          grep -qi -- "sem mutacao de labels" .github/workflows/pr-scope-labeler.yml
           grep -qi -- "main-smoke-ci-evidence" .github/workflows/main-smoke-ci.yml
           grep -qi -- "environment_change\":False" .github/workflows/main-smoke-ci.yml
           grep -qi -- "deploy\":False" .github/workflows/main-smoke-ci.yml
