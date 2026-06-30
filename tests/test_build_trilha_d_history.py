@@ -64,9 +64,9 @@ def test_build_payload_tracks_coverage_improvement() -> None:
 
     assert payload["state"] == "green"
     assert payload["trend"] == "improving"
-    assert payload["summary"]["samples"] == 3
+    assert payload["summary"]["samples"] == 4
     assert payload["dimension_summary"]["coverage"]["trend"] == "improving"
-    assert payload["dimension_summary"]["coverage"]["delta_from_baseline"] == 45.29
+    assert payload["dimension_summary"]["coverage"]["delta_from_baseline"] == 66.6
     assert "workflow_run_url" in payload["runtime_dashboard_contract"]["series_fields"]
     assert payload["history"][0]["workflow_run_url"]
 

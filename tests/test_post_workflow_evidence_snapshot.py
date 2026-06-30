@@ -48,6 +48,8 @@ def test_main_returns_zero_even_when_blocked(monkeypatch):
             event="ci",
             sha="abc",
             pipeline_report=Path("/tmp/pipeline-missing.json"),
+            workflow_run_id=None,
+            correlation_id=None,
         ),
     )
     assert module.main() == 0
