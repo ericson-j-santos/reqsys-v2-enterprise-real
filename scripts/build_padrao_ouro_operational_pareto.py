@@ -81,7 +81,7 @@ ACTION_CATALOG: list[dict[str, Any]] = [
             "docs/ops-dashboard/data/trilha-d-history.json",
             "docs/ops-dashboard/index.html",
         ],
-        "active_when": "artifact_ingestion_pending",
+        "active_when": "trilha_d_dashboard_pending",
     },
     {
         "id": "artifact_ingestion_refresh",
@@ -99,6 +99,23 @@ ACTION_CATALOG: list[dict[str, Any]] = [
             ".github/workflows/trilha-d-qualidade-governanca.yml",
         ],
         "active_when": "artifact_ingestion_pending",
+    },
+    {
+        "id": "continuous_trilha_d_monitoring",
+        "title": "Monitoramento contínuo Trilha D via artifacts",
+        "lane": "governance-automation",
+        "dimension": "coverage",
+        "target_score": 92.0,
+        "fixed_gain": 1.8,
+        "effort_points": 2,
+        "risk": "low",
+        "confidence": 0.76,
+        "why_now": "artifact ingestion habilitado — consolidar cobertura e refresh contínuo",
+        "next_artifacts": [
+            "docs/ops-dashboard/data/trilha-d-history.json",
+            ".github/workflows/trilha-d-qualidade-governanca.yml",
+        ],
+        "active_when": "continuous_monitoring_pending",
     },
     {
         "id": "predictive_regression_gate",
@@ -218,6 +235,8 @@ def action_is_active(action: dict[str, Any], *, trilha_d: dict[str, Any], gaps_r
     active_when = action.get("active_when")
     if active_when == "artifact_ingestion_pending":
         return not trilha_d.get("artifact_ingestion_enabled") or trilha_d.get("next_increment") == "artifact_ingestion_refresh"
+    if active_when == "continuous_monitoring_pending":
+        return trilha_d.get("next_increment") == "continuous_trilha_d_monitoring"
     if active_when == "pareto_dashboard_pending":
         return trilha_d.get("next_increment") == "consolidate_operational_pareto_cycle"
     if active_when == "predictive_gate_pending":
@@ -226,6 +245,8 @@ def action_is_active(action: dict[str, Any], *, trilha_d: dict[str, Any], gaps_r
         return trilha_d.get("next_increment") == "coverage_targeted_tests"
     if active_when == "governance_deep_links_pending":
         return trilha_d.get("next_increment") == "link_governance_cards_to_latest_workflow_runs"
+    if active_when == "trilha_d_dashboard_pending":
+        return trilha_d.get("next_increment") == "dashboard_trilha_d_history_card"
     if active_when == "always_when_gaps_remain":
         return gaps_remain
     return True

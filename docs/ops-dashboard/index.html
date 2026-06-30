@@ -171,14 +171,15 @@
         <div><div class="kpi-label">Estado</div><div id="trilha-d-state" class="kpi-value">-</div></div>
         <div><div class="kpi-label">Tendência</div><div id="trilha-d-trend" class="kpi-value">-</div></div>
         <div><div class="kpi-label">Delta baseline</div><div id="trilha-d-delta" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Artifact ingestion</div><div id="artifact-ingestion-enabled" class="kpi-value">-</div></div>
       </div>
       <table>
         <thead><tr><th>Dimensão</th><th>Status</th><th>Score</th><th>Tendência</th><th>Delta baseline</th></tr></thead>
         <tbody id="trilha-d-dimensions"><tr><td colspan="5">Carregando...</td></tr></tbody>
       </table>
       <table>
-        <thead><tr><th>Timestamp</th><th>Estado</th><th>Score médio</th><th>Fonte</th><th>Run</th></tr></thead>
-        <tbody id="trilha-d-history-rows"><tr><td colspan="5">Carregando...</td></tr></tbody>
+        <thead><tr><th>Timestamp</th><th>Estado</th><th>Score médio</th><th>Fonte</th><th>Run</th><th>Execução</th></tr></thead>
+        <tbody id="trilha-d-history-rows"><tr><td colspan="6">Carregando...</td></tr></tbody>
       </table>
       <div class="links" id="trilha-d-links"></div>
       <details class="details">
@@ -548,6 +549,11 @@
       document.getElementById('trilha-d-state').innerHTML = `<span class="status ${statusClass(payload.state)}">${payload.state || 'unknown'}</span>`;
       document.getElementById('trilha-d-trend').textContent = payload.trend || '-';
       document.getElementById('trilha-d-delta').textContent = payload.delta_from_baseline ?? '-';
+      const summary = payload.summary || {};
+      const ingestionEnabled = Boolean(summary.artifact_ingestion_enabled);
+      document.getElementById('artifact-ingestion-enabled').innerHTML = ingestionEnabled
+        ? '<span class="status passed">enabled</span>'
+        : '<span class="status warning">static</span>';
 
       const dimensionsBody = document.getElementById('trilha-d-dimensions');
       dimensionsBody.innerHTML = '';
@@ -572,16 +578,21 @@
       historyBody.innerHTML = '';
       const history = payload.history || [];
       if (!history.length) {
-        historyBody.innerHTML = '<tr><td colspan="5">Nenhuma amostra histórica disponível.</td></tr>';
+        historyBody.innerHTML = '<tr><td colspan="6">Nenhuma amostra histórica disponível.</td></tr>';
       } else {
         history.forEach((entry) => {
           const tr = document.createElement('tr');
+          const runUrl = entry.workflow_run_url || payload.links?.latest_run || payload.links?.workflow_runs || '';
+          const runCell = runUrl
+            ? `<a href="${runUrl}" target="_blank" rel="noopener noreferrer">Ver execução</a>`
+            : '<span class="small">-</span>';
           tr.innerHTML = `
             <td>${formatDate(entry.timestamp)}</td>
             <td><span class="status ${statusClass(entry.state)}">${entry.state || '-'}</span></td>
             <td>${entry.average_score ?? '-'}</td>
             <td>${entry.source || '-'}</td>
             <td>${entry.run_id || '-'}</td>
+            <td>${runCell}</td>
           `;
           historyBody.appendChild(tr);
         });
@@ -590,7 +601,8 @@
       const links = document.getElementById('trilha-d-links');
       links.innerHTML = '';
       addLink(links, 'trilha-d-history.json', './data/trilha-d-history.json');
-      if (payload.links?.actions) addLink(links, 'Workflow Trilha D', payload.links.actions, true);
+      if (payload.links?.workflow_runs) addLink(links, 'Workflow Trilha D', payload.links.workflow_runs, true);
+      else if (payload.links?.actions) addLink(links, 'Workflow Trilha D', payload.links.actions, true);
       if (payload.links?.source) addLink(links, 'Builder', payload.links.source, true);
 
       document.getElementById('trilha-d-details').textContent = shortJson({
@@ -971,7 +983,7 @@
       document.getElementById('runtime-executive-details').textContent = shortJson({ error: error.message });
       document.getElementById('governance-evidence-cards').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar governance evidence cards.</td></tr>`;
       document.getElementById('trilha-d-dimensions').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar histórico Trilha D.</td></tr>`;
-      document.getElementById('trilha-d-history-rows').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar histórico Trilha D.</td></tr>`;
+      document.getElementById('trilha-d-history-rows').innerHTML = `<tr><td colspan="6">Fallback seguro: falha ao carregar histórico Trilha D.</td></tr>`;
       document.getElementById('pareto-actions').innerHTML = `<tr><td colspan="6">Fallback seguro: falha ao carregar Pareto operacional.</td></tr>`;
       document.getElementById('predictive-dimension-risks').innerHTML = `<tr><td colspan="5">Fallback seguro: falha ao carregar gate preditivo.</td></tr>`;
       document.getElementById('predictive-blocking-reasons').innerHTML = '<tr><td>Fallback seguro: falha ao carregar gate preditivo.</td></tr>';

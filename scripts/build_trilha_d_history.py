@@ -22,16 +22,39 @@ NEXT_INCREMENT_AFTER_PARETO_DASHBOARD = "predictive_regression_gate"
 NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD = "coverage_targeted_tests"
 NEXT_INCREMENT_AFTER_COVERAGE_TARGETED = "link_governance_cards_to_latest_workflow_runs"
 NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS = "dashboard_trilha_d_history_card"
+NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD = "artifact_ingestion_refresh"
+NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION = "continuous_trilha_d_monitoring"
+TRILHA_D_WORKFLOW_FILE = "trilha-d-qualidade-governanca.yml"
 COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
     "backend/tests/test_hub_lowcode_service_critical_paths.py",
     "backend/tests/test_wiki_publisher_critical_paths.py",
     "backend/tests/test_power_automate_provisioning_critical_paths.py",
+    "backend/tests/test_recomendacoes_ia_critical_paths.py",
 )
 DIMENSIONS = ("tests", "coverage", "mutation", "contract", "schema", "ci-watch")
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def workflow_runs_url() -> str:
+    return f"https://github.com/{REPO}/actions/workflows/{TRILHA_D_WORKFLOW_FILE}"
+
+
+def resolve_history_run_url(run_id: str) -> str:
+    run = str(run_id or "").strip()
+    if run.isdigit():
+        return f"https://github.com/{REPO}/actions/runs/{run}"
+    if run.startswith("pr-"):
+        return f"https://github.com/{REPO}/pull/{run.removeprefix('pr-')}"
+    return workflow_runs_url()
+
+
+def enrich_history_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    enriched = dict(entry)
+    enriched["workflow_run_url"] = resolve_history_run_url(str(entry.get("run_id") or ""))
+    return enriched
 
 
 def trend_for(values: list[float]) -> str:
@@ -129,6 +152,7 @@ def report_to_history_entry(report: dict[str, Any]) -> dict[str, Any]:
         "timestamp": report.get("generated_at") or utc_now(),
         "source": "github_actions_artifact",
         "run_id": str(report.get("run_id") or ""),
+        "workflow_run_url": resolve_history_run_url(str(report.get("run_id") or "")),
         "state": history_state_from_report(report_state, average_score),
         "average_score": average_score,
         "dimensions": dimensions,
@@ -222,6 +246,26 @@ def coverage_targeted_critical_paths_ready(repo_root: Path | None = None) -> boo
     return all((root / relative_path).exists() for relative_path in COVERAGE_TARGETED_CRITICAL_PATH_TESTS)
 
 
+def trilha_d_history_dashboard_surface_ready(repo_root: Path | None = None) -> bool:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    index_html = root / "docs/ops-dashboard/index.html"
+    monitoramento_view = root / "frontend/src/views/MonitoramentoOperacionalView.vue"
+    history_json = root / "docs/ops-dashboard/data/trilha-d-history.json"
+    if not index_html.exists() or not monitoramento_view.exists() or not history_json.exists():
+        return False
+    html_text = index_html.read_text(encoding="utf-8")
+    view_text = monitoramento_view.read_text(encoding="utf-8")
+    required_markers = ("workflow_run_url", "Ver execução")
+    if not all(marker in html_text or marker in view_text for marker in required_markers):
+        return False
+    try:
+        payload = json.loads(history_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    history = payload.get("history") or []
+    return bool(history) and all(isinstance(item.get("workflow_run_url"), str) for item in history)
+
+
 def governance_deep_links_surface_ready(repo_root: Path | None = None) -> bool:
     root = repo_root or Path(__file__).resolve().parents[1]
     index_html = root / "docs/ops-dashboard/index.html"
@@ -251,18 +295,43 @@ def governance_deep_links_surface_ready(repo_root: Path | None = None) -> bool:
     )
 
 
+def artifact_ingestion_surface_ready(repo_root: Path | None = None) -> bool:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
+    index_html = root / "docs/ops-dashboard/index.html"
+    monitoramento_view = root / "frontend/src/views/MonitoramentoOperacionalView.vue"
+    if not workflow.exists() or not index_html.exists() or not monitoramento_view.exists():
+        return False
+    workflow_text = workflow.read_text(encoding="utf-8")
+    html_text = index_html.read_text(encoding="utf-8")
+    view_text = monitoramento_view.read_text(encoding="utf-8")
+    required_markers = (
+        "Atualizar histórico Trilha D (artifact ingestion)",
+        "--ingest-report",
+        "artifact-ingestion-enabled",
+        "artifact_ingestion_enabled",
+    )
+    if not all(marker in workflow_text or marker in html_text or marker in view_text for marker in required_markers):
+        return False
+    return "--ingest-report" in workflow_text and "artifact-ingestion-enabled" in html_text
+
+
 def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None = None) -> str:
-    if not artifact_ingestion:
-        return "artifact_ingestion_refresh"
-    if governance_deep_links_surface_ready(repo_root):
-        return NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS
-    if coverage_targeted_critical_paths_ready(repo_root):
-        return NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
-    if ops_dashboard_predictive_gate_surface_ready(repo_root):
-        return NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD
-    if ops_dashboard_pareto_surface_ready(repo_root):
+    if not ops_dashboard_pareto_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_INGESTION
+    if not ops_dashboard_predictive_gate_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_PARETO_DASHBOARD
-    return NEXT_INCREMENT_AFTER_INGESTION
+    if not coverage_targeted_critical_paths_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD
+    if not governance_deep_links_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    if not trilha_d_history_dashboard_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS
+    if not artifact_ingestion:
+        return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+    if artifact_ingestion_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+    return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
 
 
 def build_payload(
@@ -271,6 +340,7 @@ def build_payload(
     artifact_ingestion: bool = False,
 ) -> dict[str, Any]:
     samples = history if history is not None else build_sample_history()
+    samples = [enrich_history_entry(item) for item in samples]
     average_values = [float(item["average_score"]) for item in samples if isinstance(item.get("average_score"), int | float)]
     current_score = round(average_values[-1], 2) if average_values else 0.0
     baseline_score = round(average_values[0], 2) if average_values else 0.0
@@ -295,17 +365,27 @@ def build_payload(
             "artifact_ingestion_enabled": artifact_ingestion,
         },
         "links": {
-            "actions": f"https://github.com/{REPO}/actions/workflows/trilha-d-qualidade-governanca.yml",
+            "actions": workflow_runs_url(),
+            "workflow_runs": workflow_runs_url(),
+            "latest_run": workflow_runs_url(),
             "source": f"https://github.com/{REPO}/blob/main/scripts/build_trilha_d_history.py",
             "dashboard_data": f"https://github.com/{REPO}/blob/main/docs/ops-dashboard/data/trilha-d-history.json",
         },
         "dimension_summary": build_dimension_summary(samples),
         "history": samples,
         "runtime_dashboard_contract": {
-            "card_fields": ["state", "current_score", "trend", "delta_from_baseline"],
-            "series_fields": ["timestamp", "average_score", "state"],
+            "card_fields": ["state", "current_score", "trend", "delta_from_baseline", "workflow_run_url"],
+            "series_fields": ["timestamp", "average_score", "state", "workflow_run_url"],
             "dimension_fields": ["current_status", "current_score", "trend", "delta_from_baseline"],
-            "refresh_strategy": REFRESH_STRATEGY_ARTIFACT if artifact_ingestion else REFRESH_STRATEGY_STATIC,
+            "refresh_strategy": (
+                REFRESH_STRATEGY_ARTIFACT
+                if artifact_ingestion
+                else (
+                    "workflow_runs_deep_links_enabled"
+                    if trilha_d_history_dashboard_surface_ready()
+                    else REFRESH_STRATEGY_STATIC
+                )
+            ),
         },
     }
 

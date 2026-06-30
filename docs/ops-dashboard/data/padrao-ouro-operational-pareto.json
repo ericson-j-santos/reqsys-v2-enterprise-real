@@ -1,38 +1,38 @@
 {
   "schema_version": "1.1.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T10:30:06.407461Z",
+  "generated_at": "2026-06-30T13:01:54.566850Z",
   "state": "yellow",
   "strategy": "pareto_operational_gold_base",
-  "current_score": 95.88,
+  "current_score": 97.0,
   "target_score": 98.0,
-  "gold_gap": 2.12,
-  "projected_score_after_recommended": 98.28,
+  "gold_gap": 1.0,
+  "projected_score_after_recommended": 98.67,
   "projected_gap_after_recommended": 0.0,
-  "statistical_confidence": 0.78,
+  "statistical_confidence": 0.76,
   "dimension_signals": {
     "tests": 100.0,
-    "coverage": 74.29,
+    "coverage": 82.0,
     "mutation": 100.0,
     "contract": 100.0,
     "schema": 100.0,
     "ci-watch": 100.0
   },
   "dimension_gaps": {
-    "coverage": 25.71
+    "coverage": 18.0
   },
   "dominant_bottleneck": {
     "dimension": "coverage",
-    "score": 74.29,
-    "gap_to_100": 25.71,
+    "score": 82.0,
+    "gap_to_100": 18.0,
     "share_of_trilha_d_remaining_gap": 1.0
   },
   "summary": {
-    "actions_evaluated": 2,
+    "actions_evaluated": 1,
     "recommended_now": 1,
-    "expected_gain_now": 2.4,
+    "expected_gain_now": 1.67,
     "pareto_rule": "ações até 80% do ganho esperado acumulado (80/20)",
-    "next_increment": "dashboard_trilha_d_history_card",
+    "next_increment": "continuous_trilha_d_monitoring",
     "evidence_source": "trilha_d_history",
     "consolidation_mode": false
   },
@@ -43,50 +43,27 @@
   },
   "ranked_actions": [
     {
-      "id": "dashboard_trilha_d_history_card",
-      "title": "Expor histórico da Trilha D no dashboard",
-      "lane": "runtime-dashboard",
-      "dimension": "operational-visibility",
-      "target_score": 90.0,
-      "fixed_gain": 2.4,
+      "id": "continuous_trilha_d_monitoring",
+      "title": "Monitoramento contínuo Trilha D via artifacts",
+      "lane": "governance-automation",
+      "dimension": "coverage",
+      "target_score": 92.0,
+      "fixed_gain": 1.8,
       "effort_points": 2,
       "risk": "low",
-      "confidence": 0.78,
-      "why_now": "transforma evidência histórica em leitura operacional navegável",
+      "confidence": 0.76,
+      "why_now": "artifact ingestion habilitado — consolidar cobertura e refresh contínuo",
       "next_artifacts": [
         "docs/ops-dashboard/data/trilha-d-history.json",
-        "docs/ops-dashboard/index.html"
-      ],
-      "active_when": "artifact_ingestion_pending",
-      "current_score": 60.0,
-      "expected_score_gain": 2.4,
-      "pareto_score": 93.6,
-      "rank": 1,
-      "cumulative_expected_gain_pct": 53.33,
-      "recommended_now": true
-    },
-    {
-      "id": "artifact_ingestion_refresh",
-      "title": "Automatizar refresh do histórico por artifact",
-      "lane": "governance-automation",
-      "dimension": "evidence-refresh",
-      "target_score": 85.0,
-      "fixed_gain": 2.1,
-      "effort_points": 5,
-      "risk": "medium",
-      "confidence": 0.7,
-      "why_now": "reduz manutenção manual e aumenta confiabilidade temporal",
-      "next_artifacts": [
-        "scripts/build_trilha_d_history.py",
         ".github/workflows/trilha-d-qualidade-governanca.yml"
       ],
-      "active_when": "artifact_ingestion_pending",
-      "current_score": 60.0,
-      "expected_score_gain": 2.1,
-      "pareto_score": 24.11,
-      "rank": 2,
+      "active_when": "continuous_monitoring_pending",
+      "current_score": 82.0,
+      "expected_score_gain": 1.67,
+      "pareto_score": 684.0,
+      "rank": 1,
       "cumulative_expected_gain_pct": 100.0,
-      "recommended_now": false
+      "recommended_now": true
     }
   ],
   "runtime_dashboard_contract": {

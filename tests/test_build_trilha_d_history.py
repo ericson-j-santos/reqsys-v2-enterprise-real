@@ -4,17 +4,24 @@ import json
 from pathlib import Path
 
 from scripts.build_trilha_d_history import (
+    NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION,
     NEXT_INCREMENT_AFTER_COVERAGE_TARGETED,
+    NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS,
+    NEXT_INCREMENT_AFTER_INGESTION,
     NEXT_INCREMENT_AFTER_PARETO_DASHBOARD,
     NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD,
+    NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD,
+    artifact_ingestion_surface_ready,
     build_payload,
     coverage_targeted_critical_paths_ready,
+    governance_deep_links_surface_ready,
     ingest_report_into_history,
     merge_history,
     ops_dashboard_pareto_surface_ready,
     ops_dashboard_predictive_gate_surface_ready,
     report_to_history_entry,
     resolve_next_increment,
+    trilha_d_history_dashboard_surface_ready,
     trend_for,
 )
 from scripts.trilha_d_qualidade_governanca import consolidate
@@ -52,7 +59,8 @@ def test_build_payload_tracks_coverage_improvement() -> None:
     assert payload["summary"]["samples"] == 3
     assert payload["dimension_summary"]["coverage"]["trend"] == "improving"
     assert payload["dimension_summary"]["coverage"]["delta_from_baseline"] == 45.29
-    assert payload["runtime_dashboard_contract"]["series_fields"] == ["timestamp", "average_score", "state"]
+    assert "workflow_run_url" in payload["runtime_dashboard_contract"]["series_fields"]
+    assert payload["history"][0]["workflow_run_url"]
 
 
 def test_build_payload_accepts_custom_history_regression() -> None:
@@ -145,22 +153,50 @@ def test_ingest_report_into_history_appends_sample(tmp_path: Path) -> None:
     payload = ingest_report_into_history(str(report_path), str(output))
 
     assert payload["summary"]["artifact_ingestion_enabled"] is True
-    assert payload["runtime_dashboard_contract"]["refresh_strategy"] == "artifact_ingestion_on_trilha_d_consolidate"
-    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    assert payload["runtime_dashboard_contract"]["refresh_strategy"] in {
+        "artifact_ingestion_on_trilha_d_consolidate",
+        "workflow_runs_deep_links_enabled",
+    }
+    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
     assert len(payload["history"]) == 2
     assert payload["history"][-1]["run_id"] == "run-ingest-1"
+    assert payload["history"][-1]["workflow_run_url"]
 
 
-def test_resolve_next_increment_advances_after_pareto_dashboard_surface() -> None:
+def test_resolve_next_increment_when_pipeline_completo() -> None:
     assert ops_dashboard_pareto_surface_ready() is True
-    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
-    assert resolve_next_increment(artifact_ingestion=False) == "artifact_ingestion_refresh"
-
-
-def test_resolve_next_increment_advances_after_predictive_gate_surface() -> None:
     assert ops_dashboard_predictive_gate_surface_ready() is True
     assert coverage_targeted_critical_paths_ready() is True
+    assert governance_deep_links_surface_ready() is True
+    assert trilha_d_history_dashboard_surface_ready() is True
+    assert resolve_next_increment(artifact_ingestion=False) == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+
+
+def test_resolve_next_increment_when_artifact_ingestion_habilitado() -> None:
+    assert artifact_ingestion_surface_ready() is True
+    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+
+
+def test_resolve_next_increment_when_governance_pendente(monkeypatch) -> None:
+    monkeypatch.setattr("scripts.build_trilha_d_history.trilha_d_history_dashboard_surface_ready", lambda repo_root=None: False)
+    monkeypatch.setattr("scripts.build_trilha_d_history.governance_deep_links_surface_ready", lambda repo_root=None: False)
     assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+
+
+def test_resolve_next_increment_when_pareto_pendente(monkeypatch) -> None:
+    monkeypatch.setattr("scripts.build_trilha_d_history.ops_dashboard_pareto_surface_ready", lambda repo_root=None: False)
+    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_INGESTION
+
+
+def test_resolve_next_increment_when_trilha_d_dashboard_pendente(monkeypatch) -> None:
+    monkeypatch.setattr("scripts.build_trilha_d_history.trilha_d_history_dashboard_surface_ready", lambda repo_root=None: False)
+    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS
+
+
+def test_resolve_next_increment_advances_after_predictive_gate_surface(monkeypatch) -> None:
+    monkeypatch.setattr("scripts.build_trilha_d_history.ops_dashboard_pareto_surface_ready", lambda repo_root=None: True)
+    monkeypatch.setattr("scripts.build_trilha_d_history.ops_dashboard_predictive_gate_surface_ready", lambda repo_root=None: False)
+    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_PARETO_DASHBOARD
 
 
 def test_coverage_targeted_critical_paths_ready_detects_required_files() -> None:

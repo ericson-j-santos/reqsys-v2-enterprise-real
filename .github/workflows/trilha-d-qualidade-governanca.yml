@@ -191,6 +191,12 @@ jobs:
               print(f"| {item['dimension']} | {item['status']} | {item['score']} | {item['summary']} |")
           PY
 
+      - name: Validar superfície artifact ingestion
+        if: always()
+        run: |
+          set -euo pipefail
+          python -m pytest tests/test_build_trilha_d_history.py -q -k "artifact_ingestion"
+
       - name: Atualizar histórico Trilha D (artifact ingestion)
         if: always()
         run: |

@@ -7,6 +7,7 @@ from app.core.envelope import ok
 from app.db import get_db
 from app.models.requisito import Requisito
 from app.services.ai_quality import calcular_resumo_qualidade_ia
+from app.services.recomendacoes_ia import calcular_dashboard_ia
 from app.services.requisitos_metricas import calcular_metricas_requisitos
 
 router = APIRouter(prefix='/v1/dashboard', tags=['Dashboard'])
@@ -81,4 +82,9 @@ def dashboard_info(db: Session = Depends(get_db)):
             }
         }
     })
+
+
+@router.get('/ia')
+def dashboard_ia(janela_dias: int = 30, db: Session = Depends(get_db)):
+    return ok(calcular_dashboard_ia(db, janela_dias=janela_dias))
 

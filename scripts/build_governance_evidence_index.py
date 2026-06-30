@@ -16,6 +16,38 @@ from typing import Any
 REPO = "ericson-j-santos/reqsys-v2-enterprise-real"
 DEFAULT_OUTPUT = "docs/ops-dashboard/data/governance-evidence-index.json"
 NEXT_INCREMENT_AFTER_DEEP_LINKS = "dashboard_trilha_d_history_card"
+NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD = "artifact_ingestion_refresh"
+NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION = "continuous_trilha_d_monitoring"
+
+
+def resolve_governance_next_increment(repo_root: Path | None = None) -> str:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    history_json = root / "docs/ops-dashboard/data/trilha-d-history.json"
+    index_html = root / "docs/ops-dashboard/index.html"
+    monitoramento_view = root / "frontend/src/views/MonitoramentoOperacionalView.vue"
+    workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
+    if not history_json.exists() or not index_html.exists() or not monitoramento_view.exists() or not workflow.exists():
+        return NEXT_INCREMENT_AFTER_DEEP_LINKS
+    html_text = index_html.read_text(encoding="utf-8")
+    view_text = monitoramento_view.read_text(encoding="utf-8")
+    workflow_text = workflow.read_text(encoding="utf-8")
+    if "artifact-ingestion-enabled" not in html_text or "artifact_ingestion_enabled" not in view_text:
+        return NEXT_INCREMENT_AFTER_DEEP_LINKS
+    if "--ingest-report" not in workflow_text:
+        return NEXT_INCREMENT_AFTER_DEEP_LINKS
+    try:
+        payload = json.loads(history_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return NEXT_INCREMENT_AFTER_DEEP_LINKS
+    summary = payload.get("summary") or {}
+    if summary.get("artifact_ingestion_enabled"):
+        return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+    next_increment = summary.get("next_increment")
+    if next_increment == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION:
+        return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+    if next_increment == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD:
+        return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+    return NEXT_INCREMENT_AFTER_DEEP_LINKS
 
 
 def workflow_runs_url(workflow_file: str) -> str:
@@ -155,7 +187,7 @@ def build_payload() -> dict[str, Any]:
             "total_capabilities": len(items),
             "implemented_capabilities": implemented,
             "dashboard_ready_capabilities": dashboard_ready,
-            "next_increment": NEXT_INCREMENT_AFTER_DEEP_LINKS,
+            "next_increment": resolve_governance_next_increment(),
         },
         "links": {
             "actions": f"https://github.com/{REPO}/actions",

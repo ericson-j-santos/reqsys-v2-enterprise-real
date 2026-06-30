@@ -219,6 +219,14 @@
           <v-col cols="12" sm="6" md="3">
             <OperationalMetricCard label="Delta baseline" :value="trilhaDResumo.delta" semaforo="verde" :clickable="false" />
           </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Artifact ingestion"
+              :value="trilhaDResumo.artifactIngestion"
+              :semaforo="trilhaDResumo.artifactIngestion === 'enabled' ? 'verde' : 'amarelo'"
+              :clickable="false"
+            />
+          </v-col>
         </v-row>
         <v-table density="compact" class="mt-4" aria-label="Dimensões Trilha D">
           <thead>
@@ -248,6 +256,7 @@
               <th>Score médio</th>
               <th>Fonte</th>
               <th>Run</th>
+              <th>Execução</th>
             </tr>
           </thead>
           <tbody>
@@ -257,6 +266,18 @@
               <td>{{ entry.average_score }}</td>
               <td>{{ entry.source }}</td>
               <td>{{ entry.run_id }}</td>
+              <td>
+                <a
+                  v-if="entry.workflow_run_url"
+                  :href="entry.workflow_run_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="trilha-run-link"
+                >
+                  Ver execução
+                </a>
+                <span v-else class="small text-medium-emphasis">-</span>
+              </td>
             </tr>
           </tbody>
         </v-table>
@@ -441,6 +462,8 @@ const trilhaDResumo = computed(() => ({
   state: trilhaDItems.value.state ?? 'desconhecido',
   trend: trilhaDItems.value.trend ?? 'n/a',
   delta: trilhaDItems.value.delta_from_baseline ?? 'n/a',
+  artifactIngestion: trilhaDItems.value.summary?.artifact_ingestion_enabled ? 'enabled' : 'static',
+  nextIncrement: trilhaDItems.value.summary?.next_increment ?? 'n/a',
 }))
 const trilhaDDimensoes = computed(() => trilhaDItems.value.dimension_summary || {})
 const trilhaDDimensoesFiltradas = computed(() => {
@@ -572,6 +595,7 @@ onMounted(async () => {
 
 <style scoped>
 .governance-run-link { color: var(--accent); text-decoration: underline; font-weight: 600; }
+.trilha-run-link { color: var(--accent); text-decoration: underline; font-weight: 600; }
 .cabecalho { display: grid; gap: 1rem; align-items: center; }
 .cabecalho-acoes { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .eyebrow { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
