@@ -2,11 +2,8 @@ name: Ops Dashboard
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Repository Health Watchdog
-    types:
-      - completed
+  schedule:
+    - cron: "5 13 * * 1-5"
 
 permissions:
   contents: read
@@ -14,7 +11,7 @@ permissions:
 
 concurrency:
   group: ops-dashboard-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-dashboard:
