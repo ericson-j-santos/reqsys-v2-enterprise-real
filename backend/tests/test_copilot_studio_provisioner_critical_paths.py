@@ -139,3 +139,50 @@ def test_provisionar_webhook_resposta_nao_json(monkeypatch):
 
     assert resultado['provisioned'] is True
     assert resultado['details']['webhook_response']['text'] == 'plain text ok'
+
+
+def test_provisionar_dataverse_import_sucesso_mockado(monkeypatch):
+    import base64
+
+    monkeypatch.setattr(provisioner.settings, 'copilotstudio_environment_url', 'https://org.crm.dynamics.com/')
+    monkeypatch.setattr(provisioner.settings, 'azure_tenant_id', 'tenant')
+    monkeypatch.setattr(provisioner.settings, 'azure_client_id', 'client')
+    monkeypatch.setattr(provisioner.settings, 'azure_client_secret', 'secret')
+
+    token_response = type(
+        'Resp',
+        (),
+        {
+            'raise_for_status': lambda self: None,
+            'json': lambda self: {'access_token': 'token-abc'},
+        },
+    )()
+    import_response = type(
+        'Resp',
+        (),
+        {
+            'status_code': 204,
+            'raise_for_status': lambda self: None,
+            'json': lambda self: (_ for _ in ()).throw(ValueError('empty')),
+            'text': '',
+        },
+    )()
+
+    with patch.object(provisioner.httpx, 'AsyncClient') as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.post.side_effect = [token_response, import_response]
+        mock_client_cls.return_value = mock_client
+
+        resultado = _run(
+            provisioner.provisionar_copilot_studio(
+                _request(
+                    mode='dataverse_import',
+                    environment_url='https://org.crm.dynamics.com/',
+                    solution_zip_base64=base64.b64encode(b'zip-content').decode(),
+                ),
+            )
+        )
+
+    assert resultado['provisioned'] is True
+    assert resultado['details']['dataverse_status'] == 204
