@@ -188,7 +188,7 @@ def test_write_report_publishes_json_and_summary(tmp_path: Path) -> None:
     payload = json.loads((tmp_path / "coordenador-status.json").read_text(encoding="utf-8"))
     summary = (tmp_path / "summary.md").read_text(encoding="utf-8")
 
-    assert payload["schema_version"] == "1.3.0"
+    assert payload["schema_version"] == "1.4.0"
     assert payload["increment_gate"]["new_front_allowed"] is True
     assert "## Increment gate" in summary
 

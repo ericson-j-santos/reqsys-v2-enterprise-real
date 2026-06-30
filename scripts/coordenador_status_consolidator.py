@@ -169,6 +169,7 @@ def build_recommended_actions(
     watchdog: dict[str, Any] | None = None,
     observability_hub: dict[str, Any] | None = None,
     contract_governance: dict[str, Any] | None = None,
+    operational_mesh: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
     actions: list[dict[str, str]] = []
     backlog = health.get("automatic_backlog") or []
@@ -304,6 +305,48 @@ def build_recommended_actions(
                     "action": "tratar_gap_contrato_openapi",
                     "reference": str(sync_gap),
                     "detail": "Gap de rastreabilidade openapi_to_ci pendente no indice de artifacts",
+                }
+            )
+
+    if operational_mesh:
+        if not operational_mesh.get("mesh_integrated"):
+            actions.append(
+                {
+                    "priority": "P0",
+                    "action": "completar_malha_operacional",
+                    "reference": "unified-operational-signal",
+                    "detail": "Mesh hub, alert intelligence e event bus devem publicar artifacts na mesma cadeia",
+                }
+            )
+        evidence = operational_mesh.get("evidence_gate_consolidated") or {}
+        if not evidence.get("consolidated"):
+            actions.append(
+                {
+                    "priority": "P0",
+                    "action": "consolidar_evidence_gate",
+                    "reference": "evidence_gate_consolidated",
+                    "detail": "Evidence Gate requer pelo menos duas camadas hidratadas",
+                }
+            )
+        if operational_mesh.get("overall_state") == "red":
+            actions.append(
+                {
+                    "priority": "P0",
+                    "action": "tratar_incidente_malha_operacional",
+                    "reference": str(operational_mesh.get("correlation_id") or "mesh"),
+                    "detail": "Estado vermelho na malha operacional consolidada",
+                }
+            )
+        mesh_alert = (operational_mesh.get("operational_mesh") or {}).get("alert_intelligence") or {}
+        if mesh_alert.get("should_alert"):
+            actions.append(
+                {
+                    "priority": "P1",
+                    "action": "revisar_alerta_mesh_operacional",
+                    "reference": str(mesh_alert.get("alert_type") or "mesh_alert"),
+                    "detail": (
+                        f"{mesh_alert.get('alert_level')} — {mesh_alert.get('action_policy')}"
+                    ),
                 }
             )
 
@@ -489,6 +532,7 @@ def consolidate(
     contract_governance: dict[str, Any] | None = None,
     release_validation: dict[str, Any] | None = None,
     runtime_validation: dict[str, Any] | None = None,
+    operational_mesh: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     global_state = merge_state(str(orchestrator.get("state") or "unknown"), str(health.get("state") or "unknown"))
     backlog = health.get("automatic_backlog") or []
@@ -511,7 +555,7 @@ def consolidate(
     release_score = (release_validation or {}).get("release_readiness_score")
 
     return {
-        "schema_version": "1.3.0",
+        "schema_version": "1.4.0",
         "correlation_id": str(health.get("correlation_id") or uuid4()),
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repository": repo,
@@ -572,6 +616,22 @@ def consolidate(
                 ),
                 "public_runtime_ready": (runtime_validation or {}).get("public_runtime_ready"),
                 "post_merge_ready": (runtime_validation or {}).get("post_merge_ready"),
+                "evidence_gate_consolidated": (
+                    (runtime_validation or {}).get("evidence_gate_consolidated") or {}
+                ).get("consolidated"),
+            },
+            "operational_mesh": {
+                "available": operational_mesh is not None,
+                "state": (operational_mesh or {}).get("overall_state"),
+                "mesh_integrated": (operational_mesh or {}).get("mesh_integrated"),
+                "maturity_percent": (operational_mesh or {}).get("maturity_percent"),
+                "evidence_gate_consolidated": (
+                    (operational_mesh or {}).get("evidence_gate_consolidated") or {}
+                ).get("consolidated"),
+                "cross_runtime_score": (
+                    (operational_mesh or {}).get("cross_runtime_analytics") or {}
+                ).get("unified_score"),
+                "correlation_id": (operational_mesh or {}).get("correlation_id"),
             },
         },
         "summary": {
@@ -595,10 +655,25 @@ def consolidate(
             "gold_standard_operational_risk": (
                 (runtime_validation or {}).get("gold_standard_operational_risk") or {}
             ).get("overall_score"),
+            "operational_mesh_integrated": bool((operational_mesh or {}).get("mesh_integrated")),
+            "evidence_gate_consolidated": bool(
+                ((operational_mesh or {}).get("evidence_gate_consolidated") or {}).get("consolidated")
+                or ((runtime_validation or {}).get("evidence_gate_consolidated") or {}).get("consolidated")
+            ),
+            "cross_runtime_analytics_score": (
+                (operational_mesh or {}).get("cross_runtime_analytics") or {}
+            ).get("unified_score"),
         },
         "automatic_backlog": backlog,
         "recommended_actions": build_recommended_actions(
-            global_state, orchestrator, health, increment_gate, watchdog, observability_hub, contract_governance
+            global_state,
+            orchestrator,
+            health,
+            increment_gate,
+            watchdog,
+            observability_hub,
+            contract_governance,
+            operational_mesh,
         ),
         "guardrails": {
             "merge": False,
@@ -621,6 +696,7 @@ def consolidate(
                 "openapi-routes-drift.json",
                 "openapi-semantic-diff.json",
                 "release-validation-layer.json",
+                "unified-operational-signal.json",
             ],
             "dashboard_entrypoint": "summary.md",
         },
@@ -802,6 +878,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional Runtime Validation Consolidator snapshot path",
     )
     parser.add_argument(
+        "--operational-mesh-json",
+        default="",
+        help="Optional Unified Operational Signal Consolidator JSON path",
+    )
+    parser.add_argument(
         "--fail-on-red",
         action="store_true",
         help="Exit 1 when consolidated state is red (default: always exit 0 after successful write)",
@@ -855,6 +936,16 @@ def main() -> int:
         load_json(Path(args.runtime_validation_json)) if Path(args.runtime_validation_json).exists() else None
     )
 
+    operational_mesh: dict[str, Any] | None = None
+    if args.operational_mesh_json:
+        operational_mesh = load_json(Path(args.operational_mesh_json))
+    else:
+        default_mesh = Path(
+            "artifacts/unified-operational-signal-consolidator/unified-operational-signal.json"
+        )
+        if default_mesh.exists():
+            operational_mesh = load_json(default_mesh)
+
     if args.orchestrator_json and args.health_json:
         orchestrator = load_json(Path(args.orchestrator_json))
         health = load_json(Path(args.health_json))
@@ -889,6 +980,7 @@ def main() -> int:
         contract_governance,
         release_validation,
         runtime_validation,
+        operational_mesh,
     )
 
     orchestrator_dir.mkdir(parents=True, exist_ok=True)
