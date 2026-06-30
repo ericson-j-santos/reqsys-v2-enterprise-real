@@ -18,6 +18,14 @@ DEFAULT_OUTPUT = "docs/ops-dashboard/data/padrao-ouro-operational-pareto.json"
 DEFAULT_TRILHA_D_HISTORY = "docs/ops-dashboard/data/trilha-d-history.json"
 TARGET_SCORE = 98.0
 PARETO_THRESHOLD_PCT = 80.0
+TRILHA_D_ALIGNED_INCREMENTS = frozenset(
+    {
+        "predictive_regression_gate",
+        "coverage_targeted_tests",
+        "link_governance_cards_to_latest_workflow_runs",
+        "continuous_trilha_d_monitoring",
+    }
+)
 
 DIMENSIONS = ("tests", "coverage", "mutation", "contract", "schema", "ci-watch")
 
@@ -415,6 +423,13 @@ def build_payload(
     )
 
     evidence_mode = from_evidence or consolidation
+    trilha_next = trilha_d.get("next_increment")
+    if trilha_next in TRILHA_D_ALIGNED_INCREMENTS:
+        pareto_next_increment = trilha_next
+    elif current_score >= 100.0:
+        pareto_next_increment = None
+    else:
+        pareto_next_increment = recommended[0]["id"] if recommended else None
     return {
         "schema_version": "1.1.0",
         "repo": REPO,
@@ -435,7 +450,7 @@ def build_payload(
             "recommended_now": 0 if current_score >= 100.0 else len(recommended),
             "expected_gain_now": 0.0 if current_score >= 100.0 else expected_gain_now,
             "pareto_rule": f"ações até {PARETO_THRESHOLD_PCT:.0f}% do ganho esperado acumulado (80/20)",
-            "next_increment": None if current_score >= 100.0 else (recommended[0]["id"] if recommended else None),
+            "next_increment": pareto_next_increment,
             "evidence_source": "trilha_d_history" if trilha_d_history.exists() else "fallback_signals",
             "consolidation_mode": consolidation,
         },
