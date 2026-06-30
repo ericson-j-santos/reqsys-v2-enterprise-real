@@ -1,15 +1,15 @@
 {
   "schema_version": "1.1.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-29T20:12:03.461660Z",
+  "generated_at": "2026-06-29T20:51:02.401842Z",
   "state": "yellow",
   "strategy": "pareto_operational_gold_base",
   "current_score": 97.59,
   "target_score": 98.0,
   "gold_gap": 0.41,
-  "projected_score_after_recommended": 98.79,
+  "projected_score_after_recommended": 99.19,
   "projected_gap_after_recommended": 0.0,
-  "statistical_confidence": 0.85,
+  "statistical_confidence": 0.64,
   "dimension_signals": {
     "tests": 100.0,
     "coverage": 85.56,
@@ -28,11 +28,11 @@
     "share_of_trilha_d_remaining_gap": 1.0
   },
   "summary": {
-    "actions_evaluated": 2,
+    "actions_evaluated": 1,
     "recommended_now": 1,
-    "expected_gain_now": 1.2,
+    "expected_gain_now": 1.6,
     "pareto_rule": "ações até 80% do ganho esperado acumulado (80/20)",
-    "next_increment": "operational_pareto_dashboard_card",
+    "next_increment": "predictive_regression_gate",
     "evidence_source": "trilha_d_history",
     "consolidation_mode": false
   },
@@ -42,29 +42,6 @@
     "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/build_padrao_ouro_operational_pareto.py"
   },
   "ranked_actions": [
-    {
-      "id": "operational_pareto_dashboard_card",
-      "title": "Expor ranking Pareto no dashboard operacional",
-      "lane": "runtime-dashboard",
-      "dimension": "operational-visibility",
-      "target_score": 95.0,
-      "fixed_gain": 1.2,
-      "effort_points": 2,
-      "risk": "low",
-      "confidence": 0.85,
-      "why_now": "fecha o ciclo evidência → priorização → ação visível ao operador",
-      "next_artifacts": [
-        "docs/ops-dashboard/data/padrao-ouro-operational-pareto.json",
-        "docs/ops-dashboard/index.html"
-      ],
-      "active_when": "always_when_gaps_remain",
-      "current_score": 60.0,
-      "expected_score_gain": 1.2,
-      "pareto_score": 51.0,
-      "rank": 1,
-      "cumulative_expected_gain_pct": 42.86,
-      "recommended_now": true
-    },
     {
       "id": "predictive_regression_gate",
       "title": "Gate preditivo de regressão operacional",
@@ -84,9 +61,9 @@
       "current_score": 60.0,
       "expected_score_gain": 1.6,
       "pareto_score": 16.79,
-      "rank": 2,
+      "rank": 1,
       "cumulative_expected_gain_pct": 100.0,
-      "recommended_now": false
+      "recommended_now": true
     }
   ],
   "runtime_dashboard_contract": {

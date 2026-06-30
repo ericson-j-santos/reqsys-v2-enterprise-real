@@ -4,7 +4,12 @@
     <v-app-bar v-if="mobile" flat class="req-appbar" elevation="0" height="56">
       <v-app-bar-nav-icon color="white" aria-label="Abrir menu de navegação" @click="drawer = !drawer" />
       <span class="brand-sm ml-1"><span class="brand-dot brand-dot--sm">R</span> ReqSys</span>
-      <span class="figma-pill figma-pill--compact ml-2">{{ environmentLabelShort }}</span>
+      <AmbienteNavigator
+        :environment-hint="environment"
+        compact
+        :show-prefix="false"
+        class="ml-2"
+      />
       <v-spacer />
       <v-chip size="x-small" color="amber" variant="tonal" class="mr-2 req-role-chip">
         {{ auth.usuario?.papel || 'user' }}
@@ -33,7 +38,11 @@
         >
           Versões divergentes
         </v-chip>
-        <span class="figma-pill figma-pill--compact mt-2 d-inline-block">Ambiente: {{ ambienteDrawerLabel }}</span>
+        <AmbienteNavigator
+          :environment-hint="environment"
+          compact
+          class="mt-2 d-inline-block"
+        />
       </div>
       <v-divider />
 
@@ -154,6 +163,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../services/api'
+import AmbienteNavigator from '../components/AmbienteNavigator.vue'
 import { carregarDadosPendenciasNav } from '../composables/navPendencias'
 import {
   lerSubgrupoRequisitosPersistido,
@@ -184,17 +194,6 @@ const navegacaoInicializada = ref(false)
 
 const temaAtivo = ref(temaIdPorRota(route.path))
 const subgrupoAtivo = ref(subgrupoIdPorRota(route.path) || lerSubgrupoRequisitosPersistido() || 'entrada')
-
-const environmentLabelShort = computed(() => {
-  const value = (environment.value || 'dev').toLowerCase()
-  if (['prod', 'producao', 'production'].includes(value)) return 'prod'
-  if (['staging', 'homolog', 'homologacao', 'hml'].includes(value)) return 'stg'
-  return 'dev'
-})
-
-const ambienteDrawerLabel = computed(() => {
-  return (environment.value || 'desenvolvimento').replace(/_/g, ' ')
-})
 
 const temaAtual = computed(() => temaPorId(temaAtivo.value))
 

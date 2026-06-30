@@ -16,6 +16,7 @@ from app.api import (
     auth,
     codex_governado,
     cofre,
+    connectors,
     dashboard,
     estatisticas,
     figma_github,
@@ -103,6 +104,7 @@ app.include_router(processos.router)
 app.include_router(wiki.router)
 app.include_router(specs.router)
 app.include_router(cofre.router)
+app.include_router(connectors.router)
 app.include_router(ia.router)
 app.include_router(codex_governado.router)
 app.include_router(webhooks.router)

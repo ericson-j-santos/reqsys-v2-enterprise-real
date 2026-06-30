@@ -14,6 +14,17 @@
       </v-chip>
     </div>
 
+    <v-alert
+      v-if="modoOffline"
+      type="warning"
+      variant="tonal"
+      class="mt-2"
+      role="alert"
+      data-testid="estatisticas-modo-offline"
+    >
+      <strong>Modo offline</strong> — {{ mensagemOffline }}
+    </v-alert>
+
     <v-row class="mt-4" dense>
       <v-col v-for="card in cardsResumo" :key="card.id" cols="12" sm="6" lg="2">
         <OperationalMetricCard
@@ -123,6 +134,8 @@ import { calcularResumoEstatisticas, carregarEstatisticas, validarIndicador } fr
 const route = useRoute()
 const router = useRouter()
 const indicadores = ref([])
+const modoOffline = ref(false)
+const mensagemOffline = ref('')
 const filtroCategoria = ref(route.query.categoria || null)
 const filtroTipoFonte = ref(route.query.fonte || null)
 const filtroEstado = ref(route.query.estado || null)
@@ -183,7 +196,10 @@ watch(() => route.query, () => {
 }, { deep: true })
 
 onMounted(async () => {
-  indicadores.value = await carregarEstatisticas()
+  const resultado = await carregarEstatisticas()
+  modoOffline.value = Boolean(resultado.modoOffline)
+  mensagemOffline.value = resultado.mensagem || ''
+  indicadores.value = resultado.indicadores || []
 })
 </script>
 

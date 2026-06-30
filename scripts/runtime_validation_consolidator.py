@@ -52,6 +52,12 @@ DEFAULT_INPUTS: dict[str, list[str]] = {
     "pr_evidence_gate": [
         "audit/pr-evidence-gate.json",
     ],
+    "pr_evidence_gate_local": [
+        "artifacts/pr-evidence-gate/pr-evidence-gate.json",
+    ],
+    "unified_operational_signal": [
+        "artifacts/unified-operational-signal-consolidator/unified-operational-signal.json",
+    ],
 }
 
 DOMAIN_WEIGHTS = {
@@ -278,8 +284,12 @@ def evaluate_evidence_gate(
 ) -> dict[str, Any]:
     if pr_gate:
         gate = pr_gate.get("gate") or pr_gate
-        status = normalize_status(gate.get("status"))
-        failures = gate.get("failures") or []
+        if isinstance(gate, dict):
+            status = normalize_status(gate.get("status"))
+            failures = gate.get("failures") or []
+        else:
+            status = normalize_status(pr_gate.get("status"))
+            failures = pr_gate.get("failures") or []
         state = "red" if failures else status
         return {
             "id": "evidence_gate",
@@ -287,7 +297,7 @@ def evaluate_evidence_gate(
             "state": state,
             "score": 100 if state == "green" else 60 if state == "yellow" else 20,
             "available": True,
-            "detail": f"pr-evidence-gate status={gate.get('status')} failures={len(failures)}",
+            "detail": f"pr-evidence-gate status={pr_gate.get('status', gate if not isinstance(gate, dict) else gate.get('status'))} failures={len(failures)}",
         }
     if evidence_index:
         strict = evidence_index.get("strict_gate_passed")
@@ -333,6 +343,76 @@ def evaluate_health_center(payload: dict[str, Any] | None) -> dict[str, Any]:
         "detail": f"maturity={maturity}% gold_depth={depth} risk={risk}",
         "gold_standard_depth": depth,
         "operational_risk": risk,
+    }
+
+
+def build_evidence_gate_consolidated(
+    domains: dict[str, dict[str, Any]],
+    sources: dict[str, Any],
+) -> dict[str, Any]:
+    """Consolida PR gate, public runtime evidence e sinal operacional unificado."""
+    domain = domains.get("evidence_gate") or {}
+    layers: list[dict[str, Any]] = []
+
+    pr_gate = sources.get("pr_evidence_gate") or sources.get("pr_evidence_gate_local")
+    if pr_gate:
+        gate = pr_gate.get("gate") or pr_gate
+        if isinstance(gate, dict):
+            gate_status = gate.get("status")
+        else:
+            gate_status = pr_gate.get("status")
+        layers.append(
+            {
+                "id": "pr_evidence_gate",
+                "state": normalize_status(gate_status),
+                "detail": f"status={gate_status}",
+            }
+        )
+
+    evidence_index = sources.get("public_evidence_index")
+    if evidence_index:
+        strict = evidence_index.get("strict_gate_passed")
+        state = "green" if strict is True else "yellow" if strict is None else "red"
+        layers.append(
+            {
+                "id": "public_runtime_evidence",
+                "state": state,
+                "detail": f"strict_gate_passed={strict}",
+            }
+        )
+
+    if domain.get("available"):
+        layers.append(
+            {
+                "id": "runtime_validation_domain",
+                "state": domain.get("state", "unknown"),
+                "score": domain.get("score"),
+                "detail": domain.get("detail"),
+            }
+        )
+
+    mesh_signal = sources.get("unified_operational_signal")
+    if mesh_signal:
+        evidence_block = mesh_signal.get("evidence_gate_consolidated") or {}
+        layers.append(
+            {
+                "id": "operational_mesh_signal",
+                "state": evidence_block.get("state", mesh_signal.get("overall_state", "unknown")),
+                "detail": f"mesh_integrated={mesh_signal.get('mesh_integrated')}",
+            }
+        )
+
+    states = [layer["state"] for layer in layers if layer.get("state")]
+    consolidated_state = merge_state(*(states or [domain.get("state", "yellow")]))
+    consolidated = len(layers) >= 2
+
+    return {
+        "consolidated": consolidated,
+        "state": consolidated_state,
+        "layers_available": len(layers),
+        "layers": layers,
+        "domain_score": domain.get("score"),
+        "domain_detail": domain.get("detail"),
     }
 
 
@@ -562,7 +642,7 @@ def build_snapshot(
     post_merge_ready = domains["post_merge"]["state"] == "green" and domains["post_merge"]["available"]
 
     snapshot = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "correlation_id": correlation_id or str(uuid4()),
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repository": repo,
@@ -577,6 +657,7 @@ def build_snapshot(
         "production_ready": gold["overall_score"] >= 95 and overall_state == "green" and not blockers,
         "gold_standard_operational_risk": gold,
         "domains": domains,
+        "evidence_gate_consolidated": build_evidence_gate_consolidated(domains, sources),
         "sources": sources_meta,
         "blockers": blockers,
         "recommended_actions": build_recommended_actions(domains, gold, blockers),
@@ -671,6 +752,7 @@ def render_summary(snapshot: dict[str, Any]) -> str:
         f"- Public runtime ready: `{snapshot['public_runtime_ready']}`",
         f"- Post-merge ready: `{snapshot['post_merge_ready']}`",
         f"- Production ready: `{snapshot['production_ready']}`",
+        f"- Evidence gate consolidated: `{(snapshot.get('evidence_gate_consolidated') or {}).get('consolidated')}`",
         "",
         "## Domains",
         "",

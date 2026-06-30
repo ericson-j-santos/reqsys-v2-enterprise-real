@@ -9,7 +9,7 @@
         </p>
       </div>
       <div class="header-actions">
-        <span class="figma-pill" data-testid="ambiente-chip">Ambiente: {{ ambienteLabel }}</span>
+        <AmbienteNavigator :environment-hint="ambienteLabel" test-id="ambiente-chip" />
         <div
           class="figma-semaforo-geral"
           :class="`figma-semaforo-geral--${semaforoGeralValor}`"
@@ -100,6 +100,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import OperationalMetricCard from '../components/OperationalMetricCard.vue'
+import AmbienteNavigator from '../components/AmbienteNavigator.vue'
 import { useRequisitosStore } from '../stores/requisitos'
 import { api } from '../services/api'
 import { semaforoGeral, normalizarSemaforo } from '../utils/filtrosMonitoramento'

@@ -16,6 +16,7 @@ import ArquiteturaView from '../views/ArquiteturaView.vue'
 import GovernancaEnterpriseView from '../views/GovernancaEnterpriseView.vue'
 import HubLowCodeView from '../views/HubLowCodeView.vue'
 import GovBIView from '../views/GovBIView.vue'
+import CodexView from '../views/CodexView.vue'
 import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
 import MonitoramentoOperacionalView from '../views/MonitoramentoOperacionalView.vue'
 import FigmaGithubView from '../views/FigmaGithubView.vue'
@@ -49,7 +50,8 @@ const routes = [
   { path: '/arquitetura', component: ArquiteturaView, meta: { recurso: 'dashboard:read' } },
   { path: '/governanca', component: GovernancaEnterpriseView, meta: { recurso: 'dashboard:read' } },
   { path: '/monitoramento-operacional', component: MonitoramentoOperacionalView, meta: { recurso: 'dashboard:read' } },
-  { path: '/govbi-ia', alias: '/govbi', component: GovBIView, meta: { recurso: 'dashboard:read' } }
+  { path: '/govbi-ia', alias: '/govbi', component: GovBIView, meta: { recurso: 'dashboard:read' } },
+  { path: '/codex', component: CodexView, meta: { recurso: 'dashboard:read' } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach((to) => {

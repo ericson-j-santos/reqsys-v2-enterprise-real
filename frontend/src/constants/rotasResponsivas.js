@@ -20,6 +20,7 @@ export const ROTAS_RESPONSIVAS = [
   { path: '/painel-integracao', testId: 'route-painel-integracao', titulo: 'Painel de Integração' },
   { path: '/arquitetura', testId: 'route-arquitetura', titulo: 'Arquitetura' },
   { path: '/govbi-ia', testId: 'route-govbi-ia', titulo: 'GovBI IA' },
+  { path: '/codex', testId: 'route-codex', titulo: 'Codex Governado' },
   { path: '/monitoramento-operacional', testId: 'route-monitoramento-operacional', titulo: 'Monitoramento Operacional' },
   { path: '/analytics', testId: 'route-analytics', titulo: 'Analytics' },
   { path: '/estatisticas', testId: 'route-estatisticas', titulo: 'Estatísticas' },

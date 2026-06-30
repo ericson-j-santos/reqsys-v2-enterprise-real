@@ -105,31 +105,40 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import OperationalMetricCard from '../components/OperationalMetricCard.vue'
 import SemaforoChip from '../components/SemaforoChip.vue'
-import { calcularResumoSemaforo, semaforoGeral } from '../utils/filtrosMonitoramento'
+import { useMonitoramentoOperacional } from '../composables/useMonitoramentoOperacional'
+import { semaforoGeral } from '../utils/filtrosMonitoramento'
 import { resolverDrilldownSpa } from '../utils/runtimeDrilldown'
 import { carregarRuntimeDashboard, formatarValorRuntimeCard, semaforoRuntimeCard } from '../services/runtimeDashboard'
 
 const router = useRouter()
 const runtimeDashboard = ref(null)
-const resumoMonitoramento = ref({ verde: 0, amarelo: 0, vermelho: 0, bloqueados: 0 })
-const carregando = ref(false)
-const erro = ref('')
+const { carregarMonitoramento, resumoSemaforo, carregando, erro } = useMonitoramentoOperacional()
 
 const runtimeCards = computed(() => runtimeDashboard.value?.cards || [])
 const workflowTopology = computed(() => runtimeDashboard.value?.sections?.find((s) => s.id === 'workflow-topology')?.items || [])
 
 const semaforoGeralValor = computed(() => {
-  const resumo = {
-    verde: resumoMonitoramento.value.verde || 0,
-    amarelo: resumoMonitoramento.value.amarelo || 0,
-    vermelho: resumoMonitoramento.value.vermelho || 0,
-    bloqueado: resumoMonitoramento.value.bloqueados || 0,
+  const resumo = resumoSemaforo()
+  return semaforoGeral({
+    verde: resumo.verde || 0,
+    amarelo: resumo.amarelo || 0,
+    vermelho: resumo.vermelho || 0,
+    bloqueado: resumo.bloqueado || 0,
+  })
+})
+
+const resumoMonitoramento = computed(() => {
+  const resumo = resumoSemaforo()
+  return {
+    verde: resumo.verde || 0,
+    amarelo: resumo.amarelo || 0,
+    vermelho: resumo.vermelho || 0,
+    bloqueados: resumo.bloqueado || 0,
   }
-  return semaforoGeral(resumo)
 })
 
 const cardsResumo = computed(() => [
@@ -199,20 +208,6 @@ function irPara(rota) {
 function abrirTopologia(item) {
   const rota = resolverDrilldownSpa(item.href || item.spa_drilldown?.path || '/monitoramento-operacional', item)
   irPara(rota)
-}
-
-async function carregarMonitoramento() {
-  const resposta = await fetch('/api/monitoramento-operacional', { headers: { Accept: 'application/json' } })
-  if (!resposta.ok) throw new Error('Falha ao carregar monitoramento operacional')
-  const payload = await resposta.json()
-  const itens = payload.data?.itens || []
-  const resumo = calcularResumoSemaforo(itens)
-  resumoMonitoramento.value = {
-    verde: resumo.verde,
-    amarelo: resumo.amarelo,
-    vermelho: resumo.vermelho,
-    bloqueados: resumo.bloqueado,
-  }
 }
 
 async function carregarTudo() {
