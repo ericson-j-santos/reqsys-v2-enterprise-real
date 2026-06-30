@@ -2,52 +2,35 @@
 
 ## Objetivo
 
-Padronizar a criação e publicação do repositório independente `ericson-j-santos/reqsys-ollama-local-gateway`, mantendo o ReqSys como produto principal e o gateway como provider local governado.
+Manter sincronizado o repositório `ericson-j-santos/reqsys-ollama-local-gateway` com o bootstrap canônico do ReqSys.
 
-## Estado atual evidenciado
+## Estado atual
 
-- Repositório: `ericson-j-santos/reqsys-ollama-local-gateway` — **existe e acessível**
-- Versão publicada alvo: `0.2.0` com `POST /v1/chat`
-- Issue relacionada: `#95`
-- Provider ReqSys: `ollama_gateway` integrado ao Codex governado
+| Item | Status |
+|---|---|
+| Repositório externo | ✅ Existe |
+| Bootstrap v0.2.0 no ReqSys | ✅ `docs/ollama-local-gateway/bootstrap-files/` |
+| Uso local sem sync externo | ✅ `bash scripts/iniciar_codex_local.sh` |
+| Provider `ollama_gateway` | ✅ Integrado |
 
-## Decisão arquitetural
-
-O gateway independente não substitui o Codex Local/Online do ReqSys. Ele deve atuar como provider local via HTTP para permitir uso de modelos Ollama em ambiente controlado.
-
-## Publicação automatizada
+## Sync para repo externo
 
 ```bash
-bash scripts/sincronizar_ollama_gateway_repo.sh
+GH_TOKEN=<pat-com-write-no-repo-externo> bash scripts/sincronizar_ollama_gateway_repo.sh
 ```
 
-O script valida o bootstrap (`pytest` + `ruff`), publica no repositório externo e abre branch para PR.
+Ou GitHub Actions → **Ollama Gateway Bootstrap** → `workflow_dispatch` (secret `OLLAMA_GATEWAY_SYNC_TOKEN`).
 
-## Comandos sugeridos após merge no repositório externo
+## Arquitetura
 
-```bash
-git clone https://github.com/ericson-j-santos/reqsys-ollama-local-gateway.git
-cd reqsys-ollama-local-gateway
+O gateway não substitui o Codex no ReqSys. É provider local via HTTP (`POST /v1/chat`).
 
-git checkout -b bootstrap/gateway-inicial
-# copiar/adaptar pacote independente gerado pelo ReqSys
-python -m pytest -q
-ruff check .
-
-git add .
-git commit -m "feat: bootstrap do ReqSys Ollama Local Gateway"
-git push -u origin bootstrap/gateway-inicial
+```
+ReqSys /codex → ollama_gateway → Gateway :8008 → Ollama :11434
 ```
 
-Depois, abrir PR para `main` no repositório independente.
+## Referências
 
-## Próximo passo após publicação
-
-1. Vincular o PR do novo repositório à issue `#95` do ReqSys.
-2. Atualizar o PR `#96` com o link do repositório independente.
-3. Validar consumo do gateway via provider `ollama_gateway` no ReqSys.
-4. Manter isolamento arquitetural: o ReqSys consome o gateway por API; não duplicar produto dentro do monólito.
-
-## Status operacional
-
-Repositório externo criado. Use `scripts/sincronizar_ollama_gateway_repo.sh` para publicar atualizações. O ReqSys consome o gateway via provider `ollama_gateway`.
+- `docs/ollama-local-gateway/MANUAL_GATE_CREATE_REPOSITORY.md`
+- `docs/codex-local/DECISAO_GATEWAY_OLLAMA_PROVIDER.md`
+- Issue #95

@@ -6,7 +6,7 @@ Definir o pacote mínimo governado para criação e inicialização do repositó
 
 ## Pendência P0
 
-Repositório externo **criado**. Publicar v0.2.0 via `scripts/sincronizar_ollama_gateway_repo.sh` (requer permissão de push no repo externo).
+**Resolvida no ReqSys.** O gateway roda localmente via `bash scripts/iniciar_codex_local.sh` (porta `8008`). Sync para o repo externo é opcional via `scripts/sincronizar_ollama_gateway_repo.sh`.
 
 ## Repositório alvo
 

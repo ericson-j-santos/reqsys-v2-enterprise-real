@@ -18,6 +18,9 @@ ruff check .
 rm -rf .venv-sync
 
 echo "==> Clonando $REPO..."
+if [ -n "${GH_TOKEN:-}" ]; then
+  gh auth setup-git 2>/dev/null || true
+fi
 gh repo clone "$REPO" "$WORKDIR/repo" -- --depth=1
 
 cd "$WORKDIR/repo"
@@ -43,4 +46,11 @@ git commit -m "feat: gateway v0.2.0 com /v1/chat, audit e testes
 git push -u origin "$BRANCH"
 echo ""
 echo "Publicado em: https://github.com/$REPO/tree/$BRANCH"
-echo "Abra PR para main no repositorio externo."
+if gh pr list -R "$REPO" --head "$BRANCH" --json number --jq 'length' 2>/dev/null | grep -qv '^0$'; then
+  echo "PR ja existe para branch $BRANCH"
+else
+  gh pr create -R "$REPO" --base main --head "$BRANCH" \
+    --title "feat: gateway v0.2.0 com /v1/chat" \
+    --body "Bootstrap sincronizado do ReqSys. Inclui POST /v1/chat, audit, testes e ADR-001. Ref: issue #95" \
+    2>/dev/null && echo "PR criado no repo externo." || echo "Abra PR manualmente para main."
+fi

@@ -1,0 +1,64 @@
+name: Ollama Gateway Bootstrap
+
+on:
+  pull_request:
+    paths:
+      - 'docs/ollama-local-gateway/**'
+      - 'scripts/sincronizar_ollama_gateway_repo.sh'
+      - 'backend/app/services/codex_governado.py'
+      - 'backend/tests/test_codex_governado*.py'
+      - '.github/workflows/ollama-gateway-bootstrap.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/ollama-local-gateway/**'
+      - 'scripts/sincronizar_ollama_gateway_repo.sh'
+      - 'backend/app/services/codex_governado.py'
+      - 'backend/tests/test_codex_governado*.py'
+      - '.github/workflows/ollama-gateway-bootstrap.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-bootstrap:
+    name: Validar bootstrap gateway
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar e testar bootstrap
+        working-directory: docs/ollama-local-gateway/bootstrap-files
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+          pytest -q
+          ruff check .
+      - name: Testes Codex ollama_gateway
+        working-directory: backend
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pytest tests/test_codex_governado.py tests/test_codex_governado_critical_paths.py -q --tb=short
+      - name: Evidencia
+        run: |
+          echo "## Ollama Gateway Bootstrap" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Bootstrap pytest: OK" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Provider ollama_gateway: OK" >> "$GITHUB_STEP_SUMMARY"
+
+  sync-external:
+    name: Publicar repo externo
+    needs: validate-bootstrap
+    if: github.event_name == 'workflow_dispatch' && secrets.OLLAMA_GATEWAY_SYNC_TOKEN != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Sync para reqsys-ollama-local-gateway
+        env:
+          GH_TOKEN: ${{ secrets.OLLAMA_GATEWAY_SYNC_TOKEN }}
+        run: bash scripts/sincronizar_ollama_gateway_repo.sh

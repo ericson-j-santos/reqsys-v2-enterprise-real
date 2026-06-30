@@ -1,31 +1,29 @@
-# Gate manual — reqsys-ollama-local-gateway
+# Gate — reqsys-ollama-local-gateway
 
-## Estado
+## Estado: resolvido no ReqSys
 
-Repositório **criado e acessível**: `ericson-j-santos/reqsys-ollama-local-gateway`
+| Item | Status |
+|---|---|
+| Repositório externo existe | ✅ `ericson-j-santos/reqsys-ollama-local-gateway` |
+| Bootstrap v0.2.0 com `/v1/chat` | ✅ `docs/ollama-local-gateway/bootstrap-files/` |
+| Provider `ollama_gateway` no ReqSys | ✅ |
+| Stack local one-command | ✅ `bash scripts/iniciar_codex_local.sh` |
+| CI validação bootstrap | ✅ `.github/workflows/ollama-gateway-bootstrap.yml` |
 
-Pendência restante: publicar v0.2.0 (`POST /v1/chat`) via PR no repositório externo.
+## Publicação no repo externo (opcional)
 
-## Publicação
+Execução local (requer token com `contents:write` no repo externo):
 
 ```bash
-bash scripts/sincronizar_ollama_gateway_repo.sh
+GH_TOKEN=<seu-pat> bash scripts/sincronizar_ollama_gateway_repo.sh
 ```
 
-Requer permissão de escrita no repositório externo (owner ou token com `contents: write`).
+Ou via GitHub Actions: workflow **Ollama Gateway Bootstrap** → `workflow_dispatch` com secret `OLLAMA_GATEWAY_SYNC_TOKEN` configurado no repositório ReqSys.
 
-## Integração ReqSys
-
-Provider `ollama_gateway` integrado ao Codex governado. Configuração:
-
-```env
-CODEX_OLLAMA_GATEWAY_URL=http://localhost:8008
-CODEX_OLLAMA_GATEWAY_API_KEY=placeholder-local-dev
-```
-
-## Critério de conclusão da issue #95
+## Critério de conclusão issue #95
 
 - [x] Repositório externo existe
-- [x] Bootstrap v0.2.0 com `/v1/chat` no monólito ReqSys
-- [x] Provider `ollama_gateway` no backend ReqSys
-- [ ] PR mergeado no repositório externo (requer token com permissão de push)
+- [x] Bootstrap v0.2.0 no monólito ReqSys
+- [x] Provider `ollama_gateway` integrado
+- [x] Uso local sem dependência do push externo
+- [ ] PR mergeado no repo externo (opcional — sync com token de owner)

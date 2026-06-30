@@ -67,9 +67,9 @@ flowchart TD
 - Não duplicar funcionalidades do Codex dentro do gateway.
 - Não acoplar o ReqSys ao binário/processo do Ollama.
 - Não expor `http://<host>:11434` diretamente para usuários, internet ou frontend.
-- O ReqSys deve consumir o gateway por API autenticada.
-- O gateway pode ser publicado em repositório independente quando o repo existir.
-- Até lá, a integração e a decisão ficam rastreadas no ReqSys principal.
+- O ReqSys consome o gateway por API autenticada.
+- O gateway está disponível no monólito em `docs/ollama-local-gateway/bootstrap-files/` e via `bash scripts/iniciar_codex_local.sh`.
+- Sync para repositório independente: `scripts/sincronizar_ollama_gateway_repo.sh`.
 
 ## Configuração recomendada
 
