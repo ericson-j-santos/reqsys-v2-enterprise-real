@@ -1,22 +1,22 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T13:31:50.205732Z",
+  "generated_at": "2026-06-30T16:02:33.350651Z",
   "state": "yellow",
   "monitoring_enabled": true,
   "regression_alert": false,
   "alerts_active": 1,
   "lane": "governance-automation",
   "summary": {
-    "next_increment": "artifact_ingestion_refresh",
+    "next_increment": "continuous_trilha_d_monitoring",
     "artifact_ingestion_enabled": true,
     "continuous_monitoring_enabled": true,
     "recommendation": "investigar_alertas"
   },
   "signals": {
-    "current_score": 97.0,
+    "current_score": 98.69,
     "baseline_score": 88.33,
-    "delta_from_baseline": 8.67,
+    "delta_from_baseline": 10.36,
     "trend": "improving",
     "predictive_risk": "low",
     "regression_predicted": false,

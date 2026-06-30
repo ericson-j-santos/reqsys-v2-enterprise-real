@@ -13,6 +13,7 @@ from scripts.build_trilha_d_history import (
     NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD,
     NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION_REFRESH,
     NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD,
+    artifact_ingestion_refresh_surface_ready,
     artifact_ingestion_surface_ready,
     build_payload,
     continuous_trilha_d_monitoring_surface_ready,
@@ -183,10 +184,16 @@ def test_resolve_next_increment_when_pipeline_completo() -> None:
     assert resolve_next_increment(artifact_ingestion=False) == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
 
 
+def test_artifact_ingestion_refresh_surface_ready_detecta_arquivos() -> None:
+    assert artifact_ingestion_refresh_surface_ready() is True
+
+
 def test_resolve_next_increment_when_artifact_ingestion_habilitado() -> None:
     assert artifact_ingestion_surface_ready() is True
     expected = resolve_next_increment(artifact_ingestion=True)
-    if merge_readiness_history_surface_ready():
+    if merge_readiness_history_surface_ready() and artifact_ingestion_refresh_surface_ready():
+        assert expected == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+    elif merge_readiness_history_surface_ready():
         assert expected == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
     elif governance_workflow_deep_links_surface_ready() and coverage_targeted_surface_ready():
         assert expected == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION_REFRESH
@@ -210,7 +217,9 @@ def test_resolve_next_increment_quando_merge_readiness_pendente(monkeypatch) -> 
 def test_resolve_next_increment_when_continuous_monitoring_habilitado() -> None:
     assert continuous_trilha_d_monitoring_surface_ready() is True
     expected = resolve_next_increment(artifact_ingestion=True)
-    if merge_readiness_history_surface_ready():
+    if merge_readiness_history_surface_ready() and artifact_ingestion_refresh_surface_ready():
+        assert expected == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+    elif merge_readiness_history_surface_ready():
         assert expected == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
     elif governance_workflow_deep_links_surface_ready() and coverage_targeted_surface_ready():
         assert expected == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION_REFRESH

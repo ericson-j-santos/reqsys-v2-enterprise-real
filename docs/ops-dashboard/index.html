@@ -175,6 +175,7 @@
         <div><div class="kpi-label">Tendência</div><div id="trilha-d-trend" class="kpi-value">-</div></div>
         <div><div class="kpi-label">Delta baseline</div><div id="trilha-d-delta" class="kpi-value">-</div></div>
         <div><div class="kpi-label">Artifact ingestion</div><div id="artifact-ingestion-enabled" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Artifact refresh</div><div id="artifact-ingestion-refresh-enabled" class="kpi-value">-</div></div>
       </div>
       <table>
         <thead><tr><th>Dimensão</th><th>Status</th><th>Score</th><th>Tendência</th><th>Delta baseline</th></tr></thead>
@@ -600,6 +601,10 @@
       document.getElementById('artifact-ingestion-enabled').innerHTML = ingestionEnabled
         ? '<span class="status passed">enabled</span>'
         : '<span class="status warning">static</span>';
+      const refreshEnabled = Boolean(summary.artifact_ingestion_refresh_enabled);
+      document.getElementById('artifact-ingestion-refresh-enabled').innerHTML = refreshEnabled
+        ? '<span class="status passed">enabled</span>'
+        : '<span class="status warning">pending</span>';
 
       const dimensionsBody = document.getElementById('trilha-d-dimensions');
       dimensionsBody.innerHTML = '';

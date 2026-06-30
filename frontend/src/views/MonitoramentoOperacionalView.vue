@@ -237,6 +237,14 @@
               :clickable="false"
             />
           </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Artifact refresh"
+              :value="trilhaDResumo.artifactIngestionRefresh"
+              :semaforo="trilhaDResumo.artifactIngestionRefresh === 'enabled' ? 'verde' : 'amarelo'"
+              :clickable="false"
+            />
+          </v-col>
         </v-row>
         <v-table density="compact" class="mt-4" aria-label="Dimensões Trilha D">
           <thead>
@@ -546,6 +554,7 @@ const trilhaDResumo = computed(() => ({
   trend: trilhaDItems.value.trend ?? 'n/a',
   delta: trilhaDItems.value.delta_from_baseline ?? 'n/a',
   artifactIngestion: trilhaDItems.value.summary?.artifact_ingestion_enabled ? 'enabled' : 'static',
+  artifactIngestionRefresh: trilhaDItems.value.summary?.artifact_ingestion_refresh_enabled ? 'enabled' : 'pending',
   nextIncrement: trilhaDItems.value.summary?.next_increment ?? 'n/a',
 }))
 const trilhaDDimensoes = computed(() => trilhaDItems.value.dimension_summary || {})

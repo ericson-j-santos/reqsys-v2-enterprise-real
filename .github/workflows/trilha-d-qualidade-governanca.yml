@@ -199,80 +199,37 @@ jobs:
           set -euo pipefail
           python -m pytest tests/test_build_trilha_d_history.py -q -k "artifact_ingestion"
 
-      - name: Atualizar histórico Trilha D (artifact ingestion)
+      - name: Validar superfície artifact ingestion refresh
+        if: always()
+        run: |
+          set -euo pipefail
+          python -m pytest tests/test_refresh_trilha_d_artifact_ingestion.py -q
+          python -m pytest tests/test_build_trilha_d_history.py -q -k "artifact_ingestion_refresh"
+
+      - name: Refresh artifact ingestion Trilha D
         if: always()
         run: |
           set -euo pipefail
           REPORT="artifacts/trilha-d-qualidade-governanca/trilha-d-qualidade-governanca.json"
           if [[ ! -f "${REPORT}" ]]; then
-            echo "::warning::Relatório consolidado ausente; histórico não atualizado."
-            exit 0
-          fi
-          python scripts/build_trilha_d_history.py \
-            --ingest-report "${REPORT}" \
-            --output docs/ops-dashboard/data/trilha-d-history.json
-
-      - name: Rebuild Pareto operacional (evidence-driven)
-        if: always()
-        run: |
-          set -euo pipefail
-          if [[ ! -f docs/ops-dashboard/data/trilha-d-history.json ]]; then
-            echo "::warning::Histórico Trilha D ausente; Pareto não atualizado."
-            exit 0
-          fi
-          python scripts/build_padrao_ouro_operational_pareto.py \
-            --output docs/ops-dashboard/data/padrao-ouro-operational-pareto.json \
-            --trilha-d-history docs/ops-dashboard/data/trilha-d-history.json
-
-      - name: Predict operational regression (report-only)
-        if: always()
-        run: |
-          set -euo pipefail
-          REPORT="artifacts/trilha-d-qualidade-governanca/trilha-d-qualidade-governanca.json"
-          HISTORY="docs/ops-dashboard/data/trilha-d-history.json"
-          GATE_OUTPUT="docs/ops-dashboard/data/predictive-regression-gate.json"
-          if [[ ! -f "${HISTORY}" ]]; then
-            echo "::warning::Histórico Trilha D ausente; gate preditivo ignorado."
+            echo "::warning::Relatório consolidado ausente; refresh não executado."
             exit 0
           fi
           args=(
-            --history-json "${HISTORY}"
-            --output "${GATE_OUTPUT}"
-            --mode report_only
-            --json
+            --report "${REPORT}"
+            --github-run-id "${{ github.run_id }}"
           )
-          if [[ -f "${REPORT}" ]]; then
-            args+=(--report-json "${REPORT}")
+          MERGE_REPORT="artifacts/merge-readiness/merge-readiness.json"
+          if [[ -f "${MERGE_REPORT}" ]]; then
+            args+=(--merge-readiness-report "${MERGE_REPORT}")
           fi
-          python scripts/predict_operational_regression.py "${args[@]}"
-          mkdir -p artifacts/trilha-d-qualidade-governanca
-          cp "${GATE_OUTPUT}" artifacts/trilha-d-qualidade-governanca/predict-operational-regression-gate.json
+          python scripts/refresh_trilha_d_artifact_ingestion.py "${args[@]}"
 
       - name: Validar superfície monitoramento contínuo
         if: always()
         run: |
           set -euo pipefail
           python -m pytest tests/test_build_continuous_trilha_d_monitoring.py -q
-
-      - name: Atualizar monitoramento contínuo Trilha D
-        if: always()
-        run: |
-          set -euo pipefail
-          HISTORY="docs/ops-dashboard/data/trilha-d-history.json"
-          GATE_OUTPUT="docs/ops-dashboard/data/predictive-regression-gate.json"
-          MONITORING_OUTPUT="docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
-          if [[ ! -f "${HISTORY}" ]]; then
-            echo "::warning::Histórico Trilha D ausente; monitoramento contínuo ignorado."
-            exit 0
-          fi
-          args=(
-            --history-json "${HISTORY}"
-            --predictive-json "${GATE_OUTPUT}"
-            --output "${MONITORING_OUTPUT}"
-          )
-          python scripts/build_continuous_trilha_d_monitoring.py "${args[@]}"
-          mkdir -p artifacts/trilha-d-qualidade-governanca
-          cp "${MONITORING_OUTPUT}" artifacts/trilha-d-qualidade-governanca/continuous-trilha-d-monitoring.json
 
       - name: Validar superfície coverage targeted
         if: always()
@@ -288,20 +245,6 @@ jobs:
           set -euo pipefail
           python -m pytest tests/test_build_governance_deep_links.py -q
 
-      - name: Atualizar deep links de governança
-        if: always()
-        run: |
-          set -euo pipefail
-          HISTORY="docs/ops-dashboard/data/trilha-d-history.json"
-          if [[ ! -f "${HISTORY}" ]]; then
-            echo "::warning::Histórico Trilha D ausente; deep links de governança ignorados."
-            exit 0
-          fi
-          python scripts/build_governance_evidence_index.py \
-            --github-run-id "${{ github.run_id }}" \
-            --trilha-d-history "${HISTORY}" \
-            --output docs/ops-dashboard/data/governance-evidence-index.json
-
       - name: Publicar artifact consolidado
         if: always()
         uses: actions/upload-artifact@v4
@@ -314,6 +257,7 @@ jobs:
             docs/ops-dashboard/data/predictive-regression-gate.json
             docs/ops-dashboard/data/continuous-trilha-d-monitoring.json
             docs/ops-dashboard/data/governance-evidence-index.json
+            docs/ops-dashboard/data/merge-readiness-history.json
           if-no-files-found: warn
           retention-days: 30
 
@@ -344,11 +288,13 @@ jobs:
           SRC_PREDICTIVE="artifacts/trilha-d-ingest/docs/ops-dashboard/data/predictive-regression-gate.json"
           SRC_MONITORING="artifacts/trilha-d-ingest/docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
           SRC_GOVERNANCE="artifacts/trilha-d-ingest/docs/ops-dashboard/data/governance-evidence-index.json"
+          SRC_MERGE_READINESS="artifacts/trilha-d-ingest/docs/ops-dashboard/data/merge-readiness-history.json"
           DEST_HISTORY="docs/ops-dashboard/data/trilha-d-history.json"
           DEST_PARETO="docs/ops-dashboard/data/padrao-ouro-operational-pareto.json"
           DEST_PREDICTIVE="docs/ops-dashboard/data/predictive-regression-gate.json"
           DEST_MONITORING="docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
           DEST_GOVERNANCE="docs/ops-dashboard/data/governance-evidence-index.json"
+          DEST_MERGE_READINESS="docs/ops-dashboard/data/merge-readiness-history.json"
           if [[ ! -f "${SRC_HISTORY}" ]]; then
             echo "Histórico não gerado neste run; nada a publicar."
             exit 0
@@ -372,6 +318,9 @@ jobs:
           if [[ -f "${SRC_GOVERNANCE}" ]]; then
             cp "${SRC_GOVERNANCE}" "${DEST_GOVERNANCE}"
           fi
+          if [[ -f "${SRC_MERGE_READINESS}" ]]; then
+            cp "${SRC_MERGE_READINESS}" "${DEST_MERGE_READINESS}"
+          fi
           git add "${DEST_HISTORY}"
           if [[ -f "${DEST_PARETO}" ]]; then
             git add "${DEST_PARETO}"
@@ -385,11 +334,14 @@ jobs:
           if [[ -f "${DEST_GOVERNANCE}" ]]; then
             git add "${DEST_GOVERNANCE}"
           fi
+          if [[ -f "${DEST_MERGE_READINESS}" ]]; then
+            git add "${DEST_MERGE_READINESS}"
+          fi
           if git diff --cached --quiet; then
-            echo "Histórico Trilha D, Pareto, gate preditivo, monitoramento contínuo e governança já estão atualizados."
+            echo "Histórico Trilha D, Pareto, gate preditivo, monitoramento, governança e merge-readiness já estão atualizados."
             exit 0
           fi
-          git commit -m "chore(ops): atualizar trilha-d-history, pareto, gate preditivo, monitoramento e governança via artifact ingestion"
+          git commit -m "chore(ops): atualizar artifacts Trilha D via artifact ingestion refresh"
           for attempt in 1 2 3; do
             if git pull --rebase origin main && git push origin HEAD:main; then
               echo "Histórico Trilha D publicado na main."
