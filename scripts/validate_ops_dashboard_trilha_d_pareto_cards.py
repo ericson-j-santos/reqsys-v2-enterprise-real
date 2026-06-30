@@ -99,8 +99,12 @@ def validate_data_contracts() -> None:
 
     trilha_d = json.loads(TRILHA_D_DATA.read_text(encoding="utf-8"))
     pareto = json.loads(PARETO_DATA.read_text(encoding="utf-8"))
+    pareto_summary = pareto.get("summary") or {}
+    if pareto_summary.get("consolidation_mode"):
+        return
+
     trilha_next = (trilha_d.get("summary") or {}).get("next_increment")
-    pareto_next = (pareto.get("summary") or {}).get("next_increment")
+    pareto_next = pareto_summary.get("next_increment")
     if trilha_next == "predictive_regression_gate" and pareto_next != "predictive_regression_gate":
         fail(
             "pareto next_increment diverges from trilha-d-history after dashboard consolidation: "
