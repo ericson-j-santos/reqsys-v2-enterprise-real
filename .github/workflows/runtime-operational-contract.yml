@@ -1,0 +1,22 @@
+name: Runtime Operational Contract
+
+on:
+  pull_request:
+    paths:
+      - 'docs/contracts/runtime-operational-contract-v1.json'
+      - 'docs/runbooks/runtime-operational-contract-v1.md'
+      - 'scripts/validate_runtime_operational_contract.py'
+      - '.github/workflows/runtime-operational-contract.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-runtime-operational-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate runtime operational contract
+        run: python3 scripts/validate_runtime_operational_contract.py
