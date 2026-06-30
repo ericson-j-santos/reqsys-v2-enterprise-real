@@ -45,12 +45,36 @@ jobs:
             --max-domains 4 \
             --output artifacts/merge-readiness/merge-readiness.json
 
+      - name: Validar superfície merge-readiness history
+        if: always()
+        run: |
+          set -euo pipefail
+          python -m pytest tests/test_build_merge_readiness_history.py -q
+
+      - name: Atualizar histórico merge-readiness
+        if: always()
+        run: |
+          set -euo pipefail
+          REPORT="artifacts/merge-readiness/merge-readiness.json"
+          OUTPUT="docs/ops-dashboard/data/merge-readiness-history.json"
+          if [[ ! -f "${REPORT}" ]]; then
+            echo "::warning::Relatório merge-readiness ausente; histórico não atualizado."
+            exit 0
+          fi
+          python scripts/build_merge_readiness_history.py \
+            --ingest-report "${REPORT}" \
+            --run-id "${{ github.run_id }}" \
+            --correlation-id "${CORRELATION_ID}" \
+            --output "${OUTPUT}"
+
       - name: Publicar evidência de merge-readiness
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: merge-readiness-evidence
-          path: artifacts/merge-readiness/merge-readiness.json
+          path: |
+            artifacts/merge-readiness/merge-readiness.json
+            docs/ops-dashboard/data/merge-readiness-history.json
           if-no-files-found: warn
 
       - name: Resumo executivo
