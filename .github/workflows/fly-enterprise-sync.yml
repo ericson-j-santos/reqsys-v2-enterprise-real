@@ -93,10 +93,10 @@ jobs:
       - name: Verificar drift dev/hml (read-only)
         id: check
         run: |
-          set -euo pipefail
+          set -uo pipefail
           python scripts/validate_publication_sync.py \
             --timeout 8 \
-            --output publication-sync-gate.json
+            --output publication-sync-gate.json || true
           if python -c "import json; d=json.load(open('publication-sync-gate.json')); exit(0 if d.get('ok') else 1)"; then
             echo "drift_detected=false" >> "$GITHUB_OUTPUT"
             echo "skip_reason=already_synced" >> "$GITHUB_OUTPUT"
