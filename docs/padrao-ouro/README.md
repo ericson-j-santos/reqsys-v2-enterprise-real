@@ -88,8 +88,6 @@ Use este protocolo quando o pedido for amplo (ex.: "foco padrão ouro") ou quand
 | 4 | Atualizar contratos, ADRs, runbooks ou matriz de testes quando a mudança afetar operação. | Arquivo de documentação atualizado junto do diff funcional. | Deixar conhecimento apenas no PR/chat. |
 | 5 | Encerrar com commit convencional, PR com escopo/fora de escopo/riscos/rollback e próximos gates. | Commit + corpo de PR rastreável. | Misturar mudanças não relacionadas. |
 
-### Protocolo rápido para agentes
-
 ```text
 1. Ler este README + living-architecture-index.json.
 2. Classificar o pedido: gap_fix, consolidate, hotfix, close_duplicate ou new_front.
@@ -98,6 +96,7 @@ Use este protocolo quando o pedido for amplo (ex.: "foco padrão ouro") ou quand
 5. Validar o menor conjunto de comandos compatível com o escopo.
 6. Commitar e abrir PR com evidência objetiva.
 ```
+
 
 ## Impacto esperado
 
