@@ -27,6 +27,7 @@ jobs:
       docs: ${{ steps.detect.outputs.docs }}
       codex_static: ${{ steps.detect.outputs.codex_static }}
       workflows: ${{ steps.detect.outputs.workflows }}
+      governed_contract: ${{ steps.detect.outputs.governed_contract }}
       full_ci: ${{ steps.detect.outputs.full_ci }}
       e2e_required: ${{ steps.detect.outputs.e2e_required }}
       changed_files: ${{ steps.detect.outputs.changed_files }}
@@ -64,6 +65,7 @@ jobs:
           docs=false
           codex_static=false
           workflows=false
+          governed_contract=true
           full_ci=false
           e2e_required=false
 
@@ -91,14 +93,28 @@ jobs:
             esac
 
             case "$file" in
+              docs/contracts/runtime-operational-contract-v1.json|docs/runbooks/runtime-operational-contract-v1.md|scripts/validate_runtime_operational_contract.py|.github/workflows/runtime-operational-contract.yml|.github/workflows/ci.yml)
+                ;;
+              *)
+                governed_contract=false
+                ;;
+            esac
+
+            case "$file" in
               frontend/tests/e2e/*|frontend/playwright.config.*|frontend/src/router/*|frontend/src/views/Login*|frontend/src/views/*Auth*|frontend/src/services/auth*|frontend/src/stores/*auth*)
                 e2e_required=true
                 ;;
             esac
           done < /tmp/changed-files.txt
 
-          if [[ "$workflows" == "true" ]]; then
+          if [[ "$workflows" == "true" && "$governed_contract" != "true" ]]; then
             full_ci=true
+          fi
+
+          if [[ "$governed_contract" == "true" ]]; then
+            docs=true
+            full_ci=false
+            e2e_required=false
           fi
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && ! -s /tmp/changed-files.txt ]]; then
@@ -120,6 +136,7 @@ jobs:
             echo "docs=$docs"
             echo "codex_static=$codex_static"
             echo "workflows=$workflows"
+            echo "governed_contract=$governed_contract"
             echo "full_ci=$full_ci"
             echo "e2e_required=$e2e_required"
             echo "changed_files<<EOF"
@@ -140,6 +157,7 @@ jobs:
             echo "| Docs | ${{ steps.detect.outputs.docs }} |"
             echo "| Codex estático | ${{ steps.detect.outputs.codex_static }} |"
             echo "| Workflows | ${{ steps.detect.outputs.workflows }} |"
+            echo "| Contrato governado | ${{ steps.detect.outputs.governed_contract }} |"
             echo "| CI completo | ${{ steps.detect.outputs.full_ci }} |"
             echo "| E2E obrigatório | ${{ steps.detect.outputs.e2e_required }} |"
             echo ""
