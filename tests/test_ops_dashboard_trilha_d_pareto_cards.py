@@ -27,21 +27,37 @@ PARETO_DOM_IDS = [
     "pareto-details",
 ]
 
+PREDICTIVE_DOM_IDS = [
+    "predictive-risk",
+    "predictive-regression-predicted",
+    "predictive-parallel-safe",
+    "predictive-recommendation",
+    "predictive-signals",
+    "predictive-dimension-risks",
+    "predictive-blocking-reasons",
+    "predictive-links",
+    "predictive-details",
+]
+
 REQUIRED_SECTION_IDS = [
     "operational-intelligence-nav",
     "trilha-d-history-card",
     "operational-pareto-card",
+    "predictive-regression-card",
 ]
 
 REQUIRED_FUNCTIONS = [
     "renderTrilhaDHistory",
     "renderOperationalPareto",
+    "renderPredictiveRegressionGate",
     "renderOperationalIntelligenceQuickLinks",
     "trilha-d-history.json",
     "padrao-ouro-operational-pareto.json",
+    "predictive-regression-gate.json",
 ]
 
 NAV_INDEX = ROOT / "docs/ops-dashboard/operational-navigation-index.json"
+PREDICTIVE_DATA = ROOT / "docs/ops-dashboard/data/predictive-regression-gate.json"
 
 
 def test_ops_dashboard_exposes_trilha_d_history_card() -> None:
@@ -54,6 +70,12 @@ def test_ops_dashboard_exposes_operational_pareto_card() -> None:
     text = INDEX_HTML.read_text(encoding="utf-8")
     for dom_id in PARETO_DOM_IDS:
         assert f'id="{dom_id}"' in text, f"missing pareto dom id: {dom_id}"
+
+
+def test_ops_dashboard_exposes_predictive_regression_card() -> None:
+    text = INDEX_HTML.read_text(encoding="utf-8")
+    for dom_id in PREDICTIVE_DOM_IDS:
+        assert f'id="{dom_id}"' in text, f"missing predictive dom id: {dom_id}"
 
 
 def test_ops_dashboard_wires_trilha_d_and_pareto_renderers() -> None:
@@ -75,9 +97,21 @@ def test_operational_navigation_index_links_trilha_d_and_pareto() -> None:
     link_ids = {item.get("id") for item in payload.get("links") or []}
     assert "trilha_d_history_dashboard" in link_ids
     assert "operational_pareto_dashboard" in link_ids
+    assert "predictive_regression_dashboard" in link_ids
     by_id = {item["id"]: item for item in payload["links"]}
     assert by_id["trilha_d_history_dashboard"]["href"] == "./index.html#trilha-d-history-card"
     assert by_id["operational_pareto_dashboard"]["href"] == "./index.html#operational-pareto-card"
+    assert by_id["predictive_regression_dashboard"]["href"] == "./index.html#predictive-regression-card"
+
+
+def test_predictive_regression_gate_artifact_contract() -> None:
+    import json
+
+    assert PREDICTIVE_DATA.exists(), "predictive-regression-gate.json must be versioned for dashboard"
+    payload = json.loads(PREDICTIVE_DATA.read_text(encoding="utf-8"))
+    assert payload.get("schema_version")
+    assert payload.get("risk") is not None
+    assert "links" in payload
 
 
 def test_validate_data_contracts_skips_cross_check_in_consolidation_mode(tmp_path, monkeypatch) -> None:
@@ -95,9 +129,15 @@ def test_validate_data_contracts_skips_cross_check_in_consolidation_mode(tmp_pat
         "current_score": 100.0,
         "summary": {"next_increment": None, "consolidation_mode": True},
     }
+    predictive = {
+        "schema_version": "1.0.0",
+        "risk": "low",
+    }
     monkeypatch.setattr(validator, "TRILHA_D_DATA", tmp_path / "trilha-d-history.json")
     monkeypatch.setattr(validator, "PARETO_DATA", tmp_path / "pareto.json")
+    monkeypatch.setattr(validator, "PREDICTIVE_DATA", tmp_path / "predictive.json")
     (tmp_path / "trilha-d-history.json").write_text(json.dumps(trilha_d), encoding="utf-8")
     (tmp_path / "pareto.json").write_text(json.dumps(pareto), encoding="utf-8")
+    (tmp_path / "predictive.json").write_text(json.dumps(predictive), encoding="utf-8")
 
     validator.validate_data_contracts()

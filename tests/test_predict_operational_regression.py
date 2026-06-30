@@ -50,6 +50,7 @@ def test_predict_allows_stable_history_without_paths() -> None:
     assert result["regression_predicted"] is False
     assert result["parallel_safe"] is True
     assert result["recommendation"] == "merge_paralelo_seguro"
+    assert result["links"]["dashboard_data"].endswith("predictive-regression-gate.json")
 
 
 def test_predict_marks_overall_regressing_trend() -> None:

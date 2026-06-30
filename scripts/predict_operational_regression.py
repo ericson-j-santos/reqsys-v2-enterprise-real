@@ -20,6 +20,8 @@ if str(ROOT_DIR) not in sys.path:
 
 from scripts.build_trilha_d_history import DIMENSIONS, trend_for
 
+REPO = "ericson-j-santos/reqsys-v2-enterprise-real"
+
 CRITICAL_DIMENSIONS = {"tests", "coverage"}
 DIMENSION_PATH_HINTS: dict[str, tuple[str, ...]] = {
     "tests": ("backend/tests/", "tests/test_"),
@@ -191,6 +193,19 @@ def predict_operational_regression(
             "touched_regressing_dimensions": touched_regressing,
         },
         "dimension_risks": dimension_risks,
+        "links": {
+            "trilha_d": f"https://github.com/{REPO}/blob/main/docs/ops-dashboard/data/trilha-d-history.json",
+            "workflow": f"https://github.com/{REPO}/actions/workflows/trilha-d-qualidade-governanca.yml",
+            "guard_workflow": f"https://github.com/{REPO}/actions/workflows/predictive-regression-guard.yml",
+            "source": f"https://github.com/{REPO}/blob/main/scripts/predict_operational_regression.py",
+            "dashboard_data": f"https://github.com/{REPO}/blob/main/docs/ops-dashboard/data/predictive-regression-gate.json",
+        },
+        "runtime_dashboard_contract": {
+            "card_fields": ["risk", "regression_predicted", "parallel_safe", "recommendation"],
+            "signal_fields": ["overall_trend", "regressing_dimensions", "recent_failed_samples"],
+            "dimension_fields": ["trend", "current_score", "regressing", "touched_by_pr"],
+            "refresh_strategy": "artifact_ingestion_on_trilha_d_consolidate",
+        },
     }
 
 

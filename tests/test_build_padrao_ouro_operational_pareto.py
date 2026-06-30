@@ -12,13 +12,13 @@ from scripts.build_padrao_ouro_operational_pareto import (
 )
 
 
-def test_operational_pareto_prioritizes_visibility_after_coverage_target() -> None:
+def test_operational_pareto_prioritizes_coverage_after_predictive_gate_surface() -> None:
     payload = build_payload()
 
     assert payload["state"] == "yellow"
     assert payload["dominant_bottleneck"]["dimension"] == "coverage"
     assert payload["dominant_bottleneck"]["share_of_trilha_d_remaining_gap"] == 1.0
-    assert payload["ranked_actions"][0]["id"] == "predictive_regression_gate"
+    assert payload["ranked_actions"][0]["id"] == "coverage_targeted_tests"
     assert payload["ranked_actions"][0]["recommended_now"] is True
 
 

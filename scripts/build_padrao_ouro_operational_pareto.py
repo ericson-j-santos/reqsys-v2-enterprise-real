@@ -38,7 +38,7 @@ ACTION_CATALOG: list[dict[str, Any]] = [
         "title": "Elevar coverage dos módulos críticos",
         "lane": "quality-governance",
         "dimension": "coverage",
-        "target_score": 82.0,
+        "target_score": 92.0,
         "effort_points": 3,
         "risk": "low",
         "confidence": 0.82,
@@ -97,7 +97,7 @@ ACTION_CATALOG: list[dict[str, Any]] = [
             "scripts/predict_operational_regression.py",
             "docs/ops-dashboard/data/padrao-ouro-operational-pareto.json",
         ],
-        "active_when": "always_when_gaps_remain",
+        "active_when": "predictive_gate_pending",
     },
     {
         "id": "operational_pareto_dashboard_card",
@@ -202,6 +202,8 @@ def action_is_active(action: dict[str, Any], *, trilha_d: dict[str, Any], gaps_r
         return not trilha_d.get("artifact_ingestion_enabled") or trilha_d.get("next_increment") == "artifact_ingestion_refresh"
     if active_when == "pareto_dashboard_pending":
         return trilha_d.get("next_increment") == "consolidate_operational_pareto_cycle"
+    if active_when == "predictive_gate_pending":
+        return trilha_d.get("next_increment") == "predictive_regression_gate"
     if active_when == "always_when_gaps_remain":
         return gaps_remain
     return True
