@@ -22,11 +22,24 @@ from scripts.build_trilha_d_history import coverage_targeted_surface_ready
 
 REPO = "ericson-j-santos/reqsys-v2-enterprise-real"
 DEFAULT_OUTPUT = "docs/ops-dashboard/data/governance-evidence-index.json"
+DEFAULT_TRILHA_D_HISTORY = "docs/ops-dashboard/data/trilha-d-history.json"
 NEXT_INCREMENT_AFTER_DEEP_LINKS = "dashboard_trilha_d_history_card"
 NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD = "artifact_ingestion_refresh"
 NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION = "continuous_trilha_d_monitoring"
 NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING = "coverage_targeted_tests"
 NEXT_INCREMENT_AFTER_COVERAGE_TARGETED = "link_governance_cards_to_latest_workflow_runs"
+
+WORKFLOW_FILE_BY_EVIDENCE_ID: dict[str, str] = {
+    "conflict_prediction": "pr-conflict-guard.yml",
+    "runtime_merge_queue": "governed-merge-queue.yml",
+    "preview_environment": "preview-environment-contract.yml",
+    "governed_pr_automation": "governed-pr-automation.yml",
+    "predictive_regression": "predictive-regression-guard.yml",
+    "continuous_trilha_d_monitoring": "trilha-d-qualidade-governanca.yml",
+    "pr_evidence_gate": "pr-evidence-gate.yml",
+}
+
+TRILHA_D_WORKFLOW_EVIDENCE_IDS = frozenset({"continuous_trilha_d_monitoring", "predictive_regression"})
 
 
 def resolve_governance_next_increment(repo_root: Path | None = None) -> str:
@@ -61,6 +74,14 @@ def resolve_governance_next_increment(repo_root: Path | None = None) -> str:
             and "build_continuous_trilha_d_monitoring.py" in workflow.read_text(encoding="utf-8")
         ):
             if coverage_targeted_surface_ready(root):
+                governance_index = root / "docs/ops-dashboard/data/governance-evidence-index.json"
+                if governance_index.exists():
+                    try:
+                        governance_payload = json.loads(governance_index.read_text(encoding="utf-8"))
+                        if governance_workflow_deep_links_ready(governance_payload.get("evidence") or []):
+                            return NEXT_INCREMENT_AFTER_DEEP_LINKS
+                    except json.JSONDecodeError:
+                        pass
                 return NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
             return NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
         return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
@@ -76,15 +97,86 @@ def workflow_runs_url(workflow_file: str) -> str:
     return f"https://github.com/{REPO}/actions/workflows/{workflow_file}"
 
 
-def enrich_links(workflow_file: str, *, source: str | None = None) -> dict[str, str]:
+def workflow_run_url(workflow_file: str, run_id: str | int | None) -> str:
+    run = str(run_id or "").strip()
+    if run.isdigit():
+        return f"https://github.com/{REPO}/actions/runs/{run}"
+    return workflow_runs_url(workflow_file)
+
+
+def load_trilha_d_latest_run_id(history_path: Path | None = None) -> str | None:
+    path = history_path or Path(DEFAULT_TRILHA_D_HISTORY)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    history = payload.get("history") or []
+    if not history:
+        return None
+    for entry in reversed(history):
+        run_id = entry.get("run_id")
+        if isinstance(run_id, str | int) and str(run_id).isdigit():
+            return str(run_id)
+        workflow_run_url_value = entry.get("workflow_run_url")
+        if isinstance(workflow_run_url_value, str) and "/actions/runs/" in workflow_run_url_value:
+            candidate = workflow_run_url_value.rstrip("/").split("/")[-1]
+            if candidate.isdigit():
+                return candidate
+    return None
+
+
+def enrich_links(
+    workflow_file: str,
+    *,
+    source: str | None = None,
+    run_id: str | int | None = None,
+) -> dict[str, str]:
     links = {
         "workflow": workflow_runs_url(workflow_file),
         "workflow_runs": workflow_runs_url(workflow_file),
-        "latest_run": workflow_runs_url(workflow_file),
+        "latest_run": workflow_run_url(workflow_file, run_id),
     }
     if source:
         links["source"] = source
+    if run_id and str(run_id).isdigit():
+        links["deep_link_type"] = "workflow_run"
+    else:
+        links["deep_link_type"] = "workflow_list"
     return links
+
+
+def enrich_governance_workflow_deep_links(
+    items: list[dict[str, Any]],
+    *,
+    trilha_d_run_id: str | int | None = None,
+) -> list[dict[str, Any]]:
+    enriched: list[dict[str, Any]] = []
+    for item in items:
+        copy = dict(item)
+        evidence_id = str(copy.get("id") or "")
+        workflow_file = WORKFLOW_FILE_BY_EVIDENCE_ID.get(evidence_id)
+        links = dict(copy.get("links") or {})
+        if workflow_file:
+            run_id = trilha_d_run_id if evidence_id in TRILHA_D_WORKFLOW_EVIDENCE_IDS else None
+            source = links.get("source")
+            copy["links"] = enrich_links(workflow_file, source=source, run_id=run_id)
+        enriched.append(copy)
+    return enriched
+
+
+def governance_workflow_deep_links_ready(items: list[dict[str, Any]]) -> bool:
+    if not items:
+        return False
+    resolved = 0
+    for item in items:
+        if not item.get("dashboard_ready"):
+            continue
+        latest_run = (item.get("links") or {}).get("latest_run")
+        if isinstance(latest_run, str) and "/actions/runs/" in latest_run:
+            resolved += 1
+    return resolved >= 2
 
 
 def utc_now() -> str:
@@ -215,11 +307,17 @@ def evidence_items() -> list[dict[str, Any]]:
     ]
 
 
-def build_payload() -> dict[str, Any]:
-    items = evidence_items()
+def build_payload(
+    *,
+    trilha_d_run_id: str | int | None = None,
+    trilha_d_history: Path | None = None,
+) -> dict[str, Any]:
+    run_id = trilha_d_run_id if trilha_d_run_id is not None else load_trilha_d_latest_run_id(trilha_d_history)
+    items = enrich_governance_workflow_deep_links(evidence_items(), trilha_d_run_id=run_id)
     implemented = sum(1 for item in items if item["status"] in {"implemented", "dry_run"})
     dashboard_ready = sum(1 for item in items if item["dashboard_ready"])
     score = round((implemented / len(items)) * 70 + (dashboard_ready / len(items)) * 30)
+    deep_links_ready = governance_workflow_deep_links_ready(items)
 
     return {
         "schema_version": "1.0.0",
@@ -231,7 +329,18 @@ def build_payload() -> dict[str, Any]:
             "total_capabilities": len(items),
             "implemented_capabilities": implemented,
             "dashboard_ready_capabilities": dashboard_ready,
-            "next_increment": resolve_governance_next_increment(),
+            "governance_deep_links_enabled": deep_links_ready,
+            "workflow_run_deep_links_resolved": sum(
+                1
+                for item in items
+                if isinstance((item.get("links") or {}).get("latest_run"), str)
+                and "/actions/runs/" in item["links"]["latest_run"]
+            ),
+            "next_increment": (
+                NEXT_INCREMENT_AFTER_DEEP_LINKS
+                if deep_links_ready
+                else resolve_governance_next_increment()
+            ),
         },
         "links": {
             "actions": f"https://github.com/{REPO}/actions",
@@ -242,15 +351,24 @@ def build_payload() -> dict[str, Any]:
         "runtime_dashboard_contract": {
             "card_fields": ["title", "workflow", "status", "artifact", "dashboard_ready", "latest_run"],
             "drilldown_fields": ["links", "json_path", "drilldown_fields", "latest_run"],
-            "refresh_strategy": "workflow_runs_deep_links_enabled",
+            "refresh_strategy": (
+                "workflow_run_deep_links_enabled"
+                if deep_links_ready
+                else "workflow_runs_deep_links_enabled"
+            ),
         },
     }
 
 
-def write_payload(output_path: str) -> dict[str, Any]:
+def write_payload(
+    output_path: str,
+    *,
+    trilha_d_run_id: str | int | None = None,
+    trilha_d_history: Path | None = None,
+) -> dict[str, Any]:
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    payload = build_payload()
+    payload = build_payload(trilha_d_run_id=trilha_d_run_id, trilha_d_history=trilha_d_history)
     output.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return payload
 
@@ -258,13 +376,19 @@ def write_payload(output_path: str) -> dict[str, Any]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Gera governance-evidence-index.json para o dashboard operacional.")
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
+    parser.add_argument("--trilha-d-history", default=DEFAULT_TRILHA_D_HISTORY)
+    parser.add_argument("--github-run-id", help="Run ID do workflow Trilha D para deep links")
     parser.add_argument("--json", action="store_true", help="Imprime o payload gerado")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    payload = write_payload(args.output)
+    payload = write_payload(
+        args.output,
+        trilha_d_run_id=args.github_run_id,
+        trilha_d_history=Path(args.trilha_d_history),
+    )
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:

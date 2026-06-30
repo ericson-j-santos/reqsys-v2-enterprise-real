@@ -1,14 +1,16 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T13:23:20.278928+00:00",
+  "generated_at": "2026-06-30T13:32:04.947179+00:00",
   "overall_status": "green",
   "governance_evidence_score": 100,
   "summary": {
     "total_capabilities": 7,
     "implemented_capabilities": 7,
     "dashboard_ready_capabilities": 7,
-    "next_increment": "link_governance_cards_to_latest_workflow_runs"
+    "governance_deep_links_enabled": true,
+    "workflow_run_deep_links_resolved": 2,
+    "next_increment": "dashboard_trilha_d_history_card"
   },
   "links": {
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
@@ -36,7 +38,8 @@
         "workflow": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/pr-conflict-guard.yml",
         "workflow_runs": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/pr-conflict-guard.yml",
         "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/pr-conflict-guard.yml",
-        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/conflict_prediction_gate.py"
+        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/conflict_prediction_gate.py",
+        "deep_link_type": "workflow_list"
       }
     },
     {
@@ -59,7 +62,8 @@
         "workflow": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/governed-merge-queue.yml",
         "workflow_runs": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/governed-merge-queue.yml",
         "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/governed-merge-queue.yml",
-        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/runtime_merge_queue_gate.py"
+        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/runtime_merge_queue_gate.py",
+        "deep_link_type": "workflow_list"
       }
     },
     {
@@ -84,7 +88,8 @@
         "workflow": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/preview-environment-contract.yml",
         "workflow_runs": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/preview-environment-contract.yml",
         "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/preview-environment-contract.yml",
-        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/.github/workflows/preview-environment-contract.yml"
+        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/.github/workflows/preview-environment-contract.yml",
+        "deep_link_type": "workflow_list"
       }
     },
     {
@@ -107,7 +112,8 @@
         "workflow": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/governed-pr-automation.yml",
         "workflow_runs": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/governed-pr-automation.yml",
         "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/governed-pr-automation.yml",
-        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/governed_pr_increment_gate.py"
+        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/governed_pr_increment_gate.py",
+        "deep_link_type": "workflow_list"
       }
     },
     {
@@ -130,8 +136,9 @@
       "links": {
         "workflow": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/predictive-regression-guard.yml",
         "workflow_runs": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/predictive-regression-guard.yml",
-        "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/predictive-regression-guard.yml",
-        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/predict_operational_regression.py"
+        "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/28306826456",
+        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/predict_operational_regression.py",
+        "deep_link_type": "workflow_run"
       }
     },
     {
@@ -154,8 +161,9 @@
       "links": {
         "workflow": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
         "workflow_runs": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
-        "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
-        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/build_continuous_trilha_d_monitoring.py"
+        "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/28306826456",
+        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/build_continuous_trilha_d_monitoring.py",
+        "deep_link_type": "workflow_run"
       }
     },
     {
@@ -177,7 +185,8 @@
         "workflow": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/pr-evidence-gate.yml",
         "workflow_runs": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/pr-evidence-gate.yml",
         "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/pr-evidence-gate.yml",
-        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/.github/workflows/pr-evidence-gate.yml"
+        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/.github/workflows/pr-evidence-gate.yml",
+        "deep_link_type": "workflow_list"
       }
     }
   ],
@@ -196,6 +205,6 @@
       "drilldown_fields",
       "latest_run"
     ],
-    "refresh_strategy": "workflow_runs_deep_links_enabled"
+    "refresh_strategy": "workflow_run_deep_links_enabled"
   }
 }

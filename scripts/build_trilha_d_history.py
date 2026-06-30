@@ -330,6 +330,41 @@ def governance_deep_links_surface_ready(repo_root: Path | None = None) -> bool:
     )
 
 
+def governance_workflow_deep_links_surface_ready(repo_root: Path | None = None) -> bool:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
+    index_html = root / "docs/ops-dashboard/index.html"
+    monitoramento_view = root / "frontend/src/views/MonitoramentoOperacionalView.vue"
+    governance_index = root / "docs/ops-dashboard/data/governance-evidence-index.json"
+    if not all(path.exists() for path in (workflow, index_html, monitoramento_view, governance_index)):
+        return False
+    workflow_text = workflow.read_text(encoding="utf-8")
+    html_text = index_html.read_text(encoding="utf-8")
+    view_text = monitoramento_view.read_text(encoding="utf-8")
+    required_markers = (
+        "Atualizar deep links de governança",
+        "build_governance_evidence_index.py",
+        "governance-deep-links-enabled",
+        "governance_deep_links_enabled",
+        "--github-run-id",
+    )
+    if not all(marker in workflow_text or marker in html_text or marker in view_text for marker in required_markers):
+        return False
+    try:
+        payload = json.loads(governance_index.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    if not payload.get("summary", {}).get("governance_deep_links_enabled"):
+        return False
+    evidence = payload.get("evidence") or []
+    resolved = sum(
+        1
+        for item in evidence
+        if isinstance((item.get("links") or {}).get("latest_run"), str) and "/actions/runs/" in item["links"]["latest_run"]
+    )
+    return resolved >= 2
+
+
 def artifact_ingestion_surface_ready(repo_root: Path | None = None) -> bool:
     root = repo_root or Path(__file__).resolve().parents[1]
     workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
@@ -382,7 +417,7 @@ def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None =
         return NEXT_INCREMENT_AFTER_PARETO_DASHBOARD
     if not coverage_targeted_critical_paths_ready(repo_root):
         return NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD
-    if not governance_deep_links_surface_ready(repo_root):
+    if not governance_workflow_deep_links_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
     if not trilha_d_history_dashboard_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS
@@ -394,7 +429,7 @@ def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None =
         return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
     if not coverage_targeted_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
-    return NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
 
 
 def build_payload(
@@ -430,6 +465,7 @@ def build_payload(
                 artifact_ingestion and continuous_trilha_d_monitoring_surface_ready()
             ),
             "coverage_targeted_ready": artifact_ingestion and coverage_targeted_surface_ready(),
+            "governance_deep_links_enabled": artifact_ingestion and governance_workflow_deep_links_surface_ready(),
         },
         "links": {
             "actions": workflow_runs_url(),

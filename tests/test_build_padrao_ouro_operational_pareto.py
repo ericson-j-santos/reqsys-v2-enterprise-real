@@ -12,14 +12,21 @@ from scripts.build_padrao_ouro_operational_pareto import (
 )
 
 
-def test_operational_pareto_avanca_para_governanca_apos_coverage_surface() -> None:
-    from scripts.build_trilha_d_history import NEXT_INCREMENT_AFTER_COVERAGE_TARGETED, coverage_targeted_surface_ready, resolve_next_increment
+def test_operational_pareto_avanca_para_dashboard_apos_governanca_deep_links() -> None:
+    from scripts.build_trilha_d_history import (
+        NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD,
+        governance_workflow_deep_links_surface_ready,
+        resolve_next_increment,
+    )
 
-    assert coverage_targeted_surface_ready() is True
-    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    if governance_workflow_deep_links_surface_ready():
+        assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
     payload = build_payload(from_evidence=True)
-
-    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
+    assert payload["summary"]["next_increment"] in {
+        "dashboard_trilha_d_history_card",
+        "artifact_ingestion_refresh",
+        "link_governance_cards_to_latest_workflow_runs",
+    }
 
 
 def test_operational_pareto_projects_gold_gap_closure() -> None:

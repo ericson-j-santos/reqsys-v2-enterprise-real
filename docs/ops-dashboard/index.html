@@ -141,6 +141,7 @@
         <div><div class="kpi-label">Score governança</div><div id="gov-evidence-score" class="kpi-value">-</div></div>
         <div><div class="kpi-label">Status geral</div><div id="gov-evidence-status" class="kpi-value">-</div></div>
         <div><div class="kpi-label">Capacidades prontas</div><div id="gov-evidence-ready" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Deep links governança</div><div id="governance-deep-links-enabled" class="kpi-value">-</div></div>
         <div><div class="kpi-label">Próximo incremento</div><div id="gov-evidence-next" class="small">-</div></div>
       </div>
       <table>
@@ -888,6 +889,10 @@
       document.getElementById('gov-evidence-status').innerHTML = `<span class="status ${statusClass(payload.overall_status)}">${payload.overall_status || 'unknown'}</span>`;
       const summary = payload.summary || {};
       document.getElementById('gov-evidence-ready').textContent = `${summary.dashboard_ready_capabilities ?? 0}/${summary.implemented_capabilities ?? 0}`;
+      const deepLinksEnabled = Boolean(summary.governance_deep_links_enabled);
+      document.getElementById('governance-deep-links-enabled').innerHTML = deepLinksEnabled
+        ? `<span class="status passed">${summary.workflow_run_deep_links_resolved ?? 0} resolvidos</span>`
+        : '<span class="status warning">pendente</span>';
       document.getElementById('gov-evidence-next').textContent = summary.next_increment || '-';
 
       const body = document.getElementById('governance-evidence-cards');
@@ -899,8 +904,9 @@
         evidence.forEach((item) => {
           const tr = document.createElement('tr');
           const latestRun = item.links?.latest_run || item.links?.workflow_runs || '';
+          const runLabel = latestRun.includes('/actions/runs/') ? 'Ver execução' : 'Ver workflow runs';
           const latestRunCell = latestRun
-            ? `<a href="${latestRun}" target="_blank" rel="noopener noreferrer">Ver workflow runs</a>`
+            ? `<a href="${latestRun}" target="_blank" rel="noopener noreferrer">${runLabel}</a>`
             : '<span class="small">-</span>';
           tr.innerHTML = `
             <td>${item.title || item.id || '-'}</td>

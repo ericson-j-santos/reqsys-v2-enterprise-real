@@ -168,6 +168,16 @@
             <OperationalMetricCard label="Próximo incremento" :value="governanceResumo.nextIncrement" semaforo="amarelo" :clickable="false" />
           </v-col>
         </v-row>
+        <v-alert
+          v-if="governanceResumo.governanceDeepLinksEnabled"
+          type="success"
+          variant="tonal"
+          density="compact"
+          class="mt-2"
+          data-testid="governance-deep-links-enabled"
+        >
+          Deep links de workflow runs habilitados ({{ governanceResumo.workflowRunDeepLinksResolved }} resolvidos).
+        </v-alert>
 
         <div class="analitico mt-4">
           <v-table density="compact">
@@ -191,7 +201,7 @@
                     rel="noopener noreferrer"
                     class="governance-run-link"
                   >
-                    Ver workflow runs
+                    {{ item.links?.deep_link_type === 'workflow_run' || (item.links?.latest_run || '').includes('/actions/runs/') ? 'Ver execução' : 'Ver workflow runs' }}
                   </a>
                   <span v-else class="small text-medium-emphasis">-</span>
                 </td>
@@ -518,6 +528,8 @@ const governanceResumo = computed(() => {
     status: governanceSection.value?.items?.overall_status ?? governanceEvidence.value?.overall_status ?? 'desconhecido',
     dashboardReady: `${summary.dashboard_ready_capabilities ?? 0}/${summary.implemented_capabilities ?? 0}`,
     nextIncrement: summary.next_increment || 'n/a',
+    governanceDeepLinksEnabled: Boolean(summary.governance_deep_links_enabled),
+    workflowRunDeepLinksResolved: summary.workflow_run_deep_links_resolved ?? 0,
   }
 })
 const governanceEvidenceFiltrada = computed(() => {
