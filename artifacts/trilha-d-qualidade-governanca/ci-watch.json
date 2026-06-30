@@ -1,0 +1,41 @@
+{
+  "dimension": "ci-watch",
+  "status": "passed",
+  "score": 100.0,
+  "duration_seconds": 0.03,
+  "summary": "estrutura local do PR CI Watch validada",
+  "details": {
+    "checks": [
+      {
+        "file": ".github/workflows/ci.yml",
+        "exists": true
+      },
+      {
+        "file": ".github/workflows/pr-ci-watch.yml",
+        "exists": true
+      },
+      {
+        "file": "scripts/pr_ci_watch.py",
+        "exists": true
+      },
+      {
+        "name": "pr_ci_watch_compile",
+        "status": "passed"
+      },
+      {
+        "marker": "concurrency:",
+        "found": true
+      },
+      {
+        "marker": "exclude-run-id",
+        "found": true
+      },
+      {
+        "marker": "pr-ci-watch.json",
+        "found": true
+      }
+    ]
+  },
+  "blockers": [],
+  "recommendations": []
+}

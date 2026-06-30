@@ -116,6 +116,13 @@ def refresh_artifacts(
     governance_main(gov_args)
     refreshed.append(str(governance_path))
 
+    from scripts.build_trilha_d_history import load_history_from_output, write_payload
+
+    history = load_history_from_output(history_path)
+    write_payload(str(history_path), history=history, artifact_ingestion=True)
+
+    pareto_main(["--output", str(repo_root / DEFAULT_PARETO), "--trilha-d-history", str(history_path)])
+
     if not skip_merge_readiness and merge_readiness_report and merge_readiness_report.exists():
         from scripts.build_merge_readiness_history import main as merge_main
 

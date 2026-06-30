@@ -1,38 +1,38 @@
 {
   "schema_version": "1.1.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T21:21:40.839249Z",
+  "generated_at": "2026-06-30T21:40:28.192490Z",
   "state": "green",
   "strategy": "pareto_operational_gold_base",
-  "current_score": 99.27,
+  "current_score": 99.25,
   "target_score": 98.0,
   "gold_gap": 0.0,
-  "projected_score_after_recommended": 100.0,
+  "projected_score_after_recommended": 99.25,
   "projected_gap_after_recommended": 0.0,
-  "statistical_confidence": 0.7,
+  "statistical_confidence": 1.0,
   "dimension_signals": {
     "tests": 100.0,
-    "coverage": 95.6,
+    "coverage": 95.52,
     "mutation": 100.0,
     "contract": 100.0,
     "schema": 100.0,
     "ci-watch": 100.0
   },
   "dimension_gaps": {
-    "coverage": 4.4
+    "coverage": 4.48
   },
   "dominant_bottleneck": {
     "dimension": "coverage",
-    "score": 95.6,
-    "gap_to_100": 4.4,
+    "score": 95.52,
+    "gap_to_100": 4.48,
     "share_of_trilha_d_remaining_gap": 1.0
   },
   "summary": {
-    "actions_evaluated": 1,
-    "recommended_now": 1,
-    "expected_gain_now": 2.1,
+    "actions_evaluated": 0,
+    "recommended_now": 0,
+    "expected_gain_now": 0,
     "pareto_rule": "ações até 80% do ganho esperado acumulado (80/20)",
-    "next_increment": "artifact_ingestion_refresh",
+    "next_increment": "continuous_trilha_d_monitoring",
     "evidence_source": "trilha_d_history",
     "consolidation_mode": false
   },
@@ -41,31 +41,7 @@
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
     "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/build_padrao_ouro_operational_pareto.py"
   },
-  "ranked_actions": [
-    {
-      "id": "artifact_ingestion_refresh",
-      "title": "Automatizar refresh do histórico por artifact",
-      "lane": "governance-automation",
-      "dimension": "evidence-refresh",
-      "target_score": 85.0,
-      "fixed_gain": 2.1,
-      "effort_points": 5,
-      "risk": "medium",
-      "confidence": 0.7,
-      "why_now": "reduz manutenção manual e aumenta confiabilidade temporal",
-      "next_artifacts": [
-        "scripts/build_trilha_d_history.py",
-        ".github/workflows/trilha-d-qualidade-governanca.yml"
-      ],
-      "active_when": "artifact_ingestion_pending",
-      "current_score": 60.0,
-      "expected_score_gain": 2.1,
-      "pareto_score": 24.11,
-      "rank": 1,
-      "cumulative_expected_gain_pct": 100.0,
-      "recommended_now": true
-    }
-  ],
+  "ranked_actions": [],
   "runtime_dashboard_contract": {
     "card_fields": [
       "state",
