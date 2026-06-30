@@ -282,3 +282,28 @@ def test_executor_governado_bloqueia_componente_desconhecido():
     assert decisao.permitido is False
     assert decisao.estado == 'bloqueado_por_politica'
     assert decisao.politica_aplicada == 'AOP-RUN-UNKNOWN-COMPONENT-001'
+
+
+def test_classificar_estado_por_score_bandas():
+    from app.core.runtime_remediation import _classificar_estado_por_score
+
+    assert _classificar_estado_por_score(90) == 'saudavel'
+    assert _classificar_estado_por_score(70) == 'degradado'
+    assert _classificar_estado_por_score(40) == 'critico'
+    assert _classificar_estado_por_score(0) == 'desconhecido'
+
+
+def test_avaliar_remediacao_bloqueia_restart_em_dry_run():
+    health = criar_health_snapshot_base('corr-health', 'testes')
+    request = RemediationRequest(
+        codigo_acao='AOP-ACT-003',
+        componente='auto_remediacao_runtime',
+        tipo='restart_controlado',
+        motivo='restart simulado',
+        dry_run=True,
+    )
+
+    decisao = avaliar_remediacao(request, health, 'corr-health')
+
+    assert decisao.permitido is False
+    assert decisao.politica_aplicada == 'AOP-RUN-DESTRUCTIVE-BLOCK-001'

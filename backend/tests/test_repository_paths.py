@@ -41,11 +41,11 @@ def test_resolve_repo_file_allows_missing_file_when_not_required():
 
 
 def test_resolve_repo_file_rejeita_partes_vazias():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='Informe ao menos uma parte de caminho'):
         resolve_repo_file()
 
 
-def test_get_repository_root_via_sentinela_pyproject(tmp_path, monkeypatch):
+def test_get_repository_root_via_sentinela_pyproject(tmp_path):
     fake_repo = tmp_path / 'fake-repo'
     fake_repo.mkdir()
     (fake_repo / 'pyproject.toml').write_text('[project]\nname="reqsys"\n', encoding='utf-8')
@@ -65,3 +65,8 @@ def test_get_repository_root_via_git_e_backend(tmp_path):
     resolved = get_repository_root(start=fake_repo / 'backend')
 
     assert resolved == fake_repo
+
+
+def test_get_repository_root_falha_sem_sentinelas(tmp_path):
+    with pytest.raises(AssertionError, match='Nao foi possivel resolver a raiz do repositorio'):
+        get_repository_root(start=tmp_path)

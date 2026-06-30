@@ -116,3 +116,76 @@ def test_govbi_funcionamento_retorna_cem_por_cento():
     assert dados['percentual'] == 100
     assert dados['aprovados'] == dados['total']
     assert len(dados['resultados']) >= 5
+
+
+def test_govbi_perguntas_normaliza_resposta_externa_com_sucesso(monkeypatch):
+    class ClientComSucesso:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, *args, **kwargs):
+            request = httpx.Request('POST', 'https://govbi-ia-hom.fly.dev/api/v1/perguntas')
+            return httpx.Response(
+                200,
+                request=request,
+                json={
+                    'statusFluxo': 'CONCLUIDO',
+                    'resultado': {'colunas': ['total'], 'linhas': [{'total': 10}]},
+                    'sqlGerado': 'SELECT 1',
+                },
+            )
+
+    import app.api.govbi as govbi
+
+    monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientComSucesso)
+
+    client = TestClient(app)
+    response = client.post(
+        '/api/govbi/perguntas',
+        json={'pergunta': 'Quantas propostas por mês?', 'formatoResposta': 'tabela', 'exibirSql': True},
+        headers={'X-Correlation-Id': 'corr-govbi-ok'},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data['statusFluxo'] == 'CONCLUIDO'
+    assert data['correlationId'] == 'corr-govbi-ok'
+    assert data['resultado']['colunas'] == ['total']
+
+
+def test_govbi_perguntas_http_400_sem_json_cai_em_fallback(monkeypatch):
+    class ClientCom400SemJson:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, *args, **kwargs):
+            request = httpx.Request('POST', 'https://govbi-ia-hom.fly.dev/api/v1/perguntas')
+            response = httpx.Response(400, request=request, content=b'corpo-invalido')
+            raise httpx.HTTPStatusError('bad request', request=request, response=response)
+
+    import app.api.govbi as govbi
+
+    monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientCom400SemJson)
+
+    client = TestClient(app)
+    response = client.post(
+        '/api/govbi/perguntas',
+        json={'pergunta': 'Consulta com resposta inválida', 'formatoResposta': 'tabela', 'exibirSql': True},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data['statusFluxo'] == 'MODO_DEGRADADO'
+    assert 'HTTP 400' in data['resultado']['linhas'][1]['valor']
