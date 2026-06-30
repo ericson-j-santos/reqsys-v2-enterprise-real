@@ -205,7 +205,8 @@ jobs:
             flyctl deploy --remote-only \
               --config "$config" \
               --app "$FLY_APP" \
-              --build-arg "GITHUB_SHA=${{ github.sha }}" 2>&1 | tee "$deploy_log"
+              --build-arg "GITHUB_SHA=${{ github.sha }}" \
+              --build-arg "BUILD_NONCE=${{ github.run_id }}-${{ github.run_attempt }}" 2>&1 | tee "$deploy_log"
             status="${PIPESTATUS[0]}"
             set -e
             echo "::endgroup::"

@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -151,6 +152,11 @@ def _runtime_payload(status: str, check: str) -> dict[str, str]:
 
 
 def _build_sha() -> str:
+    stamp_path = Path('/app/.build_sha')
+    if stamp_path.exists():
+        first_line = stamp_path.read_text(encoding='utf-8').splitlines()[0].strip()
+        if first_line and first_line != 'unknown':
+            return first_line
     github_sha = (os.getenv('GITHUB_SHA') or '').strip()
     if github_sha and github_sha != 'unknown':
         return github_sha

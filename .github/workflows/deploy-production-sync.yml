@@ -181,7 +181,8 @@ jobs:
             flyctl deploy --remote-only \
               --config fly.toml \
               --app reqsys-api \
-              --build-arg "GITHUB_SHA=${{ github.sha }}" 2>&1 | tee "$deploy_log"
+              --build-arg "GITHUB_SHA=${{ github.sha }}" \
+              --build-arg "BUILD_NONCE=${{ github.run_id }}-${{ github.run_attempt }}" 2>&1 | tee "$deploy_log"
             status="${PIPESTATUS[0]}"
             set -e
             echo "::endgroup::"
@@ -196,6 +197,17 @@ jobs:
             fi
             sleep 60
           done
+      - name: Verificar build_sha publicado
+        run: |
+          set -euo pipefail
+          python scripts/verify_deploy_build_sha.py \
+            --base-url "$PUBLIC_API_URL" \
+            --expected-sha "${{ github.sha }}" \
+            --max-attempts 12 \
+            --delay-seconds 15 \
+            --output deploy-build-sha-verification.json
+        env:
+          PUBLIC_API_URL: https://reqsys-api.fly.dev
 
   deploy-frontend:
     name: Deploy frontend produção

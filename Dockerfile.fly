@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 
 ARG GITHUB_SHA=unknown
+ARG BUILD_NONCE=0
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PORT=8000 \
@@ -22,6 +23,10 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY backend/app /app/app
 COPY config/external-sources-registry.json /config/external-sources-registry.json
 COPY scripts/fly_boot.sh /app/fly_boot.sh
+
+# Cache-bust: garante rebuild do stamp mesmo quando o código backend não mudou.
+RUN echo "${GITHUB_SHA}" > /app/.build_sha \
+    && echo "${BUILD_NONCE}" >> /app/.build_sha
 
 RUN chmod +x /app/fly_boot.sh
 
