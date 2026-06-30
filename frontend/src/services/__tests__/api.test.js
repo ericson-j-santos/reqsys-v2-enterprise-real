@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { api, definirCorrelationIdSessao, obterCorrelationIdSessao } from '../api'
+import apiDefault, { api, definirCorrelationIdSessao, obterCorrelationIdSessao } from '../api'
 
 // Executa manualmente o interceptor de request configurado em services/api.js,
 // validando os headers que ele injeta.
@@ -16,6 +16,10 @@ describe('services/api — interceptor de request', () => {
 
   it('usa /api como baseURL padrão', () => {
     expect(api.defaults.baseURL).toBe('/api')
+  })
+
+  it('mantém export default compatível com imports legados', () => {
+    expect(apiDefault).toBe(api)
   })
 
   it('injeta um X-Correlation-Id em toda requisição', () => {
