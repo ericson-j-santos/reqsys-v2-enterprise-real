@@ -162,6 +162,16 @@ jobs:
           print(f"app_env={cfg['app_env']}")
           PY
 
+      - name: Garantir demo login em desenvolvimento
+        if: matrix.target_environment == 'dev'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          flyctl secrets set ALLOW_DEMO_LOGIN=true -a "${{ steps.env.outputs.fly_app }}"
+          printf '%s\n' '{"success": true, "allow_demo_login": true, "fly_app": "'"${{ steps.env.outputs.fly_app }}"'"}' \
+            > "fly-demo-login-report-${{ matrix.target_environment }}.json"
+
       - name: Configurar secrets Azure (homologação)
         if: matrix.target_environment == 'hml'
         env:
@@ -271,6 +281,7 @@ jobs:
             publication-sync-${{ matrix.target_environment }}.json
             login-validation-${{ matrix.target_environment }}.json
             fly-auth-azure-report-${{ matrix.target_environment }}.json
+            fly-demo-login-report-${{ matrix.target_environment }}.json
           if-no-files-found: warn
 
   runtime-smoke-readonly:
