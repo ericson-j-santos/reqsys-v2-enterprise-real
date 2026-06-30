@@ -24,6 +24,8 @@ NEXT_INCREMENT_AFTER_COVERAGE_TARGETED = "link_governance_cards_to_latest_workfl
 NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS = "dashboard_trilha_d_history_card"
 NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD = "artifact_ingestion_refresh"
 NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION = "continuous_trilha_d_monitoring"
+NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING = "coverage_targeted_tests"
+CONTINUOUS_MONITORING_JSON = "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
 TRILHA_D_WORKFLOW_FILE = "trilha-d-qualidade-governanca.yml"
 COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
     "backend/tests/test_hub_lowcode_service_critical_paths.py",
@@ -316,6 +318,30 @@ def artifact_ingestion_surface_ready(repo_root: Path | None = None) -> bool:
     return "--ingest-report" in workflow_text and "artifact-ingestion-enabled" in html_text
 
 
+def continuous_trilha_d_monitoring_surface_ready(repo_root: Path | None = None) -> bool:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
+    index_html = root / "docs/ops-dashboard/index.html"
+    monitoramento_view = root / "frontend/src/views/MonitoramentoOperacionalView.vue"
+    monitoring_json = root / CONTINUOUS_MONITORING_JSON
+    build_script = root / "scripts/build_continuous_trilha_d_monitoring.py"
+    if not all(path.exists() for path in (workflow, index_html, monitoramento_view, monitoring_json, build_script)):
+        return False
+    workflow_text = workflow.read_text(encoding="utf-8")
+    html_text = index_html.read_text(encoding="utf-8")
+    view_text = monitoramento_view.read_text(encoding="utf-8")
+    required_markers = (
+        "Atualizar monitoramento contínuo Trilha D",
+        "build_continuous_trilha_d_monitoring.py",
+        "continuous-trilha-d-monitoring-card",
+        "continuous_monitoring_enabled",
+        "continuous-trilha-d-monitoring.json",
+    )
+    if not all(marker in workflow_text or marker in html_text or marker in view_text for marker in required_markers):
+        return False
+    return "continuous-monitoring-enabled" in html_text and "continuous-trilha-d-monitoring.json" in workflow_text
+
+
 def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None = None) -> str:
     if not ops_dashboard_pareto_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_INGESTION
@@ -329,9 +355,11 @@ def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None =
         return NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS
     if not artifact_ingestion:
         return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
-    if artifact_ingestion_surface_ready(repo_root):
-        return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
-    return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+    if not artifact_ingestion_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+    if continuous_trilha_d_monitoring_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
+    return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
 
 
 def build_payload(
@@ -363,6 +391,9 @@ def build_payload(
             "failed_samples": sum(1 for item in samples if item.get("state") == "failed"),
             "next_increment": resolve_next_increment(artifact_ingestion=artifact_ingestion),
             "artifact_ingestion_enabled": artifact_ingestion,
+            "continuous_monitoring_enabled": (
+                artifact_ingestion and continuous_trilha_d_monitoring_surface_ready()
+            ),
         },
         "links": {
             "actions": workflow_runs_url(),

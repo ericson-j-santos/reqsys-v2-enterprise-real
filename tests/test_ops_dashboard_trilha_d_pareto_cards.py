@@ -44,20 +44,35 @@ REQUIRED_SECTION_IDS = [
     "trilha-d-history-card",
     "operational-pareto-card",
     "predictive-regression-card",
+    "continuous-trilha-d-monitoring-card",
 ]
 
 REQUIRED_FUNCTIONS = [
     "renderTrilhaDHistory",
     "renderOperationalPareto",
     "renderPredictiveRegressionGate",
+    "renderContinuousTrilhaDMonitoring",
     "renderOperationalIntelligenceQuickLinks",
     "trilha-d-history.json",
     "padrao-ouro-operational-pareto.json",
     "predictive-regression-gate.json",
+    "continuous-trilha-d-monitoring.json",
 ]
 
 NAV_INDEX = ROOT / "docs/ops-dashboard/operational-navigation-index.json"
 PREDICTIVE_DATA = ROOT / "docs/ops-dashboard/data/predictive-regression-gate.json"
+CONTINUOUS_MONITORING_DATA = ROOT / "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
+
+CONTINUOUS_MONITORING_DOM_IDS = [
+    "continuous-monitoring-state",
+    "continuous-monitoring-enabled",
+    "continuous-monitoring-regression-alert",
+    "continuous-monitoring-alerts-count",
+    "continuous-monitoring-signals",
+    "continuous-monitoring-alerts-rows",
+    "continuous-monitoring-links",
+    "continuous-monitoring-details",
+]
 
 
 def test_ops_dashboard_exposes_trilha_d_history_card() -> None:
@@ -76,6 +91,12 @@ def test_ops_dashboard_exposes_predictive_regression_card() -> None:
     text = INDEX_HTML.read_text(encoding="utf-8")
     for dom_id in PREDICTIVE_DOM_IDS:
         assert f'id="{dom_id}"' in text, f"missing predictive dom id: {dom_id}"
+
+
+def test_ops_dashboard_exposes_continuous_monitoring_card() -> None:
+    text = INDEX_HTML.read_text(encoding="utf-8")
+    for dom_id in CONTINUOUS_MONITORING_DOM_IDS:
+        assert f'id="{dom_id}"' in text, f"missing continuous monitoring dom id: {dom_id}"
 
 
 def test_ops_dashboard_wires_trilha_d_and_pareto_renderers() -> None:
@@ -98,10 +119,22 @@ def test_operational_navigation_index_links_trilha_d_and_pareto() -> None:
     assert "trilha_d_history_dashboard" in link_ids
     assert "operational_pareto_dashboard" in link_ids
     assert "predictive_regression_dashboard" in link_ids
+    assert "continuous_trilha_d_monitoring_dashboard" in link_ids
     by_id = {item["id"]: item for item in payload["links"]}
     assert by_id["trilha_d_history_dashboard"]["href"] == "./index.html#trilha-d-history-card"
     assert by_id["operational_pareto_dashboard"]["href"] == "./index.html#operational-pareto-card"
     assert by_id["predictive_regression_dashboard"]["href"] == "./index.html#predictive-regression-card"
+    assert by_id["continuous_trilha_d_monitoring_dashboard"]["href"] == "./index.html#continuous-trilha-d-monitoring-card"
+
+
+def test_continuous_trilha_d_monitoring_artifact_contract() -> None:
+    import json
+
+    assert CONTINUOUS_MONITORING_DATA.exists(), "continuous-trilha-d-monitoring.json must be versioned for dashboard"
+    payload = json.loads(CONTINUOUS_MONITORING_DATA.read_text(encoding="utf-8"))
+    assert payload.get("schema_version")
+    assert payload.get("state") is not None
+    assert "links" in payload
 
 
 def test_predictive_regression_gate_artifact_contract() -> None:

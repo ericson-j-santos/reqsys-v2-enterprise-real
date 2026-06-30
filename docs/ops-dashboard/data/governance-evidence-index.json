@@ -1,14 +1,14 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T13:01:54.538375+00:00",
+  "generated_at": "2026-06-30T13:11:21.497756+00:00",
   "overall_status": "green",
   "governance_evidence_score": 100,
   "summary": {
-    "total_capabilities": 6,
-    "implemented_capabilities": 6,
-    "dashboard_ready_capabilities": 6,
-    "next_increment": "continuous_trilha_d_monitoring"
+    "total_capabilities": 7,
+    "implemented_capabilities": 7,
+    "dashboard_ready_capabilities": 7,
+    "next_increment": "coverage_targeted_tests"
   },
   "links": {
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
@@ -132,6 +132,30 @@
         "workflow_runs": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/predictive-regression-guard.yml",
         "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/predictive-regression-guard.yml",
         "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/predict_operational_regression.py"
+      }
+    },
+    {
+      "id": "continuous_trilha_d_monitoring",
+      "title": "Continuous Trilha D Monitoring",
+      "workflow": "Trilha D — Qualidade e Governança",
+      "script": "scripts/build_continuous_trilha_d_monitoring.py",
+      "artifact": "continuous-trilha-d-monitoring-evidence",
+      "json_path": "artifacts/trilha-d-qualidade-governanca/continuous-trilha-d-monitoring.json",
+      "status": "dry_run",
+      "dashboard_ready": true,
+      "drilldown_fields": [
+        "state",
+        "monitoring_enabled",
+        "regression_alert",
+        "alerts_active",
+        "alerts",
+        "signals"
+      ],
+      "links": {
+        "workflow": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
+        "workflow_runs": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
+        "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
+        "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/build_continuous_trilha_d_monitoring.py"
       }
     },
     {

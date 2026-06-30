@@ -16,6 +16,7 @@ REQUIRED_LINK_IDS = {
     "trilha_d_history_dashboard",
     "operational_pareto_dashboard",
     "predictive_regression_dashboard",
+    "continuous_trilha_d_monitoring_dashboard",
     "executive_brief_dashboard",
     "operational_runtime_governance",
     "operational_evidence_hub",
@@ -29,6 +30,7 @@ REQUIRED_DEEP_LINK_HREFS = {
     "trilha_d_history_dashboard": "./index.html#trilha-d-history-card",
     "operational_pareto_dashboard": "./index.html#operational-pareto-card",
     "predictive_regression_dashboard": "./index.html#predictive-regression-card",
+    "continuous_trilha_d_monitoring_dashboard": "./index.html#continuous-trilha-d-monitoring-card",
 }
 
 REQUIRED_ARTIFACT_HREFS = {

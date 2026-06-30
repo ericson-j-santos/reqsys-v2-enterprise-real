@@ -284,6 +284,76 @@
       </v-card-text>
     </v-card>
 
+    <v-card class="painel trilha-d-monitoring mt-4" elevation="0" :data-section="secaoAtiva === 'trilha-d-monitoring' ? 'active' : undefined">
+      <v-card-title id="titulo-trilha-d-monitoring">Monitoramento contínuo Trilha D</v-card-title>
+      <v-card-subtitle>Alertas e regressão automática consumindo continuous-trilha-d-monitoring.json.</v-card-subtitle>
+      <v-card-text>
+        <v-row>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Estado"
+              :value="continuousMonitoringResumo.state"
+              :semaforo="continuousMonitoringResumo.state"
+              :clickable="false"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Monitoramento"
+              :value="continuousMonitoringResumo.monitoringEnabled"
+              :semaforo="continuousMonitoringResumo.monitoringEnabled === 'ativo' ? 'verde' : 'amarelo'"
+              :clickable="false"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Alerta regressão"
+              :value="continuousMonitoringResumo.regressionAlert"
+              :semaforo="continuousMonitoringResumo.regressionAlert === 'sim' ? 'vermelho' : 'verde'"
+              :clickable="false"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Alertas ativos"
+              :value="continuousMonitoringResumo.alertsActive"
+              :semaforo="Number(continuousMonitoringResumo.alertsActive) > 0 ? 'amarelo' : 'verde'"
+              :clickable="false"
+            />
+          </v-col>
+        </v-row>
+        <v-alert
+          v-if="continuousMonitoringResumo.continuous_monitoring_enabled"
+          type="success"
+          variant="tonal"
+          density="compact"
+          class="mt-3"
+          data-testid="continuous-monitoring-enabled"
+        >
+          Monitoramento contínuo habilitado via artifact ingestion.
+        </v-alert>
+        <v-table density="compact" class="mt-4" aria-label="Alertas monitoramento Trilha D">
+          <thead>
+            <tr>
+              <th>Severidade</th>
+              <th>Código</th>
+              <th>Mensagem</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="alert in continuousMonitoringAlertas" :key="alert.code">
+              <td><SemaforoChip :estado="estadoParaSemaforo(alert.severity)" :label="alert.severity || 'n/a'" /></td>
+              <td>{{ alert.code }}</td>
+              <td>{{ alert.message }}</td>
+            </tr>
+            <tr v-if="!continuousMonitoringAlertas.length">
+              <td colspan="3" class="small text-medium-emphasis">Nenhum alerta ativo.</td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card-text>
+    </v-card>
+
     <v-card class="filtros mt-4" elevation="0">
       <v-card-title>Filtros do analítico</v-card-title>
       <v-card-text>
@@ -413,6 +483,7 @@ const opcoesSecao = [
   { title: 'Governança', value: 'governanca' },
   { title: 'Malha operacional', value: 'malha-operacional' },
   { title: 'Trilha D', value: 'trilha-d' },
+  { title: 'Monitoramento Trilha D', value: 'trilha-d-monitoring' },
 ]
 
 const filtrosAtivos = computed(() => normalizarFiltrosMonitoramento({
@@ -472,6 +543,18 @@ const trilhaDDimensoesFiltradas = computed(() => {
   return Object.fromEntries(Object.entries(trilhaDDimensoes.value).filter(([key]) => key === dimensao))
 })
 const trilhaDHistorico = computed(() => trilhaDItems.value.history || [])
+const continuousMonitoring = computed(() => runtimeDashboard.value?.continuous_trilha_d_monitoring || {})
+const continuousMonitoringResumo = computed(() => ({
+  state: continuousMonitoring.value.state ?? 'desconhecido',
+  monitoringEnabled: continuousMonitoring.value.monitoring_enabled ? 'ativo' : 'inativo',
+  regressionAlert: continuousMonitoring.value.regression_alert ? 'sim' : 'não',
+  alertsActive: continuousMonitoring.value.alerts_active ?? 0,
+  continuous_monitoring_enabled: Boolean(
+    continuousMonitoring.value.monitoring_enabled
+    || continuousMonitoring.value.summary?.continuous_monitoring_enabled,
+  ),
+}))
+const continuousMonitoringAlertas = computed(() => continuousMonitoring.value.alerts || [])
 const meshSection = computed(() => runtimeDashboard.value?.sections?.find((section) => section.id === 'operational-mesh-chain') || null)
 const meshItems = computed(() => meshSection.value?.items || {})
 const meshTimeline = computed(() => meshItems.value.timeline || [])

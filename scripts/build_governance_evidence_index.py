@@ -18,6 +18,7 @@ DEFAULT_OUTPUT = "docs/ops-dashboard/data/governance-evidence-index.json"
 NEXT_INCREMENT_AFTER_DEEP_LINKS = "dashboard_trilha_d_history_card"
 NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD = "artifact_ingestion_refresh"
 NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION = "continuous_trilha_d_monitoring"
+NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING = "coverage_targeted_tests"
 
 
 def resolve_governance_next_increment(repo_root: Path | None = None) -> str:
@@ -41,6 +42,17 @@ def resolve_governance_next_increment(repo_root: Path | None = None) -> str:
         return NEXT_INCREMENT_AFTER_DEEP_LINKS
     summary = payload.get("summary") or {}
     if summary.get("artifact_ingestion_enabled"):
+        index_html = root / "docs/ops-dashboard/index.html"
+        workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
+        monitoring_json = root / "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
+        if (
+            index_html.exists()
+            and workflow.exists()
+            and monitoring_json.exists()
+            and "continuous-monitoring-enabled" in index_html.read_text(encoding="utf-8")
+            and "build_continuous_trilha_d_monitoring.py" in workflow.read_text(encoding="utf-8")
+        ):
+            return NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
         return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
     next_increment = summary.get("next_increment")
     if next_increment == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION:
@@ -151,6 +163,28 @@ def evidence_items() -> list[dict[str, Any]]:
             "links": enrich_links(
                 "predictive-regression-guard.yml",
                 source=f"https://github.com/{REPO}/blob/main/scripts/predict_operational_regression.py",
+            ),
+        },
+        {
+            "id": "continuous_trilha_d_monitoring",
+            "title": "Continuous Trilha D Monitoring",
+            "workflow": "Trilha D — Qualidade e Governança",
+            "script": "scripts/build_continuous_trilha_d_monitoring.py",
+            "artifact": "continuous-trilha-d-monitoring-evidence",
+            "json_path": "artifacts/trilha-d-qualidade-governanca/continuous-trilha-d-monitoring.json",
+            "status": "dry_run",
+            "dashboard_ready": True,
+            "drilldown_fields": [
+                "state",
+                "monitoring_enabled",
+                "regression_alert",
+                "alerts_active",
+                "alerts",
+                "signals",
+            ],
+            "links": enrich_links(
+                "trilha-d-qualidade-governanca.yml",
+                source=f"https://github.com/{REPO}/blob/main/scripts/build_continuous_trilha_d_monitoring.py",
             ),
         },
         {

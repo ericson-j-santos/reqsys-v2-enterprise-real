@@ -16,6 +16,7 @@ on:
       - 'scripts/trilha_d_qualidade_governanca.py'
       - 'scripts/trilha_d_coverage_dimension.py'
       - 'scripts/build_trilha_d_history.py'
+      - 'scripts/build_continuous_trilha_d_monitoring.py'
       - 'scripts/predict_operational_regression.py'
       - 'docs/contracts/trilha-d-qualidade-governanca.schema.json'
       - 'docs/runbooks/trilha-d-qualidade-governanca.md'
@@ -31,6 +32,7 @@ on:
       - 'scripts/trilha_d_qualidade_governanca.py'
       - 'scripts/trilha_d_coverage_dimension.py'
       - 'scripts/build_trilha_d_history.py'
+      - 'scripts/build_continuous_trilha_d_monitoring.py'
       - 'scripts/predict_operational_regression.py'
       - 'docs/contracts/trilha-d-qualidade-governanca.schema.json'
       - 'docs/runbooks/trilha-d-qualidade-governanca.md'
@@ -246,6 +248,32 @@ jobs:
           mkdir -p artifacts/trilha-d-qualidade-governanca
           cp "${GATE_OUTPUT}" artifacts/trilha-d-qualidade-governanca/predict-operational-regression-gate.json
 
+      - name: Validar superfície monitoramento contínuo
+        if: always()
+        run: |
+          set -euo pipefail
+          python -m pytest tests/test_build_continuous_trilha_d_monitoring.py -q
+
+      - name: Atualizar monitoramento contínuo Trilha D
+        if: always()
+        run: |
+          set -euo pipefail
+          HISTORY="docs/ops-dashboard/data/trilha-d-history.json"
+          GATE_OUTPUT="docs/ops-dashboard/data/predictive-regression-gate.json"
+          MONITORING_OUTPUT="docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
+          if [[ ! -f "${HISTORY}" ]]; then
+            echo "::warning::Histórico Trilha D ausente; monitoramento contínuo ignorado."
+            exit 0
+          fi
+          args=(
+            --history-json "${HISTORY}"
+            --predictive-json "${GATE_OUTPUT}"
+            --output "${MONITORING_OUTPUT}"
+          )
+          python scripts/build_continuous_trilha_d_monitoring.py "${args[@]}"
+          mkdir -p artifacts/trilha-d-qualidade-governanca
+          cp "${MONITORING_OUTPUT}" artifacts/trilha-d-qualidade-governanca/continuous-trilha-d-monitoring.json
+
       - name: Publicar artifact consolidado
         if: always()
         uses: actions/upload-artifact@v4
@@ -256,6 +284,7 @@ jobs:
             docs/ops-dashboard/data/trilha-d-history.json
             docs/ops-dashboard/data/padrao-ouro-operational-pareto.json
             docs/ops-dashboard/data/predictive-regression-gate.json
+            docs/ops-dashboard/data/continuous-trilha-d-monitoring.json
           if-no-files-found: warn
           retention-days: 30
 
@@ -284,9 +313,11 @@ jobs:
           SRC_HISTORY="artifacts/trilha-d-ingest/docs/ops-dashboard/data/trilha-d-history.json"
           SRC_PARETO="artifacts/trilha-d-ingest/docs/ops-dashboard/data/padrao-ouro-operational-pareto.json"
           SRC_PREDICTIVE="artifacts/trilha-d-ingest/docs/ops-dashboard/data/predictive-regression-gate.json"
+          SRC_MONITORING="artifacts/trilha-d-ingest/docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
           DEST_HISTORY="docs/ops-dashboard/data/trilha-d-history.json"
           DEST_PARETO="docs/ops-dashboard/data/padrao-ouro-operational-pareto.json"
           DEST_PREDICTIVE="docs/ops-dashboard/data/predictive-regression-gate.json"
+          DEST_MONITORING="docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
           if [[ ! -f "${SRC_HISTORY}" ]]; then
             echo "Histórico não gerado neste run; nada a publicar."
             exit 0
@@ -304,6 +335,9 @@ jobs:
           if [[ -f "${SRC_PREDICTIVE}" ]]; then
             cp "${SRC_PREDICTIVE}" "${DEST_PREDICTIVE}"
           fi
+          if [[ -f "${SRC_MONITORING}" ]]; then
+            cp "${SRC_MONITORING}" "${DEST_MONITORING}"
+          fi
           git add "${DEST_HISTORY}"
           if [[ -f "${DEST_PARETO}" ]]; then
             git add "${DEST_PARETO}"
@@ -311,11 +345,14 @@ jobs:
           if [[ -f "${DEST_PREDICTIVE}" ]]; then
             git add "${DEST_PREDICTIVE}"
           fi
+          if [[ -f "${DEST_MONITORING}" ]]; then
+            git add "${DEST_MONITORING}"
+          fi
           if git diff --cached --quiet; then
-            echo "Histórico Trilha D, Pareto e gate preditivo já estão atualizados."
+            echo "Histórico Trilha D, Pareto, gate preditivo e monitoramento contínuo já estão atualizados."
             exit 0
           fi
-          git commit -m "chore(ops): atualizar trilha-d-history, pareto e gate preditivo via artifact ingestion"
+          git commit -m "chore(ops): atualizar trilha-d-history, pareto, gate preditivo e monitoramento contínuo via artifact ingestion"
           for attempt in 1 2 3; do
             if git pull --rebase origin main && git push origin HEAD:main; then
               echo "Histórico Trilha D publicado na main."

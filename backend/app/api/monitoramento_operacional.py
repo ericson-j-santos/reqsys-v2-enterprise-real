@@ -39,6 +39,11 @@ from app.services.trilha_d_history_index import (
     mapear_cards_trilha_d,
     mapear_secao_trilha_d,
 )
+from app.services.continuous_trilha_d_monitoring_index import (
+    carregar_continuous_trilha_d_monitoring_index,
+    mapear_cards_continuous_monitoring,
+    mapear_secao_continuous_monitoring,
+)
 
 router = APIRouter(tags=['Monitoramento Operacional'])
 logger = logging.getLogger(__name__)
@@ -159,6 +164,9 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
     trilha_d_index = carregar_trilha_d_history_index()
     trilha_d_cards = mapear_cards_trilha_d(trilha_d_index)
     trilha_d_section = mapear_secao_trilha_d(trilha_d_index)
+    continuous_monitoring_index = carregar_continuous_trilha_d_monitoring_index()
+    continuous_monitoring_cards = mapear_cards_continuous_monitoring(continuous_monitoring_index)
+    continuous_monitoring_section = mapear_secao_continuous_monitoring(continuous_monitoring_index)
     mesh_signal = carregar_operational_mesh_signal()
     mesh_cards = mapear_cards_operational_mesh(mesh_signal)
     mesh_section = mapear_secao_operational_mesh(mesh_signal)
@@ -257,10 +265,12 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
             },
             *governance_cards,
             *trilha_d_cards,
+            *continuous_monitoring_cards,
             *mesh_cards,
         ],
         'governance_evidence': governance_index,
         'trilha_d_history': trilha_d_index,
+        'continuous_trilha_d_monitoring': continuous_monitoring_index,
         'operational_mesh': mesh_signal,
         'cross_runtime_analytics': cross_runtime,
         'sections': [
@@ -354,6 +364,7 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
             },
             governance_section,
             trilha_d_section,
+            continuous_monitoring_section,
             mesh_section,
             {
                 'id': 'correlation-analytics',

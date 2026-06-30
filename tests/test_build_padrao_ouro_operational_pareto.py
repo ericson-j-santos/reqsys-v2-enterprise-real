@@ -12,14 +12,14 @@ from scripts.build_padrao_ouro_operational_pareto import (
 )
 
 
-def test_operational_pareto_prioriza_monitoramento_continuo_apos_ingestion() -> None:
-    from scripts.build_trilha_d_history import NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION, resolve_next_increment
+def test_operational_pareto_prioriza_coverage_apos_monitoramento_continuo() -> None:
+    from scripts.build_trilha_d_history import NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING, resolve_next_increment
 
-    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
     payload = build_payload(from_evidence=True)
 
-    assert payload["summary"]["next_increment"] == "continuous_trilha_d_monitoring"
-    assert payload["ranked_actions"][0]["id"] == "continuous_trilha_d_monitoring"
+    assert payload["summary"]["next_increment"] == "coverage_targeted_tests"
+    assert payload["ranked_actions"][0]["id"] == "coverage_targeted_tests"
 
 
 def test_operational_pareto_projects_gold_gap_closure() -> None:

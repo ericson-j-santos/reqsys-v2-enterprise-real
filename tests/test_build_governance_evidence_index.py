@@ -25,6 +25,7 @@ def test_build_payload_contains_core_evidence_items() -> None:
     assert "preview_environment" in evidence_ids
     assert "governed_pr_automation" in evidence_ids
     assert "predictive_regression" in evidence_ids
+    assert "continuous_trilha_d_monitoring" in evidence_ids
     assert "pr_evidence_gate" in evidence_ids
 
 
@@ -38,7 +39,9 @@ def test_build_payload_exposes_workflow_run_deep_links() -> None:
         assert "/actions/workflows/" in links["latest_run"]
 
     assert payload["summary"]["dashboard_ready_capabilities"] == payload["summary"]["total_capabilities"]
-    assert payload["summary"]["next_increment"] == "continuous_trilha_d_monitoring"
+    from scripts.build_governance_evidence_index import NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
+
+    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
 
 
 def test_write_payload_creates_valid_json(tmp_path: Path) -> None:
