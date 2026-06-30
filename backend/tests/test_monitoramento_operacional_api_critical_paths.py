@@ -143,3 +143,14 @@ def test_runtime_dashboard_expoe_merge_readiness_history():
     assert 'merge-readiness-history' in section_ids
     assert 'merge-readiness-history' in card_ids
     assert body.get('merge_readiness_history', {}).get('summary')
+
+
+def test_runtime_dashboard_expoe_continuous_trilha_d_monitoring_history():
+    response = client.get('/api/runtime/dashboard')
+    assert response.status_code == 200
+    body = response.json()['data']
+    section_ids = [section['id'] for section in body.get('sections') or []]
+    card_ids = [card['id'] for card in body.get('cards') or []]
+    assert 'continuous-trilha-d-monitoring-history' in section_ids
+    assert 'continuous-trilha-d-monitoring-history' in card_ids
+    assert body.get('continuous_trilha_d_monitoring_history', {}).get('summary')

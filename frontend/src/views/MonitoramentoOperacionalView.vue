@@ -382,6 +382,71 @@
     </v-card>
 
     <v-card
+      class="painel trilha-d-monitoring-history mt-4"
+      elevation="0"
+      :data-section="secaoAtiva === 'trilha-d-monitoring-history' ? 'active' : undefined"
+    >
+      <v-card-title id="titulo-trilha-d-monitoring-history">Monitoramento contínuo — histórico</v-card-title>
+      <v-card-subtitle>Tendência de alertas e estabilidade via continuous-trilha-d-monitoring-history.json.</v-card-subtitle>
+      <v-card-text>
+        <v-row>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Estado histórico"
+              :value="continuousMonitoringHistoryResumo.state"
+              :semaforo="continuousMonitoringHistoryResumo.state"
+              :clickable="false"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Taxa green"
+              :value="continuousMonitoringHistoryResumo.greenRate"
+              :clickable="false"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Média alertas"
+              :value="continuousMonitoringHistoryResumo.avgAlerts"
+              :clickable="false"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Amostras"
+              :value="continuousMonitoringHistoryResumo.samples"
+              :clickable="false"
+            />
+          </v-col>
+        </v-row>
+        <v-table density="compact" class="mt-4" aria-label="Histórico monitoramento Trilha D">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Estado</th>
+              <th>Alertas</th>
+              <th>Regressão</th>
+              <th>Run</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="entry in continuousMonitoringHistorico" :key="`${entry.timestamp}-${entry.run_id}`">
+              <td>{{ entry.timestamp || '—' }}</td>
+              <td>{{ entry.state || '—' }}</td>
+              <td>{{ entry.alerts_active ?? '—' }}</td>
+              <td>{{ entry.regression_alert ? 'sim' : 'não' }}</td>
+              <td>{{ entry.run_id || '—' }}</td>
+            </tr>
+            <tr v-if="!continuousMonitoringHistorico.length">
+              <td colspan="5" class="small text-medium-emphasis">Nenhuma amostra histórica disponível.</td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card-text>
+    </v-card>
+
+    <v-card
       class="painel merge-readiness-history mt-4"
       elevation="0"
       :data-section="secaoAtiva === 'merge-readiness-history' ? 'active' : undefined"
@@ -597,6 +662,7 @@ const opcoesSecao = [
   { title: 'Malha operacional', value: 'malha-operacional' },
   { title: 'Trilha D', value: 'trilha-d' },
   { title: 'Monitoramento Trilha D', value: 'trilha-d-monitoring' },
+  { title: 'Monitoramento Trilha D — Histórico', value: 'trilha-d-monitoring-history' },
   { title: 'Merge readiness — Histórico', value: 'merge-readiness-history' },
 ]
 
@@ -677,6 +743,14 @@ const continuousMonitoringResumo = computed(() => ({
   ),
 }))
 const continuousMonitoringAlertas = computed(() => continuousMonitoring.value.alerts || [])
+const continuousMonitoringHistorico = computed(() => continuousMonitoringHistory.value.history || [])
+const continuousMonitoringHistoryResumo = computed(() => ({
+  state: continuousMonitoringHistory.value.state ?? 'desconhecido',
+  greenRate: continuousMonitoringHistory.value.summary?.green_rate ?? 'n/a',
+  avgAlerts: continuousMonitoringHistory.value.summary?.avg_alerts_active ?? 'n/a',
+  samples: continuousMonitoringHistory.value.summary?.samples ?? continuousMonitoringHistorico.value.length,
+  monitoringStabilized: continuousMonitoringHistory.value.summary?.monitoring_stabilized ? 'sim' : 'não',
+}))
 const mergeReadinessHistory = computed(() => runtimeDashboard.value?.merge_readiness_history || {})
 const mergeReadinessHistorico = computed(() => mergeReadinessHistory.value.history || [])
 const mergeReadinessHistoryResumo = computed(() => ({
