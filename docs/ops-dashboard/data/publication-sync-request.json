@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-30T12:58:00Z",
+  "source": "cursor-sync-ambientes",
+  "mode": "governed_promotion",
+  "target_sha": "c83e4487d366",
+  "promotion_order": ["dev", "hml", "prod"],
+  "pre_sync_observed": {
+    "dev": "e456dba37263",
+    "hml": "e456dba37263",
+    "prod": "70e9a86a4bc2"
+  },
+  "workflows_expected": [
+    "Fly Enterprise Sync",
+    "Deploy Production Sync"
+  ],
+  "pr_queue_actions": {
+    "close_duplicate": [542],
+    "merged": [594, 544, 595],
+    "pending_review": [503, 563, 530, 499]
+  },
+  "guardrails": [
+    "no_manual_flyctl_without_token",
+    "prod_requires_github_environment_production",
+    "validate_publication_sync_post_deploy"
+  ]
+}

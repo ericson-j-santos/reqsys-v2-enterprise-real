@@ -1,3 +1,4 @@
+# Sync: push em main dispara Deploy Production Sync via backend/**
 app = "reqsys-api"
 primary_region = "gru"
 kill_signal = "SIGINT"

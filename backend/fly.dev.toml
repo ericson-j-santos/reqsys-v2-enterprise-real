@@ -1,3 +1,4 @@
+# Sync: push em main dispara Fly Enterprise Sync (dev→hml) via backend/**
 app = "reqsys-api-dev"
 primary_region = "gru"
 kill_signal = "SIGINT"
