@@ -3,6 +3,14 @@ name: Merge Readiness Pareto Gate
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/merge-readiness.yml"
+      - "scripts/merge_readiness_gate.py"
+      - "scripts/build_merge_readiness_history.py"
+      - "tests/test_build_merge_readiness_history.py"
+      - "docs/ops-dashboard/data/merge-readiness-history.json"
   workflow_dispatch:
     inputs:
       base_ref:
@@ -20,12 +28,33 @@ env:
 
 concurrency:
   group: merge-readiness-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
+  readiness-router:
+    name: Readiness Router
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      run_gate: ${{ steps.route.outputs.run_gate }}
+    steps:
+      - name: Definir política de execução
+        id: route
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_gate=true
+          if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.pull_request.draft }}" == "true" ]]; then
+            run_gate=false
+          fi
+          echo "run_gate=$run_gate" >> "$GITHUB_OUTPUT"
+          echo "Run merge readiness gate: $run_gate" >> "$GITHUB_STEP_SUMMARY"
+
   merge-readiness:
     name: Merge readiness
     runs-on: ubuntu-latest
+    needs: readiness-router
+    if: needs.readiness-router.outputs.run_gate == 'true'
     timeout-minutes: 6
     steps:
       - name: Checkout head com histórico completo

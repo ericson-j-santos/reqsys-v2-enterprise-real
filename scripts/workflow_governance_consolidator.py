@@ -179,7 +179,7 @@ def detect_risk_patterns(spec: WorkflowSpec, registry: dict[str, Any]) -> list[s
     patterns: list[str] = []
     mesh_noise = set(registry.get("mesh_noise_suppression", []))
 
-    if spec.jobs and all(spec.job_if_conditions.get(job) for job in spec.jobs):
+    if spec.jobs and all(len(spec.job_if_conditions.get(job, [])) > 0 for job in spec.jobs):
         patterns.append("all_jobs_conditional")
 
     if spec.workflow_run_parents and all(parent in mesh_noise for parent in spec.workflow_run_parents):
@@ -189,7 +189,7 @@ def detect_risk_patterns(spec: WorkflowSpec, registry: dict[str, Any]) -> list[s
         patterns.append("paths_only_pr")
 
     if spec.has_workflow_dispatch and spec.jobs:
-        all_conditional = all(spec.job_if_conditions.get(job) for job in spec.jobs)
+        all_conditional = all(len(spec.job_if_conditions.get(job, [])) > 0 for job in spec.jobs)
         if all_conditional and "pull_request" in spec.triggers:
             patterns.append("dispatch_only_optional_jobs")
 

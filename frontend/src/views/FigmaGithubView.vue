@@ -106,8 +106,8 @@
         </label>
       </div>
 
-      <div class="tabela-wrapper">
-        <table>
+      <div class="tabela-wrapper responsive-table-shell">
+        <table class="figma-github-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -241,14 +241,14 @@ onMounted(carregarStatus)
 </script>
 
 <style scoped>
-.figma-github { display: grid; gap: 1rem; padding: 28px 32px 40px; }
-.cabecalho, .linha-painel { display: grid; gap: 1rem; align-items: start; }
+.figma-github { display: grid; gap: 1rem; padding: 28px 32px 40px; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; overflow-x: clip; }
+.cabecalho, .linha-painel { display: grid; gap: 1rem; align-items: start; min-width: 0; }
 .acoes-cabecalho { display: flex; gap: 0.5rem; justify-content: flex-start; }
 .cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-.card, .painel { border: 1px solid var(--line); border-radius: 16px; padding: 1rem; background: rgba(255,255,255,0.02); }
+.card, .painel { border: 1px solid var(--line); border-radius: 16px; padding: 1rem; background: rgba(255,255,255,0.02); min-width: 0; max-width: 100%; }
 .card span, .card strong { display: block; }
 .card strong { font-size: 1.4rem; margin-top: 0.5rem; color: var(--accent); }
-.formulario { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 1rem; }
+.formulario { display: grid; gap: 0.75rem; grid-template-columns: 1fr; margin-top: 1rem; }
 .formulario label, .filtro { display: grid; gap: 0.25rem; font-weight: 600; color: var(--text); }
 input, select, button { border: 1px solid var(--line); border-radius: 8px; padding: 0.65rem; background: rgba(255,255,255,0.04); color: var(--text); }
 button { cursor: pointer; font-weight: 700; background: var(--accent); color: #111; border-color: var(--accent); }
@@ -263,10 +263,18 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 dt { font-weight: 700; }
 dd { margin: 0.25rem 0 0; word-break: break-word; color: var(--muted); }
 .json-retorno { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; }
-.tabela-wrapper { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; min-width: 980px; }
-th, td { border-bottom: 1px solid var(--line); padding: 0.75rem; text-align: left; vertical-align: top; }
+.tabela-wrapper { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; contain: inline-size; }
+.figma-github-table { border-collapse: collapse; width: max(100%, 720px); min-width: 720px; }
+th, td { border-bottom: 1px solid var(--line); padding: 0.75rem; text-align: left; vertical-align: top; white-space: nowrap; }
+th:first-child, td:first-child, th:last-child, td:last-child { white-space: normal; }
 .badge { border: 1px solid var(--line); border-radius: 999px; padding: 0.2rem 0.55rem; }
 .vazio { text-align: center; color: var(--muted); }
-@media (min-width: 768px) { .cabecalho, .linha-painel { grid-template-columns: 1fr auto; } }
+@media (max-width: 767px) {
+  .figma-github { padding: 16px 12px 24px; }
+}
+@media (min-width: 768px) {
+  .cabecalho, .linha-painel { grid-template-columns: 1fr auto; }
+  .formulario { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+}
+@media (min-width: 1024px) { .figma-github-table { min-width: 980px; } }
 </style>
