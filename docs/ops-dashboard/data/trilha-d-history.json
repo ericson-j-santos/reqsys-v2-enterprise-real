@@ -1,15 +1,15 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T22:57:32.668631Z",
+  "generated_at": "2026-06-30T23:25:14.947119Z",
   "state": "green",
-  "current_score": 99.27,
+  "current_score": 99.25,
   "baseline_score": 88.33,
-  "delta_from_baseline": 10.94,
+  "delta_from_baseline": 10.92,
   "trend": "improving",
   "summary": {
-    "samples": 4,
-    "green_samples": 3,
+    "samples": 5,
+    "green_samples": 4,
     "failed_samples": 1,
     "next_increment": "continuous_trilha_d_monitoring",
     "artifact_ingestion_enabled": true,
@@ -34,15 +34,15 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 4
+      "samples": 5
     },
     "coverage": {
       "current_status": "passed",
-      "current_score": 95.6,
-      "previous_score": 74.29,
-      "delta_from_baseline": 66.6,
+      "current_score": 95.52,
+      "previous_score": 95.6,
+      "delta_from_baseline": 66.52,
       "trend": "improving",
-      "samples": 4
+      "samples": 5
     },
     "mutation": {
       "current_status": "passed",
@@ -50,7 +50,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 4
+      "samples": 5
     },
     "contract": {
       "current_status": "passed",
@@ -58,7 +58,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 4
+      "samples": 5
     },
     "schema": {
       "current_status": "passed",
@@ -66,7 +66,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 4
+      "samples": 5
     },
     "ci-watch": {
       "current_status": "passed",
@@ -74,7 +74,7 @@
       "previous_score": 100.0,
       "delta_from_baseline": 0.0,
       "trend": "stable",
-      "samples": 4
+      "samples": 5
     }
   },
   "history": [
@@ -225,6 +225,44 @@
         "coverage_targeted_fase5_95_percent_gate"
       ],
       "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/fase5-coverage-95"
+    },
+    {
+      "timestamp": "2026-06-30T21:39:28.632419Z",
+      "source": "github_actions_artifact",
+      "run_id": "artifact-ingestion-refresh-local",
+      "workflow_run_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
+      "state": "green",
+      "average_score": 99.25,
+      "dimensions": {
+        "ci-watch": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "contract": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "coverage": {
+          "status": "passed",
+          "score": 95.52
+        },
+        "mutation": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "schema": {
+          "status": "passed",
+          "score": 100.0
+        },
+        "tests": {
+          "status": "passed",
+          "score": 100.0
+        }
+      },
+      "notes": [
+        "continuar_incremento_qualidade",
+        "correlation_id=e8274b86-bae4-489c-8081-6564ceed3255"
+      ]
     }
   ],
   "runtime_dashboard_contract": {
