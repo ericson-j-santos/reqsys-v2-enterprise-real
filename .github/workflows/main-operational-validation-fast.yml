@@ -55,6 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           SECONDS=0
+          mkdir -p artifacts/main-operational-validation-fast
           python3 scripts/main_operational_validation_fast.py \
             --repo "${REPO}" \
             --branch "${BRANCH}" \
