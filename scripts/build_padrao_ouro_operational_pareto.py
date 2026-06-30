@@ -435,7 +435,11 @@ def build_payload(
             "recommended_now": 0 if current_score >= 100.0 else len(recommended),
             "expected_gain_now": 0.0 if current_score >= 100.0 else expected_gain_now,
             "pareto_rule": f"ações até {PARETO_THRESHOLD_PCT:.0f}% do ganho esperado acumulado (80/20)",
-            "next_increment": None if current_score >= 100.0 else (recommended[0]["id"] if recommended else None),
+            "next_increment": (
+                None
+                if current_score >= 100.0
+                else (recommended[0]["id"] if recommended else trilha_d.get("next_increment"))
+            ),
             "evidence_source": "trilha_d_history" if trilha_d_history.exists() else "fallback_signals",
             "consolidation_mode": consolidation,
         },

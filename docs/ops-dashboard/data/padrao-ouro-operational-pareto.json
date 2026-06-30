@@ -1,7 +1,7 @@
 {
   "schema_version": "1.1.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T19:58:19.883667Z",
+  "generated_at": "2026-06-30T20:12:57.749380Z",
   "state": "green",
   "strategy": "pareto_operational_gold_base",
   "current_score": 98.69,
@@ -32,7 +32,7 @@
     "recommended_now": 0,
     "expected_gain_now": 0,
     "pareto_rule": "ações até 80% do ganho esperado acumulado (80/20)",
-    "next_increment": null,
+    "next_increment": "continuous_trilha_d_monitoring",
     "evidence_source": "trilha_d_history",
     "consolidation_mode": false
   },
