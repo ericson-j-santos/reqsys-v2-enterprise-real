@@ -60,7 +60,7 @@ jobs:
             if [ "$WORKFLOW_NAME" = "$item" ]; then
               ALERT_TYPE="INFORMATIVE_EVIDENCE"
               NOISE_LEVEL="SUPPRESSED"
-              if [ "$WORKFLOW_CONCLUSION" = "success" ]; then
+              if [ "$WORKFLOW_CONCLUSION" = "success" ] || [ "$WORKFLOW_CONCLUSION" = "cancelled" ]; then
                 SHOULD_ALERT=false
               else
                 ALERT_LEVEL="LOW"
@@ -77,9 +77,10 @@ jobs:
           fi
 
           if [ "$WORKFLOW_CONCLUSION" = "cancelled" ]; then
-            ALERT_LEVEL="MEDIUM"
+            ALERT_LEVEL="INFO"
             ALERT_TYPE="CANCELLED_RUN"
-            ACTION_POLICY="VERIFY_CONTEXT"
+            ACTION_POLICY="GOVERNED_SKIP"
+            SHOULD_ALERT=false
           fi
 
           {

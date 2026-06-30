@@ -103,6 +103,20 @@ def test_retry_policy_allows_eligible_execute_mode() -> None:
     assert retry_policy["allowed"] is True
 
 
+def test_mesh_cancelled_runs_do_not_open_ops_gap() -> None:
+    runs = [
+        run("Operational Runtime Mesh Hub", "cancelled", run_id=28412979027),
+        run("Unified Operational Event Bus", "cancelled", run_id=28412979029),
+        run("Operational Alert Intelligence", "cancelled", run_id=28412977189),
+    ]
+
+    plan = build_remediation_plan(runs)
+    backlog = build_report("owner/repo", "main", runs, plan, [], "report_only")["automatic_backlog"]
+
+    assert plan == []
+    assert not any(item["id"].startswith("OPS-GAP-") for item in backlog)
+
+
 def test_compute_runtime_score_weighted() -> None:
     matrix = build_health_matrix(
         [run("CI — ReqSys v2 Enterprise", "success")],

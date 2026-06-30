@@ -65,7 +65,7 @@ jobs:
               event_class="INFORMATIVE_EVIDENCE"
               severity="INFO"
               action_policy="OBSERVE"
-              if [ "$WORKFLOW_CONCLUSION" = "success" ] || [ "$WORKFLOW_CONCLUSION" = "skipped" ]; then
+              if [ "$WORKFLOW_CONCLUSION" = "success" ] || [ "$WORKFLOW_CONCLUSION" = "skipped" ] || [ "$WORKFLOW_CONCLUSION" = "cancelled" ]; then
                 should_emit=false
               fi
               break
@@ -80,8 +80,9 @@ jobs:
 
           if [ "$WORKFLOW_CONCLUSION" = "cancelled" ]; then
             event_class="OPERATIONAL_INTERRUPTION"
-            severity="MEDIUM"
-            action_policy="VERIFY_CONTEXT"
+            severity="INFO"
+            action_policy="GOVERNED_SKIP"
+            should_emit=false
           fi
 
           {
