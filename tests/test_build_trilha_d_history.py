@@ -4,12 +4,14 @@ import json
 from pathlib import Path
 
 from scripts.build_trilha_d_history import (
+    NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION,
     NEXT_INCREMENT_AFTER_COVERAGE_TARGETED,
     NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS,
     NEXT_INCREMENT_AFTER_INGESTION,
     NEXT_INCREMENT_AFTER_PARETO_DASHBOARD,
     NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD,
     NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD,
+    artifact_ingestion_surface_ready,
     build_payload,
     coverage_targeted_critical_paths_ready,
     governance_deep_links_surface_ready,
@@ -155,7 +157,7 @@ def test_ingest_report_into_history_appends_sample(tmp_path: Path) -> None:
         "artifact_ingestion_on_trilha_d_consolidate",
         "workflow_runs_deep_links_enabled",
     }
-    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+    assert payload["summary"]["next_increment"] == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
     assert len(payload["history"]) == 2
     assert payload["history"][-1]["run_id"] == "run-ingest-1"
     assert payload["history"][-1]["workflow_run_url"]
@@ -167,8 +169,12 @@ def test_resolve_next_increment_when_pipeline_completo() -> None:
     assert coverage_targeted_critical_paths_ready() is True
     assert governance_deep_links_surface_ready() is True
     assert trilha_d_history_dashboard_surface_ready() is True
-    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
-    assert resolve_next_increment(artifact_ingestion=False) == "artifact_ingestion_refresh"
+    assert resolve_next_increment(artifact_ingestion=False) == NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+
+
+def test_resolve_next_increment_when_artifact_ingestion_habilitado() -> None:
+    assert artifact_ingestion_surface_ready() is True
+    assert resolve_next_increment(artifact_ingestion=True) == NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
 
 
 def test_resolve_next_increment_when_governance_pendente(monkeypatch) -> None:

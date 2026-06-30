@@ -51,10 +51,10 @@
       "id": "backend_api_contracts",
       "name": "Backend e contratos de API",
       "weight": 15,
-      "status": "yellow",
-      "current_signal": "Há FastAPI, OpenAPI versionado e backend .NET em evolução; o equilíbrio depende de matriz explícita de paridade entre implementações e contratos publicados.",
+      "status": "green",
+      "current_signal": "Recomendações IA, incidentes e dashboard IA agora expõem paridade FastAPI com envelope canônico; próximo foco é manter contratos alinhados ao scorecard.",
       "target_state": "Endpoints críticos com contrato canônico, versionamento, exemplo de payload, validação de erro e rastreabilidade de compatibilidade FastAPI/.NET.",
-      "next_increment": "Criar matriz de paridade API por módulo: autenticação, requisitos, dashboard, runtime, conectores e auditoria.",
+      "next_increment": "Manter matriz de paridade API atualizada após merges de rotas /v1/recomendacoes e /v1/incidentes.",
       "evidence_expected": [
         "OpenAPI canônico referenciado",
         "teste de contrato por endpoint crítico",

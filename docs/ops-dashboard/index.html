@@ -171,6 +171,7 @@
         <div><div class="kpi-label">Estado</div><div id="trilha-d-state" class="kpi-value">-</div></div>
         <div><div class="kpi-label">Tendência</div><div id="trilha-d-trend" class="kpi-value">-</div></div>
         <div><div class="kpi-label">Delta baseline</div><div id="trilha-d-delta" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Artifact ingestion</div><div id="artifact-ingestion-enabled" class="kpi-value">-</div></div>
       </div>
       <table>
         <thead><tr><th>Dimensão</th><th>Status</th><th>Score</th><th>Tendência</th><th>Delta baseline</th></tr></thead>
@@ -548,6 +549,11 @@
       document.getElementById('trilha-d-state').innerHTML = `<span class="status ${statusClass(payload.state)}">${payload.state || 'unknown'}</span>`;
       document.getElementById('trilha-d-trend').textContent = payload.trend || '-';
       document.getElementById('trilha-d-delta').textContent = payload.delta_from_baseline ?? '-';
+      const summary = payload.summary || {};
+      const ingestionEnabled = Boolean(summary.artifact_ingestion_enabled);
+      document.getElementById('artifact-ingestion-enabled').innerHTML = ingestionEnabled
+        ? '<span class="status passed">enabled</span>'
+        : '<span class="status warning">static</span>';
 
       const dimensionsBody = document.getElementById('trilha-d-dimensions');
       dimensionsBody.innerHTML = '';

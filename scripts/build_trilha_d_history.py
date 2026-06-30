@@ -23,6 +23,7 @@ NEXT_INCREMENT_AFTER_PREDICTIVE_DASHBOARD = "coverage_targeted_tests"
 NEXT_INCREMENT_AFTER_COVERAGE_TARGETED = "link_governance_cards_to_latest_workflow_runs"
 NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS = "dashboard_trilha_d_history_card"
 NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD = "artifact_ingestion_refresh"
+NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION = "continuous_trilha_d_monitoring"
 TRILHA_D_WORKFLOW_FILE = "trilha-d-qualidade-governanca.yml"
 COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
     "backend/tests/test_hub_lowcode_service_critical_paths.py",
@@ -294,9 +295,28 @@ def governance_deep_links_surface_ready(repo_root: Path | None = None) -> bool:
     )
 
 
+def artifact_ingestion_surface_ready(repo_root: Path | None = None) -> bool:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
+    index_html = root / "docs/ops-dashboard/index.html"
+    monitoramento_view = root / "frontend/src/views/MonitoramentoOperacionalView.vue"
+    if not workflow.exists() or not index_html.exists() or not monitoramento_view.exists():
+        return False
+    workflow_text = workflow.read_text(encoding="utf-8")
+    html_text = index_html.read_text(encoding="utf-8")
+    view_text = monitoramento_view.read_text(encoding="utf-8")
+    required_markers = (
+        "Atualizar histórico Trilha D (artifact ingestion)",
+        "--ingest-report",
+        "artifact-ingestion-enabled",
+        "artifact_ingestion_enabled",
+    )
+    if not all(marker in workflow_text or marker in html_text or marker in view_text for marker in required_markers):
+        return False
+    return "--ingest-report" in workflow_text and "artifact-ingestion-enabled" in html_text
+
+
 def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None = None) -> str:
-    if not artifact_ingestion:
-        return "artifact_ingestion_refresh"
     if not ops_dashboard_pareto_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_INGESTION
     if not ops_dashboard_predictive_gate_surface_ready(repo_root):
@@ -307,6 +327,10 @@ def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None =
         return NEXT_INCREMENT_AFTER_COVERAGE_TARGETED
     if not trilha_d_history_dashboard_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_GOVERNANCE_DEEP_LINKS
+    if not artifact_ingestion:
+        return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
+    if artifact_ingestion_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
     return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
 
 
@@ -353,8 +377,14 @@ def build_payload(
             "card_fields": ["state", "current_score", "trend", "delta_from_baseline", "workflow_run_url"],
             "series_fields": ["timestamp", "average_score", "state", "workflow_run_url"],
             "dimension_fields": ["current_status", "current_score", "trend", "delta_from_baseline"],
-            "refresh_strategy": "workflow_runs_deep_links_enabled" if trilha_d_history_dashboard_surface_ready() else (
-                REFRESH_STRATEGY_ARTIFACT if artifact_ingestion else REFRESH_STRATEGY_STATIC
+            "refresh_strategy": (
+                REFRESH_STRATEGY_ARTIFACT
+                if artifact_ingestion
+                else (
+                    "workflow_runs_deep_links_enabled"
+                    if trilha_d_history_dashboard_surface_ready()
+                    else REFRESH_STRATEGY_STATIC
+                )
             ),
         },
     }

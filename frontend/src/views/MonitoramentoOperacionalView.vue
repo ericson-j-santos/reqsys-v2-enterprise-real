@@ -219,6 +219,14 @@
           <v-col cols="12" sm="6" md="3">
             <OperationalMetricCard label="Delta baseline" :value="trilhaDResumo.delta" semaforo="verde" :clickable="false" />
           </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <OperationalMetricCard
+              label="Artifact ingestion"
+              :value="trilhaDResumo.artifactIngestion"
+              :semaforo="trilhaDResumo.artifactIngestion === 'enabled' ? 'verde' : 'amarelo'"
+              :clickable="false"
+            />
+          </v-col>
         </v-row>
         <v-table density="compact" class="mt-4" aria-label="Dimensões Trilha D">
           <thead>
@@ -454,6 +462,8 @@ const trilhaDResumo = computed(() => ({
   state: trilhaDItems.value.state ?? 'desconhecido',
   trend: trilhaDItems.value.trend ?? 'n/a',
   delta: trilhaDItems.value.delta_from_baseline ?? 'n/a',
+  artifactIngestion: trilhaDItems.value.summary?.artifact_ingestion_enabled ? 'enabled' : 'static',
+  nextIncrement: trilhaDItems.value.summary?.next_increment ?? 'n/a',
 }))
 const trilhaDDimensoes = computed(() => trilhaDItems.value.dimension_summary || {})
 const trilhaDDimensoesFiltradas = computed(() => {

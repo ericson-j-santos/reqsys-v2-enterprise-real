@@ -38,7 +38,7 @@ def test_build_payload_exposes_workflow_run_deep_links() -> None:
         assert "/actions/workflows/" in links["latest_run"]
 
     assert payload["summary"]["dashboard_ready_capabilities"] == payload["summary"]["total_capabilities"]
-    assert payload["summary"]["next_increment"] == "artifact_ingestion_refresh"
+    assert payload["summary"]["next_increment"] == "continuous_trilha_d_monitoring"
 
 
 def test_write_payload_creates_valid_json(tmp_path: Path) -> None:
