@@ -65,13 +65,13 @@ def build_alerts(
             }
         )
 
-    failed_samples = int(summary.get("failed_samples") or 0)
-    if failed_samples > 0:
+    recent_failed_samples = int(signals.get("recent_failed_samples") or 0)
+    if recent_failed_samples > 0:
         alerts.append(
             {
                 "severity": "warning",
-                "code": "failed_samples_in_history",
-                "message": f"Histórico Trilha D contém {failed_samples} amostra(s) com falha.",
+                "code": "recent_failed_samples",
+                "message": f"Trilha D registrou {recent_failed_samples} amostra(s) recente(s) com falha.",
             }
         )
 

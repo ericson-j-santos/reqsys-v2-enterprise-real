@@ -28,6 +28,7 @@ NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING = "coverage_targeted_tests"
 NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION_REFRESH = "merge_readiness_history"
 MERGE_READINESS_HISTORY_JSON = "docs/ops-dashboard/data/merge-readiness-history.json"
 CONTINUOUS_MONITORING_JSON = "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
+CONTINUOUS_MONITORING_HISTORY_JSON = "docs/ops-dashboard/data/continuous-trilha-d-monitoring-history.json"
 TRILHA_D_WORKFLOW_FILE = "trilha-d-qualidade-governanca.yml"
 COVERAGE_TARGETED_MIN_SCORE = 92.0
 COVERAGE_TARGETED_CRITICAL_PATH_TESTS = (
@@ -485,6 +486,43 @@ def continuous_trilha_d_monitoring_surface_ready(repo_root: Path | None = None) 
     return "continuous-monitoring-enabled" in html_text and "continuous-trilha-d-monitoring.json" in workflow_text
 
 
+def continuous_trilha_d_monitoring_increment_ready(repo_root: Path | None = None) -> bool:
+    if not continuous_trilha_d_monitoring_surface_ready(repo_root):
+        return False
+    root = repo_root or Path(__file__).resolve().parents[1]
+    workflow = root / ".github/workflows/trilha-d-qualidade-governanca.yml"
+    index_html = root / "docs/ops-dashboard/index.html"
+    monitoramento_view = root / "frontend/src/views/MonitoramentoOperacionalView.vue"
+    monitoring_json = root / CONTINUOUS_MONITORING_JSON
+    history_json = root / CONTINUOUS_MONITORING_HISTORY_JSON
+    build_script = root / "scripts/build_continuous_trilha_d_monitoring_history.py"
+    if not all(path.exists() for path in (workflow, index_html, monitoramento_view, monitoring_json, history_json, build_script)):
+        return False
+    workflow_text = workflow.read_text(encoding="utf-8")
+    html_text = index_html.read_text(encoding="utf-8")
+    view_text = monitoramento_view.read_text(encoding="utf-8")
+    required_markers = (
+        "build_continuous_trilha_d_monitoring_history.py",
+        "continuous-trilha-d-monitoring-history-card",
+        "continuous_trilha_d_monitoring_history_enabled",
+        "monitoring_stabilized",
+        "continuous-trilha-d-monitoring-history.json",
+    )
+    if not all(marker in workflow_text or marker in html_text or marker in view_text for marker in required_markers):
+        return False
+    try:
+        monitoring = json.loads(monitoring_json.read_text(encoding="utf-8"))
+        history_payload = json.loads(history_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    if monitoring.get("state") != "green":
+        return False
+    history = history_payload.get("history") or []
+    if not history:
+        return False
+    return bool(history_payload.get("summary", {}).get("continuous_trilha_d_monitoring_history_enabled"))
+
+
 def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None = None) -> str:
     if not ops_dashboard_pareto_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_INGESTION
@@ -501,6 +539,8 @@ def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None =
     if not artifact_ingestion_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_TRILHA_D_DASHBOARD
     if not continuous_trilha_d_monitoring_surface_ready(repo_root):
+        return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
+    if not continuous_trilha_d_monitoring_increment_ready(repo_root):
         return NEXT_INCREMENT_AFTER_ARTIFACT_INGESTION
     if not coverage_targeted_surface_ready(repo_root):
         return NEXT_INCREMENT_AFTER_CONTINUOUS_MONITORING
@@ -542,6 +582,9 @@ def build_payload(
             "artifact_ingestion_enabled": artifact_ingestion,
             "continuous_monitoring_enabled": (
                 artifact_ingestion and continuous_trilha_d_monitoring_surface_ready()
+            ),
+            "continuous_trilha_d_monitoring_history_enabled": (
+                artifact_ingestion and continuous_trilha_d_monitoring_increment_ready()
             ),
             "coverage_targeted_ready": artifact_ingestion and coverage_targeted_surface_ready(),
             "governance_deep_links_enabled": artifact_ingestion and governance_workflow_deep_links_surface_ready(),
