@@ -74,6 +74,30 @@ def test_build_payload_exposes_runtime_contract() -> None:
     assert payload["links"]["dashboard_data"]
 
 
+def test_build_payload_usa_next_increment_resolvido(tmp_path: Path, monkeypatch) -> None:
+    history = tmp_path / "history.json"
+    predictive = tmp_path / "predictive.json"
+    history.write_text(
+        json.dumps(
+            {
+                "current_score": 99.0,
+                "trend": "improving",
+                "summary": {"artifact_ingestion_enabled": True, "failed_samples": 0},
+            }
+        ),
+        encoding="utf-8",
+    )
+    predictive.write_text(json.dumps(_predictive()), encoding="utf-8")
+    monkeypatch.setattr(
+        "scripts.build_trilha_d_history.resolve_next_increment",
+        lambda artifact_ingestion, repo_root=None: (
+            "continuous_trilha_d_monitoring" if artifact_ingestion else "artifact_ingestion_refresh"
+        ),
+    )
+    payload = build_payload(history_path=history, predictive_path=predictive)
+    assert payload["summary"]["next_increment"] == "continuous_trilha_d_monitoring"
+
+
 def test_write_payload_creates_valid_json(tmp_path: Path) -> None:
     history = tmp_path / "history.json"
     predictive = tmp_path / "predictive.json"

@@ -2,7 +2,7 @@
   "dimension": "contract",
   "status": "passed",
   "score": 100.0,
-  "duration_seconds": 1.25,
+  "duration_seconds": 1.24,
   "summary": "10 contract test file(s), 3 check(s)",
   "details": {
     "checks": [

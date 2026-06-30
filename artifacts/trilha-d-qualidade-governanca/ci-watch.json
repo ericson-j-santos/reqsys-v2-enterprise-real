@@ -2,7 +2,7 @@
   "dimension": "ci-watch",
   "status": "passed",
   "score": 100.0,
-  "duration_seconds": 0.03,
+  "duration_seconds": 0.02,
   "summary": "estrutura local do PR CI Watch validada",
   "details": {
     "checks": [

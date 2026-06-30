@@ -9,9 +9,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 REPO = "ericson-j-santos/reqsys-v2-enterprise-real"
 DEFAULT_OUTPUT = "docs/ops-dashboard/data/continuous-trilha-d-monitoring.json"
@@ -135,6 +140,9 @@ def build_payload(
     alerts = build_alerts(history, predictive)
     state = resolve_monitoring_state(alerts)
     monitoring_enabled = bool(summary.get("artifact_ingestion_enabled"))
+    from scripts.build_trilha_d_history import resolve_next_increment
+
+    next_increment = resolve_next_increment(artifact_ingestion=monitoring_enabled)
 
     return {
         "schema_version": "1.0.0",
@@ -146,7 +154,7 @@ def build_payload(
         "alerts_active": len(alerts),
         "lane": "governance-automation",
         "summary": {
-            "next_increment": summary.get("next_increment"),
+            "next_increment": next_increment,
             "artifact_ingestion_enabled": bool(summary.get("artifact_ingestion_enabled")),
             "continuous_monitoring_enabled": monitoring_enabled,
             "recommendation": "investigar_alertas" if alerts else "monitoramento_estavel",

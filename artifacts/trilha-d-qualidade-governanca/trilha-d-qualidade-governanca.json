@@ -2,16 +2,16 @@
   "schema_version": "1.0.0",
   "trail": "D",
   "trail_name": "Qualidade e Governança",
-  "generated_at": "2026-06-30T21:39:28.632419Z",
-  "correlation_id": "e8274b86-bae4-489c-8081-6564ceed3255",
+  "generated_at": "2026-06-30T21:54:07.011329Z",
+  "correlation_id": "b9046268-6ed4-4021-9b1f-941e7a06e71a",
   "repository": "local/reqsys",
-  "run_id": "artifact-ingestion-refresh-local",
+  "run_id": "continuous-monitoring-4186",
   "parallelizable": true,
   "dimensions_total": 6,
   "state": "passed",
   "decision": "continuar_incremento_qualidade",
-  "average_score": 99.25,
-  "min_score": 95.52,
+  "average_score": 99.26,
+  "min_score": 95.56,
   "max_score": 100.0,
   "blockers": [],
   "dimensions": [
@@ -19,7 +19,7 @@
       "dimension": "ci-watch",
       "status": "passed",
       "score": 100.0,
-      "duration_seconds": 0.03,
+      "duration_seconds": 0.02,
       "summary": "estrutura local do PR CI Watch validada",
       "details": {
         "checks": [
@@ -60,7 +60,7 @@
       "dimension": "contract",
       "status": "passed",
       "score": 100.0,
-      "duration_seconds": 1.25,
+      "duration_seconds": 1.24,
       "summary": "10 contract test file(s), 3 check(s)",
       "details": {
         "checks": [
@@ -107,14 +107,14 @@
     {
       "dimension": "coverage",
       "status": "passed",
-      "score": 95.52,
-      "duration_seconds": 18.02,
-      "summary": "coverage 95.52% (gate 60.0%)",
+      "score": 95.56,
+      "duration_seconds": 18.05,
+      "summary": "coverage 95.56% (gate 60.0%)",
       "details": {
         "exit_code": 0,
-        "coverage_percent": 95.52,
+        "coverage_percent": 95.56,
         "threshold_percent": 60.0,
-        "stdout_tail": "les skipped due to complete coverage.\nRequired test coverage of 60% reached. Total coverage: 95.52%\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_ia.py:329: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:338: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:347: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:358: GROQ_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:371: GROQ_API_KEY não configurada ou sem quota\n1032 passed, 5 skipped, 9 warnings in 15.50s\n--- Logging error ---\nTraceback (most recent call last):\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 152, in _export\n    self._exporter.export(\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/trace/export/__init__.py\", line 307, in export\n    self.out.write(self.formatter(span))\nValueError: I/O operation on closed file.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/usr/lib/python3.12/logging/__init__.py\", line 1163, in emit\n    stream.write(msg + self.terminator)\nValueError: I/O operation on closed file.\nCall stack:\n  File \"/usr/lib/python3.12/threading.py\", line 1030, in _bootstrap\n    self._bootstrap_inner()\n  File \"/usr/lib/python3.12/threading.py\", line 1073, in _bootstrap_inner\n    self.run()\n  File \"/usr/lib/python3.12/threading.py\", line 1010, in run\n    self._target(*self._args, **self._kwargs)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 141, in worker\n    self._export(BatchExportStrategy.EXPORT_ALL)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 165, in _export\n    self._logger.exception(\nMessage: 'Exception while exporting %s.'\nArguments: ('Span',)\n"
+        "stdout_tail": "les skipped due to complete coverage.\nRequired test coverage of 60% reached. Total coverage: 95.56%\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_ia.py:329: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:338: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:347: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:358: GROQ_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:371: GROQ_API_KEY não configurada ou sem quota\n1037 passed, 5 skipped, 9 warnings in 15.59s\n--- Logging error ---\nTraceback (most recent call last):\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 152, in _export\n    self._exporter.export(\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/trace/export/__init__.py\", line 307, in export\n    self.out.write(self.formatter(span))\nValueError: I/O operation on closed file.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/usr/lib/python3.12/logging/__init__.py\", line 1163, in emit\n    stream.write(msg + self.terminator)\nValueError: I/O operation on closed file.\nCall stack:\n  File \"/usr/lib/python3.12/threading.py\", line 1030, in _bootstrap\n    self._bootstrap_inner()\n  File \"/usr/lib/python3.12/threading.py\", line 1073, in _bootstrap_inner\n    self.run()\n  File \"/usr/lib/python3.12/threading.py\", line 1010, in run\n    self._target(*self._args, **self._kwargs)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 141, in worker\n    self._export(BatchExportStrategy.EXPORT_ALL)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 165, in _export\n    self._logger.exception(\nMessage: 'Exception while exporting %s.'\nArguments: ('Span',)\n"
       },
       "blockers": [],
       "recommendations": []
@@ -123,7 +123,7 @@
       "dimension": "mutation",
       "status": "passed",
       "score": 100.0,
-      "duration_seconds": 1.24,
+      "duration_seconds": 1.2,
       "summary": "mutation probe em 3 modulos criticos",
       "details": {
         "mode": "lightweight_probe",
@@ -178,17 +178,17 @@
       "dimension": "tests",
       "status": "passed",
       "score": 100.0,
-      "duration_seconds": 10.45,
-      "summary": "1032 passed, 0 failed",
+      "duration_seconds": 10.43,
+      "summary": "1037 passed, 0 failed",
       "details": {
         "exit_code": 0,
         "pytest_summary": {
-          "passed": 1032,
+          "passed": 1037,
           "failed": 0,
           "skipped": 5,
           "errors": 0
         },
-        "stdout_tail": " = context.run(func, *args)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_ia.py:329: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:338: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:347: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:358: GROQ_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:371: GROQ_API_KEY não configurada ou sem quota\n1032 passed, 5 skipped, 9 warnings in 9.07s\n--- Logging error ---\nTraceback (most recent call last):\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 152, in _export\n    self._exporter.export(\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/trace/export/__init__.py\", line 307, in export\n    self.out.write(self.formatter(span))\nValueError: I/O operation on closed file.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/usr/lib/python3.12/logging/__init__.py\", line 1163, in emit\n    stream.write(msg + self.terminator)\nValueError: I/O operation on closed file.\nCall stack:\n  File \"/usr/lib/python3.12/threading.py\", line 1030, in _bootstrap\n    self._bootstrap_inner()\n  File \"/usr/lib/python3.12/threading.py\", line 1073, in _bootstrap_inner\n    self.run()\n  File \"/usr/lib/python3.12/threading.py\", line 1010, in run\n    self._target(*self._args, **self._kwargs)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 141, in worker\n    self._export(BatchExportStrategy.EXPORT_ALL)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 165, in _export\n    self._logger.exception(\nMessage: 'Exception while exporting %s.'\nArguments: ('Span',)\n"
+        "stdout_tail": " = context.run(func, *args)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_ia.py:329: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:338: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:347: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:358: GROQ_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:371: GROQ_API_KEY não configurada ou sem quota\n1037 passed, 5 skipped, 9 warnings in 9.06s\n--- Logging error ---\nTraceback (most recent call last):\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 152, in _export\n    self._exporter.export(\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/trace/export/__init__.py\", line 307, in export\n    self.out.write(self.formatter(span))\nValueError: I/O operation on closed file.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/usr/lib/python3.12/logging/__init__.py\", line 1163, in emit\n    stream.write(msg + self.terminator)\nValueError: I/O operation on closed file.\nCall stack:\n  File \"/usr/lib/python3.12/threading.py\", line 1030, in _bootstrap\n    self._bootstrap_inner()\n  File \"/usr/lib/python3.12/threading.py\", line 1073, in _bootstrap_inner\n    self.run()\n  File \"/usr/lib/python3.12/threading.py\", line 1010, in run\n    self._target(*self._args, **self._kwargs)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 141, in worker\n    self._export(BatchExportStrategy.EXPORT_ALL)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 165, in _export\n    self._logger.exception(\nMessage: 'Exception while exporting %s.'\nArguments: ('Span',)\n"
       },
       "blockers": [],
       "recommendations": []

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T21:40:28.187665+00:00",
+  "generated_at": "2026-06-30T21:54:07.062307+00:00",
   "overall_status": "green",
   "governance_evidence_score": 100,
   "summary": {
@@ -136,7 +136,7 @@
       "links": {
         "workflow": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/predictive-regression-guard.yml",
         "workflow_runs": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/predictive-regression-guard.yml",
-        "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/29000000001",
+        "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/29000000002",
         "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/predict_operational_regression.py",
         "deep_link_type": "workflow_run"
       }
@@ -161,7 +161,7 @@
       "links": {
         "workflow": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
         "workflow_runs": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/workflows/trilha-d-qualidade-governanca.yml",
-        "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/29000000001",
+        "latest_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/29000000002",
         "source": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/blob/main/scripts/build_continuous_trilha_d_monitoring.py",
         "deep_link_type": "workflow_run"
       }

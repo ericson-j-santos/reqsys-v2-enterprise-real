@@ -1,30 +1,30 @@
 {
   "schema_version": "1.1.0",
   "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
-  "generated_at": "2026-06-30T21:40:28.192490Z",
+  "generated_at": "2026-06-30T21:54:07.066941Z",
   "state": "green",
   "strategy": "pareto_operational_gold_base",
-  "current_score": 99.25,
+  "current_score": 99.26,
   "target_score": 98.0,
   "gold_gap": 0.0,
-  "projected_score_after_recommended": 99.25,
+  "projected_score_after_recommended": 99.26,
   "projected_gap_after_recommended": 0.0,
   "statistical_confidence": 1.0,
   "dimension_signals": {
     "tests": 100.0,
-    "coverage": 95.52,
+    "coverage": 95.56,
     "mutation": 100.0,
     "contract": 100.0,
     "schema": 100.0,
     "ci-watch": 100.0
   },
   "dimension_gaps": {
-    "coverage": 4.48
+    "coverage": 4.44
   },
   "dominant_bottleneck": {
     "dimension": "coverage",
-    "score": 95.52,
-    "gap_to_100": 4.48,
+    "score": 95.56,
+    "gap_to_100": 4.44,
     "share_of_trilha_d_remaining_gap": 1.0
   },
   "summary": {

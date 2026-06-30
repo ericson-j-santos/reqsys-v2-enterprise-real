@@ -556,7 +556,12 @@ def continuous_trilha_d_monitoring_increment_ready(repo_root: Path | None = None
     history = history_payload.get("history") or []
     if not history:
         return False
-    return bool(history_payload.get("summary", {}).get("continuous_trilha_d_monitoring_history_enabled"))
+    summary = history_payload.get("summary") or {}
+    if not summary.get("continuous_trilha_d_monitoring_history_enabled"):
+        return False
+    if len(history) < 3:
+        return False
+    return bool(summary.get("monitoring_stabilized"))
 
 
 def resolve_next_increment(*, artifact_ingestion: bool, repo_root: Path | None = None) -> str:

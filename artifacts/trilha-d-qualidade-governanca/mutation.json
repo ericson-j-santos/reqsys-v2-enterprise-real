@@ -2,7 +2,7 @@
   "dimension": "mutation",
   "status": "passed",
   "score": 100.0,
-  "duration_seconds": 1.24,
+  "duration_seconds": 1.2,
   "summary": "mutation probe em 3 modulos criticos",
   "details": {
     "mode": "lightweight_probe",
