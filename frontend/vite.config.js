@@ -4,6 +4,16 @@ import vue from '@vitejs/plugin-vue'
 const backendProxyTarget = process.env.VITE_BACKEND_PROXY_TARGET || 'http://127.0.0.1:8000'
 const kbProxyTarget = process.env.VITE_KB_PROXY_TARGET || 'http://127.0.0.1:8080'
 
+/** Rotas FastAPI que já incluem o prefixo /api no backend — não remover no proxy dev. */
+const BACKEND_API_PREFIXES = ['govbi', 'rag', 'requisitos', 'workflows', 'runtime']
+
+function rewriteBackendProxyPath(path) {
+  if (new RegExp(`^/api/(${BACKEND_API_PREFIXES.join('|')})\\b`).test(path)) {
+    return path
+  }
+  return path.replace(/^\/api/, '')
+}
+
 export default defineConfig({
   plugins: [vue()],
   test: {
@@ -37,7 +47,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: backendProxyTarget,
-        rewrite: path => path.replace(/^\/api/, ''),
+        rewrite: rewriteBackendProxyPath,
         changeOrigin: true,
       },
       '/kb': {
