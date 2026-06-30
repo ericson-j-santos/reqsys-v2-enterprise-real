@@ -151,7 +151,13 @@ def _runtime_payload(status: str, check: str) -> dict[str, str]:
 
 
 def _build_sha() -> str:
-    return os.getenv('GITHUB_SHA') or os.getenv('FLY_IMAGE_REF') or 'unknown'
+    github_sha = (os.getenv('GITHUB_SHA') or '').strip()
+    if github_sha and github_sha != 'unknown':
+        return github_sha
+    image_ref = (os.getenv('FLY_IMAGE_REF') or '').strip()
+    if image_ref:
+        return image_ref
+    return 'unknown'
 
 
 def _runtime_contracts() -> dict:
