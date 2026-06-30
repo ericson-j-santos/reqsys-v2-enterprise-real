@@ -39,3 +39,21 @@ def test_enriquecer_maturidade_e_idempotente(db_session):
     assert primeiro.atualizados_bdd > 0
     assert segundo.atualizados_status == 0
     assert segundo.atualizados_bdd == 0
+
+
+def test_enriquecer_maturidade_sem_requisitos_retorna_zeros(db_session):
+    resultado = enriquecer_maturidade_requisitos(db_session)
+
+    assert resultado.total == 0
+    assert resultado.atualizados_status == 0
+    assert resultado.cobertura_bdd_percentual == 0
+
+
+def test_enriquecer_maturidade_modo_simulacao_nao_persiste(db_session):
+    _criar_requisitos(db_session, 5)
+
+    resultado = enriquecer_maturidade_requisitos(db_session, aplicar=False)
+
+    assert resultado.total == 5
+    assert resultado.atualizados_bdd > 0
+    assert db_session.query(Requisito).filter(Requisito.descricao.contains('Cenário BDD')).count() == 0

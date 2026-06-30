@@ -68,3 +68,104 @@ def test_hub_historico_integracoes_endpoint(mock_listar):
     response = client.get('/v1/hub-lowcode/integracoes/historico?tipo=planner&limit=5')
     assert response.status_code == 200
     assert response.json()['data']['total'] == 0
+
+
+@patch('app.api.hub_lowcode.registrar_manifesto_provisionamento')
+@patch('app.api.hub_lowcode.gerar_manifesto_provisionamento_flow')
+def test_power_automate_flow_provisioning_plan_endpoint(mock_gerar, mock_registrar):
+    mock_gerar.return_value = {'correlation_id': 'corr-plan-1', 'display_name': 'Flow Teste'}
+    mock_registrar.return_value = None
+
+    response = client.post(
+        '/v1/hub-lowcode/power-automate/flows/provisioning-plan',
+        json={'display_name': 'Flow Teste Provisionamento', 'dry_run': True, 'registrar': False},
+        headers={'X-Correlation-Id': 'corr-plan-1'},
+    )
+
+    assert response.status_code == 200
+    assert response.json()['data']['manifesto']['correlation_id'] == 'corr-plan-1'
+
+
+@patch('app.api.hub_lowcode.salvar_log_integracao')
+@patch('app.api.hub_lowcode.serializar_registry')
+@patch('app.api.hub_lowcode.registrar_manifesto_provisionamento')
+@patch('app.api.hub_lowcode.despachar_workflow_provisionamento', new_callable=AsyncMock)
+@patch('app.api.hub_lowcode.gerar_manifesto_provisionamento_flow')
+def test_power_automate_flow_provision_dispatched(mock_gerar, mock_dispatch, mock_registrar, mock_serializar, mock_log):
+    mock_gerar.return_value = {'correlation_id': 'corr-prov-1', 'display_name': 'Flow Dispatch'}
+    mock_dispatch.return_value = {'dispatched': True, 'workflow': 'alm'}
+    registry = type('Registry', (), {'id': 42})()
+    mock_registrar.return_value = registry
+    mock_serializar.return_value = {'id': 42, 'correlation_id': 'corr-prov-1', 'status': 'dispatched'}
+
+    response = client.post(
+        '/v1/hub-lowcode/power-automate/flows/provision',
+        json={'display_name': 'Flow Dispatch Provisionamento'},
+        headers={'X-Correlation-Id': 'corr-prov-1'},
+    )
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['dispatch']['dispatched'] is True
+    mock_log.assert_called_once()
+
+
+@patch('app.api.hub_lowcode.salvar_log_integracao')
+@patch('app.api.hub_lowcode.serializar_registry')
+@patch('app.api.hub_lowcode.registrar_manifesto_provisionamento')
+@patch('app.api.hub_lowcode.despachar_workflow_provisionamento', new_callable=AsyncMock)
+@patch('app.api.hub_lowcode.gerar_manifesto_provisionamento_flow')
+def test_power_automate_flow_provision_pending_configuration(mock_gerar, mock_dispatch, mock_registrar, mock_serializar, mock_log):
+    mock_gerar.return_value = {'correlation_id': 'corr-pend-1', 'display_name': 'Flow Pendente'}
+    mock_dispatch.return_value = {'dispatched': False, 'motivo': 'GITHUB_PAT ausente'}
+    registry = type('Registry', (), {'id': 7})()
+    mock_registrar.return_value = registry
+    mock_serializar.return_value = {'id': 7, 'correlation_id': 'corr-pend-1', 'status': 'pending_configuration'}
+
+    response = client.post(
+        '/v1/hub-lowcode/power-automate/flows/provision',
+        json={'display_name': 'Flow Pendente Provisionamento'},
+    )
+
+    assert response.status_code == 200
+    assert response.json()['data']['dispatch']['dispatched'] is False
+    mock_log.assert_called_once()
+
+
+@patch('app.api.hub_lowcode.listar_registry_provisionamentos')
+def test_power_automate_provisioning_registry_endpoint(mock_listar):
+    mock_listar.return_value = [{'correlation_id': 'corr-1'}]
+    response = client.get('/v1/hub-lowcode/power-automate/flows/provisioning-registry?status=planned')
+    assert response.status_code == 200
+    assert response.json()['data']['items'][0]['correlation_id'] == 'corr-1'
+
+
+@patch('app.api.hub_lowcode.resumo_registry_provisionamentos')
+def test_power_automate_provisioning_registry_summary_endpoint(mock_resumo):
+    mock_resumo.return_value = {'total': 2, 'por_status': {'planned': 1}}
+    response = client.get('/v1/hub-lowcode/power-automate/flows/provisioning-registry/summary')
+    assert response.status_code == 200
+    assert response.json()['data']['total'] == 2
+
+
+@patch('app.api.hub_lowcode.testar_teams_webhook', new_callable=AsyncMock)
+@patch('app.api.hub_lowcode.obter_planner_webhook_config')
+def test_teams_testar_webhook_usa_config_quando_url_ausente(mock_cfg, mock_testar):
+    mock_cfg.return_value = {'teams_webhook_url': 'https://teams.example/webhook'}
+    mock_testar.return_value = {'ok': True}
+
+    response = client.post('/v1/hub-lowcode/teams/testar-webhook')
+
+    assert response.status_code == 200
+    mock_testar.assert_awaited_once_with('https://teams.example/webhook')
+
+
+@patch('app.api.hub_lowcode.testar_teams_webhook', new_callable=AsyncMock)
+def test_teams_testar_webhook_com_url_explicita(mock_testar):
+    mock_testar.return_value = {'ok': True}
+    response = client.post(
+        '/v1/hub-lowcode/teams/testar-webhook',
+        json='https://teams.example/custom',
+    )
+    assert response.status_code == 200
+    mock_testar.assert_awaited_once_with('https://teams.example/custom')
