@@ -1,5 +1,6 @@
 """Testes Pareto para elevar coverage de módulos críticos de integração."""
 
+import asyncio
 import io
 import json
 from types import SimpleNamespace
@@ -128,30 +129,34 @@ def test_azure_validar_token_reporta_falha_jwks(monkeypatch):
         azure_auth.validar_token_azure('token', 'tenant-id', 'client-id')
 
 
-@pytest.mark.asyncio
-async def test_async_workflow_health_e_consulta_job_inexistente():
-    health = await async_workflows.async_workflow_health()
-    assert health['status'] == 'ok'
-    assert health['enterprise_upgrade_path'] == ['redis', 'rabbitmq', 'azure_service_bus']
+def test_async_workflow_health_e_consulta_job_inexistente():
+    async def scenario():
+        health = await async_workflows.async_workflow_health()
+        assert health['status'] == 'ok'
+        assert health['enterprise_upgrade_path'] == ['redis', 'rabbitmq', 'azure_service_bus']
 
-    with pytest.raises(HTTPException) as exc_info:
-        await async_workflows.consultar_job_assincrono('job-inexistente')
+        with pytest.raises(HTTPException) as exc_info:
+            await async_workflows.consultar_job_assincrono('job-inexistente')
 
-    assert exc_info.value.status_code == 404
+        assert exc_info.value.status_code == 404
+
+    asyncio.run(scenario())
 
 
-@pytest.mark.asyncio
-async def test_async_workflow_cria_job_com_correlation_id_e_status_url(monkeypatch):
-    monkeypatch.setattr(async_workflows, 'process_async_workflow_job', lambda job_id: None)
-    background_tasks = BackgroundTasks()
-    payload = AsyncWorkflowJobRequest(destino_url='https://example.com/hook', payload={'ok': True})
+def test_async_workflow_cria_job_com_correlation_id_e_status_url(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(async_workflows, 'process_async_workflow_job', lambda job_id: None)
+        background_tasks = BackgroundTasks()
+        payload = AsyncWorkflowJobRequest(destino_url='https://example.com/hook', payload={'ok': True})
 
-    response = await async_workflows.criar_job_assincrono(payload, background_tasks, x_correlation_id=' corr-123 ')
-    stored = await store.get(response['job_id'])
+        response = await async_workflows.criar_job_assincrono(payload, background_tasks, x_correlation_id=' corr-123 ')
+        stored = await store.get(response['job_id'])
 
-    assert response['status'] == WorkflowJobStatus.QUEUED.value
-    assert response['correlation_id'] == 'corr-123'
-    assert response['status_url'] == f"/api/workflows/async-httpx/jobs/{response['job_id']}"
-    assert stored is not None
-    assert stored.request.payload == {'ok': True}
-    assert len(background_tasks.tasks) == 1
+        assert response['status'] == WorkflowJobStatus.QUEUED.value
+        assert response['correlation_id'] == 'corr-123'
+        assert response['status_url'] == f"/api/workflows/async-httpx/jobs/{response['job_id']}"
+        assert stored is not None
+        assert stored.request.payload == {'ok': True}
+        assert len(background_tasks.tasks) == 1
+
+    asyncio.run(scenario())
