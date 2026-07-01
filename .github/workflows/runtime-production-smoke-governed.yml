@@ -53,6 +53,12 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Instalar dependências mínimas de teste
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install pytest
+
       - name: Validar script e testes do smoke
         run: |
           set -euo pipefail
