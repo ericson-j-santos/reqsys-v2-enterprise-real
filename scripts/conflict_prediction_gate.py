@@ -47,6 +47,27 @@ CONTRACT_HINTS = (
 
 WORKFLOW_PREFIX = ".github/workflows/"
 
+RISK_COLORS = {
+    "low": "green",
+    "medium": "green",
+    "high": "yellow",
+    "blocked": "red",
+}
+
+CAPACITY_BY_RISK = {
+    "low": 5,
+    "medium": 3,
+    "high": 1,
+    "blocked": 0,
+}
+
+NEXT_ACTION_BY_RISK = {
+    "low": "continuar_incrementos_paralelos",
+    "medium": "continuar_com_limite_de_capacidade",
+    "high": "serializar_merge_com_revisao",
+    "blocked": "bloquear_merge_e_resolver_conflito",
+}
+
 
 def load_paths(raw_paths: list[str], paths_file: str | None = None) -> list[str]:
     paths = [item.strip() for item in raw_paths if item.strip()]
@@ -74,6 +95,25 @@ def _starts_with_any(path: str, prefixes: tuple[str, ...]) -> bool:
 
 def _workflow_paths(paths: list[str]) -> list[str]:
     return [path for path in paths if path.startswith(WORKFLOW_PREFIX)]
+
+
+def _safe_percentage(risk: str) -> int:
+    if risk in {"low", "medium"}:
+        return 100
+    if risk == "high":
+        return 50
+    return 0
+
+
+def _build_decision(risk: str, blocking_reasons: list[str]) -> dict[str, Any]:
+    return {
+        "color": RISK_COLORS[risk],
+        "capacity_parallel_prs": CAPACITY_BY_RISK[risk],
+        "safe_percentage": _safe_percentage(risk),
+        "next_action": NEXT_ACTION_BY_RISK[risk],
+        "requires_human_review": risk in {"high", "blocked"},
+        "requires_serialization": risk == "blocked" or bool(blocking_reasons),
+    }
 
 
 def classify_conflict(
@@ -113,11 +153,18 @@ def classify_conflict(
 
     parallel_safe = risk in {"low", "medium"} and not blocking_reasons
     recommendation = "serializar_merge" if risk == "blocked" else "merge_com_atencao" if risk == "high" else "merge_paralelo_seguro"
+    decision = _build_decision(risk, blocking_reasons)
 
     return {
         "risk": risk,
+        "color": decision["color"],
         "lane": "runtime-governance" if docs_only or artifact_only else "implementation",
         "parallel_safe": parallel_safe,
+        "capacity_parallel_prs": decision["capacity_parallel_prs"],
+        "safe_percentage": decision["safe_percentage"],
+        "next_action": decision["next_action"],
+        "requires_human_review": decision["requires_human_review"],
+        "requires_serialization": decision["requires_serialization"],
         "blocking_reasons": blocking_reasons,
         "changed_paths": paths,
         "critical_files": sorted(
@@ -141,8 +188,9 @@ def classify_conflict(
             "artifact_only": artifact_only,
             "medium_surface_change": medium_surface_change,
         },
+        "decision": decision,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
     }
 
 
@@ -170,7 +218,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
-        print(f"risk={payload['risk']} parallel_safe={payload['parallel_safe']} recommendation={payload['recommendation']}")
+        print(
+            " ".join(
+                [
+                    f"risk={payload['risk']}",
+                    f"color={payload['color']}",
+                    f"parallel_safe={payload['parallel_safe']}",
+                    f"capacity_parallel_prs={payload['capacity_parallel_prs']}",
+                    f"recommendation={payload['recommendation']}",
+                ]
+            )
+        )
 
     return 1 if payload["risk"] == "blocked" else 0
 
