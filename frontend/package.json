@@ -4,6 +4,7 @@
     "scripts": {
         "dev": "vite --host 0.0.0.0",
         "build": "vite build",
+        "test": "vitest run",
         "preview": "vite preview --host 0.0.0.0",
         "test:unit": "vitest run",
         "test:coverage": "vitest run --coverage",
