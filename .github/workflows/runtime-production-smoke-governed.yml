@@ -1,0 +1,145 @@
+name: Runtime Production Smoke Governed
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/runtime-production-smoke-governed.yml'
+      - 'scripts/build_runtime_production_smoke_governed.py'
+      - 'scripts/validate_public_runtime.py'
+      - 'tests/test_build_runtime_production_smoke_governed.py'
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      public_url:
+        description: "URL pública da API ReqSys"
+        required: true
+        default: "https://reqsys-api.fly.dev"
+        type: string
+      enforce:
+        description: "Falhar se o smoke produção não ficar green"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: runtime-production-smoke-governed-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Contract checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Run governed smoke unit tests
+        run: |
+          set -euo pipefail
+          python -m pytest tests/test_build_runtime_production_smoke_governed.py -q
+
+      - name: Compile runtime smoke scripts
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/build_runtime_production_smoke_governed.py scripts/validate_public_runtime.py
+
+  smoke:
+    name: Production runtime smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: contract
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve execution mode
+        id: mode
+        env:
+          INPUT_PUBLIC_URL: ${{ inputs.public_url }}
+          INPUT_ENFORCE: ${{ inputs.enforce }}
+        run: |
+          set -euo pipefail
+          public_url="${INPUT_PUBLIC_URL:-https://reqsys-api.fly.dev}"
+          enforce="${INPUT_ENFORCE:-false}"
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            enforce="false"
+          fi
+          echo "public_url=${public_url}" >> "$GITHUB_OUTPUT"
+          echo "enforce=${enforce}" >> "$GITHUB_OUTPUT"
+
+      - name: Collect public runtime smoke evidence
+        id: runtime_smoke
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/runtime
+          python scripts/validate_public_runtime.py \
+            --base-url "${{ steps.mode.outputs.public_url }}" \
+            --environment prod \
+            --include-optional-evidence \
+            --output artifacts/runtime/public-runtime-validation.json \
+            --readiness-output artifacts/runtime/ops-readiness-report.json
+
+      - name: Build governed production smoke snapshot
+        if: always()
+        run: |
+          set -euo pipefail
+          args=(
+            --validation artifacts/runtime/public-runtime-validation.json
+            --readiness artifacts/runtime/ops-readiness-report.json
+            --output-dir artifacts/runtime-production-smoke-governed
+            --repository "${GITHUB_REPOSITORY}"
+            --branch "${GITHUB_REF_NAME}"
+            --sha "${GITHUB_SHA}"
+            --run-id "${GITHUB_RUN_ID}"
+          )
+          if [[ "${{ steps.mode.outputs.enforce }}" == "true" ]]; then
+            args+=(--enforce)
+          fi
+          python scripts/build_runtime_production_smoke_governed.py "${args[@]}"
+
+      - name: Summary
+        if: always()
+        run: |
+          set -euo pipefail
+          summary="artifacts/runtime-production-smoke-governed/summary.md"
+          if [[ -f "${summary}" ]]; then
+            cat "${summary}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Runtime production smoke governed summary unavailable." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload runtime production smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-production-smoke-governed-evidence
+          path: |
+            artifacts/runtime/
+            artifacts/runtime-production-smoke-governed/
+          if-no-files-found: error
+          retention-days: 30
