@@ -214,8 +214,8 @@ def write_payload(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Gera monitoramento contínuo da Trilha D.")
-    parser.add_argument("--history", default=DEFAULT_HISTORY)
-    parser.add_argument("--predictive", default=DEFAULT_PREDICTIVE)
+    parser.add_argument("--history", "--history-json", dest="history", default=DEFAULT_HISTORY)
+    parser.add_argument("--predictive", "--predictive-json", dest="predictive", default=DEFAULT_PREDICTIVE)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     parser.add_argument("--json", action="store_true")
     return parser
