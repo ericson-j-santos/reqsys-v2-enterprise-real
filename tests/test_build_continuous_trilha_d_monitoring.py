@@ -74,6 +74,23 @@ def test_build_payload_exposes_runtime_contract() -> None:
     assert payload["links"]["dashboard_data"]
 
 
+def test_build_payload_usa_next_increment_resolvido(tmp_path: Path, monkeypatch) -> None:
+    history = tmp_path / "history.json"
+    predictive = tmp_path / "predictive.json"
+    history.write_text(json.dumps(_history(artifact_ingestion=True)), encoding="utf-8")
+    predictive.write_text(json.dumps(_predictive()), encoding="utf-8")
+    monkeypatch.setattr(
+        "scripts.build_trilha_d_history.resolve_next_increment",
+        lambda artifact_ingestion, repo_root=None: (
+            "merge_readiness_history" if artifact_ingestion else "artifact_ingestion_refresh"
+        ),
+    )
+
+    payload = build_payload(history_path=history, predictive_path=predictive)
+
+    assert payload["summary"]["next_increment"] == "merge_readiness_history"
+
+
 def test_write_payload_creates_valid_json(tmp_path: Path) -> None:
     history = tmp_path / "history.json"
     predictive = tmp_path / "predictive.json"
