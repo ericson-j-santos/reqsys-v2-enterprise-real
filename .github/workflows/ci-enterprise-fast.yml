@@ -148,7 +148,16 @@ jobs:
       - name: Testes unitarios frontend
         if: steps.detect.outputs.enabled == 'true'
         working-directory: ${{ steps.detect.outputs.workdir }}
-        run: npm test --if-present -- --runInBand
+        shell: bash
+        run: |
+          set -euo pipefail
+          if npm pkg get scripts.test | grep -vq '^null$'; then
+            npm test --if-present
+          elif npm pkg get scripts.test:unit | grep -vq '^null$'; then
+            npm run test:unit --if-present
+          else
+            echo "Nenhum script de teste unitario frontend configurado; skip seguro."
+          fi
 
       - name: Scripts frontend
         if: steps.detect.outputs.enabled == 'true'
