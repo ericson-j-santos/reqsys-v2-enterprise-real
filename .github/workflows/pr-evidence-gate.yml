@@ -62,8 +62,9 @@ jobs:
     needs: evidence-router
     if: needs.evidence-router.outputs.run_gate == 'true'
     env:
-      REQUIRED_WORKFLOW_NAMES: |
+      STRICT_WORKFLOW_NAMES: |
         CI — ReqSys v2 Enterprise
+      GOVERNED_WORKFLOW_NAMES: |
         Governance Quality Gates
         Governança Padrão Ouro
       OPTIONAL_WORKFLOW_NAMES: |
@@ -105,7 +106,7 @@ jobs:
 
           cat > audit/pr-evidence-gate.json << JSON
           {
-            "schema_version": "1.0.3",
+            "schema_version": "1.0.4",
             "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "repository": "${{ github.repository }}",
             "pr": null,
@@ -114,7 +115,9 @@ jobs:
               "reason": "${{ steps.ctx.outputs.reason }}",
               "failures": [],
               "pending": [],
-              "required_workflows": [],
+              "governed_skips": [],
+              "strict_workflows": [],
+              "governed_workflows": [],
               "optional_workflows": [],
               "observed_artifacts": []
             },
@@ -217,37 +220,74 @@ jobs:
               return runSummaries;
             }
 
-            function evaluate({ headSha, runSummaries, requiredWorkflowNames, optionalWorkflowNames }) {
+            function summarizeWorkflow({ name, runSummaries, strict }) {
+              const matchingRuns = runSummaries.filter((run) => run.name === name);
+              const successfulRuns = matchingRuns.filter((run) => run.status === 'completed' && run.conclusion === 'success');
+              const failedRuns = matchingRuns.filter((run) => run.status === 'completed' && run.conclusion && !['success', 'skipped', 'neutral'].includes(run.conclusion));
+              const skippedRuns = matchingRuns.filter((run) => run.status === 'completed' && ['skipped', 'neutral'].includes(run.conclusion));
+              const activeRuns = matchingRuns.filter((run) => run.status !== 'completed');
+              const latest = [...matchingRuns].sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0] || null;
+
+              return {
+                name,
+                strict,
+                matching_runs: matchingRuns.length,
+                successful_runs: successfulRuns.length,
+                failed_runs: failedRuns.length,
+                skipped_runs: skippedRuns.length,
+                active_runs: activeRuns.length,
+                latest,
+              };
+            }
+
+            function evaluate({ headSha, runSummaries, strictWorkflowNames, governedWorkflowNames, optionalWorkflowNames }) {
               const failures = [];
               const pending = [];
+              const governedSkips = [];
 
               if (!headSha) failures.push('PR head SHA was not resolved.');
-              if (runSummaries.length === 0) failures.push(`No workflow runs found for PR head SHA ${headSha}.`);
+              if (runSummaries.length === 0) {
+                failures.push(`No workflow runs found for PR head SHA ${headSha}.`);
+              }
 
-              const requiredResults = requiredWorkflowNames.map((name) => {
-                const matchingRuns = runSummaries.filter((run) => run.name === name);
-                const successfulRuns = matchingRuns.filter((run) => run.status === 'completed' && run.conclusion === 'success');
-                const failedRuns = matchingRuns.filter((run) => run.status === 'completed' && run.conclusion && run.conclusion !== 'success');
-                const activeRuns = matchingRuns.filter((run) => run.status !== 'completed');
-                const latest = matchingRuns.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0] || null;
+              const strictResults = strictWorkflowNames.map((name) => {
+                const result = summarizeWorkflow({ name, runSummaries, strict: true });
 
-                if (matchingRuns.length === 0) failures.push(`Required workflow has no run on current head SHA: ${name}`);
-                else if (activeRuns.length > 0 && successfulRuns.length === 0) pending.push(`Required workflow still running on current head SHA: ${name}`);
-                else if (successfulRuns.length === 0 && failedRuns.length > 0) failures.push(`Required workflow failed on current head SHA: ${name}`);
+                if (result.matching_runs === 0) failures.push(`Strict workflow has no run on current head SHA: ${name}`);
+                else if (result.active_runs > 0 && result.successful_runs === 0) pending.push(`Strict workflow still running on current head SHA: ${name}`);
+                else if (result.successful_runs === 0 && result.failed_runs > 0) failures.push(`Strict workflow failed on current head SHA: ${name}`);
+                else if (result.successful_runs === 0 && result.skipped_runs > 0) failures.push(`Strict workflow was skipped or neutral on current head SHA: ${name}`);
 
-                return {
-                  name,
-                  matching_runs: matchingRuns.length,
-                  successful_runs: successfulRuns.length,
-                  failed_runs: failedRuns.length,
-                  active_runs: activeRuns.length,
-                  latest,
-                };
+                return result;
+              });
+
+              const governedResults = governedWorkflowNames.map((name) => {
+                const result = summarizeWorkflow({ name, runSummaries, strict: false });
+
+                if (result.matching_runs === 0) {
+                  governedSkips.push(`Governed workflow did not run on current head SHA: ${name}`);
+                } else if (result.active_runs > 0 && result.successful_runs === 0) {
+                  pending.push(`Governed workflow still running on current head SHA: ${name}`);
+                } else if (result.successful_runs === 0 && result.failed_runs > 0) {
+                  failures.push(`Governed workflow failed on current head SHA: ${name}`);
+                } else if (result.successful_runs === 0 && result.skipped_runs > 0) {
+                  governedSkips.push(`Governed workflow completed as skipped or neutral on current head SHA: ${name}`);
+                }
+
+                return result;
               });
 
               const optionalResults = optionalWorkflowNames.map((name) => {
-                const matchingRuns = runSummaries.filter((run) => run.name === name);
-                return { name, matching_runs: matchingRuns.length };
+                const result = summarizeWorkflow({ name, runSummaries, strict: false });
+                return {
+                  name,
+                  matching_runs: result.matching_runs,
+                  successful_runs: result.successful_runs,
+                  failed_runs: result.failed_runs,
+                  skipped_runs: result.skipped_runs,
+                  active_runs: result.active_runs,
+                  latest: result.latest,
+                };
               });
 
               const allArtifacts = runSummaries.flatMap((run) => run.artifacts.map((artifact) => ({ ...artifact, workflow: run.name, run_id: run.id })));
@@ -256,7 +296,9 @@ jobs:
                 status: failures.length === 0 && pending.length === 0 ? 'passed' : failures.length > 0 ? 'failed' : 'pending',
                 failures,
                 pending,
-                required_workflows: requiredResults,
+                governed_skips: governedSkips,
+                strict_workflows: strictResults,
+                governed_workflows: governedResults,
                 optional_workflows: optionalResults,
                 observed_artifacts: allArtifacts,
               };
@@ -267,20 +309,20 @@ jobs:
               if (gate.status === 'pending') return true;
               return failures.length > 0 && failures.every((failure) => (
                 failure.startsWith('No workflow runs found for PR head SHA') ||
-                failure.startsWith('Required workflow has no run on current head SHA:')
+                failure.startsWith('Strict workflow has no run on current head SHA:')
               ));
             }
 
-            function recoverIfRequiredChecksAreGreen(gate) {
-              const required = gate.required_workflows || [];
-              const allRequiredGreen = required.length > 0 && required.every((item) => Number(item.successful_runs || 0) > 0);
-              if (gate.status === 'failed' && allRequiredGreen) {
+            function recoverIfStrictChecksAreGreen(gate) {
+              const strict = gate.strict_workflows || [];
+              const allStrictGreen = strict.length > 0 && strict.every((item) => Number(item.successful_runs || 0) > 0);
+              if (gate.status === 'failed' && allStrictGreen && gate.failures.every((failure) => failure.startsWith('No workflow runs found for PR head SHA'))) {
                 return {
                   ...gate,
-                  status: 'passed',
+                  status: gate.pending.length > 0 ? 'pending' : 'passed',
                   recovered_failures: gate.failures || [],
                   failures: [],
-                  recovery_reason: 'required_workflows_have_successful_runs_on_current_head',
+                  recovery_reason: 'strict_workflows_have_successful_runs_on_current_head',
                 };
               }
               return gate;
@@ -292,7 +334,8 @@ jobs:
             try {
               const pr = await getPullRequest();
               headSha = pr.head.sha;
-              const requiredWorkflowNames = parseList(process.env.REQUIRED_WORKFLOW_NAMES);
+              const strictWorkflowNames = parseList(process.env.STRICT_WORKFLOW_NAMES);
+              const governedWorkflowNames = parseList(process.env.GOVERNED_WORKFLOW_NAMES);
               const optionalWorkflowNames = parseList(process.env.OPTIONAL_WORKFLOW_NAMES);
               const maxWaitSeconds = Number(process.env.MAX_WAIT_SECONDS || '180');
               const pollSeconds = Number(process.env.POLL_SECONDS || '15');
@@ -303,7 +346,7 @@ jobs:
 
               do {
                 runSummaries = await listRuns(headSha, false);
-                gate = evaluate({ headSha, runSummaries, requiredWorkflowNames, optionalWorkflowNames });
+                gate = evaluate({ headSha, runSummaries, strictWorkflowNames, governedWorkflowNames, optionalWorkflowNames });
                 if (!shouldKeepPolling(gate)) break;
                 core.info(`Evidence still pending. Waiting ${pollSeconds}s before rechecking.`);
                 await sleep(pollSeconds * 1000);
@@ -316,15 +359,15 @@ jobs:
 
               if (gate.status === 'passed') {
                 const artifactRuns = await listRuns(headSha, true);
-                const artifactGate = evaluate({ headSha, runSummaries: artifactRuns, requiredWorkflowNames, optionalWorkflowNames });
+                const artifactGate = evaluate({ headSha, runSummaries: artifactRuns, strictWorkflowNames, governedWorkflowNames, optionalWorkflowNames });
                 gate = { ...gate, observed_artifacts: artifactGate.observed_artifacts };
                 runSummaries = artifactRuns;
               }
 
-              gate = recoverIfRequiredChecksAreGreen(gate);
+              gate = recoverIfStrictChecksAreGreen(gate);
 
               audit = {
-                schema_version: '1.0.3',
+                schema_version: '1.0.4',
                 generated_at: new Date().toISOString(),
                 repository: `${owner}/${repo}`,
                 pr: {
@@ -342,7 +385,7 @@ jobs:
               };
             } catch (error) {
               audit = {
-                schema_version: '1.0.3',
+                schema_version: '1.0.4',
                 generated_at: new Date().toISOString(),
                 repository: `${owner}/${repo}`,
                 pr: null,
@@ -350,7 +393,9 @@ jobs:
                   status: 'failed',
                   failures: [`Evidence build error: ${error.message}`],
                   pending: [],
-                  required_workflows: [],
+                  governed_skips: [],
+                  strict_workflows: [],
+                  governed_workflows: [],
                   optional_workflows: [],
                   observed_artifacts: [],
                 },
@@ -369,10 +414,14 @@ jobs:
               `- Status: ${audit.gate.status}`,
               `- Failures: ${audit.gate.failures.length}`,
               `- Pending after wait: ${audit.gate.pending.length}`,
+              `- Governed skips: ${audit.gate.governed_skips.length}`,
               `- Recovery: ${audit.gate.recovery_reason || 'none'}`,
               ``,
               `## Failures`,
               audit.gate.failures.length ? audit.gate.failures.map((failure) => `- ${failure}`).join('\n') : '- None',
+              ``,
+              `## Governed skips`,
+              audit.gate.governed_skips.length ? audit.gate.governed_skips.map((skip) => `- ${skip}`).join('\n') : '- None',
               ``,
               `## Recovered failures`,
               audit.gate.recovered_failures?.length ? audit.gate.recovered_failures.map((failure) => `- ${failure}`).join('\n') : '- None',
