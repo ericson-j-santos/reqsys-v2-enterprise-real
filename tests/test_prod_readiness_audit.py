@@ -6,7 +6,12 @@ from pathlib import Path
 from scripts import prod_readiness_audit as audit
 
 
-def _auth_payload(redirect: str = "https://reqsys-app.fly.dev/auth/callback.html"):
+def _auth_payload(
+    redirect: str = "https://reqsys-app.fly.dev/auth/callback.html",
+    *,
+    demo_login_enabled: bool = False,
+    environment: str = "production",
+):
     return {
         "success": True,
         "data": {
@@ -14,8 +19,8 @@ def _auth_payload(redirect: str = "https://reqsys-app.fly.dev/auth/callback.html
             "auth_status": "ready",
             "missing_fields": [],
             "expected_redirect_uri": redirect,
-            "demo_login_enabled": False,
-            "environment": "production",
+            "demo_login_enabled": demo_login_enabled,
+            "environment": environment,
         },
     }
 
@@ -41,13 +46,26 @@ def test_build_audit_ready_sem_fly_quando_smoke_publico_ok(monkeypatch):
     assert any(c["id"] == "fly_secrets_presence" and c["status"] == "manual" for c in report["checks"])
 
 
-def test_build_audit_bloqueia_redirect_demo_e_smoke(monkeypatch):
+def test_smoke_paths_seguem_contrato_publico_versionado():
+    assert audit.SMOKE_PATHS == [
+        "/health",
+        "/api/runtime/health",
+        "/api/runtime/readiness",
+        "/api/runtime/liveness",
+        "/v1/auth/config",
+    ]
+    assert "/api/runtime/status" not in audit.SMOKE_PATHS
+
+
+def test_build_audit_bloqueia_redirect_demo_ambiente_e_smoke(monkeypatch):
     def fake_get_json(url: str, timeout: float):
         if url.endswith("/v1/auth/config"):
-            payload = _auth_payload("https://reqsys-app.fly.dev")
-            payload["data"]["demo_login_enabled"] = True
-            return 200, payload, None, 10
-        if url.endswith("/api/runtime/status"):
+            return 200, _auth_payload(
+                "https://reqsys-app.fly.dev",
+                demo_login_enabled=True,
+                environment="development",
+            ), None, 10
+        if url.endswith("/api/runtime/readiness"):
             return 503, None, "http_503", 12
         return 200, {"status": "ok"}, None, 5
 
@@ -64,6 +82,7 @@ def test_build_audit_bloqueia_redirect_demo_e_smoke(monkeypatch):
     statuses = {c["id"]: c["status"] for c in report["checks"]}
     assert statuses["azure_redirect_uri"] == "action_required"
     assert statuses["auth_demo_disabled"] == "blocked"
+    assert statuses["production_environment"] == "blocked"
     assert statuses["public_smoke"] == "blocked"
     assert report["status"] == "blocked"
 
@@ -83,8 +102,35 @@ def test_build_audit_valida_presenca_nominal_de_secrets(monkeypatch):
     assert any(c["id"] == "fly_secrets_presence" and c["status"] == "ok" for c in report["checks"])
 
 
+def test_build_audit_consume_evidencia_humana(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(audit, "get_json", lambda url, timeout: (200, _auth_payload(), None, 1) if url.endswith("/v1/auth/config") else (200, {"status": "ok"}, None, 1))
+    evidence = tmp_path / "human-evidence.json"
+    evidence.write_text(json.dumps({
+        "entra_redirect_uri_registered": {"status": "confirmed"},
+        "fly_secrets_reviewed": {"status": "confirmed"},
+        "qa_approval": {"status": "approved"},
+        "ops_approval": {"status": "approved"},
+        "rollback_plan_documented": {"status": "confirmed"},
+        "deployment_window_approved": {"status": "approved"},
+    }), encoding="utf-8")
+
+    report = audit.build_audit(
+        "https://reqsys-api.fly.dev",
+        "https://reqsys-app.fly.dev",
+        "reqsys-api",
+        timeout=1,
+        check_fly=False,
+        human_evidence_path=str(evidence),
+    )
+
+    statuses = {c["id"]: c["status"] for c in report["checks"]}
+    assert statuses["entra_redirect_uri_registered"] == "ok"
+    assert statuses["fly_secrets_reviewed"] == "ok"
+    assert statuses["governance_approvals"] == "ok"
+
+
 def test_main_gera_json_e_markdown(monkeypatch, tmp_path: Path):
-    monkeypatch.setattr(audit, "build_audit", lambda *args, **kwargs: {"schema_version": "1.0.0", "source": "prod-readiness-audit", "validated_at": "2026-07-01T00:00:00Z", "status": "ready", "blocked_count": 0, "action_required_count": 0, "checks": []})
+    monkeypatch.setattr(audit, "build_audit", lambda *args, **kwargs: {"schema_version": "1.1.0", "source": "prod-readiness-audit", "validated_at": "2026-07-01T00:00:00Z", "status": "ready", "blocked_count": 0, "action_required_count": 0, "checks": [], "human_evidence_keys": []})
     output = tmp_path / "audit.json"
     markdown = tmp_path / "audit.md"
 
