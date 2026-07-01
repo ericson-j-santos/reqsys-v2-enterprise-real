@@ -84,7 +84,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          python -m pytest tests/test_build_merge_readiness_history.py tests/test_build_trilha_d_history.py::test_merge_readiness_history_increment_ready_detecta_arquivos -q
+          python -m pytest tests/test_build_merge_readiness_history.py tests/test_build_trilha_d_history.py::test_merge_readiness_history_increment_ready_detecta_superficie_sem_exigir_estabilidade_historica -q
 
       - name: Atualizar histórico merge-readiness
         if: always()
