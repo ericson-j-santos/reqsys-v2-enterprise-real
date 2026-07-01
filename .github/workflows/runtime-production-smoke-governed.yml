@@ -45,6 +45,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install pytest
+
       - name: Run governed smoke unit tests
         run: |
           set -euo pipefail
