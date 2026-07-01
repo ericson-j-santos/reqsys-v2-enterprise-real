@@ -1,0 +1,42 @@
+name: Main Post-merge Actions Discovery Guard
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/main-post-merge-actions-discovery-guard.yml"
+      - ".github/workflows/main-post-merge-validation.yml"
+      - "tests/test_main_post_merge_actions_discovery_guard.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-post-merge-actions-discovery-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Contract checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Validate main post-merge discovery contract
+        run: |
+          set -euo pipefail
+          python -m pytest tests/test_main_post_merge_actions_discovery_guard.py -q
