@@ -6,10 +6,10 @@ Este documento define a configuração mínima para o login Microsoft do ReqSys 
 
 | Ambiente | Frontend | API | Redirect URI esperado |
 |---|---|---|---|
-| Produção | `https://reqsys-app.fly.dev` | `https://reqsys-api.fly.dev` | `https://reqsys-app.fly.dev` |
-| Homologação | `https://reqsys-app-stg.fly.dev` | `https://reqsys-api-stg.fly.dev` | `https://reqsys-app-stg.fly.dev` |
-| Homologação legada | `https://reqsys-web-stg.fly.dev` | `https://reqsys-api-stg.fly.dev` | `https://reqsys-web-stg.fly.dev` |
-| Desenvolvimento | `https://reqsys-app-dev.fly.dev` | `https://reqsys-api-dev.fly.dev` | `https://reqsys-app-dev.fly.dev` |
+| Produção | `https://reqsys-app.fly.dev` | `https://reqsys-api.fly.dev` | `https://reqsys-app.fly.dev/auth/callback.html` |
+| Homologação | `https://reqsys-app-stg.fly.dev` | `https://reqsys-api-stg.fly.dev` | `https://reqsys-app-stg.fly.dev/auth/callback.html` |
+| Homologação legada | `https://reqsys-web-stg.fly.dev` | `https://reqsys-api-stg.fly.dev` | `https://reqsys-web-stg.fly.dev/auth/callback.html` |
+| Desenvolvimento | `https://reqsys-app-dev.fly.dev` | `https://reqsys-api-dev.fly.dev` | `https://reqsys-app-dev.fly.dev/auth/callback.html` |
 
 ## Variáveis obrigatórias
 
@@ -31,13 +31,14 @@ No App Registration usado pelo ReqSys:
 1. Acesse **Authentication**.
 2. Adicione a plataforma **Single-page application (SPA)**.
 3. Registre exatamente as Redirect URIs abaixo, conforme ambientes usados:
+   - `https://reqsys-app.fly.dev/auth/callback.html`
    - `https://reqsys-app.fly.dev`
-   - `https://reqsys-app-stg.fly.dev`
-   - `https://reqsys-web-stg.fly.dev`
-   - `https://reqsys-app-dev.fly.dev`
+   - `https://reqsys-app-stg.fly.dev/auth/callback.html`
+   - `https://reqsys-web-stg.fly.dev/auth/callback.html`
+   - `https://reqsys-app-dev.fly.dev/auth/callback.html`
    - `http://localhost:5173`
    - `http://localhost:8084`
-4. Não registre `/auth/callback.html` como redirect principal para o fluxo MSAL do frontend atual. O bundle versionado usa a origem pública do frontend para alinhar com `APP_PUBLIC_URL` e reduzir divergência por ambiente.
+4. Registre `/auth/callback.html` como callback principal do fluxo MSAL/PKCE. Manter também a origem pública sem caminho em produção é aceito como compatibilidade operacional enquanto bundles antigos expiram em cache.
 5. Em **ID tokens**, permita emissão de `id_token` se a configuração do tenant exigir.
 6. Salve e aguarde propagação.
 
@@ -99,7 +100,7 @@ Resultado esperado:
     "azure_enabled": true,
     "auth_status": "ready",
     "missing_fields": [],
-    "expected_redirect_uri": "https://reqsys-app.fly.dev",
+    "expected_redirect_uri": "https://reqsys-app.fly.dev/auth/callback.html",
     "demo_login_enabled": false
   }
 }
@@ -120,7 +121,7 @@ Resultado esperado para homologação atual:
     "azure_enabled": true,
     "auth_status": "ready",
     "missing_fields": [],
-    "expected_redirect_uri": "https://reqsys-app-stg.fly.dev",
+    "expected_redirect_uri": "https://reqsys-app-stg.fly.dev/auth/callback.html",
     "demo_login_enabled": false
   }
 }
@@ -136,9 +137,9 @@ AADSTS50011: The redirect URI 'https://reqsys-app-stg.fly.dev/auth/callback.html
 
 Ação esperada:
 
-1. Confirmar que o frontend publicado usa bundle posterior à correção que envia `redirect_uri=https://reqsys-app-stg.fly.dev`.
+1. Confirmar que o frontend publicado usa bundle posterior à correção que envia `redirect_uri=https://reqsys-app-stg.fly.dev/auth/callback.html`.
 2. Confirmar que `APP_PUBLIC_URL=https://reqsys-app-stg.fly.dev` está aplicado na API STG.
-3. Confirmar que `https://reqsys-app-stg.fly.dev` está registrado no Microsoft Entra ID como SPA Redirect URI.
+3. Confirmar que `https://reqsys-app-stg.fly.dev/auth/callback.html` está registrado no Microsoft Entra ID como SPA Redirect URI.
 4. Limpar cache do navegador ou testar em janela anônima.
 5. Reexecutar login Microsoft.
 
@@ -150,7 +151,7 @@ O login só pode ser considerado corrigido quando houver evidência de:
 |---|---|
 | `/v1/auth/config` | `azure_enabled=true` |
 | Produção sem demo | `demo_login_enabled=false` |
-| Redirect URI | Origem pública registrada no Entra ID, sem `/auth/callback.html` |
+| Redirect URI | Callback `/auth/callback.html` registrado no Entra ID |
 | Botão Microsoft | Visível na tela de login |
 | Login em janela anônima | Retorna sessão e redireciona para aplicação |
 | Logs | Sem token, senha, CPF, PII sensível ou connection string |
