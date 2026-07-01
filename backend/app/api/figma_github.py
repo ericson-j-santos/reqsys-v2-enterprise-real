@@ -37,6 +37,15 @@ def _resolve_repo(value: str | None) -> str:
     return repo
 
 
+@router.get('/config')
+def config_figma_github():
+    return ok({
+        'has_default_file_key': bool((settings.figma_default_file_key or '').strip()),
+        'has_default_repo': bool((settings.figma_github_default_repo or '').strip()),
+        'sync_enabled': figma_github_sync.sync_enabled(),
+    })
+
+
 @router.post('/sync')
 def sincronizar_figma_github(payload: FigmaGithubSyncIn, db: Session = Depends(get_db)):
     if not figma_github_sync.sync_enabled():

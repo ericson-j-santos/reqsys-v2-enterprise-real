@@ -44,12 +44,22 @@
           Informe a chave do arquivo Figma e o repositório GitHub. Quando omitidos, o backend usa as configurações
           padrão seguras, caso estejam habilitadas no ambiente.
         </p>
+        <p v-if="!config.has_default_file_key" class="aviso-config" role="note">
+          File key é obrigatório neste ambiente porque <code>FIGMA_DEFAULT_FILE_KEY</code> não está configurado.
+        </p>
       </div>
 
       <form class="formulario" @submit.prevent="sincronizar">
         <label>
           File key do Figma
-          <input v-model.trim="form.file_key" type="text" placeholder="Opcional se FIGMA_DEFAULT_FILE_KEY existir" />
+          <input
+            v-model.trim="form.file_key"
+            type="text"
+            :required="!config.has_default_file_key"
+            :aria-invalid="!config.has_default_file_key && !form.file_key ? 'true' : 'false'"
+            placeholder="Cole a file key do Figma"
+          />
+          <small v-if="!config.has_default_file_key">Obrigatório quando não há file key padrão no ambiente.</small>
         </label>
         <label>
           Repositório GitHub
@@ -78,6 +88,25 @@
           {{ sincronizando ? 'Sincronizando...' : 'Executar sincronização' }}
         </button>
       </form>
+    </section>
+
+    <section class="painel figma-preview-panel" aria-labelledby="titulo-preview-figma">
+      <div class="linha-painel">
+        <div>
+          <h2 id="titulo-preview-figma">Preview do Figma</h2>
+          <p>Renderização incorporada do arquivo informado, quando o compartilhamento do Figma permitir embed.</p>
+        </div>
+        <a v-if="figmaFileUrl" class="link-externo" :href="figmaFileUrl" target="_blank" rel="noopener noreferrer">Abrir no Figma</a>
+      </div>
+      <div v-if="figmaEmbedUrl" class="figma-embed-shell">
+        <iframe
+          title="Preview renderizado do arquivo Figma"
+          :src="figmaEmbedUrl"
+          loading="lazy"
+          allowfullscreen
+        />
+      </div>
+      <p v-else class="vazio">Informe um file key para visualizar o Figma nesta tela.</p>
     </section>
 
     <section v-if="resultadoSync" class="painel" aria-labelledby="titulo-retorno">
@@ -154,6 +183,12 @@ import { api } from '../services/api'
 
 const API_BASE = '/v1/integracoes/figma-github'
 
+const config = reactive({
+  has_default_file_key: true,
+  has_default_repo: true,
+  sync_enabled: false,
+})
+
 const form = reactive({
   file_key: '',
   repo: '',
@@ -172,6 +207,24 @@ const sincronizando = ref(false)
 const erro = ref('')
 const mensagem = ref('')
 const ultimaAcao = ref('-')
+
+const fileKeyPreview = computed(() => {
+  const primeiroVinculoComArquivo = itens.value.find((item) => item.figma_file_key)?.figma_file_key
+  return form.file_key || resultadoSync.value?.file_key || primeiroVinculoComArquivo || ''
+})
+
+const figmaFileUrl = computed(() => {
+  if (!fileKeyPreview.value) return ''
+  return `https://www.figma.com/file/${encodeURIComponent(fileKeyPreview.value)}/reqsys-preview`
+})
+
+const figmaEmbedUrl = computed(() => {
+  if (!figmaFileUrl.value) return ''
+  const url = new URL('https://www.figma.com/embed')
+  url.searchParams.set('embed_host', 'reqsys')
+  url.searchParams.set('url', figmaFileUrl.value)
+  return url.toString()
+})
 
 const resumo = computed(() => {
   const total = itens.value.length
@@ -200,6 +253,16 @@ function montarPayload() {
   }
 }
 
+async function carregarConfig() {
+  try {
+    const { data: payload } = await api.get(`${API_BASE}/config`)
+    Object.assign(config, payload.data || {})
+  } catch (e) {
+    config.has_default_file_key = true
+    config.has_default_repo = true
+  }
+}
+
 async function carregarStatus() {
   carregandoStatus.value = true
   limparAlertas()
@@ -217,6 +280,11 @@ async function carregarStatus() {
 async function sincronizar() {
   sincronizando.value = true
   limparAlertas()
+  if (!config.has_default_file_key && !form.file_key) {
+    erro.value = 'file_key é obrigatório quando FIGMA_DEFAULT_FILE_KEY não está configurado.'
+    sincronizando.value = false
+    return
+  }
   try {
     const { data: payload } = await api.post(`${API_BASE}/sync`, montarPayload())
     resultadoSync.value = payload.data || payload
@@ -237,7 +305,10 @@ function formatarData(valor) {
   return data.toLocaleString('pt-BR')
 }
 
-onMounted(carregarStatus)
+onMounted(async () => {
+  await carregarConfig()
+  await carregarStatus()
+})
 </script>
 
 <style scoped>
@@ -255,7 +326,8 @@ button { cursor: pointer; font-weight: 700; background: var(--accent); color: #1
 button:disabled { cursor: not-allowed; opacity: 0.6; }
 .checks { display: grid; gap: 0.4rem; align-content: end; }
 .checks label { display: flex; gap: 0.4rem; align-items: center; font-weight: 500; }
-.alerta { border-radius: 8px; padding: 0.75rem; }
+.alerta, .aviso-config { border-radius: 8px; padding: 0.75rem; }
+.aviso-config { border: 1px solid var(--amber); color: var(--amber); background: rgba(245, 158, 11, 0.08); }
 .erro { border: 1px solid var(--red); color: var(--red); }
 .sucesso { border: 1px solid var(--green); color: var(--green); }
 .detalhes { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
@@ -263,6 +335,11 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 dt { font-weight: 700; }
 dd { margin: 0.25rem 0 0; word-break: break-word; color: var(--muted); }
 .json-retorno { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; }
+.figma-preview-panel { gap: 1rem; display: grid; }
+.figma-embed-shell { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-height: 520px; background: #111827; }
+.figma-embed-shell iframe { display: block; width: 100%; min-height: 520px; border: 0; }
+.link-externo { color: var(--accent); font-weight: 700; }
+small { color: var(--muted); font-weight: 500; }
 .tabela-wrapper { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; contain: inline-size; }
 .figma-github-table { border-collapse: collapse; width: max(100%, 720px); min-width: 720px; }
 th, td { border-bottom: 1px solid var(--line); padding: 0.75rem; text-align: left; vertical-align: top; white-space: nowrap; }
