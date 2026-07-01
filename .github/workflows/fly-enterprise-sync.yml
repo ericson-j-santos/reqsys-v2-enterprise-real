@@ -150,16 +150,20 @@ jobs:
             exit 0
           fi
 
-          # push main: deploy só quando publication-sync-gate detectar drift
-          if [ "${{ needs.publication-sync-gate.outputs.drift_detected }}" != "true" ]; then
+          # push main: detectar drift em modo read-only. Promoção/deploy continua
+          # restrita a workflow_dispatch com aprovação explícita para evitar que
+          # secrets/env vars ausentes transformem divergência operacional em
+          # falha de sincronização automática não governada.
+          if [ "${{ needs.publication-sync-gate.outputs.drift_detected }}" = "true" ]; then
+            echo "::warning::Drift detectado no push main; execute workflow_dispatch com deploy=true após validar env vars/secrets."
             echo "should_deploy=false" >> "$GITHUB_OUTPUT"
             echo "targets=[]" >> "$GITHUB_OUTPUT"
-            echo "skip_reason=${{ needs.publication-sync-gate.outputs.skip_reason || 'already_synced' }}" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=drift_detected_manual_dispatch_required" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "should_deploy=true" >> "$GITHUB_OUTPUT"
-          echo "skip_reason=drift_deploy" >> "$GITHUB_OUTPUT"
-          printf '%s\n' 'targets=[{"target_environment":"dev","github_environment":"dev"},{"target_environment":"hml","github_environment":"staging"}]' >> "$GITHUB_OUTPUT"
+          echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+          echo "targets=[]" >> "$GITHUB_OUTPUT"
+          echo "skip_reason=${{ needs.publication-sync-gate.outputs.skip_reason || 'already_synced' }}" >> "$GITHUB_OUTPUT"
 
   sync-environment:
     name: Sync (${{ matrix.target_environment }})

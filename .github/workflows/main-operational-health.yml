@@ -64,8 +64,15 @@ jobs:
           grep -qi -- "read-only" .github/workflows/pr-scope-labeler.yml
           grep -qi -- "sem mutacao de labels" .github/workflows/pr-scope-labeler.yml
           grep -qi -- "main-smoke-ci-evidence" .github/workflows/main-smoke-ci.yml
-          grep -qi -- "environment_change\":False" .github/workflows/main-smoke-ci.yml
-          grep -qi -- "deploy\":False" .github/workflows/main-smoke-ci.yml
+          python - <<'PY'
+          from pathlib import Path
+
+          smoke = Path(".github/workflows/main-smoke-ci.yml").read_text(encoding="utf-8")
+          required = ['"environment_change":False', '"deploy":False']
+          missing = [item for item in required if item not in smoke.replace(" ", "")]
+          if missing:
+              raise SystemExit(f"Guardrails ausentes no Main Smoke CI: {missing}")
+          PY
           grep -qi -- "--exclude-run-id" .github/workflows/pr-ci-watch.yml
           grep -qi -- "upload-artifact" .github/workflows/pr-ci-watch.yml
 
