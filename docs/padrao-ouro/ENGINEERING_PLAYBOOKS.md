@@ -50,6 +50,22 @@ Data de referência: 2026-06-27
 - Comando de validação local com resultado.
 - Justificativa explícita para qualquer gate não executado por ausência de artifact, credencial ou ambiente.
 
+### Consolidador operacional
+
+Quando o objetivo for consolidar o operacional Padrão Ouro, gere um snapshot determinístico antes do PR:
+
+```bash
+python scripts/padrao_ouro_operational_consolidator.py --status-json artifacts/coordenador-status/coordenador-status.json
+```
+
+Interprete o resultado assim:
+
+- `gold`: nova frente pode ser avaliada pelo `Agent Increment Gate`;
+- `consolidating`: manter o PR como `consolidate`, sem nova superfície funcional;
+- `blocked`: corrigir blockers ou gaps apontados antes de promover/abrir nova frente.
+
+O arquivo de saída deve ser tratado como artifact local/CI; não versionar snapshots temporais em `artifacts/`.
+
 ---
 
 ## 1. Abrir incremento
