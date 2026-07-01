@@ -116,27 +116,28 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           if [ -f artifacts/merge-readiness/merge-readiness.json ]; then
             python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-import json
-from pathlib import Path
-payload = json.loads(Path('artifacts/merge-readiness/merge-readiness.json').read_text(encoding='utf-8'))
-print(f"- Status: `{payload.get('status')}`")
-print(f"- Ahead: `{payload.get('ahead_by')}`")
-print(f"- Behind: `{payload.get('behind_by')}`")
-print(f"- Arquivos alterados: `{payload.get('changed_files')}`")
-print(f"- Workflows alterados: `{payload.get('workflow_files')}`")
-blocking = payload.get('blocking_issues') or []
-warnings = payload.get('warnings') or []
-if blocking:
-    print('')
-    print('### Bloqueios')
-    for item in blocking:
-        print(f"- {item}")
-if warnings:
-    print('')
-    print('### Alertas')
-    for item in warnings:
-        print(f"- {item}")
-PY
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path('artifacts/merge-readiness/merge-readiness.json').read_text(encoding='utf-8'))
+          print(f"- Status: `{payload.get('status')}`")
+          print(f"- Ahead: `{payload.get('ahead_by')}`")
+          print(f"- Behind: `{payload.get('behind_by')}`")
+          print(f"- Arquivos alterados: `{payload.get('changed_files')}`")
+          print(f"- Workflows alterados: `{payload.get('workflow_files')}`")
+          blocking = payload.get('blocking_issues') or []
+          warnings = payload.get('warnings') or []
+          if blocking:
+              print('')
+              print('### Bloqueios')
+              for item in blocking:
+                  print(f"- {item}")
+          if warnings:
+              print('')
+              print('### Alertas')
+              for item in warnings:
+                  print(f"- {item}")
+          PY
           else
             echo "- Status: \`sem artifact\`" >> "$GITHUB_STEP_SUMMARY"
           fi

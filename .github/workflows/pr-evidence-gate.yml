@@ -262,6 +262,15 @@ jobs:
               };
             }
 
+            function shouldKeepPolling(gate) {
+              const failures = gate.failures || [];
+              if (gate.status === 'pending') return true;
+              return failures.length > 0 && failures.every((failure) => (
+                failure.startsWith('No workflow runs found for PR head SHA') ||
+                failure.startsWith('Required workflow has no run on current head SHA:')
+              ));
+            }
+
             function recoverIfRequiredChecksAreGreen(gate) {
               const required = gate.required_workflows || [];
               const allRequiredGreen = required.length > 0 && required.every((item) => Number(item.successful_runs || 0) > 0);
@@ -295,7 +304,7 @@ jobs:
               do {
                 runSummaries = await listRuns(headSha, false);
                 gate = evaluate({ headSha, runSummaries, requiredWorkflowNames, optionalWorkflowNames });
-                if (gate.status !== 'pending') break;
+                if (!shouldKeepPolling(gate)) break;
                 core.info(`Evidence still pending. Waiting ${pollSeconds}s before rechecking.`);
                 await sleep(pollSeconds * 1000);
               } while (Date.now() < deadline);

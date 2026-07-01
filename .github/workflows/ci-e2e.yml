@@ -80,6 +80,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Subir Vite
         env:
+          GATEWAY_PORT: "5173"
           VITE_API_URL: /api
         run: |
           npm run dev -- --host 127.0.0.1 --port 5173 > /tmp/reqsys-vite.log 2>&1 &
