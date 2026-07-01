@@ -148,7 +148,8 @@ class Settings(BaseSettings):
 
     @property
     def azure_expected_redirect_uri(self) -> str:
-        return (self.app_public_url or self.ambiente_atual_info.get('frontend', '')).rstrip('/')
+        frontend_origin = (self.app_public_url or self.ambiente_atual_info.get('frontend', '')).rstrip('/')
+        return f'{frontend_origin}/auth/callback.html' if frontend_origin else ''
 
     @property
     def cors_origins_list(self) -> list[str]:

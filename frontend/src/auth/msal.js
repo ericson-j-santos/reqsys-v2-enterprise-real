@@ -4,7 +4,7 @@ import { api } from '../services/api'
 let _instance = null
 
 export function getAuthCallbackUri() {
-  return window.location.origin
+  return `${window.location.origin}/auth/callback.html`
 }
 
 async function fetchAuthConfig() {
