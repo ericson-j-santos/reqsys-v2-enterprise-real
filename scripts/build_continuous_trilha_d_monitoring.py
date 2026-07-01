@@ -123,6 +123,15 @@ def resolve_monitoring_state(alerts: list[dict[str, str]]) -> str:
     return "green"
 
 
+def resolve_next_increment_from_history(summary: dict[str, Any]) -> str | None:
+    from scripts.build_trilha_d_history import resolve_next_increment
+
+    if not summary:
+        return None
+    artifact_ingestion = bool(summary.get("artifact_ingestion_enabled"))
+    return resolve_next_increment(artifact_ingestion=artifact_ingestion)
+
+
 def build_payload(
     *,
     history_path: Path | None = None,
@@ -135,6 +144,7 @@ def build_payload(
     alerts = build_alerts(history, predictive)
     state = resolve_monitoring_state(alerts)
     monitoring_enabled = bool(summary.get("artifact_ingestion_enabled"))
+    next_increment = resolve_next_increment_from_history(summary) or summary.get("next_increment")
 
     return {
         "schema_version": "1.0.0",
@@ -146,7 +156,7 @@ def build_payload(
         "alerts_active": len(alerts),
         "lane": "governance-automation",
         "summary": {
-            "next_increment": summary.get("next_increment"),
+            "next_increment": next_increment,
             "artifact_ingestion_enabled": bool(summary.get("artifact_ingestion_enabled")),
             "continuous_monitoring_enabled": monitoring_enabled,
             "recommendation": "investigar_alertas" if alerts else "monitoramento_estavel",
@@ -203,29 +213,31 @@ def write_payload(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Gera continuous-trilha-d-monitoring.json para o dashboard operacional.")
+    parser = argparse.ArgumentParser(description="Gera monitoramento contínuo da Trilha D.")
+    parser.add_argument("--history", "--history-json", dest="history", default=DEFAULT_HISTORY)
+    parser.add_argument("--predictive", "--predictive-json", dest="predictive", default=DEFAULT_PREDICTIVE)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
-    parser.add_argument("--history-json", default=DEFAULT_HISTORY)
-    parser.add_argument("--predictive-json", default=DEFAULT_PREDICTIVE)
-    parser.add_argument("--json", action="store_true", help="Imprime o payload gerado")
+    parser.add_argument("--json", action="store_true")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    payload = write_payload(
-        args.output,
-        history_path=Path(args.history_json),
-        predictive_path=Path(args.predictive_json),
-    )
+    payload = write_payload(args.output, history_path=Path(args.history), predictive_path=Path(args.predictive))
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         print(
-            "continuous_trilha_d_monitoring_state="
-            f"{payload['state']} alerts={payload['alerts_active']} output={args.output}"
+            " ".join(
+                [
+                    f"state={payload['state']}",
+                    f"alerts_active={payload['alerts_active']}",
+                    f"regression_alert={payload['regression_alert']}",
+                    f"next_increment={payload['summary']['next_increment']}",
+                ]
+            )
         )
-    return 0
+    return 0 if payload["state"] != "red" else 1
 
 
 if __name__ == "__main__":

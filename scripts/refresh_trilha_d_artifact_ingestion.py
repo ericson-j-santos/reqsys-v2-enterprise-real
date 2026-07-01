@@ -10,9 +10,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -27,9 +29,32 @@ DEFAULT_MONITORING_HISTORY = "docs/ops-dashboard/data/continuous-trilha-d-monito
 DEFAULT_GOVERNANCE = "docs/ops-dashboard/data/governance-evidence-index.json"
 DEFAULT_MERGE_READINESS_HISTORY = "docs/ops-dashboard/data/merge-readiness-history.json"
 
+T = TypeVar("T")
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _run_retryable(label: str, operation: Callable[[], T], *, attempts: int = 3, delay_seconds: float = 0.25) -> T:
+    """Executa uma etapa de refresh com retry leve e erro final preservado.
+
+    O refresh da Trilha D é derivado de artifacts já publicados. Em runners do
+    GitHub Actions, pequenas janelas de I/O ou geração de arquivos derivados
+    podem falhar transitoriamente. Esta função evita falso vermelho por falha
+    transitória, mas mantém erro fatal quando todas as tentativas falham.
+    """
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return operation()
+        except Exception as exc:  # pragma: no cover - exercitado por teste com monkeypatch
+            last_error = exc
+            if attempt >= attempts:
+                break
+            print(f"::warning::{label} falhou na tentativa {attempt}/{attempts}; retry seguro.")
+            time.sleep(delay_seconds)
+    raise RuntimeError(f"{label} falhou após {attempts} tentativas") from last_error
 
 
 def refresh_artifacts(
@@ -51,59 +76,74 @@ def refresh_artifacts(
 
     from scripts.build_trilha_d_history import ingest_report_into_history
 
-    ingest_report_into_history(str(report_path), str(history_path))
+    _run_retryable(
+        "ingest_report_into_history",
+        lambda: ingest_report_into_history(str(report_path), str(history_path)),
+    )
     refreshed.append(str(history_path))
 
     from scripts.build_padrao_ouro_operational_pareto import main as pareto_main
 
-    pareto_main(["--output", str(repo_root / DEFAULT_PARETO), "--trilha-d-history", str(history_path)])
+    _run_retryable(
+        "build_padrao_ouro_operational_pareto",
+        lambda: pareto_main(["--output", str(repo_root / DEFAULT_PARETO), "--trilha-d-history", str(history_path)]),
+    )
     refreshed.append(str(repo_root / DEFAULT_PARETO))
 
     predictive_path = repo_root / DEFAULT_PREDICTIVE
     from scripts.predict_operational_regression import main as predict_main
 
-    predict_main(
-        [
-            "--history-json",
-            str(history_path),
-            "--report-json",
-            str(report_path),
-            "--output",
-            str(predictive_path),
-            "--mode",
-            "report_only",
-            "--json",
-        ]
+    _run_retryable(
+        "predict_operational_regression",
+        lambda: predict_main(
+            [
+                "--history-json",
+                str(history_path),
+                "--report-json",
+                str(report_path),
+                "--output",
+                str(predictive_path),
+                "--mode",
+                "report_only",
+                "--json",
+            ]
+        ),
     )
     refreshed.append(str(predictive_path))
 
     monitoring_path = repo_root / DEFAULT_MONITORING
     from scripts.build_continuous_trilha_d_monitoring import main as monitoring_main
 
-    monitoring_main(
-        [
-            "--history-json",
-            str(history_path),
-            "--predictive-json",
-            str(predictive_path),
-            "--output",
-            str(monitoring_path),
-        ]
+    _run_retryable(
+        "build_continuous_trilha_d_monitoring",
+        lambda: monitoring_main(
+            [
+                "--history-json",
+                str(history_path),
+                "--predictive-json",
+                str(predictive_path),
+                "--output",
+                str(monitoring_path),
+            ]
+        ),
     )
     refreshed.append(str(monitoring_path))
 
     monitoring_history_path = repo_root / DEFAULT_MONITORING_HISTORY
     from scripts.build_continuous_trilha_d_monitoring_history import main as monitoring_history_main
 
-    monitoring_history_main(
-        [
-            "--ingest-monitoring",
-            str(monitoring_path),
-            "--output",
-            str(monitoring_history_path),
-            "--run-id",
-            github_run_id or "",
-        ]
+    _run_retryable(
+        "build_continuous_trilha_d_monitoring_history",
+        lambda: monitoring_history_main(
+            [
+                "--ingest-monitoring",
+                str(monitoring_path),
+                "--output",
+                str(monitoring_history_path),
+                "--run-id",
+                github_run_id or "",
+            ]
+        ),
     )
     refreshed.append(str(monitoring_history_path))
 
@@ -113,28 +153,34 @@ def refresh_artifacts(
     gov_args = ["--output", str(governance_path), "--trilha-d-history", str(history_path)]
     if github_run_id:
         gov_args.extend(["--github-run-id", github_run_id])
-    governance_main(gov_args)
+    _run_retryable("build_governance_evidence_index", lambda: governance_main(gov_args))
     refreshed.append(str(governance_path))
 
     from scripts.build_trilha_d_history import load_history_from_output, write_payload
 
-    history = load_history_from_output(history_path)
-    write_payload(str(history_path), history=history, artifact_ingestion=True)
+    history = _run_retryable("load_history_from_output", lambda: load_history_from_output(history_path))
+    _run_retryable("write_history_payload", lambda: write_payload(str(history_path), history=history, artifact_ingestion=True))
 
-    pareto_main(["--output", str(repo_root / DEFAULT_PARETO), "--trilha-d-history", str(history_path)])
+    _run_retryable(
+        "rebuild_padrao_ouro_operational_pareto",
+        lambda: pareto_main(["--output", str(repo_root / DEFAULT_PARETO), "--trilha-d-history", str(history_path)]),
+    )
 
     if not skip_merge_readiness and merge_readiness_report and merge_readiness_report.exists():
         from scripts.build_merge_readiness_history import main as merge_main
 
-        merge_main(
-            [
-                "--ingest-report",
-                str(merge_readiness_report),
-                "--output",
-                str(repo_root / DEFAULT_MERGE_READINESS_HISTORY),
-                "--run-id",
-                github_run_id or "",
-            ]
+        _run_retryable(
+            "build_merge_readiness_history",
+            lambda: merge_main(
+                [
+                    "--ingest-report",
+                    str(merge_readiness_report),
+                    "--output",
+                    str(repo_root / DEFAULT_MERGE_READINESS_HISTORY),
+                    "--run-id",
+                    github_run_id or "",
+                ]
+            ),
         )
         refreshed.append(str(repo_root / DEFAULT_MERGE_READINESS_HISTORY))
 
@@ -145,7 +191,13 @@ def refresh_artifacts(
         ("continuous-trilha-d-monitoring.json", monitoring_path),
     ):
         if src.exists():
-            (artifact_dir / name).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+            target = artifact_dir / name
+            current = target.read_text(encoding="utf-8") if target.exists() else None
+            updated = src.read_text(encoding="utf-8")
+            if current == updated:
+                print(f"::notice::{name} já estava atualizado; noop seguro.")
+            else:
+                target.write_text(updated, encoding="utf-8")
 
     return {
         "ok": True,
