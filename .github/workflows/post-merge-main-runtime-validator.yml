@@ -1,0 +1,108 @@
+name: Post-merge Main Runtime Validator
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/post-merge-main-runtime-validator.yml"
+      - "scripts/post_merge_main_runtime_validator.py"
+      - "tests/test_post_merge_main_runtime_validator.py"
+      - "scripts/runtime_production_smoke_governed.py"
+      - "scripts/executive_runtime_evidence_summary.py"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "URL pública base do ReqSys"
+        required: false
+        default: "https://reqsys-app.fly.dev"
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  DEFAULT_RUNTIME_PUBLIC_BASE_URL: "https://reqsys-app.fly.dev"
+
+concurrency:
+  group: post-merge-main-runtime-validator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate post-merge main runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Validate contracts
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/post_merge_main_runtime_validator.py
+          python -m pytest tests/test_post_merge_main_runtime_validator.py -q
+
+      - name: Run governed runtime smoke
+        env:
+          RUNTIME_PUBLIC_BASE_URL: ${{ github.event.inputs.base_url || env.DEFAULT_RUNTIME_PUBLIC_BASE_URL }}
+        run: |
+          set -euo pipefail
+          python scripts/runtime_production_smoke_governed.py \
+            --base-url "${RUNTIME_PUBLIC_BASE_URL}" \
+            --output artifacts/runtime-production-smoke-governed.json \
+            --repository "${GITHUB_REPOSITORY}" \
+            --github-run-id "${GITHUB_RUN_ID}"
+
+      - name: Build executive runtime evidence summary
+        run: |
+          set -euo pipefail
+          python scripts/executive_runtime_evidence_summary.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --github-run-id "${GITHUB_RUN_ID}" \
+            --output-dir artifacts/executive-runtime-evidence-summary
+
+      - name: Validate post-merge runtime evidence
+        run: |
+          set -euo pipefail
+          python scripts/post_merge_main_runtime_validator.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --sha "${GITHUB_SHA}" \
+            --github-run-id "${GITHUB_RUN_ID}" \
+            --output artifacts/post-merge-main-runtime-validator/post-merge-main-runtime-validator.json
+
+      - name: Summary
+        if: always()
+        run: |
+          set -euo pipefail
+          summary="artifacts/post-merge-main-runtime-validator/summary.md"
+          if [[ -f "${summary}" ]]; then
+            cat "${summary}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Post-merge main runtime validator summary unavailable." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload post-merge main runtime validator artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-merge-main-runtime-validator
+          path: |
+            artifacts/runtime-production-smoke-governed.json
+            artifacts/executive-runtime-evidence-summary/
+            artifacts/post-merge-main-runtime-validator/
+          if-no-files-found: error
+          retention-days: 30
