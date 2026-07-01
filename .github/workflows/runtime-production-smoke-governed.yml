@@ -1,0 +1,117 @@
+name: Runtime Production Smoke Governed
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "URL pública base do ReqSys"
+        required: false
+        default: "https://reqsys-app.fly.dev"
+        type: string
+      allow_degraded:
+        description: "Não falhar workflow se smoke retornar degraded"
+        required: false
+        default: false
+        type: boolean
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/runtime-production-smoke-governed.yml"
+      - "scripts/runtime_production_smoke_governed.py"
+      - "tests/test_runtime_production_smoke_governed.py"
+      - "backend/app/main.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/runtime-production-smoke-governed.yml"
+      - "scripts/runtime_production_smoke_governed.py"
+      - "tests/test_runtime_production_smoke_governed.py"
+      - "backend/app/main.py"
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  DEFAULT_RUNTIME_PUBLIC_BASE_URL: "https://reqsys-app.fly.dev"
+
+concurrency:
+  group: runtime-production-smoke-governed-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime-production-smoke:
+    name: Runtime production smoke governed
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Validar script e testes do smoke
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/runtime_production_smoke_governed.py
+          python -m pytest tests/test_runtime_production_smoke_governed.py -q
+
+      - name: Executar smoke público governado
+        env:
+          RUNTIME_PUBLIC_BASE_URL: ${{ github.event.inputs.base_url || env.DEFAULT_RUNTIME_PUBLIC_BASE_URL }}
+          ALLOW_DEGRADED: ${{ github.event.inputs.allow_degraded || 'false' }}
+        run: |
+          set -euo pipefail
+          args=(
+            --base-url "${RUNTIME_PUBLIC_BASE_URL}"
+            --output artifacts/runtime-production-smoke-governed.json
+            --repository "${{ github.repository }}"
+            --github-run-id "${{ github.run_id }}"
+            --json
+          )
+          if [[ "${ALLOW_DEGRADED}" == "true" ]]; then
+            args+=(--allow-degraded)
+          fi
+          python scripts/runtime_production_smoke_governed.py "${args[@]}"
+
+      - name: Resumo operacional
+        if: always()
+        run: |
+          set -euo pipefail
+          REPORT="artifacts/runtime-production-smoke-governed.json"
+          if [[ ! -f "${REPORT}" ]]; then
+            echo "## Runtime Production Smoke" >> "$GITHUB_STEP_SUMMARY"
+            echo "Artifact ausente." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("artifacts/runtime-production-smoke-governed.json").read_text())
+          print("## Runtime Production Smoke Governed")
+          print()
+          print(f"- Status: **{report['status']}**")
+          print(f"- Base URL: {report['base_url']}")
+          print(f"- Required: {report['required_ok']}/{report['required_total']} ({report['required_success_percentual']}%)")
+          print(f"- Total: {report['total_success_percentual']}%")
+          print(f"- Latência média: {report['average_latency_ms']} ms")
+          print(f"- Risco: {report['risk']}")
+          print()
+          print("| Endpoint | Required | HTTP | OK | Latência |")
+          print("|---|---:|---:|---:|---:|")
+          for item in report["checks"]:
+              print(f"| {item['path']} | {item['required']} | {item['actual_http']} | {item['ok']} | {item['latency_ms']} ms |")
+          PY
+
+      - name: Publicar artifact do smoke
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-production-smoke-governed
+          path: artifacts/runtime-production-smoke-governed.json
+          if-no-files-found: warn
+          retention-days: 30
