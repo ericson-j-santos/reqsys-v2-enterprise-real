@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
+from pathlib import Path
 from urllib.error import URLError
 
 import pytest
@@ -9,11 +9,16 @@ import pytest
 from scripts import runtime_production_smoke_governed as smoke
 
 
+class _FakeHeaders(dict):
+    def get_content_type(self) -> str:
+        return str(self.get("content-type", "application/json"))
+
+
 class _FakeResponse:
     def __init__(self, status: int = 200, body: bytes = b'{"data":{"status":"ok"}}') -> None:
         self.status = status
         self._body = body
-        self.headers = {"content-type": "application/json"}
+        self.headers = _FakeHeaders({"content-type": "application/json"})
 
     def __enter__(self):
         return self
@@ -103,7 +108,7 @@ def test_build_report_classifica_degraded_quando_required_falha() -> None:
     assert report["required_total"] == 2
 
 
-def test_main_gera_artifact_json(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+def test_main_gera_artifact_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(smoke, "urlopen", lambda request, timeout: _FakeResponse())
     output = tmp_path / "runtime-smoke.json"
 
@@ -124,3 +129,22 @@ def test_main_gera_artifact_json(monkeypatch: pytest.MonkeyPatch, tmp_path) -> N
     assert exit_code == 0
     assert payload["status"] == "healthy"
     assert payload["required_ok"] == payload["required_total"]
+
+
+def test_run_smoke_required_e_optional_com_mocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(smoke, "urlopen", lambda request, timeout: _FakeResponse())
+
+    report = smoke.run_smoke(
+        base_url="https://reqsys-app.fly.dev",
+        timeout_seconds=1,
+        attempts=1,
+        delay_seconds=0,
+        repository="owner/repo",
+        run_id="123",
+    )
+
+    assert report["status"] == "healthy"
+    assert report["required_success_percentual"] == 100.0
+    assert report["required_total"] == len(smoke.REQUIRED_ENDPOINTS)
+    assert report["optional_total"] == len(smoke.OPTIONAL_ENDPOINTS)
+}
