@@ -147,4 +147,3 @@ def test_run_smoke_required_e_optional_com_mocks(monkeypatch: pytest.MonkeyPatch
     assert report["required_success_percentual"] == 100.0
     assert report["required_total"] == len(smoke.REQUIRED_ENDPOINTS)
     assert report["optional_total"] == len(smoke.OPTIONAL_ENDPOINTS)
-}
