@@ -52,6 +52,25 @@ Checklist rápido antes de abrir/atualizar PR:
 
 Critério de saída: uma mudança Padrão Ouro só é pronta quando a evidência de gate, os artefatos Tier 1 afetados e o comando de validação focado estiverem rastreáveis no PR.
 
+
+### Consolidador operacional Padrão Ouro
+
+Para transformar o modo `state_yellow` em uma fila objetiva de estabilização, use o consolidador local antes de abrir ou atualizar PRs de consolidação:
+
+```bash
+python scripts/padrao_ouro_operational_consolidator.py --status-json artifacts/coordenador-status/coordenador-status.json
+```
+
+O relatório JSON gerado em `artifacts/padrao-ouro-operational-consolidator/` classifica a prontidão como:
+
+| Readiness | Significado | Próximo incremento sugerido |
+| --- | --- | --- |
+| `gold` | Coordenador verde, Tier 1 completo e nova frente liberada. | `new_front` com gate explícito. |
+| `consolidating` | Estado seguro para fechar evidências/CI sem abrir superfície nova. | `consolidate`. |
+| `blocked` | Falta coordenador, ciclo operacional, Tier 1 ou há falha crítica. | `gap_fix` ou `consolidate`, conforme blockers. |
+
+Use esse output como evidência objetiva no PR quando a demanda for “consolidar operacional padrão ouro”.
+
 ## Índices machine-readable
 
 | Artefato | Caminho | Uso |
