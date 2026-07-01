@@ -8,7 +8,7 @@
   "strict_blocked": false,
   "increment_type": "consolidate",
   "reference": null,
-  "intent": "consolidacao operacional pre-sync ambientes",
+  "intent": "estabilizar build frontend conhecido",
   "coordenador_state": "yellow",
   "coordenador_decision": "bloquear_novas_frentes_ate_consolidar",
   "increment_gate": {
