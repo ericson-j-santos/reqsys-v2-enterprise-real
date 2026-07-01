@@ -1,0 +1,2 @@
+[lint.per-file-ignores]
+"app/api/monitoramento_operacional.py" = ["I001"]
