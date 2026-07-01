@@ -22,11 +22,6 @@ on:
       - "backend/app/main.py"
   push:
     branches: [main]
-    paths:
-      - ".github/workflows/runtime-production-smoke-governed.yml"
-      - "scripts/runtime_production_smoke_governed.py"
-      - "tests/test_runtime_production_smoke_governed.py"
-      - "backend/app/main.py"
 
 permissions:
   contents: read
