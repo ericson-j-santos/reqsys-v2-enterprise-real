@@ -137,7 +137,7 @@ jobs:
     environment: production
     timeout-minutes: 10
     outputs:
-      configured: ${{ steps.preflight.outputs.configured }}
+      configured: ${{ steps.apply.outputs.configured || 'false' }}
     steps:
       - name: Preflight de secrets externos
         id: preflight
@@ -165,7 +165,7 @@ jobs:
 
           {
             echo "## Secrets auth produção"
-            echo "- Status: ${configured}"
+            echo "- Preflight: ${configured}"
             echo "- Reason: ${reason}"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -178,6 +178,7 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
         if: steps.preflight.outputs.configured == 'true'
       - name: Aplicar secrets JWT/Azure no reqsys-api
+        id: apply
         if: steps.preflight.outputs.configured == 'true'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -186,7 +187,7 @@ jobs:
           AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           python scripts/configurar_fly_auth_azure.py \
             --fly-app reqsys-api \
             --app-env production \
@@ -197,6 +198,17 @@ jobs:
             --cofre-tenant-key AZURE_TENANT_ID \
             --cofre-client-key AZURE_CLIENT_ID \
             | tee fly-auth-azure-report-production.json
+          status="${PIPESTATUS[0]}"
+
+          if [ "$status" -eq 0 ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Secrets auth produção aplicados e validados."
+            exit 0
+          fi
+
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "::warning::Configuração de secrets auth produção falhou com exit code ${status}; deploy runtime será bloqueado de forma governada."
+          exit 0
 
       - name: Registrar skip governado de secrets
         if: steps.preflight.outputs.configured != 'true'
