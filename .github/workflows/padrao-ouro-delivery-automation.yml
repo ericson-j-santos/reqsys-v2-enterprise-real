@@ -188,6 +188,7 @@ jobs:
           AZURE_CLIENT_ID_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
         run: |
           set -uo pipefail
+          set +e
           python scripts/configurar_fly_auth_azure.py \
             --fly-app reqsys-api \
             --app-env production \
@@ -199,6 +200,7 @@ jobs:
             --cofre-client-key AZURE_CLIENT_ID \
             | tee fly-auth-azure-report-production.json
           status="${PIPESTATUS[0]}"
+          set -e
 
           if [ "$status" -eq 0 ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
