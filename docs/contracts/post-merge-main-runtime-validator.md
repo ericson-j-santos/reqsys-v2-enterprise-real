@@ -23,6 +23,16 @@ Registrar o contrato operacional do workflow `Post-merge Main Runtime Validator`
 | Smoke governado | `artifacts/runtime-production-smoke-governed.json` |
 | Executive runtime summary | `artifacts/executive-runtime-evidence-summary/executive-runtime-evidence-summary.json` |
 
+## Campos de estado operacional
+
+| Campo | Regra |
+|---|---|
+| `schema_version` | `1.1.0` |
+| `evidence_completeness_percentual` | Percentual de checks críticos aprovados |
+| `dominant_blocker` | Primeiro check crítico bloqueante ou `none` |
+| `automatic_action_possible` | Próxima ação automática reportável pelo workflow |
+| `human_action_required` | Ação operacional indispensável quando houver bloqueio ou `none` |
+
 ## Gatilhos
 
 | Evento | Comportamento |
@@ -39,6 +49,8 @@ Registrar o contrato operacional do workflow `Post-merge Main Runtime Validator`
 | Artifact executivo | `contract=executive-runtime-evidence-summary` |
 | Estado final | `status=passed` quando todos os checks críticos passam |
 | Risco | `low` quando `status=passed`; `high` quando bloqueado |
+| Completude de evidência | `100.0` quando todos os checks críticos passam |
+| Bloqueio dominante | `none` quando não houver check bloqueante |
 
 ## Guardrails
 
