@@ -28,8 +28,11 @@ def test_build_report_passes_when_smoke_and_executive_summary_are_valid() -> Non
     report = build_report(_smoke(), _executive(), repo="example/repo", sha="abc", run_id="1")
 
     assert report["contract"] == "post-merge-main-runtime-validator"
+    assert report["schema_version"] == "1.1.0"
     assert report["status"] == "passed"
     assert report["risk"] == "low"
+    assert report["evidence_completeness_percentual"] == 100.0
+    assert report["dominant_blocker"] == "none"
     assert report["blocking_issues"] == []
     assert all(check["ok"] for check in report["checks"])
 
@@ -39,6 +42,8 @@ def test_build_report_blocks_when_smoke_is_missing() -> None:
 
     assert report["status"] == "blocked"
     assert report["risk"] == "high"
+    assert report["evidence_completeness_percentual"] == 50.0
+    assert report["dominant_blocker"] == "runtime_smoke"
     assert "runtime_smoke" in report["blocking_issues"]
 
 
@@ -46,6 +51,7 @@ def test_build_report_blocks_when_executive_summary_contract_is_invalid() -> Non
     report = build_report(_smoke(), {"contract": "other"}, repo="example/repo", sha="abc", run_id=None)
 
     assert report["status"] == "blocked"
+    assert report["dominant_blocker"] == "executive_runtime_evidence_summary"
     assert "executive_runtime_evidence_summary" in report["blocking_issues"]
 
 
@@ -57,6 +63,8 @@ def test_render_markdown_contains_checks_and_sha() -> None:
     assert "Post-merge Main Runtime Validator" in markdown
     assert "runtime_smoke" in markdown
     assert "abc" in markdown
+    assert "Evidence completeness" in markdown
+    assert "Dominant blocker" in markdown
 
 
 def test_main_writes_report_and_summary(tmp_path: Path, monkeypatch) -> None:
