@@ -79,12 +79,44 @@ def validate_executive_summary(summary: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _evidence_completeness_percentual(checks: list[dict[str, Any]]) -> float:
+    if not checks:
+        return 0.0
+    passed = sum(1 for check in checks if check["ok"])
+    return round((passed / len(checks)) * 100, 2)
+
+
+def _dominant_blocker(failed: list[dict[str, Any]]) -> str:
+    if not failed:
+        return "none"
+    return str(failed[0]["id"])
+
+
+def _automatic_action(status: str, dominant_blocker: str) -> str:
+    if status == "passed":
+        return "publish_artifact_and_continue_increment_planning"
+    if dominant_blocker == "runtime_smoke":
+        return "rerun_post_merge_main_runtime_validator_after_runtime_stabilization"
+    if dominant_blocker == "executive_runtime_evidence_summary":
+        return "rebuild_executive_runtime_evidence_summary_and_rerun_validator"
+    return "inspect_blocking_artifacts_and_rerun_validator"
+
+
+def _human_action(status: str, dominant_blocker: str) -> str:
+    if status == "passed":
+        return "none"
+    if dominant_blocker == "runtime_smoke":
+        return "validate_public_runtime_url_or_environment_availability"
+    return "review_missing_or_invalid_evidence_artifact"
+
+
 def build_report(smoke: dict[str, Any], executive: dict[str, Any], *, repo: str, sha: str, run_id: str | None) -> dict[str, Any]:
     checks = [validate_smoke(smoke), validate_executive_summary(executive)]
     failed = [check for check in checks if not check["ok"]]
     status = "passed" if not failed else "blocked"
+    dominant_blocker = _dominant_blocker(failed)
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "contract": "post-merge-main-runtime-validator",
         "generated_at_epoch": int(time.time()),
         "repo": repo,
@@ -92,6 +124,10 @@ def build_report(smoke: dict[str, Any], executive: dict[str, Any], *, repo: str,
         "github_run_id": run_id,
         "status": status,
         "risk": "low" if status == "passed" else "high",
+        "evidence_completeness_percentual": _evidence_completeness_percentual(checks),
+        "dominant_blocker": dominant_blocker,
+        "automatic_action_possible": _automatic_action(status, dominant_blocker),
+        "human_action_required": _human_action(status, dominant_blocker),
         "checks": checks,
         "blocking_issues": [item["id"] for item in failed],
         "links": {
@@ -115,6 +151,10 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Status: `{report['status']}`",
         f"- Risk: `{report['risk']}`",
         f"- SHA: `{report['sha']}`",
+        f"- Evidence completeness: `{report['evidence_completeness_percentual']}%`",
+        f"- Dominant blocker: `{report['dominant_blocker']}`",
+        f"- Automatic action possible: `{report['automatic_action_possible']}`",
+        f"- Human action required: `{report['human_action_required']}`",
         "",
         "## Checks",
     ]
