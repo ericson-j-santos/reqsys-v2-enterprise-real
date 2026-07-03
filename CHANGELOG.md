@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-07-03
+
+### Adicionado
+
+- `scripts/relatorio_qualidade_ia_pendentes.py`: relatório somente-leitura que lista, por ambiente (dev/hml/prod), os requisitos fora das categorias aprovado/em_analise/rejeitado — a causa raiz real do score de Qualidade IA baixo, sem mascarar ou alterar dados.
+- `scripts/replicate_requisitos_anonimizado.py`: replicação on-demand (`--execute`, dry-run por padrão) de requisitos de produção para hml/dev, mascarando `solicitante` com pseudônimo estável (LGPD) e marcando origem para reexecução idempotente. Escopo deliberadamente limitado a `requisitos`; não replica `auditoria` nem `recommendation_ia`, para não contaminar a trilha de auditoria de cada ambiente.
+- `.github/workflows/qualidade-ia-snapshot.yml` + `scripts/registrar_qualidade_ia_snapshot_ci.py`: snapshot diário agendado de Qualidade IA em dev/hml/prod via `POST /v1/qualidade-ia/snapshot`, com aviso automático (`::warning`) quando `score_geral < 70`.
+- `docs/runbooks/qualidade-ia-e-replicacao-ambientes.md`: runbook consolidando o diagnóstico do score de Qualidade IA e o procedimento de replicação anonimizada entre ambientes.
+
 ## [Unreleased] - 2026-06-20
 
 ### Adicionado
