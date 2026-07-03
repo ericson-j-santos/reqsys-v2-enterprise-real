@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.envelope import ok
 from app.db import get_db
 from app.models.requisito import Requisito
+from app.services.auditoria import registrar_evento
 from app.services.github_redmine import (
     IntegracaoError,
     fetch_github_issues,
@@ -257,3 +258,50 @@ def publicar_redmine(
         'warnings': warnings,
         'feature_enabled': github_redmine_import_enabled(),
     }, x_correlation_id)
+
+
+class ConcluirRequisitoIn(BaseModel):
+    evidencia: str = Field(
+        min_length=10,
+        description='Evidencia objetiva e verificavel de que o requisito foi entregue (ex.: link, endpoint validado, referencia de commit/PR).',
+    )
+    responsavel: str = Field(min_length=2, max_length=120)
+
+
+@router.post('/v1/requisitos/concluir/{requisito_id}')
+def concluir_requisito(
+    requisito_id: int,
+    payload: ConcluirRequisitoIn,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    """Fecha um requisito publicado no backlog (status='backlog') como concluido.
+
+    Exige evidencia objetiva no payload — nunca fecha por inferencia. O pipeline
+    (recebido -> validado -> estruturado -> backlog) nao tinha nenhuma transicao
+    formal para o estado terminal; itens entregues ficavam presos em 'backlog'
+    sem trilha de auditoria do fechamento.
+    """
+    requisito = db.get(Requisito, requisito_id)
+    if not requisito:
+        raise HTTPException(status_code=404, detail=f'Requisito {requisito_id} nao encontrado.')
+    if requisito.status != 'backlog':
+        raise HTTPException(
+            status_code=409,
+            detail=f"Requisito {requisito.codigo} esta em status '{requisito.status}'; conclusao exige status 'backlog'.",
+        )
+
+    requisito.status = 'concluido'
+    db.commit()
+
+    registrar_evento(
+        db,
+        x_correlation_id or 'sem-correlation-id',
+        payload.responsavel,
+        'REQUISITO_CONCLUIDO',
+        'requisito',
+        requisito.id,
+        f'{{"evidencia":{payload.evidencia!r}}}',
+    )
+
+    return ok({'requisito_id': requisito.id, 'codigo': requisito.codigo, 'status': requisito.status}, x_correlation_id)

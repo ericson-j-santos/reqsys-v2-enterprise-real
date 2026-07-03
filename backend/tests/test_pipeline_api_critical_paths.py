@@ -3,6 +3,8 @@
 from unittest.mock import patch
 
 from app.api import pipeline as pipeline_api
+from app.models.auditoria import AuditoriaEvento
+from app.models.requisito import Requisito
 
 
 def test_inferir_rfs_detecta_termos_de_cadastro():
@@ -280,3 +282,91 @@ def test_listar_issues_github_propaga_integracao_error(client, monkeypatch):
 
     assert response.status_code == 400
     assert 'falha simulada' in response.json()['detail']
+
+
+def test_concluir_requisito_inexistente_retorna_404(client):
+    response = client.post(
+        '/v1/requisitos/concluir/999999',
+        json={'evidencia': 'Evidencia qualquer com mais de dez caracteres.', 'responsavel': 'qa@reqsys.local'},
+    )
+
+    assert response.status_code == 404
+
+
+def test_concluir_requisito_fora_do_backlog_retorna_409(client):
+    criado = client.post(
+        '/v1/solicitacoes',
+        json={
+            'origem': 'portal',
+            'titulo': 'Requisito ainda recebido',
+            'descricao': 'Descricao longa o suficiente para passar na validacao do schema.',
+            'solicitante': 'qa@reqsys.local',
+            'area': 'QA',
+            'sistema': 'Pipeline',
+            'urgencia': 'media',
+        },
+    )
+    requisito_id = criado.json()['data']['id']
+
+    response = client.post(
+        f'/v1/requisitos/concluir/{requisito_id}',
+        json={'evidencia': 'Evidencia qualquer com mais de dez caracteres.', 'responsavel': 'qa@reqsys.local'},
+    )
+
+    assert response.status_code == 409
+
+
+def test_concluir_requisito_backlog_marca_concluido_e_audita(client):
+    # client usa o mesmo engine configurado da app (get_db); a fixture isolada
+    # `db_session` roda em um SQLite :memory: separado e nao seria visivel aqui.
+    from app.db import SessionLocal
+
+    db = SessionLocal()
+    try:
+        db.query(AuditoriaEvento).filter(AuditoriaEvento.correlation_id == 'corr-concluir-001').delete()
+        db.query(Requisito).filter(Requisito.codigo == 'REQ-CONCLUIR-001').delete()
+        db.commit()
+
+        requisito = Requisito(
+            codigo='REQ-CONCLUIR-001',
+            titulo='Requisito publicado no backlog',
+            descricao='Descricao suficiente para o schema.',
+            urgencia='media',
+            area='QA',
+            sistema='Pipeline',
+            solicitante='qa@reqsys.local',
+            status='backlog',
+        )
+        db.add(requisito)
+        db.commit()
+        db.refresh(requisito)
+        requisito_id = requisito.id
+    finally:
+        db.close()
+
+    response = client.post(
+        f'/v1/requisitos/concluir/{requisito_id}',
+        headers={'X-Correlation-Id': 'corr-concluir-001'},
+        json={
+            'evidencia': 'Endpoint /v1/auth/config confirma azure_enabled=true em producao.',
+            'responsavel': 'qa@reqsys.local',
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['status'] == 'concluido'
+    assert data['codigo'] == 'REQ-CONCLUIR-001'
+
+    db = SessionLocal()
+    try:
+        evento = (
+            db.query(AuditoriaEvento)
+            .filter(AuditoriaEvento.correlation_id == 'corr-concluir-001')
+            .filter(AuditoriaEvento.acao == 'REQUISITO_CONCLUIDO')
+            .first()
+        )
+        assert evento is not None
+        assert evento.entidade_id == str(requisito_id)
+    finally:
+        db.close()

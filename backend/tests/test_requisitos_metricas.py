@@ -1,5 +1,5 @@
-from app.services.requisitos_metricas import calcular_metricas_requisitos
 from app.models.requisito import Requisito
+from app.services.requisitos_metricas import calcular_metricas_requisitos
 
 
 def test_calcular_metricas_requisitos_vazio(db_session):

@@ -8,6 +8,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ## [Unreleased] - 2026-07-03
 
+### Corrigido (crítico — deploy)
+
+- `scripts/configurar_fly_auth_azure.py`: a validação pós-deploy comparava `expected_redirect_uri` (que a API sempre publica como `{app_public_url}/auth/callback.html`, ver `app/core/config.py:azure_expected_redirect_uri`) contra `app_public_url` puro, sem o sufixo — uma igualdade que nunca poderia ser verdadeira. Isso fazia o job "Configurar secrets auth produção" falhar sempre, bloqueando "Deploy API produção" (`needs: configure-prod-secrets`) em `deploy-production-sync.yml`. Confirmado que isso vinha bloqueando deploys de backend desde pelo menos 2026-07-02 00:07 — a API em produção estava rodando o commit do PR #654, **28 commits atrás do `main`**, sem nenhuma das mudanças de backend desta sessão. Corrigido comparando contra `{app_public_url}/auth/callback.html`. Teste de regressão em `tests/test_configurar_fly_auth_azure.py`.
+
+### Adicionado (pipeline de requisitos)
+
+- `POST /v1/requisitos/concluir/{id}`: o pipeline (`recebido → validado → estruturado → backlog`) não tinha nenhuma transição formal para um estado terminal — itens entregues ficavam presos em `backlog` sem trilha de auditoria de fechamento. Novo endpoint fecha um requisito em `backlog` como `concluido`, exige `evidencia` objetiva e `responsavel` no payload (nunca fecha por inferência) e registra evento de auditoria `REQUISITO_CONCLUIDO` com `correlation_id`. Testes em `test_pipeline_api_critical_paths.py`.
+
 ### Corrigido
 
 - `requisitos_metricas.py`: status `backlog` (alcançado via `POST /v1/backlog/publicar-redmine`, estágio posterior a `estruturado`) era contado como "pendente" no cálculo de Qualidade IA, penalizando requisitos já triados e publicados como se estivessem intocados. Adicionado a `STATUS_EM_ANALISE`, junto com `scripts/relatorio_qualidade_ia_pendentes.py` (cópia sincronizada). Validado ao vivo: score de produção sobe de 58.25 para 77.25 sem alterar nenhum dado, só a classificação.
