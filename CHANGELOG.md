@@ -8,6 +8,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ## [Unreleased] - 2026-07-03
 
+### Corrigido (crítico — deploy, parte 2)
+
+- Mesmo bug do `configurar_fly_auth_azure.py` encontrado em mais 2 lugares durante auditoria: `scripts/validar_login_multi_ambiente.py` (chamada de `validar_config` no step "Validar sync pós-deploy" — fazia o `deploy-production-sync.yml` reportar `failure` mesmo com o deploy da API já bem-sucedido) e `.github/workflows/deploy-staging-auth-fix.yml`/`auth-azure-operational-gate.yml` (valor de `--expected-redirect-uri` sem o sufixo `/auth/callback.html`). Corrigidos todos; teste de regressão adicionado em `tests/scripts/test_validar_login_multi_ambiente.py`.
+
 ### Corrigido (crítico — deploy)
 
 - `scripts/configurar_fly_auth_azure.py`: a validação pós-deploy comparava `expected_redirect_uri` (que a API sempre publica como `{app_public_url}/auth/callback.html`, ver `app/core/config.py:azure_expected_redirect_uri`) contra `app_public_url` puro, sem o sufixo — uma igualdade que nunca poderia ser verdadeira. Isso fazia o job "Configurar secrets auth produção" falhar sempre, bloqueando "Deploy API produção" (`needs: configure-prod-secrets`) em `deploy-production-sync.yml`. Confirmado que isso vinha bloqueando deploys de backend desde pelo menos 2026-07-02 00:07 — a API em produção estava rodando o commit do PR #654, **28 commits atrás do `main`**, sem nenhuma das mudanças de backend desta sessão. Corrigido comparando contra `{app_public_url}/auth/callback.html`. Teste de regressão em `tests/test_configurar_fly_auth_azure.py`.

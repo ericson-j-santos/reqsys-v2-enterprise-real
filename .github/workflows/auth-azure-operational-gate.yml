@@ -10,7 +10,7 @@ on:
       expected_redirect_uri:
         description: Redirect URI esperado do frontend
         required: true
-        default: https://reqsys-app.fly.dev
+        default: https://reqsys-app.fly.dev/auth/callback.html
 
 jobs:
   validar-auth-azure:

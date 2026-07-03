@@ -4,7 +4,7 @@
 Uso:
     python scripts/validar_login_azure_operacional.py \
         --api-url https://reqsys-api.fly.dev \
-        --expected-redirect-uri https://reqsys-app.fly.dev
+        --expected-redirect-uri https://reqsys-app.fly.dev/auth/callback.html
 
 O script não executa login interativo nem manipula credenciais. Ele valida se a API
 está publicando configuração suficiente para o frontend renderizar o botão Microsoft
