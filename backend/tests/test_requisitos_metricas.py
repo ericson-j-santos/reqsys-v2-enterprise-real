@@ -64,3 +64,24 @@ def test_calcular_metricas_requisitos_distribuicao(db_session):
     assert metricas['aprovados'] == 1
     assert metricas['rejeitados'] == 1
     assert metricas['pendentes'] == 1
+
+
+def test_calcular_metricas_requisitos_backlog_conta_como_em_analise(db_session):
+    db_session.add(
+        Requisito(
+            codigo='REQ-MET-005',
+            titulo='Publicado no Redmine',
+            descricao='desc',
+            urgencia='media',
+            area='TI',
+            sistema='ReqSys',
+            solicitante='tester',
+            status='backlog',
+        )
+    )
+    db_session.commit()
+
+    metricas = calcular_metricas_requisitos(db_session)
+    assert metricas['total'] == 1
+    assert metricas['em_analise'] == 1
+    assert metricas['pendentes'] == 0

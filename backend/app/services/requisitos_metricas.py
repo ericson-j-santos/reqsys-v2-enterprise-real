@@ -22,6 +22,10 @@ STATUS_EM_ANALISE = frozenset({
     'em analise',
     'validado',
     'estruturado',
+    # 'backlog' e alcancado via POST /v1/backlog/publicar-redmine apos 'estruturado'
+    # (app/api/pipeline.py) — e um estagio mais avancado do pipeline, nao um item
+    # intocado; contar como pendente penalizava requisitos ja triados e publicados.
+    'backlog',
 })
 
 STATUS_REJEITADOS = frozenset({
