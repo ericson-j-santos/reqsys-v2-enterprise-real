@@ -44,7 +44,7 @@
       <div class="filter-header">
         <div>
           <strong>Analítico de requisitos</strong>
-          <div class="muted filter-subtitle">Filtros aplicados por clique no dashboard ou seleção manual.</div>
+          <div class="muted filter-subtitle">Filtros aplicados por clique no dashboard ou seleção manual. Clique em uma linha para ver detalhes.</div>
         </div>
         <v-chip v-if="temFiltroAtivo" size="small" color="amber" variant="tonal">Filtro ativo</v-chip>
       </div>
@@ -108,7 +108,14 @@
     </v-alert>
 
     <v-skeleton-loader v-if="store.carregando" type="table" />
-    <v-data-table v-else :headers="headers" :items="requisitosFiltrados" item-value="id" class="table-card requisitos-table">
+    <v-data-table
+      v-else
+      :headers="headers"
+      :items="requisitosFiltrados"
+      item-value="id"
+      class="table-card requisitos-table requisitos-table-clicavel"
+      @click:row="abrirDetalhe"
+    >
       <template v-slot:[`item.status`]="{ item }">
         <v-tooltip text="Situação atual do requisito no fluxo operacional" location="top">
           <template #activator="{ props }">
@@ -117,6 +124,33 @@
         </v-tooltip>
       </template>
     </v-data-table>
+
+    <v-dialog v-model="detalheDialog" width="640">
+      <v-card v-if="detalhe">
+        <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
+          <span>{{ detalhe.titulo }}</span>
+          <v-chip size="small" :color="corStatus(detalhe.status)">{{ detalhe.status }}</v-chip>
+        </v-card-title>
+        <v-card-text>
+          <div class="muted mb-3">{{ detalhe.codigo }}</div>
+          <p class="detalhe-descricao">{{ detalhe.descricao }}</p>
+          <v-row class="mt-2">
+            <v-col cols="6" sm="4"><div class="muted">Urgência</div><div>{{ detalhe.urgencia }}</div></v-col>
+            <v-col cols="6" sm="4"><div class="muted">Área</div><div>{{ detalhe.area }}</div></v-col>
+            <v-col cols="6" sm="4"><div class="muted">Sistema</div><div>{{ detalhe.sistema }}</div></v-col>
+            <v-col cols="6" sm="4"><div class="muted">Solicitante</div><div>{{ detalhe.solicitante }}</div></v-col>
+            <v-col cols="6" sm="4">
+              <div class="muted">Impacto regulatório</div>
+              <div>{{ detalhe.impacto_regulatorio ? 'Sim' : 'Não' }}</div>
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="detalheDialog = false">Fechar</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <v-dialog v-model="dialog" width="760">
       <v-card>
@@ -204,6 +238,8 @@ const route = useRoute()
 const router = useRouter()
 const dialog = ref(false)
 const salvando = ref(false)
+const detalheDialog = ref(false)
+const detalhe = ref(null)
 const filtros = reactive(normalizarFiltrosRequisitos(route.query))
 
 const form = reactive({ titulo: '', descricao: '', urgencia: 'media', area: '', sistema: '', solicitante: '' })
@@ -248,6 +284,10 @@ function limparFiltros() {
   sincronizarQuery()
 }
 function corStatus(status) { return ({ recebido: 'blue', em_analise: 'orange', aprovado: 'green', rejeitado: 'red' })[status] || 'grey' }
+function abrirDetalhe(_event, { item } = {}) {
+  detalhe.value = item?.raw ?? item ?? null
+  if (detalhe.value) detalheDialog.value = true
+}
 
 async function salvar() {
   salvando.value = true
@@ -301,6 +341,9 @@ async function assistenteIA() {
 .filter-card { padding: 16px; }
 .filter-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .filter-actions { display: flex; justify-content: flex-end; }
+.requisitos-table-clicavel :deep(tbody tr) { cursor: pointer; }
+.requisitos-table-clicavel :deep(tbody tr:hover) { background: rgba(var(--v-theme-on-surface), 0.06); }
+.detalhe-descricao { white-space: pre-wrap; }
 @media (max-width: 720px) {
   .header-actions, .filter-actions { justify-content: stretch; }
   .header-actions :deep(.v-btn), .filter-actions :deep(.v-btn) { width: 100%; }
