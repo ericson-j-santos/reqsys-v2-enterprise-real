@@ -11,6 +11,8 @@ on:
       - "tests/test_post_merge_main_runtime_validator.py"
       - "scripts/runtime_production_smoke_governed.py"
       - "scripts/executive_runtime_evidence_summary.py"
+      - "scripts/main_operational_state_snapshot.py"
+      - "tests/test_main_operational_state_snapshot.py"
   workflow_dispatch:
     inputs:
       base_url:
@@ -54,7 +56,8 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile scripts/post_merge_main_runtime_validator.py
-          python -m pytest tests/test_post_merge_main_runtime_validator.py -q
+          python -m py_compile scripts/main_operational_state_snapshot.py
+          python -m pytest tests/test_post_merge_main_runtime_validator.py tests/test_main_operational_state_snapshot.py -q
 
       - name: Run governed runtime smoke
         env:
@@ -84,16 +87,28 @@ jobs:
             --github-run-id "${GITHUB_RUN_ID}" \
             --output artifacts/post-merge-main-runtime-validator/post-merge-main-runtime-validator.json
 
+      - name: Build main operational state snapshot
+        run: |
+          set -euo pipefail
+          python scripts/main_operational_state_snapshot.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --sha "${GITHUB_SHA}" \
+            --github-run-id "${GITHUB_RUN_ID}" \
+            --output artifacts/main-operational-state-snapshot/main-operational-state-snapshot.json
+
       - name: Summary
         if: always()
         run: |
           set -euo pipefail
-          summary="artifacts/post-merge-main-runtime-validator/summary.md"
-          if [[ -f "${summary}" ]]; then
-            cat "${summary}" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Post-merge main runtime validator summary unavailable." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          for summary in \
+            artifacts/post-merge-main-runtime-validator/summary.md \
+            artifacts/main-operational-state-snapshot/summary.md
+          do
+            if [[ -f "${summary}" ]]; then
+              cat "${summary}" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
       - name: Upload post-merge main runtime validator artifact
         if: always()
@@ -104,5 +119,6 @@ jobs:
             artifacts/runtime-production-smoke-governed.json
             artifacts/executive-runtime-evidence-summary/
             artifacts/post-merge-main-runtime-validator/
+            artifacts/main-operational-state-snapshot/
           if-no-files-found: error
           retention-days: 30
