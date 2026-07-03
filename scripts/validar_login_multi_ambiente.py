@@ -93,7 +93,10 @@ def validate_environment_login(
     checks: dict[str, Any] = {}
 
     try:
-        azure_result = validar_config(api_url, frontend_url)
+        # A API sempre publica expected_redirect_uri = "{frontend_url}/auth/callback.html"
+        # (app/core/config.py:azure_expected_redirect_uri) — comparar contra o
+        # frontend_url puro faz essa checagem falhar sempre.
+        azure_result = validar_config(api_url, f'{frontend_url}/auth/callback.html')
         checks["azure_config"] = azure_result
         if not azure_result["success"]:
             errors.extend(azure_result.get("errors") or [])

@@ -101,7 +101,7 @@ jobs:
         run: |
           python scripts/validar_login_azure_operacional.py \
             --api-url https://reqsys-api-stg.fly.dev \
-            --expected-redirect-uri https://reqsys-app-stg.fly.dev \
+            --expected-redirect-uri https://reqsys-app-stg.fly.dev/auth/callback.html \
             | tee auth-azure-staging-report.json
 
       - name: Validar bundle publicado do frontend staging
