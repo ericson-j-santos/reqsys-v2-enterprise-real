@@ -8,6 +8,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ## [Unreleased] - 2026-07-03
 
+### Corrigido
+
+- `styles.css`: `v-card` renderizado dentro de `v-overlay` (diálogos, ex. "Novo requisito" e o detalhe de requisito) ficava com fundo quase transparente (`rgba(255,255,255,0.02)`), pois a regra global de card "vidro" tinha `!important` sem exceção para overlays. Adicionada regra `.v-overlay .v-card` com fundo opaco e sombra, sem alterar a aparência dos cards de conteúdo normal da página. Validado com Playwright/screenshot antes e depois em dois diálogos.
+
 ### Adicionado
 
 - `RequisitosView.vue`: linhas da tabela "Analítico de requisitos" ficam clicáveis e abrem um diálogo com o detalhe completo do requisito (título, código, status, descrição, urgência, área, sistema, solicitante, impacto regulatório), usando os dados já carregados na listagem — sem chamada de rede adicional.
