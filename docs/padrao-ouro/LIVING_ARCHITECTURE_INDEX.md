@@ -130,7 +130,7 @@ Runbook: [`docs/runbooks/camada-testes-padrao-ouro.md`](../runbooks/camada-teste
 
 | Categoria | Exemplos |
 | --- | --- |
-| CI/CD core | `ci.yml`, `ci-e2e.yml`, `ci-security.yml`, `main-smoke-ci.yml` |
+| CI/CD core | `ci.yml`, `ci-e2e-governado.yml`, `ci-security.yml`, `main-smoke-ci.yml` |
 | PR governance | `pr-evidence-gate`, `governed-merge-queue`, `pr-auto-recovery*` |
 | Operational/runtime | `operational-*`, `runtime-*`, `reqsys-operational-health` |
 | Product intelligence | `product-intelligence-*` |

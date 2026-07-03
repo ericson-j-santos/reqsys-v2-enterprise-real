@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
 from app.db import get_db
+from app.schemas.lowcode_solution import LowCodeSolutionGenerateRequest
 from app.services.hub_lowcode import (
     descobrir_planos_planner,
     listar_ambientes_powerplatform,
@@ -17,6 +18,7 @@ from app.services.hub_lowcode import (
     status_consolidado,
     testar_teams_webhook,
 )
+from app.services.lowcode_solution_factory import gerar_lowcode_solution
 from app.services.power_automate_provisioning import (
     atualizar_status_provisionamento,
     despachar_workflow_provisionamento,
@@ -58,6 +60,33 @@ async def hub_github(limit: int = Query(default=10, ge=1, le=50)):
 async def hub_pp_ambientes():
     """Lista ambientes Power Platform via Management API."""
     return ok(await listar_ambientes_powerplatform())
+
+
+# ---------------------------------------------------------------------------
+# LowCode Solution Factory P0
+# ---------------------------------------------------------------------------
+
+@router.post('/solutions/generate')
+def lowcode_solution_generate(payload: LowCodeSolutionGenerateRequest):
+    """Gera blueprint completo de solution low-code sem executar escrita externa."""
+    solution = gerar_lowcode_solution(payload)
+    return ok(solution, solution['correlation_id'])
+
+
+@router.post('/solutions/generate/canvas')
+def lowcode_solution_generate_canvas(payload: LowCodeSolutionGenerateRequest):
+    """Gera somente o canvas markdown da solution low-code."""
+    solution = gerar_lowcode_solution(payload)
+    return ok(
+        {
+            'solution_name': solution['solution_name'],
+            'display_name': solution['display_name'],
+            'target_environment': solution['target_environment'],
+            'canvas_markdown': solution['canvas_markdown'],
+            'canvas_app': solution['apps']['canvas_app'],
+        },
+        solution['correlation_id'],
+    )
 
 
 # ---------------------------------------------------------------------------

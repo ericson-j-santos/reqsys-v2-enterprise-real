@@ -24,9 +24,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - `.github/workflows/qualidade-ia-snapshot.yml` + `scripts/registrar_qualidade_ia_snapshot_ci.py`: snapshot diário agendado de Qualidade IA em dev/hml/prod via `POST /v1/qualidade-ia/snapshot`, com aviso automático (`::warning`) quando `score_geral < 70`.
 - `docs/runbooks/qualidade-ia-e-replicacao-ambientes.md`: runbook consolidando o diagnóstico do score de Qualidade IA e o procedimento de replicação anonimizada entre ambientes.
 
-## [Unreleased] - 2026-06-20
+## [Unreleased] - 2026-07-02
 
 ### Adicionado
+
+- LowCode Solution Factory P0 (`backend/app/services/lowcode_solution_factory.py`, `backend/app/schemas/lowcode_solution.py`): gera blueprint completo de solution Power Platform (Dataverse, Canvas App, Power Automate, Copilot Studio, security roles, pacote ALM zipado) em modo `dry_run` por padrão, sem escrita externa. Endpoints `POST /v1/hub-lowcode/solutions/generate` e `/solutions/generate/canvas`.
+- `scripts/prod_readiness_audit.py`: checagem opcional `--check-azure-entra` que confirma via `az ad app show` se o redirect URI SPA já está registrado no Microsoft Entra ID, reduzindo a dependência de evidência humana manual; `production_environment` agora aceita aliases (`production`, `prod`, `prd`, `producao`, `produção`).
+
+### Alterado
+
+- Produção Fly.io: `CORS_ORIGINS` da API passa a incluir `https://tieriprod.duckdns.org`; `frontend/fly.toml` fixa `min_machines_running = 1` para evitar cold start no app público.
+- Padronização de `.github/PULL_REQUEST_TEMPLATE.md` para `.github/pull_request_template.md` e de `ci-e2e.yml` para `ci-e2e-governado.yml`, refletido em `governanca-padrao-ouro.yml`, `pr-governed-ci-validation.yml` e nos índices de documentação (ADR-0001, PADRAO_OURO_ENTERPRISE, LIVING_ARCHITECTURE_INDEX, artifact-contracts-index).
 
 - Application Balance Scorecard v0.1.0 em `docs/ops-dashboard/application-balance-scorecard.md` e `docs/ops-dashboard/data/application-balance-scorecard-v0.1.0.json`, consolidando domínios de equilíbrio, pesos, semáforo, evidência esperada, guardrails e caminho Pareto para estabilizar frontend, runtime, API, CI/CD, governança, documentação e segurança.
 - Operational Evidence Hub em `docs/dashboard/operational-evidence-hub.html` consolidando delivery readiness, completion, finalization, maturity snapshot, observability correlation, artifact contract validation, dashboard regression validation e living architecture traceability com cards executivos, drill-down navegável, semáforo, confidence level, operational risk e fallback governado para artifacts ausentes.

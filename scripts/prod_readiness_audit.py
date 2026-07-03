@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import time
 from dataclasses import asdict, dataclass
@@ -51,6 +52,7 @@ HUMAN_EVIDENCE_KEYS = {
     "rollback_plan_documented",
     "deployment_window_approved",
 }
+PRODUCTION_ENVIRONMENT_ALIASES = {"production", "prod", "prd", "producao", "produção"}
 
 
 @dataclass(frozen=True)
@@ -86,9 +88,12 @@ def get_json(url: str, timeout: float) -> tuple[int | None, dict[str, Any] | Non
 
 
 def fly_secret_names(app: str) -> tuple[set[str], str | None]:
+    fly_cmd = shutil.which("fly") or shutil.which("flyctl")
+    if not fly_cmd:
+        return set(), "fly_cli_not_found"
     try:
         proc = subprocess.run(  # noqa: S603 - comando operacional fixo, sem shell
-            ["fly", "secrets", "list", "--app", app, "--json"],
+            [fly_cmd, "secrets", "list", "--app", app, "--json"],
             text=True,
             capture_output=True,
             timeout=30,
@@ -104,6 +109,42 @@ def fly_secret_names(app: str) -> tuple[set[str], str | None]:
         return set(), "invalid_fly_json"
     names = {str(item.get("Name") or item.get("name")) for item in payload if isinstance(item, dict)}
     return {name for name in names if name and name != "None"}, None
+
+
+def azure_spa_redirect_uris(client_id: str) -> tuple[set[str], str | None]:
+    az_cmd = shutil.which("az")
+    if not az_cmd:
+        return set(), "az_cli_not_found"
+    try:
+        proc = subprocess.run(  # noqa: S603 - comando operacional fixo, sem shell
+            [
+                az_cmd,
+                "ad",
+                "app",
+                "show",
+                "--id",
+                client_id,
+                "--query",
+                "spa.redirectUris",
+                "--output",
+                "json",
+            ],
+            text=True,
+            capture_output=True,
+            timeout=60,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return set(), type(exc).__name__
+    if proc.returncode != 0:
+        return set(), proc.stderr.strip() or proc.stdout.strip() or f"az_exit_{proc.returncode}"
+    try:
+        payload = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return set(), "invalid_az_json"
+    if not isinstance(payload, list):
+        return set(), "invalid_az_spa_redirect_shape"
+    return {str(item).rstrip("/") for item in payload if item}, None
 
 
 def load_human_evidence(path: str | None) -> tuple[dict[str, Any], str | None]:
@@ -134,6 +175,7 @@ def build_audit(
     fly_app: str,
     timeout: float,
     check_fly: bool,
+    check_azure_entra: bool = False,
     human_evidence_path: str | None = None,
 ) -> dict[str, Any]:
     checks: list[Check] = []
@@ -142,6 +184,7 @@ def build_audit(
     auth_status, auth_payload, auth_error, auth_latency = get_json(f"{api_url}/v1/auth/config", timeout)
     data = auth_payload.get("data", {}) if isinstance(auth_payload, dict) else {}
     expected_redirect = data.get("expected_redirect_uri") if isinstance(data, dict) else None
+    azure_client_id = data.get("azure_client_id") if isinstance(data, dict) else None
     demo_login_enabled = data.get("demo_login_enabled")
     environment = data.get("environment")
 
@@ -159,17 +202,30 @@ def build_audit(
             "error": auth_error,
         },
     ))
+    entra_evidence: dict[str, Any] = {
+        "required_redirect_uri": f"{app_url}/auth/callback.html",
+        "human_evidence_path": human_evidence_path,
+        "human_evidence_error": human_evidence_error,
+    }
+    entra_registered = evidence_confirmed(human_evidence, "entra_redirect_uri_registered")
+    if check_azure_entra:
+        redirect_uris, entra_error = azure_spa_redirect_uris(str(azure_client_id or ""))
+        required_redirect = f"{app_url}/auth/callback.html".rstrip("/")
+        entra_registered = required_redirect in redirect_uris
+        entra_evidence.update({
+            "automation": "az ad app show",
+            "azure_client_id": azure_client_id,
+            "registered": entra_registered,
+            "error": entra_error,
+            "observed_spa_redirect_uris": sorted(redirect_uris),
+        })
     checks.append(Check(
         "entra_redirect_uri_registered",
         "auth_azure",
-        "ok" if evidence_confirmed(human_evidence, "entra_redirect_uri_registered") else "manual",
-        not evidence_confirmed(human_evidence, "entra_redirect_uri_registered"),
-        "Cadastro real do callback no Microsoft Entra ID continua humano e deve ser evidenciado.",
-        {
-            "required_redirect_uri": f"{app_url}/auth/callback.html",
-            "human_evidence_path": human_evidence_path,
-            "human_evidence_error": human_evidence_error,
-        },
+        "ok" if entra_registered else "manual",
+        not entra_registered,
+        "Cadastro real do callback no Microsoft Entra ID deve estar presente nos redirect URIs SPA.",
+        entra_evidence,
     ))
     checks.append(Check(
         "auth_demo_disabled",
@@ -183,14 +239,16 @@ def build_audit(
             "required_fly_secret": "ALLOW_DEMO_LOGIN=false",
         },
     ))
+    production_environment_ok = str(environment or "").strip().lower() in PRODUCTION_ENVIRONMENT_ALIASES
     checks.append(Check(
         "production_environment",
         "security",
-        "ok" if environment == "production" else "blocked",
-        environment != "production",
-        "Produção Fly.io deve publicar environment=production em /v1/auth/config.",
+        "ok" if production_environment_ok else "blocked",
+        not production_environment_ok,
+        "Produção Fly.io deve publicar um alias produtivo em /v1/auth/config.",
         {
             "environment": environment,
+            "accepted_aliases": sorted(PRODUCTION_ENVIRONMENT_ALIASES),
             "required_fly_secret": "APP_ENV=production",
         },
     ))
@@ -329,6 +387,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fly-app", default="reqsys-api")
     parser.add_argument("--timeout", type=float, default=8.0)
     parser.add_argument("--check-fly", action="store_true")
+    parser.add_argument("--check-azure-entra", action="store_true")
     parser.add_argument("--human-evidence", default="")
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     parser.add_argument("--markdown-output", default="")
@@ -342,6 +401,7 @@ def main(argv: list[str] | None = None) -> int:
         args.fly_app,
         args.timeout,
         args.check_fly,
+        args.check_azure_entra,
         args.human_evidence or None,
     )
     output = Path(args.output)

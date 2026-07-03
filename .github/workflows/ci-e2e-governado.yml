@@ -9,7 +9,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths:
       - "frontend/**"
-      - ".github/workflows/ci-e2e.yml"
+      - ".github/workflows/ci-e2e-governado.yml"
 
 permissions:
   contents: read

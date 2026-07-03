@@ -1,0 +1,221 @@
+{
+  "schema_version": "1.1.0",
+  "source": "prod-readiness-audit",
+  "validated_at": "2026-07-02T16:43:14.715239Z",
+  "status": "action_required",
+  "blocked_count": 0,
+  "action_required_count": 2,
+  "checks": [
+    {
+      "id": "azure_redirect_uri",
+      "area": "auth_azure",
+      "status": "ok",
+      "human_required": false,
+      "detail": "Callback público esperado deve estar refletido em /v1/auth/config.",
+      "evidence": {
+        "http": 200,
+        "expected_redirect_uri": "https://reqsys-app.fly.dev/auth/callback.html",
+        "required_entra_redirects": [
+          "https://reqsys-app.fly.dev/auth/callback.html",
+          "https://reqsys-app.fly.dev",
+          "https://reqsys-app-stg.fly.dev/auth/callback.html"
+        ],
+        "latency_ms": 1218,
+        "error": null
+      }
+    },
+    {
+      "id": "entra_redirect_uri_registered",
+      "area": "auth_azure",
+      "status": "ok",
+      "human_required": false,
+      "detail": "Cadastro real do callback no Microsoft Entra ID deve estar presente nos redirect URIs SPA.",
+      "evidence": {
+        "required_redirect_uri": "https://reqsys-app.fly.dev/auth/callback.html",
+        "human_evidence_path": null,
+        "human_evidence_error": null,
+        "automation": "az ad app show",
+        "azure_client_id": "a02a473b-19c1-4579-b482-c83e11cc0f4e",
+        "registered": true,
+        "error": null,
+        "observed_spa_redirect_uris": [
+          "https://reqsys-app-dev.fly.dev",
+          "https://reqsys-app-stg.fly.dev",
+          "https://reqsys-app.fly.dev",
+          "https://reqsys-app.fly.dev/auth/callback.html"
+        ]
+      }
+    },
+    {
+      "id": "auth_demo_disabled",
+      "area": "security",
+      "status": "ok",
+      "human_required": false,
+      "detail": "Produção exige ALLOW_DEMO_LOGIN=false e demo_login_enabled=false.",
+      "evidence": {
+        "demo_login_enabled": false,
+        "environment": "producao",
+        "required_fly_secret": "ALLOW_DEMO_LOGIN=false"
+      }
+    },
+    {
+      "id": "production_environment",
+      "area": "security",
+      "status": "ok",
+      "human_required": false,
+      "detail": "Produção Fly.io deve publicar um alias produtivo em /v1/auth/config.",
+      "evidence": {
+        "environment": "producao",
+        "accepted_aliases": [
+          "prd",
+          "prod",
+          "producao",
+          "production",
+          "produção"
+        ],
+        "required_fly_secret": "APP_ENV=production"
+      }
+    },
+    {
+      "id": "azure_public_config",
+      "area": "auth_azure",
+      "status": "ok",
+      "human_required": false,
+      "detail": "AZURE_TENANT_ID/AZURE_CLIENT_ID precisam estar configurados no backend.",
+      "evidence": {
+        "azure_enabled": true,
+        "auth_status": "ready",
+        "missing_fields": []
+      }
+    },
+    {
+      "id": "public_smoke",
+      "area": "runtime",
+      "status": "ok",
+      "human_required": false,
+      "detail": "Smoke público mínimo aderente ao contrato versionado da API.",
+      "evidence": [
+        {
+          "path": "/health",
+          "http": 200,
+          "ok": true,
+          "latency_ms": 78,
+          "error": null,
+          "status": null
+        },
+        {
+          "path": "/api/runtime/health",
+          "http": 200,
+          "ok": true,
+          "latency_ms": 8108,
+          "error": null,
+          "status": null
+        },
+        {
+          "path": "/api/runtime/readiness",
+          "http": 200,
+          "ok": true,
+          "latency_ms": 7391,
+          "error": null,
+          "status": null
+        },
+        {
+          "path": "/api/runtime/liveness",
+          "http": 200,
+          "ok": true,
+          "latency_ms": 8093,
+          "error": null,
+          "status": null
+        },
+        {
+          "path": "/v1/auth/config",
+          "http": 200,
+          "ok": true,
+          "latency_ms": 109,
+          "error": null,
+          "status": null
+        }
+      ]
+    },
+    {
+      "id": "fly_secrets_presence",
+      "area": "secrets",
+      "status": "ok",
+      "human_required": false,
+      "detail": "Validação sem valores: confirma presença nominal dos secrets obrigatórios no Fly.io.",
+      "evidence": {
+        "app": "reqsys-api",
+        "missing_keys": [],
+        "error": null,
+        "checked_keys": [
+          "ALLOW_DEMO_LOGIN",
+          "API_PUBLIC_URL",
+          "APP_ENV",
+          "APP_PUBLIC_URL",
+          "AZURE_CLIENT_ID",
+          "AZURE_TENANT_ID",
+          "JWT_AUDIENCE",
+          "JWT_ISSUER",
+          "JWT_SECRET"
+        ]
+      }
+    },
+    {
+      "id": "fly_secrets_reviewed",
+      "area": "secrets",
+      "status": "manual",
+      "human_required": true,
+      "detail": "Valores reais dos secrets não são coletados; revisão humana deve ser registrada.",
+      "evidence": {
+        "human_evidence_path": null,
+        "expected_keys": [
+          "ALLOW_DEMO_LOGIN",
+          "API_PUBLIC_URL",
+          "APP_ENV",
+          "APP_PUBLIC_URL",
+          "AZURE_CLIENT_ID",
+          "AZURE_TENANT_ID",
+          "JWT_AUDIENCE",
+          "JWT_ISSUER",
+          "JWT_SECRET"
+        ],
+        "human_evidence_error": null
+      }
+    },
+    {
+      "id": "governance_approvals",
+      "area": "governance",
+      "status": "manual",
+      "human_required": true,
+      "detail": "Aprovações, rollback e janela de implantação continuam humanos/processuais.",
+      "evidence": {
+        "pending": [
+          "qa_approval",
+          "ops_approval",
+          "deployment_window_approved",
+          "rollback_plan_documented"
+        ],
+        "human_evidence_path": null
+      }
+    },
+    {
+      "id": "corporate_domain",
+      "area": "dns",
+      "status": "recommended",
+      "human_required": true,
+      "detail": "Domínio corporativo é recomendado, não bloqueante para runtime .fly.dev.",
+      "evidence": {
+        "current_app_url": "https://reqsys-app.fly.dev",
+        "current_api_url": "https://reqsys-api.fly.dev"
+      }
+    }
+  ],
+  "human_evidence_keys": [
+    "deployment_window_approved",
+    "entra_redirect_uri_registered",
+    "fly_secrets_reviewed",
+    "ops_approval",
+    "qa_approval",
+    "rollback_plan_documented"
+  ]
+}

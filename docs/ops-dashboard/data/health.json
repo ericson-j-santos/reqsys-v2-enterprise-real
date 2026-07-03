@@ -992,7 +992,7 @@
       },
       {
         "source_type": "workflow",
-        "path": ".github/workflows/ci-e2e.yml",
+        "path": ".github/workflows/ci-e2e-governado.yml",
         "categories": [
           "delivery_evidence",
           "completion"

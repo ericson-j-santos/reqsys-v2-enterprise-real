@@ -159,7 +159,7 @@ Todo artifact operacional JSON deve convergir para os campos mínimos:
 | `examples/runtime/product-intelligence-event.runtime.valid.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/schema-runtime-validation.yaml |
 | `fly-auth-azure-report.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/configurar-fly-auth-azure.yml |
 | `fly-enterprise-sync-validation.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/fly-enterprise-sync.yml |
-| `frontend/package-lock.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/ci-e2e.yml, .github/workflows/ci-enterprise-fast.yml, .github/workflows/ci-enterprise-regression.yml, .github/workflows/ci-security.yml, .github/workflows/ci.yml |
+| `frontend/package-lock.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/ci-e2e-governado.yml, .github/workflows/ci-enterprise-fast.yml, .github/workflows/ci-enterprise-regression.yml, .github/workflows/ci-security.yml, .github/workflows/ci.yml |
 | `frontend/package.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/ci-enterprise-fast.yml, .github/workflows/ci-enterprise-regression.yml |
 | `golden-release-readiness.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/command-center-readiness.yml |
 | `infra/fly-environments.json` | workflow | `docs/contracts/operational-json-artifact.schema.json` | .github/workflows/fly-enterprise-sync.yml |
