@@ -26,7 +26,7 @@ STATUS_APROVADOS = frozenset({
     'aprovado', 'aprovados', 'concluido', 'concluído', 'concluida',
     'done', 'finalizado', 'implementado', 'encerrado',
 })
-STATUS_EM_ANALISE = frozenset({'em_analise', 'em analise', 'validado', 'estruturado'})
+STATUS_EM_ANALISE = frozenset({'em_analise', 'em analise', 'validado', 'estruturado', 'backlog'})
 STATUS_REJEITADOS = frozenset({'rejeitado', 'rejeitados', 'cancelado'})
 
 

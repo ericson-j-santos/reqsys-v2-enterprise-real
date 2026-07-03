@@ -8,6 +8,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ## [Unreleased] - 2026-07-03
 
+### Corrigido
+
+- `requisitos_metricas.py`: status `backlog` (alcançado via `POST /v1/backlog/publicar-redmine`, estágio posterior a `estruturado`) era contado como "pendente" no cálculo de Qualidade IA, penalizando requisitos já triados e publicados como se estivessem intocados. Adicionado a `STATUS_EM_ANALISE`, junto com `scripts/relatorio_qualidade_ia_pendentes.py` (cópia sincronizada). Validado ao vivo: score de produção sobe de 58.25 para 77.25 sem alterar nenhum dado, só a classificação.
+
 ### Alterado
 
 - GitHub Environment `production`: gate nativo `required_reviewers` (`ericson-j-santos`) + `deployment_branch_policy` restrito a `main`, substituindo o hack de string `APROVO-PROD`. Aplicado via API (não versionado como código); comandos de reprodução documentados em `docs/runbooks/producao-flyio-pendencias.md`.
