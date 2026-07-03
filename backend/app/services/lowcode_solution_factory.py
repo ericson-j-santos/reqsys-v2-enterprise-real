@@ -15,6 +15,7 @@ from app.schemas.lowcode_solution import LowCodeSolutionGenerateRequest
 
 FACTORY_VERSION = '0.1.0'
 PACKAGE_NAME = 'reqsys-lowcode-solution'
+_MD_BR = '  '  # hard-break markdown (dois espacos ao final da linha)
 
 
 def _utc_now() -> str:
@@ -320,15 +321,15 @@ def _canvas_markdown(solution: dict[str, Any]) -> str:
 
 ## Visao geral
 
-Solution: `{solution['solution_name']}`  
-Ambiente alvo: `{solution['target_environment']}`  
-Modo: `{solution['governance']['mode']}`  
+Solution: `{solution['solution_name']}`{_MD_BR}
+Ambiente alvo: `{solution['target_environment']}`{_MD_BR}
+Modo: `{solution['governance']['mode']}`{_MD_BR}
 Status: `{solution['status']}`
 
 ## Canvas App
 
-App: `{app['name']}`  
-Tela inicial: `{app['start_screen']}`  
+App: `{app['name']}`{_MD_BR}
+Tela inicial: `{app['start_screen']}`{_MD_BR}
 Layout: `{app['layout']}`
 
 | Tela | Objetivo | Componentes |
@@ -349,7 +350,7 @@ Layout: `{app['layout']}`
 
 ## Copilot Studio
 
-Agente: `{copilot['name']}`  
+Agente: `{copilot['name']}`{_MD_BR}
 Topicos: {topics}
 
 ## Security roles
