@@ -49,6 +49,38 @@ def test_hub_pp_ambientes_endpoint(mock_listar):
     assert response.json()['data']['ambientes'][0]['nome'] == 'Dev'
 
 
+def test_lowcode_solution_generate_endpoint():
+    response = client.post(
+        '/v1/hub-lowcode/solutions/generate',
+        json={
+            'solution_name': 'ReqSysLowCode',
+            'display_name': 'ReqSys Low-Code',
+            'target_environment': 'dev',
+            'dry_run': True,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['capability'] == 'LowCode Solution Factory P0'
+    assert data['apps']['canvas_app']['app_type'] == 'canvas'
+    assert data['dataverse']['tables']
+    assert data['package']['zip_base64']
+
+
+def test_lowcode_solution_generate_canvas_endpoint():
+    response = client.post(
+        '/v1/hub-lowcode/solutions/generate/canvas',
+        json={'solution_name': 'ReqSysLowCode', 'display_name': 'ReqSys Low-Code'},
+    )
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['solution_name'] == 'ReqSysLowCode'
+    assert 'Canvas App' in data['canvas_markdown']
+    assert data['canvas_app']['start_screen'] == 'scrDashboard'
+
+
 @patch('app.api.hub_lowcode.obter_planner_webhook_config')
 def test_hub_planner_webhook_config_endpoint(mock_obter):
     mock_obter.return_value = {

@@ -47,7 +47,7 @@ jobs:
           required_files=(
             ".github/workflows/ci.yml"
             ".github/workflows/ci-security.yml"
-            ".github/workflows/ci-e2e.yml"
+            ".github/workflows/ci-e2e-governado.yml"
             ".github/workflows/ci-observability.yml"
             "scripts/select_backend_tests.py"
             "docs/ci/CI_ACCELERATION_STRATEGY.md"

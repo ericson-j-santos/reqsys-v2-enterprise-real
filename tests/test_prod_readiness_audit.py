@@ -46,6 +46,53 @@ def test_build_audit_ready_sem_fly_quando_smoke_publico_ok(monkeypatch):
     assert any(c["id"] == "fly_secrets_presence" and c["status"] == "manual" for c in report["checks"])
 
 
+def test_build_audit_aceita_alias_publico_producao(monkeypatch):
+    def fake_get_json(url: str, timeout: float):
+        if url.endswith("/v1/auth/config"):
+            return 200, _auth_payload(environment="producao"), None, 10
+        return 200, {"status": "ok"}, None, 5
+
+    monkeypatch.setattr(audit, "get_json", fake_get_json)
+
+    report = audit.build_audit(
+        "https://reqsys-api.fly.dev",
+        "https://reqsys-app.fly.dev",
+        "reqsys-api",
+        timeout=1,
+        check_fly=False,
+    )
+
+    statuses = {c["id"]: c["status"] for c in report["checks"]}
+    assert statuses["production_environment"] == "ok"
+    assert report["blocked_count"] == 0
+
+
+def test_build_audit_confirma_redirect_entra_via_azure_cli(monkeypatch):
+    def fake_get_json(url: str, timeout: float):
+        if url.endswith("/v1/auth/config"):
+            return 200, _auth_payload(), None, 10
+        return 200, {"status": "ok"}, None, 5
+
+    monkeypatch.setattr(audit, "get_json", fake_get_json)
+    monkeypatch.setattr(
+        audit,
+        "azure_spa_redirect_uris",
+        lambda client_id: ({"https://reqsys-app.fly.dev/auth/callback.html"}, None),
+    )
+
+    report = audit.build_audit(
+        "https://reqsys-api.fly.dev",
+        "https://reqsys-app.fly.dev",
+        "reqsys-api",
+        timeout=1,
+        check_fly=False,
+        check_azure_entra=True,
+    )
+
+    statuses = {c["id"]: c["status"] for c in report["checks"]}
+    assert statuses["entra_redirect_uri_registered"] == "ok"
+
+
 def test_smoke_paths_seguem_contrato_publico_versionado():
     assert audit.SMOKE_PATHS == [
         "/health",

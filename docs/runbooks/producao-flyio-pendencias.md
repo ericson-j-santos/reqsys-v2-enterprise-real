@@ -48,7 +48,7 @@ O script automatiza:
 | Secrets produção Fly.io — presença nominal | Parcial | `fly secrets list --json` deve conter nomes obrigatórios; valores reais não são coletados | Operador Fly/Ops |
 | Secrets produção Fly.io — valores reais revisados | Não | `prod-readiness-human-evidence.json` deve registrar `fly_secrets_reviewed.status=confirmed` | Operador Fly/Ops |
 | Smoke público `/api/runtime/*` | Sim | `public_smoke=ok` no artifact do auditor | QA/Ops |
-| Auth/CORS/JWT gates | Parcial | backend deve iniciar com `APP_ENV=production`, demo desativado e issuer/audience presentes; CORS/JWT seguem cobertos pelos testes de segurança | Segurança/Ops |
+| Auth/CORS/JWT gates | Parcial | backend deve iniciar com `APP_ENV=production`, publicar alias produtivo em `/v1/auth/config` (`production`, `prod`, `prd`, `producao` ou `produção`), demo desativado e issuer/audience presentes; CORS/JWT seguem cobertos pelos testes de segurança | Segurança/Ops |
 | Aprovação QA | Não | `qa_approval.status=approved` | QA |
 | Aprovação OPS | Não | `ops_approval.status=approved` | OPS |
 | Plano de rollback | Não | `rollback_plan_documented.status=confirmed` | OPS |
