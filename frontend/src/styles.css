@@ -92,6 +92,15 @@ body {
   color: var(--text) !important;
 }
 
+/* Cards de conteúdo usam fundo "vidro" (quase transparente) por cima do gradiente
+   da página. Um v-card usado como superfície de v-dialog/v-menu flutua sobre o
+   scrim e sobre conteúdo arbitrário da página, então precisa de fundo opaco —
+   senão o conteúdo por trás vaza através do card. */
+.v-overlay .v-card {
+  background: var(--panel) !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55) !important;
+}
+
 .brand {
   font-weight: 800;
   color: var(--text);
