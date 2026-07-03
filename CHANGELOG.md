@@ -8,6 +8,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ## [Unreleased] - 2026-07-03
 
+### Alterado
+
+- GitHub Environment `production`: gate nativo `required_reviewers` (`ericson-j-santos`) + `deployment_branch_policy` restrito a `main`, substituindo o hack de string `APROVO-PROD`. Aplicado via API (não versionado como código); comandos de reprodução documentados em `docs/runbooks/producao-flyio-pendencias.md`.
+
 ### Corrigido
 
 - `styles.css`: `v-card` renderizado dentro de `v-overlay` (diálogos, ex. "Novo requisito" e o detalhe de requisito) ficava com fundo quase transparente (`rgba(255,255,255,0.02)`), pois a regra global de card "vidro" tinha `!important` sem exceção para overlays. Adicionada regra `.v-overlay .v-card` com fundo opaco e sombra, sem alterar a aparência dos cards de conteúdo normal da página. Validado com Playwright/screenshot antes e depois em dois diálogos.
