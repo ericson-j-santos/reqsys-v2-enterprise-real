@@ -187,6 +187,9 @@ def _get_json(url: str) -> dict[str, Any]:
 
 def validar(args: argparse.Namespace) -> dict[str, Any]:
     endpoint = args.api_public_url.rstrip("/") + "/v1/auth/config"
+    # Espelha app/core/config.py:azure_expected_redirect_uri — a API sempre publica
+    # "{app_public_url}/auth/callback.html", nunca a URL base sozinha.
+    redirect_uri_esperado = args.app_public_url.rstrip("/") + "/auth/callback.html"
     ultimo_payload: dict[str, Any] | None = None
 
     for tentativa in range(1, args.validation_attempts + 1):
@@ -199,7 +202,7 @@ def validar(args: argparse.Namespace) -> dict[str, Any]:
                 and data.get("azure_enabled") is True
                 and data.get("auth_status") == "ready"
                 and data.get("missing_fields") in ([], None)
-                and (data.get("expected_redirect_uri") or "").rstrip("/") == args.app_public_url.rstrip("/")
+                and (data.get("expected_redirect_uri") or "").rstrip("/") == redirect_uri_esperado
             ):
                 return {
                     "success": True,
