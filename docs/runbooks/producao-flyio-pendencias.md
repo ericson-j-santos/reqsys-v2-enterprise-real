@@ -49,11 +49,45 @@ O script automatiza:
 | Secrets produção Fly.io — valores reais revisados | Não | `prod-readiness-human-evidence.json` deve registrar `fly_secrets_reviewed.status=confirmed` | Operador Fly/Ops |
 | Smoke público `/api/runtime/*` | Sim | `public_smoke=ok` no artifact do auditor | QA/Ops |
 | Auth/CORS/JWT gates | Parcial | backend deve iniciar com `APP_ENV=production`, demo desativado e issuer/audience presentes; CORS/JWT seguem cobertos pelos testes de segurança | Segurança/Ops |
-| Aprovação QA | Não | `qa_approval.status=approved` | QA |
-| Aprovação OPS | Não | `ops_approval.status=approved` | OPS |
+| Aprovação QA | Parcial | Gate nativo GitHub Environment `production` (required reviewer) + `qa_approval.status=approved` | QA |
+| Aprovação OPS | Parcial | Gate nativo GitHub Environment `production` (required reviewer) + `ops_approval.status=approved` | OPS |
 | Plano de rollback | Não | `rollback_plan_documented.status=confirmed` | OPS |
 | Janela de implantação | Não | `deployment_window_approved.status=approved` | Gestão/Ops |
 | Domínio corporativo | Não | DNS/TLS corporativo configurado | Infra |
+
+## Gate nativo de aprovação (GitHub Environment `production`)
+
+Desde 2026-07-03, o environment `production` do GitHub tem `required_reviewers`
+configurado (`ericson-j-santos`) via API
+(`PUT /repos/{owner}/{repo}/environments/production`), além de
+`deployment_branch_policy` restringindo deploys a partir da branch `main` apenas
+(`POST .../environments/production/deployment-branch-policies`, `name=main`).
+
+Isso substitui o hack de string (`APROVO-PROD` digitado num input de
+`workflow_dispatch`) por um gate nativo do GitHub: qualquer job com
+`environment: production` — inclui os 3 jobs de `deploy-production-sync.yml`
+(secrets, deploy backend, deploy frontend), acionados tanto por
+`workflow_dispatch` quanto por `push` no `main` — **pausa automaticamente**
+aguardando aprovação manual antes de rodar.
+
+Limitações conhecidas, mantidas como pendência:
+
+- É um único revisor (`ericson-j-santos`), não papéis distintos de QA vs. OPS.
+  Para aprovação QA e OPS como evidências separadas e auditáveis, continue
+  registrando `qa_approval`/`ops_approval` em `prod-readiness-human-evidence.json`.
+- A configuração foi aplicada via API, não está versionada como código (GitHub
+  não oferece IaC nativo para `required_reviewers` no momento). Se o ambiente
+  for recriado do zero, refazer via:
+
+```bash
+gh api --method PUT repos/ericson-j-santos/reqsys-v2-enterprise-real/environments/production \
+  -f 'reviewers[][type]=User' -F 'reviewers[][id]=60470500' \
+  -F 'deployment_branch_policy[protected_branches]=false' \
+  -F 'deployment_branch_policy[custom_branch_policies]=true'
+
+gh api --method POST repos/ericson-j-santos/reqsys-v2-enterprise-real/environments/production/deployment-branch-policies \
+  -f name=main
+```
 
 ## Redirect URI canônico
 
