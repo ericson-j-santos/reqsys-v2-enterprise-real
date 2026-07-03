@@ -6,6 +6,24 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-07-03
+
+### Alterado
+
+- GitHub Environment `production`: gate nativo `required_reviewers` (`ericson-j-santos`) + `deployment_branch_policy` restrito a `main`, substituindo o hack de string `APROVO-PROD`. Aplicado via API (não versionado como código); comandos de reprodução documentados em `docs/runbooks/producao-flyio-pendencias.md`.
+
+### Corrigido
+
+- `styles.css`: `v-card` renderizado dentro de `v-overlay` (diálogos, ex. "Novo requisito" e o detalhe de requisito) ficava com fundo quase transparente (`rgba(255,255,255,0.02)`), pois a regra global de card "vidro" tinha `!important` sem exceção para overlays. Adicionada regra `.v-overlay .v-card` com fundo opaco e sombra, sem alterar a aparência dos cards de conteúdo normal da página. Validado com Playwright/screenshot antes e depois em dois diálogos.
+
+### Adicionado
+
+- `RequisitosView.vue`: linhas da tabela "Analítico de requisitos" ficam clicáveis e abrem um diálogo com o detalhe completo do requisito (título, código, status, descrição, urgência, área, sistema, solicitante, impacto regulatório), usando os dados já carregados na listagem — sem chamada de rede adicional.
+- `scripts/relatorio_qualidade_ia_pendentes.py`: relatório somente-leitura que lista, por ambiente (dev/hml/prod), os requisitos fora das categorias aprovado/em_analise/rejeitado — a causa raiz real do score de Qualidade IA baixo, sem mascarar ou alterar dados.
+- `scripts/replicate_requisitos_anonimizado.py`: replicação on-demand (`--execute`, dry-run por padrão) de requisitos de produção para hml/dev, mascarando `solicitante` com pseudônimo estável (LGPD) e marcando origem para reexecução idempotente. Escopo deliberadamente limitado a `requisitos`; não replica `auditoria` nem `recommendation_ia`, para não contaminar a trilha de auditoria de cada ambiente.
+- `.github/workflows/qualidade-ia-snapshot.yml` + `scripts/registrar_qualidade_ia_snapshot_ci.py`: snapshot diário agendado de Qualidade IA em dev/hml/prod via `POST /v1/qualidade-ia/snapshot`, com aviso automático (`::warning`) quando `score_geral < 70`.
+- `docs/runbooks/qualidade-ia-e-replicacao-ambientes.md`: runbook consolidando o diagnóstico do score de Qualidade IA e o procedimento de replicação anonimizada entre ambientes.
+
 ## [Unreleased] - 2026-07-02
 
 ### Adicionado

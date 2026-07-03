@@ -1,0 +1,37 @@
+name: Qualidade IA Snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '20 3 * * *'
+
+concurrency:
+  group: qualidade-ia-snapshot
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    name: Registrar snapshot de Qualidade IA (dev/hml/prod)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ambiente: prod
+            api_url: https://reqsys-api.fly.dev
+          - ambiente: hml
+            api_url: https://reqsys-api-stg.fly.dev
+          - ambiente: dev
+            api_url: https://reqsys-api-dev.fly.dev
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Registrar snapshot em ${{ matrix.ambiente }}
+        env:
+          AMBIENTE: ${{ matrix.ambiente }}
+          API_URL: ${{ matrix.api_url }}
+        run: python3 scripts/registrar_qualidade_ia_snapshot_ci.py
