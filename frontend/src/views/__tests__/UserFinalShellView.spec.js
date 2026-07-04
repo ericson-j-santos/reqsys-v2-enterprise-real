@@ -66,4 +66,13 @@ describe('UserFinalShellView', () => {
     expect(wrapper.find('[data-testid="user-final-progress"]').text()).toContain('100%')
     expect(wrapper.text()).toContain('Exportar evidência')
   })
+
+  it('expõe resumo técnico de telemetria sanitizada da jornada', async () => {
+    const wrapper = await montar('/home')
+
+    expect(wrapper.find('[data-testid="user-final-telemetry-chip"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="user-final-telemetry-summary"]').text()).toContain('jornada')
+    expect(wrapper.find('[data-testid="user-final-telemetry-summary"]').text()).toContain('eventos')
+    expect(wrapper.find('[data-testid="user-final-telemetry-summary"]').text()).toContain('sanitized_route_only')
+  })
 })
