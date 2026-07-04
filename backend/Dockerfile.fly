@@ -22,7 +22,8 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY app /app/app
 COPY fly_boot.sh /app/fly_boot.sh
 
-RUN chmod +x /app/fly_boot.sh
+RUN sed -i 's/\r$//' /app/fly_boot.sh \
+    && chmod +x /app/fly_boot.sh
 
 EXPOSE 8000
 

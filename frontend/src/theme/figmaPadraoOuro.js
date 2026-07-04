@@ -37,3 +37,23 @@ export const figmaVuetifyTheme = {
     'on-primary': FIGMA_TOKENS.accentOn,
   },
 }
+
+export const figmaVuetifyLightTheme = {
+  dark: false,
+  colors: {
+    background: '#f6f8fb',
+    surface: '#ffffff',
+    'surface-variant': '#eef2f7',
+    'surface-bright': '#ffffff',
+    primary: FIGMA_TOKENS.accent,
+    secondary: '#0ea5e9',
+    accent: FIGMA_TOKENS.accent,
+    error: '#dc2626',
+    warning: '#d97706',
+    info: '#0284c7',
+    success: '#16a34a',
+    'on-background': '#111827',
+    'on-surface': '#111827',
+    'on-primary': '#111827',
+  },
+}
