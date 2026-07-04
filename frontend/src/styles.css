@@ -25,6 +25,20 @@
   --font-sans: Inter, system-ui, sans-serif;
 }
 
+.v-theme--reqsysClaro {
+  --bg: #f6f8fb;
+  --bg-deep: #eef2f7;
+  --bg-gradient-top: #ffffff;
+  --card: rgba(255, 255, 255, 0.92);
+  --card-alt: #f8fafc;
+  --panel: #ffffff;
+  --border: rgba(15, 23, 42, 0.14);
+  --line: rgba(15, 23, 42, 0.14);
+  --text: #111827;
+  --text-muted: #526070;
+  --muted: #526070;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -79,7 +93,7 @@ body {
 
 .req-drawer,
 .v-navigation-drawer {
-  background: rgba(2, 6, 23, 0.92) !important;
+  background: color-mix(in srgb, var(--panel) 92%, transparent) !important;
   color: var(--text) !important;
   border-right: 1px solid var(--line) !important;
 }
@@ -136,8 +150,8 @@ body {
 
 .page,
 .req-content-shell > * {
-  padding: 28px 32px 40px;
-  max-width: 1400px;
+  padding: 24px 28px 36px;
+  max-width: 1440px;
   width: 100%;
   margin: 0 auto;
   min-width: 0;
@@ -150,14 +164,14 @@ body {
 .figma-github,
 .dashboard-operacional {
   width: 100%;
-  max-width: 1400px;
+  max-width: 1440px;
   margin: 0 auto;
   min-width: 0;
 }
 
 .hub-page,
 .ai-rec-page {
-  padding: 28px 32px 40px;
+  padding: 24px 28px 36px;
 }
 
 .page-actions {
@@ -213,12 +227,18 @@ body {
 }
 
 h1,
-.page-title,
-.v-card-title {
-  font-size: clamp(24px, 4vw, 38px);
+.page-title {
+  font-size: 1.9rem;
   margin-bottom: 0;
   color: var(--text) !important;
-  line-height: 1.05;
+  line-height: 1.15;
+  font-weight: 800;
+}
+
+.v-card-title {
+  color: var(--text) !important;
+  font-size: 1.05rem;
+  line-height: 1.3;
   font-weight: 800;
 }
 
