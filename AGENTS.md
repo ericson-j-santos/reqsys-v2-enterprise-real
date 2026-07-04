@@ -1,28 +1,37 @@
-﻿# AGENTS.md
+# AGENTS.md
 
-Guia operacional canÃ´nico para agentes, automaÃ§Ãµes e assistentes que atuam neste repositÃ³rio. Mantenha este arquivo objetivo, rastreÃ¡vel e alinhado ao estado real do cÃ³digo.
+Guia operacional canônico para agentes, automações e assistentes que atuam neste repositório. Mantenha este arquivo objetivo, rastreável e alinhado ao estado real do código.
 
-## PrincÃ­pios de trabalho
+## Princípios de trabalho
 
-- Priorizar mudanÃ§as pequenas, revisÃ¡veis e com escopo explÃ­cito.
-- NÃ£o executar aÃ§Ãµes destrutivas sem evidÃªncia, justificativa e possibilidade de rollback.
-- NÃ£o commitar segredos, `.env`, bancos locais, artefatos de build, logs sensÃ­veis ou arquivos temporÃ¡rios.
-- Preferir documentaÃ§Ã£o em portuguÃªs do Brasil quando o conteÃºdo for operacional ou de produto.
-- Validar comandos antes de documentÃ¡-los. Quando houver dÃºvida, registrar como pendÃªncia em vez de assumir.
+- Priorizar mudanças pequenas, revisáveis e com escopo explícito.
+- Não executar ações destrutivas sem evidência, justificativa e possibilidade de rollback.
+- Não commitar segredos, `.env`, bancos locais, artefatos de build, logs sensíveis ou arquivos temporários.
+- Preferir documentação em português do Brasil quando o conteúdo for operacional ou de produto.
+- Validar comandos antes de documentá-los. Quando houver dúvida, registrar como pendência em vez de assumir.
 
 ## Estrutura principal
 
 | Caminho | Responsabilidade |
 | --- | --- |
-| `backend/` | API principal FastAPI, domÃ­nio, serviÃ§os, integraÃ§Ãµes e testes Python. |
+| `backend/` | API principal FastAPI, domínio, serviços, integrações e testes Python. |
 | `frontend/` | Frontend principal Vue/Vite/Vuetify. |
-| `backend-dotnet/` | ServiÃ§o .NET complementar, quando aplicÃ¡vel. |
+| `backend-dotnet/` | Serviço .NET complementar, quando aplicável. |
 | `frontend-angular/` | Frente Angular complementar ou experimental. |
-| `frontend-vuetify/` | Variante Vuetify usada em validaÃ§Ãµes especÃ­ficas. |
-| `e2e/` e `frontend/tests/e2e/` | Testes Playwright e validaÃ§Ãµes responsivas. |
-| `.github/workflows/` | CI, quality gates e validaÃ§Ãµes agendadas/manuais. |
-| `docs/` | DecisÃµes, runbooks, evidÃªncias e documentaÃ§Ã£o operacional. |
-| `scripts/` | AutomaÃ§Ã£o local, publicaÃ§Ã£o, validaÃ§Ã£o e tarefas auxiliares. |
+| `frontend-vuetify/` | Variante Vuetify usada em validações específicas. |
+| `e2e/` e `frontend/tests/e2e/` | Testes Playwright e validações responsivas. |
+| `.github/workflows/` | CI, quality gates e validações agendadas/manuais. |
+| `docs/` | Decisões, runbooks, evidências e documentação operacional. |
+| `scripts/` | Automação local, publicação, validação e tarefas auxiliares. |
+| `artifacts/` | Saída de artifacts CI/evidência (JSON, dashboards, snapshots). |
+| `audit/` | Relatórios de auditoria e evidence consolidada. |
+| `infra/` | Configuração de infraestrutura: nginx, codex-local (Ollama/Qdrant), ambientes Fly.io. |
+| `contracts/openapi/` | Contratos OpenAPI (lintado por workflows Spectral/Newman). |
+| `schemas/` | Schemas JSON de governança e product-intelligence. |
+| `tools/` | Ferramentas standalone: codex-local-online, product_intelligence, schema_governance. |
+| `tests/` | Testes de integração/governança para scripts e workflows (não confundir com `backend/tests/`). |
+| `docs-site/` | Site MkDocs publicado em GitHub Pages. |
+| `config/` | Arquivos de configuração auxiliares. |
 
 ## Comandos essenciais
 
@@ -44,7 +53,7 @@ cd backend
 .\.venv\Scripts\Activate.ps1
 ```
 
-### Qualidade e seguranÃ§a backend
+### Qualidade e segurança backend
 
 ```bash
 cd backend
@@ -64,7 +73,22 @@ npx playwright install --with-deps chromium
 npx playwright test tests/e2e/responsividade.spec.js
 ```
 
-### Docker e publicaÃ§Ã£o local
+Testes unitários (Vitest):
+
+```bash
+cd frontend
+npm run test:unit          # vitest run
+npm run test:coverage      # vitest run --coverage
+```
+
+E2E estável:
+
+```bash
+cd frontend
+npm run test:e2e:stable    # node scripts/run-e2e-safe.js --reporter=line
+```
+
+### Docker e publicação local
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
@@ -80,60 +104,152 @@ bash scripts/publicar_ambiente.sh hml
 bash scripts/publicar_ambiente.sh prod
 ```
 
-## CI obrigatÃ³rio
+### Dev local sem Docker
 
-Antes de merge em `main`, validar o workflow `CI â€” ReqSys v2 Enterprise` com os jobs:
+```bash
+bash scripts/dev-local.sh
+# Variáveis opcionais: BACKEND_PORT, FRONTEND_PORT, DEV_DB_PATH, REQSYS_SKIP_BACKEND_INSTALL
+```
+
+Stack completa com nginx:
+
+```bash
+bash scripts/executar-local.sh
+# Variáveis opcionais: GATEWAY_PORT, BACKEND_PORT, FRONTEND_PORT, KB_PORT, KB_DIR
+```
+
+### Segurança — testes de gate
+
+```bash
+bash scripts/run_security_gate_tests.sh
+# Executa: test_security_production_gates_individual.py, test_security_cors_individual.py, test_security_auth_jwt_individual.py
+```
+
+### Validação de qualidade
+
+```bash
+bash scripts/validar_qualidade.sh
+# Executa: pytest backend, build frontend-vuetify + frontend-angular, E2E/acessibilidade
+```
+
+### Health check de URLs por ambiente
+
+```bash
+bash scripts/testar_urls_ambiente.sh dev
+bash scripts/testar_urls_ambiente.sh hml
+bash scripts/testar_urls_ambiente.sh prod
+```
+
+### Cofre operacional (vault)
+
+```bash
+python scripts/vault_setup.py init              # cria master key
+python scripts/vault_setup.py set KEY VALUE     # grava segredo
+python scripts/vault_setup.py get KEY           # lê segredo
+python scripts/vault_setup.py status            # estado do vault
+python scripts/vault_setup.py import-env        # importa .env para o vault
+python scripts/vault_setup.py gen-token         # gera VAULT_API_TOKEN
+```
+
+### OpenAPI / contratos
+
+```bash
+python scripts/validate_openapi_contract.py --contract docs-site/assets/openapi/reqsys-runtime-openapi-*.json
+python scripts/openapi_semantic_diff.py          # diff OpenAPI vs rotas FastAPI (report-only)
+python scripts/generate_postman_from_openapi.py # gera coleção Postman v2.1
+```
+
+### Validação de acessos públicos
+
+```bash
+npm run validate:access                         # validar-acessos-publicos.mjs
+npm run validate:pipeline                       # validar-pipeline-governanca.mjs
+npm run validate:dashboard-regression           # validate-dashboard-regression.mjs
+```
+
+### Auditoria de produção
+
+```bash
+python scripts/prod_readiness_audit.py
+# Verifica endpoints Fly.io, segredos obrigatórios, gates. Output: artifacts/prod-readiness-audit.json
+```
+
+### Guardrails enterprise CI
+
+```bash
+python scripts/ci_enterprise_guardrails.py
+# Validações determinísticas rápidas (configs inseguras, não-determinismo)
+```
+
+## CI obrigatório
+
+Antes de merge em `main`, validar o workflow `CI — ReqSys v2 Enterprise` com os jobs:
 
 | Job | Gate esperado |
 | --- | --- |
+| `CI Router (paths + Pareto)` | detecta escopo e ativa suites relevantes |
 | `Backend Lint & Security (ruff + pip-audit + bandit)` | `success` |
-| `Backend Tests + Coverage (pytest)` | `success` com cobertura mÃ­nima configurada |
+| `Backend Tests + Coverage (pytest)` | `success` com cobertura mínima configurada |
 | `Frontend Build + Security Audit (Vite + npm audit)` | `success` |
 | `Frontend Responsive E2E (Playwright)` | `success` |
+| `Pipeline Governança + Evidence Snapshot` | `success` |
 
-NÃ£o considerar um PR pronto para merge quando o E2E responsivo estiver ausente, em execuÃ§Ã£o ou falho, salvo decisÃ£o tÃ©cnica formal e documentada.
+Não considerar um PR pronto para merge quando o E2E responsivo estiver ausente, em execução ou falho, salvo decisão técnica formal e documentada.
 
-## Gates de produÃ§Ã£o
+### Workflows CI complementares
 
-ProduÃ§Ã£o deve ser bloqueada se qualquer condiÃ§Ã£o abaixo ocorrer:
+| Workflow | Trigger | Propósito |
+| --- | --- | --- |
+| `CI Enterprise Fast` | PR/push | Guardrails determinísticos (`ci_enterprise_guardrails.py`) |
+| `Fast CI - Operational Guardrails` | PR (paths: workflows/scripts/tests/runbooks) | Sintaxe Python + testes operacionais rápidos |
+| `CI E2E Governado` | PR com label `e2e`/`full-ci`, push main | E2E com routing por paths alterados |
+| `CI Security Deep Scan` | Push main, PR com label `security`/`full-ci` | Scan profundo backend + frontend |
+| `Main Smoke CI` | Push main, `workflow_dispatch` | Pós-merge: validação sintaxe + guardrails |
+| `OpenAPI Spectral Lint` | PR (paths: openapi/contracts) | Lint de contrato OpenAPI (report-only) |
+| `OpenAPI Routes Drift` | PR (paths: backend/api) | Detecta drift OpenAPI vs rotas FastAPI |
+| `Docs MkDocs` | PR/push (paths: mkdocs.yml, docs-site/) | Build e deploy da documentação |
+
+## Gates de produção
+
+Produção deve ser bloqueada se qualquer condição abaixo ocorrer:
 
 - `APP_ENV` produtivo com `ALLOW_DEMO_LOGIN=true`.
 - `CORS_ORIGINS=*`.
-- `JWT_SECRET` fraco, ausente ou padrÃ£o.
+- `JWT_SECRET` fraco, ausente ou padrão.
 - `JWT_ISSUER` ausente.
 - `JWT_AUDIENCE` ausente.
 - `JWT_EXP_MINUTES <= 0`.
 - Logs contendo token, senha, CPF, PII, connection string ou segredo.
 - Auditoria sem `correlation_id`.
-- Endpoint administrativo de conector exposto sem autorizaÃ§Ã£o adequada.
+- Endpoint administrativo de conector exposto sem autorização adequada.
 
 ## Deploy de hotfix e ambientes
 
-- Quando houver mudanÃ§as locais fora do escopo do hotfix, publicar a partir de uma Ã¡rvore limpa contendo somente os arquivos do ajuste aprovado.
-- Para mudanÃ§as de frontend/autenticaÃ§Ã£o, validar localmente com `npm run build` e teste unitÃ¡rio ou regressivo focado antes de publicar.
+- Quando houver mudanças locais fora do escopo do hotfix, publicar a partir de uma árvore limpa contendo somente os arquivos do ajuste aprovado.
+- Para mudanças de frontend/autenticação, validar localmente com `npm run build` e teste unitário ou regressivo focado antes de publicar.
 - Promover ambientes em ordem: `dev` primeiro, depois `staging`, depois `prod`.
-- ApÃ³s cada publicaÃ§Ã£o, validar o endpoint afetado no ambiente publicado antes de seguir para o prÃ³ximo.
-- NÃ£o publicar produÃ§Ã£o quando o deploy puder carregar alteraÃ§Ãµes locais nÃ£o revisadas ou nÃ£o relacionadas.
+- Após cada publicação, validar o endpoint afetado no ambiente publicado antes de seguir para o próximo.
+- Não publicar produção quando o deploy puder carregar alterações locais não revisadas ou não relacionadas.
 
-## PadrÃ£o de PR
+## Padrão de PR
 
 Cada PR deve conter:
 
 - Resumo objetivo.
 - Escopo e fora de escopo.
-- EvidÃªncias de teste.
-- Riscos e rollback quando aplicÃ¡vel.
-- ReferÃªncia a issue, decisÃ£o tÃ©cnica ou release note quando existir.
+- Evidências de teste.
+- Riscos e rollback quando aplicável.
+- Referência a issue, decisão técnica ou release note quando existir.
 
-CritÃ©rios mÃ­nimos para merge:
+Critérios mínimos para merge:
 
-- PR nÃ£o estÃ¡ em draft.
-- Branch estÃ¡ mergeÃ¡vel.
+- PR não está em draft.
+- Branch está mergeável.
 - CI completo e verde.
-- ComentÃ¡rios crÃ­ticos resolvidos.
-- Sem mudanÃ§as fora do escopo declarado.
+- Comentários críticos resolvidos.
+- Sem mudanças fora do escopo declarado.
 
-## PadrÃ£o de commits
+## Padrão de commits
 
 Usar commits claros e preferencialmente convencionais:
 
@@ -141,74 +257,119 @@ Usar commits claros e preferencialmente convencionais:
 feat: adicionar recurso
 fix: corrigir comportamento
 test: adicionar cobertura
-docs: atualizar documentaÃ§Ã£o
+docs: atualizar documentação
 ci: ajustar pipeline
-chore: manutenÃ§Ã£o sem impacto funcional
+chore: manutenção sem impacto funcional
 ```
 
-## SeguranÃ§a e segredos
+## Segurança e segredos
 
-- Nunca registrar valores reais de segredo em documentaÃ§Ã£o, teste ou log.
+- Nunca registrar valores reais de segredo em documentação, teste ou log.
 - Usar placeholders seguros como `placeholder`, `example.com`, `reqsys-ci` ou equivalentes.
-- NÃ£o commitar `.env`, bancos SQLite locais, dumps, prints com PII ou artefatos de execuÃ§Ã£o.
-- Antes de publicar cÃ³digo que toque autenticaÃ§Ã£o, CORS, JWT, conectores ou permissÃµes, validar gates individuais e testes regressivos.
+- Não commitar `.env`, bancos SQLite locais, dumps, prints com PII ou artefatos de execução.
+- Antes de publicar código que toque autenticação, CORS, JWT, conectores ou permissões, validar gates individuais e testes regressivos.
 
 ## Correlation ID e auditoria
 
-Toda operaÃ§Ã£o relevante deve preservar rastreabilidade:
+Toda operação relevante deve preservar rastreabilidade:
 
-- Aceitar `X-Correlation-ID` ou `X-Request-ID` quando aplicÃ¡vel.
-- Propagar o identificador para serviÃ§os internos, logs, envelopes e auditoria.
-- Gerar identificador quando o cliente nÃ£o enviar.
-- NÃ£o mascarar o `correlation_id`, mas mascarar PII e segredos.
+- Aceitar `X-Correlation-ID` ou `X-Request-ID` quando aplicável.
+- Propagar o identificador para serviços internos, logs, envelopes e auditoria.
+- Gerar identificador quando o cliente não enviar.
+- Não mascarar o `correlation_id`, mas mascarar PII e segredos.
 
-## DocumentaÃ§Ã£o esperada
+## Documentação esperada
 
-Para mudanÃ§as relevantes, atualizar pelo menos um dos itens abaixo:
+Para mudanças relevantes, atualizar pelo menos um dos itens abaixo:
 
 - `README.md`, quando afetar uso geral.
-- `docs/`, quando afetar arquitetura, seguranÃ§a, operaÃ§Ã£o ou runbook.
+- `docs/`, quando afetar arquitetura, segurança, operação ou runbook.
 - Release note em `docs/releases/`, quando houver entrega significativa.
-- Matriz de testes, quando novos gates ou cenÃ¡rios crÃ­ticos forem adicionados.
+- Matriz de testes, quando novos gates ou cenários críticos forem adicionados.
 
-## OrientaÃ§Ãµes para agentes
+## Orientações para agentes
 
 - **Antes de abrir branch/PR novo**, executar o gate de incremento objetivo:
   ```bash
   python scripts/agent_increment_gate.py --increment-type new_front --intent "descricao curta"
   ```
-  Com artifact local: `--status-json artifacts/coordenador-status/coordenador-status.json`.  
+  Com artifact local: `--status-json artifacts/coordenador-status/coordenador-status.json`.
   Tipos permitidos conforme `increment_gate.allowed_increment_types` em `coordenador-status.json`.
 - Para corrigir gap: `--increment-type gap_fix --reference OPS-GAP-*`.
 - Para fechar duplicado: `--increment-type close_duplicate --reference <numero_pr>`.
 - Para hotfix escopo fechado: `--increment-type hotfix --reference OPS-GAP-*`.
 - Para concluir incremento ativo (CI/merge): `--increment-type consolidate`.
 - Workflow manual: **Agent Increment Gate** (`workflow_dispatch`).
-- NÃ£o criar mÃºltiplos PRs concorrentes para o mesmo arquivo sem necessidade.
-- Quando houver PRs duplicados, consolidar o conteÃºdo canÃ´nico em um Ãºnico PR e fechar os demais com justificativa.
-- Preferir alteraÃ§Ã£o mÃ­nima em arquivos existentes.
-- NÃ£o fazer merge em lote de PRs antigos sem revalidar contra a `main` atual.
-- NÃ£o depender de revisÃ£o automÃ¡tica como Ãºnica evidÃªncia. CI e inspeÃ§Ã£o tÃ©cnica continuam obrigatÃ³rios.
+- Não criar múltiplos PRs concorrentes para o mesmo arquivo sem necessidade.
+- Quando houver PRs duplicados, consolidar o conteúdo canônico em um único PR e fechar os demais com justificativa.
+- Preferir alteração mínima em arquivos existentes.
+- Não fazer merge em lote de PRs antigos sem revalidar contra a `main` atual.
+- Não depender de revisão automática como única evidência. CI e inspeção técnica continuam obrigatórios.
 
-## DecisÃ£o canÃ´nica atual
+## Decisão canônica atual
 
 O ciclo de PRs deve seguir este fluxo:
 
 ```text
-triagem â†’ ajuste mÃ­nimo â†’ CI completo â†’ evidÃªncia â†’ merge controlado â†’ validaÃ§Ã£o pÃ³s-merge â†’ fechamento de duplicados
+triagem → ajuste mínimo → CI completo → evidência → merge controlado → validação pós-merge → fechamento de duplicados
 ```
 
-Este arquivo Ã© a referÃªncia operacional para prÃ³ximos agentes que atuarem no repositÃ³rio.
+Este arquivo é a referência operacional para próximos agentes que atuarem no repositório.
+
+## Ambientes Fly.io e acesso público
+
+Ambientes públicos definidos em `infra/public-access-urls.json` e validados por `npm run validate:access`:
+
+| Ambiente | Frontend Fly | API Health Fly |
+| --- | --- | --- |
+| dev | `https://reqsys-app-dev.fly.dev/` | `https://reqsys-api-dev.fly.dev/health` |
+| hml (staging) | `https://reqsys-app-stg.fly.dev/` | `https://reqsys-api-stg.fly.dev/health` |
+| prod | `https://reqsys-app.fly.dev/` | `https://reqsys-api.fly.dev/health` |
+
+Boot resiliente Fly.io: `scripts/fly_boot.sh` — garante volume gravável antes de uvicorn; fallback para `/tmp` via `REQSYS_BOOT_FALLBACK=true`.
+
+Endpoints de runtime health disponíveis: `/health` e `/api/runtime/health`.
+
+## Codex Local / Ollama
+
+Stack local de IA com Ollama + Qdrant (RAG opcional):
+
+```bash
+bash scripts/iniciar_codex_local.sh              # sobe Ollama (Docker ou nativo) + backend + frontend
+bash scripts/configurar_ollama_gateway_sync.sh   # configura sync com repo externo (requer OLLAMA_GATEWAY_SYNC_TOKEN)
+bash scripts/sincronizar_ollama_gateway_repo.sh  # sincroniza bootstrap com reqsys-ollama-local-gateway
+```
+
+Docker Compose dedicado: `infra/codex-local/docker-compose.ollama.yml` (Ollama na `:11434`, Qdrant no perfil `rag` na `:6333`).
+
+## Documentação MkDocs
+
+Site publicado em GitHub Pages via workflow `Docs MkDocs`. Para build local:
+
+```bash
+pip install -r requirements-docs.txt
+mkdocs build
+```
+
+Config: `mkdocs.yml`, fonte: `docs-site/`.
+
+## Testes de scripts (root `tests/`)
+
+Os testes em `tests/` (raiz do repo) validam scripts e workflows de governança, não o backend:
+
+```bash
+python -m pytest tests/ -q   # testes de scripts/governança (não confundir com backend/tests/)
+```
 
 ## Cursor Cloud specific instructions
 
-Ambiente jÃ¡ inicializado pelo update script (venv do backend + `npm ci` no frontend). Dependencias de sistema (`unixodbc`/`unixodbc-dev` para `pyodbc` e `python3.12-venv`) ja estao no snapshot da VM; nao precisam ser reinstaladas.
+Ambiente já inicializado pelo update script (venv do backend + `npm ci` no frontend). Dependencias de sistema (`unixodbc`/`unixodbc-dev` para `pyodbc` e `python3.12-venv`) ja estao no snapshot da VM; nao precisam ser reinstaladas.
 
 ### Coordenador Principal (operacao hibrida)
 
 Automacao real fica em GitHub Actions + scripts + agentes por PR; chats fixos sao contexto, nao runtime autonomo. Menu fechado: `docs/runbooks/coordenador-principal-menu-operacional.md`. Leitura preferencial: artifact `coordenador-status-evidence` via workflow **Coordenador Status Consolidator**.
 
-**Hub documentacao Padrão Ouro Tier 1:** `docs/padrao-ouro/README.md` — Living Architecture Index, ADR Index, Runtime Evidence Graph, Contract Catalog e Engineering Playbooks. Indice machine-readable para agentes: `docs/padrao-ouro/living-architecture-index.json`.
+**Hub documentacao Padrão Ouro Tier 1:** `docs/padrao-ouro/README.md` - Living Architecture Index, ADR Index, Runtime Evidence Graph, Contract Catalog e Engineering Playbooks. Indice machine-readable para agentes: `docs/padrao-ouro/living-architecture-index.json`.
 
 **Gate obrigatorio para nova frente:** `python scripts/agent_increment_gate.py --increment-type new_front --intent "<objetivo>"`. Exit code `0` = permitido; `1` = bloqueado (seguir `recommended_actions`). Campo `increment_gate.new_front_allowed` em `coordenador-status.json`.
 
@@ -225,7 +386,7 @@ A forma mais leve de rodar o produto e backend uvicorn + frontend Vite (o Vite f
 
 `ruff`, `pip-audit`, `bandit` e `pytest-cov` sao instalados no venv pelo update script (nao estao em `requirements.txt`). Comandos canonicos em "Comandos essenciais". A cobertura de testes fica ~74% (gate `--cov-fail-under=60` passa).
 
-### Evidencia visual — telas recentes (sempre aplicar)
+### Evidencia visual - telas recentes (sempre aplicar)
 
 Quando o usuario pedir telas, ultimas implementacoes ou evidencia visual, entregar **sempre os tres**:
 
