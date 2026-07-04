@@ -146,6 +146,14 @@
           · ambiente {{ environment.id }}
           · correlation_id {{ correlationId }}
         </span>
+        <span class="muted" data-testid="user-final-telemetry-summary">
+          jornada {{ telemetrySummary.current_state }}
+          · eventos {{ telemetrySummary.event_count }}
+          <template v-if="telemetrySummary.time_to_primary_action_ms !== null">
+            · ação {{ telemetrySummary.time_to_primary_action_ms }}ms
+          </template>
+          · {{ telemetrySummary.pii_policy }}
+        </span>
       </div>
       <div class="footer-chips">
         <v-chip
@@ -158,6 +166,9 @@
         >
           Versões divergentes
         </v-chip>
+        <v-chip size="small" color="green" variant="tonal" data-testid="user-final-telemetry-chip">
+          jornada observada
+        </v-chip>
         <v-chip size="small" color="green" variant="tonal">sem dado sensível</v-chip>
       </div>
     </v-card>
@@ -168,10 +179,12 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppVersion } from '../composables/useAppVersion'
+import { useUserJourneyTelemetry } from '../composables/useUserJourneyTelemetry'
 
 const route = useRoute()
 const router = useRouter()
 const { frontendVersion, apiVersion, apiBuildShaShort, versionsAligned, hasVersionDrift } = useAppVersion()
+const { telemetrySummary, markPrimaryAction } = useUserJourneyTelemetry(route)
 const correlationId = `ufs-${Date.now().toString(36)}`
 
 const versionSummary = computed(() => {
@@ -275,6 +288,7 @@ const guidedWorkspace = computed(() => {
 
 function goTo(target) {
   if (!target) return
+  markPrimaryAction(target)
   router.push(target)
 }
 </script>
