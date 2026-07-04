@@ -12,6 +12,11 @@
         <span v-if="showPrefix">Ambiente:</span>
         <strong>{{ ambienteAtualLabel }}</strong>
         <v-icon icon="mdi-chevron-down" size="14" class="ambiente-navigator__icon" />
+        <v-tooltip
+          activator="parent"
+          location="bottom"
+          :text="`Voce esta no ambiente ${ambienteAtualLabel}. Use este controle para trocar entre desenvolvimento, homologacao e producao preservando a pagina atual.`"
+        />
       </button>
     </template>
 
@@ -24,6 +29,11 @@
         :data-testid="`ambiente-opcao-${item.shortId}`"
         @click="selecionar(item.id)"
       >
+        <v-tooltip
+          activator="parent"
+          location="right"
+          :text="tooltipAmbiente(item)"
+        />
         <template #prepend>
           <v-chip size="x-small" :color="item.color" variant="tonal">{{ item.label }}</v-chip>
         </template>
@@ -81,6 +91,12 @@ const {
 function selecionar(id) {
   if (id === ambienteAtualId.value) return
   solicitarNavegacao(id, { preserveRoute: true })
+}
+
+function tooltipAmbiente(item) {
+  if (item.id === ambienteAtualId.value) return 'Ambiente atual: voce ja esta navegando nesta instancia.'
+  if (item.id === 'producao') return 'Abre a instancia de producao. O ReqSys pede confirmacao antes de sair do ambiente atual.'
+  return `Abre ${item.label} mantendo a rota atual para comparar a mesma tela entre ambientes.`
 }
 </script>
 

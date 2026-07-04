@@ -11,15 +11,19 @@ import './styles.css'
 import { useAuthStore } from './stores/auth'
 import { api } from './services/api'
 import { handleRedirectResult } from './auth/msal'
-import { figmaVuetifyTheme } from './theme/figmaPadraoOuro'
+import { figmaVuetifyLightTheme, figmaVuetifyTheme } from './theme/figmaPadraoOuro'
+
+const temaPersistido = localStorage.getItem('reqsys_tema_visual')
+const temaInicial = temaPersistido === 'reqsysClaro' ? 'reqsysClaro' : 'figmaPadraoOuro'
 
 const vuetify = createVuetify({
   components,
   directives,
   theme: {
-    defaultTheme: 'figmaPadraoOuro',
+    defaultTheme: temaInicial,
     themes: {
       figmaPadraoOuro: figmaVuetifyTheme,
+      reqsysClaro: figmaVuetifyLightTheme,
     },
   },
 })

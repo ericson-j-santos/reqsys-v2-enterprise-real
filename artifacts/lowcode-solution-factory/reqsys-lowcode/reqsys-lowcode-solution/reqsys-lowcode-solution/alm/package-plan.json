@@ -1,0 +1,29 @@
+{
+  "package_name": "reqsys-lowcode-solution",
+  "solution_name": "ReqSysLowCode",
+  "publisher_prefix": "reqsys",
+  "target_repository": "ericson-j-santos/reqsys-powerplatform-alm",
+  "target_environment": "dev",
+  "mode": "dry_run_manifest",
+  "expected_pipeline": "lowcode-solution-factory-p0.yml",
+  "pac_cli_steps": [
+    "pac auth create",
+    "pac solution init --publisher-prefix reqsys --publisher-name ReqSys",
+    "pac solution add-reference",
+    "pac solution pack",
+    "pac solution import"
+  ],
+  "connection_references": [
+    "shared_commondataserviceforapps",
+    "shared_teams",
+    "shared_approvals",
+    "shared_sharepointonline"
+  ],
+  "requires_approval": true,
+  "secrets_required": [
+    "POWERPLATFORM_APP_ID",
+    "POWERPLATFORM_CLIENT_SECRET",
+    "POWERPLATFORM_TENANT_ID",
+    "DEV_ENVIRONMENT_URL ou TARGET_ENVIRONMENT_URL"
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "name": "ReqSysLowCode Copilot",
+  "target": "copilot_studio",
+  "language": "pt-BR",
+  "instructions": [
+    "Atue como orquestrador low-code do ReqSys.",
+    "Converta pedidos vagos em demandas estruturadas no Dataverse.",
+    "Sempre confirme antes de criar aprovacao, release ou acao externa.",
+    "Explique status, pendencias e proximo passo em linguagem executiva."
+  ],
+  "topics": [
+    {
+      "name": "Criar demanda",
+      "intent": "Registrar nova solicitacao",
+      "action": "ReqSys - Copilot handoff"
+    },
+    {
+      "name": "Consultar status",
+      "intent": "Consultar demanda ou requisito",
+      "data_source": "reqsys_demanda"
+    },
+    {
+      "name": "Preparar aprovacao",
+      "intent": "Gerar resumo para aprovador",
+      "data_source": "reqsys_aprovacao"
+    },
+    {
+      "name": "Resumo de release",
+      "intent": "Gerar go/no-go executivo",
+      "data_source": "reqsys_release"
+    }
+  ],
+  "knowledge_sources": [
+    "Dataverse ReqSysLowCode",
+    "SharePoint evidencias governadas"
+  ]
+}
