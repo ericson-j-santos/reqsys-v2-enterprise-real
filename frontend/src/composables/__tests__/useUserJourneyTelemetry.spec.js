@@ -3,7 +3,7 @@ import { nextTick, reactive } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useUserJourneyTelemetry, __userJourneyTelemetryInternals } from '../useUserJourneyTelemetry'
 
-function mountComposable(route, options = {}) {
+async function mountComposable(route, options = {}) {
   let exposed
   const wrapper = mount({
     template: '<div />',
@@ -12,6 +12,12 @@ function mountComposable(route, options = {}) {
       return {}
     },
   })
+
+  // Garante que os hooks de montagem e watchers iniciais do Vue sejam drenados
+  // antes das asserções. Isso evita corrida entre o runner CI e o lifecycle.
+  await nextTick()
+  await nextTick()
+
   return { wrapper, exposed }
 }
 
@@ -29,9 +35,7 @@ describe('useUserJourneyTelemetry', () => {
 
   it('registra montagem e estado disponível sem expor dados sensíveis', async () => {
     const route = reactive({ path: '/home', fullPath: '/home', query: { status: 'pendente', cpf: '123' } })
-    const { wrapper, exposed } = mountComposable(route, { nowMs: () => 1000 })
-
-    await nextTick()
+    const { wrapper, exposed } = await mountComposable(route, { nowMs: () => 1000 })
 
     expect(exposed.eventCount.value).toBe(2)
     expect(exposed.telemetrySummary.value.current_state).toBe('success')
@@ -43,9 +47,8 @@ describe('useUserJourneyTelemetry', () => {
   it('mede tempo até a primeira ação primária', async () => {
     const route = reactive({ path: '/workspace', fullPath: '/workspace', query: {} })
     let currentNowMs = 1000
-    const { wrapper, exposed } = mountComposable(route, { nowMs: () => currentNowMs })
+    const { wrapper, exposed } = await mountComposable(route, { nowMs: () => currentNowMs })
 
-    await nextTick()
     currentNowMs = 1450
     exposed.markPrimaryAction('/requisitos')
 
@@ -58,11 +61,11 @@ describe('useUserJourneyTelemetry', () => {
 
   it('registra navegação governada quando a rota muda', async () => {
     const route = reactive({ path: '/home', fullPath: '/home', query: {} })
-    const { wrapper, exposed } = mountComposable(route, { nowMs: () => 1000 })
+    const { wrapper, exposed } = await mountComposable(route, { nowMs: () => 1000 })
 
-    await nextTick()
     route.path = '/analytics'
     route.fullPath = '/analytics'
+    await nextTick()
     await nextTick()
 
     expect(exposed.latestEvent.value.type).toBe('navigation')
