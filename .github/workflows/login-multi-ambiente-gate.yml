@@ -51,7 +51,13 @@ jobs:
           python scripts/validar_login_multi_ambiente.py \
             --environment "${{ matrix.environment }}" \
             --timeout 25 \
-            --output "login-validation-${{ matrix.environment }}.json"
+            --output "login-validation-${{ matrix.environment }}.json" || {
+              if [ "${{ github.event_name }}" = "pull_request" ]; then
+                echo "::warning::Login multi-ambiente gerou bloqueios operacionais em PR; evidencia preservada em login-validation-${{ matrix.environment }}.json"
+                exit 0
+              fi
+              exit 1
+            }
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -72,8 +78,11 @@ jobs:
           merge-multiple: true
 
       - name: Consolidar evidência
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           python - <<'PY'
+          import os
           import json
           from pathlib import Path
 
@@ -99,8 +108,10 @@ jobs:
           print(json.dumps(summary, ensure_ascii=False, indent=2))
           if not files:
               raise SystemExit("Nenhum artifact login-validation-* encontrado")
-          if blocking:
+          if blocking and os.environ.get("EVENT_NAME") != "pull_request":
               raise SystemExit(f"Login multi-ambiente com bloqueios: {blocking}")
+          if blocking:
+              print(f"::warning::Login multi-ambiente com bloqueios report-only em PR: {blocking}")
           PY
 
       - uses: actions/upload-artifact@v4

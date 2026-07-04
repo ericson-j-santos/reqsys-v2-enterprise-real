@@ -33,7 +33,6 @@ async function montar(initialPath) {
   await router.isReady()
 
   return mount(UserFinalShellView, {
-    shallow: true,
     global: {
       plugins: [router],
       config: { warnHandler: () => {} },
