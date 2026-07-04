@@ -45,6 +45,7 @@ describe('useUserJourneyTelemetry', () => {
     let currentNowMs = 1000
     const { wrapper, exposed } = mountComposable(route, { nowMs: () => currentNowMs })
 
+    await nextTick()
     currentNowMs = 1450
     exposed.markPrimaryAction('/requisitos')
 
@@ -59,6 +60,7 @@ describe('useUserJourneyTelemetry', () => {
     const route = reactive({ path: '/home', fullPath: '/home', query: {} })
     const { wrapper, exposed } = mountComposable(route, { nowMs: () => 1000 })
 
+    await nextTick()
     route.path = '/analytics'
     route.fullPath = '/analytics'
     await nextTick()
