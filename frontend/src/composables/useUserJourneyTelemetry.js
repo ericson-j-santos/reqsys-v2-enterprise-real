@@ -18,25 +18,26 @@ function sanitizeQuery(query = {}) {
   )
 }
 
-function createEvent(type, route, details = {}) {
+function createEvent(type, route, details = {}, getNowMs = nowMs) {
   return {
     type,
     path: route?.path || '/',
     query: sanitizeQuery(route?.query),
-    timestamp_ms: nowMs(),
+    timestamp_ms: getNowMs(),
     details,
   }
 }
 
 export function useUserJourneyTelemetry(route, options = {}) {
   const maxEvents = options.maxEvents || MAX_EVENTS
-  const startedAtMs = nowMs()
+  const getNowMs = typeof options.nowMs === 'function' ? options.nowMs : nowMs
+  const startedAtMs = getNowMs()
   const events = ref([])
   const primaryActionAtMs = ref(null)
   const currentState = ref('loading')
 
   function pushEvent(type, details = {}) {
-    const event = createEvent(type, route, details)
+    const event = createEvent(type, route, details, getNowMs)
     events.value = [...events.value.slice(-(maxEvents - 1)), event]
     return event
   }
@@ -48,7 +49,7 @@ export function useUserJourneyTelemetry(route, options = {}) {
 
   function markPrimaryAction(target) {
     if (!primaryActionAtMs.value) {
-      primaryActionAtMs.value = nowMs()
+      primaryActionAtMs.value = getNowMs()
     }
     return pushEvent('primary_action', {
       target: String(target || '').slice(0, 96),
@@ -56,7 +57,7 @@ export function useUserJourneyTelemetry(route, options = {}) {
     })
   }
 
-  const timeOnJourneyMs = computed(() => Math.max(nowMs() - startedAtMs, 0))
+  const timeOnJourneyMs = computed(() => Math.max(getNowMs() - startedAtMs, 0))
   const timeToPrimaryActionMs = computed(() => {
     if (!primaryActionAtMs.value) return null
     return Math.max(primaryActionAtMs.value - startedAtMs, 0)
