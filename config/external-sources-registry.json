@@ -44,6 +44,25 @@
         "auditor": "reqsys-governance",
         "escopo": "registry-only; conector read-only sem mock_as_real"
       }
+    },
+    {
+      "id": "bcb-sgs-cdi",
+      "nome": "Banco Central SGS - CDI diario",
+      "tipo": "externa",
+      "origem": "https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados/ultimos/1?formato=json",
+      "conector": "cdi-provider-bcb-sgs-12",
+      "versaoConector": "registry-v1",
+      "ttlMinutos": 5760,
+      "confiabilidade": "alta",
+      "mock_as_real": false,
+      "autorizado": true,
+      "pendencia": null,
+      "auditoria": {
+        "referencia": "backend/app/services/cdi_provider.py",
+        "auditado_em": "2026-07-05T00:00:00+00:00",
+        "auditor": "reqsys-governance",
+        "escopo": "fonte publica primaria; cache interno em cdi_rates; sem dependencia runtime direta"
+      }
     }
   ]
 }

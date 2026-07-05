@@ -13,6 +13,7 @@ export const NAV_TEMAS = [
       { to: '/monitoramento-operacional', icon: 'mdi-monitor-dashboard', title: 'Monitoramento', tip: 'Estado operacional de PRs, gates, integrações e pendências.' },
       { to: '/analytics', icon: 'mdi-chart-timeline-variant', title: 'Analytics', tip: 'Hub navegável com semáforo operacional e drill-down filtrado.' },
       { to: '/estatisticas', icon: 'mdi-chart-box-outline', title: 'Estatísticas', tip: 'Indicadores auditáveis com fonte, fórmula e analítico.' },
+      { to: '/financeiro', icon: 'mdi-cash-multiple', title: 'Financeiro', tip: 'Taxa CDI diária com cache interno e fonte no Banco Central.' },
     ],
   },
   {

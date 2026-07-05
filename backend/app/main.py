@@ -20,6 +20,7 @@ from app.api import (
     dashboard,
     estatisticas,
     figma_github,
+    financeiro,
     govbi,
     hub_lowcode,
     ia,
@@ -96,6 +97,7 @@ app.include_router(requisitos.api_router)
 app.include_router(agile_runtime.router)
 app.include_router(dashboard.router)
 app.include_router(estatisticas.router)
+app.include_router(financeiro.router)
 app.include_router(figma_github.router)
 app.include_router(pipeline.router)
 app.include_router(relatorios.router)
