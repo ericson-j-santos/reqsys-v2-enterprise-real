@@ -8,22 +8,28 @@ from sqlalchemy.orm import Session
 from app.core.envelope import ok
 from app.db import get_db
 from app.schemas.agents import AgentGenerateRequest, AgentProvisionRequest
+from app.services.adr_orchestrator import (
+    AdrDemand,
+    analytics_adrs,
+    coordenar_e_persistir_demanda,
+    coordenar_e_persistir_lote,
+    listar_coordenadores_adr,
+)
+from app.services.adr_orchestrator import (
+    analytics_coordinators as adr_analytics_coordinators,
+)
+from app.services.adr_orchestrator import (
+    analytics_risk as adr_analytics_risk,
+)
+from app.services.adr_orchestrator import (
+    analytics_summary as adr_analytics_summary,
+)
 from app.services.agent_generator import (
     PACKAGE_NAME,
     catalogo_agentes,
     gerar_pacote_agentes,
     gerar_zip_bytes,
     montar_arquivos_pacote,
-)
-from app.services.adr_orchestrator import (
-    AdrDemand,
-    analytics_adrs,
-    analytics_coordinators as adr_analytics_coordinators,
-    analytics_risk as adr_analytics_risk,
-    analytics_summary as adr_analytics_summary,
-    coordenar_e_persistir_demanda,
-    coordenar_e_persistir_lote,
-    listar_coordenadores_adr,
 )
 from app.services.copilot_studio_provisioner import provisionar_copilot_studio
 from app.services.reqsys_orchestrator import (
