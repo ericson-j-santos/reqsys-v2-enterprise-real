@@ -407,16 +407,18 @@ def _payload_hash(demanda: AdrDemand) -> str:
 
 
 def registrar_evento_coordenacao(db: Session, demanda: AdrDemand, rota: dict) -> AdrCoordinationEvent:
+    adrs_relacionados = [item['adr_id'] for item in rota['adrs_relacionados']]
+    violacoes = [v['violacao'] for v in rota['violacoes_detectadas']]
     evento = AdrCoordinationEvent(
         correlation_id=demanda.correlation_id,
         adr_primario=rota['adr_primario']['adr_id'],
         coordinator_id=rota['adr_primario']['coordinator_id'],
-        adrs_relacionados=[item['adr_id'] for item in rota['adrs_relacionados']],
+        adrs_relacionados=json.dumps(adrs_relacionados, ensure_ascii=False),
         prioridade=rota['prioridade_sugerida'],
         score=rota['adr_primario']['score'],
         confianca=rota['confianca'],
         nivel_risco=rota['nivel_risco'],
-        violacoes=[v['violacao'] for v in rota['violacoes_detectadas']],
+        violacoes=json.dumps(violacoes, ensure_ascii=False),
         origem=rota['origem'],
         ambiente=rota['ambiente'],
         payload_hash=_payload_hash(demanda),
@@ -480,8 +482,7 @@ def analytics_risk(db: Session) -> dict:
     critico = db.query(func.count(AdrCoordinationEvent.id)).filter(AdrCoordinationEvent.nivel_risco == 'critico').scalar() or 0
     alto = db.query(func.count(AdrCoordinationEvent.id)).filter(AdrCoordinationEvent.nivel_risco == 'alto').scalar() or 0
     baixa_confianca = db.query(func.count(AdrCoordinationEvent.id)).filter(AdrCoordinationEvent.confianca < 0.6).scalar() or 0
-    eventos_com_violacao = db.query(AdrCoordinationEvent).filter(AdrCoordinationEvent.violacoes.isnot(None)).all()
-    total_violacoes = sum(1 for evento in eventos_com_violacao if evento.violacoes)
+    total_violacoes = db.query(func.count(AdrCoordinationEvent.id)).filter(AdrCoordinationEvent.violacoes != '[]').scalar() or 0
     return {
         'schema_version': '1.0.0',
         'risk': {
