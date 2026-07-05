@@ -1,13 +1,17 @@
 """
 Serviço IA — Gemini (primary) + Groq/Llama (fallback automático).
-Fluxo: tenta Gemini → se quota esgotada, usa Groq transparentemente.
-Limites free tier: Gemini 15 req/min / 1.500/dia | Groq 30 req/min / 14.400/dia.
+
+A chamada externa passa pela porta comum `LLMGateway`.
+O serviço mantém apenas regras específicas da IA Assistente: cota, fallback
+Gemini -> Groq e normalização de exceções para a API existente.
 """
 import logging
 import threading
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+
+from app.services.llm_provider import LLMGateway, _post_json as _llm_post_json
 
 logger = logging.getLogger('reqsys.ia')
 
@@ -97,43 +101,69 @@ def get_uso_groq() -> dict:
     return _groq_tracker.snapshot()
 
 
+def _post_json(url: str, payload: dict, headers: dict[str, str] | None = None, timeout: int = 45) -> dict:
+    return _llm_post_json(url, payload, headers, timeout)
+
+
+def _gateway() -> LLMGateway:
+    return LLMGateway(post_json=_post_json)
+
+
+def _is_quota_error(msg: str) -> bool:
+    msg_lower = msg.lower()
+    return (
+        '429' in msg
+        or 'resource_exhausted' in msg_lower
+        or 'quota exceeded' in msg_lower
+        or 'rate_limit_exceeded' in msg_lower
+        or 'rate limit' in msg_lower
+        or 'too many requests' in msg_lower
+    )
+
+
+def _is_bad_key_error(msg: str) -> bool:
+    msg_lower = msg.lower()
+    return (
+        '400' in msg
+        or '401' in msg
+        or 'api_key' in msg_lower
+        or 'invalid api key' in msg_lower
+        or 'authentication' in msg_lower
+        or 'invalid' in msg_lower
+    )
+
+
+def _is_model_error(msg: str) -> bool:
+    msg_lower = msg.lower()
+    return '404' in msg or 'not found' in msg_lower or 'not supported' in msg_lower
+
+
 # ---------------------------------------------------------------------------
-# Client Gemini
+# Client Gemini via porta comum
 # ---------------------------------------------------------------------------
 def _gerar(api_key: str, model: str, prompt: str) -> str:
     if not api_key:
         raise GeminiIndisponivel('GEMINI_API_KEY não configurada no .env')
     try:
-        import google.generativeai as genai  # type: ignore
-        genai.configure(api_key=api_key)
-        cliente = genai.GenerativeModel(model)
-        resposta = cliente.generate_content(prompt)
+        texto = _gateway().gerar_gemini(
+            api_key=api_key,
+            model=model,
+            prompt=prompt,
+        )
         _gemini_tracker.registrar()
-        return resposta.text.strip()
+        return texto.strip()
     except GeminiIndisponivel:
         raise
-    except ImportError:
-        raise GeminiIndisponivel('Pacote google-generativeai não instalado.')
     except Exception as exc:
         msg = str(exc)
-        msg_lower = msg.lower()
-        is_quota = (
-            '429' in msg
-            or 'resource_exhausted' in msg_lower
-            or 'quota exceeded' in msg_lower
-            or 'rate limit' in msg_lower
-            or 'too many requests' in msg_lower
-        )
-        if is_quota:
+        if _is_quota_error(msg):
             raise GeminiIndisponivel(
                 f'Quota Gemini esgotada (free tier: {_GEMINI_LIMITE_MIN} req/min, '
                 f'{_GEMINI_LIMITE_DIA} req/dia). Ativando fallback Groq...'
             )
-        is_bad_key = '400' in msg or 'api_key' in msg_lower or 'invalid' in msg_lower
-        is_not_found = '404' in msg or 'not found' in msg_lower or 'not supported' in msg_lower
-        if is_bad_key:
+        if _is_bad_key_error(msg):
             raise GeminiIndisponivel('GEMINI_API_KEY inválida. Verifique a chave em aistudio.google.com.')
-        if is_not_found:
+        if _is_model_error(msg):
             raise GeminiIndisponivel(
                 f'Modelo Gemini "{model}" não disponível. '
                 'Modelos válidos: gemini-2.0-flash, gemini-2.5-flash.'
@@ -143,40 +173,29 @@ def _gerar(api_key: str, model: str, prompt: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Client Groq
+# Client Groq via porta comum
 # ---------------------------------------------------------------------------
 def _gerar_groq(api_key: str, model: str, prompt: str) -> str:
     if not api_key:
         raise GeminiIndisponivel('GROQ_API_KEY não configurada no .env')
     try:
-        from groq import Groq  # type: ignore
-        client = Groq(api_key=api_key)
-        completion = client.chat.completions.create(
+        texto = _gateway().gerar_groq(
+            api_key=api_key,
             model=model,
-            messages=[{'role': 'user', 'content': prompt}],
+            prompt=prompt,
         )
         _groq_tracker.registrar()
-        return completion.choices[0].message.content.strip()
+        return texto.strip()
     except GeminiIndisponivel:
         raise
-    except ImportError:
-        raise GeminiIndisponivel('Pacote groq não instalado. Execute: pip install groq')
     except Exception as exc:
         msg = str(exc)
-        msg_lower = msg.lower()
-        is_quota = (
-            '429' in msg
-            or 'rate_limit_exceeded' in msg_lower
-            or 'rate limit' in msg_lower
-            or 'too many requests' in msg_lower
-        )
-        if is_quota:
+        if _is_quota_error(msg):
             raise GeminiIndisponivel(
                 f'Quota Groq esgotada (free tier: {_GROQ_LIMITE_MIN} req/min, '
                 f'{_GROQ_LIMITE_DIA} req/dia). Tente novamente em instantes.'
             )
-        is_bad_key = '401' in msg or 'invalid api key' in msg_lower or 'authentication' in msg_lower
-        if is_bad_key:
+        if _is_bad_key_error(msg):
             raise GeminiIndisponivel('GROQ_API_KEY inválida. Verifique a chave em console.groq.com.')
         logger.exception('Erro inesperado ao chamar Groq')
         raise GeminiIndisponivel(f'Groq indisponível: {msg}')
