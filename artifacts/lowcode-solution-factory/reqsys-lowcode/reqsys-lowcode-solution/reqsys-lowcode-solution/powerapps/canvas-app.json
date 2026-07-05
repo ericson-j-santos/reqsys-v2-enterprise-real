@@ -1,0 +1,113 @@
+{
+  "app_type": "canvas",
+  "name": "ReqSysLowCode Canvas App",
+  "logical_name": "reqsys_reqsyslowcode_canvas",
+  "theme": {
+    "primary": "#2563EB",
+    "accent": "#10B981",
+    "warning": "#F59E0B",
+    "danger": "#DC2626"
+  },
+  "start_screen": "scrDashboard",
+  "layout": "responsive_tablet",
+  "navigation": [
+    {
+      "label": "Painel ReqSys",
+      "target": "scrDashboard"
+    },
+    {
+      "label": "Demandas",
+      "target": "scrDemandas"
+    },
+    {
+      "label": "Requisitos",
+      "target": "scrRequisitos"
+    },
+    {
+      "label": "Aprovacoes",
+      "target": "scrAprovacoes"
+    },
+    {
+      "label": "Evidencias",
+      "target": "scrEvidencias"
+    }
+  ],
+  "screens": [
+    {
+      "name": "scrDashboard",
+      "title": "Painel ReqSys",
+      "purpose": "Resumo operacional com demandas, aprovacoes, riscos e releases.",
+      "data_sources": [
+        "reqsys_demanda",
+        "reqsys_aprovacao",
+        "reqsys_release"
+      ],
+      "components": [
+        "Header",
+        "KpiStrip",
+        "DemandasRecentes",
+        "AprovacoesPendentes",
+        "ReleaseStatus"
+      ]
+    },
+    {
+      "name": "scrDemandas",
+      "title": "Demandas",
+      "purpose": "Criar, classificar e acompanhar demandas.",
+      "data_sources": [
+        "reqsys_demanda"
+      ],
+      "components": [
+        "DemandForm",
+        "DemandGallery",
+        "PriorityBadge",
+        "SubmitForApprovalButton"
+      ]
+    },
+    {
+      "name": "scrRequisitos",
+      "title": "Requisitos",
+      "purpose": "Detalhar requisitos, regras e criterios de aceite.",
+      "data_sources": [
+        "reqsys_requisito",
+        "reqsys_demanda"
+      ],
+      "components": [
+        "RequirementForm",
+        "AcceptanceCriteriaEditor",
+        "TraceabilityPanel"
+      ]
+    },
+    {
+      "name": "scrAprovacoes",
+      "title": "Aprovacoes",
+      "purpose": "Decidir aprovacao, rejeicao ou devolucao para ajuste.",
+      "data_sources": [
+        "reqsys_aprovacao"
+      ],
+      "components": [
+        "ApprovalQueue",
+        "DecisionPanel",
+        "AuditTimeline"
+      ]
+    },
+    {
+      "name": "scrEvidencias",
+      "title": "Evidencias",
+      "purpose": "Registrar evidencias de qualidade, operacao e release.",
+      "data_sources": [
+        "reqsys_evidencia",
+        "reqsys_release"
+      ],
+      "components": [
+        "EvidenceUpload",
+        "EvidenceGallery",
+        "ReleaseLink"
+      ]
+    }
+  ],
+  "offline": {
+    "enabled": false,
+    "reason": "P0 usa Dataverse online e ALM sandbox-first."
+  }
+}

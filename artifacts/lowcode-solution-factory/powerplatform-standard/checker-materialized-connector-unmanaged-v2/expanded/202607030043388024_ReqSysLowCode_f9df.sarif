@@ -1,0 +1,1200 @@
+{
+  "$schema": "https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0-rtm.4.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "PowerApps Checker",
+          "organization": "Microsoft",
+          "product": "PowerApps Checker",
+          "productSuite": "PowerApps",
+          "informationUri": "https://docs.microsoft.com/powerapps/maker/common-data-service/use-powerapps-checker",
+          "rules": [
+            {
+              "id": "meta-remove-dup-reg",
+              "helpUri": "https://learn.microsoft.com/powerapps/developer/data-platform/best-practices/business-logic/do-not-duplicate-plugin-step-registration",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Performance",
+                "originalSeverity": "Critical",
+                "severity": "Critical",
+                "caLevel": "Critical"
+              }
+            },
+            {
+              "id": "meta-avoid-reg-no-attribute",
+              "helpUri": "https://learn.microsoft.com/powerapps/developer/data-platform/best-practices/business-logic/include-filtering-attributes-plugin-registration",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Performance",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "meta-avoid-reg-retrieve",
+              "helpUri": "https://learn.microsoft.com/powerapps/developer/data-platform/best-practices/business-logic/limit-registration-plugins-retrieve-retrievemultiple",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Performance",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "meta-remove-inactive",
+              "helpUri": "https://learn.microsoft.com/powerapps/developer/model-driven-apps/best-practices/business-logic/remove-deactivated-disabled-configurations",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Maintainability",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "web-avoid-unpub-api",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/avoid-unpub-api",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Supportability",
+                "originalSeverity": "High",
+                "severity": "High",
+                "caLevel": "High"
+              }
+            },
+            {
+              "id": "web-avoid-modals",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/avoid-modals",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Supportability",
+                "originalSeverity": "High",
+                "severity": "High",
+                "caLevel": "High"
+              }
+            },
+            {
+              "id": "web-avoid-crm2011-service-odata",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/avoid-crm2011-service-odata",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "Critical",
+                "severity": "Critical",
+                "caLevel": "Critical"
+              }
+            },
+            {
+              "id": "web-avoid-crm2011-service-soap",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/avoid-crm2011-service-soap",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "Critical",
+                "severity": "Critical",
+                "caLevel": "Critical"
+              }
+            },
+            {
+              "id": "web-avoid-browser-specific-api",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/avoid-browser-specific-api",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "Critical",
+                "severity": "Critical",
+                "caLevel": "Critical"
+              }
+            },
+            {
+              "id": "web-avoid-2011-api",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/avoid-2011-api",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "High",
+                "severity": "High",
+                "caLevel": "High"
+              }
+            },
+            {
+              "id": "web-use-relative-uri",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/use-relative-uri",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Maintainability",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-use-async",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/use-async",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Performance",
+                "originalSeverity": "Critical",
+                "severity": "Critical",
+                "caLevel": "Critical"
+              }
+            },
+            {
+              "id": "web-avoid-window-top",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/avoid-window-top",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Supportability",
+                "originalSeverity": "High",
+                "severity": "High",
+                "caLevel": "High"
+              }
+            },
+            {
+              "id": "web-use-client-context",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/use-client-context",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-use-navigation-api",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/use-navigation-api",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-use-offline",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/use-offline",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-use-grid-api",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/use-grid-api",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-avoid-isactivitytype",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/avoid-isactivitytype",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "meta-avoid-silverlight",
+              "helpUri": "https://learn.microsoft.com/dynamics365/get-started/whats-new/customer-engagement/important-changes-coming#BKMK_Silverlight",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "meta-avoid-retrievemultiple-annotation",
+              "helpUri": "https://learn.microsoft.com/powerapps/developer/data-platform/best-practices/",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Usage",
+                "originalSeverity": "High",
+                "severity": "High",
+                "caLevel": "High"
+              }
+            },
+            {
+              "id": "web-remove-debug-script",
+              "helpUri": "https://learn.microsoft.com/powerapps/developer/model-driven-apps/best-practices/",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Usage",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-use-strict-mode",
+              "helpUri": "https://developer.mozilla.org/docs/Web/JavaScript/Reference/Strict_mode/Transitioning_to_strict_mode",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Usage",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-use-strict-equality-operators",
+              "helpUri": "https://developer.mozilla.org/docs/Web/JavaScript/Equality_comparisons_and_sameness",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Usage",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-avoid-eval",
+              "helpUri": "https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/eval",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Security",
+                "originalSeverity": "Critical",
+                "severity": "Critical",
+                "caLevel": "Critical"
+              }
+            },
+            {
+              "id": "app-formula-issues-high",
+              "helpUri": "https://learn.microsoft.com/powerapps/maker/canvas-apps/formula-reference",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Critical",
+                "severity": "Critical",
+                "caLevel": "Critical"
+              }
+            },
+            {
+              "id": "app-formula-issues-medium",
+              "helpUri": "https://learn.microsoft.com/powerapps/maker/canvas-apps/formula-reference",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-formula-issues-low",
+              "helpUri": "https://learn.microsoft.com/powerapps/maker/canvas-apps/formula-reference",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "app-use-delayoutput-text-input",
+              "helpUri": "https://learn.microsoft.com/powerapps/maker/canvas-apps/performance-tips#use-delayed-load",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Performance",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-reduce-screen-controls",
+              "helpUri": "https://learn.microsoft.com/powerapps/maker/canvas-apps/performance-tips#limit-the-number-of-controls",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Performance",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-include-accessible-label",
+              "helpUri": "https://www.w3.org/WAI/tutorials/forms/labels/",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Accessibility",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-include-alternative-input",
+              "helpUri": "https://www.w3.org/WAI/tips/developing/#ensure-that-all-interactive-elements-are-keyboard-accessible",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Accessibility",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-avoid-autostart",
+              "helpUri": "https://digital.gov/2014/06/30/508-accessible-videos-use-a-508-compliant-video-player/",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Accessibility",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-include-captions",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/canvas-apps/accessibility-checker#types-of-issues",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Accessibility",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-make-focusborder-visible",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/canvas-apps/accessibility-checker#types-of-issues",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Accessibility",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-include-helpful-control-setting",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/canvas-apps/accessibility-checker#types-of-issues",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Accessibility",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-avoid-interactive-html",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/canvas-apps/accessibility-checker#types-of-issues",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Accessibility",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-include-readable-screen-name",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/canvas-apps/accessibility-checker#types-of-issues",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Accessibility",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-include-state-indication-text",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/canvas-apps/accessibility-checker#types-of-issues",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Accessibility",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-include-tab-order",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/canvas-apps/accessibility-checker#types-of-issues",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Accessibility",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-include-tab-index",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/canvas-apps/accessibility-checker#types-of-issues",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Accessibility",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "flow-avoid-recursive-loop",
+              "helpUri": "https://learn.microsoft.com/flow/error-checker",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "flow-avoid-invalid-reference",
+              "helpUri": "https://learn.microsoft.com/flow/error-checker",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Usage",
+                "originalSeverity": "High",
+                "severity": "High",
+                "caLevel": "High"
+              }
+            },
+            {
+              "id": "flow-outlook-attachment-missing-info",
+              "helpUri": "https://learn.microsoft.com/flow/error-checker",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Usage",
+                "originalSeverity": "High",
+                "severity": "High",
+                "caLevel": "High"
+              }
+            },
+            {
+              "id": "meta-include-missingunmanageddependencies",
+              "helpUri": "https://learn.microsoft.com/troubleshoot/power-platform/power-apps/solutions/missing-dependency-on-solution-import",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-remove-alert",
+              "helpUri": "https://eslint.org/docs/rules/no-alert",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Usage",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-remove-console",
+              "helpUri": "https://eslint.org/docs/rules/no-console",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Usage",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-use-global-context",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/use-global-context",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-use-org-setting",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/use-org-setting",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-testformula-issues-high",
+              "helpUri": "https://learn.microsoft.com/powerapps/maker/canvas-apps/working-with-test-studio#test-functions",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "High",
+                "severity": "High",
+                "caLevel": "High"
+              }
+            },
+            {
+              "id": "app-testformula-issues-medium",
+              "helpUri": "https://learn.microsoft.com/powerapps/maker/canvas-apps/working-with-test-studio#test-functions",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "app-testformula-issues-low",
+              "helpUri": "https://learn.microsoft.com/powerapps/maker/canvas-apps/working-with-test-studio#test-functions",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "flow-avoid-connection-mode",
+              "helpUri": "https://learn.microsoft.com/powerapps/maker/data-platform/create-connection-reference#updating-a-flow-to-use-connection-references-instead-of-connections",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-avoid-with",
+              "helpUri": "https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/with",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Performance",
+                "originalSeverity": "High",
+                "severity": "High",
+                "caLevel": "High"
+              }
+            },
+            {
+              "id": "web-avoid-loadtheme",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/avoid-loadtheme",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Supportability",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "web-use-getsecurityroleprivilegesinfo",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/use-getsecurityroleprivilegesinfo",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Performance",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-sdl-no-cookies",
+              "helpUri": "https://github.com/microsoft/eslint-plugin-sdl/blob/main/docs/rules/no-cookies.md",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Security",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-sdl-no-document-domain",
+              "helpUri": "https://github.com/microsoft/eslint-plugin-sdl/blob/main/docs/rules/no-document-domain.md",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Security",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-sdl-no-document-write",
+              "helpUri": "https://github.com/microsoft/eslint-plugin-sdl/blob/main/docs/rules/no-document-write.md",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Security",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-sdl-no-html-method",
+              "helpUri": "https://github.com/microsoft/eslint-plugin-sdl/blob/main/docs/rules/no-html-method.md",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Security",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-sdl-no-inner-html",
+              "helpUri": "https://github.com/microsoft/eslint-plugin-sdl/blob/main/docs/rules/no-inner-html.md",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Security",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-sdl-no-insecure-url",
+              "helpUri": "https://github.com/microsoft/eslint-plugin-sdl/blob/main/docs/rules/no-insecure-url.md",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Security",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-sdl-no-msapp-exec-unsafe",
+              "helpUri": "https://github.com/microsoft/eslint-plugin-sdl/blob/main/docs/rules/no-msapp-exec-unsafe.md",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Security",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-sdl-no-postmessage-star-origin",
+              "helpUri": "https://github.com/microsoft/eslint-plugin-sdl/blob/main/docs/rules/no-postmessage-star-origin.md",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Security",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-sdl-no-winjs-html-unsafe",
+              "helpUri": "https://github.com/microsoft/eslint-plugin-sdl/blob/main/docs/rules/no-winjs-html-unsafe.md",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Security",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "connector-validate-brandcolor",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2244386",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "connector-validate-iconimage",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2244166",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "connector-validate-swagger-isproperjson",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2244842",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "High",
+                "severity": "High",
+                "caLevel": "High"
+              }
+            },
+            {
+              "id": "connector-validate-swagger",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2245509",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "connector-validate-swagger-extended",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2245307",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "connector-validate-title",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2247920",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "connector-validate-connectionparam-isproperjson",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2248011",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "High",
+                "severity": "High",
+                "caLevel": "High"
+              }
+            },
+            {
+              "id": "connector-validate-connectionparameters",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2247861",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "connector-validate-connectionparam-oauth2idp",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2248012",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "web-use-appsidepane-api",
+              "helpUri": "https://learn.microsoft.com/power-apps/maker/data-platform/powerapps-checker/rules/web/use-appsidepane-api",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "UpgradeReadiness",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "meta-license-fieldservice-sdkmessages",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2262812",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Licensing",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "meta-license-fieldservice-entity-operations",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2262812",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Licensing",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "meta-license-fieldservice-customcontrols",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2262812",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Licensing",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "meta-avoid-managed-entity-assets",
+              "helpUri": "https://learn.microsoft.com/troubleshoot/power-platform/power-apps/solutions/missing-dependency-on-solution-import",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "meta-include-unmanaged-entity-assets",
+              "helpUri": "https://learn.microsoft.com/troubleshoot/power-platform/power-apps/solutions/missing-dependency-on-solution-import",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "connector-validate-hexadecimalbrandcolor",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2244386",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "connector-validate-pngiconimage",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2244166",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "connector-validate-iconsize",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2244166",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "connector-validate-backgroundwithbrandiconcolor",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2244166",
+              "properties": {
+                "componentType": "WebResource",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "desktopflow-avoid-unsafe-password",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2323834",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Security",
+                "originalSeverity": "High",
+                "severity": "High",
+                "caLevel": "High"
+              }
+            },
+            {
+              "id": "desktopflow-avoid-subflow-recursion",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2324103",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "desktopflow-limit-variable-name-length",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2323740",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Maintainability",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "desktopflow-input-argument-default-value",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2323741",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Maintainability",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "desktopflow-limit-argument-count",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2323836",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Maintainability",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "desktopflow-avoid-empty-on-error-block",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2324105",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "desktopflow-avoid-excessive-nested-ifs",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2323837",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Maintainability",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "desktopflow-avoid-incomplete-if-branch",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2323742",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            },
+            {
+              "id": "desktopflow-avoid-infinite-loop",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2323839",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Design",
+                "originalSeverity": "Medium",
+                "severity": "Medium",
+                "caLevel": "Medium"
+              }
+            },
+            {
+              "id": "desktopflow-avoid-excessive-wait-actions",
+              "helpUri": "https://go.microsoft.com/fwlink/?linkid=2324106",
+              "properties": {
+                "componentType": "Configuration",
+                "primaryCategory": "Performance",
+                "originalSeverity": "Low",
+                "severity": "Low",
+                "caLevel": "Low"
+              }
+            }
+          ],
+          "language": "pt-BR"
+        }
+      },
+      "invocations": [
+        {
+          "startTimeUtc": "2026-07-03T00:43:37.253Z",
+          "endTimeUtc": "2026-07-03T00:43:38.800Z",
+          "executionSuccessful": true
+        }
+      ],
+      "language": "pt-BR",
+      "artifacts": [
+        {
+          "location": {
+            "uri": "/ReqSysLowCodematerializedconnectorunmanaged/Connector/new_reqsyslowcodeconnector_connectionparameters.json"
+          },
+          "length": 755
+        },
+        {
+          "location": {
+            "uri": "/ReqSysLowCodematerializedconnectorunmanaged/Connector/new_reqsyslowcodeconnector_openapidefinition.json"
+          },
+          "length": 4102
+        },
+        {
+          "location": {
+            "uri": "/ReqSysLowCodematerializedconnectorunmanaged/Connector/new_reqsyslowcodeconnector_iconblob.Png"
+          },
+          "length": 146
+        },
+        {
+          "location": {
+            "uri": "/ReqSysLowCodematerializedconnectorunmanaged/Connector/new_reqsyslowcodeconnector_policytemplateinstances.json"
+          },
+          "length": 2
+        },
+        {
+          "location": {
+            "uri": "/SvcFab/_App/MakerOps.Advisor_App211/temp/sbx53lnp.du3/1/ReqSysLowCodematerializedconnectorunmanaged.zip"
+          },
+          "length": 59863
+        },
+        {
+          "location": {
+            "uri": "/reqsys_/lowcode/canvas.htm"
+          },
+          "length": 3312
+        },
+        {
+          "location": {
+            "uri": "/reqsys_/lowcode/copilot-security-alm.htm"
+          },
+          "length": 13578
+        },
+        {
+          "location": {
+            "uri": "/reqsys_/lowcode/dataverse-schema.htm"
+          },
+          "length": 30233
+        },
+        {
+          "location": {
+            "uri": "/reqsys_/lowcode/manifest.htm"
+          },
+          "length": 48471
+        },
+        {
+          "location": {
+            "uri": "/reqsys_/lowcode/powerautomate-flows.htm"
+          },
+          "length": 3188
+        }
+      ],
+      "results": [
+        {
+          "ruleId": "connector-validate-iconsize",
+          "ruleIndex": 81,
+          "message": {
+            "text": "Verifique se as dimensões do ícone são quadradas e recaem no intervalo de 100x100 a 230x230 pixels."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Connector/new_reqsyslowcodeconnector_iconblob.Png"
+                },
+                "region": {
+                  "snippet": {
+                    "text": "new_reqsyslowcodeconnector.Icon"
+                  }
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "new_reqsyslowcodeconnector.Icon"
+                }
+              ],
+              "properties": {
+                "Module": "new_reqsyslowcodeconnector",
+                "Type": "new_reqsyslowcodeconnector",
+                "Member": "new_reqsyslowcodeconnector.Icon"
+              }
+            }
+          ],
+          "properties": {
+            "originalSeverity": "Medium",
+            "severity": "Medium",
+            "caLevel": "Medium"
+          }
+        },
+        {
+          "ruleId": "connector-validate-backgroundwithbrandiconcolor",
+          "ruleIndex": 82,
+          "message": {
+            "text": "O ícone deve conter uma tela de fundo com uma cor diferente de branco (#ffffff) e uma cor não padrão (#007ee5) que corresponda à cor de tela de fundo do ícone especificado"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "/Connector/new_reqsyslowcodeconnector_iconblob.Png"
+                },
+                "region": {
+                  "snippet": {
+                    "text": "new_reqsyslowcodeconnector.Icon"
+                  }
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "new_reqsyslowcodeconnector.Icon"
+                }
+              ],
+              "properties": {
+                "Module": "new_reqsyslowcodeconnector",
+                "Type": "new_reqsyslowcodeconnector",
+                "Member": "new_reqsyslowcodeconnector.Icon"
+              }
+            }
+          ],
+          "properties": {
+            "originalSeverity": "Medium",
+            "severity": "Medium",
+            "caLevel": "Medium"
+          }
+        }
+      ],
+      "automationDetails": {
+        "correlationGuid": "4fdca8d1-353c-44ee-a1ed-67177cd0039d"
+      },
+      "columnKind": "utf16CodeUnits",
+      "translations": [
+        {
+          "name": "pt-BR",
+          "language": "pt-BR"
+        },
+        {
+          "name": "en-US"
+        }
+      ]
+    }
+  ]
+}
