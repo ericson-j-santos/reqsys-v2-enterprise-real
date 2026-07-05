@@ -1,7 +1,7 @@
 <template>
   <v-layout class="req-layout">
     <v-app-bar v-if="mobile" flat class="req-appbar" elevation="0" height="56">
-      <v-app-bar-nav-icon color="white" aria-label="Abrir menu de navegacao" @click="drawer = !drawer" />
+      <v-app-bar-nav-icon color="white" aria-label="Abrir menu de navegação" @click="drawer = !drawer" />
       <span class="brand-sm ml-1"><span class="brand-dot brand-dot--sm">R</span> ReqSys</span>
       <AmbienteNavigator :environment-hint="environment" compact :show-prefix="false" class="ml-2" />
       <v-spacer />
