@@ -19,7 +19,7 @@ from app.models.codex_auditoria import CodexAuditoria
 logger = logging.getLogger('reqsys.codex_governado')
 audit_logger = logging.getLogger('reqsys.audit.codex_governado')
 
-Provider = Literal['mock', 'ollama', 'ollama_gateway', 'openai', 'claude', 'groq']
+Provider = Literal['mock', 'ollama', 'ollama_gateway', 'openai', 'claude', 'groq', 'gemini']
 
 _PADROES_SENSIVEIS = [
     re.compile(r'(senha|password|passwd)\s*[:=]', re.I),
@@ -202,6 +202,42 @@ def chamar_groq(prompt: str) -> str:
     return str(data['choices'][0]['message']['content'])
 
 
+def _extrair_resposta_gemini(data: dict[str, Any]) -> str:
+    output_text = data.get('output_text')
+    if output_text:
+        return str(output_text)
+
+    text = data.get('text')
+    if text:
+        return str(text)
+
+    candidates = data.get('candidates') or []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        content = candidate.get('content') or {}
+        parts = content.get('parts') or []
+        textos = [str(part.get('text') or '') for part in parts if isinstance(part, dict) and part.get('text')]
+        if textos:
+            return '\n'.join(textos)
+
+    raise RuntimeError('Resposta do Gemini sem conteudo utilizavel')
+
+
+def chamar_gemini(prompt: str) -> str:
+    if not settings.gemini_api_key:
+        raise RuntimeError('GEMINI_API_KEY ausente')
+    payload = {
+        'model': settings.gemini_model,
+        'system_instruction': _SYSTEM_PROMPT,
+        'input': prompt,
+        'generation_config': {'temperature': 0.1},
+    }
+    headers = {'x-goog-api-key': settings.gemini_api_key, 'Content-Type': 'application/json'}
+    data = _post_json('https://generativelanguage.googleapis.com/v1beta/interactions', payload, headers=headers)
+    return _extrair_resposta_gemini(data)
+
+
 def resposta_mock(contexto: str, entrada: str, correlation_id: str) -> str:
     return json.dumps({
         'resumo': 'Analise governada executada em modo mock para validacao operacional.',
@@ -226,6 +262,8 @@ def executar_provider(provider: Provider, prompt: str, contexto: str, entrada: s
         return chamar_claude(prompt)
     if provider == 'groq':
         return chamar_groq(prompt)
+    if provider == 'gemini':
+        return chamar_gemini(prompt)
     raise RuntimeError(f'Provider nao suportado: {provider}')
 
 

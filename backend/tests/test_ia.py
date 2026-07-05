@@ -42,7 +42,7 @@ class TestIAStatus:
     def test_status_tem_campo_modelo(self, auth_headers):
         data = client.get('/v1/ia/status', headers=auth_headers).json()['data']
         assert 'modelo' in data
-        assert data['modelo'] == 'gemini-2.0-flash'
+        assert data['modelo'] == 'gemini-3.5-flash'
 
     def test_status_tem_cota(self, auth_headers):
         data = client.get('/v1/ia/status', headers=auth_headers).json()['data']

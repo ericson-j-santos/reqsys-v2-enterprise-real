@@ -22,12 +22,25 @@ GET  /v1/codex/status
 
 ```json
 {
-  "provider": "groq",
+  "provider": "gemini",
   "contexto": "Validar PR do ReqSys",
   "entrada": "Falha no CI de backend",
   "publicar_no_reqsys": false
 }
 ```
+
+## Provider Gemini para Hermes Agent
+
+Configure no `.env` local ou no cofre do ambiente:
+
+```env
+GEMINI_API_KEY=sua-chave-gemini
+GEMINI_MODEL=gemini-3.5-flash
+```
+
+Depois selecione `gemini` na tela Codex Governado ou envie `"provider": "gemini"` para `/v1/codex/analyze`.
+
+Trate `GEMINI_API_KEY` como segredo: nao commite, nao publique em chat e rotacione a chave se ela tiver sido exposta.
 
 ## Provider Groq/Llama gratuito
 
@@ -44,6 +57,7 @@ Depois selecione `groq` na tela Codex Governado ou envie `"provider": "groq"` pa
 
 - Endpoint exige JWT.
 - Modo mock responde sem provedor externo.
+- Provider `gemini` usa a API Gemini com chave em variavel de ambiente.
 - Provider `groq` usa API compatível com OpenAI Chat Completions.
 - Conteudo sensivel e bloqueado.
 - Rate limit retorna HTTP 429.

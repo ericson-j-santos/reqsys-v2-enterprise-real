@@ -13,7 +13,7 @@ router = APIRouter(prefix='/v1/codex', tags=['Codex Governado'])
 
 
 class CodexAnalyzeRequest(BaseModel):
-    provider: Literal['mock', 'ollama', 'ollama_gateway', 'openai', 'claude', 'groq'] = 'mock'
+    provider: Literal['mock', 'ollama', 'ollama_gateway', 'openai', 'claude', 'groq', 'gemini'] = 'mock'
     contexto: str = Field(min_length=1, max_length=12000)
     entrada: str = Field(min_length=1, max_length=30000)
     correlation_id: str | None = Field(default=None, max_length=120)
@@ -53,7 +53,7 @@ def status_codex(user: dict = Depends(get_current_user)):
         'servico': 'codex-governado',
         'autenticado': True,
         'usuario': user.get('sub'),
-        'providers': ['mock', 'ollama', 'ollama_gateway', 'openai', 'claude', 'groq'],
+        'providers': ['mock', 'ollama', 'ollama_gateway', 'openai', 'claude', 'groq', 'gemini'],
         'provider_canonico_local': 'ollama_gateway',
         'guard_rails': ['jwt', 'rate_limit', 'auditoria', 'bloqueio_conteudo_sensivel', 'correlation_id'],
         'operacional': ['auditoria_persistente', 'score_confianca', 'latencia_media', 'dashboard_summary'],
