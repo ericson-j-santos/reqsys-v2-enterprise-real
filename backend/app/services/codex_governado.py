@@ -16,8 +16,14 @@ from app.core.config import settings
 from app.models.codex_auditoria import CodexAuditoria
 from app.services.llm_provider import (
     LLMGateway,
+)
+from app.services.llm_provider import (
     _post_json as _llm_post_json,
+)
+from app.services.llm_provider import (
     extrair_resposta_gemini as _llm_extrair_resposta_gemini,
+)
+from app.services.llm_provider import (
     extrair_resposta_textual as _llm_extrair_resposta_textual,
 )
 

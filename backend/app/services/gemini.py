@@ -11,7 +11,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 
-from app.services.llm_provider import LLMGateway, _post_json as _llm_post_json
+from app.services.llm_provider import LLMGateway
+from app.services.llm_provider import _post_json as _llm_post_json
 
 logger = logging.getLogger('reqsys.ia')
 
