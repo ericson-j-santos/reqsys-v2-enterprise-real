@@ -41,6 +41,15 @@ def test_chamar_claude(mock_post, monkeypatch):
     assert svc.chamar_claude('prompt') == 'claude ok'
 
 
+@patch('app.services.codex_governado._post_json', return_value={'choices': [{'message': {'content': 'groq ok'}}]})
+def test_chamar_groq(mock_post, monkeypatch):
+    monkeypatch.setattr(svc.settings, 'groq_api_key', 'gsk-test')
+    monkeypatch.setattr(svc.settings, 'groq_model', 'llama-test')
+    assert svc.chamar_groq('prompt') == 'groq ok'
+    payload = mock_post.call_args.args[1]
+    assert payload['model'] == 'llama-test'
+
+
 def test_executar_provider_mock():
     resposta = svc.executar_provider('mock', 'prompt', 'ctx', 'entrada', 'corr-1')
     assert 'correlation_id' in resposta
@@ -55,6 +64,12 @@ def test_executar_provider_desconhecido():
 def test_executar_provider_ollama(mock_ollama):
     assert svc.executar_provider('ollama', 'p', 'c', 'e', 'corr') == 'ollama via provider'
     mock_ollama.assert_called_once_with('p')
+
+
+@patch('app.services.codex_governado.chamar_groq', return_value='groq via provider')
+def test_executar_provider_groq(mock_groq):
+    assert svc.executar_provider('groq', 'p', 'c', 'e', 'corr') == 'groq via provider'
+    mock_groq.assert_called_once_with('p')
 
 
 @patch('app.services.codex_governado._post_json', return_value={'data': {'resposta': 'gateway ok'}})
@@ -82,6 +97,12 @@ def test_chamar_claude_sem_key(monkeypatch):
     monkeypatch.setattr(svc.settings, 'codex_claude_key', '')
     with pytest.raises(RuntimeError, match='CLAUDE_KEY'):
         svc.chamar_claude('prompt')
+
+
+def test_chamar_groq_sem_key(monkeypatch):
+    monkeypatch.setattr(svc.settings, 'groq_api_key', '')
+    with pytest.raises(RuntimeError, match='GROQ_API_KEY'):
+        svc.chamar_groq('prompt')
 
 
 def test_publicar_reqsys_sem_endpoint(monkeypatch):
