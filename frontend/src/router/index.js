@@ -21,6 +21,7 @@ import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
 import MonitoramentoOperacionalView from '../views/MonitoramentoOperacionalView.vue'
 import FigmaGithubView from '../views/FigmaGithubView.vue'
 import EstatisticasView from '../views/EstatisticasView.vue'
+import FinanceiroView from '../views/FinanceiroView.vue'
 import AnalyticsHubView from '../views/AnalyticsHubView.vue'
 import UserFinalShellView from '../views/UserFinalShellView.vue'
 import OrquestradorIAView from '../views/OrquestradorIAView.vue'
@@ -49,6 +50,7 @@ const routes = [
   { path: '/painel-integracao', component: PainelIntegracaoView, meta: { recurso: 'dashboard:read' } },
   { path: '/figma-github', component: FigmaGithubView, meta: { recurso: 'dashboard:read' } },
   { path: '/estatisticas', component: EstatisticasView, meta: { recurso: 'dashboard:read' } },
+  { path: '/financeiro', component: FinanceiroView, meta: { recurso: 'dashboard:read' } },
   { path: '/arquitetura', component: ArquiteturaView, meta: { recurso: 'dashboard:read' } },
   { path: '/governanca', component: GovernancaEnterpriseView, meta: { recurso: 'dashboard:read' } },
   { path: '/monitoramento-operacional', component: MonitoramentoOperacionalView, meta: { recurso: 'dashboard:read' } },
