@@ -9,12 +9,17 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-import requests
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.codex_auditoria import CodexAuditoria
+from app.services.llm_provider import (
+    LLMGateway,
+    _post_json as _llm_post_json,
+    extrair_resposta_gemini as _llm_extrair_resposta_gemini,
+    extrair_resposta_textual as _llm_extrair_resposta_textual,
+)
 
 logger = logging.getLogger('reqsys.codex_governado')
 audit_logger = logging.getLogger('reqsys.audit.codex_governado')
@@ -85,157 +90,83 @@ def montar_prompt(contexto: str, entrada: str) -> str:
     )
 
 
-def _post_json(url: str, payload: dict[str, Any], headers: dict[str, str] | None = None, timeout: int = 45) -> dict[str, Any]:
-    resposta = requests.post(url, json=payload, headers=headers or {}, timeout=timeout)
-    resposta.raise_for_status()
-    return resposta.json()
+def _post_json(
+    url: str,
+    payload: dict[str, Any],
+    headers: dict[str, str] | None = None,
+    timeout: int = 45,
+) -> dict[str, Any]:
+    return _llm_post_json(url, payload, headers, timeout)
+
+
+def _gateway() -> LLMGateway:
+    return LLMGateway(post_json=_post_json)
 
 
 def _extrair_resposta_textual(data: dict[str, Any]) -> str:
-    candidatos = [
-        data.get('response'),
-        data.get('resposta'),
-        data.get('resultado'),
-        data.get('answer'),
-        data.get('content'),
-    ]
-    envelope = data.get('data')
-    if isinstance(envelope, dict):
-        candidatos.extend([
-            envelope.get('response'),
-            envelope.get('resposta'),
-            envelope.get('resultado'),
-            envelope.get('answer'),
-            envelope.get('content'),
-        ])
-    for candidato in candidatos:
-        if candidato:
-            return str(candidato)
-    raise RuntimeError('Resposta do provider sem conteudo utilizavel')
-
-
-def chamar_ollama(prompt: str) -> str:
-    base_url = (settings.codex_ollama_base_url or 'http://localhost:11434').rstrip('/')
-    payload = {
-        'model': settings.codex_ollama_model,
-        'prompt': prompt,
-        'stream': False,
-        'options': {'temperature': 0.1},
-    }
-    data = _post_json(f'{base_url}/api/generate', payload)
-    return str(data.get('response') or '')
-
-
-def chamar_ollama_gateway(prompt: str, contexto: str, entrada: str, correlation_id: str) -> str:
-    if not settings.codex_ollama_gateway_url:
-        raise RuntimeError('CODEX_OLLAMA_GATEWAY_URL ausente')
-
-    base_url = settings.codex_ollama_gateway_url.rstrip('/')
-    model = settings.codex_ollama_gateway_model or settings.codex_ollama_model
-    payload = {
-        'model': model,
-        'task_type': 'code',
-        'prompt': prompt,
-        'contexto': contexto,
-        'entrada': entrada,
-        'correlation_id': correlation_id,
-        'source': 'reqsys-codex-local-online',
-    }
-    headers = {'Content-Type': 'application/json'}
-    if settings.codex_ollama_gateway_api_key:
-        headers['X-API-Key'] = settings.codex_ollama_gateway_api_key
-
-    timeout = max(1, int(settings.codex_ollama_gateway_timeout_seconds))
-    data = _post_json(f'{base_url}/v1/chat', payload, headers=headers, timeout=timeout)
-    return _extrair_resposta_textual(data)
-
-
-def chamar_openai(prompt: str) -> str:
-    if not settings.codex_openai_key:
-        raise RuntimeError('CODEX_OPENAI_KEY ausente')
-    payload = {
-        'model': settings.codex_openai_model,
-        'messages': [
-            {'role': 'system', 'content': _SYSTEM_PROMPT},
-            {'role': 'user', 'content': prompt},
-        ],
-        'temperature': 0.1,
-    }
-    headers = {'Authorization': f'Bearer {settings.codex_openai_key}', 'Content-Type': 'application/json'}
-    data = _post_json('https://api.openai.com/v1/chat/completions', payload, headers=headers)
-    return str(data['choices'][0]['message']['content'])
-
-
-def chamar_claude(prompt: str) -> str:
-    if not settings.codex_claude_key:
-        raise RuntimeError('CODEX_CLAUDE_KEY ausente')
-    payload = {
-        'model': settings.codex_claude_model,
-        'max_tokens': 1600,
-        'temperature': 0.1,
-        'system': _SYSTEM_PROMPT,
-        'messages': [{'role': 'user', 'content': prompt}],
-    }
-    headers = {
-        'x-api-key': settings.codex_claude_key,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-    }
-    data = _post_json('https://api.anthropic.com/v1/messages', payload, headers=headers)
-    blocos = data.get('content') or []
-    return '\n'.join(str(item.get('text') or '') for item in blocos if isinstance(item, dict))
-
-
-def chamar_groq(prompt: str) -> str:
-    if not settings.groq_api_key:
-        raise RuntimeError('GROQ_API_KEY ausente')
-    payload = {
-        'model': settings.groq_model,
-        'messages': [
-            {'role': 'system', 'content': _SYSTEM_PROMPT},
-            {'role': 'user', 'content': prompt},
-        ],
-        'temperature': 0.1,
-    }
-    headers = {'Authorization': f'Bearer {settings.groq_api_key}', 'Content-Type': 'application/json'}
-    data = _post_json('https://api.groq.com/openai/v1/chat/completions', payload, headers=headers)
-    return str(data['choices'][0]['message']['content'])
+    return _llm_extrair_resposta_textual(data)
 
 
 def _extrair_resposta_gemini(data: dict[str, Any]) -> str:
-    output_text = data.get('output_text')
-    if output_text:
-        return str(output_text)
+    return _llm_extrair_resposta_gemini(data)
 
-    text = data.get('text')
-    if text:
-        return str(text)
 
-    candidates = data.get('candidates') or []
-    for candidate in candidates:
-        if not isinstance(candidate, dict):
-            continue
-        content = candidate.get('content') or {}
-        parts = content.get('parts') or []
-        textos = [str(part.get('text') or '') for part in parts if isinstance(part, dict) and part.get('text')]
-        if textos:
-            return '\n'.join(textos)
+def chamar_ollama(prompt: str) -> str:
+    return _gateway().gerar_ollama(
+        base_url=settings.codex_ollama_base_url or 'http://localhost:11434',
+        model=settings.codex_ollama_model,
+        prompt=prompt,
+    )
 
-    raise RuntimeError('Resposta do Gemini sem conteudo utilizavel')
+
+def chamar_ollama_gateway(prompt: str, contexto: str, entrada: str, correlation_id: str) -> str:
+    model = settings.codex_ollama_gateway_model or settings.codex_ollama_model
+    return _gateway().gerar_ollama_gateway(
+        base_url=settings.codex_ollama_gateway_url,
+        model=model,
+        prompt=prompt,
+        contexto=contexto,
+        entrada=entrada,
+        correlation_id=correlation_id,
+        api_key=settings.codex_ollama_gateway_api_key,
+        timeout=settings.codex_ollama_gateway_timeout_seconds,
+    )
+
+
+def chamar_openai(prompt: str) -> str:
+    return _gateway().gerar_openai(
+        api_key=settings.codex_openai_key,
+        model=settings.codex_openai_model,
+        prompt=prompt,
+        system_prompt=_SYSTEM_PROMPT,
+    )
+
+
+def chamar_claude(prompt: str) -> str:
+    return _gateway().gerar_claude(
+        api_key=settings.codex_claude_key,
+        model=settings.codex_claude_model,
+        prompt=prompt,
+        system_prompt=_SYSTEM_PROMPT,
+    )
+
+
+def chamar_groq(prompt: str) -> str:
+    return _gateway().gerar_groq(
+        api_key=settings.groq_api_key,
+        model=settings.groq_model,
+        prompt=prompt,
+        system_prompt=_SYSTEM_PROMPT,
+    )
 
 
 def chamar_gemini(prompt: str) -> str:
-    if not settings.gemini_api_key:
-        raise RuntimeError('GEMINI_API_KEY ausente')
-    payload = {
-        'model': settings.gemini_model,
-        'system_instruction': _SYSTEM_PROMPT,
-        'input': prompt,
-        'generation_config': {'temperature': 0.1},
-    }
-    headers = {'x-goog-api-key': settings.gemini_api_key, 'Content-Type': 'application/json'}
-    data = _post_json('https://generativelanguage.googleapis.com/v1beta/interactions', payload, headers=headers)
-    return _extrair_resposta_gemini(data)
+    return _gateway().gerar_gemini(
+        api_key=settings.gemini_api_key,
+        model=settings.gemini_model,
+        prompt=prompt,
+        system_prompt=_SYSTEM_PROMPT,
+    )
 
 
 def resposta_mock(contexto: str, entrada: str, correlation_id: str) -> str:
@@ -398,7 +329,11 @@ def analisar_governado(
         'resultado': resposta[:8000],
         'status': 'analise_governada_concluida',
     }
-    publicacao = publicar_reqsys(reqsys_payload) if publicar_no_reqsys else {'publicado': False, 'motivo': 'publicacao_nao_solicitada'}
+    publicacao = (
+        publicar_reqsys(reqsys_payload)
+        if publicar_no_reqsys
+        else {'publicado': False, 'motivo': 'publicacao_nao_solicitada'}
+    )
     reqsys_publicado = bool(publicacao.get('publicado'))
     score_confianca = calcular_score_confianca(provider, False, reqsys_publicado)
     latencia_ms = int((time.perf_counter() - inicio) * 1000)
@@ -436,7 +371,11 @@ def resumo_operacional(db: Session, limite: int = 10) -> dict[str, Any]:
     publicados = db.query(CodexAuditoria).filter(CodexAuditoria.reqsys_publicado.is_(True)).count()
     latencia_media = db.query(func.avg(CodexAuditoria.latencia_ms)).scalar() or 0
     confianca_media = db.query(func.avg(CodexAuditoria.score_confianca)).scalar() or 0
-    por_provider = dict(db.query(CodexAuditoria.provider, func.count(CodexAuditoria.id)).group_by(CodexAuditoria.provider).all())
+    por_provider = dict(
+        db.query(CodexAuditoria.provider, func.count(CodexAuditoria.id))
+        .group_by(CodexAuditoria.provider)
+        .all()
+    )
     recentes = (
         db.query(CodexAuditoria)
         .order_by(CodexAuditoria.id.desc())
