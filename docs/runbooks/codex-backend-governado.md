@@ -22,17 +22,29 @@ GET  /v1/codex/status
 
 ```json
 {
-  "provider": "mock",
+  "provider": "groq",
   "contexto": "Validar PR do ReqSys",
   "entrada": "Falha no CI de backend",
   "publicar_no_reqsys": false
 }
 ```
 
+## Provider Groq/Llama gratuito
+
+Configure no `.env` local:
+
+```env
+GROQ_API_KEY=sua-chave-groq
+GROQ_MODEL=llama-3.3-70b-versatile
+```
+
+Depois selecione `groq` na tela Codex Governado ou envie `"provider": "groq"` para `/v1/codex/analyze`.
+
 ## Criterios de aceite
 
 - Endpoint exige JWT.
 - Modo mock responde sem provedor externo.
+- Provider `groq` usa API compatível com OpenAI Chat Completions.
 - Conteudo sensivel e bloqueado.
 - Rate limit retorna HTTP 429.
 - Resultado contem `correlation_id`.

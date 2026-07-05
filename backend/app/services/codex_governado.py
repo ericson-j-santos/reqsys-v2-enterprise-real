@@ -19,7 +19,7 @@ from app.models.codex_auditoria import CodexAuditoria
 logger = logging.getLogger('reqsys.codex_governado')
 audit_logger = logging.getLogger('reqsys.audit.codex_governado')
 
-Provider = Literal['mock', 'ollama', 'ollama_gateway', 'openai', 'claude']
+Provider = Literal['mock', 'ollama', 'ollama_gateway', 'openai', 'claude', 'groq']
 
 _PADROES_SENSIVEIS = [
     re.compile(r'(senha|password|passwd)\s*[:=]', re.I),
@@ -186,6 +186,22 @@ def chamar_claude(prompt: str) -> str:
     return '\n'.join(str(item.get('text') or '') for item in blocos if isinstance(item, dict))
 
 
+def chamar_groq(prompt: str) -> str:
+    if not settings.groq_api_key:
+        raise RuntimeError('GROQ_API_KEY ausente')
+    payload = {
+        'model': settings.groq_model,
+        'messages': [
+            {'role': 'system', 'content': _SYSTEM_PROMPT},
+            {'role': 'user', 'content': prompt},
+        ],
+        'temperature': 0.1,
+    }
+    headers = {'Authorization': f'Bearer {settings.groq_api_key}', 'Content-Type': 'application/json'}
+    data = _post_json('https://api.groq.com/openai/v1/chat/completions', payload, headers=headers)
+    return str(data['choices'][0]['message']['content'])
+
+
 def resposta_mock(contexto: str, entrada: str, correlation_id: str) -> str:
     return json.dumps({
         'resumo': 'Analise governada executada em modo mock para validacao operacional.',
@@ -208,6 +224,8 @@ def executar_provider(provider: Provider, prompt: str, contexto: str, entrada: s
         return chamar_openai(prompt)
     if provider == 'claude':
         return chamar_claude(prompt)
+    if provider == 'groq':
+        return chamar_groq(prompt)
     raise RuntimeError(f'Provider nao suportado: {provider}')
 
 
