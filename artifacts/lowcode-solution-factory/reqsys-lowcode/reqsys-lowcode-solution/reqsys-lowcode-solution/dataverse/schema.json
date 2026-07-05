@@ -1,0 +1,455 @@
+{
+  "tables": [
+    {
+      "logical_name": "reqsys_demanda",
+      "display_name": "Demandas",
+      "description": "Entrada governada de demandas, ideias e solicitacoes.",
+      "ownership": "UserOrTeam",
+      "auditing_enabled": true,
+      "change_tracking_enabled": true,
+      "columns": [
+        {
+          "name": "reqsys_codigo",
+          "type": "text",
+          "required": true,
+          "max_length": 80,
+          "display_name": "Codigo"
+        },
+        {
+          "name": "reqsys_titulo",
+          "type": "text",
+          "required": true,
+          "max_length": 250,
+          "display_name": "Titulo"
+        },
+        {
+          "name": "reqsys_status",
+          "type": "choice",
+          "required": true,
+          "display_name": "Status"
+        },
+        {
+          "name": "reqsys_prioridade",
+          "type": "choice",
+          "required": false,
+          "display_name": "Prioridade"
+        },
+        {
+          "name": "reqsys_origem",
+          "type": "choice",
+          "display_name": "Origem"
+        },
+        {
+          "name": "reqsys_solicitante",
+          "type": "lookup",
+          "target": "systemuser",
+          "display_name": "Solicitante"
+        },
+        {
+          "name": "reqsys_resultado_esperado",
+          "type": "multiline_text",
+          "display_name": "Resultado esperado"
+        },
+        {
+          "name": "reqsys_score_priorizacao",
+          "type": "whole_number",
+          "display_name": "Score de priorizacao"
+        }
+      ],
+      "views": [
+        {
+          "name": "Ativos",
+          "filter": "reqsys_status ne \"arquivado\""
+        },
+        {
+          "name": "Pendentes de aprovacao",
+          "filter": "reqsys_status eq \"em_aprovacao\""
+        },
+        {
+          "name": "Risco alto",
+          "filter": "reqsys_prioridade eq \"alta\""
+        }
+      ],
+      "forms": [
+        {
+          "name": "Principal",
+          "type": "main"
+        },
+        {
+          "name": "Rapido",
+          "type": "quick_create"
+        }
+      ]
+    },
+    {
+      "logical_name": "reqsys_requisito",
+      "display_name": "Requisitos",
+      "description": "Requisitos funcionais, nao funcionais, regras e criterios.",
+      "ownership": "UserOrTeam",
+      "auditing_enabled": true,
+      "change_tracking_enabled": true,
+      "columns": [
+        {
+          "name": "reqsys_codigo",
+          "type": "text",
+          "required": true,
+          "max_length": 80,
+          "display_name": "Codigo"
+        },
+        {
+          "name": "reqsys_titulo",
+          "type": "text",
+          "required": true,
+          "max_length": 250,
+          "display_name": "Titulo"
+        },
+        {
+          "name": "reqsys_status",
+          "type": "choice",
+          "required": true,
+          "display_name": "Status"
+        },
+        {
+          "name": "reqsys_prioridade",
+          "type": "choice",
+          "required": false,
+          "display_name": "Prioridade"
+        },
+        {
+          "name": "reqsys_demanda_id",
+          "type": "lookup",
+          "target": "reqsys_demanda",
+          "display_name": "Demanda"
+        },
+        {
+          "name": "reqsys_tipo",
+          "type": "choice",
+          "display_name": "Tipo"
+        },
+        {
+          "name": "reqsys_criterios_aceite",
+          "type": "multiline_text",
+          "display_name": "Criterios de aceite"
+        },
+        {
+          "name": "reqsys_regra_negocio",
+          "type": "multiline_text",
+          "display_name": "Regra de negocio"
+        }
+      ],
+      "views": [
+        {
+          "name": "Ativos",
+          "filter": "reqsys_status ne \"arquivado\""
+        },
+        {
+          "name": "Pendentes de aprovacao",
+          "filter": "reqsys_status eq \"em_aprovacao\""
+        },
+        {
+          "name": "Risco alto",
+          "filter": "reqsys_prioridade eq \"alta\""
+        }
+      ],
+      "forms": [
+        {
+          "name": "Principal",
+          "type": "main"
+        },
+        {
+          "name": "Rapido",
+          "type": "quick_create"
+        }
+      ]
+    },
+    {
+      "logical_name": "reqsys_aprovacao",
+      "display_name": "Aprovacoes",
+      "description": "Decisoes formais sobre demandas, requisitos e releases.",
+      "ownership": "UserOrTeam",
+      "auditing_enabled": true,
+      "change_tracking_enabled": true,
+      "columns": [
+        {
+          "name": "reqsys_codigo",
+          "type": "text",
+          "required": true,
+          "max_length": 80,
+          "display_name": "Codigo"
+        },
+        {
+          "name": "reqsys_titulo",
+          "type": "text",
+          "required": true,
+          "max_length": 250,
+          "display_name": "Titulo"
+        },
+        {
+          "name": "reqsys_status",
+          "type": "choice",
+          "required": true,
+          "display_name": "Status"
+        },
+        {
+          "name": "reqsys_prioridade",
+          "type": "choice",
+          "required": false,
+          "display_name": "Prioridade"
+        },
+        {
+          "name": "reqsys_referencia",
+          "type": "text",
+          "display_name": "Referencia"
+        },
+        {
+          "name": "reqsys_aprovador",
+          "type": "lookup",
+          "target": "systemuser",
+          "display_name": "Aprovador"
+        },
+        {
+          "name": "reqsys_parecer",
+          "type": "multiline_text",
+          "display_name": "Parecer"
+        },
+        {
+          "name": "reqsys_decidido_em",
+          "type": "datetime",
+          "display_name": "Decidido em"
+        }
+      ],
+      "views": [
+        {
+          "name": "Ativos",
+          "filter": "reqsys_status ne \"arquivado\""
+        },
+        {
+          "name": "Pendentes de aprovacao",
+          "filter": "reqsys_status eq \"em_aprovacao\""
+        },
+        {
+          "name": "Risco alto",
+          "filter": "reqsys_prioridade eq \"alta\""
+        }
+      ],
+      "forms": [
+        {
+          "name": "Principal",
+          "type": "main"
+        },
+        {
+          "name": "Rapido",
+          "type": "quick_create"
+        }
+      ]
+    },
+    {
+      "logical_name": "reqsys_evidencia",
+      "display_name": "Evidencias",
+      "description": "Evidencias de qualidade, operacao, release e governanca.",
+      "ownership": "UserOrTeam",
+      "auditing_enabled": true,
+      "change_tracking_enabled": true,
+      "columns": [
+        {
+          "name": "reqsys_codigo",
+          "type": "text",
+          "required": true,
+          "max_length": 80,
+          "display_name": "Codigo"
+        },
+        {
+          "name": "reqsys_titulo",
+          "type": "text",
+          "required": true,
+          "max_length": 250,
+          "display_name": "Titulo"
+        },
+        {
+          "name": "reqsys_status",
+          "type": "choice",
+          "required": true,
+          "display_name": "Status"
+        },
+        {
+          "name": "reqsys_prioridade",
+          "type": "choice",
+          "required": false,
+          "display_name": "Prioridade"
+        },
+        {
+          "name": "reqsys_referencia",
+          "type": "text",
+          "display_name": "Referencia"
+        },
+        {
+          "name": "reqsys_tipo_evidencia",
+          "type": "choice",
+          "display_name": "Tipo de evidencia"
+        },
+        {
+          "name": "reqsys_url",
+          "type": "url",
+          "display_name": "URL"
+        },
+        {
+          "name": "reqsys_conteudo",
+          "type": "multiline_text",
+          "display_name": "Conteudo"
+        }
+      ],
+      "views": [
+        {
+          "name": "Ativos",
+          "filter": "reqsys_status ne \"arquivado\""
+        },
+        {
+          "name": "Pendentes de aprovacao",
+          "filter": "reqsys_status eq \"em_aprovacao\""
+        },
+        {
+          "name": "Risco alto",
+          "filter": "reqsys_prioridade eq \"alta\""
+        }
+      ],
+      "forms": [
+        {
+          "name": "Principal",
+          "type": "main"
+        },
+        {
+          "name": "Rapido",
+          "type": "quick_create"
+        }
+      ]
+    },
+    {
+      "logical_name": "reqsys_release",
+      "display_name": "Releases",
+      "description": "Pacotes de mudanca, go/no-go, comunicacao e rollback.",
+      "ownership": "UserOrTeam",
+      "auditing_enabled": true,
+      "change_tracking_enabled": true,
+      "columns": [
+        {
+          "name": "reqsys_codigo",
+          "type": "text",
+          "required": true,
+          "max_length": 80,
+          "display_name": "Codigo"
+        },
+        {
+          "name": "reqsys_titulo",
+          "type": "text",
+          "required": true,
+          "max_length": 250,
+          "display_name": "Titulo"
+        },
+        {
+          "name": "reqsys_status",
+          "type": "choice",
+          "required": true,
+          "display_name": "Status"
+        },
+        {
+          "name": "reqsys_prioridade",
+          "type": "choice",
+          "required": false,
+          "display_name": "Prioridade"
+        },
+        {
+          "name": "reqsys_versao",
+          "type": "text",
+          "display_name": "Versao"
+        },
+        {
+          "name": "reqsys_janela",
+          "type": "datetime",
+          "display_name": "Janela"
+        },
+        {
+          "name": "reqsys_rollback",
+          "type": "multiline_text",
+          "display_name": "Plano de rollback"
+        },
+        {
+          "name": "reqsys_go_no_go",
+          "type": "choice",
+          "display_name": "Go/No-Go"
+        }
+      ],
+      "views": [
+        {
+          "name": "Ativos",
+          "filter": "reqsys_status ne \"arquivado\""
+        },
+        {
+          "name": "Pendentes de aprovacao",
+          "filter": "reqsys_status eq \"em_aprovacao\""
+        },
+        {
+          "name": "Risco alto",
+          "filter": "reqsys_prioridade eq \"alta\""
+        }
+      ],
+      "forms": [
+        {
+          "name": "Principal",
+          "type": "main"
+        },
+        {
+          "name": "Rapido",
+          "type": "quick_create"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from": "reqsys_requisito",
+      "to": "reqsys_demanda",
+      "type": "many_to_one"
+    },
+    {
+      "from": "reqsys_aprovacao",
+      "to": "reqsys_demanda",
+      "type": "many_to_one"
+    },
+    {
+      "from": "reqsys_evidencia",
+      "to": "reqsys_release",
+      "type": "many_to_one"
+    }
+  ],
+  "choices": {
+    "status": [
+      "novo",
+      "em_triagem",
+      "em_aprovacao",
+      "aprovado",
+      "em_execucao",
+      "validado",
+      "arquivado"
+    ],
+    "prioridade": [
+      "baixa",
+      "media",
+      "alta",
+      "critica"
+    ],
+    "origem": [
+      "power_app",
+      "teams",
+      "copilot",
+      "importacao",
+      "manual"
+    ],
+    "tipo_requisito": [
+      "funcional",
+      "nao_funcional",
+      "regra_negocio",
+      "integracao",
+      "seguranca"
+    ]
+  }
+}
