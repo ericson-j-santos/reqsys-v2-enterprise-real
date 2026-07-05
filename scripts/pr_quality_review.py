@@ -44,6 +44,12 @@ SENSITIVE_FILENAMES = (
     "token",
     "credentials",
 )
+SAFE_TEMPLATE_SUFFIXES = (
+    ".example",
+    ".sample",
+    ".template",
+    ".dist",
+)
 DOC_EXTENSIONS = {".md", ".mdx", ".txt"}
 TEST_HINTS = ("test_", "_test", "/tests/", "spec.", ".spec.")
 
@@ -77,6 +83,8 @@ class ChangedFile:
     @property
     def is_sensitive(self) -> bool:
         lowered = self.filename.lower()
+        if any(lowered.endswith(suffix) for suffix in SAFE_TEMPLATE_SUFFIXES):
+            return False
         return any(marker in lowered for marker in SENSITIVE_FILENAMES)
 
     @property
