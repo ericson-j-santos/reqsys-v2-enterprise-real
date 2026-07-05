@@ -21,6 +21,22 @@ def test_extrair_resposta_textual_sem_conteudo():
         svc._extrair_resposta_textual({'data': {}})
 
 
+def test_extrair_resposta_gemini_generate_content():
+    texto = svc._extrair_resposta_gemini({
+        'candidates': [{'content': {'parts': [{'text': 'gemini ok'}]}}],
+    })
+    assert texto == 'gemini ok'
+
+
+def test_extrair_resposta_gemini_interactions_output_text():
+    assert svc._extrair_resposta_gemini({'output_text': 'gemini output'}) == 'gemini output'
+
+
+def test_extrair_resposta_gemini_sem_conteudo():
+    with pytest.raises(RuntimeError, match='Gemini sem conteudo'):
+        svc._extrair_resposta_gemini({'candidates': []})
+
+
 @patch('app.services.codex_governado._post_json', return_value={'response': 'ollama ok'})
 def test_chamar_ollama(mock_post):
     assert svc.chamar_ollama('prompt') == 'ollama ok'
@@ -50,6 +66,17 @@ def test_chamar_groq(mock_post, monkeypatch):
     assert payload['model'] == 'llama-test'
 
 
+@patch('app.services.codex_governado._post_json', return_value={'output_text': 'gemini ok'})
+def test_chamar_gemini(mock_post, monkeypatch):
+    monkeypatch.setattr(svc.settings, 'gemini_api_key', 'AIza-test')
+    monkeypatch.setattr(svc.settings, 'gemini_model', 'gemini-test')
+    assert svc.chamar_gemini('prompt') == 'gemini ok'
+    payload = mock_post.call_args.args[1]
+    headers = mock_post.call_args.kwargs.get('headers') or mock_post.call_args[1].get('headers')
+    assert payload['model'] == 'gemini-test'
+    assert headers['x-goog-api-key'] == 'AIza-test'
+
+
 def test_executar_provider_mock():
     resposta = svc.executar_provider('mock', 'prompt', 'ctx', 'entrada', 'corr-1')
     assert 'correlation_id' in resposta
@@ -70,6 +97,12 @@ def test_executar_provider_ollama(mock_ollama):
 def test_executar_provider_groq(mock_groq):
     assert svc.executar_provider('groq', 'p', 'c', 'e', 'corr') == 'groq via provider'
     mock_groq.assert_called_once_with('p')
+
+
+@patch('app.services.codex_governado.chamar_gemini', return_value='gemini via provider')
+def test_executar_provider_gemini(mock_gemini):
+    assert svc.executar_provider('gemini', 'p', 'c', 'e', 'corr') == 'gemini via provider'
+    mock_gemini.assert_called_once_with('p')
 
 
 @patch('app.services.codex_governado._post_json', return_value={'data': {'resposta': 'gateway ok'}})
@@ -103,6 +136,12 @@ def test_chamar_groq_sem_key(monkeypatch):
     monkeypatch.setattr(svc.settings, 'groq_api_key', '')
     with pytest.raises(RuntimeError, match='GROQ_API_KEY'):
         svc.chamar_groq('prompt')
+
+
+def test_chamar_gemini_sem_key(monkeypatch):
+    monkeypatch.setattr(svc.settings, 'gemini_api_key', '')
+    with pytest.raises(RuntimeError, match='GEMINI_API_KEY'):
+        svc.chamar_gemini('prompt')
 
 
 def test_publicar_reqsys_sem_endpoint(monkeypatch):

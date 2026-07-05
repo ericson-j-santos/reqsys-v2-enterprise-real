@@ -2,7 +2,7 @@
   <section class="page" data-testid="route-codex">
     <PageHeader
       title="Codex Governado"
-      subtitle="Análise de código com LLM local, Groq/Llama ou mock, com JWT, rate limit, auditoria e correlation_id."
+      subtitle="Análise de código com Gemini, LLM local, Groq/Llama ou mock, com JWT, rate limit, auditoria e correlation_id."
       :chip="statusLabel"
       :chip-color="statusColor"
       chip-tooltip="Status do serviço Codex governado"
@@ -136,7 +136,7 @@ import { computed, onMounted, ref } from 'vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../services/api'
 
-const providers = ['mock', 'ollama', 'ollama_gateway', 'openai', 'claude', 'groq']
+const providers = ['mock', 'ollama', 'ollama_gateway', 'openai', 'claude', 'groq', 'gemini']
 const provider = ref('mock')
 const contexto = ref('')
 const entrada = ref('')

@@ -21,21 +21,9 @@ def test_gerar_sem_api_key():
         _gerar("", "gemini-2.0-flash", "prompt")
 
 
-def test_gerar_pacote_gemini_ausente():
-    with patch("builtins.__import__", side_effect=lambda name, *args, **kwargs: (_ for _ in ()).throw(ImportError(name)) if name == "google.generativeai" else __import__(name, *args, **kwargs)):
-        with pytest.raises(GeminiIndisponivel, match="não instalado"):
-            _gerar("key", "gemini-2.0-flash", "prompt")
-
-
 def test_gerar_groq_sem_api_key():
     with pytest.raises(GeminiIndisponivel, match="GROQ_API_KEY"):
         _gerar_groq("", "llama", "prompt")
-
-
-def test_gerar_groq_pacote_ausente():
-    with patch("builtins.__import__", side_effect=lambda name, *args, **kwargs: (_ for _ in ()).throw(ImportError(name)) if name == "groq" else __import__(name, *args, **kwargs)):
-        with pytest.raises(GeminiIndisponivel, match="não instalado"):
-            _gerar_groq("key", "llama", "prompt")
 
 
 def test_resumir_e_sugerir_descricao_usam_fallback():

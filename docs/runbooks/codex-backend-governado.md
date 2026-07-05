@@ -22,12 +22,44 @@ GET  /v1/codex/status
 
 ```json
 {
-  "provider": "groq",
+  "provider": "gemini",
   "contexto": "Validar PR do ReqSys",
   "entrada": "Falha no CI de backend",
   "publicar_no_reqsys": false
 }
 ```
+
+## Arquitetura de providers LLM
+
+As chamadas externas para LLM ficam centralizadas em `backend/app/services/llm_provider.py`.
+
+Responsabilidades da porta comum:
+
+- montar payload HTTP por provider;
+- aplicar headers de autenticacao;
+- usar timeout padrao;
+- extrair texto de respostas OpenAI-compatible, Claude, Gemini, Ollama e gateway local.
+
+Responsabilidades que permanecem nos servicos consumidores:
+
+- regra de negocio;
+- rate limit por produto;
+- fallback especifico;
+- auditoria e persistencia de dominio;
+- mensagens de erro publicas da API existente.
+
+## Provider Gemini para Hermes Agent
+
+Configure no `.env` local ou no cofre do ambiente:
+
+```env
+GEMINI_API_KEY=sua-chave-gemini
+GEMINI_MODEL=gemini-3.5-flash
+```
+
+Depois selecione `gemini` na tela Codex Governado ou envie `"provider": "gemini"` para `/v1/codex/analyze`.
+
+Trate `GEMINI_API_KEY` como segredo: nao commite, nao publique em chat e rotacione a chave se ela tiver sido exposta.
 
 ## Provider Groq/Llama gratuito
 
@@ -44,7 +76,9 @@ Depois selecione `groq` na tela Codex Governado ou envie `"provider": "groq"` pa
 
 - Endpoint exige JWT.
 - Modo mock responde sem provedor externo.
+- Provider `gemini` usa a API Gemini com chave em variavel de ambiente.
 - Provider `groq` usa API compatível com OpenAI Chat Completions.
+- Porta comum de LLM centraliza payload, headers, timeout e extração textual.
 - Conteudo sensivel e bloqueado.
 - Rate limit retorna HTTP 429.
 - Resultado contem `correlation_id`.

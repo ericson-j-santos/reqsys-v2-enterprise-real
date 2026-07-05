@@ -79,9 +79,9 @@ class Settings(BaseSettings):
     # Caminho para o .sdd do my-first-spec-project (absoluto ou relativo ao reqsys root)
     sdd_specs_path: str = Field(default_factory=lambda: get_secret('SDD_SPECS_PATH', '') or '')
 
-    # Gemini IA — free tier (gemini-2.0-flash: 15 req/min, 1500 req/dia)
+    # Gemini IA — free tier; modelo configuravel conforme disponibilidade do AI Studio
     gemini_api_key: str = Field(default_factory=lambda: get_secret('GEMINI_API_KEY', '') or '')
-    gemini_model: str = Field(default_factory=lambda: get_secret('GEMINI_MODEL', 'gemini-2.0-flash') or 'gemini-2.0-flash')
+    gemini_model: str = Field(default_factory=lambda: get_secret('GEMINI_MODEL', 'gemini-3.5-flash') or 'gemini-3.5-flash')
 
     # Groq IA — fallback gratuito (llama-3.3-70b: 30 req/min, 14.400 req/dia)
     groq_api_key: str = Field(default_factory=lambda: get_secret('GROQ_API_KEY', '') or '')
