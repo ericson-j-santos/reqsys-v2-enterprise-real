@@ -107,10 +107,32 @@ export const NAV_ITEMS_FLAT = NAV_TEMAS.flatMap((tema) =>
   tema.items.map((item) => ({ ...item, temaId: tema.id, temaTitle: tema.title })),
 )
 
+function normalizarRota(path) {
+  return path === '/' ? '/' : path.replace(/\/$/, '')
+}
+
+function rotaCorresponde(pathAtual, rotaCatalogo) {
+  return pathAtual === rotaCatalogo || (pathAtual !== '/' && pathAtual.startsWith(rotaCatalogo + '/'))
+}
+
+function resolverSubgrupoCanonico(path) {
+  const normalizado = normalizarRota(path)
+  for (const tema of NAV_TEMAS) {
+    const subgrupo = tema.subgroups?.find((sub) =>
+      sub.paths.some((rota) => rotaCorresponde(normalizado, rota)),
+    )
+    if (subgrupo) return { tema, subgrupo }
+  }
+  return null
+}
+
 export function temaIdPorRota(path) {
-  const normalizado = path === '/' ? '/' : path.replace(/\/$/, '')
+  const subgrupoCanonico = resolverSubgrupoCanonico(path)
+  if (subgrupoCanonico) return subgrupoCanonico.tema.id
+
+  const normalizado = normalizarRota(path)
   const tema = NAV_TEMAS.find((grupo) =>
-    grupo.items.some((item) => item.to === normalizado || (normalizado !== '/' && normalizado.startsWith(item.to + '/'))),
+    grupo.items.some((item) => rotaCorresponde(normalizado, item.to)),
   )
   return tema?.id ?? NAV_TEMAS[0].id
 }
@@ -120,11 +142,14 @@ export function temaPorId(id) {
 }
 
 export function itemPorRota(path) {
-  const normalizado = path === '/' ? '/' : path.replace(/\/$/, '')
+  const normalizado = normalizarRota(path)
   return NAV_ITEMS_FLAT.find((item) => item.to === normalizado)
 }
 
 export function subgrupoIdPorRota(path) {
+  const subgrupoCanonico = resolverSubgrupoCanonico(path)
+  if (subgrupoCanonico) return subgrupoCanonico.subgrupo.id
+
   const item = itemPorRota(path)
   if (item?.subgroupId) return item.subgroupId
   const tema = temaPorId(temaIdPorRota(path))
