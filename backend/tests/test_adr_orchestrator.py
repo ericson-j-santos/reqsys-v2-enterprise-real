@@ -104,3 +104,88 @@ def test_analytics_risk_conta_apenas_eventos_com_violacao_real(db_session):
 
     assert risk['nivel_critico'] == 1
     assert risk['com_violacao_de_gate'] == 1
+
+
+def test_endpoint_adr_orchestrator_health(client):
+    resp = client.get('/v1/agents/adr-orchestrator/health')
+
+    assert resp.status_code == 200
+    data = resp.json()['data']
+    assert data['service'] == 'reqsys-adr-orchestrator'
+    assert data['total_adrs_coordenados'] == 12
+
+
+def test_endpoint_adr_orchestrator_coordinators(client):
+    resp = client.get('/v1/agents/adr-orchestrator/coordinators')
+
+    assert resp.status_code == 200
+    data = resp.json()['data']
+    assert data['coordenacao_geral'] == 'adr-geral-coordinator'
+    assert data['total'] == 12
+
+
+def test_endpoint_adr_orchestrator_route(client, correlation_id):
+    resp = client.post(
+        '/v1/agents/adr-orchestrator/route',
+        json={
+            'titulo': 'Pipeline CI com PR em draft sem evidencia',
+            'descricao': 'Merge bloqueado, changelog pendente e cobertura de testes ausente.',
+            'origem': 'chat-fixado',
+            'ambiente': 'dev',
+        },
+        headers={'X-Correlation-ID': correlation_id},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body['success'] is True
+    assert body['meta']['correlation_id'] == correlation_id
+    data = body['data']
+    assert data['adr_primario']['adr_id'] == 'ADR-006'
+    assert data['coordination_event_id'] > 0
+
+
+def test_endpoint_adr_orchestrator_batch(client):
+    resp = client.post('/v1/agents/adr-orchestrator/route/batch', json={
+        'demandas': [
+            {'titulo': 'Mascarar CPF e token nos logs', 'descricao': 'Evitar vazamento de dado pessoal (LGPD)'},
+            {'titulo': 'Timeout e retry no adapter de integracao', 'descricao': 'Configurar circuit breaker e idempotencia'},
+        ]
+    })
+
+    assert resp.status_code == 200
+    data = resp.json()['data']
+    assert data['total'] == 2
+    assert data['por_adr']['ADR-002'] == 1
+    assert data['por_adr']['ADR-010'] == 1
+
+
+def test_endpoint_adr_orchestrator_analytics(client, correlation_id):
+    resp = client.post(
+        '/v1/agents/adr-orchestrator/route',
+        json={
+            'titulo': 'Health e readiness do runtime com metrica ausente',
+            'descricao': 'Painel operacional sem severidade classificada.',
+            'origem': 'pytest-analytics',
+            'prioridade_informada': 'alta',
+            'ambiente': 'dev',
+        },
+        headers={'X-Correlation-ID': correlation_id},
+    )
+    assert resp.status_code == 200
+
+    summary = client.get('/v1/agents/adr-orchestrator/analytics/summary')
+    assert summary.status_code == 200
+    assert summary.json()['data']['total_eventos'] >= 1
+
+    adrs = client.get('/v1/agents/adr-orchestrator/analytics/adrs')
+    assert adrs.status_code == 200
+    assert any(item['valor'] == 'ADR-007' for item in adrs.json()['data']['adrs'])
+
+    coordinators = client.get('/v1/agents/adr-orchestrator/analytics/coordinators')
+    assert coordinators.status_code == 200
+    assert any(item['valor'] == 'adr-007-coordinator' for item in coordinators.json()['data']['coordinators'])
+
+    risk = client.get('/v1/agents/adr-orchestrator/analytics/risk')
+    assert risk.status_code == 200
+    assert 'com_violacao_de_gate' in risk.json()['data']['risk']

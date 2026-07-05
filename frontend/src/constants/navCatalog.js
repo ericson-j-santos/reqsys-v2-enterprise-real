@@ -58,6 +58,7 @@ export const NAV_TEMAS = [
       { to: '/recomendacoes-ia', icon: 'mdi-robot-outline', title: 'Recomendações IA', tip: 'Recomendações geradas por IA com decisão e outcome.' },
       { to: '/govbi-ia', icon: 'mdi-database-search', title: 'GovBI IA', tip: 'Consultas analíticas em linguagem natural governada.' },
       { to: '/codex', icon: 'mdi-code-braces', title: 'Codex', tip: 'Análise de código com LLM local (Ollama) ou mock, governada pelo ReqSys.' },
+      { to: '/orquestrador-ia', icon: 'mdi-sitemap-outline', title: 'Orquestrador IA', tip: 'Classifica demandas por tema e aciona o coordenador de IA correspondente.' },
     ],
   },
   {
@@ -91,6 +92,7 @@ export const NAV_TEMAS = [
     icon: 'mdi-sitemap',
     items: [
       { to: '/arquitetura', icon: 'mdi-sitemap', title: 'Mapa da Solução', tip: 'Visão completa dos componentes Web e Low-Code.' },
+      { to: '/coordenacao-adr', icon: 'mdi-book-open-variant', title: 'Coordenação ADRs', tip: 'Coordenação geral que classifica demandas pelos 12 ADRs e aponta violações de gate.' },
     ],
   },
 ]
