@@ -98,7 +98,7 @@ ADR_COORDINATORS: tuple[AdrCoordinatorRule, ...] = (
         tema='segregacao_ambientes',
         status='accepted',
         nivel_autonomia_maximo='N2',
-        palavras_chave=('ambiente', 'producao', 'produção', 'homologacao', 'homologação', 'desenvolvimento', 'gate', 'deploy', 'debug', 'verify=false', 'variavel de ambiente', 'variável de ambiente'),
+        palavras_chave=('ambiente', 'producao', 'produção', 'homologacao', 'homologação', 'desenvolvimento', 'gate', 'deploy', 'debug', 'tls verify desativado', 'variavel de ambiente', 'variável de ambiente'),
         riscos_padrao=('deploy_sem_gate', 'debug_ativo_producao', 'secret_hardcoded'),
         criterios_aceite=('Validador de ambiente implementado no boot', 'Testes para cada bloqueio produtivo', 'CI executa validação de ambiente'),
         automacoes=('rodar validador de ambiente', 'checar variaveis obrigatorias', 'bloquear promocao insegura'),
