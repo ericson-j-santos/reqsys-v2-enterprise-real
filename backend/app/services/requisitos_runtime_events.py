@@ -9,7 +9,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.runtime_core import RuntimeDeliveryResult, RuntimeEventBus, RuntimeEventEnvelope
+from app.services.runtime_core import (
+    RuntimeDeliveryResult,
+    RuntimeEventBus,
+    RuntimeEventEnvelope,
+)
 
 EVENTO_REQUISITO_TRANSICIONADO = 'REQUISITO_TRANSICIONADO'
 SOURCE_WORKFLOW_REQUISITOS = 'api.requisitos.workflow'
