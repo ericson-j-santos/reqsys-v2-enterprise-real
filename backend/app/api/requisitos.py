@@ -1,3 +1,4 @@
+import json
 import logging
 from collections import Counter
 from time import time_ns
@@ -8,12 +9,14 @@ from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
 from app.db import get_db
+from app.models.auditoria import AuditoriaEvento
 from app.models.requisito import Requisito
 from app.schemas.requisito import (
     RequisitoCriar,
     RequisitoOut,
     RequisitoPowerAutomateCriar,
     RequisitoPowerAutomateOut,
+    RequisitoTransicaoCriar,
 )
 from app.services.auditoria import registrar_evento
 
@@ -23,8 +26,25 @@ router = APIRouter(prefix='/v1/requisitos', tags=['Requisitos'])
 api_router = APIRouter(prefix='/api/requisitos', tags=['Requisitos Power Automate'])
 
 _STATUS_PENDENTES = {'recebido', 'pendente', 'em_analise', 'analise', 'bloqueado', 'devolvido'}
-_STATUS_APROVACAO = {'aguardando_aprovacao', 'aguardando-aprovacao', 'aprovacao', 'em_aprovacao'}
-_STATUS_PRONTOS = {'aprovado', 'pronto', 'concluido', 'concluído', 'done', 'aceito'}
+_STATUS_APROVACAO = {'aguardando_aprovacao', 'aguardando-aprovacao', 'aprovacao', 'em_aprovacao', 'pronto_para_aprovacao'}
+_STATUS_PRONTOS = {'aprovado', 'pronto', 'concluido', 'concluído', 'done', 'aceito', 'validado', 'evidenciado', 'exportado'}
+_WORKFLOW_ESTADOS = ['recebido', 'refinamento', 'pronto_para_aprovacao', 'aprovado', 'em_execucao', 'validado', 'evidenciado', 'exportado']
+_TRANSICOES_PERMITIDAS = {
+    'recebido': {'refinamento', 'bloqueado', 'devolvido'},
+    'pendente': {'refinamento', 'bloqueado', 'devolvido'},
+    'em_analise': {'refinamento', 'bloqueado', 'devolvido'},
+    'analise': {'refinamento', 'bloqueado', 'devolvido'},
+    'refinamento': {'pronto_para_aprovacao', 'bloqueado', 'devolvido'},
+    'pronto_para_aprovacao': {'aprovado', 'refinamento', 'devolvido'},
+    'aguardando_aprovacao': {'aprovado', 'refinamento', 'devolvido'},
+    'aprovado': {'em_execucao', 'bloqueado'},
+    'em_execucao': {'validado', 'bloqueado'},
+    'validado': {'evidenciado', 'em_execucao'},
+    'evidenciado': {'exportado', 'validado'},
+    'bloqueado': {'refinamento', 'devolvido'},
+    'devolvido': {'refinamento', 'bloqueado'},
+}
+_ESTADOS_TERMINAIS = {'exportado'}
 
 
 def _gerar_codigo_requisito() -> str:
@@ -45,6 +65,11 @@ def _percentual(parte: int, total: int) -> int:
     return round((parte / total) * 100)
 
 
+def _tem_criterio_aceite(requisito: Requisito) -> bool:
+    descricao = _normalizar_texto(requisito.descricao).lower()
+    return any(termo in descricao for termo in ('criterio', 'critério', 'bdd', 'dado que', 'quando', 'entao', 'então'))
+
+
 def _calcular_score_prontidao(requisito: Requisito) -> int:
     campos_minimos = [
         requisito.titulo,
@@ -63,7 +88,7 @@ def _calcular_score_prontidao(requisito: Requisito) -> int:
     elif len(descricao) >= 40:
         pontos += 6
 
-    if any(termo in descricao.lower() for termo in ('criterio', 'critério', 'bdd', 'dado que', 'quando', 'entao', 'então')):
+    if _tem_criterio_aceite(requisito):
         pontos += 10
 
     if status_normalizado in _STATUS_PRONTOS:
@@ -75,7 +100,6 @@ def _calcular_score_prontidao(requisito: Requisito) -> int:
 def _classificar_requisito(requisito: Requisito) -> dict:
     score = _calcular_score_prontidao(requisito)
     status_normalizado = _normalizar_chave(requisito.status)
-    descricao = _normalizar_texto(requisito.descricao)
 
     return {
         'id': requisito.id,
@@ -86,7 +110,7 @@ def _classificar_requisito(requisito: Requisito) -> dict:
         'sistema': requisito.sistema,
         'solicitante': requisito.solicitante,
         'score_prontidao': score,
-        'sem_criterio_aceite': not any(termo in descricao.lower() for termo in ('criterio', 'critério', 'bdd', 'dado que', 'quando', 'entao', 'então')),
+        'sem_criterio_aceite': not _tem_criterio_aceite(requisito),
         'baixa_qualidade': score < 70,
         'sem_rastreabilidade': not all(_normalizar_texto(valor) for valor in (requisito.codigo, requisito.solicitante, requisito.area, requisito.sistema)),
         'aguardando_aprovacao': status_normalizado in _STATUS_APROVACAO,
@@ -114,6 +138,78 @@ def _filtrar_requisitos(
     return resultado
 
 
+def _proximo_estado_sugerido(status_atual: str | None) -> str | None:
+    atual = _normalizar_chave(status_atual)
+    if atual in _ESTADOS_TERMINAIS:
+        return None
+    permitidos = _TRANSICOES_PERMITIDAS.get(atual, {'refinamento'})
+    for estado in _WORKFLOW_ESTADOS:
+        if estado in permitidos:
+            return estado
+    return sorted(permitidos)[0] if permitidos else None
+
+
+def _montar_workflow_state(requisito: Requisito) -> dict:
+    status_atual = _normalizar_chave(requisito.status) or 'recebido'
+    permitidos = sorted(_TRANSICOES_PERMITIDAS.get(status_atual, set()))
+    score = _calcular_score_prontidao(requisito)
+
+    return {
+        'schema_version': '1.0.0',
+        'estado_atual': status_atual,
+        'estado_label': requisito.status,
+        'fluxo_alvo': _WORKFLOW_ESTADOS,
+        'transicoes_permitidas': permitidos,
+        'proximo_estado_sugerido': _proximo_estado_sugerido(status_atual),
+        'estado_terminal': status_atual in _ESTADOS_TERMINAIS,
+        'score_prontidao': score,
+        'criterios_minimos': {
+            'dados_minimos': all(_normalizar_texto(valor) for valor in (requisito.titulo, requisito.descricao, requisito.area, requisito.sistema, requisito.solicitante)),
+            'criterio_aceite_detectado': _tem_criterio_aceite(requisito),
+            'score_minimo_refinamento': score >= 70,
+            'evidencia_obrigatoria_exportacao': True,
+        },
+    }
+
+
+def _validar_transicao(requisito: Requisito, payload: RequisitoTransicaoCriar) -> tuple[str, str]:
+    origem = _normalizar_chave(requisito.status) or 'recebido'
+    destino = _normalizar_chave(payload.novo_status)
+    permitidos = _TRANSICOES_PERMITIDAS.get(origem, {'refinamento'})
+
+    if origem in _ESTADOS_TERMINAIS:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={'code': 'REQUISITO_ESTADO_TERMINAL', 'message': 'Requisito em estado terminal não permite nova transição.', 'estado_atual': origem},
+        )
+
+    if destino not in permitidos:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={'code': 'TRANSICAO_INVALIDA', 'message': 'Transição não permitida pela máquina de estados governada.', 'estado_atual': origem, 'novo_status': destino, 'permitidos': sorted(permitidos)},
+        )
+
+    if destino in {'pronto_para_aprovacao', 'aprovado'} and not _tem_criterio_aceite(requisito):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={'code': 'CRITERIO_ACEITE_OBRIGATORIO', 'message': 'Transição exige critério de aceite ou BDD detectável na descrição.'},
+        )
+
+    if destino == 'pronto_para_aprovacao' and _calcular_score_prontidao(requisito) < 70:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={'code': 'SCORE_PRONTIDAO_INSUFICIENTE', 'message': 'Transição exige score de prontidão mínimo de 70.'},
+        )
+
+    if destino in {'evidenciado', 'exportado'} and not _normalizar_texto(payload.evidencia):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={'code': 'EVIDENCIA_OBRIGATORIA', 'message': 'Transição exige evidência operacional informada.'},
+        )
+
+    return origem, destino
+
+
 def _montar_workspace_operacional(requisitos: list[Requisito]) -> dict:
     classificados = [_classificar_requisito(requisito) for requisito in requisitos]
     total = len(classificados)
@@ -129,7 +225,7 @@ def _montar_workspace_operacional(requisitos: list[Requisito]) -> dict:
     status_counter = Counter(_normalizar_chave(item['status']) or 'sem_status' for item in classificados)
 
     return {
-        'schema_version': '1.0.0',
+        'schema_version': '1.1.0',
         'source': 'api.requisitos.workspace',
         'metrics': [
             {
@@ -152,12 +248,12 @@ def _montar_workspace_operacional(requisitos: list[Requisito]) -> dict:
             },
             {
                 'id': 'fluxo',
-                'value': '6 etapas',
+                'value': '8 estados',
                 'label': 'workflow de requisito',
-                'description': 'Entrada, refinamento, aceite, aprovação, rastreabilidade e exportação.',
+                'description': 'Recebido, refinamento, aprovação, execução, validação, evidência e exportação.',
                 'icon': 'mdi-source-branch-sync',
                 'color': 'blue',
-                'status': 'guiado',
+                'status': 'governado',
             },
             {
                 'id': 'pendencias',
@@ -210,7 +306,7 @@ def _montar_workspace_operacional(requisitos: list[Requisito]) -> dict:
             'status': dict(status_counter),
         },
         'top_items': sorted(classificados, key=lambda item: item['score_prontidao'])[:5],
-        'workflow': ['entrada', 'refinamento', 'aceite', 'aprovacao', 'rastreabilidade', 'exportacao'],
+        'workflow': _WORKFLOW_ESTADOS,
     }
 
 
@@ -231,6 +327,23 @@ def _serializar_power_automate(requisito: Requisito) -> dict:
         solicitante=requisito.solicitante,
         impacto_regulatorio=requisito.impacto_regulatorio,
     ).model_dump()
+
+
+def _serializar_evento_timeline(evento: AuditoriaEvento) -> dict:
+    try:
+        payload = json.loads(evento.payload_minimo or '{}')
+    except json.JSONDecodeError:
+        payload = {'raw': evento.payload_minimo}
+    return {
+        'id': evento.id,
+        'correlation_id': evento.correlation_id,
+        'usuario': evento.usuario,
+        'acao': evento.acao,
+        'entidade': evento.entidade,
+        'entidade_id': evento.entidade_id,
+        'payload': payload,
+        'criado_em': evento.criado_em.isoformat() if hasattr(evento.criado_em, 'isoformat') else str(evento.criado_em),
+    }
 
 
 def _buscar_requisito_por_identificador(db: Session, identificador: str) -> Requisito:
@@ -303,6 +416,71 @@ def obter_workspace_operacional(
         payload,
         x_correlation_id,
         meta={'contract': 'reqsys-workspace-operacional-v1'},
+    )
+
+
+@api_router.get('/{identificador}/workflow')
+def obter_workflow_requisito(identificador: str, db: Session = Depends(get_db), x_correlation_id: str | None = Header(default=None)):
+    requisito = _buscar_requisito_por_identificador(db, identificador)
+    eventos = (
+        db.query(AuditoriaEvento)
+        .filter(AuditoriaEvento.entidade == 'requisito', AuditoriaEvento.entidade_id == str(requisito.id))
+        .order_by(AuditoriaEvento.id.asc())
+        .all()
+    )
+    return ok(
+        {
+            'schema_version': '1.0.0',
+            'requisito': _serializar_power_automate(requisito),
+            'workflow': _montar_workflow_state(requisito),
+            'timeline': [_serializar_evento_timeline(evento) for evento in eventos],
+        },
+        x_correlation_id,
+        meta={'contract': 'reqsys-requisito-workflow-v1'},
+    )
+
+
+@api_router.post('/{identificador}/transicao')
+def transicionar_requisito(
+    identificador: str,
+    payload: RequisitoTransicaoCriar,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    requisito = _buscar_requisito_por_identificador(db, identificador)
+    origem, destino = _validar_transicao(requisito, payload)
+    requisito.status = destino
+    db.add(requisito)
+    db.commit()
+    db.refresh(requisito)
+
+    payload_auditoria = {
+        'schema_version': '1.0.0',
+        'origem': origem,
+        'destino': destino,
+        'motivo': payload.motivo,
+        'evidencia': bool(_normalizar_texto(payload.evidencia)),
+        'score_prontidao': _calcular_score_prontidao(requisito),
+    }
+    registrar_evento(
+        db,
+        x_correlation_id or 'sem-correlation-id',
+        payload.usuario,
+        'REQUISITO_TRANSICIONADO',
+        'requisito',
+        requisito.id,
+        json.dumps(payload_auditoria, ensure_ascii=False),
+    )
+    logger.info('requisito_transicionado codigo=%s origem=%s destino=%s correlation_id=%s', requisito.codigo, origem, destino, x_correlation_id or 'sem-correlation-id')
+    return ok(
+        {
+            'schema_version': '1.0.0',
+            'requisito': _serializar_power_automate(requisito),
+            'workflow': _montar_workflow_state(requisito),
+            'transicao': payload_auditoria,
+        },
+        x_correlation_id,
+        meta={'contract': 'reqsys-requisito-transicao-v1'},
     )
 
 
