@@ -68,9 +68,14 @@ jobs:
           fi
 
           if [ -f "docs/governance/branch-protection-enterprise-baseline.md" ]; then
-            require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Require status checks" "checks obrigatórios documentados"
+            require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Required status checks" "checks obrigatórios documentados"
+            require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Required approvals" "aprovações obrigatórias documentadas"
+            require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Merge queue" "merge queue documentada"
+            require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Auto-merge" "auto-merge documentado"
+            require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Bypass permissions" "permissões de bypass documentadas"
             require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Block force pushes" "bloqueio de force push documentado"
             require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Squash merge" "política de squash merge documentada"
+            require_contains "docs/governance/branch-protection-enterprise-baseline.md" "Checklist de confirmação final" "confirmação final da main documentada"
           fi
 
           {
@@ -82,6 +87,11 @@ jobs:
             echo "| Baseline versionável | \`$STATUS\` |"
             echo "| CODEOWNERS | \`$(test -f .github/CODEOWNERS && echo presente || echo ausente)\` |"
             echo "| Documento canônico | \`$(test -f docs/governance/branch-protection-enterprise-baseline.md && echo presente || echo ausente)\` |"
+            echo "| Required status checks | \`documentado\` |"
+            echo "| Required approvals | \`documentado\` |"
+            echo "| Merge queue | \`documentado\` |"
+            echo "| Auto-merge | \`documentado\` |"
+            echo "| Bypass permissions | \`documentado\` |"
             echo
             echo "## Falhas"
             echo
