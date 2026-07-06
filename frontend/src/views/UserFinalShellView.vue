@@ -46,6 +46,10 @@
       >
         {{ item.label }}
       </v-btn>
+      <v-spacer />
+      <v-chip size="small" :color="workspaceSourceColor" variant="tonal" data-testid="user-final-workspace-source">
+        dados {{ workspaceStatusLabel }}
+      </v-chip>
     </v-card>
 
     <v-row class="mt-4">
@@ -95,6 +99,9 @@
       <v-col cols="12" lg="7">
         <v-card class="state-card" data-testid="user-final-action-queue">
           <v-card-title>Fila de trabalho do analista</v-card-title>
+          <v-card-subtitle v-if="workspaceSummary.total_requisitos !== null" data-testid="user-final-workspace-summary">
+            {{ workspaceSummary.total_requisitos }} requisitos · score médio {{ workspaceSummary.score_medio_prontidao }}% · {{ workspaceSummary.pendencias_operacionais }} pendências
+          </v-card-subtitle>
           <v-card-text>
             <div class="work-queue">
               <div v-for="item in actionQueue" :key="item.id" class="queue-item" :data-testid="`user-final-queue-${item.id}`">
@@ -126,6 +133,9 @@
                 @click="item.route ? goTo(item.route) : undefined"
               />
             </v-list>
+            <v-alert v-if="workspaceError" type="warning" variant="tonal" density="compact" class="mt-2" data-testid="user-final-workspace-error">
+              API indisponível. Mantido fallback seguro para não bloquear a jornada.
+            </v-alert>
           </v-card-text>
         </v-card>
       </v-col>
@@ -233,7 +243,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppVersion } from '../composables/useAppVersion'
 import { useUserJourneyTelemetry } from '../composables/useUserJourneyTelemetry'
@@ -243,12 +253,39 @@ const router = useRouter()
 const { frontendVersion, apiVersion, apiBuildShaShort, versionsAligned, hasVersionDrift } = useAppVersion()
 const { telemetrySummary, markPrimaryAction } = useUserJourneyTelemetry(route)
 const correlationId = `ufs-${Date.now().toString(36)}`
+const workspaceStatus = ref('fallback')
+const workspaceError = ref(null)
+const workspaceSummary = ref({ total_requisitos: null, score_medio_prontidao: 0, pendencias_operacionais: 0 })
+
+const fallbackMetrics = [
+  { id: 'prontas', value: '86%', label: 'prontidão funcional', description: 'Jornada principal orientada para trabalho real.', icon: 'mdi-account-check-outline', color: 'green', status: 'fallback' },
+  { id: 'dados', value: '74%', label: 'qualidade dos dados', description: 'Campos críticos e rastreabilidade ainda exigem saneamento progressivo.', icon: 'mdi-database-check-outline', color: 'amber', status: 'fallback' },
+  { id: 'fluxo', value: '6 etapas', label: 'workflow de requisito', description: 'Fluxo canônico definido da entrada até a evidência.', icon: 'mdi-source-branch-sync', color: 'blue', status: 'guiado' },
+  { id: 'pendencias', value: '34', label: 'pendências operacionais', description: 'Itens pendentes por baixa prontidão ou etapa incompleta.', icon: 'mdi-clipboard-alert-outline', color: 'amber', status: 'fallback' },
+]
+
+const fallbackActionQueue = [
+  { id: 'sem-aceite', title: 'Histórias sem critério de aceite', description: 'Requisitos que ainda não estão prontos para desenvolvimento.', count: '12', icon: 'mdi-format-list-checks', color: 'red' },
+  { id: 'baixa-qualidade', title: 'Requisitos com baixa qualidade', description: 'Itens que precisam de refinamento, ambiguidade removida ou exemplo BDD.', count: '8', icon: 'mdi-auto-fix', color: 'amber' },
+  { id: 'sem-rastro', title: 'Itens sem rastreabilidade', description: 'Demandas sem origem, decisão, vínculo técnico ou evidência de aprovação.', count: '5', icon: 'mdi-link-variant-off', color: 'amber' },
+  { id: 'aprovacao', title: 'Aguardando aprovação', description: 'Itens já refinados que dependem de aceite do responsável.', count: '9', icon: 'mdi-account-clock-outline', color: 'blue' },
+]
+
+const realUseMetrics = ref([...fallbackMetrics])
+const actionQueue = ref([...fallbackActionQueue])
 
 const versionSummary = computed(() => {
   if (!apiVersion.value) return `Versão frontend v${frontendVersion}`
   if (versionsAligned.value) return `Versão v${frontendVersion} (frontend e API alinhadas)`
   return `Versão frontend v${frontendVersion} · API v${apiVersion.value}`
 })
+
+const workspaceStatusLabel = computed(() => {
+  if (workspaceStatus.value === 'api') return 'reais'
+  if (workspaceStatus.value === 'loading') return 'carregando'
+  return 'fallback'
+})
+const workspaceSourceColor = computed(() => (workspaceStatus.value === 'api' ? 'green' : workspaceStatus.value === 'loading' ? 'blue' : 'amber'))
 
 const shellNavItems = [
   { label: 'Início', route: '/home', icon: 'mdi-home-outline' },
@@ -284,24 +321,10 @@ const environment = computed(() => {
   return { id: 'DEV', label: 'Desenvolvimento', color: 'blue' }
 })
 
-const realUseMetrics = [
-  { id: 'prontas', value: '86%', label: 'prontidão funcional', description: 'Jornada principal orientada para trabalho real.', icon: 'mdi-account-check-outline', color: 'green', status: 'verde' },
-  { id: 'dados', value: '74%', label: 'qualidade dos dados', description: 'Campos críticos e rastreabilidade ainda exigem saneamento progressivo.', icon: 'mdi-database-check-outline', color: 'amber', status: 'atenção' },
-  { id: 'fluxo', value: '6 etapas', label: 'workflow de requisito', description: 'Fluxo canônico definido da entrada até a evidência.', icon: 'mdi-source-branch-sync', color: 'blue', status: 'guiado' },
-  { id: 'ruido', value: '- técnico', label: 'menor ruído na home', description: 'CI e runtime ficam fora da rota principal do analista.', icon: 'mdi-eye-off-outline', color: 'green', status: 'limpo' },
-]
-
 const operationalCards = [
   { id: 'requisitos', title: 'Requisitos', description: 'Criar, consultar e acompanhar demandas com foco em clareza, aceite e rastreabilidade.', icon: 'mdi-file-document-edit-outline', status: 'Ação principal', statusColor: 'green', route: '/requisitos', actionLabel: 'Abrir requisitos' },
   { id: 'pendencias', title: 'Pendências operacionais', description: 'Tratar itens sem dono, sem aceite, com baixa qualidade ou bloqueados por aprovação.', icon: 'mdi-clipboard-alert-outline', status: 'Fila diária', statusColor: 'amber', route: '/workspace?status=pendente', actionLabel: 'Abrir fila' },
   { id: 'governanca', title: 'Evidências e governança', description: 'Consultar gates, trilhas e observabilidade apenas quando a decisão exigir comprovação.', icon: 'mdi-shield-check-outline', status: 'Sob demanda', statusColor: 'blue', route: '/governanca', actionLabel: 'Ver evidência' },
-]
-
-const actionQueue = [
-  { id: 'sem-aceite', title: 'Histórias sem critério de aceite', description: 'Requisitos que ainda não estão prontos para desenvolvimento.', count: '12', icon: 'mdi-format-list-checks', color: 'red' },
-  { id: 'baixa-qualidade', title: 'Requisitos com baixa qualidade', description: 'Itens que precisam de refinamento, ambiguidade removida ou exemplo BDD.', count: '8', icon: 'mdi-auto-fix', color: 'amber' },
-  { id: 'sem-rastro', title: 'Itens sem rastreabilidade', description: 'Demandas sem origem, decisão, vínculo técnico ou evidência de aprovação.', count: '5', icon: 'mdi-link-variant-off', color: 'amber' },
-  { id: 'aprovacao', title: 'Aguardando aprovação', description: 'Itens já refinados que dependem de aceite do responsável.', count: '9', icon: 'mdi-account-clock-outline', color: 'blue' },
 ]
 
 const dataQualityStates = [
@@ -371,11 +394,79 @@ const guidedWorkspace = computed(() => {
   }
 })
 
+function getApiBaseUrl() {
+  return (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+}
+
+function getPersistedFilters() {
+  if (typeof localStorage === 'undefined') return {}
+  try {
+    return JSON.parse(localStorage.getItem('reqsys.workspace.filters') || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function persistFilters(filters) {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem('reqsys.workspace.filters', JSON.stringify(filters))
+}
+
+function buildWorkspaceQuery() {
+  const persisted = getPersistedFilters()
+  const filters = {
+    status: route.query.status ? String(route.query.status) : persisted.status,
+    area: route.query.area ? String(route.query.area) : persisted.area,
+    responsavel: route.query.responsavel ? String(route.query.responsavel) : persisted.responsavel,
+  }
+  persistFilters(filters)
+
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) params.set(key, value)
+  })
+  return params.toString()
+}
+
+async function carregarWorkspaceOperacional() {
+  if (typeof fetch !== 'function') return
+  workspaceStatus.value = 'loading'
+  workspaceError.value = null
+
+  try {
+    const query = buildWorkspaceQuery()
+    const endpoint = `${getApiBaseUrl()}/api/requisitos/workspace${query ? `?${query}` : ''}`
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: 'application/json',
+        'X-Correlation-Id': correlationId,
+      },
+    })
+    if (!response.ok) throw new Error(`workspace_operacional_http_${response.status}`)
+    const envelope = await response.json()
+    const payload = envelope?.data
+    if (!payload?.metrics || !payload?.action_queue) throw new Error('workspace_operacional_payload_invalido')
+
+    realUseMetrics.value = payload.metrics
+    actionQueue.value = payload.action_queue
+    workspaceSummary.value = payload.summary || workspaceSummary.value
+    workspaceStatus.value = 'api'
+  } catch (error) {
+    workspaceError.value = error
+    workspaceStatus.value = 'fallback'
+    realUseMetrics.value = [...fallbackMetrics]
+    actionQueue.value = [...fallbackActionQueue]
+  }
+}
+
 function goTo(target) {
   if (!target) return
   markPrimaryAction(target)
   router.push(target)
 }
+
+onMounted(carregarWorkspaceOperacional)
+watch(() => route.fullPath, carregarWorkspaceOperacional)
 </script>
 
 <style scoped>
