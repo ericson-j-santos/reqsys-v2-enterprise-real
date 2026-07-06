@@ -11,6 +11,8 @@ from app.services.gemini import (
     resumir_requisito,
     sugerir_descricao,
 )
+from app.services.govbi_ai_health import montar_govbi_ai_health
+from app.services.llm_telemetry import obter_snapshot_telemetry_llm
 from app.services.recomendacoes_ia import gerar_texto_recomendacao
 
 router = APIRouter(prefix='/v1/ia', tags=['IA Assistente'])
@@ -44,6 +46,18 @@ def _handle_ia_error(exc: GeminiIndisponivel):
 
 def _groq_params() -> dict:
     return {'groq_key': settings.groq_api_key, 'groq_model': settings.groq_model}
+
+
+def _govbi_ai_health_payload() -> dict:
+    return montar_govbi_ai_health(
+        gemini_configurado=bool(settings.gemini_api_key),
+        gemini_modelo=settings.gemini_model,
+        gemini_cota=get_uso(),
+        groq_configurado=bool(settings.groq_api_key),
+        groq_modelo=settings.groq_model,
+        groq_cota=get_uso_groq(),
+        telemetry=obter_snapshot_telemetry_llm(),
+    )
 
 
 @router.post('/resumir')
@@ -107,6 +121,12 @@ def gerar_recomendacao(body: GerarRecomendacaoRequest):
     )
 
 
+@router.get('/govbi/health')
+def govbi_ia_health():
+    """Health operacional do GovBI IA com provider, fallback, cota e telemetry."""
+    return ok(_govbi_ai_health_payload())
+
+
 @router.get('/status')
 def ia_status():
     """Verifica configuração e cota de ambos os providers (Gemini + Groq)."""
@@ -156,4 +176,6 @@ def ia_status():
         'fallback_ativo': fallback_ativo,
         'avisos': avisos,
         'passos_pendentes': passos_pendentes,
+        'telemetry': obter_snapshot_telemetry_llm(),
+        'govbi_health': _govbi_ai_health_payload(),
     })
