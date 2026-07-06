@@ -56,7 +56,7 @@ def test_bloqueia_transicao_fora_da_maquina_de_estados():
 
 
 def test_exige_criterio_de_aceite_para_pronto_para_aprovacao():
-    req = requisito(status='refinamento', descricao='Descricao sem aceite estruturado nem BDD explicito.')
+    req = requisito(status='refinamento', descricao='Descricao operacional preliminar sem regra verificavel informada.')
 
     with pytest.raises(HTTPException) as exc:
         _validar_transicao(req, payload('pronto_para_aprovacao'))
