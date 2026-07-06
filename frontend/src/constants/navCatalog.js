@@ -5,6 +5,10 @@
  * - as primeiras áreas devem apoiar o trabalho diário do analista/PO;
  * - recursos técnicos ficam em Administração, Governança ou Arquitetura;
  * - o usuário final não deve precisar entender CI, runtime ou infraestrutura para cadastrar e acompanhar uma demanda.
+ *
+ * Compatibilidade com main:
+ * - preserva rotas adicionadas depois da criação do PR: Financeiro, Orquestrador IA e Coordenação ADRs;
+ * - mantém subgrupos canônicos para resolver rotas duplicadas sem quebrar testes e jornada real.
  */
 export const NAV_TEMAS = [
   {
@@ -62,6 +66,7 @@ export const NAV_TEMAS = [
     items: [
       { to: '/analytics', icon: 'mdi-chart-timeline-variant', title: 'Analytics', tip: 'Indicadores executivos com drill-down.' },
       { to: '/estatisticas', icon: 'mdi-chart-box-outline', title: 'Estatísticas', tip: 'Indicadores auditáveis com fonte, fórmula e analítico.' },
+      { to: '/financeiro', icon: 'mdi-cash-multiple', title: 'Financeiro', tip: 'Taxa CDI diária com cache interno e fonte no Banco Central.' },
       { to: '/relatorios', icon: 'mdi-file-chart-outline', title: 'Relatórios', tip: 'Catálogo e status de relatórios corporativos.' },
       { to: '/govbi-ia', icon: 'mdi-database-search', title: 'GovBI IA', tip: 'Consultas analíticas em linguagem natural governada.' },
     ],
@@ -89,6 +94,7 @@ export const NAV_TEMAS = [
       { to: '/specs', icon: 'mdi-file-code-outline', title: 'Specs SDD', tip: 'Especificações técnicas e contratos de features.' },
       { to: '/governanca', icon: 'mdi-shield-check-outline', title: 'Governança', tip: 'Gates, CI/CD, observabilidade, políticas e evidências.' },
       { to: '/codex', icon: 'mdi-code-braces', title: 'Codex', tip: 'Análise de código com LLM local ou mock, governada pelo ReqSys.' },
+      { to: '/orquestrador-ia', icon: 'mdi-sitemap-outline', title: 'Orquestrador IA', tip: 'Classifica demandas por tema e aciona o coordenador de IA correspondente.' },
     ],
   },
   {
@@ -98,6 +104,7 @@ export const NAV_TEMAS = [
     icon: 'mdi-sitemap',
     items: [
       { to: '/arquitetura', icon: 'mdi-sitemap', title: 'Mapa da Solução', tip: 'Visão completa dos componentes Web, backend, integrações e Low-Code.' },
+      { to: '/coordenacao-adr', icon: 'mdi-book-open-variant', title: 'Coordenação ADRs', tip: 'Coordenação geral que classifica demandas pelos 12 ADRs e aponta violações de gate.' },
     ],
   },
 ]
