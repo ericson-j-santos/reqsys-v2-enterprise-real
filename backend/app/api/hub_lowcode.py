@@ -18,6 +18,10 @@ from app.services.hub_lowcode import (
     status_consolidado,
     testar_teams_webhook,
 )
+from app.services.lowcode_adr_coordinator import (
+    listar_adr_base_coordenador,
+    planejar_coordenacao_por_adr,
+)
 from app.services.lowcode_solution_factory import gerar_lowcode_solution
 from app.services.power_automate_provisioning import (
     atualizar_status_provisionamento,
@@ -90,6 +94,37 @@ def lowcode_solution_generate_canvas(payload: LowCodeSolutionGenerateRequest):
 
 
 # ---------------------------------------------------------------------------
+# LowCode ADR Agent Coordinator P0
+# ---------------------------------------------------------------------------
+
+@router.get('/agents/coordenador/adr-base')
+def lowcode_adr_agent_base():
+    """Retorna a base governada de ADRs e agentes do Coordenador ReqSys."""
+    return ok(listar_adr_base_coordenador())
+
+
+@router.post('/agents/coordenador/planejar')
+def lowcode_adr_agent_planejar(
+    objetivo: str = Body(..., min_length=10, max_length=2000),
+    adr_refs: list[str] | None = Body(default=None),
+    dry_run: bool = Body(default=True),
+    x_correlation_id: str | None = Header(default=None),
+):
+    """Planeja a chamada de agentes especializados conforme ADR aplicável.
+
+    O endpoint opera em modo governado: por padrão não executa escrita externa, apenas
+    devolve o plano de roteamento, guardrails, rastreabilidade e critérios de aceite.
+    """
+    plano = planejar_coordenacao_por_adr(
+        objetivo=objetivo,
+        adr_refs=adr_refs,
+        dry_run=dry_run,
+        correlation_id=x_correlation_id,
+    )
+    return ok(plano, plano['correlation_id'])
+
+
+# ---------------------------------------------------------------------------
 # Power Automate Flow Provisioning P0/P0.1
 # ---------------------------------------------------------------------------
 
@@ -129,10 +164,7 @@ async def power_automate_flow_provision(
     solution_name: str = Body(default='ReqSysAutomacao'),
     x_correlation_id: str | None = Header(default=None),
 ):
-    """Solicita dispatch do workflow ALM que provisiona o flow.
-
-    Se GITHUB_PAT nao estiver configurado, retorna plano e motivo sem falhar.
-    """
+    """Solicita dispatch do workflow ALM que provisiona o flow."""
     manifesto = gerar_manifesto_provisionamento_flow(
         display_name=display_name,
         trigger_type=trigger_type,
