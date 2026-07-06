@@ -1,0 +1,37 @@
+{
+  "$schema": "https://reqsys.dev/schemas/design-tokens-v1.json",
+  "metadata": {
+    "name": "ReqSys DSC Governado",
+    "version": "1.0.0",
+    "source": "DSC atual corporativo",
+    "governance": "padrao-ouro",
+    "compatibility": "figmaPadraoOuro"
+  },
+  "colors": {
+    "primary": "#005CA9",
+    "primaryDeep": "#003B73",
+    "primarySoft": "#E6F0FA",
+    "accent": "#F39200",
+    "accentDeep": "#B56D00",
+    "analytics": "#00B3AD",
+    "analyticsDeep": "#007C78",
+    "success": "#22C55E",
+    "warning": "#F59E0B",
+    "critical": "#EF4444",
+    "background": "#071526",
+    "backgroundDeep": "#03101F",
+    "surface": "#0B2038",
+    "surfaceElevated": "#102B49",
+    "text": "#F8FAFC",
+    "muted": "#B8C7D9",
+    "border": "rgba(184, 199, 217, 0.24)"
+  },
+  "semantic": {
+    "governance": "primary",
+    "executiveHighlight": "accent",
+    "informational": "analytics",
+    "healthy": "success",
+    "degraded": "warning",
+    "criticalState": "critical"
+  }
+}
