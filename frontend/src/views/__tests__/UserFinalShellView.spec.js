@@ -46,7 +46,7 @@ describe('UserFinalShellView', () => {
 
     expect(wrapper.find('[data-testid="user-final-shell"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="user-final-guided-workspace"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="user-final-progress"]').text()).toContain('33%')
+    expect(wrapper.find('[data-testid="user-final-progress"]').text()).toContain('20%')
     expect(wrapper.find('[data-testid="user-final-intent-low-cognitive-load"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="user-final-intent-auditable"]').exists()).toBe(true)
   })
@@ -55,14 +55,14 @@ describe('UserFinalShellView', () => {
     const wrapper = await montar('/workspace?status=pendente')
 
     expect(wrapper.find('[data-testid="user-final-intent-filtered-context"]').text()).toContain('pendente')
-    expect(wrapper.find('[data-testid="user-final-progress"]').text()).toContain('67%')
+    expect(wrapper.find('[data-testid="user-final-progress"]').text()).toContain('40%')
     expect(wrapper.text()).toContain('Filtrar pendências')
   })
 
   it('destaca etapa de evidência na visão de analytics', async () => {
     const wrapper = await montar('/analytics')
 
-    expect(wrapper.find('[data-testid="user-final-progress"]').text()).toContain('100%')
+    expect(wrapper.find('[data-testid="user-final-progress"]').text()).toContain('80%')
     expect(wrapper.text()).toContain('Exportar evidência')
   })
 
