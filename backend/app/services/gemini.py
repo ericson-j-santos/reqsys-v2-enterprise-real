@@ -13,6 +13,7 @@ from datetime import date, datetime, timezone
 
 from app.services.llm_provider import LLMGateway
 from app.services.llm_provider import _post_json as _llm_post_json
+from app.services.llm_telemetry import registrar_evento_llm
 
 logger = logging.getLogger('reqsys.ia')
 
@@ -144,6 +145,7 @@ def _is_model_error(msg: str) -> bool:
 # ---------------------------------------------------------------------------
 def _gerar(api_key: str, model: str, prompt: str) -> str:
     if not api_key:
+        registrar_evento_llm('gemini', 'falha', 'api_key_ausente')
         raise GeminiIndisponivel('GEMINI_API_KEY não configurada no .env')
     try:
         texto = _gateway().gerar_gemini(
@@ -152,24 +154,30 @@ def _gerar(api_key: str, model: str, prompt: str) -> str:
             prompt=prompt,
         )
         _gemini_tracker.registrar()
+        registrar_evento_llm('gemini', 'sucesso')
         return texto.strip()
     except GeminiIndisponivel:
+        registrar_evento_llm('gemini', 'falha', 'gemini_indisponivel')
         raise
     except Exception as exc:
         msg = str(exc)
         if _is_quota_error(msg):
+            registrar_evento_llm('gemini', 'falha', 'quota_esgotada')
             raise GeminiIndisponivel(
                 f'Quota Gemini esgotada (free tier: {_GEMINI_LIMITE_MIN} req/min, '
                 f'{_GEMINI_LIMITE_DIA} req/dia). Ativando fallback Groq...'
             )
         if _is_bad_key_error(msg):
+            registrar_evento_llm('gemini', 'falha', 'api_key_invalida')
             raise GeminiIndisponivel('GEMINI_API_KEY inválida. Verifique a chave em aistudio.google.com.')
         if _is_model_error(msg):
+            registrar_evento_llm('gemini', 'falha', 'modelo_indisponivel')
             raise GeminiIndisponivel(
                 f'Modelo Gemini "{model}" não disponível. '
                 'Modelos válidos: gemini-2.0-flash, gemini-2.5-flash.'
             )
         logger.exception('Erro inesperado ao chamar Gemini')
+        registrar_evento_llm('gemini', 'falha', 'erro_inesperado')
         raise GeminiIndisponivel(f'Gemini indisponível: {msg}')
 
 
@@ -178,6 +186,7 @@ def _gerar(api_key: str, model: str, prompt: str) -> str:
 # ---------------------------------------------------------------------------
 def _gerar_groq(api_key: str, model: str, prompt: str) -> str:
     if not api_key:
+        registrar_evento_llm('groq', 'falha', 'api_key_ausente')
         raise GeminiIndisponivel('GROQ_API_KEY não configurada no .env')
     try:
         texto = _gateway().gerar_groq(
@@ -186,19 +195,24 @@ def _gerar_groq(api_key: str, model: str, prompt: str) -> str:
             prompt=prompt,
         )
         _groq_tracker.registrar()
+        registrar_evento_llm('groq', 'sucesso')
         return texto.strip()
     except GeminiIndisponivel:
+        registrar_evento_llm('groq', 'falha', 'groq_indisponivel')
         raise
     except Exception as exc:
         msg = str(exc)
         if _is_quota_error(msg):
+            registrar_evento_llm('groq', 'falha', 'quota_esgotada')
             raise GeminiIndisponivel(
                 f'Quota Groq esgotada (free tier: {_GROQ_LIMITE_MIN} req/min, '
                 f'{_GROQ_LIMITE_DIA} req/dia). Tente novamente em instantes.'
             )
         if _is_bad_key_error(msg):
+            registrar_evento_llm('groq', 'falha', 'api_key_invalida')
             raise GeminiIndisponivel('GROQ_API_KEY inválida. Verifique a chave em console.groq.com.')
         logger.exception('Erro inesperado ao chamar Groq')
+        registrar_evento_llm('groq', 'falha', 'erro_inesperado')
         raise GeminiIndisponivel(f'Groq indisponível: {msg}')
 
 
@@ -216,6 +230,7 @@ def _gerar_com_fallback(
     except GeminiIndisponivel as exc:
         if groq_key:
             logger.info('Gemini indisponível (%s) — usando Groq como fallback.', exc)
+            registrar_evento_llm('gemini', 'fallback_acionado')
             return _gerar_groq(groq_key, groq_model, prompt), 'groq'
         raise
 
