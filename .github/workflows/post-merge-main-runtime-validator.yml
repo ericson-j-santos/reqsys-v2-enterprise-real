@@ -3,6 +3,8 @@ name: Post-merge Main Runtime Validator
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "17 */6 * * *"
   pull_request:
     branches: [main]
     paths:
@@ -13,6 +15,7 @@ on:
       - "scripts/executive_runtime_evidence_summary.py"
       - "scripts/main_operational_state_snapshot.py"
       - "tests/test_main_operational_state_snapshot.py"
+      - "docs/contracts/post-merge-main-runtime-validator.md"
   workflow_dispatch:
     inputs:
       base_url:
@@ -101,6 +104,7 @@ jobs:
         run: |
           set -euo pipefail
           for summary in \
+            artifacts/executive-runtime-evidence-summary/summary.md \
             artifacts/post-merge-main-runtime-validator/summary.md \
             artifacts/main-operational-state-snapshot/summary.md
           do
