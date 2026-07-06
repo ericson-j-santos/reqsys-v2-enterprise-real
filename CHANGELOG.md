@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-07-05
+
+### Adicionado (Financeiro · CDI)
+
+- Provedor interno e gratuito da taxa CDI diária (`backend/app/services/cdi_provider.py`, `backend/app/models/cdi_rate.py`): Banco Central (série SGS 12) como fonte primária, com cache local em `cdi_rates` e fallback para o último valor conhecido (`stale=true`) quando o BCB está indisponível. Endpoints `GET /v1/financeiro/cdi/latest` e `POST /v1/financeiro/cdi/refresh` (admin) em `backend/app/api/financeiro.py`. Fonte registrada e auditada em `config/external-sources-registry.json` (`bcb-sgs-cdi`).
+- `backend/app/core/resilience.py`: `CircuitBreaker` + `call_with_retry` genéricos (retry exponencial + circuit breaker com cooldown), extraídos do provedor de CDI para reuso em qualquer adapter externo. `cdi_provider.py` foi migrado para usá-los; nenhum outro adapter foi migrado ainda (gap pendente, ver runbook).
+- Auditoria (`registrar_evento`) em `POST /v1/financeiro/cdi/refresh`: eventos `CDI_REFRESH_SUCESSO`/`CDI_REFRESH_FALHA` com `correlation_id` e usuário admin responsável.
+- Frontend (`frontend/src/views/FinanceiroView.vue`, `frontend/src/services/financeiro.js`): página `/financeiro` com cards de taxa diária (% e decimal), status de cache (atualizado/desatualizado) e drill-down de fonte/URL/fórmula; botão "Atualizar do Banco Central" visível apenas para `papel === 'admin'`. Rota e item de menu registrados em `router/index.js` e `constants/navCatalog.js`.
+- `scripts/scaffold_cdi_feature.py`: gerador autocontido (stdlib apenas) que escreve em disco todos os arquivos da feature CDI (backend + testes + frontend) a partir de templates embutidos — reprodutível em qualquer checkout do repositório. Ver `docs/FINANCEIRO_CDI.md`.
+- `docs/FINANCEIRO_CDI.md`: documentação viva da feature (estado atual, estado alvo, gaps pendentes, como operar e como reproduzir via scaffold).
+
 ## [Unreleased] - 2026-07-03
 
 ### Corrigido (crítico — deploy, parte 2)
