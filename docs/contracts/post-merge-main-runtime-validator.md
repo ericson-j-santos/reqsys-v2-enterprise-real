@@ -37,9 +37,21 @@ Registrar o contrato operacional do workflow `Post-merge Main Runtime Validator`
 
 | Evento | Comportamento |
 |---|---|
-| `push` em `main` | Executa validação pós-merge completa |
+| `push` em `main` | Executa validação pós-merge completa imediatamente após merge ou push na branch principal |
+| `schedule` | Executa validação recorrente a cada 6 horas para cobrir ausência de evento capturado, indisponibilidade transitória ou necessidade de revalidação contínua |
 | `pull_request` para `main` | Executa apenas quando arquivos do contrato mudarem |
 | `workflow_dispatch` | Permite validação manual com `base_url` opcional |
+
+## Evidências automatizadas
+
+A validação automatizada deve publicar, no mesmo artifact `post-merge-main-runtime-validator`:
+
+| Evidência | Caminho |
+|---|---|
+| Smoke público governado | `artifacts/runtime-production-smoke-governed.json` |
+| Sumário executivo runtime | `artifacts/executive-runtime-evidence-summary/` |
+| Validador pós-merge | `artifacts/post-merge-main-runtime-validator/` |
+| Estado Único ReqSys da `main` | `artifacts/main-operational-state-snapshot/` |
 
 ## Critérios de sucesso
 
@@ -58,6 +70,7 @@ Registrar o contrato operacional do workflow `Post-merge Main Runtime Validator`
 - `artifact_contract_validation`
 - `no_runtime_mutation`
 - `reuse_existing_runtime_smoke`
+- `recurring_validation_without_parallel_gate`
 
 ## Links operacionais
 
@@ -72,6 +85,7 @@ Registrar o contrato operacional do workflow `Post-merge Main Runtime Validator`
 - Não substitui o smoke governado.
 - Não duplica Pareto Gate, Human Gate, Executive Brief ou External Signal.
 - Não altera contrato funcional da aplicação.
+- Não cria novo workflow concorrente de governança operacional.
 
 ## Status operacional
 
