@@ -12,10 +12,16 @@ from app.services.gemini import (
     sugerir_descricao,
 )
 from app.services.govbi_ai_health import montar_govbi_ai_health
-from app.services.llm_telemetry import obter_snapshot_telemetry_llm
+from app.services.govbi_ai_runtime_probes import executar_runtime_probes_govbi
+from app.services.llm_telemetry import (
+    compactar_telemetry_llm,
+    obter_snapshot_telemetry_llm,
+    obter_telemetry_persistida_llm,
+)
 from app.services.recomendacoes_ia import gerar_texto_recomendacao
 
 router = APIRouter(prefix='/v1/ia', tags=['IA Assistente'])
+_ultimo_probe_govbi: dict = {}
 
 
 class ResumoRequest(BaseModel):
@@ -57,6 +63,8 @@ def _govbi_ai_health_payload() -> dict:
         groq_modelo=settings.groq_model,
         groq_cota=get_uso_groq(),
         telemetry=obter_snapshot_telemetry_llm(),
+        telemetry_persistida=obter_telemetry_persistida_llm(),
+        ultimo_probe=_ultimo_probe_govbi,
     )
 
 
@@ -123,13 +131,41 @@ def gerar_recomendacao(body: GerarRecomendacaoRequest):
 
 @router.get('/govbi/health')
 def govbi_ia_health():
-    """Health operacional do GovBI IA com provider, fallback, cota e telemetry."""
+    """Health operacional do GovBI IA com provider, fallback, cota, telemetry e probes."""
     return ok(_govbi_ai_health_payload())
+
+
+@router.get('/govbi/telemetry')
+def govbi_ia_telemetry():
+    """Resumo da telemetry operacional em memória e persistida sem payload sensível."""
+    return ok({
+        'memoria': obter_snapshot_telemetry_llm(),
+        'persistida': obter_telemetry_persistida_llm(),
+    })
+
+
+@router.post('/govbi/telemetry/compactar')
+def compactar_govbi_ia_telemetry():
+    """Aplica retenção no storage local de telemetry LLM."""
+    return ok(compactar_telemetry_llm())
+
+
+@router.post('/govbi/probes')
+def executar_govbi_ia_probes():
+    """Executa smoke probes reais e sanitizados para providers LLM do GovBI IA."""
+    global _ultimo_probe_govbi
+    _ultimo_probe_govbi = executar_runtime_probes_govbi(
+        gemini_api_key=settings.gemini_api_key,
+        gemini_model=settings.gemini_model,
+        groq_api_key=settings.groq_api_key,
+        groq_model=settings.groq_model,
+    )
+    return ok(_ultimo_probe_govbi)
 
 
 @router.get('/status')
 def ia_status():
-    """Verifica configuração e cota de ambos os providers (Gemini + Groq)."""
+    """Verifica configuração, cota, telemetry e runtime dos providers Gemini + Groq."""
     gemini_ok = bool(settings.gemini_api_key)
     groq_ok = bool(settings.groq_api_key)
     fallback_ativo = gemini_ok and groq_ok
@@ -177,5 +213,7 @@ def ia_status():
         'avisos': avisos,
         'passos_pendentes': passos_pendentes,
         'telemetry': obter_snapshot_telemetry_llm(),
+        'telemetry_persistida': obter_telemetry_persistida_llm(),
+        'ultimo_probe_govbi': _ultimo_probe_govbi,
         'govbi_health': _govbi_ai_health_payload(),
     })
