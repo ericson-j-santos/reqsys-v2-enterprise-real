@@ -2,10 +2,10 @@
   <section class="dashboard-operacional" data-testid="route-dashboard" aria-labelledby="titulo-dashboard">
     <div class="dashboard-header">
       <div>
-        <p class="figma-eyebrow">ReqSys · Trilha C · Dashboard Operacional</p>
-        <h1 id="titulo-dashboard">Dashboard de Requisitos</h1>
+        <p class="figma-eyebrow">ReqSys · Uso real · Painel do dia</p>
+        <h1 id="titulo-dashboard">Painel do dia</h1>
         <p class="muted dashboard-subtitle">
-          Visão consolidada com semáforo operacional, cards clicáveis e drill-down filtrado.
+          Foque no que precisa de decisão: novas demandas, requisitos com baixa qualidade, aprovações, rastreabilidade e próximos passos.
         </p>
       </div>
       <div class="header-actions">
@@ -16,7 +16,7 @@
           data-testid="dashboard-semaforo-geral"
         >
           <span class="figma-semaforo-dot" :class="`figma-semaforo-dot--${semaforoGeralValor}`" />
-          Geral: {{ semaforoGeralLabel }}
+          Prontidão: {{ semaforoGeralLabel }}
         </div>
         <v-btn
           color="primary"
@@ -32,6 +32,18 @@
     </div>
 
     <p v-if="erro" class="erro" role="alert">{{ erro }}</p>
+
+    <section class="jornada-card figma-panel" aria-labelledby="titulo-jornada-real">
+      <div>
+        <h2 id="titulo-jornada-real">Jornada principal do requisito</h2>
+        <p class="panel-lead">
+          Entrada → Refinamento com IA → Critérios de aceite → Aprovação → Rastreabilidade → Publicação.
+        </p>
+      </div>
+      <v-btn color="primary" variant="tonal" prepend-icon="mdi-plus-circle-outline" data-testid="dashboard-novo-requisito" @click="irPara({ path: '/requisitos', query: { acao: 'novo' } })">
+        Novo requisito
+      </v-btn>
+    </section>
 
     <div class="metrics-grid">
       <OperationalMetricCard
@@ -49,8 +61,8 @@
 
     <div class="lower-panels">
       <section class="figma-panel pipeline-panel">
-        <h2>Pipeline operacional</h2>
-        <p class="panel-lead">Etapas clicáveis com drill-down para o analítico correspondente.</p>
+        <h2>Próximas ações</h2>
+        <p class="panel-lead">Etapas orientadas à rotina do analista, sem exigir leitura de detalhes técnicos de ambiente, CI ou runtime.</p>
         <div class="timeline-steps">
           <div
             v-for="step in pipelineSteps"
@@ -67,14 +79,14 @@
               <strong>{{ step.titulo }}</strong>
               <span>{{ step.descricao }}</span>
             </div>
-            <span class="step-btn">Abrir analítico</span>
+            <span class="step-btn">Abrir</span>
           </div>
         </div>
       </section>
 
       <section class="figma-panel info-panel" data-testid="dashboard-info-card">
-        <h2>Informações do sistema</h2>
-        <p class="panel-lead">Destinos analíticos e endpoints críticos.</p>
+        <h2>Atalhos de decisão</h2>
+        <p class="panel-lead">Acessos úteis para transformar demanda em requisito pronto para desenvolvimento.</p>
         <div class="figma-list">
           <div
             v-for="item in painelDireito"
@@ -102,17 +114,10 @@ import { useRouter } from 'vue-router'
 import OperationalMetricCard from '../components/OperationalMetricCard.vue'
 import AmbienteNavigator from '../components/AmbienteNavigator.vue'
 import { useRequisitosStore } from '../stores/requisitos'
-import { api } from '../services/api'
 import { semaforoGeral, normalizarSemaforo } from '../utils/filtrosMonitoramento'
-import { contarIntegracoesPorStatus } from '../utils/filtrosIntegracao'
-import { carregarHistoricoGovbi, contarConsultasGovbi } from '../utils/filtrosGovbi'
-import { achatarHistoricoPipeline, carregarHistoricoPipeline, contarEtapasPipeline } from '../utils/filtrosPipeline'
 
 const store = useRequisitosStore()
 const router = useRouter()
-const integracaoErros = ref(0)
-const govbiDegradado = ref(0)
-const pipelineErros = ref(0)
 const carregando = ref(false)
 const erro = ref('')
 
@@ -126,30 +131,11 @@ async function carregarTudo() {
       store.carregarMetricas(),
       store.carregarDashboardInfo(),
       store.carregarQualidadeIA(),
-      carregarIntegracaoErros(),
-      carregarMetricasAnaliticas(),
     ])
   } catch (e) {
-    erro.value = e?.message || 'Erro ao carregar dashboard operacional'
+    erro.value = e?.message || 'Erro ao carregar o painel do dia'
   } finally {
     carregando.value = false
-  }
-}
-
-function carregarMetricasAnaliticas() {
-  const consultasGovbi = carregarHistoricoGovbi()
-  govbiDegradado.value = contarConsultasGovbi(consultasGovbi).erros
-  const etapasPipeline = achatarHistoricoPipeline(carregarHistoricoPipeline())
-  pipelineErros.value = contarEtapasPipeline(etapasPipeline).erros
-}
-
-async function carregarIntegracaoErros() {
-  try {
-    const resp = await api.get('/v1/hub-lowcode/integracoes/historico?limit=100')
-    const eventos = resp.data?.data?.eventos || []
-    integracaoErros.value = contarIntegracoesPorStatus(eventos).erros
-  } catch (_) {
-    integracaoErros.value = 0
   }
 }
 
@@ -164,51 +150,63 @@ function semaforoContagem(valor, limiarAtencao = 0) {
   return Number(valor) > limiarAtencao ? 'amarelo' : 'verde'
 }
 
-function semaforoErro(valor) {
-  return Number(valor) > 0 ? 'vermelho' : 'verde'
+function semaforoProntidao(valor, limiarBloqueio = 0) {
+  return Number(valor) > limiarBloqueio ? 'vermelho' : 'verde'
 }
 
 const cards = computed(() => {
   const scoreIA = Math.round(store.qualidadeIAResumo.score_geral ?? 0)
   const pendentes = store.metricas.pendentes ?? 0
   const emAnalise = store.metricas.em_analise ?? 0
+  const aprovados = store.metricas.aprovados ?? 0
+  const total = store.metricas.total ?? 0
+  const baixaQualidade = scoreIA < 70 ? emAnalise || pendentes || 1 : 0
 
   return [
     {
-      id: 'requisitos',
-      label: 'Requisitos',
-      value: store.metricas.total ?? 0,
+      id: 'minhas-demandas',
+      label: 'Demandas abertas',
+      value: total,
       semaforo: 'verde',
-      icon: 'mdi-file-document-outline',
-      hint: 'Base completa de requisitos cadastrados',
+      icon: 'mdi-file-document-edit-outline',
+      hint: 'Demandas e requisitos cadastrados para acompanhamento',
       rota: { path: '/requisitos' },
     },
     {
-      id: 'em-analise',
-      label: 'Em análise',
+      id: 'aguardando-refinamento',
+      label: 'Em refinamento',
       value: emAnalise,
       semaforo: semaforoContagem(emAnalise),
-      icon: 'mdi-chart-timeline-variant',
-      hint: 'Requisitos em avaliação técnica/funcional',
+      icon: 'mdi-clipboard-text-search-outline',
+      hint: 'Itens que precisam virar requisito testável, história ou critério de aceite',
       rota: { path: '/requisitos', query: { status: 'em_analise' } },
+    },
+    {
+      id: 'baixa-qualidade',
+      label: 'Baixa qualidade',
+      value: baixaQualidade,
+      semaforo: semaforoProntidao(baixaQualidade),
+      icon: 'mdi-alert-decagram-outline',
+      hint: 'Itens que exigem revisão por clareza, completude ou testabilidade',
+      rota: { path: '/qualidade-ia' },
     },
     {
       id: 'aprovados',
       label: 'Aprovados',
-      value: store.metricas.aprovados ?? 0,
+      value: aprovados,
       semaforo: 'verde',
       icon: 'mdi-check-decagram-outline',
-      hint: 'Requisitos aprovados para execução',
+      hint: 'Requisitos prontos para execução ou publicação',
       rota: { path: '/requisitos', query: { status: 'aprovado' } },
     },
     {
-      id: 'qualidade-ia',
-      label: 'Qualidade IA',
-      value: `${scoreIA}%`,
-      semaforo: semaforoQualidadeIA(scoreIA),
-      icon: 'mdi-brain',
-      hint: 'Score geral de qualidade do módulo de IA',
-      rota: { path: '/qualidade-ia' },
+      id: 'rastreabilidade',
+      label: 'Rastreabilidade',
+      value: aprovados,
+      semaforo: aprovados > 0 ? 'verde' : 'amarelo',
+      icon: 'mdi-vector-link',
+      hint: 'Itens que devem manter origem, decisão, história, entrega e evidência',
+      rota: { path: '/rastreabilidade' },
     },
     {
       id: 'pendencias',
@@ -216,44 +214,8 @@ const cards = computed(() => {
       value: pendentes,
       semaforo: semaforoContagem(pendentes),
       icon: 'mdi-alert-circle-outline',
-      hint: 'Itens que demandam triagem ou decisão',
+      hint: 'Itens aguardando triagem, decisão ou complementação',
       rota: { path: '/requisitos', query: { status: 'recebido' } },
-    },
-    {
-      id: 'integracao-erros',
-      label: 'Erros integração',
-      value: integracaoErros.value,
-      semaforo: semaforoErro(integracaoErros.value),
-      icon: 'mdi-connection',
-      hint: 'Falhas recentes em Planner ou Teams',
-      rota: { path: '/painel-integracao', query: { status: 'erro' } },
-    },
-    {
-      id: 'govbi-degradado',
-      label: 'GovBI degradado',
-      value: govbiDegradado.value,
-      semaforo: semaforoErro(govbiDegradado.value),
-      icon: 'mdi-robot-outline',
-      hint: 'Consultas GovBI com erro ou modo degradado',
-      rota: { path: '/govbi-ia', query: { status: 'MODO_DEGRADADO' } },
-    },
-    {
-      id: 'pipeline-erros',
-      label: 'Pipeline com erro',
-      value: pipelineErros.value,
-      semaforo: semaforoErro(pipelineErros.value),
-      icon: 'mdi-pipe',
-      hint: 'Etapas de pipeline com falha registradas',
-      rota: { path: '/pipeline', query: { status: 'error' } },
-    },
-    {
-      id: 'task-console',
-      label: 'Task Console',
-      value: pendentes,
-      semaforo: semaforoContagem(pendentes),
-      icon: 'mdi-console',
-      hint: 'Tarefas pendentes de envio ao Planner',
-      rota: { path: '/task-console', query: { status: 'pendente' } },
     },
   ]
 })
@@ -272,79 +234,60 @@ const semaforoGeralLabel = computed(() => normalizarSemaforo(semaforoGeralValor.
 const pipelineSteps = [
   {
     id: 'entrada',
-    titulo: 'Entrada',
-    descricao: 'SharePoint, Forms e planilhas Excel',
-    rota: { path: '/hub-lowcode' },
+    titulo: 'Registrar ou revisar entrada',
+    descricao: 'Capturar demanda, objetivo, área, urgência e impacto esperado.',
+    rota: { path: '/requisitos', query: { acao: 'novo' } },
   },
   {
-    id: 'normalizacao',
-    titulo: 'Normalização e validação',
-    descricao: 'Padronização e checagens de consistência',
+    id: 'refinamento',
+    titulo: 'Refinar para requisito testável',
+    descricao: 'Melhorar clareza, remover ambiguidade e gerar critérios de aceite.',
+    rota: { path: '/qualidade-ia' },
+  },
+  {
+    id: 'aprovacao',
+    titulo: 'Aprovar ou devolver',
+    descricao: 'Decidir se o item está pronto para execução ou precisa de complemento.',
     rota: { path: '/pipeline' },
   },
   {
-    id: 'estruturacao',
-    titulo: 'Estruturação do requisito',
-    descricao: 'Requisito, histórias e backlog',
-    rota: { path: '/requisitos' },
-  },
-  {
-    id: 'publicacao',
-    titulo: 'Publicação e auditoria',
-    descricao: 'Redmine, Planner e trilha de auditoria',
-    rota: { path: '/painel-integracao' },
+    id: 'rastreio',
+    titulo: 'Rastrear entrega',
+    descricao: 'Conectar requisito, história, PR, evidência e publicação.',
+    rota: { path: '/rastreabilidade' },
   },
 ]
 
-const painelDireito = computed(() => {
-  const endpoint = (dashboardInfo.value.endpoints_criticos || []).find(
-    (ep) => String(ep.url || '').includes('/dashboard/requisitos'),
-  ) || (dashboardInfo.value.endpoints_criticos || [])[0]
-
-  const items = [
-    {
-      id: 'analytics',
-      title: 'Analytics navegável',
-      subtitle: 'Hub executivo com runtime',
-      rota: { path: '/analytics' },
-      testId: 'destino-analytics',
-    },
-    {
-      id: 'monitoramento',
-      title: 'Incidentes críticos',
-      subtitle: 'Itens em vermelho ou bloqueados',
-      rota: { path: '/monitoramento-operacional', query: { estado: 'vermelho' } },
-      testId: 'destino-monitoramento',
-    },
-    {
-      id: 'estatisticas',
-      title: 'Estatísticas auditáveis',
-      subtitle: 'Indicadores com fonte e fórmula',
-      rota: { path: '/estatisticas' },
-      testId: 'destino-estatisticas',
-    },
-  ]
-
-  if (endpoint) {
-    items.push({
-      id: 'endpoint-critico',
-      title: `${endpoint.metodo} ${endpoint.url}`,
-      subtitle: endpoint.titulo || 'Endpoint crítico de métricas',
-      rota: { path: '/monitoramento-operacional', query: { secao: 'runtime' } },
-      testId: 'destino-endpoint-critico',
-    })
-  } else {
-    items.push({
-      id: 'endpoint-critico',
-      title: 'GET /v1/dashboard/requisitos',
-      subtitle: 'Endpoint crítico de métricas',
-      rota: { path: '/monitoramento-operacional', query: { secao: 'runtime' } },
-      testId: 'destino-endpoint-critico',
-    })
-  }
-
-  return items
-})
+const painelDireito = computed(() => [
+  {
+    id: 'novo-requisito',
+    title: 'Cadastrar nova demanda',
+    subtitle: 'Comece pela necessidade de negócio e impacto esperado',
+    rota: { path: '/requisitos', query: { acao: 'novo' } },
+    testId: 'destino-novo-requisito',
+  },
+  {
+    id: 'criterios-aceite',
+    title: 'Validar critérios de aceite',
+    subtitle: 'Revise BDD, DoD, ambiguidade e completude',
+    rota: { path: '/qualidade-ia' },
+    testId: 'destino-criterios-aceite',
+  },
+  {
+    id: 'publicar-integracao',
+    title: 'Publicar em ferramenta de entrega',
+    subtitle: 'Preparar envio para Planner, Redmine, GitHub ou workflow corporativo',
+    rota: { path: '/painel-integracao' },
+    testId: 'destino-publicar-integracao',
+  },
+  {
+    id: 'auditar-decisao',
+    title: 'Auditar decisão',
+    subtitle: 'Ver linha do tempo, responsável e evidência da mudança',
+    rota: { path: '/auditoria' },
+    testId: 'destino-auditar-decisao',
+  },
+])
 
 function irPara(rota) {
   if (!rota?.path) return
@@ -380,16 +323,30 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
 }
 
 .dashboard-subtitle {
-  max-width: 62ch;
+  max-width: 72ch;
   margin-top: 8px;
   font-size: 14px;
 }
 
+.jornada-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.jornada-card h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
-  margin-top: 24px;
+  margin-top: 18px;
 }
 
 .lower-panels {
@@ -422,7 +379,7 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
   justify-content: space-between;
   gap: 12px;
   align-items: center;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: 10px;
   cursor: pointer;
 }
@@ -478,8 +435,10 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
 }
 
 @media (max-width: 700px) {
-  .dashboard-header {
+  .dashboard-header,
+  .jornada-card {
     flex-direction: column;
+    align-items: stretch;
   }
 
   .header-actions {
