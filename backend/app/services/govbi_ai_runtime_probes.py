@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Callable, Any
+from typing import Any, Callable
 
 from app.services.gemini import GeminiIndisponivel, resumir_requisito
 
@@ -13,12 +13,19 @@ class ProviderProbeConfig:
     provider: str
     configurado: bool
     papel: str
-    chave_presente: bool
     modelo: str
 
 
 def _agora_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _seguranca_payload() -> dict[str, bool]:
+    return {
+        'sem_prompt_em_resposta': True,
+        'sem_resposta_modelo_em_resposta': True,
+        'sem_chave_exposta': True,
+    }
 
 
 def _probe_nao_configurado(config: ProviderProbeConfig) -> dict[str, Any]:
@@ -30,16 +37,20 @@ def _probe_nao_configurado(config: ProviderProbeConfig) -> dict[str, Any]:
         'motivo': 'provider_nao_configurado',
         'latencia_ms': None,
         'executado_em': _agora_iso(),
-        'seguranca': {
-            'sem_prompt_em_resposta': True,
-            'sem_resposta_modelo_em_resposta': True,
-            'sem_chave_exposta': True,
-        },
+        'seguranca': _seguranca_payload(),
     }
 
 
 def _normalizar_provider_usado(provider_usado: str) -> str:
-    return (provider_usado or 'desconhecido').strip().lower() or 'desconhecido'
+    provider = (provider_usado or 'desconhecido').strip().lower() or 'desconhecido'
+    if provider not in {'gemini', 'groq'}:
+        return 'desconhecido'
+    return provider
+
+
+def _mensagem_sanitizada(exc: Exception) -> str:
+    mensagem = str(exc).replace('\n', ' ').replace('\r', ' ').strip()
+    return mensagem[:180] or 'erro_indisponivel'
 
 
 def executar_runtime_probes_govbi(
@@ -61,14 +72,12 @@ def executar_runtime_probes_govbi(
             provider='gemini',
             configurado=bool(gemini_api_key),
             papel='primario',
-            chave_presente=bool(gemini_api_key),
             modelo=gemini_model,
         ),
         ProviderProbeConfig(
             provider='groq',
             configurado=bool(groq_api_key),
             papel='fallback',
-            chave_presente=bool(groq_api_key),
             modelo=groq_model,
         ),
     ]
@@ -98,11 +107,7 @@ def executar_runtime_probes_govbi(
                 'latencia_ms': latency,
                 'executado_em': _agora_iso(),
                 'fallback_acionado': provider_usado == 'groq',
-                'seguranca': {
-                    'sem_prompt_em_resposta': True,
-                    'sem_resposta_modelo_em_resposta': True,
-                    'sem_chave_exposta': True,
-                },
+                'seguranca': _seguranca_payload(),
             })
         except GeminiIndisponivel as exc:
             latency = round((time.perf_counter() - started) * 1000, 2)
@@ -111,15 +116,11 @@ def executar_runtime_probes_govbi(
                 'papel': 'primario_ou_fallback',
                 'status': 'failure',
                 'tipo_erro': 'provider_indisponivel',
-                'mensagem_sanitizada': str(exc)[:180],
+                'mensagem_sanitizada': _mensagem_sanitizada(exc),
                 'latencia_ms': latency,
                 'executado_em': _agora_iso(),
                 'fallback_acionado': bool(groq_api_key),
-                'seguranca': {
-                    'sem_prompt_em_resposta': True,
-                    'sem_resposta_modelo_em_resposta': True,
-                    'sem_chave_exposta': True,
-                },
+                'seguranca': _seguranca_payload(),
             })
 
         for config in configs:
