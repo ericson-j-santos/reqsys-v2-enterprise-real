@@ -19,6 +19,16 @@ class RequisitoOut(RequisitoCriar):
     model_config = ConfigDict(from_attributes=True)
 
 
+class RequisitoTransicaoCriar(BaseModel):
+    schema_version: str = Field(default='1.0.0', pattern=r'^\d+\.\d+\.\d+$')
+    novo_status: str = Field(
+        pattern='^(recebido|refinamento|pronto_para_aprovacao|aprovado|em_execucao|validado|evidenciado|exportado|bloqueado|devolvido)$'
+    )
+    usuario: str = Field(min_length=2, max_length=120)
+    motivo: str = Field(min_length=5, max_length=500)
+    evidencia: str | None = Field(default=None, max_length=1000)
+
+
 class RequisitoPowerAutomateCriar(BaseModel):
     schema_version: str = Field(default='1.0.0', pattern=r'^\d+\.\d+\.\d+$')
     titulo: str = Field(min_length=5, max_length=200)
