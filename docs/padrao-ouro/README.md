@@ -19,6 +19,7 @@ Documentação aqui **não é texto morto** — é infraestrutura operacional vi
 | 5 | **Engineering Playbooks** | [`ENGINEERING_PLAYBOOKS.md`](ENGINEERING_PLAYBOOKS.md) | Fluxos operacionais para incrementos, CI, merge governado e evidências. |
 | 6 | **Testing Playbook** | [`TESTING_PLAYBOOK.md`](TESTING_PLAYBOOK.md) | Pirâmide, árvores, gates, convenções e comandos da camada de testes. |
 | 7 | **Foco Padrão Ouro** | [`FOCO_PADRAO_OURO.md`](FOCO_PADRAO_OURO.md) | Sequência prioritária para consolidar qualidade, rastreabilidade e prontidão de merge com diff mínimo. |
+| 8 | **Matriz de Fechamento de Gaps Enterprise** | [`enterprise-gap-closure-matrix.json`](enterprise-gap-closure-matrix.json) | Backlog Pareto machine-readable para runtime de agentes, UX enterprise, workflow engine, observabilidade, RBAC/ABAC e GitOps. |
 
 ## Foco operacional Padrão Ouro
 
@@ -76,6 +77,7 @@ Use esse output como evidência objetiva no PR quando a demanda for “consolida
 | Artefato | Caminho | Uso |
 | --- | --- | --- |
 | Living Architecture Index (JSON) | [`living-architecture-index.json`](living-architecture-index.json) | Contexto reutilizável para agentes/IA — módulos, ownership, pontos de extensão. |
+| Matriz de gaps enterprise | [`enterprise-gap-closure-matrix.json`](enterprise-gap-closure-matrix.json) | Fila priorizada de gaps com owners, evidência mínima e rollback por frente. |
 | Matriz de ambientes Fly.io | [`../../infra/fly-environments.json`](../../infra/fly-environments.json) | Apps, URLs, volumes, smoke endpoints e promoção dev → hml → prod. |
 | URLs públicas canônicas | [`../../infra/public-access-urls.json`](../../infra/public-access-urls.json) | Alvos de validação Fly/DuckDNS para `validar-acessos-publicos.mjs`. |
 | Mapa de rastreabilidade canônico | [`../traceability/living-architecture-map.json`](../traceability/living-architecture-map.json) | Workflows, artifacts, contratos, dashboards e PRs recentes. |
@@ -85,6 +87,7 @@ Use esse output como evidência objetiva no PR quando a demanda for “consolida
 
 ```text
 Foco Padrão Ouro      → FOCO_PADRAO_OURO → prioridades P0–P4
+Gaps enterprise       → enterprise-gap-closure-matrix.json → Pareto P0/P1/P2
 Novo incremento / PR     → ENGINEERING_PLAYBOOKS → Agent Increment Gate
 Novo teste / gate CI     → TESTING_PLAYBOOK → Trilha D (quando qualidade)
 Decisão arquitetural     → ADR_INDEX → criar ADR em docs/adr/

@@ -28,6 +28,26 @@ Concentrar cada incremento em uma melhoria pequena, verificável e conectada aos
 5. Registrar evidência no PR com escopo, fora de escopo, riscos e rollback.
 ```
 
+
+## Pareto atual de gaps enterprise
+
+Quando o pedido mencionar produção corporativa, operação autônoma, UX enterprise, multiagentes ou padrão ouro consolidado, use a matriz machine-readable [`enterprise-gap-closure-matrix.json`](enterprise-gap-closure-matrix.json) como backlog canônico de fechamento de gaps.
+
+| Prioridade | Gap canônico | Resultado mínimo esperado |
+| --- | --- | --- |
+| P0 | `OPS-GAP-AGENT-RUNTIME-001` | State machine, envelope de evento e memória operacional compartilhada antes de expandir autonomia. |
+| P0 | `OPS-GAP-GITOPS-CHECKS-001` | Inventário de branch protection versus workflows reais para eliminar checks obsoletos. |
+| P1 | `OPS-GAP-UX-ENTERPRISE-001` | Guided flows e evidência visual/teste focado para adoção corporativa. |
+| P1 | `OPS-GAP-WORKFLOW-ENGINE-001` | Topologia versionada de workflow com estados, transições, permissões e evidências. |
+| P2 | `OPS-GAP-OBSERVABILITY-001` | Correlação distribuída entre agentes, CI, workflows e runtime health. |
+| P2 | `OPS-GAP-RBAC-ABAC-001` | Matriz recurso → papel → contexto → auditoria para rotas críticas. |
+
+Validação local da matriz:
+
+```bash
+python scripts/enterprise_gap_closure_matrix.py
+```
+
 ## Definition of Done Padrão Ouro
 
 Um incremento só deve ser considerado pronto quando cumprir todos os itens aplicáveis:
