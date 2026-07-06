@@ -64,7 +64,7 @@ test.describe('responsividade padrão ouro — 21 rotas', () => {
 
     await page.locator('button[aria-label="Abrir menu de navegação"]').click()
     await page.getByTestId('nav-tema-requisitos').click()
-    const menuLink = page.getByTestId('nav-item-requisitos')
+    const menuLink = page.getByTestId('nav-subgrupo-entrada').getByTestId('nav-item-requisitos')
     await expect(menuLink).toBeVisible()
     await menuLink.click()
     await expect(page).toHaveURL(/\/requisitos$/)
@@ -76,7 +76,7 @@ test.describe('responsividade padrão ouro — 21 rotas', () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await loginDemo(page)
 
-    await expect(page.getByTestId('metric-card-requisitos')).toBeVisible()
+    await expect(page.getByTestId('metric-card-minhas-demandas')).toBeVisible()
     await expect(page.getByTestId('dashboard-info-card')).toBeVisible()
     expect(await hasMainHorizontalOverflow(page)).toBe(false)
   })
