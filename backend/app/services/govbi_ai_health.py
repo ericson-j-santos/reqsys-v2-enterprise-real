@@ -7,7 +7,7 @@ def _status_provider(configurado: bool, cota: dict[str, Any]) -> str:
     if not configurado:
         return 'nao_configurado'
     restante_dia = cota.get('restante_dia')
-    if isinstance(restante_dia, int | float) and restante_dia <= 0:
+    if isinstance(restante_dia, (int, float)) and restante_dia <= 0:
         return 'quota_esgotada'
     return 'operacional'
 
