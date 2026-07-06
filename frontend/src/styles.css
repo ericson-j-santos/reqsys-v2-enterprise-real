@@ -1,39 +1,46 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 
 :root {
-  --bg: #0b1220;
-  --bg-deep: #020617;
-  --bg-gradient-top: #0f172a;
-  --card: rgba(255, 255, 255, 0.02);
-  --card-alt: rgba(255, 255, 255, 0.04);
-  --panel: #111827;
-  --border: rgba(148, 163, 184, 0.28);
-  --line: rgba(148, 163, 184, 0.28);
-  --accent: #f39200;
-  --accent-strong: #f39200;
-  --accent-secondary: #f39200;
-  --accent-tertiary: #38bdf8;
-  --text: #e5e7eb;
-  --text-muted: #94a3b8;
-  --muted: #94a3b8;
-  --error: #ef4444;
-  --green: #22c55e;
-  --amber: #f59e0b;
-  --red: #ef4444;
+  --dsc-primary: #005CA9;
+  --dsc-primary-deep: #003B73;
+  --dsc-primary-soft: #E6F0FA;
+  --dsc-accent: #F39200;
+  --dsc-accent-deep: #B56D00;
+  --dsc-teal: #00B3AD;
+  --dsc-teal-deep: #007C78;
+  --bg: #071526;
+  --bg-deep: #03101F;
+  --bg-gradient-top: #062A4F;
+  --card: rgba(255, 255, 255, 0.035);
+  --card-alt: rgba(255, 255, 255, 0.065);
+  --panel: #0B2038;
+  --border: rgba(184, 199, 217, 0.24);
+  --line: rgba(184, 199, 217, 0.24);
+  --accent: var(--dsc-primary);
+  --accent-strong: var(--dsc-accent);
+  --accent-secondary: var(--dsc-accent);
+  --accent-tertiary: var(--dsc-teal);
+  --text: #F8FAFC;
+  --text-muted: #B8C7D9;
+  --muted: #B8C7D9;
+  --error: #EF4444;
+  --green: #22C55E;
+  --amber: #F59E0B;
+  --red: #EF4444;
   --radius-card: 16px;
   --radius-pill: 999px;
   --font-sans: Inter, system-ui, sans-serif;
 }
 
 .v-theme--reqsysClaro {
-  --bg: #f6f8fb;
-  --bg-deep: #eef2f7;
-  --bg-gradient-top: #ffffff;
-  --card: rgba(255, 255, 255, 0.92);
-  --card-alt: #f8fafc;
-  --panel: #ffffff;
-  --border: rgba(15, 23, 42, 0.14);
-  --line: rgba(15, 23, 42, 0.14);
+  --bg: #F6F8FB;
+  --bg-deep: #EAF1F8;
+  --bg-gradient-top: #FFFFFF;
+  --card: rgba(255, 255, 255, 0.94);
+  --card-alt: #F8FAFC;
+  --panel: #FFFFFF;
+  --border: rgba(0, 92, 169, 0.18);
+  --line: rgba(0, 92, 169, 0.18);
   --text: #111827;
   --text-muted: #526070;
   --muted: #526070;
@@ -64,7 +71,7 @@ body {
 }
 
 .v-tooltip > .v-overlay__content {
-  background-color: rgba(15, 23, 42, 0.96) !important;
+  background-color: rgba(7, 21, 38, 0.96) !important;
   color: var(--text) !important;
   font-size: 12px !important;
   border-radius: 8px !important;
@@ -129,8 +136,8 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: var(--accent);
-  color: #111;
+  background: linear-gradient(135deg, var(--dsc-primary), var(--dsc-teal));
+  color: #FFFFFF;
   display: grid;
   place-items: center;
   font-size: 13px;
@@ -213,7 +220,7 @@ body {
 
 .metric-value {
   font-size: clamp(24px, 3vw, 32px);
-  color: var(--accent);
+  color: var(--accent-strong);
   font-weight: 800;
   line-height: 1.1;
   overflow-wrap: anywhere;
@@ -264,7 +271,7 @@ h1,
 
 .v-toolbar,
 .v-app-bar {
-  background: rgba(2, 6, 23, 0.72) !important;
+  background: rgba(3, 16, 31, 0.76) !important;
   color: var(--text) !important;
   border-bottom: 1px solid var(--line);
 }
@@ -277,7 +284,7 @@ h1,
 .v-btn--variant-flat.bg-primary,
 .v-btn.bg-amber {
   background: var(--accent) !important;
-  color: #111 !important;
+  color: #FFFFFF !important;
 }
 
 .v-btn {
@@ -308,11 +315,11 @@ h1,
 
 .v-list-item--active,
 .v-list-item:hover {
-  background: rgba(243, 146, 0, 0.08) !important;
+  background: rgba(0, 92, 169, 0.12) !important;
 }
 
 .v-list-item--active {
-  border: 1px solid rgba(243, 146, 0, 0.35);
+  border: 1px solid rgba(0, 92, 169, 0.38);
   border-radius: 12px;
 }
 
@@ -322,7 +329,7 @@ h1,
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .figma-panel {
@@ -343,9 +350,9 @@ h1,
 }
 
 .figma-pill--accent {
-  background: var(--accent);
-  color: #111;
-  border-color: var(--accent);
+  background: var(--accent-strong);
+  color: #111827;
+  border-color: var(--accent-strong);
 }
 
 .figma-semaforo-geral {
@@ -390,8 +397,8 @@ h1,
 
 .figma-list-item:hover,
 .figma-list-item:focus-visible {
-  border-color: rgba(243, 146, 0, 0.35);
-  background: rgba(243, 146, 0, 0.06);
+  border-color: rgba(0, 92, 169, 0.38);
+  background: rgba(0, 92, 169, 0.1);
   outline: none;
 }
 
