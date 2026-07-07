@@ -1,12 +1,41 @@
 import hashlib
 import json
+import time
 from urllib import request
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 
+from app.core.resilience import CircuitBreaker, HTTPErrorNaoRetentavel, call_with_retry
 from app.core.secrets import get_secret
 from app.services.github_version_checker import verificar_versao_github
 
 _REQSYS_VERSION = "2.7.0"
+
+WIKI_PUBLISHER_MAX_RETRIES = 3
+WIKI_PUBLISHER_RETRY_BACKOFF_SECONDS = 0.5
+WIKI_PUBLISHER_CIRCUIT_FAILURE_THRESHOLD = 3
+WIKI_PUBLISHER_CIRCUIT_COOLDOWN_SECONDS = 60
+
+# Um circuit breaker por host: Redmine wiki e o Wiki Sync service (opcional) sao
+# destinos independentes — falha em um nao deve bloquear o outro.
+_circuits: dict[str, CircuitBreaker] = {}
+
+
+def _circuit_for(url: str) -> CircuitBreaker:
+    host = urlparse(url).netloc or 'default'
+    if host not in _circuits:
+        _circuits[host] = CircuitBreaker(
+            name=f'wiki_publisher_{host}',
+            failure_threshold=WIKI_PUBLISHER_CIRCUIT_FAILURE_THRESHOLD,
+            cooldown_seconds=WIKI_PUBLISHER_CIRCUIT_COOLDOWN_SECONDS,
+        )
+    return _circuits[host]
+
+
+def reset_circuit_breakers() -> None:
+    """Reseta todos os circuit breakers desta integracao (uso em testes)."""
+    for circuit in _circuits.values():
+        circuit.reset()
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +94,14 @@ def _checar_github(codigo: str, hash_reqsys: str) -> dict | None:
 # Chamada ao Redmine Wiki Sync service
 # ---------------------------------------------------------------------------
 
-def _publicar_redmine_wiki(wiki_page_title: str, conteudo: str, correlation_id: str) -> dict:
+def _publicar_redmine_wiki(
+    wiki_page_title: str,
+    conteudo: str,
+    correlation_id: str,
+    *,
+    sleep=time.sleep,
+    max_retries: int = WIKI_PUBLISHER_MAX_RETRIES,
+) -> dict:
     """Publica direto na API wiki do Redmine (sem servico intermediario)."""
     base_url = (get_secret("REDMINE_BASE_URL", "") or "").strip().rstrip("/")
     api_key = (get_secret("REDMINE_API_KEY", "") or "").strip()
@@ -99,19 +135,35 @@ def _publicar_redmine_wiki(wiki_page_title: str, conteudo: str, correlation_id: 
         "User-Agent": f"reqsys-wiki-publisher/{_REQSYS_VERSION}",
     }
 
+    req = request.Request(url=url, data=payload, headers=headers, method="PUT")
+
+    def _do() -> None:
+        try:
+            with request.urlopen(req, timeout=15):  # nosec B310
+                return None
+        except HTTPError as exc:
+            raise HTTPErrorNaoRetentavel(exc) from exc
+
     try:
-        req = request.Request(url=url, data=payload, headers=headers, method="PUT")
-        with request.urlopen(req, timeout=15) as _:  # nosec B310
-            wiki_url = f"{base_url}/projects/{project_id}/wiki/{page_slug}"
-            return {
-                "publicado": True,
-                "correlation_id": correlation_id,
-                "wiki_page_title": wiki_page_title,
-                "wiki_url": wiki_url,
-                "status_publicacao": "publicado",
-                "mensagem": f"Pagina wiki criada/atualizada: {wiki_url}",
-            }
-    except HTTPError as exc:
+        call_with_retry(
+            _do,
+            max_retries=max_retries,
+            backoff_seconds=WIKI_PUBLISHER_RETRY_BACKOFF_SECONDS,
+            retry_on=(URLError,),
+            sleep=sleep,
+            circuit=_circuit_for(url),
+        )
+        wiki_url = f"{base_url}/projects/{project_id}/wiki/{page_slug}"
+        return {
+            "publicado": True,
+            "correlation_id": correlation_id,
+            "wiki_page_title": wiki_page_title,
+            "wiki_url": wiki_url,
+            "status_publicacao": "publicado",
+            "mensagem": f"Pagina wiki criada/atualizada: {wiki_url}",
+        }
+    except HTTPErrorNaoRetentavel as wrapper:
+        exc = wrapper.original
         detail = exc.read().decode("utf-8", errors="ignore")[:400]
         return {
             "publicado": False,
@@ -120,7 +172,7 @@ def _publicar_redmine_wiki(wiki_page_title: str, conteudo: str, correlation_id: 
             "status_publicacao": "erro",
             "mensagem": f"Erro HTTP {exc.code} ao publicar wiki: {detail}",
         }
-    except (URLError, Exception) as exc:
+    except Exception as exc:
         return {
             "publicado": False,
             "correlation_id": correlation_id,
@@ -130,7 +182,14 @@ def _publicar_redmine_wiki(wiki_page_title: str, conteudo: str, correlation_id: 
         }
 
 
-def _chamar_wiki_sync(wiki_page_title: str, conteudo: str, correlation_id: str) -> dict:
+def _chamar_wiki_sync(
+    wiki_page_title: str,
+    conteudo: str,
+    correlation_id: str,
+    *,
+    sleep=time.sleep,
+    max_retries: int = WIKI_PUBLISHER_MAX_RETRIES,
+) -> dict:
     """Tenta Wiki Sync service; cai direto no Redmine se nao configurado."""
     base_url = (get_secret("WIKI_SYNC_BASE_URL", "") or "").strip().rstrip("/")
     if not base_url:
@@ -153,24 +212,39 @@ def _chamar_wiki_sync(wiki_page_title: str, conteudo: str, correlation_id: str) 
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
+    req = request.Request(
+        url=f"{base_url}/v1/sync/wiki",
+        data=payload,
+        headers=headers,
+        method="POST",
+    )
+
+    def _do() -> dict:
+        try:
+            with request.urlopen(req, timeout=15) as resp:  # nosec B310
+                return json.loads(resp.read().decode("utf-8"))
+        except HTTPError as exc:
+            raise HTTPErrorNaoRetentavel(exc) from exc
+
     try:
-        req = request.Request(
-            url=f"{base_url}/v1/sync/wiki",
-            data=payload,
-            headers=headers,
-            method="POST",
+        body = call_with_retry(
+            _do,
+            max_retries=max_retries,
+            backoff_seconds=WIKI_PUBLISHER_RETRY_BACKOFF_SECONDS,
+            retry_on=(URLError,),
+            sleep=sleep,
+            circuit=_circuit_for(req.full_url),
         )
-        with request.urlopen(req, timeout=15) as resp:  # nosec B310
-            body = json.loads(resp.read().decode("utf-8"))
-            novo_correlation = body.get("data", {}).get("correlationId", correlation_id)
-            return {
-                "publicado": True,
-                "correlation_id": novo_correlation,
-                "wiki_page_title": wiki_page_title,
-                "status_publicacao": "publicado",
-                "mensagem": "Requisito enfileirado no Redmine Wiki Sync com sucesso.",
-            }
-    except HTTPError as exc:
+        novo_correlation = body.get("data", {}).get("correlationId", correlation_id)
+        return {
+            "publicado": True,
+            "correlation_id": novo_correlation,
+            "wiki_page_title": wiki_page_title,
+            "status_publicacao": "publicado",
+            "mensagem": "Requisito enfileirado no Redmine Wiki Sync com sucesso.",
+        }
+    except HTTPErrorNaoRetentavel as wrapper:
+        exc = wrapper.original
         detail = exc.read().decode("utf-8", errors="ignore")[:400]
         return {
             "publicado": False,
@@ -179,7 +253,7 @@ def _chamar_wiki_sync(wiki_page_title: str, conteudo: str, correlation_id: str) 
             "status_publicacao": "erro",
             "mensagem": f"Erro HTTP {exc.code} ao chamar Wiki Sync: {detail}",
         }
-    except (URLError, Exception) as exc:
+    except Exception as exc:
         return {
             "publicado": False,
             "correlation_id": correlation_id,

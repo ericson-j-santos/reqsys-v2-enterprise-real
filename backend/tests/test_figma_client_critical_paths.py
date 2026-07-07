@@ -13,6 +13,13 @@ from app.services import figma_client as fc
 from app.services.figma_client import FigmaError
 
 
+@pytest.fixture(autouse=True)
+def _circuit_breaker_isolado():
+    fc.reset_circuit_breaker()
+    yield
+    fc.reset_circuit_breaker()
+
+
 def test_request_json_sem_token_levanta_erro(monkeypatch):
     monkeypatch.setattr(fc.settings, 'figma_access_token', '')
 
@@ -36,6 +43,43 @@ def test_request_json_url_error_propaga_figma_error(mock_urlopen, monkeypatch):
 
     with pytest.raises(FigmaError, match='Falha de rede'):
         fc._request_json('GET', '/v1/files/demo')
+
+
+@patch('app.services.figma_client.request.urlopen')
+def test_request_json_tenta_novamente_apos_falha_transitoria(mock_urlopen, monkeypatch):
+    monkeypatch.setattr(fc.settings, 'figma_access_token', 'token-test')
+    chamadas = {'n': 0}
+    sonos = []
+
+    def fake_urlopen(req, timeout):
+        chamadas['n'] += 1
+        if chamadas['n'] < 3:
+            raise URLError('timeout de rede')
+        resp = MagicMock()
+        resp.read.return_value = json.dumps({'document': {'id': '0:0'}}).encode('utf-8')
+        resp.__enter__.return_value = resp
+        return resp
+
+    mock_urlopen.side_effect = fake_urlopen
+
+    resultado = fc._request_json('GET', '/v1/files/demo', sleep=sonos.append)
+
+    assert resultado == {'document': {'id': '0:0'}}
+    assert chamadas['n'] == 3
+    assert len(sonos) == 2
+
+
+@patch('app.services.figma_client.request.urlopen')
+def test_request_json_circuito_abre_apos_falhas_consecutivas(mock_urlopen, monkeypatch):
+    monkeypatch.setattr(fc.settings, 'figma_access_token', 'token-test')
+    mock_urlopen.side_effect = URLError('figma fora do ar')
+
+    for _ in range(3):
+        with pytest.raises(FigmaError):
+            fc._request_json('GET', '/v1/files/demo', sleep=lambda _s: None, max_retries=1)
+
+    with pytest.raises(FigmaError, match="Circuito 'figma_api' aberto"):
+        fc._request_json('GET', '/v1/files/demo', sleep=lambda _s: None)
 
 
 @patch('app.services.figma_client._request_json')

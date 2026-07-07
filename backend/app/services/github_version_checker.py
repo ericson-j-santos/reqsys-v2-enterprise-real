@@ -5,7 +5,7 @@ from base64 import b64decode
 from urllib import request
 from urllib.error import HTTPError, URLError
 
-from app.core.resilience import CircuitBreaker, CircuitBreakerOpenError, call_with_retry
+from app.core.resilience import CircuitBreaker, HTTPErrorNaoRetentavel, call_with_retry
 from app.core.secrets import get_secret
 
 GITHUB_VERSION_MAX_RETRIES = 3
@@ -25,15 +25,6 @@ def reset_circuit_breaker() -> None:
     _circuit.reset()
 
 
-class _HTTPErrorNaoRetentavel(Exception):
-    """Envelopa um HTTPError para que o retry (retry_on=(URLError,)) nao o trate
-    como falha transitoria de rede — HTTPError e subclasse de URLError em urllib."""
-
-    def __init__(self, original: HTTPError) -> None:
-        super().__init__(str(original))
-        self.original = original
-
-
 def _hash_conteudo(conteudo: str) -> str:
     return hashlib.sha256(conteudo.encode("utf-8")).hexdigest()
 
@@ -43,7 +34,7 @@ def _do_fetch(req: request.Request) -> dict:
         with request.urlopen(req, timeout=10) as resp:  # nosec B310
             return json.loads(resp.read().decode("utf-8"))
     except HTTPError as exc:
-        raise _HTTPErrorNaoRetentavel(exc) from exc
+        raise HTTPErrorNaoRetentavel(exc) from exc
 
 
 def verificar_versao_github(
@@ -86,7 +77,7 @@ def verificar_versao_github(
             sleep=sleep,
             circuit=_circuit,
         )
-    except _HTTPErrorNaoRetentavel as wrapper:
+    except HTTPErrorNaoRetentavel as wrapper:
         exc = wrapper.original
         if exc.code == 404:
             return {
@@ -105,16 +96,7 @@ def verificar_versao_github(
             "conteudo_github": None,
             "mensagem": f"Erro HTTP {exc.code} ao verificar versão no GitHub.",
         }
-    except CircuitBreakerOpenError as exc:
-        return {
-            "status": "erro",
-            "arquivo_github": file_path,
-            "hash_github": None,
-            "hash_reqsys": hash_reqsys,
-            "conteudo_github": None,
-            "mensagem": f"Falha ao conectar ao GitHub: {exc}",
-        }
-    except (URLError, Exception) as exc:
+    except Exception as exc:
         return {
             "status": "erro",
             "arquivo_github": file_path,
