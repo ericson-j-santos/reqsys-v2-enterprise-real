@@ -38,6 +38,7 @@ OPTIONAL_ENDPOINTS: tuple[tuple[str, int, str], ...] = (
     ("/api/runtime/build-info", 200, "runtime_build"),
     ("/api/runtime/dependencies", 200, "runtime_dependencies"),
     ("/api/runtime/evidence/summary", 200, "runtime_evidence_summary"),
+    ("/api/requisitos/runtime/inspection", 200, "requisitos_runtime_inspection"),
 )
 
 
@@ -74,8 +75,12 @@ def _decode_envelope_status(body: bytes, content_type: str | None) -> str | None
         return None
     if isinstance(payload, dict):
         data = payload.get("data")
-        if isinstance(data, dict) and isinstance(data.get("status"), str):
-            return data["status"]
+        if isinstance(data, dict):
+            health = data.get("health")
+            if isinstance(health, dict) and isinstance(health.get("status"), str):
+                return health["status"]
+            if isinstance(data.get("status"), str):
+                return data["status"]
         if isinstance(payload.get("status"), str):
             return payload["status"]
     return None
