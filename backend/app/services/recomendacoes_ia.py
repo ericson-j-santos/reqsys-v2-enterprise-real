@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import desc, or_
+from sqlalchemy import desc
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.requisito import (
@@ -11,6 +11,7 @@ from app.models.requisito import (
     RecommendationIAOutcome,
     Requisito,
 )
+from app.repositories.requisito_repository import RequisitoRepository
 
 _URGENCIA_SCORE = {
     'critica': 0.95,
@@ -39,22 +40,12 @@ def serializar_incidente(requisito: Requisito) -> dict:
 
 
 def listar_incidentes(db: Session, *, limit: int = 30, search: str | None = None) -> list[dict]:
-    query = db.query(Requisito).order_by(desc(Requisito.id))
-    if search:
-        termo = f'%{search.strip()}%'
-        query = query.filter(
-            or_(
-                Requisito.titulo.ilike(termo),
-                Requisito.descricao.ilike(termo),
-                Requisito.area.ilike(termo),
-                Requisito.sistema.ilike(termo),
-            )
-        )
-    return [serializar_incidente(item) for item in query.limit(limit).all()]
+    itens = RequisitoRepository(db).buscar_com_filtro_texto(search, limit=limit)
+    return [serializar_incidente(item) for item in itens]
 
 
 def obter_incidente(db: Session, incidente_id: int) -> dict | None:
-    requisito = db.query(Requisito).filter(Requisito.id == incidente_id).first()
+    requisito = RequisitoRepository(db).buscar_por_id(incidente_id)
     return serializar_incidente(requisito) if requisito else None
 
 
@@ -121,7 +112,7 @@ def obter_recomendacao(db: Session, recomendacao_id: int) -> dict | None:
 
 
 def criar_recomendacao(db: Session, payload: dict) -> dict:
-    requisito = db.query(Requisito).filter(Requisito.id == payload['id_incidente']).first()
+    requisito = RequisitoRepository(db).buscar_por_id(payload['id_incidente'])
     if not requisito:
         raise ValueError('Requisito/incidente não encontrado.')
 

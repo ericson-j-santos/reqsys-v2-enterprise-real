@@ -6,7 +6,7 @@ from sqlalchemy import func
 
 from app.models.ai_quality import QualidadeIASnapshot
 from app.models.auditoria import AuditoriaEvento
-from app.models.requisito import Requisito
+from app.repositories.requisito_repository import RequisitoRepository
 from app.services.requisitos_metricas import calcular_metricas_requisitos
 
 
@@ -27,11 +27,7 @@ def calcular_resumo_qualidade_ia(db):
     em_analise = metricas_requisitos['em_analise']
     pendentes = metricas_requisitos['pendentes']
 
-    cobertura_dados = (
-        db.query(Requisito)
-        .filter(func.length(func.coalesce(Requisito.descricao, '')) >= 40)
-        .count()
-    )
+    cobertura_dados = RequisitoRepository(db).contar_com_descricao_minima(40)
 
     sete_dias_atras = datetime.now(timezone.utc) - timedelta(days=7)
     acao_normalizada = func.lower(func.coalesce(AuditoriaEvento.acao, ''))

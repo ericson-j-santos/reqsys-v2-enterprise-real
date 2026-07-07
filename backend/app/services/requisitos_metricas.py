@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.requisito import Requisito
+from app.repositories.requisito_repository import RequisitoRepository
 
 STATUS_APROVADOS = frozenset({
     'aprovado',
@@ -41,7 +40,8 @@ def _status_normalizado(status: str | None) -> str:
 
 def calcular_metricas_requisitos(db: Session) -> dict[str, int]:
     """Métricas canônicas do pipeline de requisitos para dashboard e analytics."""
-    total = db.query(Requisito).count()
+    repo = RequisitoRepository(db)
+    total = repo.contar_total()
     if total == 0:
         return {
             'total': 0,
@@ -51,24 +51,9 @@ def calcular_metricas_requisitos(db: Session) -> dict[str, int]:
             'pendentes': 0,
         }
 
-    aprovados = (
-        db.query(Requisito)
-        .filter(func.lower(Requisito.status).in_(STATUS_APROVADOS))
-        .count()
-    )
-    em_analise = (
-        db.query(Requisito)
-        .filter(
-            func.lower(Requisito.status).in_(STATUS_EM_ANALISE)
-            | func.lower(Requisito.status).like('%analise%')
-        )
-        .count()
-    )
-    rejeitados = (
-        db.query(Requisito)
-        .filter(func.lower(Requisito.status).in_(STATUS_REJEITADOS))
-        .count()
-    )
+    aprovados = repo.contar_por_status_in(STATUS_APROVADOS)
+    em_analise = repo.contar_por_status_in_ou_contendo(STATUS_EM_ANALISE, 'analise')
+    rejeitados = repo.contar_por_status_in(STATUS_REJEITADOS)
     pendentes = max(total - aprovados - em_analise - rejeitados, 0)
 
     return {

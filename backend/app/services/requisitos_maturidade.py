@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.models.requisito import Requisito
+from app.repositories.requisito_repository import RequisitoRepository
 from app.services.estatisticas import _status_counts, _tem_bdd
 
 BDD_BLOCO = (
@@ -64,7 +65,7 @@ def enriquecer_maturidade_requisitos(
     aplicar: bool = True,
 ) -> ResultadoEnriquecimentoMaturidade:
     """Avança requisitos no pipeline e adiciona BDD até atingir as metas de maturidade."""
-    requisitos = db.query(Requisito).order_by(Requisito.id).all()
+    requisitos = RequisitoRepository(db).listar_todos(ordenar_por_id='asc')
     total = len(requisitos)
     if total == 0:
         return ResultadoEnriquecimentoMaturidade(

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.requisito import Requisito
+from app.repositories.requisito_repository import RequisitoRepository
 from app.services.estatisticas_historico import (
     calcular_tendencias,
     carregar_historico,
@@ -116,7 +117,7 @@ def _status_counts(requisitos: list[Requisito]) -> dict[str, int]:
 def gerar_indicadores_estatisticos(db: Session, tendencias: dict[str, str] | None = None) -> list[dict[str, Any]]:
     coletado_em = _agora_iso()
     tendencias = tendencias or {}
-    requisitos = db.query(Requisito).all()
+    requisitos = RequisitoRepository(db).listar_todos()
     resumo_externo = resumo_fontes_externas()
     fontes_externas = listar_fontes_externas()
     total_requisitos = len(requisitos)
