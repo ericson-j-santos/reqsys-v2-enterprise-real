@@ -26,8 +26,9 @@ def test_runtime_requisitos_inspection_endpoint_expoe_snapshot_governado():
 
     assert response.status_code == 200
     body = response.json()
-    assert body['sucesso'] is True
-    assert body['correlation_id'] == 'corr-runtime-inspection-001'
+    assert body['success'] is True
+    assert body['errors'] == []
+    assert body['meta']['correlation_id'] == 'corr-runtime-inspection-001'
     assert body['meta']['contract'] == 'reqsys-requisitos-runtime-inspection-v1'
     assert body['data']['schema_version'] == '1.0.0'
     assert body['data']['health']['status'] == 'healthy'
