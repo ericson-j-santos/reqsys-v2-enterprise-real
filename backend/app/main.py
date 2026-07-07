@@ -38,6 +38,7 @@ from app.api import (
     runtime_analytics,
     sistema,
     specs,
+    teams_gateway,
     webhooks,
     wiki,
 )
@@ -116,6 +117,7 @@ app.include_router(codex_governado.router)
 app.include_router(webhooks.router)
 app.include_router(rastreabilidade.router)
 app.include_router(hub_lowcode.router)
+app.include_router(teams_gateway.router)
 app.include_router(agents.router)
 app.include_router(monitoramento_operacional.router)
 app.include_router(runtime_analytics.router)
