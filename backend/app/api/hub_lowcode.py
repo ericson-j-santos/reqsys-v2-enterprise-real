@@ -1,12 +1,19 @@
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.db import get_db
 from app.schemas.lowcode_solution import LowCodeSolutionGenerateRequest
 from app.services.hub_lowcode import (
+    criar_chat_e_enviar_como_usuario,
+    criar_chat_individual_teams,
     descobrir_planos_planner,
+    enviar_mensagem_chat_teams,
+    enviar_mensagem_chat_teams_como_usuario,
     listar_ambientes_powerplatform,
+    listar_chats_como_usuario,
     listar_flows_pa,
     listar_historico_integracoes,
     listar_pacotes_ia,
@@ -295,6 +302,130 @@ async def teams_testar(
         cfg = obter_planner_webhook_config(db)
         url = cfg.get('teams_webhook_url') or ''
     return ok(await testar_teams_webhook(url))
+
+
+# ---------------------------------------------------------------------------
+# Teams via Graph API — mensagens em chat 1:1/grupo
+#
+# O Graph bloqueia o envio de mensagem app-only para chats entre humanos (403
+# exigindo Teamwork.Migrate.All, validado ao vivo em 2026-07-07) — por isso o
+# envio real usa o fluxo delegado (.../mensagens/chat-delegado), que recebe o
+# access_token do Graph já adquirido pelo frontend com o usuário logado
+# (escopo ChatMessage.Send/Chat.ReadWrite, já consentido no tenant). O endpoint
+# app-only (.../mensagens/chat) fica mantido só para cenários futuros onde o
+# próprio app seja participante do chat (ex.: Teams App/bot instalado).
+# ---------------------------------------------------------------------------
+
+@router.get('/teams/graph/status')
+def teams_graph_status():
+    """Indica se a mensageria Teams via Graph API está configurada (ADR-007/009)."""
+    envio_configurado = settings.teams_graph_configurado
+    criacao_configurada = settings.teams_graph_chat_criacao_configurada
+    return ok({
+        'envio_app_only_configurado': envio_configurado,
+        'criacao_de_chat_1a1_configurada': criacao_configurada,
+        'campos_faltantes': settings.teams_graph_missing_fields,
+        'semaforo': 'verde' if envio_configurado else 'cinza',
+        'nota': (
+            'Envio app-only e bloqueado pelo Graph para chats entre humanos '
+            '(403 Teamwork.Migrate.All) — use /mensagens/chat-delegado com o '
+            'access_token do usuário logado para enviar de fato.'
+        ),
+    })
+
+
+@router.post('/teams/graph/mensagens/chat')
+async def teams_graph_enviar_mensagem_chat(
+    db: Session = Depends(get_db),
+    chat_id: str = Body(..., min_length=1),
+    texto: str = Body(..., min_length=1, max_length=20000),
+    content_type: str = Body(default='text'),
+    autor: str = Body(default=''),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+):
+    """Envia mensagem app-only via Microsoft Graph a um chat existente do Teams.
+
+    Aviso: falha com 403 para chats entre humanos (limitação do Graph, não da
+    configuração). Para enviar de fato, use /teams/graph/mensagens/chat-delegado.
+    """
+    correlation_id = resolver_correlation_id(x_correlation_id, None)
+    resultado = await enviar_mensagem_chat_teams(
+        chat_id, texto, content_type=content_type, db=db, autor=autor, correlation_id=correlation_id,
+    )
+    return ok(resultado, correlation_id)
+
+
+@router.post('/teams/graph/mensagens/chat-delegado')
+async def teams_graph_enviar_mensagem_chat_delegado(
+    db: Session = Depends(get_db),
+    chat_id: str = Body(..., min_length=1),
+    texto: str = Body(..., min_length=1, max_length=20000),
+    usuario_access_token: str = Body(..., min_length=1),
+    content_type: str = Body(default='text'),
+    autor: str = Body(default=''),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+):
+    """Envia mensagem a um chat existente usando o access_token delegado do
+    usuário logado (adquirido pelo frontend com escopo ChatMessage.Send/
+    Chat.ReadWrite). Caminho recomendado — funciona para chats humano-humano.
+    """
+    correlation_id = resolver_correlation_id(x_correlation_id, None)
+    resultado = await enviar_mensagem_chat_teams_como_usuario(
+        chat_id, texto, usuario_access_token,
+        content_type=content_type, db=db, autor=autor, correlation_id=correlation_id,
+    )
+    return ok(resultado, correlation_id)
+
+
+@router.post('/teams/graph/chats')
+async def teams_graph_listar_chats(
+    usuario_access_token: str = Body(..., min_length=1, embed=True),
+    top: int = Body(default=50, ge=1, le=200, embed=True),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+):
+    """Lista os chats (1:1/grupo) do usuário logado via Graph (access_token
+    delegado), para o frontend oferecer um seletor em vez de exigir chat_id
+    manual. Usa o mesmo escopo Chat.ReadWrite já concedido — sem permissão nova.
+    """
+    correlation_id = resolver_correlation_id(x_correlation_id, None)
+    resultado = await listar_chats_como_usuario(usuario_access_token, top=top)
+    return ok(resultado, correlation_id)
+
+
+@router.post('/teams/graph/chats/individual')
+async def teams_graph_criar_chat_individual(
+    usuario_a_aad_object_id: str = Body(..., min_length=1),
+    usuario_b_aad_object_id: str = Body(..., min_length=1),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+):
+    """Cria (ou obtém) um chat 1:1 app-only entre dois usuários AAD reais, sem
+    enviar mensagem (a criação funciona app-only; o envio exige o fluxo delegado).
+    """
+    correlation_id = resolver_correlation_id(x_correlation_id, None)
+    resultado = await criar_chat_individual_teams(usuario_a_aad_object_id, usuario_b_aad_object_id, correlation_id=correlation_id)
+    return ok(resultado, correlation_id)
+
+
+@router.post('/teams/graph/chats/individual/enviar-delegado')
+async def teams_graph_criar_chat_e_enviar_delegado(
+    db: Session = Depends(get_db),
+    usuario_a_aad_object_id: str = Body(..., min_length=1),
+    usuario_b_aad_object_id: str = Body(..., min_length=1),
+    texto: str = Body(..., min_length=1, max_length=20000),
+    usuario_access_token: str = Body(..., min_length=1),
+    content_type: str = Body(default='text'),
+    autor: str = Body(default=''),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+):
+    """Cria (ou obtém) o chat 1:1 entre os dois usuários (app-only) e envia a
+    mensagem usando o access_token delegado do usuário logado.
+    """
+    correlation_id = resolver_correlation_id(x_correlation_id, None)
+    resultado = await criar_chat_e_enviar_como_usuario(
+        usuario_a_aad_object_id, usuario_b_aad_object_id, texto, usuario_access_token,
+        content_type=content_type, db=db, autor=autor, correlation_id=correlation_id,
+    )
+    return ok(resultado, correlation_id)
 
 
 # ---------------------------------------------------------------------------
