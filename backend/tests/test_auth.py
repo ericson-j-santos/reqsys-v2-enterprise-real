@@ -1,11 +1,36 @@
 """
 Testes de autenticação (login, token, autorização)
 """
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 client = TestClient(app)
+
+
+class TestLoginAuditoriaEPii:
+    def test_login_demo_registra_evento_de_auditoria(self):
+        with patch("app.api.auth.registrar_evento") as mock_registrar:
+            resp = client.post("/v1/auth/login", json={"email": "auditor.teste@example.com"})
+
+        assert resp.status_code == 200
+        mock_registrar.assert_called_once()
+        args = mock_registrar.call_args[0]
+        assert args[2] == "auditor.teste@example.com"
+        assert args[3] == "LOGIN_DEMO"
+        assert args[4] == "usuario"
+
+    def test_login_demo_nao_loga_email_em_texto_puro(self, caplog):
+        with caplog.at_level("INFO", logger="reqsys.security"):
+            resp = client.post("/v1/auth/login", json={"email": "sensivel.teste@example.com"})
+
+        assert resp.status_code == 200
+        mensagens = "\n".join(r.getMessage() for r in caplog.records)
+        assert "sensivel.teste@example.com" not in mensagens
+        assert "s***@example.com" in mensagens
 
 
 # ---------------------------------------------------------------------------

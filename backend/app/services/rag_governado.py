@@ -7,12 +7,9 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-logger = logging.getLogger('reqsys.rag')
+from app.core.pii_masking import mascarar_pii
 
-PII_PATTERNS = (
-    re.compile(r'\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b'),
-    re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'),
-)
+logger = logging.getLogger('reqsys.rag')
 
 
 @dataclass(frozen=True)
@@ -45,13 +42,6 @@ class RespostaRAG:
 
 def gerar_correlation_id(prefixo: str = 'rag') -> str:
     return f'{prefixo}-{uuid4()}'
-
-
-def mascarar_pii(texto: str) -> str:
-    texto_mascarado = texto
-    for pattern in PII_PATTERNS:
-        texto_mascarado = pattern.sub('[DADO_MASCARADO]', texto_mascarado)
-    return texto_mascarado
 
 
 def normalizar_documentos(documentos: list[dict[str, Any]] | None) -> list[DocumentoRAG]:

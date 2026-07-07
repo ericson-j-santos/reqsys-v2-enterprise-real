@@ -9,6 +9,13 @@ from app.services import github_client
 from app.services.github_client import GitHubError
 
 
+@pytest.fixture(autouse=True)
+def _circuit_breaker_isolado():
+    github_client.reset_circuit_breaker()
+    yield
+    github_client.reset_circuit_breaker()
+
+
 def test_parse_repo_valido_e_invalido():
     assert github_client._parse_repo("owner/repo") == ("owner", "repo")
     assert github_client._parse_repo("/owner/repo/") == ("owner", "repo")
@@ -122,6 +129,65 @@ def test_create_issue_comment_e_get_branch_sha_propaga_erro():
     ):
         with pytest.raises(github_client.GitHubError):
             github_client.get_branch_sha("acme/repo", "main")
+
+
+def test_request_json_tenta_novamente_apos_falha_transitoria_de_rede():
+    chamadas = {'n': 0}
+    sonos = []
+
+    def fake_urlopen(req, timeout):
+        chamadas['n'] += 1
+        if chamadas['n'] < 3:
+            raise URLError('timeout de rede')
+        resp = MagicMock()
+        resp.read.return_value = b'{"ok": true}'
+        resp.__enter__.return_value = resp
+        return resp
+
+    with patch('app.services.github_client.get_secret', return_value='token-teste'):
+        with patch('urllib.request.urlopen', side_effect=fake_urlopen):
+            resultado = github_client._request_json('GET', '/repos/o/r/issues', sleep=sonos.append)
+
+    assert resultado == {'ok': True}
+    assert chamadas['n'] == 3
+    assert len(sonos) == 2
+
+
+def test_request_json_nao_reage_erro_http_como_falha_transitoria():
+    """HTTPError e subclasse de URLError, mas nao deve ser retentado nem abrir o circuito."""
+    chamadas = {'n': 0}
+
+    def fake_urlopen(req, timeout):
+        chamadas['n'] += 1
+        raise HTTPError(url='https://api.github.com/test', code=404, msg='Not Found', hdrs=None, fp=MagicMock(read=lambda: b'nao encontrado'))
+
+    with patch('app.services.github_client.get_secret', return_value='token-teste'):
+        with patch('urllib.request.urlopen', side_effect=fake_urlopen):
+            with pytest.raises(GitHubError, match='HTTP 404'):
+                github_client._request_json('GET', '/repos/o/r/issues', sleep=lambda _s: None)
+
+    assert chamadas['n'] == 1
+
+
+def test_circuit_breaker_abre_apos_falhas_consecutivas_e_bloqueia_nova_chamada():
+    def fake_urlopen(req, timeout):
+        raise URLError('github fora do ar')
+
+    with patch('app.services.github_client.get_secret', return_value='token-teste'):
+        with patch('urllib.request.urlopen', side_effect=fake_urlopen):
+            for _ in range(3):
+                with pytest.raises(GitHubError):
+                    github_client._request_json('GET', '/repos/o/r/issues', sleep=lambda _s: None, max_retries=1)
+
+            chamadas_apos_abertura = {'n': 0}
+
+            def urlopen_nao_deveria_ser_chamado(req, timeout):
+                chamadas_apos_abertura['n'] += 1
+                raise AssertionError('circuito deveria estar aberto e bloquear a chamada HTTP')
+
+            with patch('urllib.request.urlopen', side_effect=urlopen_nao_deveria_ser_chamado):
+                with pytest.raises(GitHubError, match="Circuito 'github_api' aberto"):
+                    github_client._request_json('GET', '/repos/o/r/issues', sleep=lambda _s: None)
 
 
 def test_github_token_configurado():
