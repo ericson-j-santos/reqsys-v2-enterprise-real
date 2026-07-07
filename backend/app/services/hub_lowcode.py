@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.resilience import CircuitBreaker, CircuitBreakerOpenError, call_with_retry_async
 from app.models.configuracao_lowcode import ConfiguracaoLowCode
 from app.models.integracao_log import IntegracaoLog
 
@@ -529,3 +530,344 @@ async def testar_teams_webhook(teams_webhook_url: str) -> dict[str, Any]:
         return {'ok': False, 'erro': f'HTTP {exc.response.status_code}: {exc.response.text[:300]}'}
     except Exception as exc:
         return {'ok': False, 'erro': str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Teams via Graph API — mensagens em chat 1:1/grupo
+#
+# Descoberta validada ao vivo (2026-07-07) contra o tenant real: o Graph NAO
+# permite enviar chatMessage app-only (client credentials) para um chat entre
+# humanos — mesmo com `Chat.ReadWrite.All` + `Chat.Create` (aplicacao) concedidos
+# e a criacao do chat funcionando, o POST de mensagem retorna 403 exigindo
+# `Teamwork.Migrate.All` (permissao de migracao/compliance, nao de mensageria).
+# Isso so e contornavel publicando um Teams App/bot com RSC instalado na
+# conversa — um projeto a parte, fora de escopo aqui.
+#
+# Por isso o envio real de mensagem usa o fluxo DELEGADO (on-behalf-of do
+# usuario logado): o frontend adquire um access_token do Graph com escopo
+# `ChatMessage.Send`/`Chat.ReadWrite` (ja concedidos via admin consent no app
+# registration) e o backend apenas relaya essa chamada, sem client secret.
+# `criar_chat_individual_teams` app-only continua funcional para CRIAR chats
+# (isso nao tem a mesma restricao), mas enviar mensagem nele exige o token
+# delegado — nao ha combinacao de permissao de aplicacao que resolva o envio.
+# ---------------------------------------------------------------------------
+
+_TEAMS_GRAPH_MAX_RETRIES = 3
+_TEAMS_GRAPH_RETRY_BACKOFF_SECONDS = 0.5
+_teams_graph_circuit = CircuitBreaker(name='teams_graph', failure_threshold=3, cooldown_seconds=60)
+
+
+def reset_teams_graph_circuit_breaker() -> None:
+    """Reseta o circuit breaker do Teams Graph (uso em testes)."""
+    _teams_graph_circuit.reset()
+
+
+def _normalizar_content_type_teams(content_type: str) -> str:
+    return content_type if content_type in ('text', 'html') else 'text'
+
+
+async def _postar_mensagem_chat_graph(
+    chat_id: str,
+    texto: str,
+    tipo_conteudo: str,
+    access_token: str,
+) -> dict[str, Any]:
+    payload = {'body': {'contentType': tipo_conteudo, 'content': texto}}
+
+    async def _enviar() -> dict[str, Any]:
+        headers = {'Authorization': f'Bearer {access_token}'}
+        async with httpx.AsyncClient(timeout=15) as c:
+            resp = await c.post(f'{_GRAPH_BASE}/chats/{chat_id}/messages', json=payload, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    return await call_with_retry_async(
+        _enviar,
+        max_retries=_TEAMS_GRAPH_MAX_RETRIES,
+        backoff_seconds=_TEAMS_GRAPH_RETRY_BACKOFF_SECONDS,
+        retry_on=(httpx.TimeoutException, httpx.ConnectError),
+        circuit=_teams_graph_circuit,
+    )
+
+
+async def enviar_mensagem_chat_teams(
+    chat_id: str,
+    texto: str,
+    content_type: str = 'text',
+    db: Session | None = None,
+    autor: str = '',
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """Envia mensagem app-only a um chat do Teams via Microsoft Graph.
+
+    Aviso: o Graph bloqueia esse caminho para chats entre humanos (ver nota
+    acima) — mantido para chats onde o proprio app seja participante (ex.:
+    grupos criados incluindo um Teams App instalado). Para enviar a um chat
+    humano-humano use `enviar_mensagem_chat_teams_como_usuario`.
+    """
+    corr = correlation_id or str(uuid.uuid4())
+    if not _tem_credenciais_graph():
+        erro = 'Credenciais Graph (AZURE_TENANT_ID/AZURE_CLIENT_ID/AZURE_CLIENT_SECRET) não configuradas'
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph', status='erro', autor=autor,
+                                  mensagem=erro, correlation_id=corr)
+        return {'configurado': False, 'enviado': False, 'erro': erro, 'correlation_id': corr}
+
+    if not chat_id:
+        return {'configurado': True, 'enviado': False, 'erro': 'chat_id não fornecido', 'correlation_id': corr}
+
+    tipo_conteudo = _normalizar_content_type_teams(content_type)
+
+    try:
+        token = await _token_grafico()
+        resposta = await _postar_mensagem_chat_graph(chat_id, texto, tipo_conteudo, token)
+        if db is not None:
+            salvar_log_integracao(
+                db, tipo='teams_graph', status='sucesso', autor=autor,
+                titulo=f'Mensagem enviada ao chat {chat_id}',
+                mensagem=texto[:200],
+                detalhes={'chat_id': chat_id, 'content_type': tipo_conteudo, 'message_id': resposta.get('id')},
+                correlation_id=corr,
+            )
+        return {
+            'configurado': True,
+            'enviado': True,
+            'message_id': resposta.get('id'),
+            'chat_id': chat_id,
+            'correlation_id': corr,
+        }
+    except CircuitBreakerOpenError as exc:
+        msg = str(exc)
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph', status='erro', autor=autor, mensagem=msg, correlation_id=corr)
+        return {'configurado': True, 'enviado': False, 'erro': msg, 'correlation_id': corr}
+    except httpx.HTTPStatusError as exc:
+        msg = f'HTTP {exc.response.status_code}: {exc.response.text[:300]}'
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph', status='erro', autor=autor, mensagem=msg, correlation_id=corr)
+        return {'configurado': True, 'enviado': False, 'erro': msg, 'correlation_id': corr}
+    except Exception as exc:
+        msg = str(exc)
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph', status='erro', autor=autor, mensagem=msg, correlation_id=corr)
+        return {'configurado': True, 'enviado': False, 'erro': msg, 'correlation_id': corr}
+
+
+async def enviar_mensagem_chat_teams_como_usuario(
+    chat_id: str,
+    texto: str,
+    usuario_access_token: str,
+    content_type: str = 'text',
+    db: Session | None = None,
+    autor: str = '',
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """Envia mensagem a um chat do Teams usando um access_token delegado do Graph
+    (adquirido pelo frontend com o usuario logado, escopo ChatMessage.Send/
+    Chat.ReadWrite). O backend nunca ve a senha/credencial do usuario, apenas
+    relaya o token recebido — nao usa client secret nesta chamada.
+    """
+    corr = correlation_id or str(uuid.uuid4())
+    if not usuario_access_token:
+        return {'enviado': False, 'erro': 'usuario_access_token não fornecido', 'correlation_id': corr}
+    if not chat_id:
+        return {'enviado': False, 'erro': 'chat_id não fornecido', 'correlation_id': corr}
+
+    tipo_conteudo = _normalizar_content_type_teams(content_type)
+
+    try:
+        resposta = await _postar_mensagem_chat_graph(chat_id, texto, tipo_conteudo, usuario_access_token)
+        if db is not None:
+            salvar_log_integracao(
+                db, tipo='teams_graph_delegado', status='sucesso', autor=autor,
+                titulo=f'Mensagem enviada ao chat {chat_id} (delegado)',
+                mensagem=texto[:200],
+                detalhes={'chat_id': chat_id, 'content_type': tipo_conteudo, 'message_id': resposta.get('id')},
+                correlation_id=corr,
+            )
+        return {'enviado': True, 'message_id': resposta.get('id'), 'chat_id': chat_id, 'correlation_id': corr}
+    except CircuitBreakerOpenError as exc:
+        msg = str(exc)
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph_delegado', status='erro', autor=autor, mensagem=msg, correlation_id=corr)
+        return {'enviado': False, 'erro': msg, 'correlation_id': corr}
+    except httpx.HTTPStatusError as exc:
+        msg = f'HTTP {exc.response.status_code}: {exc.response.text[:300]}'
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph_delegado', status='erro', autor=autor, mensagem=msg, correlation_id=corr)
+        return {'enviado': False, 'erro': msg, 'correlation_id': corr}
+    except Exception as exc:
+        msg = str(exc)
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph_delegado', status='erro', autor=autor, mensagem=msg, correlation_id=corr)
+        return {'enviado': False, 'erro': msg, 'correlation_id': corr}
+
+
+def _extrair_membros_chat(chat: dict[str, Any]) -> list[dict[str, Any]]:
+    membros = []
+    for m in chat.get('members') or []:
+        membros.append({
+            'user_id': m.get('userId'),
+            'nome': m.get('displayName') or '',
+            'email': m.get('email') or '',
+        })
+    return membros
+
+
+async def listar_chats_como_usuario(
+    usuario_access_token: str,
+    top: int = 50,
+) -> dict[str, Any]:
+    """Lista os chats (1:1 e grupo) do usuario logado via Graph, usando o
+    access_token delegado (escopo Chat.Read/Chat.ReadWrite — ja concedido, sem
+    permissao nova). Usado para preencher o seletor de chat_id no frontend em
+    vez do usuario ter que descobrir/colar o id manualmente.
+    """
+    if not usuario_access_token:
+        return {'chats': [], 'erro': 'usuario_access_token não fornecido'}
+
+    async def _listar() -> dict[str, Any]:
+        headers = {'Authorization': f'Bearer {usuario_access_token}'}
+        async with httpx.AsyncClient(timeout=15) as c:
+            resp = await c.get(
+                f'{_GRAPH_BASE}/me/chats',
+                params={'$top': top, '$expand': 'members'},
+                headers=headers,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+    try:
+        resposta = await call_with_retry_async(
+            _listar,
+            max_retries=_TEAMS_GRAPH_MAX_RETRIES,
+            backoff_seconds=_TEAMS_GRAPH_RETRY_BACKOFF_SECONDS,
+            retry_on=(httpx.TimeoutException, httpx.ConnectError),
+            circuit=_teams_graph_circuit,
+        )
+        chats = [
+            {
+                'id': item.get('id'),
+                'topico': item.get('topic'),
+                'tipo': item.get('chatType'),
+                'membros': _extrair_membros_chat(item),
+            }
+            for item in resposta.get('value', [])
+        ]
+        return {'chats': chats}
+    except CircuitBreakerOpenError as exc:
+        return {'chats': [], 'erro': str(exc)}
+    except httpx.HTTPStatusError as exc:
+        return {'chats': [], 'erro': f'HTTP {exc.response.status_code}: {exc.response.text[:300]}'}
+    except Exception as exc:
+        return {'chats': [], 'erro': str(exc)}
+
+
+async def criar_chat_individual_teams(
+    usuario_a_aad_object_id: str,
+    usuario_b_aad_object_id: str,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """Cria (ou obtem, se ja existir) um chat 1:1 app-only entre dois usuarios reais.
+
+    Validado ao vivo (2026-07-07): o Graph so aceita 2 usuarios reais no roster
+    de um chat oneOnOne — o service principal do proprio app NAO pode ser um dos
+    membros (retorna 403 RosterCreationNotAllowed), entao esta funcao exige os
+    dois AAD object IDs explicitamente. A criacao em si e idempotente por
+    conjunto de membros: se ja existir um chat com os mesmos dois membros, a
+    API retorna o chat existente em vez de duplicar. Enviar mensagem NESSE chat
+    ainda exige o fluxo delegado (`enviar_mensagem_chat_teams_como_usuario`) —
+    ver nota no topo da secao.
+    """
+    corr = correlation_id or str(uuid.uuid4())
+    if not _tem_credenciais_graph():
+        return {
+            'configurado': False,
+            'ok': False,
+            'erro': 'Credenciais Graph (AZURE_TENANT_ID/AZURE_CLIENT_ID/AZURE_CLIENT_SECRET) não configuradas',
+            'correlation_id': corr,
+        }
+
+    if not usuario_a_aad_object_id or not usuario_b_aad_object_id:
+        return {
+            'configurado': True, 'ok': False,
+            'erro': 'usuario_a_aad_object_id e usuario_b_aad_object_id são obrigatórios',
+            'correlation_id': corr,
+        }
+
+    payload = {
+        'chatType': 'oneOnOne',
+        'members': [
+            {
+                '@odata.type': '#microsoft.graph.aadUserConversationMember',
+                'roles': ['owner'],
+                'user@odata.bind': f"https://graph.microsoft.com/v1.0/users('{usuario_a_aad_object_id}')",
+            },
+            {
+                '@odata.type': '#microsoft.graph.aadUserConversationMember',
+                'roles': ['owner'],
+                'user@odata.bind': f"https://graph.microsoft.com/v1.0/users('{usuario_b_aad_object_id}')",
+            },
+        ],
+    }
+
+    async def _criar() -> dict[str, Any]:
+        token = await _token_grafico()
+        headers = {'Authorization': f'Bearer {token}'}
+        async with httpx.AsyncClient(timeout=15) as c:
+            resp = await c.post(f'{_GRAPH_BASE}/chats', json=payload, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    try:
+        resposta = await call_with_retry_async(
+            _criar,
+            max_retries=_TEAMS_GRAPH_MAX_RETRIES,
+            backoff_seconds=_TEAMS_GRAPH_RETRY_BACKOFF_SECONDS,
+            retry_on=(httpx.TimeoutException, httpx.ConnectError),
+            circuit=_teams_graph_circuit,
+        )
+        return {'configurado': True, 'ok': True, 'chat_id': resposta.get('id'), 'correlation_id': corr}
+    except CircuitBreakerOpenError as exc:
+        return {'configurado': True, 'ok': False, 'erro': str(exc), 'correlation_id': corr}
+    except httpx.HTTPStatusError as exc:
+        return {
+            'configurado': True, 'ok': False,
+            'erro': f'HTTP {exc.response.status_code}: {exc.response.text[:300]}',
+            'correlation_id': corr,
+        }
+    except Exception as exc:
+        return {'configurado': True, 'ok': False, 'erro': str(exc), 'correlation_id': corr}
+
+
+async def criar_chat_e_enviar_como_usuario(
+    usuario_a_aad_object_id: str,
+    usuario_b_aad_object_id: str,
+    texto: str,
+    usuario_access_token: str,
+    content_type: str = 'text',
+    db: Session | None = None,
+    autor: str = '',
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """Cria/obtem o chat 1:1 entre os dois usuarios (app-only — funciona) e envia
+    a mensagem usando o access_token delegado do usuario logado (unico caminho
+    que o Graph aceita para postar em chat humano-humano, ver nota no topo).
+    """
+    corr = correlation_id or str(uuid.uuid4())
+    chat = await criar_chat_individual_teams(usuario_a_aad_object_id, usuario_b_aad_object_id, correlation_id=corr)
+    if not chat.get('ok'):
+        if db is not None and chat.get('configurado'):
+            salvar_log_integracao(db, tipo='teams_graph', status='erro', autor=autor,
+                                  mensagem=chat.get('erro', 'falha ao criar chat 1:1'), correlation_id=corr)
+        return {
+            'configurado': chat.get('configurado', False),
+            'enviado': False,
+            'erro': chat.get('erro'),
+            'correlation_id': corr,
+        }
+
+    return await enviar_mensagem_chat_teams_como_usuario(
+        chat['chat_id'], texto, usuario_access_token,
+        content_type=content_type, db=db, autor=autor, correlation_id=corr,
+    )

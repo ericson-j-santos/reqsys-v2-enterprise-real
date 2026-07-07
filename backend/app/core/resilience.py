@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Callable, TypeVar
+from typing import Awaitable, Callable, TypeVar
 
 from app.core.telemetry import log_erro, log_evento
 
@@ -94,6 +95,42 @@ def call_with_retry(
             last_error = exc
             if attempt < max_retries:
                 sleep(backoff_seconds * (2 ** (attempt - 1)))
+            continue
+
+        if circuit is not None:
+            circuit.record_success()
+        return result
+
+    assert last_error is not None
+    if circuit is not None:
+        circuit.record_failure()
+    raise last_error
+
+
+async def call_with_retry_async(
+    fn: Callable[[], Awaitable[T]],
+    *,
+    max_retries: int = 3,
+    backoff_seconds: float = 0.5,
+    retry_on: tuple[type[BaseException], ...] = (Exception,),
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    circuit: CircuitBreaker | None = None,
+) -> T:
+    """Variante assincrona de `call_with_retry` para adapters baseados em `httpx.AsyncClient`.
+
+    Mesma semantica de retry/circuito; usa `await` em vez de chamada sincrona.
+    """
+    if circuit is not None:
+        circuit.guard()
+
+    last_error: BaseException | None = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            result = await fn()
+        except retry_on as exc:
+            last_error = exc
+            if attempt < max_retries:
+                await sleep(backoff_seconds * (2 ** (attempt - 1)))
             continue
 
         if circuit is not None:

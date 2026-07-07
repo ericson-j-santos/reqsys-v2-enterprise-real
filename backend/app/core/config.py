@@ -65,6 +65,14 @@ class Settings(BaseSettings):
     # Token estático para acesso service-to-service ao cofre (POST /v1/cofre/resolver)
     vault_api_token: str = Field(default_factory=lambda: get_secret('VAULT_API_TOKEN', '') or '')
 
+    # vault-service remoto (extração do cofre, ADR-041) — usado por app.core.secrets.get_secret()
+    # como fallback além do keyring local. Lido via os.environ direto dentro de secrets.py
+    # (não via `settings`, para evitar ciclo de bootstrap); estes campos existem só para
+    # diagnóstico/health-check exibirem se está configurado, sem expor o token.
+    cofre_service_base_url: str = Field(default_factory=lambda: get_secret('COFRE_API_URL', '') or '')
+    cofre_service_token: str = Field(default_factory=lambda: get_secret('COFRE_SERVICE_TOKEN', '') or '')
+    cofre_service_timeout_seconds: float = Field(default_factory=lambda: float(get_secret('COFRE_SERVICE_TIMEOUT_SECONDS', '5') or '5'))
+
     # Git webhooks — rastreabilidade
     github_webhook_secret: str = Field(default_factory=lambda: get_secret('GITHUB_WEBHOOK_SECRET', '') or '')
     gitlab_webhook_token: str = Field(default_factory=lambda: get_secret('GITLAB_WEBHOOK_TOKEN', '') or '')
@@ -116,6 +124,11 @@ class Settings(BaseSettings):
     powerautomate_planner_webhook_url: str = Field(default_factory=lambda: get_secret('POWERAUTOMATE_PLANNER_WEBHOOK_URL', '') or '')
     powerautomate_planner_webhook_key: str = Field(default_factory=lambda: get_secret('POWERAUTOMATE_PLANNER_WEBHOOK_KEY', '') or '')
     teams_notifications_webhook_url: str = Field(default_factory=lambda: get_secret('TEAMS_NOTIFICATIONS_WEBHOOK_URL', '') or '')
+    # Object ID do service principal do app registration (AZURE_CLIENT_ID) no tenant,
+    # necessario para o app se auto-incluir como membro ao criar um chat 1:1 via Graph API.
+    teams_graph_app_service_principal_id: str = Field(
+        default_factory=lambda: get_secret('TEAMS_GRAPH_APP_SERVICE_PRINCIPAL_ID', '') or ''
+    )
     app_public_url: str = Field(default_factory=lambda: get_secret('APP_PUBLIC_URL', '') or '')
     api_public_url: str = Field(default_factory=lambda: get_secret('API_PUBLIC_URL', '') or '')
 
@@ -134,6 +147,10 @@ class Settings(BaseSettings):
         return secret in _WEAK_SECRETS or len(secret) < 32
 
     @property
+    def cofre_service_configurado(self) -> bool:
+        return bool(self.cofre_service_base_url.strip() and self.cofre_service_token.strip())
+
+    @property
     def azure_configured(self) -> bool:
         return bool(self.azure_tenant_id.strip() and self.azure_client_id.strip())
 
@@ -145,6 +162,24 @@ class Settings(BaseSettings):
         if not self.azure_client_id.strip():
             missing.append('AZURE_CLIENT_ID')
         return missing
+
+    @property
+    def teams_graph_configurado(self) -> bool:
+        return self.azure_configured and bool(self.azure_client_secret.strip())
+
+    @property
+    def teams_graph_missing_fields(self) -> list[str]:
+        missing = list(self.azure_missing_fields)
+        if not self.azure_client_secret.strip():
+            missing.append('AZURE_CLIENT_SECRET')
+        return missing
+
+    @property
+    def teams_graph_chat_criacao_configurada(self) -> bool:
+        # Criacao de chat 1:1 app-only exige 2 usuarios reais como membros (o
+        # service principal do app nao pode ser membro — validado ao vivo em
+        # 2026-07-07), entao so depende das credenciais Graph basicas.
+        return self.teams_graph_configurado
 
     @property
     def azure_expected_redirect_uri(self) -> str:

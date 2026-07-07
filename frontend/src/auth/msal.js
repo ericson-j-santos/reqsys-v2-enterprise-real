@@ -48,6 +48,10 @@ export async function getMsalInstance() {
 
 export const SCOPES = ['openid', 'profile', 'email']
 
+// Escopos delegados do Graph para mensageria Teams (ChatMessage.Send/Chat.ReadWrite
+// ja consentidos tenant-wide no app registration — sem prompt de consentimento extra).
+export const TEAMS_GRAPH_SCOPES = ['ChatMessage.Send', 'Chat.ReadWrite']
+
 function clearInteractionState(clientId) {
   const prefixes = [`msal.${clientId}`, 'msal.']
   const markers = [
@@ -115,6 +119,37 @@ export async function handleRedirectResult() {
     if (ignorable.includes(err.errorCode)) return null
     throw err
   }
+}
+
+// Adquire um access_token delegado do Graph para mensageria Teams (chat 1:1/grupo).
+// Tenta silencioso primeiro (funciona sem interacao, ja que o escopo ja foi
+// consentido); só abre popup se o silent falhar por exigir interacao.
+export async function acquireTeamsGraphToken() {
+  const msal = await getMsalInstance()
+  if (!msal) throw new Error('Azure AD nao configurado no servidor')
+
+  const account = msal.getAllAccounts()[0]
+  if (!account) throw new Error('Nenhuma conta Microsoft logada — faça login novamente')
+
+  const request = { scopes: TEAMS_GRAPH_SCOPES, account }
+  try {
+    const response = await msal.acquireTokenSilent(request)
+    return response.accessToken
+  } catch (err) {
+    if (err.name === 'InteractionRequiredAuthError' || String(err.errorCode || '').includes('interaction_required')) {
+      const response = await msal.acquireTokenPopup(request)
+      return response.accessToken
+    }
+    throw err
+  }
+}
+
+// Conta MSAL atualmente logada (ou null). Usado para identificar o proprio
+// usuario ao montar rotulos de chat (excluir "eu mesmo" da lista de membros).
+export async function getContaAtual() {
+  const msal = await getMsalInstance()
+  if (!msal) return null
+  return msal.getAllAccounts()[0] || null
 }
 
 export async function logoutMicrosoft() {

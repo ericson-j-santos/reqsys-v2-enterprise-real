@@ -6,6 +6,8 @@ const mockGetAllAccounts = vi.fn(() => [])
 const mockGetConfiguration = vi.fn(() => ({ auth: { clientId: 'test-client-id' } }))
 const mockInitialize = vi.fn()
 const mockConstructor = vi.fn()
+const mockAcquireTokenSilent = vi.fn()
+const mockAcquireTokenPopup = vi.fn()
 
 vi.mock('@azure/msal-browser', () => {
   class PublicClientApplication {
@@ -16,6 +18,8 @@ vi.mock('@azure/msal-browser', () => {
       this.loginRedirect = mockLoginRedirect
       this.getAllAccounts = mockGetAllAccounts
       this.getConfiguration = mockGetConfiguration
+      this.acquireTokenSilent = mockAcquireTokenSilent
+      this.acquireTokenPopup = mockAcquireTokenPopup
     }
   }
   return { PublicClientApplication }
@@ -42,6 +46,9 @@ beforeEach(() => {
   mockHandleRedirectPromise.mockReset().mockResolvedValue(null)
   mockLoginRedirect.mockReset().mockResolvedValue(undefined)
   mockInitialize.mockReset().mockResolvedValue(undefined)
+  mockGetAllAccounts.mockReset().mockReturnValue([])
+  mockAcquireTokenSilent.mockReset()
+  mockAcquireTokenPopup.mockReset()
   localStorage.clear()
   sessionStorage.clear()
 })
@@ -162,5 +169,78 @@ describe('handleRedirectResult', () => {
     mockHandleRedirectPromise.mockRejectedValue(err)
     const { handleRedirectResult } = await import('../msal')
     await expect(handleRedirectResult()).rejects.toThrow('unexpected failure')
+  })
+})
+
+describe('acquireTeamsGraphToken', () => {
+  it('retorna access_token via acquireTokenSilent quando ha conta logada', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockResolvedValue({ accessToken: 'silent-token' })
+
+    const { acquireTeamsGraphToken, TEAMS_GRAPH_SCOPES } = await import('../msal')
+    const token = await acquireTeamsGraphToken()
+
+    expect(token).toBe('silent-token')
+    expect(mockAcquireTokenSilent).toHaveBeenCalledWith(
+      expect.objectContaining({ scopes: TEAMS_GRAPH_SCOPES, account: { username: 'user@tieri659.onmicrosoft.com' } })
+    )
+    expect(mockAcquireTokenPopup).not.toHaveBeenCalled()
+  })
+
+  it('cai para acquireTokenPopup quando o silent exige interacao', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    const interactionErr = Object.assign(new Error('interaction required'), { name: 'InteractionRequiredAuthError' })
+    mockAcquireTokenSilent.mockRejectedValue(interactionErr)
+    mockAcquireTokenPopup.mockResolvedValue({ accessToken: 'popup-token' })
+
+    const { acquireTeamsGraphToken } = await import('../msal')
+    const token = await acquireTeamsGraphToken()
+
+    expect(token).toBe('popup-token')
+    expect(mockAcquireTokenPopup).toHaveBeenCalledTimes(1)
+  })
+
+  it('lanca erro quando nao ha conta Microsoft logada', async () => {
+    mockGetAllAccounts.mockReturnValue([])
+    const { acquireTeamsGraphToken } = await import('../msal')
+    await expect(acquireTeamsGraphToken()).rejects.toThrow('Nenhuma conta Microsoft logada')
+  })
+
+  it('propaga erros do silent que nao sao de interacao', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockRejectedValue(new Error('falha de rede'))
+
+    const { acquireTeamsGraphToken } = await import('../msal')
+    await expect(acquireTeamsGraphToken()).rejects.toThrow('falha de rede')
+    expect(mockAcquireTokenPopup).not.toHaveBeenCalled()
+  })
+
+  it('lanca erro quando Azure AD nao esta configurado', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
+    const { acquireTeamsGraphToken } = await import('../msal')
+    await expect(acquireTeamsGraphToken()).rejects.toThrow('Azure AD nao configurado')
+  })
+})
+
+describe('getContaAtual', () => {
+  it('retorna a primeira conta logada', async () => {
+    mockGetAllAccounts.mockReturnValue([{ localAccountId: 'user-123', username: 'user@tieri659.onmicrosoft.com' }])
+    const { getContaAtual } = await import('../msal')
+    const conta = await getContaAtual()
+    expect(conta).toEqual({ localAccountId: 'user-123', username: 'user@tieri659.onmicrosoft.com' })
+  })
+
+  it('retorna null quando nao ha conta logada', async () => {
+    mockGetAllAccounts.mockReturnValue([])
+    const { getContaAtual } = await import('../msal')
+    expect(await getContaAtual()).toBeNull()
+  })
+
+  it('retorna null quando Azure AD nao esta configurado', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
+    const { getContaAtual } = await import('../msal')
+    expect(await getContaAtual()).toBeNull()
   })
 })

@@ -70,6 +70,77 @@
           </v-row>
         </v-expansion-panel-text>
       </v-expansion-panel>
+
+      <!-- Envio de mensagem Teams via Graph API (delegado) -->
+      <v-expansion-panel>
+        <v-expansion-panel-title>
+          <div class="d-flex align-center gap-2">
+            <v-icon size="small" class="mr-2">mdi-message-text-outline</v-icon>
+            <span>Enviar mensagem Teams (Graph API)</span>
+          </div>
+        </v-expansion-panel-title>
+        <v-expansion-panel-text>
+          <v-row dense class="mt-1">
+            <v-col cols="12">
+              <div class="text-caption text-medium-emphasis mb-3">
+                Envia uma mensagem real a um chat do Teams usando sua conta Microsoft logada (fluxo delegado) — funciona para chats 1:1/grupo entre pessoas, diferente do webhook acima. Clique no ícone de atualizar para carregar seus chats.
+              </div>
+            </v-col>
+            <v-col cols="12" md="5">
+              <v-combobox
+                v-model="graphForm.chat_id"
+                :items="chatsDisponiveis"
+                item-title="rotulo"
+                item-value="id"
+                label="Chat do Teams"
+                density="compact"
+                variant="outlined"
+                hide-details="auto"
+                placeholder="Selecione ou cole um chat_id"
+                prepend-inner-icon="mdi-chat-outline"
+                :loading="carregandoChats"
+                clearable
+              >
+                <template #append-inner>
+                  <v-icon
+                    size="small"
+                    icon="mdi-refresh"
+                    role="button"
+                    tabindex="0"
+                    title="Carregar meus chats"
+                    @click.stop="carregarChatsGraph"
+                    @keyup.enter.stop="carregarChatsGraph"
+                  />
+                </template>
+              </v-combobox>
+            </v-col>
+            <v-col cols="12" md="5">
+              <v-text-field
+                v-model="graphForm.texto"
+                label="Mensagem"
+                density="compact"
+                variant="outlined"
+                hide-details="auto"
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="2" class="d-flex align-center">
+              <v-btn
+                color="primary"
+                variant="tonal"
+                size="small"
+                block
+                :loading="enviandoGraph"
+                :disabled="!graphForm.chat_id || !graphForm.texto"
+                @click="enviarMensagemGraph"
+                prepend-icon="mdi-send-outline"
+              >
+                Enviar
+              </v-btn>
+            </v-col>
+          </v-row>
+        </v-expansion-panel-text>
+      </v-expansion-panel>
     </v-expansion-panels>
 
     <!-- Cards de resumo clicáveis -->
@@ -304,6 +375,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../services/api'
+import { enviarMensagemChatTeams, listarChatsTeams } from '../services/teamsGraph'
 import {
   contarIntegracoesPorStatus,
   criarQueryFiltrosIntegracao,
@@ -326,6 +398,11 @@ const configStatus = ref({ teams: false })
 const configForm = ref({ teams_webhook_url: '' })
 const salvando = ref(false)
 const testando = ref(false)
+
+const graphForm = ref({ chat_id: '', texto: '' })
+const enviandoGraph = ref(false)
+const chatsDisponiveis = ref([])
+const carregandoChats = ref(false)
 
 const filtros = reactive(normalizarFiltrosIntegracao(route.query))
 
@@ -496,6 +573,34 @@ async function testarTeams() {
     snackbar.value = { aberto: true, msg: 'Erro ao testar: ' + (e?.response?.data?.detail || e.message), cor: 'error' }
   } finally {
     testando.value = false
+  }
+}
+
+async function carregarChatsGraph() {
+  carregandoChats.value = true
+  try {
+    chatsDisponiveis.value = await listarChatsTeams()
+  } catch (e) {
+    snackbar.value = { aberto: true, msg: 'Erro ao carregar chats: ' + (e?.response?.data?.detail || e.message), cor: 'error' }
+  } finally {
+    carregandoChats.value = false
+  }
+}
+
+async function enviarMensagemGraph() {
+  enviandoGraph.value = true
+  try {
+    const resultado = await enviarMensagemChatTeams(graphForm.value.chat_id, graphForm.value.texto)
+    snackbar.value = {
+      aberto: true,
+      msg: resultado.enviado ? 'Mensagem enviada no Teams!' : ('Erro: ' + (resultado.erro || 'desconhecido')),
+      cor: resultado.enviado ? 'success' : 'error',
+    }
+    if (resultado.enviado) graphForm.value.texto = ''
+  } catch (e) {
+    snackbar.value = { aberto: true, msg: 'Erro ao enviar: ' + (e?.response?.data?.detail || e.message), cor: 'error' }
+  } finally {
+    enviandoGraph.value = false
   }
 }
 
