@@ -1,6 +1,7 @@
 """Testes de caminhos críticos — integrações GitHub (versão e Redmine)."""
 
 import hashlib
+import json
 from base64 import b64encode
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -10,6 +11,13 @@ import pytest
 
 from app.services import github_redmine, github_version_checker
 from app.services.github_redmine import IntegracaoError
+
+
+@pytest.fixture(autouse=True)
+def _circuit_breaker_isolado():
+    github_version_checker.reset_circuit_breaker()
+    yield
+    github_version_checker.reset_circuit_breaker()
 
 
 def test_github_redmine_import_enabled_respeita_env(monkeypatch):
@@ -197,3 +205,64 @@ def test_github_redmine_request_json_propaga_erros():
     with patch("urllib.request.urlopen", side_effect=URLError("timeout")):
         with pytest.raises(IntegracaoError, match="Falha de rede"):
             github_redmine._request_json("GET", "https://example.com")
+
+
+def test_verificar_versao_github_tenta_novamente_apos_falha_transitoria():
+    chamadas = {"n": 0}
+    sonos = []
+    conteudo = "conteudo ok"
+    payload = {"content": b64encode(conteudo.encode("utf-8")).decode("ascii")}
+
+    def fake_urlopen(req, timeout):
+        chamadas["n"] += 1
+        if chamadas["n"] < 3:
+            raise URLError("timeout de rede")
+        resp = MagicMock()
+        resp.read.return_value = json.dumps(payload).encode("utf-8")
+        resp.__enter__.return_value = resp
+        return resp
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        resultado = github_version_checker.verificar_versao_github(
+            "acme/repo", "docs/a.md", hashlib.sha256(conteudo.encode("utf-8")).hexdigest(), sleep=sonos.append,
+        )
+
+    assert resultado["status"] == "sincronizado"
+    assert chamadas["n"] == 3
+    assert len(sonos) == 2
+
+
+def test_verificar_versao_github_nao_retenta_404():
+    """HTTPError e subclasse de URLError, mas 404 e um resultado definitivo — nao deve ser retentado."""
+    chamadas = {"n": 0}
+
+    def fake_urlopen(req, timeout):
+        chamadas["n"] += 1
+        raise HTTPError("url", 404, "not found", None, None)
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        resultado = github_version_checker.verificar_versao_github(
+            "acme/repo", "docs/a.md", "hash-local", sleep=lambda _s: None,
+        )
+
+    assert resultado["status"] == "nao_encontrado"
+    assert chamadas["n"] == 1
+
+
+def test_verificar_versao_github_circuito_abre_apos_falhas_consecutivas():
+    def fake_urlopen(req, timeout):
+        raise URLError("github fora do ar")
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        for _ in range(3):
+            resultado = github_version_checker.verificar_versao_github(
+                "acme/repo", "docs/a.md", "hash-local", sleep=lambda _s: None, max_retries=1,
+            )
+            assert resultado["status"] == "erro"
+
+        resultado_circuito_aberto = github_version_checker.verificar_versao_github(
+            "acme/repo", "docs/a.md", "hash-local", sleep=lambda _s: None,
+        )
+
+    assert resultado_circuito_aberto["status"] == "erro"
+    assert "Circuito 'github_version_checker' aberto" in resultado_circuito_aberto["mensagem"]
