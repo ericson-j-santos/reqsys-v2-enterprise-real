@@ -1,13 +1,31 @@
 import json
+import time
 from typing import Any
 from urllib import parse, request
 from urllib.error import HTTPError, URLError
 
+from app.core.resilience import CircuitBreaker, CircuitBreakerOpenError, call_with_retry
 from app.core.secrets import get_secret
+
+GITHUB_MAX_RETRIES = 3
+GITHUB_RETRY_BACKOFF_SECONDS = 0.5
+GITHUB_CIRCUIT_FAILURE_THRESHOLD = 3
+GITHUB_CIRCUIT_COOLDOWN_SECONDS = 60
+
+_github_circuit = CircuitBreaker(
+    name='github_api',
+    failure_threshold=GITHUB_CIRCUIT_FAILURE_THRESHOLD,
+    cooldown_seconds=GITHUB_CIRCUIT_COOLDOWN_SECONDS,
+)
 
 
 class GitHubError(RuntimeError):
     pass
+
+
+def reset_circuit_breaker() -> None:
+    """Reseta o estado do circuit breaker (uso em testes)."""
+    _github_circuit.reset()
 
 
 def _parse_repo(repo: str) -> tuple[str, str]:
@@ -18,7 +36,27 @@ def _parse_repo(repo: str) -> tuple[str, str]:
     return parts[0], parts[1]
 
 
-def _request_json(method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+def _do_request(req: request.Request) -> Any:
+    try:
+        with request.urlopen(req, timeout=20) as resp:  # nosec B310
+            raw = resp.read().decode('utf-8')
+            return json.loads(raw) if raw else {}
+    except HTTPError as exc:
+        # Resposta HTTP definitiva do GitHub (4xx/5xx): nao e falha de rede transitoria,
+        # entao convertemos aqui para nao ser capturada pelo retry_on=(URLError,) do
+        # call_with_retry (HTTPError e subclasse de URLError em urllib).
+        detail = exc.read().decode('utf-8', errors='ignore')
+        raise GitHubError(f'HTTP {exc.code} no GitHub: {detail[:400]}') from exc
+
+
+def _request_json(
+    method: str,
+    path: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    sleep=time.sleep,
+    max_retries: int = GITHUB_MAX_RETRIES,
+) -> Any:
     token = (get_secret('GITHUB_TOKEN', '') or '').strip()
     if not token:
         raise GitHubError('GITHUB_TOKEN nao configurado.')
@@ -35,12 +73,16 @@ def _request_json(method: str, path: str, payload: dict[str, Any] | None = None)
 
     req = request.Request(url=f'https://api.github.com{path}', data=body, headers=headers, method=method)
     try:
-        with request.urlopen(req, timeout=20) as resp:  # nosec B310
-            raw = resp.read().decode('utf-8')
-            return json.loads(raw) if raw else {}
-    except HTTPError as exc:
-        detail = exc.read().decode('utf-8', errors='ignore')
-        raise GitHubError(f'HTTP {exc.code} no GitHub: {detail[:400]}') from exc
+        return call_with_retry(
+            lambda: _do_request(req),
+            max_retries=max_retries,
+            backoff_seconds=GITHUB_RETRY_BACKOFF_SECONDS,
+            retry_on=(URLError,),
+            sleep=sleep,
+            circuit=_github_circuit,
+        )
+    except CircuitBreakerOpenError as exc:
+        raise GitHubError(str(exc)) from exc
     except URLError as exc:
         raise GitHubError(f'Falha de rede no GitHub: {exc.reason}') from exc
 

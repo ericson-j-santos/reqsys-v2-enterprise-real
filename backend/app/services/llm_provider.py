@@ -1,11 +1,47 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 
+from app.core.resilience import CircuitBreaker, CircuitBreakerOpenError, call_with_retry
+
 PostJsonFn = Callable[[str, dict[str, Any], dict[str, str] | None, int], dict[str, Any]]
+
+LLM_MAX_RETRIES = 3
+LLM_RETRY_BACKOFF_SECONDS = 0.5
+LLM_CIRCUIT_FAILURE_THRESHOLD = 3
+LLM_CIRCUIT_COOLDOWN_SECONDS = 60
+
+# Um circuit breaker por host (openai/anthropic/groq/gemini/ollama sao providers
+# independentes; uma falha na OpenAI nao deve abrir o circuito da Anthropic).
+_circuits: dict[str, CircuitBreaker] = {}
+
+
+def _circuit_for(url: str) -> CircuitBreaker:
+    host = urlparse(url).netloc or 'default'
+    if host not in _circuits:
+        _circuits[host] = CircuitBreaker(
+            name=f'llm_{host}',
+            failure_threshold=LLM_CIRCUIT_FAILURE_THRESHOLD,
+            cooldown_seconds=LLM_CIRCUIT_COOLDOWN_SECONDS,
+        )
+    return _circuits[host]
+
+
+def reset_circuit_breakers() -> None:
+    """Reseta todos os circuit breakers de providers LLM (uso em testes)."""
+    for circuit in _circuits.values():
+        circuit.reset()
+
+
+def _do_post(url: str, payload: dict[str, Any], headers: dict[str, str] | None, timeout: int) -> dict[str, Any]:
+    resposta = requests.post(url, json=payload, headers=headers or {}, timeout=timeout)
+    resposta.raise_for_status()
+    return resposta.json()
 
 
 def _post_json(
@@ -13,10 +49,21 @@ def _post_json(
     payload: dict[str, Any],
     headers: dict[str, str] | None = None,
     timeout: int = 45,
+    *,
+    sleep=time.sleep,
+    max_retries: int = LLM_MAX_RETRIES,
 ) -> dict[str, Any]:
-    resposta = requests.post(url, json=payload, headers=headers or {}, timeout=timeout)
-    resposta.raise_for_status()
-    return resposta.json()
+    try:
+        return call_with_retry(
+            lambda: _do_post(url, payload, headers, timeout),
+            max_retries=max_retries,
+            backoff_seconds=LLM_RETRY_BACKOFF_SECONDS,
+            retry_on=(requests.ConnectionError, requests.Timeout),
+            sleep=sleep,
+            circuit=_circuit_for(url),
+        )
+    except CircuitBreakerOpenError as exc:
+        raise requests.ConnectionError(str(exc)) from exc
 
 
 def extrair_resposta_textual(data: dict[str, Any]) -> str:

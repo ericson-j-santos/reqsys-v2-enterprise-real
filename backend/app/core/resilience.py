@@ -16,6 +16,20 @@ class CircuitBreakerOpenError(RuntimeError):
     """Levantado quando o circuito esta aberto e a chamada e bloqueada antes de atingir o adapter externo."""
 
 
+class HTTPErrorNaoRetentavel(Exception):
+    """Envelopa um `urllib.error.HTTPError` para que `call_with_retry(retry_on=(URLError,))`
+    nao o trate como falha transitoria de rede — HTTPError e subclasse de URLError em
+    urllib, entao sem esse envelope uma resposta HTTP definitiva (404, 500 etc.) seria
+    retentada como se fosse timeout/conexao recusada. Adapters urllib devem capturar
+    HTTPError dentro da funcao passada a `call_with_retry` e relanca-la envolvida nesta
+    classe; o chamador entao desembrulha `.original` fora do retry.
+    """
+
+    def __init__(self, original: Exception) -> None:
+        super().__init__(str(original))
+        self.original = original
+
+
 @dataclass
 class CircuitBreaker:
     """Circuit breaker simples baseado em contagem de falhas consecutivas + cooldown."""

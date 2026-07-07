@@ -1,18 +1,55 @@
 import hashlib
 import hmac
 import json
+import time
 from typing import Any
 from urllib import parse, request
 from urllib.error import HTTPError, URLError
 
 from app.core.config import settings
+from app.core.resilience import CircuitBreaker, CircuitBreakerOpenError, call_with_retry
+
+FIGMA_MAX_RETRIES = 3
+FIGMA_RETRY_BACKOFF_SECONDS = 0.5
+FIGMA_CIRCUIT_FAILURE_THRESHOLD = 3
+FIGMA_CIRCUIT_COOLDOWN_SECONDS = 60
+
+_figma_circuit = CircuitBreaker(
+    name='figma_api',
+    failure_threshold=FIGMA_CIRCUIT_FAILURE_THRESHOLD,
+    cooldown_seconds=FIGMA_CIRCUIT_COOLDOWN_SECONDS,
+)
 
 
 class FigmaError(RuntimeError):
     pass
 
 
-def _request_json(method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+def reset_circuit_breaker() -> None:
+    """Reseta o estado do circuit breaker (uso em testes)."""
+    _figma_circuit.reset()
+
+
+def _do_request(req: request.Request) -> Any:
+    try:
+        with request.urlopen(req, timeout=20) as resp:  # nosec B310
+            raw = resp.read().decode('utf-8')
+            return json.loads(raw) if raw else {}
+    except HTTPError as exc:
+        # HTTPError e subclasse de URLError; convertida aqui para nao ser retentada
+        # pelo retry_on=(URLError,) do call_with_retry como se fosse falha de rede.
+        detail = exc.read().decode('utf-8', errors='ignore')
+        raise FigmaError(f'HTTP {exc.code} no Figma: {detail[:400]}') from exc
+
+
+def _request_json(
+    method: str,
+    path: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    sleep=time.sleep,
+    max_retries: int = FIGMA_MAX_RETRIES,
+) -> Any:
     token = (settings.figma_access_token or '').strip()
     if not token:
         raise FigmaError('FIGMA_ACCESS_TOKEN nao configurado.')
@@ -28,12 +65,16 @@ def _request_json(method: str, path: str, payload: dict[str, Any] | None = None)
 
     req = request.Request(url=f'https://api.figma.com{path}', data=body, headers=headers, method=method)
     try:
-        with request.urlopen(req, timeout=20) as resp:  # nosec B310
-            raw = resp.read().decode('utf-8')
-            return json.loads(raw) if raw else {}
-    except HTTPError as exc:
-        detail = exc.read().decode('utf-8', errors='ignore')
-        raise FigmaError(f'HTTP {exc.code} no Figma: {detail[:400]}') from exc
+        return call_with_retry(
+            lambda: _do_request(req),
+            max_retries=max_retries,
+            backoff_seconds=FIGMA_RETRY_BACKOFF_SECONDS,
+            retry_on=(URLError,),
+            sleep=sleep,
+            circuit=_figma_circuit,
+        )
+    except CircuitBreakerOpenError as exc:
+        raise FigmaError(str(exc)) from exc
     except URLError as exc:
         raise FigmaError(f'Falha de rede no Figma: {exc.reason}') from exc
 

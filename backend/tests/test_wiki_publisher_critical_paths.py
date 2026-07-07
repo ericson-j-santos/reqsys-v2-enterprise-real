@@ -5,6 +5,9 @@ from io import BytesIO
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
 
+import pytest
+
+from app.services import wiki_publisher as module
 from app.services.wiki_publisher import (
     _chamar_wiki_sync,
     _hash_conteudo,
@@ -13,6 +16,13 @@ from app.services.wiki_publisher import (
     gerar_conteudo_wiki_requisito,
     publicar_requisito_no_wiki,
 )
+
+
+@pytest.fixture(autouse=True)
+def _circuit_breaker_isolado():
+    module.reset_circuit_breakers()
+    yield
+    module.reset_circuit_breakers()
 
 
 def _requisito(**overrides):
@@ -203,10 +213,60 @@ def test_publicar_redmine_wiki_url_error(mock_secret, mock_urlopen):
     }.get(key, default)
     mock_urlopen.side_effect = URLError('offline')
 
-    resultado = _publicar_redmine_wiki('Requisitos/REQ-TEST-001', '# titulo', 'corr-redmine-004')
+    resultado = _publicar_redmine_wiki('Requisitos/REQ-TEST-001', '# titulo', 'corr-redmine-004', sleep=lambda _s: None)
 
     assert resultado['publicado'] is False
     assert 'Falha de conexao' in resultado['mensagem']
+
+
+@patch('app.services.wiki_publisher.request.urlopen')
+@patch('app.services.wiki_publisher.get_secret')
+def test_publicar_redmine_wiki_tenta_novamente_apos_falha_transitoria(mock_secret, mock_urlopen):
+    mock_secret.side_effect = lambda key, default='': {
+        'REDMINE_BASE_URL': 'https://redmine.example.com',
+        'REDMINE_API_KEY': 'api-key',
+        'REDMINE_PROJECT_ID': 'proj-1',
+    }.get(key, default)
+    chamadas = {'n': 0}
+    sonos = []
+
+    def fake_urlopen(req, timeout):
+        chamadas['n'] += 1
+        if chamadas['n'] < 3:
+            raise URLError('timeout de rede')
+        return MagicMock()
+
+    mock_urlopen.side_effect = fake_urlopen
+
+    resultado = _publicar_redmine_wiki('Requisitos/REQ-TEST-001', '# titulo', 'corr-redmine-005', sleep=sonos.append)
+
+    assert resultado['publicado'] is True
+    assert chamadas['n'] == 3
+    assert len(sonos) == 2
+
+
+@patch('app.services.wiki_publisher.request.urlopen')
+@patch('app.services.wiki_publisher.get_secret')
+def test_publicar_redmine_wiki_circuito_abre_apos_falhas_consecutivas(mock_secret, mock_urlopen):
+    mock_secret.side_effect = lambda key, default='': {
+        'REDMINE_BASE_URL': 'https://redmine.example.com',
+        'REDMINE_API_KEY': 'api-key',
+        'REDMINE_PROJECT_ID': 'proj-1',
+    }.get(key, default)
+    mock_urlopen.side_effect = URLError('redmine fora do ar')
+
+    for _ in range(3):
+        resultado = _publicar_redmine_wiki(
+            'Requisitos/REQ-TEST-001', '# titulo', 'corr-redmine-006', sleep=lambda _s: None, max_retries=1,
+        )
+        assert resultado['publicado'] is False
+
+    resultado_circuito_aberto = _publicar_redmine_wiki(
+        'Requisitos/REQ-TEST-001', '# titulo', 'corr-redmine-007', sleep=lambda _s: None,
+    )
+
+    assert resultado_circuito_aberto['publicado'] is False
+    assert "Circuito 'wiki_publisher_redmine.example.com' aberto" in resultado_circuito_aberto['mensagem']
 
 
 @patch('app.services.wiki_publisher.request.urlopen')

@@ -1,12 +1,17 @@
 import logging
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.correlation import obter_correlation_id
 from app.core.envelope import ok
+from app.core.pii_masking import mascarar_email
 from app.core.security import criar_token
+from app.db import get_db
+from app.services.auditoria import registrar_evento
 from app.services.azure_auth import extrair_usuario, validar_token_azure
 from app.services.rbac import permissoes
 
@@ -42,7 +47,7 @@ class AzureLoginInput(BaseModel):
 
 
 @router.post('/azure')
-def login_azure(body: AzureLoginInput, request: Request):
+def login_azure(body: AzureLoginInput, request: Request, db: Session = Depends(get_db)):
     """Login via Azure AD — valida ID token emitido pelo Microsoft Entra ID."""
     if not settings.azure_configured:
         raise HTTPException(503, 'Azure AD não configurado (AZURE_TENANT_ID / AZURE_CLIENT_ID ausentes)')
@@ -58,7 +63,8 @@ def login_azure(body: AzureLoginInput, request: Request):
     nome = info['nome']
     papel = _papel_from_email(email)
 
-    logger.info('azure_login ip=%s email=%s papel=%s', request.client.host if request.client else '?', email, papel)
+    logger.info('azure_login ip=%s email=%s papel=%s', request.client.host if request.client else '?', mascarar_email(email), papel)
+    registrar_evento(db, obter_correlation_id(), email, 'LOGIN_AZURE', 'usuario', email)
     usuario = {'email': email, 'nome': nome, 'papel': papel, 'permissoes': permissoes(papel)}
     token = criar_token({'sub': email, 'papel': papel})
     return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})
@@ -76,7 +82,7 @@ _TOKEN_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token'
 
 
 @router.post('/azure-code')
-def login_azure_code(body: AzureCodeInput, request: Request):
+def login_azure_code(body: AzureCodeInput, request: Request, db: Session = Depends(get_db)):
     """Recebe o authorization code do PKCE flow e faz o exchange com Azure AD."""
     if not settings.azure_configured:
         raise HTTPException(503, 'Azure AD não configurado')
@@ -117,7 +123,8 @@ def login_azure_code(body: AzureCodeInput, request: Request):
     papel = _papel_from_email(email)
 
     logger.info('azure_pkce_login ip=%s email=%s papel=%s',
-                request.client.host if request.client else '?', email, papel)
+                request.client.host if request.client else '?', mascarar_email(email), papel)
+    registrar_evento(db, obter_correlation_id(), email, 'LOGIN_AZURE_PKCE', 'usuario', email)
     usuario = {'email': email, 'nome': nome, 'papel': papel, 'permissoes': permissoes(papel)}
     token   = criar_token({'sub': email, 'papel': papel})
     return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})
@@ -152,7 +159,7 @@ class LoginInput(BaseModel):
 
 
 @router.post('/login')
-def login(body: LoginInput, request: Request):
+def login(body: LoginInput, request: Request, db: Session = Depends(get_db)):
     """Login demo — permitido apenas quando ALLOW_DEMO_LOGIN=true e fora de produção."""
     if settings.is_production or not settings.allow_demo_login:
         logger.warning('demo_login_bloqueado ip=%s environment=%s', request.client.host if request.client else '?', settings.app_environment)
@@ -160,7 +167,8 @@ def login(body: LoginInput, request: Request):
 
     email = body.email
     papel = _papel_from_email(email)
-    logger.info('demo_login ip=%s email=%s papel=%s', request.client.host if request.client else '?', email, papel)
+    logger.info('demo_login ip=%s email=%s papel=%s', request.client.host if request.client else '?', mascarar_email(email), papel)
+    registrar_evento(db, obter_correlation_id(), email, 'LOGIN_DEMO', 'usuario', email)
     usuario = {'email': email, 'nome': _nome_from_email(email), 'papel': papel, 'permissoes': permissoes(papel)}
     token = criar_token({'sub': email, 'papel': papel})
     return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})

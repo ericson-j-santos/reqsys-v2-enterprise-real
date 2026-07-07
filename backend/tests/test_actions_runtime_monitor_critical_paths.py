@@ -1,15 +1,24 @@
 """Caminhos críticos — monitor de GitHub Actions runtime."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
+from app.services import actions_runtime_monitor as module
 from app.services.actions_runtime_monitor import (
     WorkflowRunSnapshot,
     classificar_runs,
     decidir_estado,
     normalizar_run,
 )
+
+
+@pytest.fixture(autouse=True)
+def _circuit_breaker_isolado():
+    module.reset_circuit_breakers()
+    yield
+    module.reset_circuit_breakers()
 
 
 def _run(**kwargs) -> WorkflowRunSnapshot:
@@ -80,6 +89,49 @@ def test_github_actions_client_listar_runs(mock_get, monkeypatch):
 
     assert len(runs) == 1
     assert runs[0].workflow == 'CI'
+
+
+def test_github_actions_client_tenta_novamente_apos_falha_transitoria(monkeypatch):
+    from app.services.actions_runtime_monitor import GitHubActionsClient
+
+    monkeypatch.setenv('GITHUB_TOKEN', 'ghp_test_token')
+    chamadas = {'n': 0}
+    sonos = []
+
+    def fake_get(url, headers, params, timeout):
+        chamadas['n'] += 1
+        if chamadas['n'] < 3:
+            raise requests.ConnectionError('timeout de rede')
+        resposta = MagicMock()
+        resposta.raise_for_status.return_value = None
+        resposta.json.return_value = {'workflow_runs': [{'id': 1, 'name': 'CI', 'status': 'completed', 'conclusion': 'success'}]}
+        return resposta
+
+    with patch('app.services.actions_runtime_monitor.requests.get', side_effect=fake_get):
+        client = GitHubActionsClient()
+        runs = client.listar_runs('owner/repo', sleep=sonos.append)
+
+    assert len(runs) == 1
+    assert chamadas['n'] == 3
+    assert len(sonos) == 2
+
+
+def test_github_actions_client_circuito_abre_apos_falhas_consecutivas(monkeypatch):
+    from app.services.actions_runtime_monitor import GitHubActionsClient
+
+    monkeypatch.setenv('GITHUB_TOKEN', 'ghp_test_token')
+    client = GitHubActionsClient()
+
+    def fake_get(url, headers, params, timeout):
+        raise requests.ConnectionError('github fora do ar')
+
+    with patch('app.services.actions_runtime_monitor.requests.get', side_effect=fake_get):
+        for _ in range(3):
+            with pytest.raises(requests.ConnectionError):
+                client.listar_runs('owner/repo', sleep=lambda _s: None, max_retries=1)
+
+        with pytest.raises(requests.ConnectionError, match="Circuito 'actions_runtime_monitor_api.github.com' aberto"):
+            client.listar_runs('owner/repo', sleep=lambda _s: None)
 
 
 def test_github_actions_client_exige_token(monkeypatch):

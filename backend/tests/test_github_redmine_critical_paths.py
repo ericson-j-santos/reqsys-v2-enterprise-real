@@ -19,6 +19,13 @@ from app.services.github_redmine import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _circuit_breaker_isolado():
+    module.reset_circuit_breakers()
+    yield
+    module.reset_circuit_breakers()
+
+
 def test_parse_repo_rejeita_formato_invalido():
     with pytest.raises(IntegracaoError, match='Repo inválido'):
         _parse_repo('owner-only')
@@ -99,6 +106,50 @@ def test_publish_requisito_to_redmine_sem_config_retorna_warning():
         resultado = publish_requisito_to_redmine(_Req())
     assert resultado['issue_principal_id'] is None
     assert resultado['warnings']
+
+
+def test_request_json_tenta_novamente_apos_falha_transitoria():
+    chamadas = {'n': 0}
+    sonos = []
+
+    def fake_urlopen(req, timeout):
+        chamadas['n'] += 1
+        if chamadas['n'] < 3:
+            raise URLError('timeout de rede')
+        resp = MagicMock()
+        resp.read.return_value = json.dumps({'ok': True}).encode('utf-8')
+        resp.__enter__.return_value = resp
+        return resp
+
+    with patch('app.services.github_redmine.request.urlopen', side_effect=fake_urlopen):
+        resultado = _request_json('GET', 'https://api.github.com/repos/o/r/issues', sleep=sonos.append)
+
+    assert resultado == {'ok': True}
+    assert chamadas['n'] == 3
+    assert len(sonos) == 2
+
+
+def test_request_json_circuito_e_isolado_por_host():
+    def fake_urlopen(req, timeout):
+        raise URLError('github fora do ar')
+
+    with patch('app.services.github_redmine.request.urlopen', side_effect=fake_urlopen):
+        for _ in range(3):
+            with pytest.raises(IntegracaoError):
+                _request_json('GET', 'https://api.github.com/repos/o/r/issues', sleep=lambda _s: None, max_retries=1)
+
+        with pytest.raises(IntegracaoError, match="Circuito 'github_redmine_api.github.com' aberto"):
+            _request_json('GET', 'https://api.github.com/repos/o/r/issues', sleep=lambda _s: None)
+
+    # Redmine (host diferente) nao deve ser afetado pelo circuito do GitHub.
+    response = MagicMock()
+    response.read.return_value = json.dumps({'issue': {'id': 1}}).encode('utf-8')
+    response.__enter__ = lambda self: self
+    response.__exit__ = MagicMock(return_value=False)
+    with patch('app.services.github_redmine.request.urlopen', return_value=response):
+        resultado = _request_json('POST', 'https://redmine.example/issues.json', payload={'a': 1})
+
+    assert resultado == {'issue': {'id': 1}}
 
 
 def test_request_json_post_com_payload():
