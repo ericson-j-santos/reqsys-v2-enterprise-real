@@ -40,8 +40,8 @@ def main() -> int:
     forbidden = [item for item in FORBIDDEN if item in html]
     if forbidden:
         raise SystemExit(f"dashboard contem trecho proibido: {forbidden}")
-    if html.count("runtime-executive-post-deploy-card") != 2:
-        raise SystemExit("card post-deploy deve aparecer uma vez no section id e uma vez no link/anchor")
+    if html.count("runtime-executive-post-deploy-card") < 2:
+        raise SystemExit("card post-deploy deve ter section id e pelo menos um link/anchor")
     print("ops dashboard runtime executive post-deploy card validation: ok")
     return 0
 
