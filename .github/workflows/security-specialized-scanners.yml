@@ -257,3 +257,69 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
+
+  security-executive-summary:
+    name: Security Executive Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - gitleaks
+      - python-dependency-audit
+      - npm-audit
+      - sbom
+      - codeql
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download scanner artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: artifacts/security-scanners/downloaded
+
+      - name: Normalize downloaded artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts/security-scanners/pip-audit
+          mkdir -p artifacts/security-scanners/npm-audit
+          mkdir -p artifacts/security-scanners/sbom
+          mkdir -p artifacts/security-scanners/gitleaks
+
+          if [ -d artifacts/security-scanners/downloaded/pip-audit-report ]; then
+            cp -R artifacts/security-scanners/downloaded/pip-audit-report/. artifacts/security-scanners/pip-audit/
+          fi
+          if [ -d artifacts/security-scanners/downloaded/npm-audit-report ]; then
+            cp -R artifacts/security-scanners/downloaded/npm-audit-report/. artifacts/security-scanners/npm-audit/
+          fi
+          if [ -d artifacts/security-scanners/downloaded/reqsys-sbom-cyclonedx ]; then
+            cp -R artifacts/security-scanners/downloaded/reqsys-sbom-cyclonedx/. artifacts/security-scanners/sbom/
+          fi
+          find artifacts/security-scanners/downloaded -iname '*gitleaks*.json' -exec cp {} artifacts/security-scanners/gitleaks/ \; || true
+
+      - name: Build security executive summary
+        shell: bash
+        env:
+          STRICT_INPUT: ${{ inputs.strict || 'false' }}
+        run: |
+          strict_flag=""
+          if [ "$STRICT_INPUT" = "true" ]; then
+            strict_flag="--strict"
+          fi
+          python scripts/build_security_executive_summary.py \
+            --repo "${{ github.repository }}" \
+            --branch "${{ github.ref_name }}" \
+            --output-dir artifacts/security-executive-summary \
+            $strict_flag
+
+      - name: Upload security executive summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-executive-summary
+          path: artifacts/security-executive-summary/
+          if-no-files-found: error
+          retention-days: 30
