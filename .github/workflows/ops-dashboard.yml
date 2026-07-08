@@ -38,6 +38,7 @@ jobs:
           python -m py_compile scripts/enrich_runtime_executive_deeplinks.py
           python -m py_compile scripts/validate_runtime_executive_public_page.py
           python -m py_compile scripts/validate_runtime_executive_deeplink_state.py
+          python -m py_compile scripts/smoke_runtime_executive_static_publication.py
 
       - name: Generate fallback dashboard data
         shell: bash
@@ -135,6 +136,22 @@ jobs:
           python3 scripts/validate_runtime_executive_public_page.py
           python3 scripts/validate_runtime_executive_deeplink_state.py
 
+      - name: Smoke Runtime Executive static publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/smoke_runtime_executive_static_publication.py \
+            --root artifacts/ops-dashboard \
+            --output artifacts/runtime-executive-public-smoke/runtime-executive-public-smoke.json
+
+      - name: Publish Runtime Executive smoke artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-executive-public-smoke
+          path: artifacts/runtime-executive-public-smoke
+          if-no-files-found: error
+          retention-days: 15
+
       - name: Publish ops dashboard artifact
         uses: actions/upload-artifact@v4
         with:
@@ -151,10 +168,12 @@ jobs:
             echo "# Ops Dashboard"
             echo ""
             echo "Artifact publicado: ops-dashboard-static"
+            echo "Smoke publicado: runtime-executive-public-smoke"
             echo ""
             echo "Runtime executive index publicado em data/runtime-executive-index.json."
             echo "Runtime executive page publicada em runtime-executive.html."
             echo "Runtime executive deep link oficial integrado aos contratos do Estado Unico."
+            echo "Runtime executive static publication smoke validado."
             echo "Strategic governance index publicado em data/strategic-governance-index.json."
             echo "Conflict risk report publicado em data/conflict-risk-report.json."
             echo ""
