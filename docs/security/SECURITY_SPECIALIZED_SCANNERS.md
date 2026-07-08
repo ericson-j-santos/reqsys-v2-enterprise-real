@@ -8,11 +8,13 @@ Adicionar scanners especializados ao pipeline de segurança do ReqSys, complemen
 
 O baseline heurístico permanece como primeira barreira rápida e determinística. Os scanners especializados entram como segunda camada de profundidade.
 
+A política operacional padrão é **report-only** para `pull_request` e `push`, evitando que backlog técnico ou falso positivo de scanner externo bloqueie a evolução antes de existir consolidador executivo de segurança. O bloqueio estrito fica disponível por execução manual com `workflow_dispatch` e `strict=true`.
+
 ## Scanners adicionados
 
 | Scanner | Finalidade | Evidência |
 |---|---|---|
-| Gitleaks | Detecção especializada de segredos no repositório e histórico | Summary/artifact do action |
+| Gitleaks | Detecção especializada de segredos no snapshot atual do repositório | Summary/artifact do action |
 | pip-audit | Vulnerabilidades em dependências Python | `pip-audit-report` |
 | npm audit | Vulnerabilidades em dependências Node/frontend | `npm-audit-report` |
 | Anchore SBOM | Inventário CycloneDX de componentes | `reqsys-sbom-cyclonedx` |
@@ -28,11 +30,11 @@ O workflow executa em:
 
 ## Modo strict
 
-O input `strict` controla se alguns scanners de dependência devem falhar o job quando houver achados.
+O input `strict` controla se scanners suportados devem falhar o job quando houver achados.
 
 ```text
-strict=true  -> falha quando o scanner retorna vulnerabilidade/risco suportado
-strict=false -> publica evidência sem bloquear
+strict=false -> padrão; publica evidência sem bloquear CI/PR
+strict=true  -> execução manual; falha quando scanner suportado retorna vulnerabilidade/risco
 ```
 
 ## Evidências geradas
@@ -58,6 +60,7 @@ Artifacts publicados:
 - Permissões mínimas declaradas no workflow.
 - Evidências preservadas por 30 dias.
 - Scanners separados por job para facilitar diagnóstico.
+- Bloqueio estrito somente sob execução manual intencional.
 
 ## Relação com o Security Baseline Gate
 
