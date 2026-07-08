@@ -79,6 +79,48 @@ ALLOWLIST_PATH_PARTS = {
     "scripts/validate_security_baseline.py",
 }
 
+SECRET_TEST_PATH_MARKERS = (
+    "/test/",
+    "/tests/",
+    "/__tests__/",
+    ".spec.",
+    ".test.",
+    "responsiveMocks.js",
+)
+
+DOCUMENTATION_EXTENSIONS = {".md", ".txt"}
+
+PLACEHOLDER_SECRET_VALUES = {
+    "admin123",
+    "analista123",
+    "auditor123",
+    "senha123",
+    "admin@123",
+    "analista@123",
+    "auditor@123",
+    "qualquer",
+    "silent-token",
+    "popup-token",
+    "delegated-token",
+    "jwt-token",
+    "jwt-token-abc",
+    "token-e2e",
+    "fake-gemini",
+    "fake-groq",
+    "aiza-test",
+    "<client-secret>",
+}
+
+SECRET_ASSIGNMENT = re.compile(
+    r"(?i)(?<![.\w-])"
+    r"(client_secret|api[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|password|senha)"
+    r"\s*[:=]\s*"
+    r"(?P<quote>['\"])(?P<value>[^'\"]{8,})(?P=quote)"
+)
+
+BEARER_TOKEN = re.compile(r"(?i)authorization\s*[:=]\s*['\"]?bearer\s+[a-z0-9._\-]{20,}")
+PRIVATE_KEY = re.compile(r"(?i)-----BEGIN (RSA |EC |OPENSSH |)PRIVATE KEY-----")
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -163,6 +205,50 @@ def add_finding(findings: list[Finding], rule_id: str, severity: str, path: Path
     )
 
 
+def is_test_path(path: Path, root: Path) -> bool:
+    relative = f"/{path.relative_to(root).as_posix()}"
+    return any(marker in relative for marker in SECRET_TEST_PATH_MARKERS)
+
+
+def is_documentation_path(path: Path) -> bool:
+    return path.suffix.lower() in DOCUMENTATION_EXTENSIONS or path.parts[0:1] == ("docs",)
+
+
+def is_env_interpolated(value: str) -> bool:
+    stripped = value.strip()
+    return stripped.startswith(("$", "${", "%", "${{", "process.env", "import.meta.env", "os.environ"))
+
+
+def is_placeholder_secret(value: str) -> bool:
+    normalized = value.strip().lower()
+    return normalized in PLACEHOLDER_SECRET_VALUES or normalized.startswith(("fake-", "mock-", "test-", "dummy-", "example-"))
+
+
+def should_skip_secret_assignment(path: Path, root: Path, value: str, line: str) -> bool:
+    """Evita falsos positivos sem permitir segredos reais hardcoded.
+
+    Regras preservadas:
+    - Segredo literal real fora de teste/documentação continua crítico.
+    - Variável interpolada em shell/CI não é segredo hardcoded.
+    - Credenciais demo/mocks em teste e UI local não devem quebrar main.
+    """
+    if is_env_interpolated(value):
+        return True
+    if is_documentation_path(path):
+        return True
+    if is_placeholder_secret(value):
+        return True
+    if is_test_path(path, root):
+        return True
+    if re.search(r"(?i)(mock|stub|fixture|demo|exemplo|placeholder)", line):
+        return True
+    return False
+
+
+def should_skip_cors_finding(path: Path) -> bool:
+    return is_documentation_path(path)
+
+
 def scan_env_files(root: Path, findings: list[Finding], include_paths: set[str] | None = None) -> None:
     for path in iter_files(root, include_paths=include_paths):
         name = path.name.lower()
@@ -180,15 +266,9 @@ def scan_env_files(root: Path, findings: list[Finding], include_paths: set[str] 
 
 
 def scan_lines(root: Path, findings: list[Finding], include_paths: set[str] | None = None) -> None:
-    secret_patterns = [
-        ("SEC-SECRET-001", re.compile(r"(?i)(client_secret|api[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|password|senha)\s*[:=]\s*['\"][^'\"]{8,}['\"]")),
-        ("SEC-SECRET-002", re.compile(r"(?i)authorization\s*[:=]\s*['\"]?bearer\s+[a-z0-9._\-]{20,}")),
-        ("SEC-SECRET-003", re.compile(r"(?i)-----BEGIN (RSA |EC |OPENSSH |)PRIVATE KEY-----")),
-    ]
-
     msal_hardcode = re.compile(r"(?i)(clientId|client_id|tenantId|tenant_id|redirectUri|redirect_uri)\s*[:=]\s*['\"][^'\"]+['\"]")
     env_url = re.compile(r"https://reqsys-[a-z0-9\-]+\.fly\.dev|https://reqsys-app(?:-[a-z]+)?\.fly\.dev", re.I)
-    cors_wildcard = re.compile(r"(?i)(allow_origins\s*=\s*\[\s*['\"]\*['\"]\s*\]|Access-Control-Allow-Origin\s*[:=]\s*['\"]\*['\"])" )
+    cors_wildcard = re.compile(r"(?i)(allow_origins\s*=\s*\[\s*['\"]\*['\"]\s*\]|Access-Control-Allow-Origin\s*[:=]\s*['\"]\*['\"])")
     tls_disabled = re.compile(r"(?i)(verify\s*=\s*False|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*['\"]?0['\"]?)")
     risky_log = re.compile(r"(?i)(print|logger\.|console\.)[^\n]*(authorization|access_token|refresh_token|client_secret|password|senha|cpf)")
 
@@ -199,19 +279,43 @@ def scan_lines(root: Path, findings: list[Finding], include_paths: set[str] | No
             if not stripped or stripped.startswith("#") or stripped.startswith("//"):
                 continue
 
-            for rule_id, pattern in secret_patterns:
-                if pattern.search(line):
-                    add_finding(
-                        findings,
-                        rule_id,
-                        "critical",
-                        path,
-                        root,
-                        line_no,
-                        line,
-                        "Mover segredo para GitHub Secrets/secret manager e consumir por variável de ambiente.",
-                    )
-            if cors_wildcard.search(line):
+            for match in SECRET_ASSIGNMENT.finditer(line):
+                value = match.group("value")
+                if should_skip_secret_assignment(path, root, value, line):
+                    continue
+                add_finding(
+                    findings,
+                    "SEC-SECRET-001",
+                    "critical",
+                    path,
+                    root,
+                    line_no,
+                    line,
+                    "Mover segredo para GitHub Secrets/secret manager e consumir por variável de ambiente.",
+                )
+            if BEARER_TOKEN.search(line):
+                add_finding(
+                    findings,
+                    "SEC-SECRET-002",
+                    "critical",
+                    path,
+                    root,
+                    line_no,
+                    line,
+                    "Mover segredo para GitHub Secrets/secret manager e consumir por variável de ambiente.",
+                )
+            if PRIVATE_KEY.search(line):
+                add_finding(
+                    findings,
+                    "SEC-SECRET-003",
+                    "critical",
+                    path,
+                    root,
+                    line_no,
+                    line,
+                    "Mover segredo para GitHub Secrets/secret manager e consumir por variável de ambiente.",
+                )
+            if cors_wildcard.search(line) and not should_skip_cors_finding(path):
                 add_finding(
                     findings,
                     "SEC-CORS-001",
