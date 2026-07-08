@@ -45,6 +45,8 @@ jobs:
           python -m py_compile scripts/validate_runtime_executive_post_deploy_history.py
           python -m py_compile scripts/evaluate_runtime_executive_temporal_regression.py
           python -m py_compile scripts/validate_runtime_executive_regression_alert.py
+          python -m py_compile scripts/executive_readiness_gate.py
+          python -m py_compile scripts/validate_runtime_executive_readiness_integration.py
 
       - name: Generate fallback dashboard data
         shell: bash
@@ -105,6 +107,16 @@ jobs:
             --executive-brief docs/ops-dashboard/data/executive-brief.json
           python scripts/validate_runtime_executive_regression_alert.py
 
+      - name: Generate Executive Readiness Gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/executive_readiness_gate.py \
+            --repo "${{ github.repository }}" \
+            --branch main \
+            --output-dir artifacts/executive-readiness-gate \
+            --correlation-id "${{ github.run_id }}-${{ github.run_attempt }}"
+
       - name: Generate runtime executive index
         shell: bash
         run: |
@@ -118,7 +130,9 @@ jobs:
             --delivery-finalization artifacts/delivery-finalization/delivery-finalization-report.json \
             --conflict-risk-report docs/ops-dashboard/data/conflict-risk-report.json \
             --runtime-validation artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json \
+            --executive-readiness artifacts/executive-readiness-gate/executive-readiness-gate.json \
             --output docs/ops-dashboard/data/runtime-executive-index.json
+          python scripts/validate_runtime_executive_readiness_integration.py
 
       - name: Generate strategic governance index
         shell: bash
@@ -158,6 +172,7 @@ jobs:
           test -f artifacts/ops-dashboard/data/conflict-risk-report.json
           test -f artifacts/ops-dashboard/data/executive-brief.json
           test -f artifacts/ops-dashboard/data/runtime-executive-post-deploy-history.json
+          test -f artifacts/executive-readiness-gate/executive-readiness-gate.json
 
       - name: Validate ops dashboard contracts
         shell: bash
@@ -171,6 +186,7 @@ jobs:
           python3 scripts/validate_ops_dashboard_runtime_executive_post_deploy_card.py
           python3 scripts/validate_runtime_executive_post_deploy_history.py
           python3 scripts/validate_runtime_executive_regression_alert.py
+          python3 scripts/validate_runtime_executive_readiness_integration.py
 
       - name: Smoke Runtime Executive static publication
         shell: bash
@@ -204,6 +220,14 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Publish Executive Readiness Gate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-readiness-gate
+          path: artifacts/executive-readiness-gate
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Publish ops dashboard artifact
         uses: actions/upload-artifact@v4
         with:
@@ -223,12 +247,14 @@ jobs:
             echo "Smoke publicado: runtime-executive-public-smoke"
             echo "Histórico publicado: runtime-executive-post-deploy-history"
             echo "Regression alert publicado: runtime-executive-regression-alert"
+            echo "Executive readiness publicado: executive-readiness-gate"
             echo ""
             echo "Runtime executive index publicado em data/runtime-executive-index.json."
             echo "Runtime executive page publicada em runtime-executive.html."
             echo "Runtime executive post-deploy card publicado no Ops Dashboard."
             echo "Runtime executive post-deploy history publicado em data/runtime-executive-post-deploy-history.json."
             echo "Runtime executive regression alert publicado como evidence gate temporal."
+            echo "Executive Readiness Gate integrado como decisão de produção no Runtime Executive Index."
             echo "Runtime executive deep link oficial integrado aos contratos do Estado Unico."
             echo "Runtime executive static publication smoke validado."
             echo "Strategic governance index publicado em data/strategic-governance-index.json."
