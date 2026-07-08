@@ -173,7 +173,9 @@ def read_secret_from_remote_vault(key: str) -> str | None:
     url = f"{base_url.rstrip('/')}/v1/segredos/{key}"
 
     def _do_get() -> str | None:
-        resposta = requests.get(url, headers={'X-Vault-Token': token}, timeout=_cofre_service_timeout_seconds())
+        resposta = requests.get(
+            url, headers={'X-Vault-Token': token}, timeout=_cofre_service_timeout_seconds()
+        )  # nosec B113 - timeout sempre presente (default 5s via _cofre_service_timeout_seconds)
         if resposta.status_code == 404:
             return None
         resposta.raise_for_status()
