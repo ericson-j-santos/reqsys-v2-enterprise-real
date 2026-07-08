@@ -30,6 +30,11 @@ DEFAULT_INPUTS: dict[str, list[str]] = {
         "audit/runtime/public-runtime-validation.json",
         "artifacts/runtime/public-runtime-validation.json",
     ],
+    "security_executive_summary": [
+        "docs/ops-dashboard/data/security-executive-summary.json",
+        "artifacts/security-executive-summary/security-executive-summary.json",
+        "audit/security/security-executive-summary.json",
+    ],
     "security_baseline": [
         "artifacts/security-baseline-report/security-baseline-report.json",
         "audit/security/security-baseline-report.json",
@@ -105,17 +110,20 @@ def normalize_status(value: Any, default: str = "unknown") -> str:
         "online": "green",
         "stable": "green",
         "true": "green",
+        "security_evidence_ok": "green",
         "passed_with_warnings": "yellow",
         "partial": "yellow",
         "warning": "yellow",
         "warnings": "yellow",
         "degraded": "yellow",
         "pending": "yellow",
+        "review_security_backlog": "yellow",
         "false": "red",
         "failed": "red",
         "failure": "red",
         "critical": "red",
         "blocked": "red",
+        "blocked_security_critical": "red",
         "missing": "red",
         "offline": "red",
         "unknown": "unknown",
@@ -197,16 +205,27 @@ def evaluate_smoke(runtime: dict[str, Any] | None, public_runtime: dict[str, Any
     return domain("smoke_checks", "Smoke checks", "red", 0, False, "smoke público ausente", True)
 
 
-def evaluate_security(security: dict[str, Any] | None, brief: dict[str, Any] | None) -> dict[str, Any]:
+def evaluate_security(security_summary: dict[str, Any] | None, security: dict[str, Any] | None, brief: dict[str, Any] | None) -> dict[str, Any]:
+    if security_summary:
+        overall = security_summary.get("overall") or {}
+        totals = security_summary.get("totals") or {}
+        severity = totals.get("severity") or {}
+        critical = int(severity.get("critical") or 0)
+        high = int(severity.get("high") or 0)
+        missing = overall.get("missing_scanners") or []
+        state = "red" if bool(overall.get("production_blocked")) or critical > 0 else normalize_status(overall.get("state") or overall.get("decision"), "yellow" if missing else "green")
+        score = int(overall.get("score") if overall.get("score") is not None else score_for(state))
+        detail = f"source=security_executive_summary; decision={overall.get('decision', '-')}; critical={critical}; high={high}; missing_scanners={len(missing)}"
+        return domain("seguranca", "Segurança", state, score, True, detail, bool(overall.get("production_blocked")) or state == "red")
     if security:
         critical = int(security.get("critical_count") or security.get("critical_findings") or 0)
         high = int(security.get("high_count") or security.get("high_findings") or 0)
         status = normalize_status(security.get("status") or security.get("overall_status"), "green")
         state = "red" if critical > 0 else "yellow" if high > 0 else status
-        return domain("seguranca", "Segurança", state, None, True, f"critical={critical}; high={high}")
+        return domain("seguranca", "Segurança", state, None, True, f"source=security_baseline; critical={critical}; high={high}")
     semaforo = (brief or {}).get("semaforo_executivo") or {}
     state = normalize_status(semaforo.get("seguranca"), "green" if brief else "unknown")
-    return domain("seguranca", "Segurança", state, None, bool(brief), f"semaforo={state}", state == "red")
+    return domain("seguranca", "Segurança", state, None, bool(brief), f"source=executive_brief; semaforo={state}", state == "red")
 
 
 def evaluate_regression(regression: dict[str, Any] | None, brief: dict[str, Any] | None) -> dict[str, Any]:
@@ -254,7 +273,7 @@ def build_domains(sources: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "runtime_publico": evaluate_runtime(runtime, public_runtime),
         "deploy": domain("deploy", "Deploy", deploy_state, available=bool(post_deploy or (runtime and runtime.get("production_ready"))), detail="post_deploy disponível" if post_deploy else "evidência pós-deploy ausente; gate report-only", production_blocker=deploy_state == "red"),
         "smoke_checks": evaluate_smoke(runtime, public_runtime),
-        "seguranca": evaluate_security(sources.get("security_baseline"), brief),
+        "seguranca": evaluate_security(sources.get("security_executive_summary"), sources.get("security_baseline"), brief),
         "regressao_temporal": evaluate_regression(sources.get("regression_alert"), brief),
         "evidencias_executivas": evaluate_evidence(runtime, sources.get("pr_evidence_gate"), brief),
     }
@@ -284,7 +303,7 @@ def build_gate(repo: str, branch: str, root: Path | None = None, correlation_id:
     ready = score >= 90 and not blockers and all(domains[key]["state"] in {"green", "yellow"} for key in REQUIRED_FOR_PRODUCTION)
     risk = max(0, 100 - score)
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "kind": "executive_readiness_gate",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "correlation_id": correlation_id or str(uuid4()),
@@ -310,6 +329,7 @@ def build_gate(repo: str, branch: str, root: Path | None = None, correlation_id:
             "risco_operacional_percent": risk,
             "throughput_prs_paralelos": "alto",
             "estabilidade_ci_percent": domains["ci_cd"]["score"],
+            "seguranca_percent": domains["seguranca"]["score"],
         },
         "sources": source_meta,
         "guardrails": {
@@ -320,7 +340,7 @@ def build_gate(repo: str, branch: str, root: Path | None = None, correlation_id:
             "external_calls": False,
             "report_only": True,
         },
-        "next_safe_increment": "conectar_executive_readiness_gate_ao_runtime_executive_index_e_ops_dashboard",
+        "next_safe_increment": "expor_executive_readiness_gate_no_runtime_executive_index_e_ops_dashboard",
     }
 
 
