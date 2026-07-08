@@ -1,0 +1,701 @@
+name: Fly Environment Homologation Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente alvo para homologacao controlada"
+        required: true
+        type: choice
+        options:
+          - dev
+          - stg
+          - prod
+      deploy:
+        description: "Executar deploy antes dos smokes"
+        required: true
+        type: boolean
+        default: true
+      issue_number:
+        description: "Issue de auditoria para comentario automatico"
+        required: true
+        type: string
+        default: "729"
+      expected_sha:
+        description: "SHA minimo esperado no historico da main. Vazio usa o SHA do workflow."
+        required: false
+        type: string
+        default: ""
+      strict_publication_sync:
+        description: "Falhar se /api/runtime/build-info nao expuser SHA compativel"
+        required: true
+        type: boolean
+        default: true
+      run_dry_run:
+        description: "Executar smokes dry_run do Teams Gateway"
+        required: true
+        type: boolean
+        default: true
+      comment_issue:
+        description: "Comentar resultado na issue de homologacao"
+        required: true
+        type: boolean
+        default: true
+      approve_prod_deploy:
+        description: "Obrigatorio para deploy em prod: APROVO-PROD"
+        required: false
+        type: string
+        default: ""
+      smoke_timeout_seconds:
+        description: "Timeout HTTP dos smokes"
+        required: true
+        type: string
+        default: "20"
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: fly-environment-homologation-gate-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  ARTIFACT_DIR: artifacts/fly-homologation
+  CORRELATION_ID: fly-env-gate-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.environment }}
+
+jobs:
+  preflight:
+    name: Preflight homologacao ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    outputs:
+      fly_app: ${{ steps.resolve.outputs.fly_app }}
+      base_url: ${{ steps.resolve.outputs.base_url }}
+      github_environment: ${{ steps.resolve.outputs.github_environment }}
+      expected_sha: ${{ steps.resolve.outputs.expected_sha }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolver ambiente e validar gate
+        id: resolve
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
+          DEPLOY_REQUESTED: ${{ inputs.deploy }}
+          APPROVE_PROD_DEPLOY: ${{ inputs.approve_prod_deploy }}
+          INPUT_EXPECTED_SHA: ${{ inputs.expected_sha }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          SMOKE_TIMEOUT_SECONDS: ${{ inputs.smoke_timeout_seconds }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$ARTIFACT_DIR"
+
+          case "$TARGET_ENV" in
+            dev)
+              fly_app="reqsys-api-dev"
+              base_url="https://reqsys-api-dev.fly.dev"
+              github_environment="development"
+              ;;
+            stg)
+              fly_app="reqsys-api-stg"
+              base_url="https://reqsys-api-stg.fly.dev"
+              github_environment="staging"
+              ;;
+            prod)
+              fly_app="reqsys-api"
+              base_url="https://reqsys-api.fly.dev"
+              github_environment="production"
+              ;;
+            *)
+              echo "Ambiente invalido: $TARGET_ENV" >&2
+              exit 1
+              ;;
+          esac
+
+          if ! [[ "$ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "issue_number deve ser numerico." >&2
+            exit 1
+          fi
+
+          if ! [[ "$SMOKE_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]]; then
+            echo "smoke_timeout_seconds deve ser numerico." >&2
+            exit 1
+          fi
+
+          if [ "$TARGET_ENV" = "prod" ] && [ "$DEPLOY_REQUESTED" = "true" ] && [ "$APPROVE_PROD_DEPLOY" != "APROVO-PROD" ]; then
+            echo "Deploy em producao bloqueado: informe approve_prod_deploy=APROVO-PROD." >&2
+            exit 1
+          fi
+
+          expected_sha="${INPUT_EXPECTED_SHA:-${GITHUB_SHA}}"
+
+          if ! git cat-file -e "${expected_sha}^{commit}" 2>/dev/null; then
+            echo "expected_sha nao encontrado no historico local: ${expected_sha}" >&2
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$expected_sha" HEAD; then
+            echo "expected_sha precisa estar contido no historico do HEAD validado." >&2
+            exit 1
+          fi
+
+          {
+            echo "fly_app=$fly_app"
+            echo "base_url=$base_url"
+            echo "github_environment=$github_environment"
+            echo "expected_sha=$expected_sha"
+          } >> "$GITHUB_OUTPUT"
+
+          export fly_app base_url github_environment expected_sha
+
+          python - <<'PY'
+          import json
+          import os
+          import time
+          from pathlib import Path
+
+          payload = {
+              "schema_version": "1.0.0",
+              "contract": "fly-environment-homologation-preflight",
+              "ok": True,
+              "environment": os.environ["TARGET_ENV"],
+              "fly_app": os.environ.get("fly_app", ""),
+              "base_url": os.environ.get("base_url", ""),
+              "github_environment": os.environ.get("github_environment", ""),
+              "issue_number": os.environ["ISSUE_NUMBER"],
+              "deploy_requested": os.environ["DEPLOY_REQUESTED"] == "true",
+              "expected_sha": os.environ.get("expected_sha") or os.environ["GITHUB_SHA"],
+              "workflow_sha": os.environ["GITHUB_SHA"],
+              "correlation_id": os.environ["CORRELATION_ID"],
+              "generated_at_epoch": int(time.time()),
+          }
+          path = Path(os.environ["ARTIFACT_DIR"]) / "preflight.json"
+          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+        shell: bash
+
+      - name: Validar issue de auditoria
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = Number('${{ inputs.issue_number }}');
+            if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+              core.setFailed('issue_number inválido.');
+              return;
+            }
+            const { owner, repo } = context.repo;
+            const { data: issue } = await github.rest.issues.get({
+              owner,
+              repo,
+              issue_number: issueNumber,
+            });
+            if (issue.state !== 'open') {
+              core.setFailed(`Issue #${issueNumber} precisa estar aberta para receber evidências.`);
+            }
+
+      - name: Upload preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly-homologation-preflight-${{ inputs.environment }}
+          path: artifacts/fly-homologation/preflight.json
+          if-no-files-found: warn
+
+  deploy:
+    name: Deploy Fly ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: always() && needs.preflight.result == 'success'
+    environment:
+      name: ${{ needs.preflight.outputs.github_environment }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Setup Flyctl
+        if: ${{ inputs.deploy == true }}
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy no Fly.io
+        if: ${{ inputs.deploy == true }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_APP: ${{ needs.preflight.outputs.fly_app }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+
+          deploy_log="$ARTIFACT_DIR/deploy-${{ inputs.environment }}.log"
+          max_attempts=3
+
+          for attempt in $(seq 1 "$max_attempts"); do
+            echo "::group::Deploy ${FLY_APP} attempt ${attempt}/${max_attempts}"
+            set +e
+            flyctl deploy --remote-only \
+              --config fly.toml \
+              --app "$FLY_APP" \
+              --build-arg "GITHUB_SHA=${GITHUB_SHA}" 2>&1 | tee "$deploy_log"
+            status="${PIPESTATUS[0]}"
+            set -e
+            echo "::endgroup::"
+
+            if [ "$status" -eq 0 ]; then
+              python - <<'PY'
+              import json
+              import os
+              import time
+              from pathlib import Path
+
+              payload = {
+                  "schema_version": "1.0.0",
+                  "contract": "fly-environment-homologation-deploy",
+                  "ok": True,
+                  "environment": "${{ inputs.environment }}",
+                  "fly_app": os.environ["FLY_APP"],
+                  "base_url": "${{ needs.preflight.outputs.base_url }}",
+                  "deployed_sha": os.environ["GITHUB_SHA"],
+                  "correlation_id": os.environ["CORRELATION_ID"],
+                  "generated_at_epoch": int(time.time()),
+              }
+              path = Path(os.environ["ARTIFACT_DIR"]) / "deploy-${{ inputs.environment }}.json"
+              path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+              PY
+              exit 0
+            fi
+
+            if ! grep -Eiq "timeout reached waiting for health checks|request canceled|failed to get VM" "$deploy_log"; then
+              exit "$status"
+            fi
+
+            if [ "$attempt" -eq "$max_attempts" ]; then
+              exit "$status"
+            fi
+
+            sleep 60
+          done
+        shell: bash
+
+      - name: Registrar deploy omitido
+        if: ${{ inputs.deploy == false }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          python - <<'PY'
+          import json
+          import os
+          import time
+          from pathlib import Path
+
+          payload = {
+              "schema_version": "1.0.0",
+              "contract": "fly-environment-homologation-deploy",
+              "ok": True,
+              "skipped": True,
+              "reason": "deploy=false",
+              "environment": "${{ inputs.environment }}",
+              "fly_app": "${{ needs.preflight.outputs.fly_app }}",
+              "base_url": "${{ needs.preflight.outputs.base_url }}",
+              "workflow_sha": os.environ["GITHUB_SHA"],
+              "correlation_id": os.environ["CORRELATION_ID"],
+              "generated_at_epoch": int(time.time()),
+          }
+          path = Path(os.environ["ARTIFACT_DIR"]) / "deploy-${{ inputs.environment }}.json"
+          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+        shell: bash
+
+      - name: Upload deploy evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly-homologation-deploy-${{ inputs.environment }}
+          path: |
+            artifacts/fly-homologation/deploy-${{ inputs.environment }}.json
+            artifacts/fly-homologation/deploy-${{ inputs.environment }}.log
+          if-no-files-found: warn
+
+  smoke:
+    name: Smoke Teams Gateway ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    needs:
+      - preflight
+      - deploy
+    if: always() && needs.preflight.result == 'success' && needs.deploy.result == 'success'
+    timeout-minutes: 15
+    steps:
+      - name: Executar smokes governados
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
+          BASE_URL: ${{ needs.preflight.outputs.base_url }}
+          FLY_APP: ${{ needs.preflight.outputs.fly_app }}
+          EXPECTED_SHA: ${{ needs.preflight.outputs.expected_sha }}
+          STRICT_PUBLICATION_SYNC: ${{ inputs.strict_publication_sync }}
+          RUN_DRY_RUN: ${{ inputs.run_dry_run }}
+          SMOKE_TIMEOUT_SECONDS: ${{ inputs.smoke_timeout_seconds }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          from pathlib import Path
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          base_url = os.environ["BASE_URL"].rstrip("/")
+          target_env = os.environ["TARGET_ENV"]
+          timeout = int(os.environ["SMOKE_TIMEOUT_SECONDS"])
+          strict_sync = os.environ["STRICT_PUBLICATION_SYNC"] == "true"
+          run_dry_run = os.environ["RUN_DRY_RUN"] == "true"
+          expected_sha = os.environ["EXPECTED_SHA"]
+          correlation_id = os.environ["CORRELATION_ID"]
+
+          def normalize_sha(value):
+              if not value:
+                  return None
+              value = str(value).strip()
+              return value[:12] if value else None
+
+          def unwrap(payload):
+              if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+                  return payload["data"]
+              return payload
+
+          def http_json(name, method, path, payload=None, critical=True, expected_status=200):
+              url = f"{base_url}{path}"
+              body = None
+              headers = {
+                  "Accept": "application/json",
+                  "User-Agent": "reqsys-fly-environment-homologation-gate/1.0",
+                  "X-Correlation-ID": correlation_id,
+              }
+              if payload is not None:
+                  body = json.dumps(payload).encode("utf-8")
+                  headers["Content-Type"] = "application/json"
+
+              started = time.time()
+              request = Request(url, data=body, method=method, headers=headers)
+              result = {
+                  "name": name,
+                  "method": method,
+                  "path": path,
+                  "url": url,
+                  "critical": critical,
+                  "expected_status": expected_status,
+                  "status_code": None,
+                  "ok": False,
+                  "duration_ms": None,
+                  "error": None,
+                  "data_summary": None,
+              }
+              try:
+                  with urlopen(request, timeout=timeout) as response:
+                      raw = response.read(256_000)
+                      result["status_code"] = response.status
+              except HTTPError as exc:
+                  raw = exc.read(256_000)
+                  result["status_code"] = exc.code
+                  result["error"] = str(exc)
+              except (URLError, TimeoutError, OSError) as exc:
+                  raw = b""
+                  result["error"] = str(exc)
+
+              result["duration_ms"] = int((time.time() - started) * 1000)
+              parsed = None
+              if raw:
+                  try:
+                      parsed = json.loads(raw.decode("utf-8"))
+                  except Exception as exc:
+                      result["error"] = result["error"] or f"json_invalid: {exc}"
+
+              data = unwrap(parsed)
+              if isinstance(data, dict):
+                  result["data_summary"] = {
+                      "keys": sorted(data.keys())[:20],
+                      "schema_version": data.get("schema_version"),
+                      "status": data.get("status"),
+                      "canal": data.get("canal"),
+                      "canal_usado": data.get("canal_usado"),
+                      "dry_run": data.get("dry_run"),
+                      "motivo": data.get("motivo"),
+                      "erro": data.get("erro"),
+                  }
+
+              result["ok"] = result["status_code"] == expected_status and result["error"] is None
+              return result, data
+
+          probes = []
+
+          status_probe, status_data = http_json(
+              "teams_gateway_status",
+              "GET",
+              "/v1/teams-gateway/status",
+              critical=True,
+          )
+          if not (isinstance(status_data, dict) and status_data.get("schema_version") == "1.0.0"):
+              status_probe["ok"] = False
+              status_probe["error"] = status_probe["error"] or "schema_version esperado 1.0.0 nao encontrado"
+          probes.append(status_probe)
+
+          build_probe, build_data = http_json(
+              "runtime_build_info",
+              "GET",
+              "/api/runtime/build-info",
+              critical=strict_sync,
+          )
+          observed_sha = None
+          if isinstance(build_data, dict):
+              observed_sha = build_data.get("build_sha") or build_data.get("commit_sha")
+          expected_short = normalize_sha(expected_sha)
+          observed_short = normalize_sha(observed_sha)
+          if strict_sync:
+              build_probe["ok"] = build_probe["ok"] and bool(observed_short) and observed_short == expected_short
+              if not build_probe["ok"]:
+                  build_probe["error"] = build_probe["error"] or (
+                      f"SHA publicado divergente ou ausente: esperado={expected_short}, observado={observed_short or 'n/a'}"
+                  )
+          probes.append(build_probe)
+
+          if run_dry_run:
+              routes_payload = {
+                  "destino_tipo": "chat",
+                  "destino_id": "homologacao-dry-run",
+                  "texto": "Smoke de rota do Teams Gateway",
+                  "usuario_access_token": "token-smoke-dry-run",
+                  "dry_run": True,
+                  "metadata": {
+                      "gate": "fly-environment-homologation-gate",
+                      "environment": target_env,
+                      "correlation_id": correlation_id,
+                  },
+              }
+              routes_probe, routes_data = http_json(
+                  "teams_gateway_routes_graph_delegado",
+                  "POST",
+                  "/v1/teams-gateway/routes",
+                  payload=routes_payload,
+                  critical=True,
+              )
+              if not (isinstance(routes_data, dict) and routes_data.get("canal") == "graph_delegado"):
+                  routes_probe["ok"] = False
+                  routes_probe["error"] = routes_probe["error"] or "rota esperada graph_delegado nao selecionada"
+              probes.append(routes_probe)
+
+              message_payload = dict(routes_payload)
+              message_payload["texto"] = "Smoke dry_run de mensagem do Teams Gateway"
+              message_probe, message_data = http_json(
+                  "teams_gateway_messages_dry_run",
+                  "POST",
+                  "/v1/teams-gateway/messages",
+                  payload=message_payload,
+                  critical=True,
+              )
+              if not (isinstance(message_data, dict) and message_data.get("dry_run") is True):
+                  message_probe["ok"] = False
+                  message_probe["error"] = message_probe["error"] or "dry_run esperado nao confirmado"
+              probes.append(message_probe)
+
+              delegated_payload = dict(message_payload)
+              delegated_probe, delegated_data = http_json(
+                  "teams_gateway_messages_delegated_dry_run",
+                  "POST",
+                  "/v1/teams-gateway/messages/delegated",
+                  payload=delegated_payload,
+                  critical=True,
+              )
+              if not (isinstance(delegated_data, dict) and delegated_data.get("dry_run") is True):
+                  delegated_probe["ok"] = False
+                  delegated_probe["error"] = delegated_probe["error"] or "dry_run delegado esperado nao confirmado"
+              probes.append(delegated_probe)
+
+              webhook_payload = {
+                  "destino_tipo": "canal",
+                  "texto": "Smoke dry_run webhook do Teams Gateway",
+                  "webhook_url": "https://example.invalid/reqsys-teams-gateway-smoke",
+                  "dry_run": True,
+                  "metadata": {
+                      "gate": "fly-environment-homologation-gate",
+                      "environment": target_env,
+                      "correlation_id": correlation_id,
+                  },
+              }
+              webhook_probe, webhook_data = http_json(
+                  "teams_gateway_messages_webhook_dry_run",
+                  "POST",
+                  "/v1/teams-gateway/messages/webhook",
+                  payload=webhook_payload,
+                  critical=True,
+              )
+              if not (isinstance(webhook_data, dict) and webhook_data.get("dry_run") is True):
+                  webhook_probe["ok"] = False
+                  webhook_probe["error"] = webhook_probe["error"] or "dry_run webhook esperado nao confirmado"
+              probes.append(webhook_probe)
+
+          blocking = [
+              f"{probe['name']}: {probe.get('error') or 'falha'}"
+              for probe in probes
+              if probe["critical"] and not probe["ok"]
+          ]
+
+          evidence = {
+              "schema_version": "1.0.0",
+              "contract": "fly-environment-homologation-gate",
+              "ok": not blocking,
+              "environment": target_env,
+              "fly_app": os.environ["FLY_APP"],
+              "base_url": base_url,
+              "expected_sha": expected_sha,
+              "observed_sha": observed_sha,
+              "strict_publication_sync": strict_sync,
+              "run_dry_run": run_dry_run,
+              "correlation_id": correlation_id,
+              "run": {
+                  "id": os.environ["GITHUB_RUN_ID"],
+                  "attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+                  "sha": os.environ["GITHUB_SHA"],
+                  "ref": os.environ["GITHUB_REF_NAME"],
+              },
+              "generated_at_epoch": int(time.time()),
+              "probes": probes,
+              "blocking_issues": blocking,
+              "next_actions": []
+              if not blocking
+              else [
+                  "Conferir se o deploy publicou a imagem correta no Fly.io.",
+                  "Validar logs da Machine Fly do ambiente alvo.",
+                  "Reexecutar o gate apos estabilizacao do runtime.",
+              ],
+          }
+
+          artifact_dir = Path(os.environ["ARTIFACT_DIR"])
+          evidence_path = artifact_dir / f"evidence-{target_env}.json"
+          evidence_path.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+          rows = [
+              "| Probe | Critico | Status HTTP | OK | Erro |",
+              "|---|---:|---:|---:|---|",
+          ]
+          for probe in probes:
+              rows.append(
+                  f"| {probe['name']} | {str(probe['critical']).lower()} | "
+                  f"{probe['status_code'] or 'n/a'} | {str(probe['ok']).lower()} | "
+                  f"{(probe.get('error') or '').replace('|', '/')} |"
+              )
+
+          summary = "\n".join(
+              [
+                  f"## Fly Environment Homologation Gate — {target_env}",
+                  "",
+                  f"- Resultado: {'aprovado' if evidence['ok'] else 'reprovado'}",
+                  f"- App Fly: `{evidence['fly_app']}`",
+                  f"- URL: {base_url}",
+                  f"- SHA esperado: `{expected_sha}`",
+                  f"- SHA observado: `{observed_sha or 'n/a'}`",
+                  f"- Correlation ID: `{correlation_id}`",
+                  "",
+                  *rows,
+                  "",
+              ]
+          )
+          (artifact_dir / f"summary-{target_env}.md").write_text(summary, encoding="utf-8")
+          Path(os.environ["GITHUB_STEP_SUMMARY"]).write_text(summary, encoding="utf-8")
+
+          if blocking:
+              print(json.dumps(evidence, ensure_ascii=False, indent=2))
+              sys.exit(1)
+          PY
+        shell: bash
+
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly-homologation-${{ inputs.environment }}
+          path: |
+            artifacts/fly-homologation/evidence-${{ inputs.environment }}.json
+            artifacts/fly-homologation/summary-${{ inputs.environment }}.md
+          if-no-files-found: warn
+
+  comment-issue:
+    name: Comentar issue de homologacao
+    runs-on: ubuntu-latest
+    needs:
+      - preflight
+      - deploy
+      - smoke
+    if: always() && inputs.comment_issue == true && needs.preflight.result == 'success'
+    steps:
+      - name: Baixar evidencia de smoke
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: fly-homologation-${{ inputs.environment }}
+          path: downloaded-evidence
+
+      - name: Comentar issue
+        uses: actions/github-script@v7
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
+          FLY_APP: ${{ needs.preflight.outputs.fly_app }}
+          BASE_URL: ${{ needs.preflight.outputs.base_url }}
+          EXPECTED_SHA: ${{ needs.preflight.outputs.expected_sha }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          SMOKE_RESULT: ${{ needs.smoke.result }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const evidencePath = path.join('downloaded-evidence', `evidence-${process.env.TARGET_ENV}.json`);
+            let evidence = null;
+
+            if (fs.existsSync(evidencePath)) {
+              evidence = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+            }
+
+            const ok = evidence ? evidence.ok : false;
+            const probes = evidence?.probes ?? [];
+            const rows = probes.map((probe) => (
+              `| ${probe.name} | ${probe.critical ? 'sim' : 'não'} | ${probe.status_code ?? 'n/a'} | ${probe.ok ? 'sim' : 'não'} | ${(probe.error ?? '').replaceAll('|', '/')} |`
+            )).join('\n');
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `## Fly Environment Homologation Gate — ${process.env.TARGET_ENV}`,
+              ``,
+              `Resultado: **${ok ? 'APROVADO' : 'REPROVADO'}**`,
+              ``,
+              `- App Fly: \`${process.env.FLY_APP}\``,
+              `- URL: ${process.env.BASE_URL}`,
+              `- SHA esperado: \`${process.env.EXPECTED_SHA}\``,
+              `- SHA observado: \`${evidence?.observed_sha ?? 'n/a'}\``,
+              `- Deploy job: \`${process.env.DEPLOY_RESULT}\``,
+              `- Smoke job: \`${process.env.SMOKE_RESULT}\``,
+              `- Correlation ID: \`${evidence?.correlation_id ?? process.env.CORRELATION_ID ?? 'n/a'}\``,
+              `- Workflow run: ${runUrl}`,
+              ``,
+              `| Probe | Crítico | HTTP | OK | Erro |`,
+              `|---|---:|---:|---:|---|`,
+              rows || `| evidencia_indisponivel | sim | n/a | não | artifact não encontrado |`,
+              ``,
+              ok
+                ? `Ambiente homologado pelo gate automatizado.`
+                : `Ambiente não homologado. Corrigir bloqueios e reexecutar o gate antes de avançar para o próximo ambiente.`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body,
+            });
