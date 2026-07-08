@@ -2,7 +2,7 @@
 
 ## Resumo
 
-Integra o `Executive Readiness Gate` ao `Runtime Executive Index` e ao fluxo do Ops Dashboard, tornando a decisão `READY_FOR_PRODUCTION` / `BLOCKED_FOR_PRODUCTION` consumível por dashboards, automações e agentes.
+Integra o `Executive Readiness Gate` ao `Runtime Executive Index`, ao fluxo do Ops Dashboard e à camada visual pública, tornando a decisão `READY_FOR_PRODUCTION` / `BLOCKED_FOR_PRODUCTION` consumível por dashboards, automações, agentes e operadores.
 
 ## Alterações
 
@@ -18,12 +18,23 @@ Integra o `Executive Readiness Gate` ao `Runtime Executive Index` e ao fluxo do 
   - Gera `artifacts/executive-readiness-gate/executive-readiness-gate.json` antes do Runtime Executive Index.
   - Passa `--executive-readiness` para o builder do índice executivo.
   - Valida o contrato integrado.
+  - Injeta os cards visuais nos painéis públicos.
   - Publica artifact dedicado `executive-readiness-gate`.
 
+- `scripts/inject_runtime_executive_readiness_cards.py`
+  - Injeta card visual de Executive Readiness no `docs/ops-dashboard/index.html`.
+  - Injeta seção dedicada no `docs/ops-dashboard/runtime-executive.html`.
+  - Mantém injeção idempotente e offline.
+
 - `scripts/validate_runtime_executive_readiness_integration.py`
-  - Valida presença do card executivo.
+  - Valida presença do card executivo no contrato.
   - Valida consistência entre summary e card.
   - Valida link e guardrail de precedência.
+
+- `scripts/validate_runtime_executive_readiness_visual.py`
+  - Valida presença do card visual nos dois HTMLs públicos.
+  - Valida IDs usados pela renderização JavaScript.
+  - Valida consumo de `cards.executive_readiness`.
 
 - `tests/test_runtime_executive_readiness_index.py`
   - Cobre cenário pronto para produção.
@@ -49,6 +60,16 @@ Integra o `Executive Readiness Gate` ao `Runtime Executive Index` e ao fluxo do 
 }
 ```
 
+## Visual adicionado
+
+- Decisão executiva.
+- Produção liberada/bloqueada.
+- Score de readiness.
+- Risco operacional.
+- Quantidade de blockers.
+- Domínios obrigatórios.
+- Links para `runtime-executive-index.json`, `executive-readiness-gate` e Executive Brief.
+
 ## Guardrails
 
 - Execução offline.
@@ -57,7 +78,8 @@ Integra o `Executive Readiness Gate` ao `Runtime Executive Index` e ao fluxo do 
 - Sem deploy.
 - Sem merge automático por este workflow.
 - Precedência explícita do Executive Readiness Gate para decisão de produção.
+- Interface consome somente `runtime-executive-index.json`.
 
 ## Próximo incremento seguro
 
-Expor visualmente `cards.executive_readiness` como card dedicado no HTML público do Ops Dashboard e no `runtime-executive.html`, mantendo o mesmo contrato `runtime-executive-index.json`.
+Após CI verde e merge, consolidar o mesmo sinal como indicador de topo no relatório executivo enxuto e nos gates externos de promoção DEV → STG → PROD.
