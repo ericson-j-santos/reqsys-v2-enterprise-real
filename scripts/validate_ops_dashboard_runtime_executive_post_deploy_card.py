@@ -15,6 +15,7 @@ REQUIRED = [
     "renderRuntimeExecutivePostDeploy",
     "./data/executive-brief.json",
     "./data/runtime-executive-post-deploy-history.json",
+    "../artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json",
     "runtime_executive_post_deploy",
     "post-deploy-state",
     "post-deploy-score",
@@ -26,6 +27,13 @@ REQUIRED = [
     "post-deploy-history-score-trend",
     "post-deploy-history-stability",
     "post-deploy-history-rows",
+    "post-deploy-regression-status",
+    "post-deploy-regression-risk",
+    "post-deploy-regression-blocked",
+    "post-deploy-regression-violations",
+    "post-deploy-regression-rows",
+    "regression_alert",
+    "production_blocked",
     "await renderRuntimeExecutivePostDeploy();",
 ]
 
