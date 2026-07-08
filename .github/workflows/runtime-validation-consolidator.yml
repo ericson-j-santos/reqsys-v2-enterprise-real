@@ -16,6 +16,7 @@ on:
       - Main Post-Merge Validation
       - Runtime Health Validator
       - Runtime Production Smoke Governed
+      - Runtime Executive Post-Deploy Smoke
     types:
       - completed
 
@@ -74,12 +75,26 @@ jobs:
           name: runtime-production-smoke-governed
           path: artifacts/runtime-production-smoke
 
+      - name: Download Runtime Executive Post-Deploy Smoke artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: runtime-executive-post-deploy-smoke
+          path: artifacts/runtime-executive-post-deploy-smoke
+
       - name: Download unified operational signal artifact
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: unified-operational-signal
           path: artifacts/unified-operational-signal-consolidator
+
+      - name: Validar scripts de consolidação
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/runtime_validation_consolidator.py
+          python -m py_compile scripts/enrich_runtime_validation_with_post_deploy_smoke.py
 
       - name: Gerar runtime-validation-snapshot.json
         shell: bash
@@ -92,6 +107,14 @@ jobs:
             --branch "${TARGET_BRANCH}" \
             --output-dir "artifacts/runtime-validation-consolidator" \
             --publish-executive-brief "docs/ops-dashboard/data/executive-brief.json"
+
+      - name: Integrar Runtime Executive post-deploy smoke ao Estado Unico
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/enrich_runtime_validation_with_post_deploy_smoke.py \
+            --snapshot "artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json" \
+            --executive-brief "docs/ops-dashboard/data/executive-brief.json"
 
       - name: Gerar runtime-executive-index.json
         shell: bash
@@ -114,11 +137,13 @@ jobs:
             score=$(python3 -c "import json; print(json.load(open('${snapshot}'))['validation_score'])")
             risk=$(python3 -c "import json; print(json.load(open('${snapshot}'))['operational_risk_percent'])")
             gold=$(python3 -c "import json; d=json.load(open('${snapshot}')); print(d['gold_standard_operational_risk']['overall_score'])")
+            post=$(python3 -c "import json; d=json.load(open('${snapshot}')); print(d.get('runtime_executive_post_deploy_ready'))")
             echo "## Runtime Validation Consolidator" >> "$GITHUB_STEP_SUMMARY"
             echo "- State: \`${state}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Validation score: \`${score}%\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Operational risk: \`${risk}%\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Padrão Ouro risco operacional: \`${gold}%\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Runtime Executive post-deploy ready: \`${post}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Artifact: \`runtime-validation-evidence\`" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "## Runtime Validation Consolidator" >> "$GITHUB_STEP_SUMMARY"
