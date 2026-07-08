@@ -1,0 +1,60 @@
+name: Executive Readiness Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/executive_readiness_gate.py"
+      - "tests/test_executive_readiness_gate.py"
+      - ".github/workflows/executive-readiness-gate.yml"
+      - "artifacts/**"
+      - "audit/**"
+      - "docs/ops-dashboard/data/**"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/executive_readiness_gate.py"
+      - "tests/test_executive_readiness_gate.py"
+      - ".github/workflows/executive-readiness-gate.yml"
+      - "artifacts/**"
+      - "audit/**"
+      - "docs/ops-dashboard/data/**"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  executive-readiness-gate:
+    name: Build Executive Readiness Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run unit tests
+        run: python -m unittest tests/test_executive_readiness_gate.py
+
+      - name: Build gate artifact
+        run: |
+          python scripts/executive_readiness_gate.py \
+            --repo "${{ github.repository }}" \
+            --branch "${{ github.ref_name }}" \
+            --correlation-id "${{ github.run_id }}-${{ github.run_attempt }}"
+
+      - name: Upload Executive Readiness Gate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-readiness-gate
+          path: |
+            artifacts/executive-readiness-gate/executive-readiness-gate.json
+            artifacts/executive-readiness-gate/summary.md
+          if-no-files-found: error
