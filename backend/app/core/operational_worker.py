@@ -5,7 +5,11 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from app.core.operational_queue import OperationalTask, OperationalTaskType, operational_queue
+from app.core.operational_queue import (
+    OperationalTask,
+    OperationalTaskType,
+    operational_queue,
+)
 
 logger = logging.getLogger('reqsys.operational_worker')
 
