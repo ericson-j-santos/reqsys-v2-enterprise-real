@@ -49,6 +49,9 @@ jobs:
           python -m py_compile scripts/validate_ops_dashboard_regression_alert_semaforo.py
           python -m py_compile scripts/enrich_runtime_executive_canonical_blocking.py
           python -m py_compile scripts/validate_runtime_executive_canonical_blocking.py
+          python -m py_compile scripts/build_security_executive_summary.py
+          python -m py_compile scripts/inject_ops_dashboard_security_executive_summary_card.py
+          python -m py_compile scripts/validate_ops_dashboard_security_executive_summary_card.py
 
       - name: Generate fallback dashboard data
         shell: bash
@@ -88,6 +91,18 @@ jobs:
             --branch main \
             --output-dir artifacts/runtime-validation-consolidator \
             --publish-executive-brief docs/ops-dashboard/data/executive-brief.json
+
+      - name: Build Security Executive Summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build_security_executive_summary.py \
+            --repo "${{ github.repository }}" \
+            --branch main \
+            --output-dir artifacts/security-executive-summary
+          cp artifacts/security-executive-summary/security-executive-summary.json docs/ops-dashboard/data/security-executive-summary.json
+          cp artifacts/security-executive-summary/security-executive-summary.md docs/ops-dashboard/data/security-executive-summary.md
+          python -m json.tool docs/ops-dashboard/data/security-executive-summary.json >/tmp/security-executive-summary.validated.json
 
       - name: Build Runtime Executive post-deploy history
         shell: bash
@@ -158,6 +173,12 @@ jobs:
           set -euo pipefail
           python scripts/inject_ops_dashboard_regression_alert_semaforo.py
 
+      - name: Inject Security Executive Summary card
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/inject_ops_dashboard_security_executive_summary_card.py
+
       - name: Inject Runtime Executive post-deploy card
         shell: bash
         run: |
@@ -178,6 +199,7 @@ jobs:
           test -f artifacts/ops-dashboard/data/conflict-risk-report.json
           test -f artifacts/ops-dashboard/data/executive-brief.json
           test -f artifacts/ops-dashboard/data/runtime-executive-post-deploy-history.json
+          test -f artifacts/ops-dashboard/data/security-executive-summary.json
 
       - name: Validate ops dashboard contracts
         shell: bash
@@ -193,6 +215,7 @@ jobs:
           python3 scripts/validate_runtime_executive_regression_alert.py
           python3 scripts/validate_ops_dashboard_regression_alert_semaforo.py
           python3 scripts/validate_runtime_executive_canonical_blocking.py
+          python3 scripts/validate_ops_dashboard_security_executive_summary_card.py
 
       - name: Smoke Runtime Executive static publication
         shell: bash
@@ -226,6 +249,14 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Publish Security Executive Summary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-executive-summary
+          path: artifacts/security-executive-summary
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Publish ops dashboard artifact
         uses: actions/upload-artifact@v4
         with:
@@ -245,10 +276,12 @@ jobs:
             echo "Smoke publicado: runtime-executive-public-smoke"
             echo "Histórico publicado: runtime-executive-post-deploy-history"
             echo "Regression alert publicado: runtime-executive-regression-alert"
+            echo "Security executive summary publicado: security-executive-summary"
             echo ""
             echo "Runtime executive index publicado em data/runtime-executive-index.json."
             echo "Runtime executive page publicada em runtime-executive.html."
             echo "Runtime executive post-deploy card publicado no Ops Dashboard."
+            echo "Security executive summary card publicado no Ops Dashboard."
             echo "Runtime executive regression alert refletido no semaforo executivo principal."
             echo "Runtime executive canonical blocking publicado no Runtime Executive Index e Executive Brief."
             echo "Runtime executive post-deploy history publicado em data/runtime-executive-post-deploy-history.json."
@@ -257,6 +290,7 @@ jobs:
             echo "Runtime executive static publication smoke validado."
             echo "Strategic governance index publicado em data/strategic-governance-index.json."
             echo "Conflict risk report publicado em data/conflict-risk-report.json."
+            echo "Security executive summary publicado em data/security-executive-summary.json."
             echo ""
             echo "Escopo: painel estatico, priorizacao report-only e governanca executiva."
           } >> "$GITHUB_STEP_SUMMARY"
