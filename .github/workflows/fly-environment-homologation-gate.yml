@@ -245,27 +245,7 @@ jobs:
             echo "::endgroup::"
 
             if [ "$status" -eq 0 ]; then
-              python - <<'PY'
-              import json
-              import os
-              import time
-              from pathlib import Path
-
-              payload = {
-                  "schema_version": "1.0.0",
-                  "contract": "fly-environment-homologation-deploy",
-                  "ok": True,
-                  "environment": "${{ inputs.environment }}",
-                  "fly_app": os.environ["FLY_APP"],
-                  "base_url": "${{ needs.preflight.outputs.base_url }}",
-                  "deployed_sha": os.environ["GITHUB_SHA"],
-                  "correlation_id": os.environ["CORRELATION_ID"],
-                  "generated_at_epoch": int(time.time()),
-              }
-              path = Path(os.environ["ARTIFACT_DIR"]) / "deploy-${{ inputs.environment }}.json"
-              path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-              PY
-              exit 0
+              break
             fi
 
             if ! grep -Eiq "timeout reached waiting for health checks|request canceled|failed to get VM" "$deploy_log"; then
@@ -278,6 +258,27 @@ jobs:
 
             sleep 60
           done
+
+          python - <<'PY'
+          import json
+          import os
+          import time
+          from pathlib import Path
+
+          payload = {
+              "schema_version": "1.0.0",
+              "contract": "fly-environment-homologation-deploy",
+              "ok": True,
+              "environment": "${{ inputs.environment }}",
+              "fly_app": os.environ["FLY_APP"],
+              "base_url": "${{ needs.preflight.outputs.base_url }}",
+              "deployed_sha": os.environ["GITHUB_SHA"],
+              "correlation_id": os.environ["CORRELATION_ID"],
+              "generated_at_epoch": int(time.time()),
+          }
+          path = Path(os.environ["ARTIFACT_DIR"]) / "deploy-${{ inputs.environment }}.json"
+          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
         shell: bash
 
       - name: Registrar deploy omitido
