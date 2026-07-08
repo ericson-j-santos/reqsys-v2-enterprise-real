@@ -52,6 +52,11 @@ jobs:
           python -m py_compile scripts/build_security_executive_summary.py
           python -m py_compile scripts/inject_ops_dashboard_security_executive_summary_card.py
           python -m py_compile scripts/validate_ops_dashboard_security_executive_summary_card.py
+          python -m py_compile scripts/executive_readiness_gate.py
+          python -m py_compile scripts/enrich_runtime_executive_readiness.py
+          python -m py_compile scripts/validate_runtime_executive_readiness_integration.py
+          python -m py_compile scripts/inject_runtime_executive_readiness_cards.py
+          python -m py_compile scripts/validate_runtime_executive_readiness_visual.py
 
       - name: Generate fallback dashboard data
         shell: bash
@@ -124,6 +129,16 @@ jobs:
             --executive-brief docs/ops-dashboard/data/executive-brief.json
           python scripts/validate_runtime_executive_regression_alert.py
 
+      - name: Generate Executive Readiness Gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/executive_readiness_gate.py \
+            --repo "${{ github.repository }}" \
+            --branch main \
+            --output-dir artifacts/executive-readiness-gate \
+            --correlation-id "${{ github.run_id }}-${{ github.run_attempt }}"
+
       - name: Generate runtime executive index
         shell: bash
         run: |
@@ -148,6 +163,15 @@ jobs:
             --runtime-index docs/ops-dashboard/data/runtime-executive-index.json \
             --executive-brief docs/ops-dashboard/data/executive-brief.json
           python scripts/validate_runtime_executive_canonical_blocking.py
+
+      - name: Enrich Runtime Executive with Executive Readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/enrich_runtime_executive_readiness.py \
+            --runtime-index docs/ops-dashboard/data/runtime-executive-index.json \
+            --executive-readiness artifacts/executive-readiness-gate/executive-readiness-gate.json
+          python scripts/validate_runtime_executive_readiness_integration.py
 
       - name: Generate strategic governance index
         shell: bash
@@ -185,6 +209,13 @@ jobs:
           set -euo pipefail
           python scripts/inject_ops_dashboard_runtime_executive_post_deploy_card.py
 
+      - name: Inject Executive Readiness visual cards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/inject_runtime_executive_readiness_cards.py
+          python scripts/validate_runtime_executive_readiness_visual.py
+
       - name: Prepare dashboard artifact
         shell: bash
         run: |
@@ -200,6 +231,7 @@ jobs:
           test -f artifacts/ops-dashboard/data/executive-brief.json
           test -f artifacts/ops-dashboard/data/runtime-executive-post-deploy-history.json
           test -f artifacts/ops-dashboard/data/security-executive-summary.json
+          test -f artifacts/executive-readiness-gate/executive-readiness-gate.json
 
       - name: Validate ops dashboard contracts
         shell: bash
@@ -216,6 +248,8 @@ jobs:
           python3 scripts/validate_ops_dashboard_regression_alert_semaforo.py
           python3 scripts/validate_runtime_executive_canonical_blocking.py
           python3 scripts/validate_ops_dashboard_security_executive_summary_card.py
+          python3 scripts/validate_runtime_executive_readiness_integration.py
+          python3 scripts/validate_runtime_executive_readiness_visual.py
 
       - name: Smoke Runtime Executive static publication
         shell: bash
@@ -257,6 +291,14 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Publish Executive Readiness Gate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-readiness-gate
+          path: artifacts/executive-readiness-gate
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Publish ops dashboard artifact
         uses: actions/upload-artifact@v4
         with:
@@ -277,11 +319,13 @@ jobs:
             echo "Histórico publicado: runtime-executive-post-deploy-history"
             echo "Regression alert publicado: runtime-executive-regression-alert"
             echo "Security executive summary publicado: security-executive-summary"
+            echo "Executive readiness publicado: executive-readiness-gate"
             echo ""
             echo "Runtime executive index publicado em data/runtime-executive-index.json."
             echo "Runtime executive page publicada em runtime-executive.html."
             echo "Runtime executive post-deploy card publicado no Ops Dashboard."
             echo "Security executive summary card publicado no Ops Dashboard."
+            echo "Executive Readiness visual publicado no Ops Dashboard e Runtime Executive Page."
             echo "Runtime executive regression alert refletido no semaforo executivo principal."
             echo "Runtime executive canonical blocking publicado no Runtime Executive Index e Executive Brief."
             echo "Runtime executive post-deploy history publicado em data/runtime-executive-post-deploy-history.json."
