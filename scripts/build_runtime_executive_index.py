@@ -44,9 +44,30 @@ def normalize_status(value: Any, default: str = "unknown") -> str:
 
 def status_to_risk(status: Any) -> str:
     normalized = normalize_status(status)
-    if normalized in {"passed", "success", "healthy", "stable", "low", "merge_imediato", "true", "ok"}:
+    if normalized in {
+        "passed",
+        "success",
+        "healthy",
+        "stable",
+        "low",
+        "merge_imediato",
+        "true",
+        "ok",
+        "ready_for_production",
+        "ready",
+    }:
         return "low"
-    if normalized in {"failed", "failure", "critical", "high", "blocked", "isolamento_obrigatorio", "false"}:
+    if normalized in {
+        "failed",
+        "failure",
+        "critical",
+        "high",
+        "blocked",
+        "isolamento_obrigatorio",
+        "false",
+        "blocked_for_production",
+        "not_ready",
+    }:
         return "high"
     return "medium"
 
@@ -226,6 +247,7 @@ def summarize_runtime_validation(validation: dict[str, Any] | None = None) -> di
             "gold_standard_score": 0,
             "public_runtime_ready": False,
             "post_merge_ready": False,
+            "production_ready": False,
             "risk": "medium",
             "source_artifact": "runtime-validation-snapshot",
         }
@@ -246,6 +268,51 @@ def summarize_runtime_validation(validation: dict[str, Any] | None = None) -> di
     }
 
 
+def summarize_executive_readiness(readiness_gate: dict[str, Any] | None = None) -> dict[str, Any]:
+    readiness_gate = readiness_gate or {}
+    readiness = readiness_gate.get("executive_readiness") or {}
+    if not readiness_gate:
+        return {
+            "available": False,
+            "status": "unknown",
+            "decision": "UNKNOWN",
+            "ready_for_production": False,
+            "score": 0,
+            "risk_percent": 100,
+            "blocker_count": 0,
+            "blockers": [],
+            "risk": "medium",
+            "source_artifact": "executive-readiness-gate",
+        }
+
+    decision = normalize_status(readiness.get("decision"), "unknown").upper()
+    ready = bool(readiness.get("ready_for_production"))
+    score = safe_number(readiness.get("score"), default=0)
+    risk_percent = safe_number(readiness.get("risk_percent"), default=max(0, 100 - int(score)))
+    blockers = readiness.get("blockers") or []
+    status = normalize_status(readiness.get("overall_state"), "passed" if ready else "blocked")
+    risk = "high" if blockers or not ready else "low" if risk_percent <= 15 else "medium"
+    domains = readiness_gate.get("domains") or {}
+
+    return {
+        "available": True,
+        "status": status,
+        "decision": decision,
+        "ready_for_production": ready,
+        "score": score,
+        "risk_percent": risk_percent,
+        "blocker_count": len(blockers),
+        "blockers": blockers,
+        "domain_count": len(domains),
+        "required_domains": [
+            key for key, value in domains.items()
+            if isinstance(value, dict) and value.get("production_blocker")
+        ],
+        "risk": risk,
+        "source_artifact": "executive-readiness-gate",
+    }
+
+
 def build_runtime_executive_index(
     health: dict[str, Any],
     merge_index: dict[str, Any] | None = None,
@@ -255,6 +322,7 @@ def build_runtime_executive_index(
     finalization_report: dict[str, Any] | None = None,
     conflict_risk_report: dict[str, Any] | None = None,
     runtime_validation: dict[str, Any] | None = None,
+    executive_readiness_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     merge_index = merge_index or {}
     lane_priority = lane_priority or {}
@@ -266,6 +334,7 @@ def build_runtime_executive_index(
     evidence_summary = summarize_evidence_gate(health, evidence_gate_report)
     finalization_summary = summarize_finalization(health, finalization_report)
     validation_summary = summarize_runtime_validation(runtime_validation)
+    executive_readiness_summary = summarize_executive_readiness(executive_readiness_gate)
 
     consolidated_risk = worst_risk(
         health_summary["risk"],
@@ -274,6 +343,7 @@ def build_runtime_executive_index(
         evidence_summary["risk"],
         finalization_summary["risk"],
         validation_summary["risk"] if validation_summary["available"] else None,
+        executive_readiness_summary["risk"] if executive_readiness_summary["available"] else None,
     )
 
     score_values = [
@@ -285,17 +355,23 @@ def build_runtime_executive_index(
     ]
     if validation_summary["available"]:
         score_values.append(safe_number(validation_summary["validation_score"], default=0))
+    if executive_readiness_summary["available"]:
+        score_values.append(safe_number(executive_readiness_summary["score"], default=0))
     executive_score = round(sum(score_values) / len(score_values), 2)
 
+    production_ready = bool(executive_readiness_summary.get("ready_for_production")) if executive_readiness_summary["available"] else bool(validation_summary.get("production_ready"))
+
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "repo": repo_name,
         "generated_at_epoch": int(time.time()),
         "summary": {
-            "status": "critical" if consolidated_risk == "high" else "warning" if consolidated_risk == "medium" else "passed",
+            "status": "passed" if production_ready and consolidated_risk == "low" else "critical" if consolidated_risk == "high" else "warning",
             "executive_score": executive_score,
             "risk": consolidated_risk,
             "confidence": merge_summary.get("confidence", "low"),
+            "production_ready": production_ready,
+            "executive_readiness_decision": executive_readiness_summary.get("decision", "UNKNOWN"),
             "source": "static_offline_artifacts",
         },
         "cards": {
@@ -305,6 +381,7 @@ def build_runtime_executive_index(
             "evidence_gate": evidence_summary,
             "finalization": finalization_summary,
             "runtime_validation": validation_summary,
+            "executive_readiness": executive_readiness_summary,
         },
         "links": {
             "ops_dashboard": "docs/ops-dashboard/index.html",
@@ -317,6 +394,7 @@ def build_runtime_executive_index(
             "pr_evidence_gate": "audit/pr-evidence-gate.json",
             "delivery_finalization_report": "artifacts/delivery-finalization/delivery-finalization-report.json",
             "runtime_validation_snapshot": "artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json",
+            "executive_readiness_gate": "artifacts/executive-readiness-gate/executive-readiness-gate.json",
             "executive_brief": "docs/ops-dashboard/data/executive-brief.json",
             "actions": f"https://github.com/{repo_name}/actions" if repo_name != "unknown" else "",
             "pulls": f"https://github.com/{repo_name}/pulls" if repo_name != "unknown" else "",
@@ -327,6 +405,7 @@ def build_runtime_executive_index(
             "safe_fallback_when_source_artifact_missing",
             "report_only_contract_for_public_dashboard",
             "real_artifact_precedence_when_available",
+            "executive_readiness_gate_precedence_for_production_decision",
         ],
     }
 
@@ -343,6 +422,10 @@ def main() -> int:
         "--runtime-validation",
         default="artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json",
     )
+    parser.add_argument(
+        "--executive-readiness",
+        default="artifacts/executive-readiness-gate/executive-readiness-gate.json",
+    )
     parser.add_argument("--repo", default="")
     parser.add_argument("--output", default="docs/ops-dashboard/data/runtime-executive-index.json")
     args = parser.parse_args()
@@ -356,6 +439,7 @@ def main() -> int:
         load_json(args.delivery_finalization),
         load_json(args.conflict_risk_report),
         load_json(args.runtime_validation),
+        load_json(args.executive_readiness),
     )
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
