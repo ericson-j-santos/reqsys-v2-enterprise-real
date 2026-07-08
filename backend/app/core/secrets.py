@@ -20,6 +20,13 @@ try:
 except ImportError:
     _CRYPTO_OK = False
 
+try:
+    import requests
+    _REQUESTS_OK = True
+except ImportError:
+    requests = None  # type: ignore
+    _REQUESTS_OK = False
+
 
 _DEFAULT_VAULT_SERVICE = 'mvp-intelligence-vault'
 _MASTER_KEY_SLOT = '__master_key__'
@@ -108,6 +115,86 @@ def vault_initialized(service_name: str | None = None) -> bool:
         return False
 
 
+# ---------------------------------------------------------------------------
+# vault-service remoto (extração do cofre, ADR-041) — fallback opcional além do
+# keyring local. Lido direto de os.environ (nao de app.core.config.settings) de
+# proposito: Settings() e construido chamando get_secret() para cada campo, entao
+# depender de `settings` aqui criaria um ciclo de bootstrap.
+# ---------------------------------------------------------------------------
+
+_REMOTE_CIRCUIT_FAILURE_THRESHOLD = 3
+_REMOTE_CIRCUIT_COOLDOWN_SECONDS = 60
+_remote_circuit = None  # type: ignore[var-annotated]
+
+
+def _cofre_service_base_url() -> str:
+    return os.getenv('COFRE_API_URL', '').strip()
+
+
+def _cofre_service_token() -> str:
+    return os.getenv('COFRE_SERVICE_TOKEN', '').strip()
+
+
+def _cofre_service_timeout_seconds() -> float:
+    try:
+        return float(os.getenv('COFRE_SERVICE_TIMEOUT_SECONDS', '5') or '5')
+    except ValueError:
+        return 5.0
+
+
+def _remote_vault_circuit():
+    global _remote_circuit
+    if _remote_circuit is None:
+        from app.core.resilience import CircuitBreaker
+        _remote_circuit = CircuitBreaker(
+            name='cofre_service_remoto',
+            failure_threshold=_REMOTE_CIRCUIT_FAILURE_THRESHOLD,
+            cooldown_seconds=_REMOTE_CIRCUIT_COOLDOWN_SECONDS,
+        )
+    return _remote_circuit
+
+
+def read_secret_from_remote_vault(key: str) -> str | None:
+    """Le um segredo do vault-service remoto (timeout + retry + circuit breaker, ADR-010).
+
+    Retorna None (nunca levanta) sempre que o serviço remoto nao estiver configurado,
+    indisponivel ou com o circuito aberto — quem chama trata isso como "nao resolvido
+    por aqui" e segue para o proximo fallback (mesmo contrato de read_secret_from_vault).
+    """
+    if not key or not _REQUESTS_OK:
+        return None
+    base_url = _cofre_service_base_url()
+    token = _cofre_service_token()
+    if not base_url or not token:
+        return None
+
+    from app.core.resilience import CircuitBreakerOpenError, call_with_retry
+
+    url = f"{base_url.rstrip('/')}/v1/segredos/{key}"
+
+    def _do_get() -> str | None:
+        resposta = requests.get(url, headers={'X-Vault-Token': token}, timeout=_cofre_service_timeout_seconds())
+        if resposta.status_code == 404:
+            return None
+        resposta.raise_for_status()
+        return resposta.json().get('value')
+
+    try:
+        return call_with_retry(
+            _do_get,
+            max_retries=2,
+            backoff_seconds=0.3,
+            retry_on=(requests.ConnectionError, requests.Timeout),
+            circuit=_remote_vault_circuit(),
+        )
+    except CircuitBreakerOpenError:
+        _logger.warning('Circuito do vault-service remoto aberto; usando fallback local/default para "%s"', key)
+        return None
+    except Exception:
+        _logger.warning('Falha ao ler segredo "%s" do vault-service remoto', key)
+        return None
+
+
 def get_secret(
     name: str,
     default: str | None = None,
@@ -126,6 +213,9 @@ def get_secret(
             return vault_value
         if env_value not in (None, ''):
             return env_value
+        remote_value = read_secret_from_remote_vault(secret_key)
+        if remote_value not in (None, ''):
+            return remote_value
         return default
 
     if env_value not in (None, ''):
@@ -134,6 +224,10 @@ def get_secret(
     vault_value = read_secret_from_vault(secret_key)
     if vault_value not in (None, ''):
         return vault_value
+
+    remote_value = read_secret_from_remote_vault(secret_key)
+    if remote_value not in (None, ''):
+        return remote_value
 
     return default
 
@@ -153,6 +247,11 @@ def describe_secret_resolution(
 
     has_vault = vault_value not in (None, '')
     has_env = env_value not in (None, '')
+    # Só consulta o vault-service remoto se nem env nem vault local resolverem —
+    # evita uma chamada de rede por segredo monitorado na tela de diagnóstico.
+    has_remote = False
+    if not has_env and not has_vault:
+        has_remote = read_secret_from_remote_vault(secret_key) not in (None, '')
 
     if prefer_vault and has_vault:
         source = 'vault'
@@ -160,6 +259,8 @@ def describe_secret_resolution(
         source = 'env'
     elif has_vault:
         source = 'vault'
+    elif has_remote:
+        source = 'vault_remoto'
     elif default is not None:
         source = 'default'
     else:

@@ -21,3 +21,4 @@ from app.models.requisito import (  # noqa: F401
     RecommendationIAOutcome,
     Requisito,
 )
+from app.models.vault_token import VaultToken  # noqa: F401

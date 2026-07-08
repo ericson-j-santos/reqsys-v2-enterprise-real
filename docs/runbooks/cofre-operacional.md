@@ -49,12 +49,28 @@ python scripts/vault_setup.py init
 python scripts/vault_setup.py import-env
 ```
 
-### Gerar token S2S
+### Gerar token S2S global (legado)
 
 ```bash
 python scripts/vault_setup.py gen-token
 # Adicionar saída ao .env como VAULT_API_TOKEN=
 ```
+
+> Prefira tokens escopados (abaixo) para qualquer consumidor novo — o `VAULT_API_TOKEN`
+> global dá acesso a **todas** as chaves do cofre. Use-o só como fallback de transição.
+
+### Criar token escopado por consumidor
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/cofre/tokens \
+  -H "Authorization: Bearer <token_admin>" \
+  -H "Content-Type: application/json" \
+  -d '{"label": "projeto-externo-x", "key_patterns": ["PROJX_*"]}'
+# {"token": "..."} — guarde agora, não é mostrado de novo
+```
+
+O token retornado só lê chaves que casem os `key_patterns` (glob). Listar (`GET /v1/cofre/tokens`,
+não expõe o valor) e revogar (`DELETE /v1/cofre/tokens/{id}`) exigem JWT admin.
 
 ## Diagnóstico
 
@@ -81,6 +97,9 @@ UI: menu **Governança → Segredos** (`/segredos-status`).
 - Valores nunca aparecem em `/v1/sistema/segredos-status`.
 - Não commitar `.env`, tokens ou saída de `vault_setup.py get`.
 - Em produção: `VAULT_API_TOKEN` com `secrets.token_urlsafe(32)` mínimo.
+- Toda gravação/remoção/leitura de segredo gera `AuditoriaEvento` (chave e ação, nunca o valor) — consulte via `/v1/auditoria` filtrando `entidade=cofre_segredo`.
+- Uso do token global legado em vez de um token escopado fica registrado como `COFRE_TOKEN_LEGADO_USADO` — útil para identificar quem ainda não migrou.
+- `/api/v1/cofre/` tem rate limit dedicado no nginx (zona `cofre`, 5-10 req/s conforme ambiente).
 
 ## Testes
 
