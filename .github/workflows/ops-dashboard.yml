@@ -41,6 +41,8 @@ jobs:
           python -m py_compile scripts/smoke_runtime_executive_static_publication.py
           python -m py_compile scripts/inject_ops_dashboard_runtime_executive_post_deploy_card.py
           python -m py_compile scripts/validate_ops_dashboard_runtime_executive_post_deploy_card.py
+          python -m py_compile scripts/build_runtime_executive_post_deploy_history.py
+          python -m py_compile scripts/validate_runtime_executive_post_deploy_history.py
 
       - name: Generate fallback dashboard data
         shell: bash
@@ -80,6 +82,16 @@ jobs:
             --branch main \
             --output-dir artifacts/runtime-validation-consolidator \
             --publish-executive-brief docs/ops-dashboard/data/executive-brief.json
+
+      - name: Build Runtime Executive post-deploy history
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build_runtime_executive_post_deploy_history.py \
+            --output docs/ops-dashboard/data/runtime-executive-post-deploy-history.json \
+            --artifact-output artifacts/runtime-executive-post-deploy-history/runtime-executive-post-deploy-history.json \
+            --executive-brief docs/ops-dashboard/data/executive-brief.json
+          python scripts/validate_runtime_executive_post_deploy_history.py
 
       - name: Generate runtime executive index
         shell: bash
@@ -133,6 +145,7 @@ jobs:
           test -f artifacts/ops-dashboard/data/strategic-governance-index.json
           test -f artifacts/ops-dashboard/data/conflict-risk-report.json
           test -f artifacts/ops-dashboard/data/executive-brief.json
+          test -f artifacts/ops-dashboard/data/runtime-executive-post-deploy-history.json
 
       - name: Validate ops dashboard contracts
         shell: bash
@@ -144,6 +157,7 @@ jobs:
           python3 scripts/validate_runtime_executive_public_page.py
           python3 scripts/validate_runtime_executive_deeplink_state.py
           python3 scripts/validate_ops_dashboard_runtime_executive_post_deploy_card.py
+          python3 scripts/validate_runtime_executive_post_deploy_history.py
 
       - name: Smoke Runtime Executive static publication
         shell: bash
@@ -160,6 +174,14 @@ jobs:
           path: artifacts/runtime-executive-public-smoke
           if-no-files-found: error
           retention-days: 15
+
+      - name: Publish Runtime Executive history artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-executive-post-deploy-history
+          path: artifacts/runtime-executive-post-deploy-history
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Publish ops dashboard artifact
         uses: actions/upload-artifact@v4
@@ -178,10 +200,12 @@ jobs:
             echo ""
             echo "Artifact publicado: ops-dashboard-static"
             echo "Smoke publicado: runtime-executive-public-smoke"
+            echo "Histórico publicado: runtime-executive-post-deploy-history"
             echo ""
             echo "Runtime executive index publicado em data/runtime-executive-index.json."
             echo "Runtime executive page publicada em runtime-executive.html."
             echo "Runtime executive post-deploy card publicado no Ops Dashboard."
+            echo "Runtime executive post-deploy history publicado em data/runtime-executive-post-deploy-history.json."
             echo "Runtime executive deep link oficial integrado aos contratos do Estado Unico."
             echo "Runtime executive static publication smoke validado."
             echo "Strategic governance index publicado em data/strategic-governance-index.json."
