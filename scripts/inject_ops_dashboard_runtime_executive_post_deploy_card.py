@@ -33,10 +33,20 @@ SECTION = r'''
         <div><div class="kpi-label">Tendência score</div><div id="post-deploy-history-score-trend" class="kpi-value">-</div></div>
         <div><div class="kpi-label">Estabilidade</div><div id="post-deploy-history-stability" class="kpi-value">-</div></div>
       </div>
+      <div class="grid" style="margin-top: 16px;">
+        <div><div class="kpi-label">Regression alert</div><div id="post-deploy-regression-status" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Risco regressão</div><div id="post-deploy-regression-risk" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Produção bloqueada</div><div id="post-deploy-regression-blocked" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Violações</div><div id="post-deploy-regression-violations" class="kpi-value">-</div></div>
+      </div>
       <div class="links" id="post-deploy-links"></div>
       <table>
         <thead><tr><th>Sinal</th><th>Valor</th></tr></thead>
         <tbody id="post-deploy-drilldown"><tr><td colspan="2">Carregando...</td></tr></tbody>
+      </table>
+      <table>
+        <thead><tr><th>Violação</th><th>Severidade</th><th>Observado</th><th>Threshold</th><th>Detalhe</th></tr></thead>
+        <tbody id="post-deploy-regression-rows"><tr><td colspan="5">Carregando regressão temporal...</td></tr></tbody>
       </table>
       <table>
         <thead><tr><th>Última execução</th><th>Estado</th><th>Score</th><th>Latência</th><th>Falhas</th></tr></thead>
@@ -77,10 +87,20 @@ SCRIPT = r'''
         },
         history: [],
       };
+      const regressionFallback = {
+        status: 'unknown',
+        production_blocked: false,
+        risk: 'unknown',
+        violations: [],
+        thresholds: {},
+        observed: {},
+      };
       const response = await fetchOptionalJson('./data/executive-brief.json', fallback);
       const historyResponse = await fetchOptionalJson('./data/runtime-executive-post-deploy-history.json', historyFallback);
+      const regressionResponse = await fetchOptionalJson('../artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json', regressionFallback);
       const payload = response.data || fallback;
       const historyPayload = historyResponse.data || historyFallback;
+      const regression = regressionResponse.data || regressionFallback;
       const historySummary = historyPayload.summary || historyFallback.summary;
       const estado = payload.estado_unico || {};
       const post = estado.runtime_executive_post_deploy || fallback.estado_unico.runtime_executive_post_deploy;
@@ -88,6 +108,10 @@ SCRIPT = r'''
       const score = post.score ?? payload.indicadores_executivos?.runtime_executive_post_deploy_percent ?? 0;
       const failures = post.failure_count ?? 0;
       const productionReady = Boolean(estado.pronto_para_producao);
+      const regressionStatus = regression.status || estado.runtime_executive_regression_alert?.status || 'unknown';
+      const regressionRisk = regression.risk || estado.runtime_executive_regression_alert?.risk || 'unknown';
+      const regressionBlocked = Boolean(regression.production_blocked ?? estado.runtime_executive_regression_alert?.production_blocked);
+      const regressionViolations = regression.violations || estado.runtime_executive_regression_alert?.violations || [];
 
       document.getElementById('post-deploy-state').innerHTML = `<span class="status ${statusClass(state)}">${state}</span>`;
       document.getElementById('post-deploy-score').textContent = `${score}%`;
@@ -99,11 +123,18 @@ SCRIPT = r'''
       document.getElementById('post-deploy-history-latency').textContent = historySummary.avg_latency_ms == null ? '-' : `${historySummary.avg_latency_ms} ms`;
       document.getElementById('post-deploy-history-score-trend').innerHTML = `<span class="status ${statusClass(historySummary.score_trend)}">${historySummary.score_trend || 'stable'}</span>`;
       document.getElementById('post-deploy-history-stability').innerHTML = `<span class="status ${statusClass(historySummary.stability)}">${historySummary.stability || 'unknown'}</span>`;
+      document.getElementById('post-deploy-regression-status').innerHTML = `<span class="status ${statusClass(regressionStatus)}">${regressionStatus}</span>`;
+      document.getElementById('post-deploy-regression-risk').innerHTML = `<span class="status ${statusClass(regressionRisk)}">${regressionRisk}</span>`;
+      document.getElementById('post-deploy-regression-blocked').innerHTML = regressionBlocked
+        ? '<span class="status critical">sim</span>'
+        : '<span class="status passed">não</span>';
+      document.getElementById('post-deploy-regression-violations').textContent = regressionViolations.length;
 
       const links = document.getElementById('post-deploy-links');
       links.innerHTML = '';
       addLink(links, 'executive-brief.json', './data/executive-brief.json');
       addLink(links, 'histórico post-deploy', './data/runtime-executive-post-deploy-history.json');
+      addLink(links, 'regression alert', '../artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json');
       if (post.page_url) addLink(links, 'Página pública', post.page_url, true);
       if (post.contract_url) addLink(links, 'Contrato público', post.contract_url, true);
       if (payload.links?.runtime_executive_public_page && payload.links.runtime_executive_public_page !== post.page_url) {
@@ -124,11 +155,29 @@ SCRIPT = r'''
         ['Histórico samples', historySummary.samples ?? 0],
         ['Disponibilidade histórica', `${historySummary.availability_percent ?? 0}%`],
         ['MTBF', historySummary.mtbf_hours == null ? '-' : `${historySummary.mtbf_hours} h`],
+        ['Regression status', regressionStatus],
+        ['Regression risk', regressionRisk],
+        ['Produção bloqueada por regressão', regressionBlocked ? 'sim' : 'não'],
+        ['Threshold disponibilidade', regression.thresholds?.min_availability ?? '-'],
+        ['Threshold latência média', regression.thresholds?.max_avg_latency_ms ?? '-'],
+        ['Threshold taxa falha recente', regression.thresholds?.max_recent_failure_rate ?? '-'],
         ['Fonte', response.available ? response.source : `fallback: ${response.error}`],
       ];
       document.getElementById('post-deploy-drilldown').innerHTML = rows.map(([label, value]) => `
         <tr><td>${label}</td><td>${value}</td></tr>
       `).join('');
+
+      document.getElementById('post-deploy-regression-rows').innerHTML = regressionViolations.length
+        ? regressionViolations.map((item) => `
+          <tr>
+            <td>${item.code || '-'}</td>
+            <td><span class="status ${statusClass(item.severity)}">${item.severity || '-'}</span></td>
+            <td>${item.observed ?? '-'}</td>
+            <td>${item.threshold ?? '-'}</td>
+            <td>${item.detail || '-'}</td>
+          </tr>
+        `).join('')
+        : '<tr><td colspan="5">Nenhuma violação temporal ativa.</td></tr>';
 
       const historyRows = (historyPayload.history || []).slice().reverse().slice(0, 6);
       document.getElementById('post-deploy-history-rows').innerHTML = historyRows.length
@@ -151,6 +200,9 @@ SCRIPT = r'''
         history_available: historyResponse.available,
         history_source: historyResponse.source,
         history_summary: historySummary,
+        regression_available: regressionResponse.available,
+        regression_source: regressionResponse.source,
+        regression_alert: regression,
         semaforo_executivo: payload.semaforo_executivo || {},
         indicadores_executivos: payload.indicadores_executivos || {},
       });
