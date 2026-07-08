@@ -16,7 +16,7 @@ on:
         required: true
         default: "/data/runtime-executive-index.json"
       strict:
-        description: "Falhar o workflow se o smoke público falhar"
+        description: "Falhar o workflow se o smoke público ou regressão temporal falhar"
         required: true
         type: boolean
         default: true
@@ -72,12 +72,14 @@ jobs:
           echo "contract_path=${contract_path}" >> "$GITHUB_OUTPUT"
           echo "strict=${strict}" >> "$GITHUB_OUTPUT"
 
-      - name: Compile smoke and history scripts
+      - name: Compile smoke, history and regression scripts
         run: |
           set -euo pipefail
           python -m py_compile scripts/smoke_runtime_executive_public_endpoint.py
           python -m py_compile scripts/build_runtime_executive_post_deploy_history.py
           python -m py_compile scripts/validate_runtime_executive_post_deploy_history.py
+          python -m py_compile scripts/evaluate_runtime_executive_temporal_regression.py
+          python -m py_compile scripts/validate_runtime_executive_regression_alert.py
 
       - name: Run Runtime Executive post-deploy smoke
         id: smoke
@@ -105,6 +107,23 @@ jobs:
             --executive-brief docs/ops-dashboard/data/executive-brief.json
           python scripts/validate_runtime_executive_post_deploy_history.py
 
+      - name: Evaluate Runtime Executive temporal regression
+        id: regression
+        if: always()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          strict_arg=""
+          if [[ "${{ steps.inputs.outputs.strict }}" == "true" ]]; then
+            strict_arg="--strict"
+          fi
+          python scripts/evaluate_runtime_executive_temporal_regression.py \
+            --history docs/ops-dashboard/data/runtime-executive-post-deploy-history.json \
+            --output artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json \
+            --executive-brief docs/ops-dashboard/data/executive-brief.json \
+            ${strict_arg}
+          python scripts/validate_runtime_executive_regression_alert.py
+
       - name: Build summary
         if: always()
         run: |
@@ -114,6 +133,7 @@ jobs:
           from pathlib import Path
           path = Path("artifacts/runtime-executive-post-deploy-smoke/runtime-executive-post-deploy-smoke.json")
           history_path = Path("artifacts/runtime-executive-post-deploy-history/runtime-executive-post-deploy-history.json")
+          regression_path = Path("artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json")
           if path.exists():
               payload = json.loads(path.read_text(encoding="utf-8"))
           else:
@@ -129,6 +149,7 @@ jobs:
               path.parent.mkdir(parents=True, exist_ok=True)
               path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
           history = json.loads(history_path.read_text(encoding="utf-8")) if history_path.exists() else {"summary": {}}
+          regression = json.loads(regression_path.read_text(encoding="utf-8")) if regression_path.exists() else {"status": "missing", "production_blocked": False, "risk": "medium", "violations": []}
           hs = history.get("summary", {})
           summary = [
               "# Runtime Executive Post-Deploy Smoke",
@@ -141,6 +162,12 @@ jobs:
               f"- Histórico samples: `{hs.get('samples', 0)}`",
               f"- Histórico disponibilidade: `{hs.get('availability_percent', 0)}%`",
               f"- Histórico estabilidade: `{hs.get('stability', 'unknown')}`",
+              f"- Regressão temporal: `{regression.get('status')}`",
+              f"- Produção bloqueada: `{regression.get('production_blocked')}`",
+              f"- Risco regressão: `{regression.get('risk')}`",
+              "",
+              "## Regression violations",
+              *(f"- `{item.get('code')}` · `{item.get('severity')}` — {item.get('detail')}" for item in (regression.get('violations') or [])),
               "",
               "## Failures",
               *(f"- `{item}`" for item in (payload.get('failures') or ["none"])),
@@ -169,8 +196,17 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Upload regression alert evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-executive-regression-alert
+          path: artifacts/runtime-executive-regression-alert
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Enforce strict post-deploy smoke
-        if: ${{ always() && steps.inputs.outputs.strict == 'true' && steps.smoke.outcome != 'success' }}
+        if: ${{ always() && steps.inputs.outputs.strict == 'true' && (steps.smoke.outcome != 'success' || steps.regression.outcome != 'success') }}
         run: |
-          echo "Runtime Executive post-deploy smoke failed in strict mode."
+          echo "Runtime Executive post-deploy smoke/regression failed in strict mode."
           exit 1
