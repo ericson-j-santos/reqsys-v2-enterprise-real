@@ -10,6 +10,14 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_EXECUTIVE_PAGE = "docs/ops-dashboard/runtime-executive.html"
+LOCAL_LINKS_TO_VALIDATE = {
+    "runtime_executive_page",
+    "runtime_executive_index",
+    "runtime_executive_page_relative",
+    "strategic_governance_index",
+    "executive_brief",
+    "ops_dashboard",
+}
 EXPECTED_LINKS = {
     "runtime_index": ROOT / "docs" / "ops-dashboard" / "data" / "runtime-executive-index.json",
     "strategic_governance": ROOT / "docs" / "ops-dashboard" / "data" / "strategic-governance-index.json",
@@ -30,10 +38,16 @@ def assert_link(payload: dict[str, Any], key: str, expected: str) -> None:
         raise AssertionError(f"link {key} invalido: esperado={expected!r}; atual={actual!r}")
 
 
+def resolve_local_link(path_value: str) -> Path:
+    if path_value.startswith("./"):
+        return ROOT / "docs" / "ops-dashboard" / path_value[2:]
+    return ROOT / path_value
+
+
 def assert_relative_path_exists(path_value: str) -> None:
     if path_value.startswith("http"):
         return
-    target = ROOT / path_value
+    target = resolve_local_link(path_value)
     if not target.exists():
         raise AssertionError(f"link local aponta para arquivo inexistente: {path_value}")
 
@@ -70,9 +84,9 @@ def validate_executive_brief(payload: dict[str, Any]) -> None:
 
 def validate_local_links(payload: dict[str, Any]) -> None:
     for key, value in (payload.get("links") or {}).items():
-        if key in {"actions", "pulls"}:
+        if key not in LOCAL_LINKS_TO_VALIDATE:
             continue
-        if isinstance(value, str) and value and not value.startswith("./"):
+        if isinstance(value, str) and value:
             assert_relative_path_exists(value)
 
 
