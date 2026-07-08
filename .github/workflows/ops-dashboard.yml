@@ -35,7 +35,9 @@ jobs:
           python -m py_compile scripts/generate_ops_dashboard_data.py
           python -m py_compile scripts/build_runtime_executive_index.py
           python -m py_compile scripts/build_strategic_governance_index.py
+          python -m py_compile scripts/enrich_runtime_executive_deeplinks.py
           python -m py_compile scripts/validate_runtime_executive_public_page.py
+          python -m py_compile scripts/validate_runtime_executive_deeplink_state.py
 
       - name: Generate fallback dashboard data
         shell: bash
@@ -100,6 +102,15 @@ jobs:
             --runtime-index docs/ops-dashboard/data/runtime-executive-index.json \
             --output docs/ops-dashboard/data/strategic-governance-index.json
 
+      - name: Enrich Runtime Executive deep links
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/enrich_runtime_executive_deeplinks.py \
+            --runtime-index docs/ops-dashboard/data/runtime-executive-index.json \
+            --strategic-governance docs/ops-dashboard/data/strategic-governance-index.json \
+            --executive-brief docs/ops-dashboard/data/executive-brief.json
+
       - name: Prepare dashboard artifact
         shell: bash
         run: |
@@ -122,6 +133,7 @@ jobs:
           python3 scripts/validate_ops_dashboard_trilha_d_pareto_cards.py
           python3 scripts/validate_ops_dashboard_runtime_validation.py
           python3 scripts/validate_runtime_executive_public_page.py
+          python3 scripts/validate_runtime_executive_deeplink_state.py
 
       - name: Publish ops dashboard artifact
         uses: actions/upload-artifact@v4
@@ -142,6 +154,7 @@ jobs:
             echo ""
             echo "Runtime executive index publicado em data/runtime-executive-index.json."
             echo "Runtime executive page publicada em runtime-executive.html."
+            echo "Runtime executive deep link oficial integrado aos contratos do Estado Unico."
             echo "Strategic governance index publicado em data/strategic-governance-index.json."
             echo "Conflict risk report publicado em data/conflict-risk-report.json."
             echo ""
