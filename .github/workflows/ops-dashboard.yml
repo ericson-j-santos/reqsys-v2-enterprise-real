@@ -47,6 +47,8 @@ jobs:
           python -m py_compile scripts/validate_runtime_executive_regression_alert.py
           python -m py_compile scripts/inject_ops_dashboard_regression_alert_semaforo.py
           python -m py_compile scripts/validate_ops_dashboard_regression_alert_semaforo.py
+          python -m py_compile scripts/enrich_runtime_executive_canonical_blocking.py
+          python -m py_compile scripts/validate_runtime_executive_canonical_blocking.py
 
       - name: Generate fallback dashboard data
         shell: bash
@@ -122,6 +124,16 @@ jobs:
             --runtime-validation artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json \
             --output docs/ops-dashboard/data/runtime-executive-index.json
 
+      - name: Promote temporal blocking to canonical executive contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/enrich_runtime_executive_canonical_blocking.py \
+            --alert artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json \
+            --runtime-index docs/ops-dashboard/data/runtime-executive-index.json \
+            --executive-brief docs/ops-dashboard/data/executive-brief.json
+          python scripts/validate_runtime_executive_canonical_blocking.py
+
       - name: Generate strategic governance index
         shell: bash
         run: |
@@ -180,6 +192,7 @@ jobs:
           python3 scripts/validate_runtime_executive_post_deploy_history.py
           python3 scripts/validate_runtime_executive_regression_alert.py
           python3 scripts/validate_ops_dashboard_regression_alert_semaforo.py
+          python3 scripts/validate_runtime_executive_canonical_blocking.py
 
       - name: Smoke Runtime Executive static publication
         shell: bash
@@ -237,6 +250,7 @@ jobs:
             echo "Runtime executive page publicada em runtime-executive.html."
             echo "Runtime executive post-deploy card publicado no Ops Dashboard."
             echo "Runtime executive regression alert refletido no semaforo executivo principal."
+            echo "Runtime executive canonical blocking publicado no Runtime Executive Index e Executive Brief."
             echo "Runtime executive post-deploy history publicado em data/runtime-executive-post-deploy-history.json."
             echo "Runtime executive regression alert publicado como evidence gate temporal."
             echo "Runtime executive deep link oficial integrado aos contratos do Estado Unico."
