@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -105,9 +104,35 @@ def is_text_file(path: Path) -> bool:
     return path.suffix.lower() in TEXT_EXTENSIONS
 
 
-def iter_files(root: Path) -> Iterable[Path]:
+def normalize_repo_path(value: str) -> str:
+    return value.strip().replace("\\", "/").lstrip("./")
+
+
+def load_changed_file_paths(changed_files_path: Path) -> set[str]:
+    if not changed_files_path.exists():
+        return set()
+    return {
+        normalize_repo_path(line)
+        for line in changed_files_path.read_text(encoding="utf-8").splitlines()
+        if normalize_repo_path(line)
+    }
+
+
+def iter_files(root: Path, include_paths: set[str] | None = None) -> Iterable[Path]:
+    if include_paths is not None:
+        for relative_path in sorted(include_paths):
+            path = (root / relative_path).resolve()
+            try:
+                path.relative_to(root)
+            except ValueError:
+                continue
+            if path.is_file() and not is_ignored_path(path.relative_to(root)) and is_text_file(path):
+                yield path
+        return
+
     for path in root.rglob("*"):
-        if path.is_file() and not is_ignored_path(path) and is_text_file(path):
+        relative_path = path.relative_to(root)
+        if path.is_file() and not is_ignored_path(relative_path) and is_text_file(path):
             yield path
 
 
@@ -138,8 +163,8 @@ def add_finding(findings: list[Finding], rule_id: str, severity: str, path: Path
     )
 
 
-def scan_env_files(root: Path, findings: list[Finding]) -> None:
-    for path in iter_files(root):
+def scan_env_files(root: Path, findings: list[Finding], include_paths: set[str] | None = None) -> None:
+    for path in iter_files(root, include_paths=include_paths):
         name = path.name.lower()
         if name == ".env" or name.startswith(".env.") and name not in {".env.example", ".env.exemplo"}:
             add_finding(
@@ -154,7 +179,7 @@ def scan_env_files(root: Path, findings: list[Finding]) -> None:
             )
 
 
-def scan_lines(root: Path, findings: list[Finding]) -> None:
+def scan_lines(root: Path, findings: list[Finding], include_paths: set[str] | None = None) -> None:
     secret_patterns = [
         ("SEC-SECRET-001", re.compile(r"(?i)(client_secret|api[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|password|senha)\s*[:=]\s*['\"][^'\"]{8,}['\"]")),
         ("SEC-SECRET-002", re.compile(r"(?i)authorization\s*[:=]\s*['\"]?bearer\s+[a-z0-9._\-]{20,}")),
@@ -167,7 +192,7 @@ def scan_lines(root: Path, findings: list[Finding]) -> None:
     tls_disabled = re.compile(r"(?i)(verify\s*=\s*False|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*['\"]?0['\"]?)")
     risky_log = re.compile(r"(?i)(print|logger\.|console\.)[^\n]*(authorization|access_token|refresh_token|client_secret|password|senha|cpf)")
 
-    for path in iter_files(root):
+    for path in iter_files(root, include_paths=include_paths):
         content = read_text(path)
         for line_no, line in enumerate(content.splitlines(), start=1):
             stripped = line.strip()
@@ -186,7 +211,6 @@ def scan_lines(root: Path, findings: list[Finding]) -> None:
                         line,
                         "Mover segredo para GitHub Secrets/secret manager e consumir por variável de ambiente.",
                     )
-
             if cors_wildcard.search(line):
                 add_finding(
                     findings,
@@ -198,7 +222,6 @@ def scan_lines(root: Path, findings: list[Finding]) -> None:
                     line,
                     "Substituir wildcard por ALLOWED_ORIGINS segregado por DEV/STG/PROD.",
                 )
-
             if tls_disabled.search(line):
                 add_finding(
                     findings,
@@ -210,7 +233,6 @@ def scan_lines(root: Path, findings: list[Finding]) -> None:
                     line,
                     "Manter validação TLS habilitada e configurar CA corporativa quando necessário.",
                 )
-
             if msal_hardcode.search(line) and "os.environ" not in line and "import.meta.env" not in line and "process.env" not in line:
                 add_finding(
                     findings,
@@ -222,7 +244,6 @@ def scan_lines(root: Path, findings: list[Finding]) -> None:
                     line,
                     "Parametrizar MSAL via variáveis por ambiente: client_id, tenant_id, redirect_uri e scopes.",
                 )
-
             if env_url.search(line) and "example" not in path.name.lower() and ".md" != path.suffix.lower():
                 add_finding(
                     findings,
@@ -234,7 +255,6 @@ def scan_lines(root: Path, findings: list[Finding]) -> None:
                     line,
                     "Remover URL de ambiente hardcoded e usar variável API_BASE_URL/PUBLIC_BASE_URL.",
                 )
-
             if risky_log.search(line):
                 add_finding(
                     findings,
@@ -255,14 +275,16 @@ def summarize(findings: list[Finding]) -> dict[str, int]:
     return summary
 
 
-def write_reports(findings: list[Finding], root: Path, output_dir: Path) -> None:
+def write_reports(findings: list[Finding], root: Path, output_dir: Path, scan_scope: str, scanned_files: int) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     summary = summarize(findings)
     status = "failed" if summary.get("critical", 0) > 0 else "passed"
     payload = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "status": status,
+        "scan_scope": scan_scope,
+        "scanned_files": scanned_files,
         "summary": summary,
         "findings": [asdict(finding) for finding in findings],
     }
@@ -272,6 +294,11 @@ def write_reports(findings: list[Finding], root: Path, output_dir: Path) -> None
         "# Security Baseline Gate",
         "",
         f"Status: **{status.upper()}**",
+        "",
+        "## Escopo",
+        "",
+        f"- Modo: `{scan_scope}`",
+        f"- Arquivos analisados: {scanned_files}",
         "",
         "## Resumo",
         "",
@@ -305,15 +332,25 @@ def main() -> int:
     parser.add_argument("--root", default=str(ROOT_DEFAULT), help="Raiz do repositório.")
     parser.add_argument("--output-dir", default="artifacts/security-baseline", help="Diretório de saída dos relatórios.")
     parser.add_argument("--strict", action="store_true", help="Falha o processo quando houver achado crítico.")
+    parser.add_argument("--scope", choices={"all", "changed"}, default="all", help="Escopo de varredura: repositório completo ou apenas arquivos alterados.")
+    parser.add_argument("--changed-files", default=None, help="Arquivo texto com paths alterados, um por linha, relativo à raiz do repositório.")
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
     output_dir = (root / args.output_dir).resolve()
+    include_paths: set[str] | None = None
+
+    if args.scope == "changed":
+        if not args.changed_files:
+            raise SystemExit("--changed-files é obrigatório quando --scope=changed")
+        include_paths = load_changed_file_paths((root / args.changed_files).resolve())
+
+    scanned_files = len(list(iter_files(root, include_paths=include_paths)))
     findings: list[Finding] = []
 
-    scan_env_files(root, findings)
-    scan_lines(root, findings)
-    write_reports(findings, root, output_dir)
+    scan_env_files(root, findings, include_paths=include_paths)
+    scan_lines(root, findings, include_paths=include_paths)
+    write_reports(findings, root, output_dir, args.scope, scanned_files)
 
     summary = summarize(findings)
     if args.strict and summary.get("critical", 0) > 0:
