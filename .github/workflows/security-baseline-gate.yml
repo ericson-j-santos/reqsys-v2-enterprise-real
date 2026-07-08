@@ -1,0 +1,75 @@
+name: Security Baseline Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: "Falhar quando houver achados críticos"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-baseline-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-baseline:
+    name: Security Baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile validator
+        run: python -m py_compile scripts/validate_security_baseline.py
+
+      - name: Run Security Baseline Gate
+        env:
+          STRICT_INPUT: ${{ inputs.strict || 'true' }}
+        run: |
+          if [ "$STRICT_INPUT" = "false" ]; then
+            python scripts/validate_security_baseline.py --output-dir artifacts/security-baseline
+          else
+            python scripts/validate_security_baseline.py --strict --output-dir artifacts/security-baseline
+          fi
+
+      - name: Publish security baseline artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-baseline-report
+          path: artifacts/security-baseline/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Append security summary
+        if: always()
+        run: |
+          if [ -f artifacts/security-baseline/security-baseline-report.md ]; then
+            cat artifacts/security-baseline/security-baseline-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Security baseline report não foi gerado." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
