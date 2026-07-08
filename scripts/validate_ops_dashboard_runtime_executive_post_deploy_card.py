@@ -14,12 +14,18 @@ REQUIRED = [
     "Runtime Executive — Post-Deploy público",
     "renderRuntimeExecutivePostDeploy",
     "./data/executive-brief.json",
+    "./data/runtime-executive-post-deploy-history.json",
     "runtime_executive_post_deploy",
     "post-deploy-state",
     "post-deploy-score",
     "post-deploy-failures",
     "post-deploy-links",
     "post-deploy-drilldown",
+    "post-deploy-history-availability",
+    "post-deploy-history-latency",
+    "post-deploy-history-score-trend",
+    "post-deploy-history-stability",
+    "post-deploy-history-rows",
     "await renderRuntimeExecutivePostDeploy();",
 ]
 
