@@ -113,6 +113,8 @@ jobs:
           python -m py_compile scripts/validate_runtime_executive_post_deploy_history.py
           python -m py_compile scripts/evaluate_runtime_executive_temporal_regression.py
           python -m py_compile scripts/validate_runtime_executive_regression_alert.py
+          python -m py_compile scripts/enrich_runtime_executive_canonical_blocking.py
+          python -m py_compile scripts/validate_runtime_executive_canonical_blocking.py
 
       - name: Gerar runtime-validation-snapshot.json
         shell: bash
@@ -163,6 +165,16 @@ jobs:
             --runtime-validation "artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json" \
             --output "docs/ops-dashboard/data/runtime-executive-index.json"
 
+      - name: Promover bloqueio temporal para contratos executivos canonicos
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/enrich_runtime_executive_canonical_blocking.py \
+            --alert "artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json" \
+            --runtime-index "docs/ops-dashboard/data/runtime-executive-index.json" \
+            --executive-brief "docs/ops-dashboard/data/executive-brief.json"
+          python3 scripts/validate_runtime_executive_canonical_blocking.py
+
       - name: Resumo executivo
         if: always()
         shell: bash
@@ -192,9 +204,13 @@ jobs:
           if [[ -f "${index}" ]]; then
             exec_score=$(python3 -c "import json; print(json.load(open('${index}'))['summary']['executive_score'])")
             exec_risk=$(python3 -c "import json; print(json.load(open('${index}'))['summary']['risk'])")
+            exec_blocked=$(python3 -c "import json; print(json.load(open('${index}'))['summary'].get('production_blocked'))")
+            exec_alert=$(python3 -c "import json; print(json.load(open('${index}'))['summary'].get('regression_alert_status'))")
             echo "## Runtime Executive Index" >> "$GITHUB_STEP_SUMMARY"
             echo "- Executive score: \`${exec_score}%\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Risk: \`${exec_risk}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Production blocked: \`${exec_blocked}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Regression alert: \`${exec_alert}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Artifact: \`runtime-validation-evidence\`" >> "$GITHUB_STEP_SUMMARY"
           fi
           if [[ -f "${history}" ]]; then
