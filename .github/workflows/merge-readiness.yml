@@ -2,9 +2,13 @@ name: Merge Readiness Pareto Gate
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [main]
+    branches:
+      - main
+      - "feat/**"
+      - "fix/**"
+      - "codex/**"
+      - "cursor/**"
     paths:
       - ".github/workflows/merge-readiness.yml"
       - "scripts/merge_readiness_gate.py"
@@ -39,9 +43,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  event-sentinel:
+    name: Event sentinel
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Registrar evento recebido
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Merge Readiness Event Sentinel"
+            echo ""
+            echo "- Event: `${{ github.event_name }}`"
+            echo "- Ref: `${{ github.ref }}`"
+            echo "- Ref name: `${{ github.ref_name }}`"
+            echo "- SHA: `${{ github.sha }}`"
+            echo "- Correlation ID: `${CORRELATION_ID}`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   readiness-router:
     name: Readiness Router
     runs-on: ubuntu-latest
+    needs: event-sentinel
     timeout-minutes: 2
     outputs:
       run_gate: ${{ steps.route.outputs.run_gate }}
@@ -52,11 +76,17 @@ jobs:
         run: |
           set -euo pipefail
           run_gate=true
+          reason="eligible"
+
           if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.pull_request.draft }}" == "true" ]]; then
             run_gate=false
+            reason="draft_pull_request"
           fi
+
           echo "run_gate=$run_gate" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
           echo "Run merge readiness gate: $run_gate" >> "$GITHUB_STEP_SUMMARY"
+          echo "Reason: $reason" >> "$GITHUB_STEP_SUMMARY"
 
   merge-readiness:
     name: Merge readiness
