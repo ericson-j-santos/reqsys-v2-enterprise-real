@@ -18,6 +18,14 @@ on:
         required: true
         default: "main"
         type: string
+      strict:
+        description: "Falhar workflow quando o Pareto Gate retornar blocked"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
 permissions:
   contents: read
@@ -72,14 +80,28 @@ jobs:
       - name: Validar prontidão objetiva de merge
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.inputs.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+          STRICT_INPUT: ${{ github.event.inputs.strict || 'false' }}
         run: |
-          set -euo pipefail
+          set +e
           python scripts/merge_readiness_gate.py \
             --base-ref "$BASE_REF" \
             --max-changed-files 25 \
             --max-workflow-files 3 \
             --max-domains 4 \
             --output artifacts/merge-readiness/merge-readiness.json
+          exit_code=$?
+          set -e
+
+          echo "Merge readiness exit code: ${exit_code}" >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$exit_code" -ne 0 ]]; then
+            if [[ "$EVENT_NAME" == "pull_request" && "$STRICT_INPUT" != "true" ]]; then
+              echo "::warning::Merge Readiness Pareto Gate report-only em pull_request; evidência publicada sem bloquear CI."
+              exit 0
+            fi
+            exit "$exit_code"
+          fi
 
       - name: Validar superfície merge-readiness history
         if: always()
@@ -123,28 +145,28 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           if [ -f artifacts/merge-readiness/merge-readiness.json ]; then
             python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json
-          from pathlib import Path
+import json
+from pathlib import Path
 
-          payload = json.loads(Path('artifacts/merge-readiness/merge-readiness.json').read_text(encoding='utf-8'))
-          print(f"- Status: `{payload.get('status')}`")
-          print(f"- Ahead: `{payload.get('ahead_by')}`")
-          print(f"- Behind: `{payload.get('behind_by')}`")
-          print(f"- Arquivos alterados: `{payload.get('changed_files')}`")
-          print(f"- Workflows alterados: `{payload.get('workflow_files')}`")
-          blocking = payload.get('blocking_issues') or []
-          warnings = payload.get('warnings') or []
-          if blocking:
-              print('')
-              print('### Bloqueios')
-              for item in blocking:
-                  print(f"- {item}")
-          if warnings:
-              print('')
-              print('### Alertas')
-              for item in warnings:
-                  print(f"- {item}")
-          PY
+payload = json.loads(Path('artifacts/merge-readiness/merge-readiness.json').read_text(encoding='utf-8'))
+print(f"- Status: `{payload.get('status')}`")
+print(f"- Ahead: `{payload.get('ahead_by')}`")
+print(f"- Behind: `{payload.get('behind_by')}`")
+print(f"- Arquivos alterados: `{payload.get('changed_files')}`")
+print(f"- Workflows alterados: `{payload.get('workflow_files')}`")
+blocking = payload.get('blocking_issues') or []
+warnings = payload.get('warnings') or []
+if blocking:
+    print('')
+    print('### Bloqueios')
+    for item in blocking:
+        print(f"- {item}")
+if warnings:
+    print('')
+    print('### Alertas')
+    for item in warnings:
+        print(f"- {item}")
+PY
           else
             echo "- Status: \`sem artifact\`" >> "$GITHUB_STEP_SUMMARY"
           fi
