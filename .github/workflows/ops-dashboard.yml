@@ -63,7 +63,7 @@ jobs:
           if [ -f artifacts/pr-conflict-guard/conflict-risk-report.json ]; then
             cp artifacts/pr-conflict-guard/conflict-risk-report.json docs/ops-dashboard/data/conflict-risk-report.json
           elif [ -f artifacts/conflict-risk-report/conflict-risk-report.json ]; then
-            cp artifacts/conflict-risk-report.json docs/ops-dashboard/data/conflict-risk-report.json
+            cp artifacts/conflict-risk-report/conflict-risk-report.json docs/ops-dashboard/data/conflict-risk-report.json
           elif [ -f audit/conflict-risk-report.json ]; then
             cp audit/conflict-risk-report.json docs/ops-dashboard/data/conflict-risk-report.json
           else
