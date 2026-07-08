@@ -9,7 +9,8 @@
     "confidence": "low",
     "top_priority_lane": "merge_governance",
     "recommended_action": "stabilizar_evidencias_antes_de_expandir",
-    "next_bottleneck": "runtime_publico_e_readiness"
+    "next_bottleneck": "runtime_publico_e_readiness",
+    "runtime_executive_page_integrated": true
   },
   "priority_lanes": [
     {
@@ -92,11 +93,19 @@
     "source": "runtime_executive_index"
   },
   "links": {
+    "runtime_executive_page": "docs/ops-dashboard/runtime-executive.html",
     "runtime_executive_index": "docs/ops-dashboard/data/runtime-executive-index.json",
     "strategic_governance_index": "docs/ops-dashboard/data/strategic-governance-index.json",
     "ops_dashboard": "docs/ops-dashboard/index.html",
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
     "pulls": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pulls"
+  },
+  "public_surfaces": {
+    "runtime_executive_page": {
+      "status": "official",
+      "path": "docs/ops-dashboard/runtime-executive.html",
+      "source": "runtime_executive_index.links.runtime_executive_page"
+    }
   },
   "guardrails": [
     "offline_static_generation",
@@ -104,6 +113,8 @@
     "no_runtime_github_api_call",
     "priority_does_not_override_required_ci",
     "high_risk_blocks_parallel_expansion",
-    "evidence_first_before_autonomous_execution"
+    "evidence_first_before_autonomous_execution",
+    "runtime_executive_page_is_official_surface",
+    "contract_deeplink_consistency"
   ]
 }
