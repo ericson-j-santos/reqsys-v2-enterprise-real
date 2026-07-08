@@ -15,6 +15,7 @@ on:
       - Public Runtime Evidence Gate
       - Main Post-Merge Validation
       - Runtime Health Validator
+      - Runtime Production Smoke Governed
     types:
       - completed
 
@@ -66,6 +67,13 @@ jobs:
           name: runtime-health-center-evidence
           path: artifacts/runtime-health-center
 
+      - name: Download Runtime Production Smoke artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: runtime-production-smoke-governed
+          path: artifacts/runtime-production-smoke
+
       - name: Download unified operational signal artifact
         uses: actions/download-artifact@v4
         continue-on-error: true
@@ -85,12 +93,22 @@ jobs:
             --output-dir "artifacts/runtime-validation-consolidator" \
             --publish-executive-brief "docs/ops-dashboard/data/executive-brief.json"
 
+      - name: Gerar runtime-executive-index.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/build_runtime_executive_index.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --runtime-validation "artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json" \
+            --output "docs/ops-dashboard/data/runtime-executive-index.json"
+
       - name: Resumo executivo
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           snapshot="artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json"
+          index="docs/ops-dashboard/data/runtime-executive-index.json"
           if [[ -f "${snapshot}" ]]; then
             state=$(python3 -c "import json; print(json.load(open('${snapshot}'))['overall_state'])")
             score=$(python3 -c "import json; print(json.load(open('${snapshot}'))['validation_score'])")
@@ -106,6 +124,14 @@ jobs:
             echo "## Runtime Validation Consolidator" >> "$GITHUB_STEP_SUMMARY"
             echo "- Falha ao gerar snapshot" >> "$GITHUB_STEP_SUMMARY"
           fi
+          if [[ -f "${index}" ]]; then
+            exec_score=$(python3 -c "import json; print(json.load(open('${index}'))['summary']['executive_score'])")
+            exec_risk=$(python3 -c "import json; print(json.load(open('${index}'))['summary']['risk'])")
+            echo "## Runtime Executive Index" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Executive score: \`${exec_score}%\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Risk: \`${exec_risk}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Artifact: \`runtime-validation-evidence\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Publicar artifact consolidado
         if: always()
@@ -115,5 +141,6 @@ jobs:
           path: |
             artifacts/runtime-validation-consolidator
             docs/ops-dashboard/data/executive-brief.json
+            docs/ops-dashboard/data/runtime-executive-index.json
           if-no-files-found: error
           retention-days: 30
