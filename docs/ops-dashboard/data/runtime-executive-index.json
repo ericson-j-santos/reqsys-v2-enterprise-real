@@ -7,7 +7,9 @@
     "executive_score": 73.17,
     "risk": "medium",
     "confidence": "medium",
-    "source": "static_offline_artifacts"
+    "source": "static_offline_artifacts",
+    "runtime_executive_page_published": true,
+    "runtime_executive_page_path": "docs/ops-dashboard/runtime-executive.html"
   },
   "cards": {
     "health": {
@@ -86,6 +88,8 @@
   },
   "links": {
     "ops_dashboard": "docs/ops-dashboard/index.html",
+    "runtime_executive_page": "docs/ops-dashboard/runtime-executive.html",
+    "runtime_executive_page_relative": "./runtime-executive.html",
     "operational_evidence_hub": "docs/dashboard/operational-evidence-hub.html",
     "health_json": "docs/ops-dashboard/data/health.json",
     "merge_intelligence_index": "docs/ops-dashboard/data/merge-intelligence-index.json",
@@ -99,11 +103,21 @@
     "actions": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions",
     "pulls": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pulls"
   },
+  "public_surfaces": {
+    "runtime_executive_page": {
+      "status": "published",
+      "path": "docs/ops-dashboard/runtime-executive.html",
+      "contract": "docs/ops-dashboard/data/runtime-executive-index.json",
+      "guardrail": "no_runtime_github_api_call"
+    }
+  },
   "guardrails": [
     "offline_static_generation",
     "no_runtime_github_api_call",
     "safe_fallback_when_source_artifact_missing",
     "report_only_contract_for_public_dashboard",
-    "real_artifact_precedence_when_available"
+    "real_artifact_precedence_when_available",
+    "official_runtime_executive_deeplink",
+    "public_page_contract_consistency"
   ]
 }
