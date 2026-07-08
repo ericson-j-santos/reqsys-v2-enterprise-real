@@ -82,6 +82,13 @@ jobs:
           name: runtime-executive-post-deploy-smoke
           path: artifacts/runtime-executive-post-deploy-smoke
 
+      - name: Download Runtime Executive Post-Deploy History artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: runtime-executive-post-deploy-history
+          path: artifacts/runtime-executive-post-deploy-history
+
       - name: Download unified operational signal artifact
         uses: actions/download-artifact@v4
         continue-on-error: true
@@ -95,6 +102,8 @@ jobs:
           set -euo pipefail
           python -m py_compile scripts/runtime_validation_consolidator.py
           python -m py_compile scripts/enrich_runtime_validation_with_post_deploy_smoke.py
+          python -m py_compile scripts/build_runtime_executive_post_deploy_history.py
+          python -m py_compile scripts/validate_runtime_executive_post_deploy_history.py
 
       - name: Gerar runtime-validation-snapshot.json
         shell: bash
@@ -116,6 +125,16 @@ jobs:
             --snapshot "artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json" \
             --executive-brief "docs/ops-dashboard/data/executive-brief.json"
 
+      - name: Consolidar histórico Runtime Executive post-deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/build_runtime_executive_post_deploy_history.py \
+            --output "docs/ops-dashboard/data/runtime-executive-post-deploy-history.json" \
+            --artifact-output "artifacts/runtime-executive-post-deploy-history/runtime-executive-post-deploy-history.json" \
+            --executive-brief "docs/ops-dashboard/data/executive-brief.json"
+          python3 scripts/validate_runtime_executive_post_deploy_history.py
+
       - name: Gerar runtime-executive-index.json
         shell: bash
         run: |
@@ -132,6 +151,7 @@ jobs:
           set -euo pipefail
           snapshot="artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json"
           index="docs/ops-dashboard/data/runtime-executive-index.json"
+          history="docs/ops-dashboard/data/runtime-executive-post-deploy-history.json"
           if [[ -f "${snapshot}" ]]; then
             state=$(python3 -c "import json; print(json.load(open('${snapshot}'))['overall_state'])")
             score=$(python3 -c "import json; print(json.load(open('${snapshot}'))['validation_score'])")
@@ -157,6 +177,15 @@ jobs:
             echo "- Risk: \`${exec_risk}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Artifact: \`runtime-validation-evidence\`" >> "$GITHUB_STEP_SUMMARY"
           fi
+          if [[ -f "${history}" ]]; then
+            samples=$(python3 -c "import json; print(json.load(open('${history}'))['summary']['samples'])")
+            availability=$(python3 -c "import json; print(json.load(open('${history}'))['summary']['availability_percent'])")
+            stability=$(python3 -c "import json; print(json.load(open('${history}'))['summary']['stability'])")
+            echo "## Runtime Executive Post-Deploy History" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Samples: \`${samples}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Availability: \`${availability}%\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Stability: \`${stability}\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Publicar artifact consolidado
         if: always()
@@ -165,7 +194,9 @@ jobs:
           name: runtime-validation-evidence
           path: |
             artifacts/runtime-validation-consolidator
+            artifacts/runtime-executive-post-deploy-history
             docs/ops-dashboard/data/executive-brief.json
             docs/ops-dashboard/data/runtime-executive-index.json
+            docs/ops-dashboard/data/runtime-executive-post-deploy-history.json
           if-no-files-found: error
           retention-days: 30
