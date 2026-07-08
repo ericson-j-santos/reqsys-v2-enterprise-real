@@ -72,10 +72,12 @@ jobs:
           echo "contract_path=${contract_path}" >> "$GITHUB_OUTPUT"
           echo "strict=${strict}" >> "$GITHUB_OUTPUT"
 
-      - name: Compile smoke script
+      - name: Compile smoke and history scripts
         run: |
           set -euo pipefail
           python -m py_compile scripts/smoke_runtime_executive_public_endpoint.py
+          python -m py_compile scripts/build_runtime_executive_post_deploy_history.py
+          python -m py_compile scripts/validate_runtime_executive_post_deploy_history.py
 
       - name: Run Runtime Executive post-deploy smoke
         id: smoke
@@ -93,6 +95,16 @@ jobs:
             --output artifacts/runtime-executive-post-deploy-smoke/runtime-executive-post-deploy-smoke.json \
             ${strict_arg}
 
+      - name: Build Runtime Executive post-deploy history
+        if: always()
+        run: |
+          set -euo pipefail
+          python scripts/build_runtime_executive_post_deploy_history.py \
+            --output docs/ops-dashboard/data/runtime-executive-post-deploy-history.json \
+            --artifact-output artifacts/runtime-executive-post-deploy-history/runtime-executive-post-deploy-history.json \
+            --executive-brief docs/ops-dashboard/data/executive-brief.json
+          python scripts/validate_runtime_executive_post_deploy_history.py
+
       - name: Build summary
         if: always()
         run: |
@@ -101,6 +113,7 @@ jobs:
           import json
           from pathlib import Path
           path = Path("artifacts/runtime-executive-post-deploy-smoke/runtime-executive-post-deploy-smoke.json")
+          history_path = Path("artifacts/runtime-executive-post-deploy-history/runtime-executive-post-deploy-history.json")
           if path.exists():
               payload = json.loads(path.read_text(encoding="utf-8"))
           else:
@@ -115,6 +128,8 @@ jobs:
               }
               path.parent.mkdir(parents=True, exist_ok=True)
               path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          history = json.loads(history_path.read_text(encoding="utf-8")) if history_path.exists() else {"summary": {}}
+          hs = history.get("summary", {})
           summary = [
               "# Runtime Executive Post-Deploy Smoke",
               "",
@@ -123,6 +138,9 @@ jobs:
               f"- Page URL: `{payload.get('page_url')}`",
               f"- Contract URL: `{payload.get('contract_url')}`",
               f"- Failures: `{len(payload.get('failures') or [])}`",
+              f"- Histórico samples: `{hs.get('samples', 0)}`",
+              f"- Histórico disponibilidade: `{hs.get('availability_percent', 0)}%`",
+              f"- Histórico estabilidade: `{hs.get('stability', 'unknown')}`",
               "",
               "## Failures",
               *(f"- `{item}`" for item in (payload.get('failures') or ["none"])),
@@ -141,6 +159,15 @@ jobs:
           path: artifacts/runtime-executive-post-deploy-smoke
           if-no-files-found: error
           retention-days: 15
+
+      - name: Upload post-deploy history evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-executive-post-deploy-history
+          path: artifacts/runtime-executive-post-deploy-history
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Enforce strict post-deploy smoke
         if: ${{ always() && steps.inputs.outputs.strict == 'true' && steps.smoke.outcome != 'success' }}
