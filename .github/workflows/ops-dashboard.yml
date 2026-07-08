@@ -35,6 +35,7 @@ jobs:
           python -m py_compile scripts/generate_ops_dashboard_data.py
           python -m py_compile scripts/build_runtime_executive_index.py
           python -m py_compile scripts/build_strategic_governance_index.py
+          python -m py_compile scripts/validate_runtime_executive_public_page.py
 
       - name: Generate fallback dashboard data
         shell: bash
@@ -106,6 +107,7 @@ jobs:
           mkdir -p artifacts/ops-dashboard
           cp -R docs/ops-dashboard/* artifacts/ops-dashboard/
           test -f artifacts/ops-dashboard/index.html
+          test -f artifacts/ops-dashboard/runtime-executive.html
           test -f artifacts/ops-dashboard/data/health.json
           test -f artifacts/ops-dashboard/data/runtime-executive-index.json
           test -f artifacts/ops-dashboard/data/strategic-governance-index.json
@@ -119,6 +121,7 @@ jobs:
           python3 scripts/validate_ops_dashboard_navigation.py
           python3 scripts/validate_ops_dashboard_trilha_d_pareto_cards.py
           python3 scripts/validate_ops_dashboard_runtime_validation.py
+          python3 scripts/validate_runtime_executive_public_page.py
 
       - name: Publish ops dashboard artifact
         uses: actions/upload-artifact@v4
@@ -138,6 +141,7 @@ jobs:
             echo "Artifact publicado: ops-dashboard-static"
             echo ""
             echo "Runtime executive index publicado em data/runtime-executive-index.json."
+            echo "Runtime executive page publicada em runtime-executive.html."
             echo "Strategic governance index publicado em data/strategic-governance-index.json."
             echo "Conflict risk report publicado em data/conflict-risk-report.json."
             echo ""
