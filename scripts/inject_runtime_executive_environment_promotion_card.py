@@ -113,33 +113,76 @@ RUNTIME_FUNCTION = """
 """
 
 
-def inject_once(text: str, needle: str, insertion: str, label: str) -> str:
+def inject_once(text: str, needles: tuple[str, ...], insertion: str, label: str) -> str:
     if insertion.strip() in text:
         return text
-    if needle not in text:
-        raise RuntimeError(f"Ponto de injeção não encontrado: {label}")
-    return text.replace(needle, insertion + needle, 1)
+    for needle in needles:
+        if needle in text:
+            return text.replace(needle, insertion + needle, 1)
+    raise RuntimeError(f"Ponto de injeção não encontrado: {label}")
 
 
 def patch_ops_dashboard(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     if MARKER not in text:
-        text = inject_once(text, "    <section class=\"card\" id=\"executive-readiness-visual-card\">", OPS_SECTION + "\n", "ops section")
+        text = inject_once(
+            text,
+            (
+                "    <section class=\"card\" id=\"executive-readiness-visual-card\">",
+                "    <section class=\"card\">\n      <h2>Runtime público — readiness Fly/DuckDNS</h2>",
+                "  </main>",
+            ),
+            OPS_SECTION + "\n",
+            "ops section",
+        )
     if "function renderEnvironmentPromotionReadiness(payload)" not in text:
-        text = inject_once(text, "    function renderExecutiveReadinessVisual(payload)", OPS_FUNCTION + "\n", "ops function")
+        text = inject_once(
+            text,
+            (
+                "    function renderExecutiveReadinessVisual(payload)",
+                "    async function renderRuntimeExecutiveIndex()",
+            ),
+            OPS_FUNCTION + "\n",
+            "ops function",
+        )
     if "renderEnvironmentPromotionReadiness(payload);" not in text:
-        text = text.replace("      renderExecutiveReadinessVisual(payload);", "      renderEnvironmentPromotionReadiness(payload);\n      renderExecutiveReadinessVisual(payload);", 1)
+        text = text.replace(
+            "      const cards = payload.cards || fallback.cards;",
+            "      renderEnvironmentPromotionReadiness(payload);\n      const cards = payload.cards || fallback.cards;",
+            1,
+        )
     path.write_text(text, encoding="utf-8")
 
 
 def patch_runtime_executive(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     if MARKER not in text:
-        text = inject_once(text, "    <section class=\"card\" id=\"executive-readiness-visual-card\">", RUNTIME_SECTION + "\n", "runtime section")
+        text = inject_once(
+            text,
+            (
+                "    <section class=\"card\" id=\"executive-readiness-visual-card\">",
+                "    <section class=\"card\">\n      <h2>Links de evidência</h2>",
+                "    <section class=\"card\">\n      <h2>Contrato bruto</h2>",
+            ),
+            RUNTIME_SECTION + "\n",
+            "runtime section",
+        )
     if "function renderEnvironmentPromotion(payload)" not in text:
-        text = inject_once(text, "    function renderExecutiveReadiness(payload)", RUNTIME_FUNCTION + "\n", "runtime function")
+        text = inject_once(
+            text,
+            (
+                "    function renderExecutiveReadiness(payload)",
+                "    function renderCards(cards)",
+            ),
+            RUNTIME_FUNCTION + "\n",
+            "runtime function",
+        )
     if "renderEnvironmentPromotion(payload);" not in text:
-        text = text.replace("        renderExecutiveReadiness(payload);", "        renderEnvironmentPromotion(payload);\n        renderExecutiveReadiness(payload);", 1)
+        text = text.replace(
+            "        renderCards(payload.cards || {});",
+            "        renderEnvironmentPromotion(payload);\n        renderCards(payload.cards || {});",
+            1,
+        )
     path.write_text(text, encoding="utf-8")
 
 
