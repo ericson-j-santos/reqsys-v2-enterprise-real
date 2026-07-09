@@ -4,6 +4,17 @@ on:
   pull_request:
     branches: [main, master, develop]
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/**"
+      - "docs/ops-dashboard/**"
+      - "docs/dashboard/**"
+      - "docs/ci/**"
+      - "docs/adr/**"
+      - "config/**"
 
 concurrency:
   group: predictive-regression-guard-${{ github.event.pull_request.number }}
@@ -66,6 +77,6 @@ jobs:
         run: |
           {
             echo "## Predictive Regression Guard"
-            echo "- Paths alterados: \`${{ steps.collect.outputs.count }}\`"
-            echo "- Modo: \`advisory\`"
+            echo "- Paths alterados: `${{ steps.collect.outputs.count }}`"
+            echo "- Modo: `advisory`"
           } >> "$GITHUB_STEP_SUMMARY"
