@@ -1,12 +1,10 @@
 // Fluxo OAuth2/PKCE puro — sem @azure/msal-browser
 // Web Crypto API (disponível em todos os browsers modernos)
 
+import { getAuthCallbackUri } from './env'
+
 const KEY_VERIFIER = 'reqsys_pkce_verifier'
 const KEY_STATE    = 'reqsys_oauth_state'
-
-function getAuthCallbackUri() {
-  return `${window.location.origin}/auth/callback.html`
-}
 
 function b64url(buffer) {
   return btoa(String.fromCharCode(...new Uint8Array(buffer)))

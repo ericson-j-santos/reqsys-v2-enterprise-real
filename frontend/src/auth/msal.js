@@ -1,11 +1,12 @@
 import { PublicClientApplication } from '@azure/msal-browser'
 import { api } from '../services/api'
+import {
+  getAuthCallbackUri,
+  getLoginRedirectStartPageUri,
+  getPostLogoutRedirectUri,
+} from './env'
 
 let _instance = null
-
-export function getAuthCallbackUri() {
-  return `${window.location.origin}/auth/callback.html`
-}
 
 async function fetchAuthConfig() {
   try {
@@ -27,7 +28,7 @@ export async function getMsalInstance() {
       clientId: serverConfig.azure_client_id,
       authority: `https://login.microsoftonline.com/${serverConfig.azure_tenant_id}`,
       redirectUri: getAuthCallbackUri(),
-      postLogoutRedirectUri: window.location.origin + '/login',
+      postLogoutRedirectUri: getPostLogoutRedirectUri(),
       navigateToLoginRequestUrl: false,
     },
     cache: {
@@ -77,7 +78,7 @@ async function executarLoginRedirect(msal) {
     scopes: SCOPES,
     prompt: 'select_account',
     redirectUri: getAuthCallbackUri(),
-    redirectStartPage: window.location.origin + '/login',
+    redirectStartPage: getLoginRedirectStartPageUri(),
   })
 }
 

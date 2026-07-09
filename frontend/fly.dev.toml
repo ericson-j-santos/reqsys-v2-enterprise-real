@@ -8,6 +8,9 @@ primary_region = "gru"
     VITE_API_URL = "https://reqsys-api-dev.fly.dev"
     VITE_PUBLIC_URL = "https://reqsys-app-dev.fly.dev"
     VITE_PUBLIC_DUCKDNS_URL = "https://tieridev.duckdns.org"
+    VITE_MSAL_REDIRECT_URI = "https://reqsys-app-dev.fly.dev/auth/callback.html"
+    VITE_MSAL_POST_LOGOUT_REDIRECT_URI = "https://reqsys-app-dev.fly.dev/login"
+    VITE_MSAL_LOGIN_REDIRECT_START_PAGE = "https://reqsys-app-dev.fly.dev/login"
 
 [http_service]
   internal_port = 80
