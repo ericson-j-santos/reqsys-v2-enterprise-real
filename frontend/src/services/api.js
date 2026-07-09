@@ -36,3 +36,21 @@ api.interceptors.request.use((config) => {
 })
 
 export default api
+
+
+function limparSessaoExpirada() {
+  localStorage.removeItem('reqsys_token')
+  localStorage.removeItem('reqsys_usuario')
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    const destino = `${window.location.pathname}${window.location.search}`
+    window.location.assign(`/login?redirect=${encodeURIComponent(destino)}`)
+  }
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) limparSessaoExpirada()
+    return Promise.reject(error)
+  },
+)

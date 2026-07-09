@@ -26,9 +26,10 @@ import AnalyticsHubView from '../views/AnalyticsHubView.vue'
 import UserFinalShellView from '../views/UserFinalShellView.vue'
 import OrquestradorIAView from '../views/OrquestradorIAView.vue'
 import CoordenacaoAdrView from '../views/CoordenacaoAdrView.vue'
+import NotFoundView from '../views/NotFoundView.vue'
 import { useAuthStore } from '../stores/auth'
 
-const routes = [
+export const routes = [
   { path: '/login', component: LoginView, meta: { public: true } },
   { path: '/', component: DashboardView, meta: { recurso: 'dashboard:read' } },
   { path: '/home', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
@@ -57,12 +58,17 @@ const routes = [
   { path: '/govbi-ia', alias: '/govbi', component: GovBIView, meta: { recurso: 'dashboard:read' } },
   { path: '/codex', component: CodexView, meta: { recurso: 'dashboard:read' } },
   { path: '/orquestrador-ia', component: OrquestradorIAView, meta: { recurso: 'dashboard:read' } },
-  { path: '/coordenacao-adr', component: CoordenacaoAdrView, meta: { recurso: 'dashboard:read' } }
+  { path: '/coordenacao-adr', component: CoordenacaoAdrView, meta: { recurso: 'dashboard:read' } },
+  { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { public: true } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach((to) => {
   const auth = useAuthStore()
-  if (!to.meta.public && !auth.autenticado) return '/login'
-  if (to.meta.recurso && auth.usuario && !auth.pode(to.meta.recurso)) return '/'
+  if (!to.meta.public && !auth.autenticado) {
+    return { path: '/login', query: to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : {} }
+  }
+  if (to.meta.recurso && auth.usuario && !auth.pode(to.meta.recurso)) {
+    return { path: '/', query: { forbidden: String(to.meta.recurso) } }
+  }
 })
 export default router
