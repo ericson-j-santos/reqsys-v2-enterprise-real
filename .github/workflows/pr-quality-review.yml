@@ -3,6 +3,22 @@ name: PR Quality Review
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "scripts/**"
+      - "tests/**"
+      - "config/**"
+      - "infra/**"
+      - "docker/**"
+      - "nginx/**"
+      - ".github/workflows/**"
+      - "docs/ci/**"
+      - "docs/adr/**"
+      - "docs/ops-dashboard/**"
+      - "pyproject.toml"
+      - "package*.json"
+      - "frontend/package*.json"
   workflow_dispatch:
     inputs:
       pr_number:
