@@ -1,0 +1,79 @@
+name: PR Workflow Run Metrics Validation
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_pr_workflow_run_metrics.py"
+      - "tests/test_build_pr_workflow_run_metrics.py"
+      - ".github/workflows/pr-workflow-run-metrics-validation.yml"
+      - "docs/ci/pr-workflow-run-metrics.md"
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/build_pr_workflow_run_metrics.py"
+      - "tests/test_build_pr_workflow_run_metrics.py"
+      - ".github/workflows/pr-workflow-run-metrics-validation.yml"
+      - "docs/ci/pr-workflow-run-metrics.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-workflow-run-metrics-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  validate:
+    name: Validate PR workflow run metrics
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile metrics builder
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/build_pr_workflow_run_metrics.py
+          python -m py_compile tests/test_build_pr_workflow_run_metrics.py
+
+      - name: Run focused tests
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. python -m pytest -q tests/test_build_pr_workflow_run_metrics.py
+
+      - name: Generate synthetic metrics artifact
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/github-actions
+          cat > artifacts/github-actions/workflow-runs.json <<'JSON'
+          {
+            "workflow_runs": [
+              {"name": "ReqSys Required Fast Gate", "status": "completed", "conclusion": "success", "pull_requests": [{"number": 766}]},
+              {"name": "CI Enterprise Fast", "status": "completed", "conclusion": "success", "pull_requests": [{"number": 766}]}
+            ]
+          }
+          JSON
+          python scripts/build_pr_workflow_run_metrics.py --json
+          test -f docs/ops-dashboard/data/pr-workflow-run-metrics.json
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "# PR Workflow Run Metrics Validation"
+            echo ""
+            echo "Métrica de workflows por PR validada com snapshot sintético."
+          } >> "$GITHUB_STEP_SUMMARY"
