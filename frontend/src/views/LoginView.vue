@@ -89,7 +89,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
 import { loginMicrosoftRedirect } from '../auth/msal'
@@ -110,6 +110,7 @@ const azureConfig = ref(null)
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
 const camposAusentes = computed(() => azureConfig.value?.missing_fields || [])
 const redirectEsperado = computed(() => azureConfig.value?.expected_redirect_uri || '')
@@ -151,7 +152,8 @@ async function entrarDemo() {
   erro.value = ''
   try {
     await auth.login({ email: email.value, senha: senha.value })
-    router.push('/')
+    const destino = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    router.push(destino.startsWith('/login') ? '/' : destino)
   } catch (e) {
     erro.value = e.response?.data?.detail || 'Falha no login demo'
   } finally {
