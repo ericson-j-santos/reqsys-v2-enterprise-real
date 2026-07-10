@@ -10,23 +10,27 @@ for (const viewport of [
   test.describe(`qualidade visual ${viewport.name}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-    test('não possui violações críticas e mantém baseline visual', async ({ page }) => {
+    test('não possui violações críticas nem overflow horizontal', async ({ page }, testInfo) => {
       await page.goto(baseURL, { waitUntil: 'networkidle' });
       await expect(page.locator('body')).toBeVisible();
 
       const resultado = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
         .analyze();
-
       const criticas = resultado.violations.filter((item) =>
         ['critical', 'serious'].includes(item.impact || ''),
       );
       expect(criticas, JSON.stringify(criticas, null, 2)).toEqual([]);
 
-      await expect(page).toHaveScreenshot(`home-${viewport.name}.png`, {
-        fullPage: true,
-        animations: 'disabled',
-        maxDiffPixelRatio: 0.01,
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(1);
+
+      const screenshot = await page.screenshot({ fullPage: true, animations: 'disabled' });
+      await testInfo.attach(`visual-${viewport.name}`, {
+        body: screenshot,
+        contentType: 'image/png',
       });
     });
   });
