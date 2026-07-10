@@ -1,0 +1,121 @@
+name: Domain Coverage Ratchet
+
+on:
+  workflow_run:
+    workflows: ["Domain Coverage Governance"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID do Domain Coverage Governance"
+        required: true
+        type: string
+      minimum_gain:
+        description: "Ganho mínimo em pontos percentuais"
+        required: false
+        default: "0.5"
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: domain-coverage-ratchet
+  cancel-in-progress: false
+
+jobs:
+  propose-ratchet:
+    if: >-
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verificar baseline ativo
+        id: policy
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          policy = json.loads(Path('config/domain-coverage-policy.json').read_text(encoding='utf-8'))
+          print(f"active={'true' if policy.get('baseline') else 'false'}")
+          PY
+
+      - name: Resolver origem
+        if: steps.policy.outputs.active == 'true'
+        id: source
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "run_id=${{ inputs.run_id }}" >> "$GITHUB_OUTPUT"
+            echo "minimum_gain=${{ inputs.minimum_gain }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+            echo "minimum_gain=0.5" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Baixar evidência
+        if: steps.policy.outputs.active == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/domain-coverage
+          gh run download "${{ steps.source.outputs.run_id }}" \
+            --repo "${{ github.repository }}" \
+            --name domain-coverage-evidence \
+            --dir /tmp/domain-coverage
+
+      - name: Gerar proposta monotônica
+        if: steps.policy.outputs.active == 'true'
+        run: |
+          python scripts/ratchet_domain_coverage_baseline.py \
+            --report /tmp/domain-coverage/artifacts/domain-coverage/report.json \
+            --minimum-gain "${{ steps.source.outputs.minimum_gain }}"
+
+      - name: Detectar promoção
+        if: steps.policy.outputs.active == 'true'
+        id: promotion
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          evidence = json.loads(Path('artifacts/domain-coverage/ratchet-evidence.json').read_text(encoding='utf-8'))
+          print(f"required={'true' if evidence.get('promoted') else 'false'}")
+          PY
+
+      - name: Criar PR de elevação
+        if: steps.promotion.outputs.required == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          cp artifacts/domain-coverage/ratcheted-policy.json config/domain-coverage-policy.json
+          mkdir -p docs/ops-dashboard/data
+          cp artifacts/domain-coverage/ratchet-evidence.json docs/ops-dashboard/data/domain-coverage-ratchet-latest.json
+          BRANCH="automation/domain-coverage-ratchet-${RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add config/domain-coverage-policy.json docs/ops-dashboard/data/domain-coverage-ratchet-latest.json
+          git commit -m "chore(test): elevar baseline de cobertura por domínio"
+          git push origin "$BRANCH"
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore(test): elevar baseline de cobertura por domínio" \
+            --body "## Ratchet monotônico\n\nEleva apenas domínios com ganho mínimo de ${{ steps.source.outputs.minimum_gain }} p.p.\n\n- Nunca reduz baseline.\n- Requer CI e aprovação humana.\n- Evidência: run ${RUN_ID}."
+
+      - name: Publicar evidência
+        if: always() && steps.policy.outputs.active == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: domain-coverage-ratchet-evidence
+          path: artifacts/domain-coverage/ratchet-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
