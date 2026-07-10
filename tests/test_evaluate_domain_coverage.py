@@ -3,13 +3,14 @@ from __future__ import annotations
 from scripts.evaluate_domain_coverage import evaluate
 
 
-def coverage_payload(core_percent: float, service_percent: float) -> dict:
+def coverage_payload(core_percent: float, service_percent: float, backend_prefix: bool = True) -> dict:
+    prefix = "backend/" if backend_prefix else ""
     return {
         "files": {
-            "backend/app/core/a.py": {
+            f"{prefix}app/core/a.py": {
                 "summary": {"covered_lines": int(core_percent), "num_statements": 100}
             },
-            "backend/app/services/b.py": {
+            f"{prefix}app/services/b.py": {
                 "summary": {"covered_lines": int(service_percent), "num_statements": 100}
             },
         }
@@ -34,6 +35,23 @@ def test_first_run_records_without_blocking() -> None:
     assert report["status"] == "baseline_required"
     assert report["regressions"] == []
     assert report["domains"]["core"]["coverage_percent"] == 70.0
+
+
+def test_accepts_coverage_paths_relative_to_backend_working_directory() -> None:
+    report = evaluate(coverage_payload(70, 60, backend_prefix=False), policy_payload())
+
+    assert report["status"] == "baseline_required"
+    assert report["invalid_domains"] == []
+    assert report["domains"]["services"]["matched_files"] == ["app/services/b.py"]
+
+
+def test_invalid_measurement_blocks_when_domain_has_no_matching_files() -> None:
+    coverage = {"files": {"app/other/a.py": {"summary": {"covered_lines": 1, "num_statements": 1}}}}
+
+    report = evaluate(coverage, policy_payload())
+
+    assert report["status"] == "invalid_measurement"
+    assert report["invalid_domains"] == ["core", "services"]
 
 
 def test_regression_fails_when_below_committed_baseline() -> None:

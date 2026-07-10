@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate backend coverage by architectural domain.
-
-Consumes Coverage.py JSON output and a versioned policy. The first execution records
-coverage without blocking when no baseline exists. Once baseline values are committed,
-any regression beyond the allowed tolerance fails the gate.
-"""
+"""Avalia cobertura do backend por domínio arquitetural."""
 
 from __future__ import annotations
 
@@ -23,14 +18,13 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def normalize_path(value: str) -> str:
-    return value.replace("\\", "/").lstrip("./")
+    normalized = value.replace("\\", "/").lstrip("./")
+    return normalized.removeprefix("backend/")
 
 
 def file_coverage(item: dict[str, Any]) -> tuple[int, int]:
     summary = item.get("summary") or {}
-    covered = int(summary.get("covered_lines", 0))
-    statements = int(summary.get("num_statements", 0))
-    return covered, statements
+    return int(summary.get("covered_lines", 0)), int(summary.get("num_statements", 0))
 
 
 def evaluate(coverage: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
@@ -40,6 +34,7 @@ def evaluate(coverage: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]
     baseline = policy.get("baseline") or {}
     domains: dict[str, Any] = {}
     regressions: list[str] = []
+    invalid_domains: list[str] = []
 
     for name, rule in (policy.get("domains") or {}).items():
         prefixes = [normalize_path(path) for path in rule.get("paths", [])]
@@ -54,15 +49,15 @@ def evaluate(coverage: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]
                 statements += current_statements
                 matched_files.append(path)
 
+        if not matched_files or statements <= 0:
+            invalid_domains.append(name)
+
         percent = round((covered / statements * 100), 2) if statements else 0.0
         baseline_percent = baseline.get(name)
         target = float(rule.get("target_percent", 0.0))
-        regression = False
-
-        if baseline_percent is not None:
-            regression = percent + tolerance < float(baseline_percent)
-            if regression:
-                regressions.append(name)
+        regression = baseline_percent is not None and percent + tolerance < float(baseline_percent)
+        if regression:
+            regressions.append(name)
 
         domains[name] = {
             "coverage_percent": percent,
@@ -75,13 +70,22 @@ def evaluate(coverage: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]
             "matched_files": sorted(matched_files),
         }
 
-    status = "failed" if regressions else "baseline_required" if not baseline else "passed"
+    if invalid_domains:
+        status = "invalid_measurement"
+    elif regressions:
+        status = "failed"
+    elif not baseline:
+        status = "baseline_required"
+    else:
+        status = "passed"
+
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "mode": policy.get("mode", "record_then_regression"),
         "status": status,
         "allowed_regression_percentage_points": tolerance,
         "regressions": regressions,
+        "invalid_domains": invalid_domains,
         "domains": domains,
     }
 
@@ -98,13 +102,8 @@ def main(argv: list[str] | None = None) -> int:
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-
-    if args.json:
-        print(json.dumps(report, indent=2, ensure_ascii=False))
-    else:
-        print(f"domain_coverage_status={report['status']} output={output}")
-
-    return 1 if report["status"] == "failed" else 0
+    print(json.dumps(report, indent=2, ensure_ascii=False) if args.json else f"domain_coverage_status={report['status']} output={output}")
+    return 1 if report["status"] in {"failed", "invalid_measurement"} else 0
 
 
 if __name__ == "__main__":
