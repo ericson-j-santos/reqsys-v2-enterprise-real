@@ -22,10 +22,10 @@ Guia operacional canônico para agentes, automações e assistentes que atuam ne
 | `e2e/` e `frontend/tests/e2e/` | Testes Playwright e validações responsivas. |
 | `.github/workflows/` | CI, quality gates e validações agendadas/manuais. |
 | `docs/` | Decisões, runbooks, evidências e documentação operacional. |
-| `scripts/` | Automação local, publicação, validação e tarefas auxiliares. |
+| `scripts/` | Automação local, publicação, validação e tarefas auxiliares. Subdiretório `scripts/governance/` para gates de governança enterprise. Equivalentes Windows PowerShell em `scripts/*.ps1`. |
 | `artifacts/` | Saída de artifacts CI/evidência (JSON, dashboards, snapshots). |
 | `audit/` | Relatórios de auditoria e evidence consolidada. |
-| `infra/` | Configuração de infraestrutura: nginx, codex-local (Ollama/Qdrant), ambientes Fly.io. |
+| `infra/` | Configuração de infraestrutura: nginx, codex-local (Ollama/Qdrant), ambientes Fly.io. Manifesto canônico de ambientes em `infra/fly-environments.json`. Subdiretórios por ambiente (`dev/`, `hml/`, `prod/`) e reverse-proxy. |
 | `contracts/openapi/` | Contratos OpenAPI (lintado por workflows Spectral/Newman). |
 | `schemas/` | Schemas JSON de governança e product-intelligence. |
 | `tools/` | Ferramentas standalone: codex-local-online, product_intelligence, schema_governance. |
@@ -181,6 +181,71 @@ python scripts/ci_enterprise_guardrails.py
 # Validações determinísticas rápidas (configs inseguras, não-determinismo)
 ```
 
+### Gates de merge e PR
+
+```bash
+python scripts/merge_readiness_gate.py                 # branch atrasada, conflito, PR grande, excesso de workflows, domínios misturados
+python scripts/conflict_prediction_gate.py             # risco de conflito por paths alterados (determinístico, sem IA)
+python scripts/runtime_merge_queue_gate.py --lane runtime-governance --ci green --runtime-smoke green --incidents none-critical --contracts green --json
+python scripts/pr_quality_review.py                    # revisão automatizada de PR: risco, escopo, arquivos sensíveis
+```
+
+### Validação de ambientes Fly.io
+
+```bash
+python scripts/validate_fly_runtime_config.py          # valida config versionada do Fly (read-only, sem deploy)
+python scripts/validate_fly_enterprise_sync.py         # valida matriz canônica de ambientes Fly.io
+python scripts/validate_dev_environment_readiness.py  # valida ambiente dev (evidence artifact, não exige endpoints verdes)
+python scripts/validate_environment_promotion_readiness.py  # valida contrato de promoção DEV→STG→PROD
+python scripts/environment_drift_analyzer.py           # drift cross-ambiente (report-only)
+python scripts/executive_readiness_gate.py             # decisão única de promoção de ambiente (report-only)
+```
+
+### Validação de autenticação
+
+```bash
+python scripts/validar_login_azure_operacional.py --api-url https://reqsys-api-dev.fly.dev
+python scripts/validar_login_multi_ambiente.py         # valida login Azure AD + demo em todos ambientes Fly
+python scripts/validar_frontend_auth_redirect.py --dist-dir frontend/dist  # valida redirect URI no bundle
+python scripts/configurar_fly_auth_azure.py            # configura secrets Azure AD no Fly.io (nunca imprime valores)
+```
+
+### Validação de segurança e runtime
+
+```bash
+python scripts/validate_security_baseline.py           # secret scanning, CORS, TLS, PII em logs (read-only, CI)
+python scripts/check_encoding.py                       # detecta mojibake em Python source files
+python scripts/validate_public_runtime.py              # smoke público e readiness (read-only)
+python scripts/runtime_production_smoke_governed.py    # smoke governado de endpoints públicos essenciais
+python scripts/runtime_public_validator.py             # validador público do runtime
+```
+
+### Padrão Ouro e maturidade
+
+```bash
+python scripts/trilhas_padrao_ouro.py                  # consolidador Trilhas A–E do Padrão Ouro
+python scripts/padrao_ouro_scorecard.py                # scorecard executivo de maturidade
+python scripts/delivery_maturity_snapshot.py           # snapshot de maturidade de entrega
+python scripts/operational_cycle_complete_gate.py      # gate determinístico para ciclo Trilha D
+```
+
+### Pós-merge e operacional
+
+```bash
+python scripts/post_merge_main_runtime_validator.py    # valida evidência runtime pós-merge (offline, lê artifacts locais)
+python scripts/actions_auto_operator.py                # rerun automático de workflows allowlisted com falha transitória
+python scripts/workflow_command_center.py              # monitora e dispatcha workflows governados
+python scripts/coordenador_status_consolidator.py      # consolida status do coordenador em artifact
+```
+
+### Seleção de testes e scaffolding
+
+```bash
+python scripts/select_backend_tests.py                 # seleciona testes backend afetados pelo diff (fallback para suite completa)
+python scripts/scaffold_cdi_feature.py [--dry-run] [--force]  # scaffold autocontido da feature Financeiro/CDI
+python scripts/replicate_requisitos_anonimizado.py --dry-run  # replica requisitos com anonimização LGPD (dry-run por padrão)
+```
+
 ## CI obrigatório
 
 Antes de merge em `main`, validar o workflow `CI — ReqSys v2 Enterprise` com os jobs:
@@ -208,6 +273,28 @@ Não considerar um PR pronto para merge quando o E2E responsivo estiver ausente,
 | `OpenAPI Spectral Lint` | PR (paths: openapi/contracts) | Lint de contrato OpenAPI (report-only) |
 | `OpenAPI Routes Drift` | PR (paths: backend/api) | Detecta drift OpenAPI vs rotas FastAPI |
 | `Docs MkDocs` | PR/push (paths: mkdocs.yml, docs-site/) | Build e deploy da documentação |
+| `Agent Increment Gate` | `workflow_dispatch` | Gate de incremento para nova frente/gap_fix/hotfix |
+| `Coordenador Status Consolidator` | Agendado, `workflow_dispatch` | Consolida status operacional do coordenador |
+| `Governed Merge Queue` | PR, agendado | Merge queue governada com smoke + CI + contratos |
+| `PR Evidence Gate` | PR | Evidência obrigatória antes de merge |
+| `PR Conflict Guard` | PR | Predição de conflito e proteção de paths sensíveis |
+| `PR Quality Review` | PR | Revisão determinística de risco/escopo do PR |
+| `PR CI Watch` | PR | Monitoramento de CI em PRs abertos |
+| `Main Post-Merge Validation` | Push main | Validação runtime + evidência pós-merge |
+| `Fly Enterprise Sync` | Agendado, `workflow_dispatch` | Sincronização e validação de ambientes Fly.io |
+| `Fly Governed Command Center` | `workflow_dispatch` | Comando governado de operações Fly.io |
+| `Fly Runtime P0` | Push main | Validação P0 de runtime Fly.io pós-deploy |
+| `Runtime Validation Consolidator` | Agendado, `workflow_dispatch` | Consolidação de validações runtime |
+| `Runtime Health Center/Validator` | Agendado | Health check e validação de runtime |
+| `Operational Governance Gate` | `workflow_dispatch` | Gate de governança operacional |
+| `Security Baseline Gate` | PR | Validação de baseline de segurança |
+| `Merge Readiness` | PR | Condições de merge readiness (branch, conflito, tamanho) |
+| `Governed Promotion Pipeline` | `workflow_dispatch` | Pipeline de promoção dev→hml→prod governada |
+| `Trilhas Padrão Ouro` | Agendado, `workflow_dispatch` | Consolidação das Trilhas A–E |
+| `Governança Padrão Ouro` | Agendado | Scorecard de maturidade Padrão Ouro |
+| `Workflow Command Center` | `workflow_dispatch` | Monitora e dispatcha workflows governados |
+| `Operational Intelligence Hub` | Agendado | Hub de inteligência operacional |
+| `Failure Pattern Engine` | Agendado, `workflow_dispatch` | Detecção de padrões de falha em CI |
 
 ## Gates de produção
 
@@ -328,7 +415,9 @@ Ambientes públicos definidos em `infra/public-access-urls.json` e validados por
 
 Boot resiliente Fly.io: `scripts/fly_boot.sh` — garante volume gravável antes de uvicorn; fallback para `/tmp` via `REQSYS_BOOT_FALLBACK=true`.
 
-Endpoints de runtime health disponíveis: `/health` e `/api/runtime/health`.
+Endpoints de runtime health disponíveis: `/health`, `/api/runtime/health`, `/api/runtime/readiness`, `/api/runtime/liveness`. Em prod, também `/api/runtime/metrics`.
+
+Manifesto canônico de ambientes: `infra/fly-environments.json` — define promoção `dev → hml → prod`, smoke endpoints por ambiente, secrets obrigatórios e apps Fly.io. Validado por `scripts/validate_fly_enterprise_sync.py`.
 
 ## Codex Local / Ollama
 
