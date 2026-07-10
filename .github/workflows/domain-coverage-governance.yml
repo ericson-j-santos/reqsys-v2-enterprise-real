@@ -1,0 +1,113 @@
+name: Domain Coverage Governance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "scripts/evaluate_domain_coverage.py"
+      - "tests/test_evaluate_domain_coverage.py"
+      - "config/domain-coverage-policy.json"
+      - ".github/workflows/domain-coverage-governance.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "scripts/evaluate_domain_coverage.py"
+      - "tests/test_evaluate_domain_coverage.py"
+      - "config/domain-coverage-policy.json"
+      - ".github/workflows/domain-coverage-governance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: domain-coverage-governance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  domain-coverage:
+    name: Coverage regression by domain
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Validate evaluator
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. python -m pytest -q tests/test_evaluate_domain_coverage.py
+
+      - name: Measure backend coverage
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          mkdir -p ../artifacts/domain-coverage
+          python -m pytest tests \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=json:../artifacts/domain-coverage/coverage.json
+
+      - name: Evaluate domain regression
+        run: |
+          set -euo pipefail
+          python scripts/evaluate_domain_coverage.py --json
+          mkdir -p docs/ops-dashboard/data
+          cp artifacts/domain-coverage/report.json docs/ops-dashboard/data/domain-coverage-latest.json
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: domain-coverage-evidence
+          path: |
+            artifacts/domain-coverage/coverage.json
+            artifacts/domain-coverage/report.json
+            docs/ops-dashboard/data/domain-coverage-latest.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f artifacts/domain-coverage/report.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("artifacts/domain-coverage/report.json").read_text(encoding="utf-8"))
+          print("# Domain Coverage Governance")
+          print()
+          print(f"**Status:** `{report['status']}`")
+          print()
+          print("| Domínio | Atual | Baseline | Meta | Regressão |")
+          print("|---|---:|---:|---:|---:|")
+          for name, item in sorted(report["domains"].items()):
+              baseline = "não registrado" if item["baseline_percent"] is None else f"{item['baseline_percent']}%"
+              print(
+                  f"| {name} | {item['coverage_percent']}% | {baseline} | "
+                  f"{item['target_percent']}% | {'sim' if item['regression'] else 'não'} |"
+              )
+          print()
+          print("O primeiro ciclo registra evidência. Após baseline versionado, regressões bloqueiam o gate.")
+          PY
+          else
+            echo "# Domain Coverage Governance" >> "$GITHUB_STEP_SUMMARY"
+            echo "Relatório não gerado; consulte os passos anteriores." >> "$GITHUB_STEP_SUMMARY"
+          fi
