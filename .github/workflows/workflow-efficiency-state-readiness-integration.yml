@@ -1,0 +1,132 @@
+name: Workflow Efficiency State Readiness Integration
+
+on:
+  workflow_run:
+    workflows:
+      - "Workflow Efficiency Artifact Homologation"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID do workflow de homologação"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: workflow-efficiency-state-readiness-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    name: Integrate homologation into State and Readiness
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate integration implementation
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/enrich_workflow_efficiency_homologation_state.py
+          python -m unittest tests/test_enrich_workflow_efficiency_homologation_state.py
+
+      - name: Resolve source run
+        id: source
+        env:
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_RUN_ID"
+          echo "run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Download homologation evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow-efficiency-artifact-homologation
+          path: artifacts/workflow-efficiency-artifact-homologation
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+
+      - name: Prepare executive contracts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/workflow-efficiency-state-readiness
+          cp docs/ops-dashboard/data/runtime-executive-index.json \
+            artifacts/workflow-efficiency-state-readiness/runtime-executive-index.json
+          cp docs/ops-dashboard/data/executive-brief.json \
+            artifacts/workflow-efficiency-state-readiness/executive-brief.json
+          if [ -f artifacts/executive-readiness-gate/executive-readiness-gate.json ]; then
+            cp artifacts/executive-readiness-gate/executive-readiness-gate.json \
+              artifacts/workflow-efficiency-state-readiness/executive-readiness-gate.json
+          else
+            printf '{"schema_version":"1.0.0","executive_readiness":{},"domains":{}}\n' \
+              > artifacts/workflow-efficiency-state-readiness/executive-readiness-gate.json
+          fi
+
+      - name: Enrich State and Executive Readiness
+        run: |
+          set -euo pipefail
+          python scripts/enrich_workflow_efficiency_homologation_state.py \
+            --evidence artifacts/workflow-efficiency-artifact-homologation/evidence.json \
+            --runtime-index artifacts/workflow-efficiency-state-readiness/runtime-executive-index.json \
+            --executive-brief artifacts/workflow-efficiency-state-readiness/executive-brief.json \
+            --executive-readiness artifacts/workflow-efficiency-state-readiness/executive-readiness-gate.json
+
+      - name: Validate report-only contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('artifacts/workflow-efficiency-state-readiness')
+          runtime = json.loads((root / 'runtime-executive-index.json').read_text())
+          brief = json.loads((root / 'executive-brief.json').read_text())
+          readiness = json.loads((root / 'executive-readiness-gate.json').read_text())
+
+          card = runtime['cards']['workflow_efficiency_homologation']
+          domain = readiness['domains']['workflow_efficiency_homologation']
+          assert card['report_only'] is True
+          assert card['production_blocker'] is False
+          assert domain['report_only'] is True
+          assert domain['production_blocker'] is False
+          assert 'workflow_efficiency_homologation' in brief['evidencias']
+          PY
+
+      - name: Publish enriched executive contracts
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-efficiency-state-readiness
+          path: artifacts/workflow-efficiency-state-readiness
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summarize integration
+        run: |
+          {
+            echo "# Workflow Efficiency State + Readiness"
+            echo ""
+            echo "- Fonte: workflow-efficiency-artifact-homologation"
+            echo "- Estado Único: enriquecido"
+            echo "- Executive Brief: enriquecido"
+            echo "- Executive Readiness: domínio report-only"
+            echo "- Produção bloqueada por este domínio: não"
+            echo "- Artifact: workflow-efficiency-state-readiness"
+          } >> "$GITHUB_STEP_SUMMARY"
