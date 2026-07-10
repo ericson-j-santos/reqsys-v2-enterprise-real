@@ -85,13 +85,33 @@ jobs:
         run: npx playwright install --with-deps chromium
       - working-directory: frontend
         run: npm run build
-      - name: Executar servidor e testes
+      - name: Subir preview e aguardar prontidão
         working-directory: frontend
+        shell: bash
         run: |
-          npm run preview -- --port 4173 > /tmp/reqsys-web.log 2>&1 &
-          npx playwright test tests/e2e/accessibility-visual.spec.ts --reporter=html
+          set -euo pipefail
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/reqsys-web.log 2>&1 &
+          echo $! > /tmp/reqsys-web.pid
+
+          for tentativa in {1..60}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then
+              echo "Preview Vite disponível na tentativa ${tentativa}."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Preview Vite não ficou disponível dentro do limite."
+          cat /tmp/reqsys-web.log
+          exit 1
+      - name: Executar testes de acessibilidade e visual
+        working-directory: frontend
+        run: npx playwright test tests/e2e/accessibility-visual.spec.ts --reporter=html
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+      - name: Exibir log do preview em caso de falha
+        if: failure()
+        run: cat /tmp/reqsys-web.log || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -99,6 +119,8 @@ jobs:
           path: |
             frontend/playwright-report
             frontend/test-results
+            /tmp/reqsys-web.log
+          if-no-files-found: warn
           retention-days: 30
 
   resilience:
