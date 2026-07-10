@@ -57,6 +57,10 @@ jobs:
           python -m py_compile scripts/validate_runtime_executive_readiness_integration.py
           python -m py_compile scripts/inject_runtime_executive_readiness_cards.py
           python -m py_compile scripts/validate_runtime_executive_readiness_visual.py
+          python -m py_compile scripts/inject_workflow_efficiency_visual_card.py
+          python -m py_compile scripts/validate_workflow_efficiency_visual_card.py
+          python -m unittest tests/test_workflow_efficiency_visual_card.py
+          python -m unittest tests/test_ops_dashboard_workflow_efficiency_integration.py
 
       - name: Generate fallback dashboard data
         shell: bash
@@ -216,6 +220,13 @@ jobs:
           python scripts/inject_runtime_executive_readiness_cards.py
           python scripts/validate_runtime_executive_readiness_visual.py
 
+      - name: Inject Workflow Efficiency visual card
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/inject_workflow_efficiency_visual_card.py
+          python scripts/validate_workflow_efficiency_visual_card.py
+
       - name: Prepare dashboard artifact
         shell: bash
         run: |
@@ -232,6 +243,7 @@ jobs:
           test -f artifacts/ops-dashboard/data/runtime-executive-post-deploy-history.json
           test -f artifacts/ops-dashboard/data/security-executive-summary.json
           test -f artifacts/executive-readiness-gate/executive-readiness-gate.json
+          test "$(grep -c 'id=\"workflow-efficiency-visual-card\"' artifacts/ops-dashboard/index.html)" -eq 1
 
       - name: Validate ops dashboard contracts
         shell: bash
@@ -250,6 +262,7 @@ jobs:
           python3 scripts/validate_ops_dashboard_security_executive_summary_card.py
           python3 scripts/validate_runtime_executive_readiness_integration.py
           python3 scripts/validate_runtime_executive_readiness_visual.py
+          python3 scripts/validate_workflow_efficiency_visual_card.py
 
       - name: Smoke Runtime Executive static publication
         shell: bash
@@ -326,6 +339,7 @@ jobs:
             echo "Runtime executive post-deploy card publicado no Ops Dashboard."
             echo "Security executive summary card publicado no Ops Dashboard."
             echo "Executive Readiness visual publicado no Ops Dashboard e Runtime Executive Page."
+            echo "Workflow Efficiency visual publicado pelo pipeline principal do Ops Dashboard."
             echo "Runtime executive regression alert refletido no semaforo executivo principal."
             echo "Runtime executive canonical blocking publicado no Runtime Executive Index e Executive Brief."
             echo "Runtime executive post-deploy history publicado em data/runtime-executive-post-deploy-history.json."
