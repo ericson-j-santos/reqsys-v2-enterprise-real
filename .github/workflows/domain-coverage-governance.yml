@@ -6,17 +6,21 @@ on:
     paths:
       - "backend/**"
       - "scripts/evaluate_domain_coverage.py"
+      - "scripts/propose_domain_coverage_baseline.py"
       - "tests/test_evaluate_domain_coverage.py"
+      - "tests/test_propose_domain_coverage_baseline.py"
       - "config/domain-coverage-policy.json"
-      - ".github/workflows/domain-coverage-governance.yml"
+      - ".github/workflows/domain-coverage-*.yml"
   push:
     branches: [main]
     paths:
       - "backend/**"
       - "scripts/evaluate_domain_coverage.py"
+      - "scripts/propose_domain_coverage_baseline.py"
       - "tests/test_evaluate_domain_coverage.py"
+      - "tests/test_propose_domain_coverage_baseline.py"
       - "config/domain-coverage-policy.json"
-      - ".github/workflows/domain-coverage-governance.yml"
+      - ".github/workflows/domain-coverage-*.yml"
   workflow_dispatch:
 
 permissions:
@@ -49,10 +53,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt
 
-      - name: Validate evaluator
+      - name: Validate governance tooling
         run: |
           set -euo pipefail
-          PYTHONPATH=. python -m pytest -q tests/test_evaluate_domain_coverage.py
+          PYTHONPATH=. python -m pytest -q \
+            tests/test_evaluate_domain_coverage.py \
+            tests/test_propose_domain_coverage_baseline.py
 
       - name: Measure backend coverage
         working-directory: backend
@@ -95,17 +101,17 @@ jobs:
           print("# Domain Coverage Governance")
           print()
           print(f"**Status:** `{report['status']}`")
+          if report.get("invalid_domains"):
+              print(f"**Domínios inválidos:** `{', '.join(report['invalid_domains'])}`")
           print()
-          print("| Domínio | Atual | Baseline | Meta | Regressão |")
-          print("|---|---:|---:|---:|---:|")
+          print("| Domínio | Atual | Baseline | Meta | Regressão | Arquivos |")
+          print("|---|---:|---:|---:|---:|---:|")
           for name, item in sorted(report["domains"].items()):
               baseline = "não registrado" if item["baseline_percent"] is None else f"{item['baseline_percent']}%"
               print(
                   f"| {name} | {item['coverage_percent']}% | {baseline} | "
-                  f"{item['target_percent']}% | {'sim' if item['regression'] else 'não'} |"
+                  f"{item['target_percent']}% | {'sim' if item['regression'] else 'não'} | {len(item['matched_files'])} |"
               )
-          print()
-          print("O primeiro ciclo registra evidência. Após baseline versionado, regressões bloqueiam o gate.")
           PY
           else
             echo "# Domain Coverage Governance" >> "$GITHUB_STEP_SUMMARY"
