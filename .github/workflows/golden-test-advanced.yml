@@ -1,0 +1,113 @@
+name: Golden Test Advanced
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'tests/**'
+      - '.github/workflows/golden-test-advanced.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '20 3 * * 1-5'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: golden-test-advanced-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  performance:
+    name: Performance k6
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar backend
+        run: pip install -r backend/requirements.txt
+      - name: Subir API
+        run: |
+          cd backend
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/reqsys-api.log 2>&1 &
+          for i in {1..30}; do curl -fsS http://127.0.0.1:8000/health && exit 0; sleep 1; done
+          cat /tmp/reqsys-api.log
+          exit 1
+      - uses: grafana/setup-k6-action@v1
+      - name: Executar thresholds de carga
+        run: k6 run --summary-export=artifacts-k6.json tests/performance/k6-smoke.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-evidence
+          path: artifacts-k6.json
+          retention-days: 30
+
+  mutation:
+    name: Mutation backend
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r backend/requirements.txt mutmut
+      - name: Executar mutation testing focado
+        working-directory: backend
+        run: |
+          mutmut run --paths-to-mutate app/core --tests-dir tests --runner 'python -m pytest -q'
+          mutmut results > mutation-results.txt
+          test "$(mutmut results | grep -c 'survived')" -eq 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-evidence
+          path: backend/mutation-results.txt
+          retention-days: 30
+
+  accessibility-visual:
+    name: Accessibility and visual regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci && npm install --no-save @axe-core/playwright
+      - working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - working-directory: frontend
+        run: npm run build
+      - name: Executar servidor e testes
+        working-directory: frontend
+        run: |
+          npm run preview -- --port 4173 > /tmp/reqsys-web.log 2>&1 &
+          npx playwright test tests/e2e/accessibility-visual.spec.ts --reporter=html
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accessibility-visual-evidence
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 30
+
+  resilience:
+    name: Resilience contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest
+      - run: pytest -q tests/resilience/test_resilience_contract.py
