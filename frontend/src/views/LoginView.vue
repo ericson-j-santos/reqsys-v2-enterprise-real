@@ -67,7 +67,15 @@
           />
         </template>
 
-        <v-alert v-if="erro" type="error" density="compact" class="mt-1">{{ erro }}</v-alert>
+        <v-alert
+          v-if="erro"
+          type="error"
+          color="#b91c1c"
+          density="compact"
+          class="mt-1 login-error-alert"
+        >
+          {{ erro }}
+        </v-alert>
       </v-card-text>
 
       <v-card-actions v-if="demoLoginDisponivel" class="px-4 pb-4">
@@ -183,5 +191,9 @@ async function entrarDemo() {
 .btn-microsoft {
   border-color: #38bdf8 !important;
   color: #38bdf8 !important;
+}
+
+.login-error-alert {
+  color: #ffffff !important;
 }
 </style>
