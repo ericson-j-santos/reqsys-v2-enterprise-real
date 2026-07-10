@@ -1,0 +1,121 @@
+name: CI Workflow Efficiency Dashboard
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_ci_workflow_efficiency_dashboard.py"
+      - "tests/test_build_ci_workflow_efficiency_dashboard.py"
+      - ".github/workflows/ci-workflow-efficiency-dashboard.yml"
+      - "docs/ci/workflow-efficiency-dashboard.md"
+      - "docs/ops-dashboard/data/ci-workflow-pareto-recommendations.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ci-workflow-efficiency-dashboard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate workflow efficiency dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile and test
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/build_ci_workflow_efficiency_dashboard.py
+          python -m unittest tests/test_build_ci_workflow_efficiency_dashboard.py
+
+      - name: Generate synthetic Pareto source
+        run: |
+          set -euo pipefail
+          mkdir -p docs/ops-dashboard/data
+          cat > docs/ops-dashboard/data/ci-workflow-pareto-recommendations.json <<'JSON'
+          {
+            "schema_version": "1.0.0",
+            "mode": "report_only",
+            "summary": {
+              "pr_sample_count": 4,
+              "observed_workflow_count": 6,
+              "recommended_path_review_count": 2
+            },
+            "recommendations": [
+              {
+                "workflow": "Runtime Risk Scoring",
+                "pr_presence_count": 4,
+                "pr_presence_percent": 100,
+                "potential_runs_saved": 3,
+                "decision": "RECOMMEND_PATH_REVIEW"
+              },
+              {
+                "workflow": "PR Quality Review",
+                "pr_presence_count": 2,
+                "pr_presence_percent": 50,
+                "potential_runs_saved": 1,
+                "decision": "KEEP_MEASURING"
+              }
+            ]
+          }
+          JSON
+
+      - name: Build dashboard and history
+        run: |
+          set -euo pipefail
+          python scripts/build_ci_workflow_efficiency_dashboard.py --json > /tmp/workflow-efficiency.json
+          python -m json.tool docs/ops-dashboard/data/ci-workflow-efficiency-dashboard.json > /tmp/dashboard.validated.json
+          python -m json.tool docs/ops-dashboard/data/history/ci-workflow-efficiency-history.json > /tmp/history.validated.json
+
+      - name: Validate executive contract and guardrails
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          dashboard = json.loads(Path("docs/ops-dashboard/data/ci-workflow-efficiency-dashboard.json").read_text(encoding="utf-8"))
+          history = json.loads(Path("docs/ops-dashboard/data/history/ci-workflow-efficiency-history.json").read_text(encoding="utf-8"))
+
+          assert dashboard["mode"] == "report_only"
+          assert dashboard["executive_card"]["title"] == "Workflow Efficiency"
+          assert dashboard["top_workflows"][0]["workflow"] == "Runtime Risk Scoring"
+          assert "no_automatic_workflow_change" in dashboard["guardrails"]
+          assert len(history["entries"]) == 1
+          PY
+
+      - name: Publish evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-workflow-efficiency-dashboard
+          path: |
+            docs/ops-dashboard/data/ci-workflow-efficiency-dashboard.json
+            docs/ops-dashboard/data/history/ci-workflow-efficiency-history.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Executive summary
+        if: always()
+        run: |
+          {
+            echo "# Workflow Efficiency Dashboard"
+            echo ""
+            echo "- Modo: report-only"
+            echo "- Card executivo: Workflow Efficiency"
+            echo "- Histórico: últimas 30 medições"
+            echo "- Alteração automática de workflows: desabilitada"
+          } >> "$GITHUB_STEP_SUMMARY"
