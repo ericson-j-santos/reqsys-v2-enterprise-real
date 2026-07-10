@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "minimum_pr_sample": 3,
+  "minimum_presence_percent": 50,
+  "minimum_potential_runs_saved": 2,
+  "target_average_workflows_per_pr": 10,
+  "protected_workflows": [
+    "ReqSys Required Fast Gate",
+    "CI — ReqSys v2 Enterprise",
+    "CI Enterprise Fast",
+    "PR Evidence Gate",
+    "Governed Merge Queue",
+    "Security Baseline Gate",
+    "Branch Protection Audit"
+  ],
+  "report_only_workflows": [
+    "Runtime Risk Scoring",
+    "PR Quality Review",
+    "Predictive Regression Guard",
+    "Deep Governance Review",
+    "Workflow Governance Consolidator",
+    "PR Workflow Run Metrics Validation",
+    "Preview Environment Contract",
+    "PR Scope Labeler",
+    "PR Fast Classifier"
+  ]
+}
