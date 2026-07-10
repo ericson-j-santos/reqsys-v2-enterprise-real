@@ -49,13 +49,14 @@ def evaluate(coverage: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]
                 statements += current_statements
                 matched_files.append(path)
 
-        if not matched_files or statements <= 0:
+        eligible_for_baseline = bool(matched_files and statements > 0)
+        if not eligible_for_baseline and baseline.get(name) is not None:
             invalid_domains.append(name)
 
         percent = round((covered / statements * 100), 2) if statements else 0.0
         baseline_percent = baseline.get(name)
         target = float(rule.get("target_percent", 0.0))
-        regression = baseline_percent is not None and percent + tolerance < float(baseline_percent)
+        regression = eligible_for_baseline and baseline_percent is not None and percent + tolerance < float(baseline_percent)
         if regression:
             regressions.append(name)
 
@@ -63,24 +64,30 @@ def evaluate(coverage: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]
             "coverage_percent": percent,
             "baseline_percent": baseline_percent,
             "target_percent": target,
-            "target_met": percent >= target,
+            "target_met": eligible_for_baseline and percent >= target,
             "regression": regression,
             "covered_lines": covered,
             "statements": statements,
             "matched_files": sorted(matched_files),
+            "eligible_for_baseline": eligible_for_baseline,
         }
+
+    eligible_without_baseline = [
+        name for name, item in domains.items()
+        if item["eligible_for_baseline"] and baseline.get(name) is None
+    ]
 
     if invalid_domains:
         status = "invalid_measurement"
     elif regressions:
         status = "failed"
-    elif not baseline:
+    elif eligible_without_baseline:
         status = "baseline_required"
     else:
         status = "passed"
 
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "mode": policy.get("mode", "record_then_regression"),
         "status": status,
         "allowed_regression_percentage_points": tolerance,
