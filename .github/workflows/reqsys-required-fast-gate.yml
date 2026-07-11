@@ -1,0 +1,117 @@
+name: ReqSys Required Fast Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reqsys-required-fast-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  required-fast-gate:
+    name: Required Fast Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve changed files
+        id: changes
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/reqsys-required-fast-gate
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" > artifacts/reqsys-required-fast-gate/changed-files.txt
+          else
+            git diff --name-only "HEAD~1...HEAD" > artifacts/reqsys-required-fast-gate/changed-files.txt || true
+          fi
+
+          total=$(wc -l < artifacts/reqsys-required-fast-gate/changed-files.txt | tr -d ' ')
+          echo "changed_count=${total}" >> "$GITHUB_OUTPUT"
+
+          if grep -Eq '^(backend/|scripts/|tests/|frontend/|\.github/workflows/|docs/ops-dashboard/)' artifacts/reqsys-required-fast-gate/changed-files.txt; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compile changed Python files
+        run: |
+          set -euo pipefail
+          mapfile -t python_files < <(grep -E '^(backend/|scripts/|tests/).+\.py$' artifacts/reqsys-required-fast-gate/changed-files.txt || true)
+          if [ "${#python_files[@]}" -eq 0 ]; then
+            echo "Nenhum Python alterado para py_compile."
+            exit 0
+          fi
+          python -m py_compile "${python_files[@]}"
+
+      - name: Validate critical workflow syntax surface
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          required = {
+              ".github/workflows/reqsys-required-fast-gate.yml": [
+                  "name: ReqSys Required Fast Gate",
+                  "cancel-in-progress: true",
+                  "timeout-minutes: 8",
+                  "Required Fast Gate",
+              ],
+          }
+
+          for path, tokens in required.items():
+              text = Path(path).read_text(encoding="utf-8")
+              missing = [token for token in tokens if token not in text]
+              if missing:
+                  raise SystemExit(f"{path}: tokens ausentes: {missing}")
+          print("Required Fast Gate workflow contract validated")
+          PY
+
+      - name: Security baseline smoke
+        run: |
+          set -euo pipefail
+          if [ -f scripts/validate_security_baseline.py ]; then
+            python -m py_compile scripts/validate_security_baseline.py
+          else
+            echo "scripts/validate_security_baseline.py ausente; skip seguro."
+          fi
+
+      - name: Required fast gate summary
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            echo "# ReqSys Required Fast Gate"
+            echo ""
+            echo "| Sinal | Resultado |"
+            echo "|---|---|"
+            echo "| Arquivos alterados | ${{ steps.changes.outputs.changed_count }} |"
+            echo "| Escopo relevante | ${{ steps.changes.outputs.relevant }} |"
+            echo "| Política | gate mínimo, determinístico e cancelável |"
+            echo ""
+            echo "Este gate é o candidato canônico para branch protection. Workflows report-only devem permanecer fora do caminho crítico de merge."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -98,6 +98,22 @@ body {
   overflow-x: hidden;
 }
 
+.req-route-feedback {
+  position: fixed !important;
+  top: 16px;
+  right: 16px;
+  z-index: 3000;
+  width: min(520px, calc(100vw - 32px));
+  border: 1px solid rgba(245, 158, 11, 0.45) !important;
+  background: color-mix(in srgb, var(--panel) 94%, transparent) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32) !important;
+}
+
+.req-route-feedback code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .req-drawer,
 .v-navigation-drawer {
   background: color-mix(in srgb, var(--panel) 92%, transparent) !important;
@@ -460,6 +476,13 @@ h1,
   .hub-page,
   .ai-rec-page {
     padding: 16px;
+  }
+
+  .req-route-feedback {
+    top: 64px;
+    right: 8px;
+    left: 8px;
+    width: auto;
   }
 
   .page-header {

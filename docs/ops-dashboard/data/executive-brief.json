@@ -31,26 +31,38 @@
       "coordenacao_operacional_central",
       "runtime_evidence_gate",
       "auto_merge_governado",
-      "runtime_validation_consolidator"
+      "runtime_validation_consolidator",
+      "runtime_executive_public_page"
     ],
     "validado": [
       "ci_principal",
       "gates_seguranca",
-      "runtime_validation_snapshot"
+      "runtime_validation_snapshot",
+      "runtime_executive_page_contract"
     ],
     "evidenciado": [
       "runtime_publico",
       "smoke_checks",
-      "health_snapshot_unico"
+      "health_snapshot_unico",
+      "runtime_executive_public_page"
     ],
     "consolidado": [
       "governanca",
       "pipeline",
-      "risco_operacional"
+      "risco_operacional",
+      "runtime_executive_deeplink_oficial"
     ],
+    "public_surfaces": {
+      "runtime_executive_page": "docs/ops-dashboard/runtime-executive.html"
+    },
     "pronto_para_producao": false
   },
-  "proximo_incremento_seguro": "manter_runtime_validation_consolidator_continuo",
+  "links": {
+    "runtime_executive_page": "docs/ops-dashboard/runtime-executive.html",
+    "runtime_executive_index": "docs/ops-dashboard/data/runtime-executive-index.json",
+    "ops_dashboard": "docs/ops-dashboard/index.html"
+  },
+  "proximo_incremento_seguro": "consolidar_smoke_publico_runtime_executive_page",
   "decisao_executiva": [
     "continuar_paralelizacao_governada",
     "priorizar_validacao_runtime_continua",

@@ -6,7 +6,11 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.core.envelope import ok
-from app.core.operational_queue import OperationalTask, OperationalTaskType, operational_queue
+from app.core.operational_queue import (
+    OperationalTask,
+    OperationalTaskType,
+    operational_queue,
+)
 from app.core.operational_worker import operational_worker
 
 router = APIRouter(prefix='/api/operational-autonomy', tags=['operational-autonomy'])

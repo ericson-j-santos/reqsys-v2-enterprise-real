@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import apiDefault, { api, definirCorrelationIdSessao, obterCorrelationIdSessao } from '../api'
 
 // Executa manualmente o interceptor de request configurado em services/api.js,
@@ -8,10 +8,16 @@ function runRequestInterceptor(config) {
   return handler.fulfilled(config)
 }
 
+function runResponseRejected(error) {
+  const handler = api.interceptors.response.handlers.find(Boolean)
+  return handler.rejected(error)
+}
+
 describe('services/api — interceptor de request', () => {
   beforeEach(() => {
     localStorage.clear()
     sessionStorage.clear()
+    vi.restoreAllMocks()
   })
 
   it('usa /api como baseURL padrão', () => {
@@ -49,5 +55,22 @@ describe('services/api — interceptor de request', () => {
   it('não anexa Authorization quando não há token', () => {
     const config = runRequestInterceptor({ headers: {} })
     expect(config.headers.Authorization).toBeUndefined()
+  })
+
+  it('limpa sessão e redireciona para login preservando rota em 401', async () => {
+    localStorage.setItem('reqsys_token', 'jwt-expirado')
+    localStorage.setItem('reqsys_usuario', JSON.stringify({ email: 'user@example.com' }))
+    window.history.pushState({}, '', '/requisitos?aba=lista')
+    const assign = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/requisitos', search: '?aba=lista', assign },
+    })
+
+    await expect(runResponseRejected({ response: { status: 401 } })).rejects.toMatchObject({ response: { status: 401 } })
+
+    expect(localStorage.getItem('reqsys_token')).toBeNull()
+    expect(localStorage.getItem('reqsys_usuario')).toBeNull()
+    expect(assign).toHaveBeenCalledWith('/login?redirect=%2Frequisitos%3Faba%3Dlista')
   })
 })

@@ -2,14 +2,18 @@ name: Merge Readiness Pareto Gate
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   push:
     branches: [main]
     paths:
       - ".github/workflows/merge-readiness.yml"
       - "scripts/merge_readiness_gate.py"
       - "scripts/build_merge_readiness_history.py"
+      - "scripts/build_environment_promotion_readiness.py"
+      - "scripts/validate_environment_promotion_readiness.py"
       - "tests/test_build_merge_readiness_history.py"
+      - "tests/test_merge_readiness_workflow.py"
+      - "tests/test_environment_promotion_readiness.py"
       - "docs/ops-dashboard/data/merge-readiness-history.json"
   workflow_dispatch:
     inputs:
@@ -18,6 +22,14 @@ on:
         required: true
         default: "main"
         type: string
+      strict:
+        description: "Falhar workflow quando o Pareto Gate retornar blocked"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
 permissions:
   contents: read
@@ -37,6 +49,7 @@ jobs:
     timeout-minutes: 2
     outputs:
       run_gate: ${{ steps.route.outputs.run_gate }}
+      reason: ${{ steps.route.outputs.reason }}
     steps:
       - name: Definir política de execução
         id: route
@@ -44,18 +57,21 @@ jobs:
         run: |
           set -euo pipefail
           run_gate=true
+          reason=active
           if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.pull_request.draft }}" == "true" ]]; then
             run_gate=false
+            reason=draft_pull_request
           fi
           echo "run_gate=$run_gate" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
           echo "Run merge readiness gate: $run_gate" >> "$GITHUB_STEP_SUMMARY"
+          echo "Reason: $reason" >> "$GITHUB_STEP_SUMMARY"
 
   merge-readiness:
     name: Merge readiness
     runs-on: ubuntu-latest
     needs: readiness-router
-    if: needs.readiness-router.outputs.run_gate == 'true'
-    timeout-minutes: 6
+    timeout-minutes: 8
     steps:
       - name: Checkout head com histórico completo
         uses: actions/checkout@v4
@@ -69,17 +85,66 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest
 
-      - name: Validar prontidão objetiva de merge
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.inputs.base_ref || 'main' }}
+      - name: Registrar execução não aplicável
+        if: needs.readiness-router.outputs.run_gate != 'true'
         run: |
           set -euo pipefail
+          mkdir -p artifacts/merge-readiness
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = {
+              "status": "not_applicable",
+              "decision": "skipped",
+              "reason": "${{ needs.readiness-router.outputs.reason }}",
+              "correlation_id": "${{ env.CORRELATION_ID }}",
+              "blocking_issues": [],
+              "warnings": ["Gate não executado porque o pull request está em modo draft."],
+          }
+          Path("artifacts/merge-readiness/merge-readiness.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2),
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Validar prontidão objetiva de merge
+        if: needs.readiness-router.outputs.run_gate == 'true'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.inputs.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+          STRICT_INPUT: ${{ github.event.inputs.strict || 'false' }}
+        run: |
+          set +e
           python scripts/merge_readiness_gate.py \
             --base-ref "$BASE_REF" \
             --max-changed-files 25 \
             --max-workflow-files 3 \
             --max-domains 4 \
             --output artifacts/merge-readiness/merge-readiness.json
+          exit_code=$?
+          set -e
+
+          echo "Merge readiness exit code: ${exit_code}" >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$exit_code" -ne 0 ]]; then
+            if [[ "$EVENT_NAME" == "pull_request" && "$STRICT_INPUT" != "true" ]]; then
+              echo "::warning::Merge Readiness Pareto Gate report-only em pull_request; evidência publicada sem bloquear CI."
+              exit 0
+            fi
+            exit "$exit_code"
+          fi
+
+      - name: Validar contrato de promotion readiness
+        if: needs.readiness-router.outputs.run_gate == 'true'
+        run: |
+          set -euo pipefail
+          python -m unittest tests/test_environment_promotion_readiness.py
+          python scripts/build_environment_promotion_readiness.py \
+            --repo "${{ github.repository }}" \
+            --expected-sha "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --output artifacts/environment-promotion-readiness/environment-promotion-readiness.json
+          python scripts/validate_environment_promotion_readiness.py
 
       - name: Validar superfície merge-readiness history
         if: always()
@@ -103,15 +168,17 @@ jobs:
             --correlation-id "${CORRELATION_ID}" \
             --output "${OUTPUT}"
 
-      - name: Publicar evidência de merge-readiness
+      - name: Publicar evidências de readiness
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: merge-readiness-evidence
           path: |
             artifacts/merge-readiness/merge-readiness.json
+            artifacts/environment-promotion-readiness/environment-promotion-readiness.json
             docs/ops-dashboard/data/merge-readiness-history.json
           if-no-files-found: warn
+          retention-days: 30
 
       - name: Resumo executivo
         if: always()
@@ -120,6 +187,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Correlation ID: \`$CORRELATION_ID\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Evidência: \`artifacts/merge-readiness/merge-readiness.json\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Promotion readiness: \`artifacts/environment-promotion-readiness/environment-promotion-readiness.json\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           if [ -f artifacts/merge-readiness/merge-readiness.json ]; then
             python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
@@ -128,10 +196,12 @@ jobs:
 
           payload = json.loads(Path('artifacts/merge-readiness/merge-readiness.json').read_text(encoding='utf-8'))
           print(f"- Status: `{payload.get('status')}`")
-          print(f"- Ahead: `{payload.get('ahead_by')}`")
-          print(f"- Behind: `{payload.get('behind_by')}`")
-          print(f"- Arquivos alterados: `{payload.get('changed_files')}`")
-          print(f"- Workflows alterados: `{payload.get('workflow_files')}`")
+          print(f"- Decision: `{payload.get('decision', 'n/a')}`")
+          print(f"- Reason: `{payload.get('reason', 'n/a')}`")
+          print(f"- Ahead: `{payload.get('ahead_by', 'n/a')}`")
+          print(f"- Behind: `{payload.get('behind_by', 'n/a')}`")
+          print(f"- Arquivos alterados: `{payload.get('changed_files', 'n/a')}`")
+          print(f"- Workflows alterados: `{payload.get('workflow_files', 'n/a')}`")
           blocking = payload.get('blocking_issues') or []
           warnings = payload.get('warnings') or []
           if blocking:

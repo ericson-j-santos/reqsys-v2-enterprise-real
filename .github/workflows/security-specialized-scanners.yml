@@ -1,0 +1,325 @@
+name: Security Specialized Scanners
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: "Falhar quando scanner suportado encontrar vulnerabilidade crítica"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: security-specialized-scanners-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gitleaks:
+    name: Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: ${{ (inputs.strict || 'false') != 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: true
+          GITLEAKS_ENABLE_SUMMARY: true
+
+  python-dependency-audit:
+    name: pip-audit Python Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+
+      - name: Discover Python dependency files
+        id: discover
+        shell: bash
+        run: |
+          mkdir -p artifacts/security-scanners/pip-audit
+          find . \
+            -path './.git' -prune -o \
+            -path './.venv' -prune -o \
+            -path './venv' -prune -o \
+            -path './node_modules' -prune -o \
+            \( -name 'requirements*.txt' -o -name 'pyproject.toml' \) -print \
+            > artifacts/security-scanners/pip-audit/python-dependency-files.txt
+
+          if [ -s artifacts/security-scanners/pip-audit/python-dependency-files.txt ]; then
+            echo "has_python_deps=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_python_deps=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run pip-audit
+        if: steps.discover.outputs.has_python_deps == 'true'
+        shell: bash
+        env:
+          STRICT_INPUT: ${{ inputs.strict || 'false' }}
+        run: |
+          set +e
+          exit_code=0
+          while IFS= read -r file; do
+            safe_name=$(echo "$file" | sed 's#^./##; s#[/ ]#_#g')
+            if [[ "$file" == *requirements*.txt ]]; then
+              pip-audit -r "$file" --format json --output "artifacts/security-scanners/pip-audit/${safe_name}.json"
+              current=$?
+            elif [[ "$file" == *pyproject.toml ]]; then
+              dir=$(dirname "$file")
+              (cd "$dir" && pip-audit --format json --output "$GITHUB_WORKSPACE/artifacts/security-scanners/pip-audit/${safe_name}.json")
+              current=$?
+            else
+              current=0
+            fi
+            if [ "$current" -ne 0 ]; then
+              exit_code=$current
+            fi
+          done < artifacts/security-scanners/pip-audit/python-dependency-files.txt
+
+          if [ "$STRICT_INPUT" = "true" ]; then
+            exit "$exit_code"
+          fi
+          exit 0
+
+      - name: No Python dependency files found
+        if: steps.discover.outputs.has_python_deps != 'true'
+        run: echo "Nenhum requirements*.txt ou pyproject.toml encontrado para pip-audit." | tee artifacts/security-scanners/pip-audit/README.md
+
+      - name: Upload pip-audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: artifacts/security-scanners/pip-audit/
+          if-no-files-found: warn
+          retention-days: 30
+
+  npm-audit:
+    name: npm Audit Frontend Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Discover package-lock files
+        id: discover
+        shell: bash
+        run: |
+          mkdir -p artifacts/security-scanners/npm-audit
+          find . \
+            -path './.git' -prune -o \
+            -path './node_modules' -prune -o \
+            -name 'package-lock.json' -print \
+            > artifacts/security-scanners/npm-audit/package-lock-files.txt
+
+          if [ -s artifacts/security-scanners/npm-audit/package-lock-files.txt ]; then
+            echo "has_node_deps=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_node_deps=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run npm audit
+        if: steps.discover.outputs.has_node_deps == 'true'
+        shell: bash
+        env:
+          STRICT_INPUT: ${{ inputs.strict || 'false' }}
+        run: |
+          set +e
+          exit_code=0
+          while IFS= read -r lock_file; do
+            dir=$(dirname "$lock_file")
+            safe_name=$(echo "$dir" | sed 's#^./##; s#[/ ]#_#g')
+            [ -z "$safe_name" ] && safe_name="root"
+            (cd "$dir" && npm audit --json > "$GITHUB_WORKSPACE/artifacts/security-scanners/npm-audit/${safe_name}.json")
+            current=$?
+            if [ "$current" -ne 0 ]; then
+              exit_code=$current
+            fi
+          done < artifacts/security-scanners/npm-audit/package-lock-files.txt
+
+          if [ "$STRICT_INPUT" = "true" ]; then
+            exit "$exit_code"
+          fi
+          exit 0
+
+      - name: No Node dependency lockfiles found
+        if: steps.discover.outputs.has_node_deps != 'true'
+        run: echo "Nenhum package-lock.json encontrado para npm audit." | tee artifacts/security-scanners/npm-audit/README.md
+
+      - name: Upload npm audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: artifacts/security-scanners/npm-audit/
+          if-no-files-found: warn
+          retention-days: 30
+
+  sbom:
+    name: SBOM CycloneDX
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Prepare SBOM output directory
+        run: mkdir -p artifacts/security-scanners/sbom
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: artifacts/security-scanners/sbom/reqsys-sbom.cyclonedx.json
+
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-sbom-cyclonedx
+          path: artifacts/security-scanners/sbom/
+          if-no-files-found: error
+          retention-days: 30
+
+  codeql:
+    name: CodeQL SAST
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - javascript-typescript
+          - python
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended,security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  security-executive-summary:
+    name: Security Executive Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - gitleaks
+      - python-dependency-audit
+      - npm-audit
+      - sbom
+      - codeql
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download scanner artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: artifacts/security-scanners/downloaded
+
+      - name: Normalize downloaded artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts/security-scanners/pip-audit
+          mkdir -p artifacts/security-scanners/npm-audit
+          mkdir -p artifacts/security-scanners/sbom
+          mkdir -p artifacts/security-scanners/gitleaks
+
+          if [ -d artifacts/security-scanners/downloaded/pip-audit-report ]; then
+            cp -R artifacts/security-scanners/downloaded/pip-audit-report/. artifacts/security-scanners/pip-audit/
+          fi
+          if [ -d artifacts/security-scanners/downloaded/npm-audit-report ]; then
+            cp -R artifacts/security-scanners/downloaded/npm-audit-report/. artifacts/security-scanners/npm-audit/
+          fi
+          if [ -d artifacts/security-scanners/downloaded/reqsys-sbom-cyclonedx ]; then
+            cp -R artifacts/security-scanners/downloaded/reqsys-sbom-cyclonedx/. artifacts/security-scanners/sbom/
+          fi
+          find artifacts/security-scanners/downloaded -iname '*gitleaks*.json' -exec cp {} artifacts/security-scanners/gitleaks/ \; || true
+
+      - name: Build security executive summary
+        shell: bash
+        env:
+          STRICT_INPUT: ${{ inputs.strict || 'false' }}
+        run: |
+          strict_flag=""
+          if [ "$STRICT_INPUT" = "true" ]; then
+            strict_flag="--strict"
+          fi
+          python scripts/build_security_executive_summary.py \
+            --repo "${{ github.repository }}" \
+            --branch "${{ github.ref_name }}" \
+            --output-dir artifacts/security-executive-summary \
+            $strict_flag
+
+      - name: Upload security executive summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-executive-summary
+          path: artifacts/security-executive-summary/
+          if-no-files-found: error
+          retention-days: 30
