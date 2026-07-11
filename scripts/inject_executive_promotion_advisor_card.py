@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 MARKER = 'id="executive-promotion-advisor-card"'
@@ -51,29 +52,36 @@ def inject_before(text: str, needles: tuple[str, ...], insertion: str, label: st
     raise RuntimeError(f"Ponto de injeção não encontrado: {label}")
 
 
+def inject_before_pattern(text: str, pattern: str, insertion: str, label: str) -> str:
+    if insertion.strip() in text:
+        return text
+    match = re.search(pattern, text, flags=re.MULTILINE)
+    if not match:
+        raise RuntimeError(f"Ponto de injeção não encontrado: {label}")
+    return text[: match.start()] + insertion + text[match.start() :]
+
+
 def patch_dashboard(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
 
     if MARKER not in text:
-        text = inject_before(text, ('  </main>',), SECTION + "\n", "seção visual")
+        text = inject_before(text, ('  </main>', '</main>'), SECTION + "\n", "seção visual")
 
     if "function renderExecutivePromotionAdvisor(payload)" not in text:
-        text = inject_before(
+        text = inject_before_pattern(
             text,
-            ("    async function renderRuntimeExecutiveIndex()",),
+            r"^[ \t]*async function renderRuntimeExecutiveIndex\(\)",
             FUNCTION + "\n",
             "função de renderização",
         )
 
     if "renderExecutivePromotionAdvisor(payload);" not in text:
-        needle = "      const cards = payload.cards || fallback.cards;"
-        if needle not in text:
+        pattern = r"^(?P<indent>[ \t]*)const cards = payload\.cards \|\| fallback\.cards;"
+        match = re.search(pattern, text, flags=re.MULTILINE)
+        if not match:
             raise RuntimeError("Hook do Runtime Executive Index não encontrado")
-        text = text.replace(
-            needle,
-            "      renderExecutivePromotionAdvisor(payload);\n" + needle,
-            1,
-        )
+        hook = f"{match.group('indent')}renderExecutivePromotionAdvisor(payload);\n"
+        text = text[: match.start()] + hook + text[match.start() :]
 
     path.write_text(text, encoding="utf-8")
 
