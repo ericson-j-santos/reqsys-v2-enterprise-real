@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from scripts.build_executive_promotion_advisor_public_smoke_history import build
