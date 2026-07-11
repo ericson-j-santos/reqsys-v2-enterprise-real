@@ -39,27 +39,34 @@ jobs:
               os.environ["DOMAIN_COVERAGE_POLICY_PATH"],
               os.environ["DOMAIN_COVERAGE_BASELINE_DIFF_PATH"],
           ]
-          result = subprocess.run(
-              [
-                  "gh",
-                  "api",
-                  "--repo",
-                  os.environ["GITHUB_REPOSITORY"],
-                  f"/repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{os.environ['PR_NUMBER']}/files",
-                  "--paginate",
-                  "--jq",
-                  ".[].filename",
-              ],
-              check=True,
-              capture_output=True,
-              text=True,
-          )
+          try:
+              result = subprocess.run(
+                  [
+                      "gh",
+                      "api",
+                      "--repo",
+                      os.environ["GITHUB_REPOSITORY"],
+                      f"/repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{os.environ['PR_NUMBER']}/files",
+                      "--paginate",
+                      "--jq",
+                      ".[].filename",
+                  ],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+          except subprocess.CalledProcessError as exc:
+              stderr = exc.stderr.strip() if exc.stderr else "sem detalhes"
+              raise SystemExit(
+                  f"Falha ao consultar arquivos do PR {os.environ['PR_NUMBER']} para validar o baseline por domínio: {stderr}"
+              ) from exc
           changed = {line.strip() for line in result.stdout.splitlines() if line.strip()}
-          matches = [path for path in tracked if path in changed]
+          matches = {path for path in tracked if path in changed}
+          ordered_matches = [path for path in tracked if path in matches]
 
-          print(f"requires_approval={'true' if matches else 'false'}")
+          print(f"requires_approval={'true' if ordered_matches else 'false'}")
           print("governed_files<<EOF")
-          print("\n".join(matches))
+          print("\n".join(ordered_matches))
           print("EOF")
           PY
 
