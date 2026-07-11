@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-11T00:00:00Z",
+  "description": "Baseline inicial de cobertura por domínio arquitetural. Estabelece a linha-base conservadora (50%) para ativação do regression_gate.",
+  "requires_human_approval": true,
+  "previous_mode": "record_then_regression",
+  "current_mode": "regression_gate",
+  "domains": {
+    "core": {
+      "previous_baseline": null,
+      "new_baseline": 50.0
+    },
+    "services": {
+      "previous_baseline": null,
+      "new_baseline": 50.0
+    },
+    "api": {
+      "previous_baseline": null,
+      "new_baseline": 50.0
+    },
+    "repositories": {
+      "previous_baseline": null,
+      "new_baseline": 50.0
+    },
+    "runtime": {
+      "previous_baseline": null,
+      "new_baseline": 50.0
+    }
+  }
+}

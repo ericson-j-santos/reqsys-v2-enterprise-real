@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "mode": "record_then_regression",
+  "mode": "regression_gate",
   "allowed_regression_percentage_points": 0.0,
   "domains": {
     "core": {
@@ -29,5 +29,11 @@
       "target_percent": 70.0
     }
   },
-  "baseline": {}
+  "baseline": {
+    "core": 50.0,
+    "services": 50.0,
+    "api": 50.0,
+    "repositories": 50.0,
+    "runtime": 50.0
+  }
 }
