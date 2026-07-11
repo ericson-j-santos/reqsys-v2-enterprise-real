@@ -19,6 +19,9 @@ jobs:
       github.event_name == 'pull_request' ||
       (github.event.pull_request.base.ref == 'main')
     runs-on: ubuntu-latest
+    env:
+      DOMAIN_COVERAGE_POLICY_PATH: config/domain-coverage-policy.json
+      DOMAIN_COVERAGE_BASELINE_DIFF_PATH: docs/ops-dashboard/data/domain-coverage-baseline-diff.json
     steps:
       - name: Detectar escopo governado
         id: scope
@@ -34,7 +37,7 @@ jobs:
               "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
               --paginate \
               --jq '.[].filename' |
-            grep -Fx -e "config/domain-coverage-policy.json" -e "docs/ops-dashboard/data/domain-coverage-baseline-diff.json" ||
+            grep -Fx -e "${DOMAIN_COVERAGE_POLICY_PATH}" -e "${DOMAIN_COVERAGE_BASELINE_DIFF_PATH}" ||
             true
           )"
 
@@ -60,10 +63,11 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
-          policy = json.loads(Path('config/domain-coverage-policy.json').read_text(encoding='utf-8'))
-          diff = json.loads(Path('docs/ops-dashboard/data/domain-coverage-baseline-diff.json').read_text(encoding='utf-8'))
+          policy = json.loads(Path(os.environ['DOMAIN_COVERAGE_POLICY_PATH']).read_text(encoding='utf-8'))
+          diff = json.loads(Path(os.environ['DOMAIN_COVERAGE_BASELINE_DIFF_PATH']).read_text(encoding='utf-8'))
 
           assert policy.get('mode') == 'regression_gate', 'modo regression_gate não ativado'
           assert policy.get('baseline'), 'baseline não pode ser vazio'
@@ -90,11 +94,13 @@ jobs:
 
       - name: Resumo
         if: always()
+        env:
+          GOVERNED_FILES: ${{ steps.scope.outputs.governed_files }}
         run: |
           echo "## Domain Coverage Baseline Approval" >> "$GITHUB_STEP_SUMMARY"
           if [[ "${{ steps.scope.outputs.requires_approval }}" == "true" ]]; then
             echo "Arquivos governados detectados:" >> "$GITHUB_STEP_SUMMARY"
-            echo "${{ steps.scope.outputs.governed_files }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "${GOVERNED_FILES}" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "A substituição do baseline exige política válida e ao menos uma revisão APPROVED." >> "$GITHUB_STEP_SUMMARY"
           else
