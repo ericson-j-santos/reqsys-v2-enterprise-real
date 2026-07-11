@@ -1,12 +1,10 @@
 {
   "schema_version": "1.1.0",
   "mode": "record_then_regression",
-  "status": "invalid_measurement",
+  "status": "baseline_required",
   "allowed_regression_percentage_points": 0.0,
   "regressions": [],
-  "invalid_domains": [
-    "runtime"
-  ],
+  "invalid_domains": [],
   "domains": {
     "core": {
       "coverage_percent": 96.01,
@@ -165,14 +163,33 @@
       ]
     },
     "runtime": {
-      "coverage_percent": 0.0,
+      "coverage_percent": 94.09,
       "baseline_percent": null,
       "target_percent": 70.0,
-      "target_met": false,
+      "target_met": true,
       "regression": false,
-      "covered_lines": 0,
-      "statements": 0,
-      "matched_files": []
+      "covered_lines": 1163,
+      "statements": 1236,
+      "matched_files": [
+        "app/api/actions_runtime_center.py",
+        "app/api/agile_runtime.py",
+        "app/api/operational_autonomy.py",
+        "app/api/operational_intelligence.py",
+        "app/api/requisitos_runtime_inspection.py",
+        "app/api/requisitos_runtime_transition.py",
+        "app/api/runtime_analytics.py",
+        "app/core/operational_queue.py",
+        "app/core/operational_worker.py",
+        "app/core/runtime_analytics.py",
+        "app/core/runtime_boot.py",
+        "app/core/runtime_remediation.py",
+        "app/services/actions_runtime_monitor.py",
+        "app/services/govbi_ai_runtime_probes.py",
+        "app/services/operational_mesh_signal.py",
+        "app/services/requisitos_runtime_events.py",
+        "app/services/runtime_core.py",
+        "app/services/runtime_intelligence_service.py"
+      ]
     }
   }
 }
