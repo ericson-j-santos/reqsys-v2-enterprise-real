@@ -39,6 +39,13 @@ def _slug(value: str) -> str:
     return normalized or "ReqSysCopilotHITL"
 
 
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT.resolve()))
+    except ValueError:
+        return str(path.resolve())
+
+
 def _write_xml(path: Path, root: ET.Element) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     ET.indent(root, space="  ")
@@ -74,18 +81,21 @@ def _solution_xml(unique_name: str, display_name: str, version: str) -> ET.Eleme
 
 def _customizations_xml(unique_name: str) -> ET.Element:
     root = ET.Element("ImportExportXml", {"version": "9.2.0.0", "SolutionPackageVersion": "9.2"})
-    ET.SubElement(root, "Entities")
-    ET.SubElement(root, "Roles")
-    ET.SubElement(root, "Workflows")
-    ET.SubElement(root, "FieldSecurityProfiles")
-    ET.SubElement(root, "Templates")
-    ET.SubElement(root, "EntityMaps")
-    ET.SubElement(root, "EntityRelationships")
-    ET.SubElement(root, "OrganizationSettings")
-    ET.SubElement(root, "optionsets")
-    ET.SubElement(root, "CustomControls")
-    ET.SubElement(root, "EntityDataProviders")
-    ET.SubElement(root, "Languages")
+    for element in [
+        "Entities",
+        "Roles",
+        "Workflows",
+        "FieldSecurityProfiles",
+        "Templates",
+        "EntityMaps",
+        "EntityRelationships",
+        "OrganizationSettings",
+        "optionsets",
+        "CustomControls",
+        "EntityDataProviders",
+        "Languages",
+    ]:
+        ET.SubElement(root, element)
     ET.SubElement(root, "solution", {"uniquename": unique_name})
     return root
 
@@ -199,8 +209,8 @@ def materialize(blueprint_path: Path, output_dir: Path, *, validate_with_pac: bo
         "solution_unique_name": unique_name,
         "display_name": display_name,
         "version": version,
-        "source_blueprint": str(blueprint_path.relative_to(ROOT)),
-        "package": str(package_path.relative_to(ROOT)),
+        "source_blueprint": _display_path(blueprint_path),
+        "package": _display_path(package_path),
         "managed": False,
         "requires_human_approval": True,
         "production_import_blocked_by_default": True,
