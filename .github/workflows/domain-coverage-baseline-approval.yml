@@ -31,25 +31,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PR_FILES="$(mktemp)"
-          gh api \
-            --repo "${{ github.repository }}" \
-            "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
-            --paginate \
-            --jq '.[].filename' > "${PR_FILES}"
-          GOVERNED_MATCHES="$(grep -Fx -e "${DOMAIN_COVERAGE_POLICY_PATH}" -e "${DOMAIN_COVERAGE_BASELINE_DIFF_PATH}" "${PR_FILES}" || true)"
-          rm -f "${PR_FILES}"
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os
+          import subprocess
 
-          if [[ -n "${GOVERNED_MATCHES}" ]]; then
-            echo "requires_approval=true" >> "$GITHUB_OUTPUT"
-            {
-              echo "governed_files<<EOF"
-              printf '%s\n' "${GOVERNED_MATCHES}"
-              echo "EOF"
-            } >> "$GITHUB_OUTPUT"
-          else
-            echo "requires_approval=false" >> "$GITHUB_OUTPUT"
-          fi
+          tracked = [
+              os.environ["DOMAIN_COVERAGE_POLICY_PATH"],
+              os.environ["DOMAIN_COVERAGE_BASELINE_DIFF_PATH"],
+          ]
+          result = subprocess.run(
+              [
+                  "gh",
+                  "api",
+                  "--repo",
+                  os.environ["GITHUB_REPOSITORY"],
+                  f"/repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{os.environ['PR_NUMBER']}/files",
+                  "--paginate",
+                  "--jq",
+                  ".[].filename",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+          changed = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+          matches = [path for path in tracked if path in changed]
+
+          print(f"requires_approval={'true' if matches else 'false'}")
+          print("governed_files<<EOF")
+          print("\n".join(matches))
+          print("EOF")
+          PY
 
       - name: Checkout PR
         if: steps.scope.outputs.requires_approval == 'true'
