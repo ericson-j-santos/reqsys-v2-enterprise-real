@@ -51,7 +51,7 @@ jobs:
           test -n "$TARGET_ENVIRONMENT"
           test -n "$TARGET_URL"
           case "$TARGET_ENVIRONMENT" in
-            dev|development|stg|staging|prod|production) ;;
+            dev|development|stg|staging|prod|production|github-pages) ;;
             *) echo "Ambiente não governado: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
           esac
 
