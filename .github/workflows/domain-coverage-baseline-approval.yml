@@ -20,10 +20,41 @@ jobs:
       (github.event.pull_request.base.ref == 'main')
     runs-on: ubuntu-latest
     steps:
+      - name: Detectar escopo governado
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOVERNED_MATCHES="$(
+            gh api \
+              --repo "${{ github.repository }}" \
+              "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
+              --paginate \
+              --jq '.[].filename' |
+            grep -Fx -e "config/domain-coverage-policy.json" -e "docs/ops-dashboard/data/domain-coverage-baseline-diff.json" ||
+            true
+          )"
+
+          if [[ -n "${GOVERNED_MATCHES}" ]]; then
+            echo "requires_approval=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "governed_files<<EOF"
+              printf '%s\n' "${GOVERNED_MATCHES}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "requires_approval=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout PR
+        if: steps.scope.outputs.requires_approval == 'true'
         uses: actions/checkout@v4
 
       - name: Validar escopo e política
+        if: steps.scope.outputs.requires_approval == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -43,6 +74,7 @@ jobs:
           PY
 
       - name: Exigir revisão APPROVED
+        if: steps.scope.outputs.requires_approval == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -60,4 +92,11 @@ jobs:
         if: always()
         run: |
           echo "## Domain Coverage Baseline Approval" >> "$GITHUB_STEP_SUMMARY"
-          echo "A substituição do baseline exige política válida e ao menos uma revisão APPROVED." >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${{ steps.scope.outputs.requires_approval }}" == "true" ]]; then
+            echo "Arquivos governados detectados:" >> "$GITHUB_STEP_SUMMARY"
+            echo "${{ steps.scope.outputs.governed_files }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "A substituição do baseline exige política válida e ao menos uma revisão APPROVED." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Nenhuma alteração de baseline por domínio foi detectada neste PR; validação ignorada." >> "$GITHUB_STEP_SUMMARY"
+          fi
