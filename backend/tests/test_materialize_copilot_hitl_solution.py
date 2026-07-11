@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import zipfile
 from pathlib import Path
 
@@ -7,9 +8,12 @@ os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_materialize_copilot_hitl.db")
 os.environ.setdefault("JWT_SECRET", "reqsys-test-secret-with-minimum-safe-length")
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from scripts.materialize_copilot_hitl_solution import materialize
 
-ROOT = Path(__file__).resolve().parents[2]
 BLUEPRINT = ROOT / "artifacts/lowcode-solution-factory/copilot-hitl-agent-network/manifest.json"
 
 
