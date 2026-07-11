@@ -1,59 +1,38 @@
 {
   "schema_version": "1.1.0",
-  "generated_at": "2026-06-28T14:45:43Z",
+  "generated_at": "2026-07-11T12:35:01.819233+00:00",
   "name": "runtime-operational-correlation-timeline",
   "mode": "report_only",
   "runtime_state": "TIMELINE_HYDRATED",
-  "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7",
-  "workflow_run_id": null,
-  "timeline_event_count": 4,
+  "correlation_id": "test-correlation",
+  "timeline_event_count": 3,
   "timeline": [
     {
       "sequence": 1,
-      "event": "coordenador_status_captured",
-      "source": "coordenador-status-consolidator",
-      "correlation_level": "governance",
-      "state": "yellow",
-      "decision": "bloquear_novas_frentes_ate_consolidar",
-      "correlation_id": "d61aa286-015e-451d-ad3d-c54278c2103e"
+      "event": "ci_workflow_run",
+      "correlation_level": "ci"
     },
     {
       "sequence": 2,
       "event": "environment_probe",
-      "source": "multi-environment-evidence",
-      "correlation_level": "runtime",
-      "environment": "dev",
-      "status": "unknown",
-      "readiness_percent": 0,
-      "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7"
+      "correlation_level": "runtime"
     },
     {
+      "event": "timeline_bootstrap",
+      "source": "generate_runtime_operational_correlation_timeline",
+      "correlation_level": "governance",
+      "state": "bootstrap",
       "sequence": 3,
-      "event": "environment_probe",
-      "source": "multi-environment-evidence",
-      "correlation_level": "runtime",
-      "environment": "hml",
-      "status": "unknown",
-      "readiness_percent": 0,
-      "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7"
-    },
-    {
-      "sequence": 4,
-      "event": "environment_probe",
-      "source": "multi-environment-evidence",
-      "correlation_level": "runtime",
-      "environment": "prod",
-      "status": "unknown",
-      "readiness_percent": 0,
-      "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7"
+      "correlation_id": "test-correlation"
     }
   ],
-  "confidence_percent": 85,
-  "risk_percent": 60,
+  "confidence_percent": 90,
+  "risk_percent": 10,
   "limits": [
-    "report_only",
-    "no_auto_deploy",
+    "no_deploy",
     "no_production_mutation",
+    "no_external_write",
     "human_review_required"
-  ]
+  ],
+  "next_recommended_increment": "Operational Observability Hub scheduled chain"
 }

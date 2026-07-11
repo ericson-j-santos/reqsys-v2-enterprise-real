@@ -1390,5 +1390,353 @@
         "tendencia": "estavel"
       }
     ]
+  },
+  {
+    "schema_version": "2.1.0",
+    "coletado_em": "2026-07-11T12:34:47.002336+00:00",
+    "correlation_id": "7d6f1e7f-7c83-4abf-ae40-11805816db25",
+    "ambiente": "desenvolvimento",
+    "resumo": {
+      "total": 6,
+      "internos": 5,
+      "externos": 1,
+      "invalidos": 0,
+      "nao_medidos": 0,
+      "fontes_externas": {
+        "total": 3,
+        "autorizadas_validas": 3,
+        "expiradas": 0,
+        "mock_marcadas": 0,
+        "pendentes_auditoria": 0
+      }
+    },
+    "indicadores_resumo": [
+      {
+        "id": "total-requisitos",
+        "valorAtual": 96,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-com-bdd",
+        "valorAtual": 0,
+        "estadoAtual": "critico",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-com-lacunas",
+        "valorAtual": 0,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-concluidos",
+        "valorAtual": 0,
+        "estadoAtual": "critico",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "guard-rails-producao",
+        "valorAtual": 100,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "fontes-externas-validas",
+        "valorAtual": 3,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      }
+    ]
+  },
+  {
+    "schema_version": "2.1.0",
+    "coletado_em": "2026-07-11T12:34:47.033242+00:00",
+    "correlation_id": "e183a075-af2f-4611-982a-5cee310e4c3c",
+    "ambiente": "desenvolvimento",
+    "resumo": {
+      "total": 6,
+      "internos": 5,
+      "externos": 1,
+      "invalidos": 0,
+      "nao_medidos": 0,
+      "fontes_externas": {
+        "total": 3,
+        "autorizadas_validas": 3,
+        "expiradas": 0,
+        "mock_marcadas": 0,
+        "pendentes_auditoria": 0
+      }
+    },
+    "indicadores_resumo": [
+      {
+        "id": "total-requisitos",
+        "valorAtual": 96,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-com-bdd",
+        "valorAtual": 0,
+        "estadoAtual": "critico",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-com-lacunas",
+        "valorAtual": 0,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-concluidos",
+        "valorAtual": 0,
+        "estadoAtual": "critico",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "guard-rails-producao",
+        "valorAtual": 100,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "fontes-externas-validas",
+        "valorAtual": 3,
+        "estadoAtual": "adequado",
+        "tendencia": "subindo"
+      }
+    ]
+  },
+  {
+    "schema_version": "2.1.0",
+    "coletado_em": "2026-07-11T12:34:47.065070+00:00",
+    "correlation_id": "corr-estatisticas-v2-test",
+    "ambiente": "desenvolvimento",
+    "resumo": {
+      "total": 6,
+      "internos": 5,
+      "externos": 1,
+      "invalidos": 0,
+      "nao_medidos": 0,
+      "fontes_externas": {
+        "total": 3,
+        "autorizadas_validas": 3,
+        "expiradas": 0,
+        "mock_marcadas": 0,
+        "pendentes_auditoria": 0
+      }
+    },
+    "indicadores_resumo": [
+      {
+        "id": "total-requisitos",
+        "valorAtual": 96,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-com-bdd",
+        "valorAtual": 0,
+        "estadoAtual": "critico",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-com-lacunas",
+        "valorAtual": 0,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-concluidos",
+        "valorAtual": 0,
+        "estadoAtual": "critico",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "guard-rails-producao",
+        "valorAtual": 100,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "fontes-externas-validas",
+        "valorAtual": 3,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      }
+    ]
+  },
+  {
+    "schema_version": "2.1.0",
+    "coletado_em": "2026-07-11T12:34:47.097010+00:00",
+    "correlation_id": "b194cdbe-8be3-4cd0-b04e-108d1ce09557",
+    "ambiente": "desenvolvimento",
+    "resumo": {
+      "total": 6,
+      "internos": 5,
+      "externos": 1,
+      "invalidos": 0,
+      "nao_medidos": 0,
+      "fontes_externas": {
+        "total": 3,
+        "autorizadas_validas": 3,
+        "expiradas": 0,
+        "mock_marcadas": 0,
+        "pendentes_auditoria": 0
+      }
+    },
+    "indicadores_resumo": [
+      {
+        "id": "total-requisitos",
+        "valorAtual": 96,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-com-bdd",
+        "valorAtual": 0,
+        "estadoAtual": "critico",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-com-lacunas",
+        "valorAtual": 0,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-concluidos",
+        "valorAtual": 0,
+        "estadoAtual": "critico",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "guard-rails-producao",
+        "valorAtual": 100,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "fontes-externas-validas",
+        "valorAtual": 3,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      }
+    ]
+  },
+  {
+    "schema_version": "2.1.0",
+    "coletado_em": "2026-07-11T12:34:47.130001+00:00",
+    "correlation_id": "a01a2eab-a19f-430c-9d5f-1d3e204a9f02",
+    "ambiente": "desenvolvimento",
+    "resumo": {
+      "total": 6,
+      "internos": 5,
+      "externos": 1,
+      "invalidos": 0,
+      "nao_medidos": 0,
+      "fontes_externas": {
+        "total": 3,
+        "autorizadas_validas": 3,
+        "expiradas": 0,
+        "mock_marcadas": 0,
+        "pendentes_auditoria": 0
+      }
+    },
+    "indicadores_resumo": [
+      {
+        "id": "total-requisitos",
+        "valorAtual": 96,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-com-bdd",
+        "valorAtual": 0,
+        "estadoAtual": "critico",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-com-lacunas",
+        "valorAtual": 0,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-concluidos",
+        "valorAtual": 0,
+        "estadoAtual": "critico",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "guard-rails-producao",
+        "valorAtual": 100,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "fontes-externas-validas",
+        "valorAtual": 3,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      }
+    ]
+  },
+  {
+    "schema_version": "2.1.0",
+    "coletado_em": "2026-07-11T12:34:47.163209+00:00",
+    "correlation_id": "cee77f54-5b01-4e70-9e19-dd8bae1c61e6",
+    "ambiente": "desenvolvimento",
+    "resumo": {
+      "total": 6,
+      "internos": 5,
+      "externos": 1,
+      "invalidos": 0,
+      "nao_medidos": 0,
+      "fontes_externas": {
+        "total": 3,
+        "autorizadas_validas": 3,
+        "expiradas": 0,
+        "mock_marcadas": 0,
+        "pendentes_auditoria": 0
+      }
+    },
+    "indicadores_resumo": [
+      {
+        "id": "total-requisitos",
+        "valorAtual": 96,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-com-bdd",
+        "valorAtual": 0,
+        "estadoAtual": "critico",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-com-lacunas",
+        "valorAtual": 0,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "requisitos-concluidos",
+        "valorAtual": 0,
+        "estadoAtual": "critico",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "guard-rails-producao",
+        "valorAtual": 100,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      },
+      {
+        "id": "fontes-externas-validas",
+        "valorAtual": 3,
+        "estadoAtual": "adequado",
+        "tendencia": "estavel"
+      }
+    ]
   }
 ]

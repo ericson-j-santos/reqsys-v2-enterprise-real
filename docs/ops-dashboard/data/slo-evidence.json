@@ -1,19 +1,19 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-28T14:45:43Z",
+  "generated_at": "2026-07-11T12:35:01Z",
   "source": "operational-slo-evidence",
-  "status": "watch",
-  "confidence_level": "low",
-  "maturity_percent": 75,
-  "operational_risk": "medium",
+  "status": "degraded",
+  "confidence_level": "high",
+  "maturity_percent": 50,
+  "operational_risk": "high",
   "commit_sha": "local",
-  "correlation_id": "a4c53fd1-e5a9-42e0-9952-b8d4cb122ae7",
+  "correlation_id": "af725b96-17a5-4b62-bd61-169e38e0d4e7",
   "mode": "report_only",
   "summary": {
     "slo_count": 3,
-    "breach_count": 1,
-    "met_count": 0,
-    "no_data_count": 2
+    "breach_count": 2,
+    "met_count": 1,
+    "no_data_count": 0
   },
   "slos": [
     {
@@ -22,10 +22,10 @@
       "environment": "all",
       "target_percent": 95.0,
       "window_days": 7,
-      "actual_percent": null,
-      "error_budget_remaining": null,
+      "actual_percent": 97.0,
+      "error_budget_remaining": 2.0,
       "breach": false,
-      "status": "no_data"
+      "status": "met"
     },
     {
       "slo_id": "env_probe_availability",
@@ -33,8 +33,8 @@
       "environment": "multi",
       "target_percent": 99.0,
       "window_days": 1,
-      "actual_percent": 0.0,
-      "error_budget_remaining": -99.0,
+      "actual_percent": 66.67,
+      "error_budget_remaining": -32.33,
       "breach": true,
       "status": "breach"
     },
@@ -44,10 +44,10 @@
       "environment": "all",
       "target_percent": 90.0,
       "window_days": 7,
-      "actual_percent": null,
-      "error_budget_remaining": null,
-      "breach": false,
-      "status": "no_data"
+      "actual_percent": 75.0,
+      "error_budget_remaining": -15.0,
+      "breach": true,
+      "status": "breach"
     }
   ],
   "guardrails": [
