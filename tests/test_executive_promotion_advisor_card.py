@@ -16,18 +16,31 @@ async function renderRuntimeExecutiveIndex() {
 }
 </script></body></html>'''
 
+INDENTED_HTML = '''<!doctype html><html><body><main></main><script>
+    function statusClass(value) { return value || 'unknown'; }
+    async function renderRuntimeExecutiveIndex() {
+      const payload = {cards: {}};
+      const fallback = {cards: {}};
+      const cards = payload.cards || fallback.cards;
+      return cards;
+    }
+</script></body></html>'''
+
 
 class ExecutivePromotionAdvisorCardTests(unittest.TestCase):
     def test_injects_card_idempotently(self):
-        with tempfile.TemporaryDirectory() as directory:
-            dashboard = Path(directory) / "index.html"
-            dashboard.write_text(BASE_HTML, encoding="utf-8")
-            patch_dashboard(dashboard)
-            first = dashboard.read_text(encoding="utf-8")
-            patch_dashboard(dashboard)
-            second = dashboard.read_text(encoding="utf-8")
-            self.assertEqual(first, second)
-            self.assertEqual(second.count('id="executive-promotion-advisor-card"'), 1)
+        for source in (BASE_HTML, INDENTED_HTML):
+            with self.subTest(indented=source is INDENTED_HTML):
+                with tempfile.TemporaryDirectory() as directory:
+                    dashboard = Path(directory) / "index.html"
+                    dashboard.write_text(source, encoding="utf-8")
+                    patch_dashboard(dashboard)
+                    first = dashboard.read_text(encoding="utf-8")
+                    patch_dashboard(dashboard)
+                    second = dashboard.read_text(encoding="utf-8")
+                    self.assertEqual(first, second)
+                    self.assertEqual(second.count('id="executive-promotion-advisor-card"'), 1)
+                    self.assertEqual(second.count("renderExecutivePromotionAdvisor(payload);"), 1)
 
     def test_validates_packaged_contract_and_guardrails(self):
         with tempfile.TemporaryDirectory() as directory:
