@@ -41,8 +41,10 @@ jobs:
           cache: 'pip'
           cache-dependency-path: backend/requirements*.txt
 
-      - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest
+      - name: Install backend test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
 
       - name: Run contract tests
         run: python -m pytest backend/tests/test_materialize_copilot_hitl_solution.py -q
