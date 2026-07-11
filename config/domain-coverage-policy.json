@@ -20,7 +20,20 @@
       "target_percent": 70.0
     },
     "runtime": {
-      "paths": ["backend/app/runtime/", "backend/app/operational/"],
+      "paths": [
+        "backend/app/core/runtime_",
+        "backend/app/core/operational_",
+        "backend/app/services/runtime_",
+        "backend/app/services/actions_runtime_",
+        "backend/app/services/govbi_ai_runtime_",
+        "backend/app/services/operational_",
+        "backend/app/services/requisitos_runtime_",
+        "backend/app/api/runtime_",
+        "backend/app/api/actions_runtime_",
+        "backend/app/api/agile_runtime.py",
+        "backend/app/api/requisitos_runtime_",
+        "backend/app/api/operational_"
+      ],
       "target_percent": 70.0
     }
   },

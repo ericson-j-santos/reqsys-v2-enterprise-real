@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from scripts.evaluate_domain_coverage import evaluate
 
 
@@ -74,3 +77,31 @@ def test_improvement_passes_and_reports_target_state() -> None:
     assert report["status"] == "passed"
     assert report["domains"]["core"]["target_met"] is True
     assert report["domains"]["services"]["target_met"] is True
+
+
+def test_versioned_policy_runtime_domain_matches_runtime_files() -> None:
+    policy = json.loads(
+        Path("config/domain-coverage-policy.json").read_text(encoding="utf-8")
+    )
+    coverage = {
+        "files": {
+            "app/core/runtime_boot.py": {
+                "summary": {"covered_lines": 8, "num_statements": 10}
+            },
+            "app/services/requisitos_runtime_events.py": {
+                "summary": {"covered_lines": 9, "num_statements": 10}
+            },
+            "app/api/runtime_analytics.py": {
+                "summary": {"covered_lines": 7, "num_statements": 10}
+            },
+        }
+    }
+
+    report = evaluate(coverage, policy)
+
+    assert "runtime" not in report["invalid_domains"]
+    assert report["domains"]["runtime"]["matched_files"] == [
+        "app/api/runtime_analytics.py",
+        "app/core/runtime_boot.py",
+        "app/services/requisitos_runtime_events.py",
+    ]
