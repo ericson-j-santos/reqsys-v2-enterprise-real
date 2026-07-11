@@ -28,10 +28,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Para pull_request, o trigger já tem filtro de paths — só dispara quando os
+          # arquivos de cobertura mudam, portanto a validação é sempre pertinente.
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # Para pull_request_review os filtros de paths não se aplicam; verificamos
+          # manualmente se o PR toca algum dos arquivos de governança de cobertura.
+          # Os caminhos abaixo devem ser mantidos sincronizados com o filtro on.pull_request.paths.
           CHANGED="$(gh api \
             --repo "${{ github.repository }}" \
             "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
