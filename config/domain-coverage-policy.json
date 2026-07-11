@@ -30,7 +30,7 @@
         "backend/app/services/requisitos_runtime_",
         "backend/app/api/runtime_",
         "backend/app/api/actions_runtime_",
-        "backend/app/api/agile_runtime.py",
+        "backend/app/api/agile_runtime",
         "backend/app/api/requisitos_runtime_",
         "backend/app/api/operational_"
       ],

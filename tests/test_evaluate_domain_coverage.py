@@ -79,7 +79,7 @@ def test_improvement_passes_and_reports_target_state() -> None:
     assert report["domains"]["services"]["target_met"] is True
 
 
-def test_versioned_policy_runtime_domain_matches_runtime_files() -> None:
+def test_runtime_domain_policy_matches_actual_files() -> None:
     policy = json.loads(
         Path("config/domain-coverage-policy.json").read_text(encoding="utf-8")
     )
