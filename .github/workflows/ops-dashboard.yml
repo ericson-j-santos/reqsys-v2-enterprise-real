@@ -36,6 +36,32 @@ jobs:
           python -m py_compile scripts/build_runtime_executive_index.py
           python -m py_compile scripts/build_strategic_governance_index.py
           python -m py_compile scripts/validate_ops_dashboard_runtime_executive_panel.py
+          python -m py_compile scripts/enrich_runtime_executive_deeplinks.py
+          python -m py_compile scripts/validate_runtime_executive_public_page.py
+          python -m py_compile scripts/validate_runtime_executive_deeplink_state.py
+          python -m py_compile scripts/smoke_runtime_executive_static_publication.py
+          python -m py_compile scripts/inject_ops_dashboard_runtime_executive_post_deploy_card.py
+          python -m py_compile scripts/validate_ops_dashboard_runtime_executive_post_deploy_card.py
+          python -m py_compile scripts/build_runtime_executive_post_deploy_history.py
+          python -m py_compile scripts/validate_runtime_executive_post_deploy_history.py
+          python -m py_compile scripts/evaluate_runtime_executive_temporal_regression.py
+          python -m py_compile scripts/validate_runtime_executive_regression_alert.py
+          python -m py_compile scripts/inject_ops_dashboard_regression_alert_semaforo.py
+          python -m py_compile scripts/validate_ops_dashboard_regression_alert_semaforo.py
+          python -m py_compile scripts/enrich_runtime_executive_canonical_blocking.py
+          python -m py_compile scripts/validate_runtime_executive_canonical_blocking.py
+          python -m py_compile scripts/build_security_executive_summary.py
+          python -m py_compile scripts/inject_ops_dashboard_security_executive_summary_card.py
+          python -m py_compile scripts/validate_ops_dashboard_security_executive_summary_card.py
+          python -m py_compile scripts/executive_readiness_gate.py
+          python -m py_compile scripts/enrich_runtime_executive_readiness.py
+          python -m py_compile scripts/validate_runtime_executive_readiness_integration.py
+          python -m py_compile scripts/inject_runtime_executive_readiness_cards.py
+          python -m py_compile scripts/validate_runtime_executive_readiness_visual.py
+          python -m py_compile scripts/inject_workflow_efficiency_visual_card.py
+          python -m py_compile scripts/validate_workflow_efficiency_visual_card.py
+          python -m unittest tests/test_workflow_efficiency_visual_card.py
+          python -m unittest tests/test_ops_dashboard_workflow_efficiency_integration.py
 
       - name: Generate fallback dashboard data
         shell: bash
@@ -76,6 +102,48 @@ jobs:
             --output-dir artifacts/runtime-validation-consolidator \
             --publish-executive-brief docs/ops-dashboard/data/executive-brief.json
 
+      - name: Build Security Executive Summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build_security_executive_summary.py \
+            --repo "${{ github.repository }}" \
+            --branch main \
+            --output-dir artifacts/security-executive-summary
+          cp artifacts/security-executive-summary/security-executive-summary.json docs/ops-dashboard/data/security-executive-summary.json
+          cp artifacts/security-executive-summary/security-executive-summary.md docs/ops-dashboard/data/security-executive-summary.md
+          python -m json.tool docs/ops-dashboard/data/security-executive-summary.json >/tmp/security-executive-summary.validated.json
+
+      - name: Build Runtime Executive post-deploy history
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build_runtime_executive_post_deploy_history.py \
+            --output docs/ops-dashboard/data/runtime-executive-post-deploy-history.json \
+            --artifact-output artifacts/runtime-executive-post-deploy-history/runtime-executive-post-deploy-history.json \
+            --executive-brief docs/ops-dashboard/data/executive-brief.json
+          python scripts/validate_runtime_executive_post_deploy_history.py
+
+      - name: Evaluate Runtime Executive temporal regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/evaluate_runtime_executive_temporal_regression.py \
+            --history docs/ops-dashboard/data/runtime-executive-post-deploy-history.json \
+            --output artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json \
+            --executive-brief docs/ops-dashboard/data/executive-brief.json
+          python scripts/validate_runtime_executive_regression_alert.py
+
+      - name: Generate Executive Readiness Gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/executive_readiness_gate.py \
+            --repo "${{ github.repository }}" \
+            --branch main \
+            --output-dir artifacts/executive-readiness-gate \
+            --correlation-id "${{ github.run_id }}-${{ github.run_attempt }}"
+
       - name: Generate runtime executive index
         shell: bash
         run: |
@@ -91,6 +159,25 @@ jobs:
             --runtime-validation artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json \
             --output docs/ops-dashboard/data/runtime-executive-index.json
 
+      - name: Promote temporal blocking to canonical executive contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/enrich_runtime_executive_canonical_blocking.py \
+            --alert artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json \
+            --runtime-index docs/ops-dashboard/data/runtime-executive-index.json \
+            --executive-brief docs/ops-dashboard/data/executive-brief.json
+          python scripts/validate_runtime_executive_canonical_blocking.py
+
+      - name: Enrich Runtime Executive with Executive Readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/enrich_runtime_executive_readiness.py \
+            --runtime-index docs/ops-dashboard/data/runtime-executive-index.json \
+            --executive-readiness artifacts/executive-readiness-gate/executive-readiness-gate.json
+          python scripts/validate_runtime_executive_readiness_integration.py
+
       - name: Generate strategic governance index
         shell: bash
         run: |
@@ -100,6 +187,47 @@ jobs:
             --runtime-index docs/ops-dashboard/data/runtime-executive-index.json \
             --output docs/ops-dashboard/data/strategic-governance-index.json
 
+      - name: Enrich Runtime Executive deep links
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/enrich_runtime_executive_deeplinks.py \
+            --runtime-index docs/ops-dashboard/data/runtime-executive-index.json \
+            --strategic-governance docs/ops-dashboard/data/strategic-governance-index.json \
+            --executive-brief docs/ops-dashboard/data/executive-brief.json
+
+      - name: Inject Runtime Executive regression semaforo
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/inject_ops_dashboard_regression_alert_semaforo.py
+
+      - name: Inject Security Executive Summary card
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/inject_ops_dashboard_security_executive_summary_card.py
+
+      - name: Inject Runtime Executive post-deploy card
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/inject_ops_dashboard_runtime_executive_post_deploy_card.py
+
+      - name: Inject Executive Readiness visual cards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/inject_runtime_executive_readiness_cards.py
+          python scripts/validate_runtime_executive_readiness_visual.py
+
+      - name: Inject Workflow Efficiency visual card
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/inject_workflow_efficiency_visual_card.py
+          python scripts/validate_workflow_efficiency_visual_card.py
+
       - name: Prepare dashboard artifact
         shell: bash
         run: |
@@ -107,11 +235,16 @@ jobs:
           mkdir -p artifacts/ops-dashboard
           cp -R docs/ops-dashboard/* artifacts/ops-dashboard/
           test -f artifacts/ops-dashboard/index.html
+          test -f artifacts/ops-dashboard/runtime-executive.html
           test -f artifacts/ops-dashboard/data/health.json
           test -f artifacts/ops-dashboard/data/runtime-executive-index.json
           test -f artifacts/ops-dashboard/data/strategic-governance-index.json
           test -f artifacts/ops-dashboard/data/conflict-risk-report.json
           test -f artifacts/ops-dashboard/data/executive-brief.json
+          test -f artifacts/ops-dashboard/data/runtime-executive-post-deploy-history.json
+          test -f artifacts/ops-dashboard/data/security-executive-summary.json
+          test -f artifacts/executive-readiness-gate/executive-readiness-gate.json
+          test "$(grep -c 'id=\"workflow-efficiency-visual-card\"' artifacts/ops-dashboard/index.html)" -eq 1
 
       - name: Validate ops dashboard contracts
         shell: bash
@@ -121,6 +254,65 @@ jobs:
           python3 scripts/validate_ops_dashboard_trilha_d_pareto_cards.py
           python3 scripts/validate_ops_dashboard_runtime_validation.py
           python3 scripts/validate_ops_dashboard_runtime_executive_panel.py
+          python3 scripts/validate_runtime_executive_public_page.py
+          python3 scripts/validate_runtime_executive_deeplink_state.py
+          python3 scripts/validate_ops_dashboard_runtime_executive_post_deploy_card.py
+          python3 scripts/validate_runtime_executive_post_deploy_history.py
+          python3 scripts/validate_runtime_executive_regression_alert.py
+          python3 scripts/validate_ops_dashboard_regression_alert_semaforo.py
+          python3 scripts/validate_runtime_executive_canonical_blocking.py
+          python3 scripts/validate_ops_dashboard_security_executive_summary_card.py
+          python3 scripts/validate_runtime_executive_readiness_integration.py
+          python3 scripts/validate_runtime_executive_readiness_visual.py
+          python3 scripts/validate_workflow_efficiency_visual_card.py
+
+      - name: Smoke Runtime Executive static publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/smoke_runtime_executive_static_publication.py \
+            --root artifacts/ops-dashboard \
+            --output artifacts/runtime-executive-public-smoke/runtime-executive-public-smoke.json
+
+      - name: Publish Runtime Executive smoke artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-executive-public-smoke
+          path: artifacts/runtime-executive-public-smoke
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Publish Runtime Executive history artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-executive-post-deploy-history
+          path: artifacts/runtime-executive-post-deploy-history
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish Runtime Executive regression alert artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-executive-regression-alert
+          path: artifacts/runtime-executive-regression-alert
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish Security Executive Summary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-executive-summary
+          path: artifacts/security-executive-summary
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish Executive Readiness Gate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-readiness-gate
+          path: artifacts/executive-readiness-gate
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Publish ops dashboard artifact
         uses: actions/upload-artifact@v4
@@ -138,11 +330,28 @@ jobs:
             echo "# Ops Dashboard"
             echo ""
             echo "Artifact publicado: ops-dashboard-static"
+            echo "Smoke publicado: runtime-executive-public-smoke"
+            echo "Histórico publicado: runtime-executive-post-deploy-history"
+            echo "Regression alert publicado: runtime-executive-regression-alert"
+            echo "Security executive summary publicado: security-executive-summary"
+            echo "Executive readiness publicado: executive-readiness-gate"
             echo ""
             echo "Runtime executive index publicado em data/runtime-executive-index.json."
             echo "Runtime executive panel validado em index.html."
+            echo "Runtime executive page publicada em runtime-executive.html."
+            echo "Runtime executive post-deploy card publicado no Ops Dashboard."
+            echo "Security executive summary card publicado no Ops Dashboard."
+            echo "Executive Readiness visual publicado no Ops Dashboard e Runtime Executive Page."
+            echo "Workflow Efficiency visual publicado pelo pipeline principal do Ops Dashboard."
+            echo "Runtime executive regression alert refletido no semaforo executivo principal."
+            echo "Runtime executive canonical blocking publicado no Runtime Executive Index e Executive Brief."
+            echo "Runtime executive post-deploy history publicado em data/runtime-executive-post-deploy-history.json."
+            echo "Runtime executive regression alert publicado como evidence gate temporal."
+            echo "Runtime executive deep link oficial integrado aos contratos do Estado Unico."
+            echo "Runtime executive static publication smoke validado."
             echo "Strategic governance index publicado em data/strategic-governance-index.json."
             echo "Conflict risk report publicado em data/conflict-risk-report.json."
+            echo "Security executive summary publicado em data/security-executive-summary.json."
             echo ""
             echo "Escopo: painel estatico, priorizacao report-only e governanca executiva."
           } >> "$GITHUB_STEP_SUMMARY"

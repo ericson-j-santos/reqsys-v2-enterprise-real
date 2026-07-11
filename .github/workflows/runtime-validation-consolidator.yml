@@ -16,6 +16,7 @@ on:
       - Main Post-Merge Validation
       - Runtime Health Validator
       - Runtime Production Smoke Governed
+      - Runtime Executive Post-Deploy Smoke
     types:
       - completed
 
@@ -74,12 +75,46 @@ jobs:
           name: runtime-production-smoke-governed
           path: artifacts/runtime-production-smoke
 
+      - name: Download Runtime Executive Post-Deploy Smoke artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: runtime-executive-post-deploy-smoke
+          path: artifacts/runtime-executive-post-deploy-smoke
+
+      - name: Download Runtime Executive Post-Deploy History artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: runtime-executive-post-deploy-history
+          path: artifacts/runtime-executive-post-deploy-history
+
+      - name: Download Runtime Executive Regression Alert artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: runtime-executive-regression-alert
+          path: artifacts/runtime-executive-regression-alert
+
       - name: Download unified operational signal artifact
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: unified-operational-signal
           path: artifacts/unified-operational-signal-consolidator
+
+      - name: Validar scripts de consolidação
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/runtime_validation_consolidator.py
+          python -m py_compile scripts/enrich_runtime_validation_with_post_deploy_smoke.py
+          python -m py_compile scripts/build_runtime_executive_post_deploy_history.py
+          python -m py_compile scripts/validate_runtime_executive_post_deploy_history.py
+          python -m py_compile scripts/evaluate_runtime_executive_temporal_regression.py
+          python -m py_compile scripts/validate_runtime_executive_regression_alert.py
+          python -m py_compile scripts/enrich_runtime_executive_canonical_blocking.py
+          python -m py_compile scripts/validate_runtime_executive_canonical_blocking.py
 
       - name: Gerar runtime-validation-snapshot.json
         shell: bash
@@ -93,6 +128,34 @@ jobs:
             --output-dir "artifacts/runtime-validation-consolidator" \
             --publish-executive-brief "docs/ops-dashboard/data/executive-brief.json"
 
+      - name: Integrar Runtime Executive post-deploy smoke ao Estado Unico
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/enrich_runtime_validation_with_post_deploy_smoke.py \
+            --snapshot "artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json" \
+            --executive-brief "docs/ops-dashboard/data/executive-brief.json"
+
+      - name: Consolidar histórico Runtime Executive post-deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/build_runtime_executive_post_deploy_history.py \
+            --output "docs/ops-dashboard/data/runtime-executive-post-deploy-history.json" \
+            --artifact-output "artifacts/runtime-executive-post-deploy-history/runtime-executive-post-deploy-history.json" \
+            --executive-brief "docs/ops-dashboard/data/executive-brief.json"
+          python3 scripts/validate_runtime_executive_post_deploy_history.py
+
+      - name: Avaliar regressão temporal Runtime Executive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/evaluate_runtime_executive_temporal_regression.py \
+            --history "docs/ops-dashboard/data/runtime-executive-post-deploy-history.json" \
+            --output "artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json" \
+            --executive-brief "docs/ops-dashboard/data/executive-brief.json"
+          python3 scripts/validate_runtime_executive_regression_alert.py
+
       - name: Gerar runtime-executive-index.json
         shell: bash
         run: |
@@ -102,6 +165,16 @@ jobs:
             --runtime-validation "artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json" \
             --output "docs/ops-dashboard/data/runtime-executive-index.json"
 
+      - name: Promover bloqueio temporal para contratos executivos canonicos
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/enrich_runtime_executive_canonical_blocking.py \
+            --alert "artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json" \
+            --runtime-index "docs/ops-dashboard/data/runtime-executive-index.json" \
+            --executive-brief "docs/ops-dashboard/data/executive-brief.json"
+          python3 scripts/validate_runtime_executive_canonical_blocking.py
+
       - name: Resumo executivo
         if: always()
         shell: bash
@@ -109,16 +182,20 @@ jobs:
           set -euo pipefail
           snapshot="artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json"
           index="docs/ops-dashboard/data/runtime-executive-index.json"
+          history="docs/ops-dashboard/data/runtime-executive-post-deploy-history.json"
+          regression="artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json"
           if [[ -f "${snapshot}" ]]; then
             state=$(python3 -c "import json; print(json.load(open('${snapshot}'))['overall_state'])")
             score=$(python3 -c "import json; print(json.load(open('${snapshot}'))['validation_score'])")
             risk=$(python3 -c "import json; print(json.load(open('${snapshot}'))['operational_risk_percent'])")
             gold=$(python3 -c "import json; d=json.load(open('${snapshot}')); print(d['gold_standard_operational_risk']['overall_score'])")
+            post=$(python3 -c "import json; d=json.load(open('${snapshot}')); print(d.get('runtime_executive_post_deploy_ready'))")
             echo "## Runtime Validation Consolidator" >> "$GITHUB_STEP_SUMMARY"
             echo "- State: \`${state}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Validation score: \`${score}%\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Operational risk: \`${risk}%\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Padrão Ouro risco operacional: \`${gold}%\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Runtime Executive post-deploy ready: \`${post}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Artifact: \`runtime-validation-evidence\`" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "## Runtime Validation Consolidator" >> "$GITHUB_STEP_SUMMARY"
@@ -127,10 +204,32 @@ jobs:
           if [[ -f "${index}" ]]; then
             exec_score=$(python3 -c "import json; print(json.load(open('${index}'))['summary']['executive_score'])")
             exec_risk=$(python3 -c "import json; print(json.load(open('${index}'))['summary']['risk'])")
+            exec_blocked=$(python3 -c "import json; print(json.load(open('${index}'))['summary'].get('production_blocked'))")
+            exec_alert=$(python3 -c "import json; print(json.load(open('${index}'))['summary'].get('regression_alert_status'))")
             echo "## Runtime Executive Index" >> "$GITHUB_STEP_SUMMARY"
             echo "- Executive score: \`${exec_score}%\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Risk: \`${exec_risk}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Production blocked: \`${exec_blocked}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Regression alert: \`${exec_alert}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Artifact: \`runtime-validation-evidence\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ -f "${history}" ]]; then
+            samples=$(python3 -c "import json; print(json.load(open('${history}'))['summary']['samples'])")
+            availability=$(python3 -c "import json; print(json.load(open('${history}'))['summary']['availability_percent'])")
+            stability=$(python3 -c "import json; print(json.load(open('${history}'))['summary']['stability'])")
+            echo "## Runtime Executive Post-Deploy History" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Samples: \`${samples}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Availability: \`${availability}%\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Stability: \`${stability}\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ -f "${regression}" ]]; then
+            reg_status=$(python3 -c "import json; print(json.load(open('${regression}'))['status'])")
+            reg_blocked=$(python3 -c "import json; print(json.load(open('${regression}'))['production_blocked'])")
+            reg_risk=$(python3 -c "import json; print(json.load(open('${regression}'))['risk'])")
+            echo "## Runtime Executive Regression Alert" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Status: \`${reg_status}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Production blocked: \`${reg_blocked}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Risk: \`${reg_risk}\`" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Publicar artifact consolidado
@@ -140,7 +239,10 @@ jobs:
           name: runtime-validation-evidence
           path: |
             artifacts/runtime-validation-consolidator
+            artifacts/runtime-executive-post-deploy-history
+            artifacts/runtime-executive-regression-alert
             docs/ops-dashboard/data/executive-brief.json
             docs/ops-dashboard/data/runtime-executive-index.json
+            docs/ops-dashboard/data/runtime-executive-post-deploy-history.json
           if-no-files-found: error
           retention-days: 30

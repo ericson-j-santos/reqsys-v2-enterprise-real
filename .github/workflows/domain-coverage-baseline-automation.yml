@@ -1,0 +1,106 @@
+name: Domain Coverage Baseline Automation
+
+on:
+  workflow_run:
+    workflows: ["Domain Coverage Governance"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID do Domain Coverage Governance"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: domain-coverage-baseline-automation
+  cancel-in-progress: false
+
+jobs:
+  propose-baseline:
+    if: >-
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verificar se baseline ainda precisa ser ativado
+        id: policy
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          policy = json.loads(Path('config/domain-coverage-policy.json').read_text(encoding='utf-8'))
+          print(f"required={'true' if not policy.get('baseline') else 'false'}")
+          PY
+
+      - name: Resolver run de origem
+        if: steps.policy.outputs.required == 'true'
+        id: source
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "run_id=${{ inputs.run_id }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Baixar evidência de cobertura
+        if: steps.policy.outputs.required == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/domain-coverage
+          gh run download "${{ steps.source.outputs.run_id }}" \
+            --repo "${{ github.repository }}" \
+            --name domain-coverage-evidence \
+            --dir /tmp/domain-coverage
+
+      - name: Gerar política proposta e diff
+        if: steps.policy.outputs.required == 'true'
+        run: |
+          python scripts/propose_domain_coverage_baseline.py \
+            --report /tmp/domain-coverage/artifacts/domain-coverage/report.json
+          cp artifacts/domain-coverage/proposed-policy.json config/domain-coverage-policy.json
+          mkdir -p docs/ops-dashboard/data
+          cp artifacts/domain-coverage/baseline-diff.json docs/ops-dashboard/data/domain-coverage-baseline-diff.json
+
+      - name: Criar PR governado de ativação
+        if: steps.policy.outputs.required == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH="automation/domain-coverage-baseline-${RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add config/domain-coverage-policy.json docs/ops-dashboard/data/domain-coverage-baseline-diff.json
+          git commit -m "chore(test): ativar baseline medido de cobertura por domínio"
+          git push origin "$BRANCH"
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore(test): ativar baseline medido de cobertura por domínio" \
+            --body "## Origem\n\nArtifact do workflow Domain Coverage Governance, run **${RUN_ID}**.\n\n## Governança\n\n- Ativa o modo regression_gate.\n- Versiona somente percentuais com arquivos e statements medidos.\n- Publica diff no Ops Dashboard.\n- Requer ao menos uma revisão APPROVED antes do merge.\n- Não altera metas-alvo nem tolerância sem revisão humana."
+
+      - name: Resumo
+        if: always()
+        run: |
+          echo "## Domain Coverage Baseline Automation" >> "$GITHUB_STEP_SUMMARY"
+          echo "Baseline necessário: ${{ steps.policy.outputs.required }}" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f artifacts/domain-coverage/baseline-diff.json ]]; then
+            cat artifacts/domain-coverage/baseline-diff.json >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0.0",
+  "required_capabilities": [
+    "unit",
+    "integration",
+    "e2e",
+    "coverage",
+    "security"
+  ],
+  "advisory_capabilities": [
+    "contract",
+    "performance",
+    "mutation",
+    "visual_regression",
+    "resilience"
+  ],
+  "minimum_backend_coverage_percent": 60,
+  "evidence_patterns": {
+    "unit": [
+      "backend/tests/test_*.py",
+      "frontend/src/**/*.spec.*",
+      "frontend/src/**/*.test.*"
+    ],
+    "integration": [
+      "backend/tests/*integration*.py",
+      "backend/tests/*api*.py",
+      "backend/tests/test_*service*.py",
+      "backend/tests/test_*repository*.py"
+    ],
+    "e2e": [
+      "frontend/tests/e2e/**/*.spec.*",
+      "frontend/playwright.config.*"
+    ],
+    "coverage": [
+      "backend/pyproject.toml",
+      ".github/workflows/ci.yml"
+    ],
+    "security": [
+      ".github/workflows/ci.yml",
+      "backend/requirements-audit.txt"
+    ],
+    "contract": [
+      "**/*contract*.py",
+      "**/*contract*.json",
+      ".github/workflows/*contract*.yml"
+    ],
+    "performance": [
+      "**/k6*.js",
+      "**/*locust*.py",
+      "**/*performance*.py",
+      ".github/workflows/*performance*.yml"
+    ],
+    "mutation": [
+      "**/mutmut*.ini",
+      "**/.mutmut-config",
+      ".github/workflows/*mutation*.yml"
+    ],
+    "visual_regression": [
+      "frontend/tests/**/*visual*.spec.*",
+      ".github/workflows/*visual*.yml"
+    ],
+    "resilience": [
+      "**/*chaos*.py",
+      "**/*resilience*.py",
+      ".github/workflows/*resilience*.yml"
+    ]
+  }
+}
