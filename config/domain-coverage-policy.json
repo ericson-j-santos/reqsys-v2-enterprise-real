@@ -20,7 +20,12 @@
       "target_percent": 70.0
     },
     "runtime": {
-      "paths": ["backend/app/runtime/", "backend/app/operational/"],
+      "paths": [
+        "backend/app/core/runtime_boot.py",
+        "backend/app/services/runtime_core.py",
+        "backend/app/services/actions_runtime_monitor.py",
+        "backend/app/api/runtime_analytics.py"
+      ],
       "target_percent": 70.0
     }
   },
