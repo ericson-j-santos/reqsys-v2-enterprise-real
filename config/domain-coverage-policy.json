@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.1",
+  "schema_version": "1.0.0",
   "mode": "record_then_regression",
   "allowed_regression_percentage_points": 0.0,
   "domains": {
@@ -20,14 +20,7 @@
       "target_percent": 70.0
     },
     "runtime": {
-      "paths": [
-        "backend/app/core/runtime_",
-        "backend/app/core/operational_",
-        "backend/app/services/runtime_",
-        "backend/app/services/operational_",
-        "backend/app/api/runtime_",
-        "backend/app/api/operational_"
-      ],
+      "paths": ["backend/app/runtime/", "backend/app/operational/"],
       "target_percent": 70.0
     }
   },
