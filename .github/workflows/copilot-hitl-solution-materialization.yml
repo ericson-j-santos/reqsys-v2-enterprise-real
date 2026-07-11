@@ -29,6 +29,7 @@ jobs:
     timeout-minutes: 15
     env:
       OUTPUT_DIR: artifacts/lowcode-solution-factory/copilot-hitl-agent-network/generated
+      PYTHONPATH: backend
 
     steps:
       - name: Checkout
