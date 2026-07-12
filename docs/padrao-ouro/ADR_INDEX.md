@@ -50,6 +50,7 @@ Data: YYYY-MM-DD
 | [ADR-031](../adr/ADR-031-runtime-risk-and-promotion-pipeline.md) | Runtime Risk and Promotion Pipeline | aceito | Risco runtime + promoção |
 | [ADR-PR-AUTO-RECOVERY-V2](../adr/ADR-PR-AUTO-RECOVERY-V2.md) | PR Auto Recovery V2 | aceito | Recuperação automática de PR |
 | [ADR-PR-AUTO-RECOVERY-V3](../adr/ADR-PR-AUTO-RECOVERY-V3.md) | PR Auto Recovery V3 | aceito | Recuperação controlada V3 |
+| [ADR-044](../adr/ADR-044-gitlab-edition-pipeline-paralela.md) | GitLab Edition: Pipeline Paralela Fortalecida, Não-Ativa | aceito | CI ativa continua sendo só GitHub Actions; GitLab Edition é scaffolding local com jobs reais, sem projeto GitLab provisionado |
 
 ---
 
