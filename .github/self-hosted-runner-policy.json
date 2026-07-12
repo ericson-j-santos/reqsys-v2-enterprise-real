@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "self_hosted_allowed": false,
+  "approved_workflows": [],
+  "required_adr": null,
+  "rationale": "ReqSys usa runners hospedados pelo GitHub. A adoção de self-hosted exige ADR, allowlist explícita e revisão de segurança."
+}
