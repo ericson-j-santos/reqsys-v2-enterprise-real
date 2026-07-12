@@ -20,6 +20,7 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY app /app/app
+COPY diagram_generator_portable /app/diagram_generator_portable
 COPY fly_boot.sh /app/fly_boot.sh
 
 RUN sed -i 's/\r$//' /app/fly_boot.sh \
