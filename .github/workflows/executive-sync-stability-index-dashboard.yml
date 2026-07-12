@@ -1,0 +1,70 @@
+name: Executive Sync Stability Index Dashboard
+
+on:
+  workflow_run:
+    workflows: ["Executive Sync Stability Index"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  publish-card:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/inject_executive_sync_stability_index_card.py
+          python -m py_compile scripts/validate_executive_sync_stability_index_card.py
+          python -m unittest tests/test_executive_sync_stability_index_dashboard.py
+      - name: Download latest canonical dashboard
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ops-dashboard.yml
+          name: ops-dashboard-static
+          path: dist/ops-dashboard-static
+          workflow_conclusion: success
+          if_no_artifact_found: fail
+      - name: Download latest executive index evidence
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: executive-sync-stability-index.yml
+          name: executive-sync-stability-index
+          path: evidence/executive-sync-stability-index
+          workflow_conclusion: success
+          if_no_artifact_found: fail
+      - name: Resolve input contract
+        run: |
+          set -euo pipefail
+          INDEX=$(find evidence/executive-sync-stability-index -type f -name 'runtime-executive-index.json' | head -n 1)
+          test -n "$INDEX"
+          cp "$INDEX" dist/ops-dashboard-static/data/runtime-executive-index.json
+      - name: Inject and validate card
+        run: |
+          mkdir -p evidence/executive-sync-stability-dashboard
+          python scripts/inject_executive_sync_stability_index_card.py \
+            --html dist/ops-dashboard-static/index.html \
+            --runtime-index dist/ops-dashboard-static/data/runtime-executive-index.json
+          python scripts/validate_executive_sync_stability_index_card.py \
+            --html dist/ops-dashboard-static/index.html \
+            --runtime-index dist/ops-dashboard-static/data/runtime-executive-index.json \
+            --evidence evidence/executive-sync-stability-dashboard/validation.json
+      - name: Publish canonical dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops-dashboard-static
+          path: dist/ops-dashboard-static
+          retention-days: 90
+      - name: Publish validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-sync-stability-index-dashboard-evidence
+          path: evidence/executive-sync-stability-dashboard
+          retention-days: 90
