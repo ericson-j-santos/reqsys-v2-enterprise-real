@@ -86,7 +86,7 @@ def validate_environment_login(
     api_url = str(cfg["api_url"]).rstrip("/")
     frontend_url = str(cfg["frontend_url"]).rstrip("/")
     app_env = str(cfg.get("app_env") or "")
-    expect_demo_allowed = app_env == "development"
+    configured_demo_allowed: bool | None = None
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -100,10 +100,11 @@ def validate_environment_login(
         checks["azure_config"] = azure_result
         if not azure_result["success"]:
             errors.extend(azure_result.get("errors") or [])
-        for warning in azure_result.get("warnings") or []:
-            if app_env == "development" and "demo_login_enabled" in warning:
-                continue
-            warnings.append(warning)
+        warnings.extend(azure_result.get("warnings") or [])
+
+        demo_flag = (azure_result.get("data") or {}).get("demo_login_enabled")
+        if isinstance(demo_flag, bool):
+            configured_demo_allowed = demo_flag
     except Exception as exc:  # noqa: BLE001
         checks["azure_config"] = {"success": False, "errors": [str(exc)]}
         errors.append(f"azure_config: {exc}")
@@ -117,13 +118,17 @@ def validate_environment_login(
         checks["frontend_redirect"] = {"success": False, "errors": [str(exc)]}
         errors.append(f"frontend_redirect: {exc}")
 
+    # O contrato operacional deve seguir a configuração publicada pela própria API.
+    # O ambiente de desenvolvimento pode ter login demo desabilitado por hardening;
+    # nesse caso, 403 é o comportamento correto e não uma falha de CI.
+    expect_demo_allowed = configured_demo_allowed if configured_demo_allowed is not None else app_env == "development"
     demo_probe = _probe_demo_login(api_url, timeout=timeout, expect_allowed=expect_demo_allowed)
     checks["demo_login"] = asdict(demo_probe)
     if not demo_probe.ok:
-        label = "demo_login deve funcionar em dev" if expect_demo_allowed else "demo_login deve estar bloqueado fora de dev"
+        label = "demo_login deve funcionar quando habilitado" if expect_demo_allowed else "demo_login deve estar bloqueado quando desabilitado"
         errors.append(f"{label}: {demo_probe.detail or demo_probe.status_code}")
 
-    if app_env == "production" and checks.get("azure_config", {}).get("data", {}).get("demo_login_enabled") is True:
+    if app_env == "production" and configured_demo_allowed is True:
         errors.append("demo_login_enabled não pode ser true em produção")
 
     operational_status = "ready"
