@@ -7,7 +7,7 @@ retornando listas vazias com flag `configurado=False` em vez de lançar exceçã
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from typing import Any
 
 import httpx
@@ -35,6 +35,9 @@ _TIERI_URL = 'https://orga258f260.crm2.dynamics.com'
 _CHAVE_WEBHOOK_URL = 'planner_webhook_url'
 _CHAVE_WEBHOOK_KEY = 'planner_webhook_key'
 _CHAVE_TEAMS_WEBHOOK = 'teams_webhook_url'
+_FLOW_BOT_LIMITE_ACOES_DIA = 6000
+_FLOW_BOT_ACOES_SUCESSO = 9
+_FLOW_BOT_ACOES_ERRO = 3
 
 
 def _tem_credenciais_graph() -> bool:
@@ -56,7 +59,7 @@ async def _token_grafico() -> str:
         return resp.json()['access_token']
 
 
-async def _token_power_automate() -> str:
+async def token_power_automate() -> str:
     async with httpx.AsyncClient(timeout=10) as c:
         resp = await c.post(
             _PA_TOKEN_URL.format(tenant=settings.azure_tenant_id),
@@ -178,7 +181,7 @@ async def listar_ambientes_powerplatform() -> dict[str, Any]:
         return {'configurado': False, 'ambientes': [], 'erro': 'Credenciais Azure AD não configuradas'}
 
     try:
-        token = await _token_power_automate()
+        token = await token_power_automate()
         headers = {'Authorization': f'Bearer {token}'}
         async with httpx.AsyncClient(timeout=15) as c:
             resp = await c.get(
@@ -424,6 +427,18 @@ def _try_json(val: Any) -> str:
         return str(val)
 
 
+def _try_parse_json(val: Any) -> dict[str, Any]:
+    if isinstance(val, dict):
+        return val
+    if not isinstance(val, str) or not val.strip():
+        return {}
+    try:
+        parsed = json.loads(val)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
 def salvar_log_integracao(
     db: Session,
     tipo: str,
@@ -488,6 +503,96 @@ def listar_historico_integracoes(
     except Exception as exc:
         logger.warning('hub_lowcode: erro ao listar histórico: %s', exc)
         return {'configurado': True, 'eventos': [], 'total': 0, 'erro': str(exc)}
+
+
+def resumo_uso_flow_bot_hoje(
+    db: Session,
+    *,
+    limite_acoes_dia: int = _FLOW_BOT_LIMITE_ACOES_DIA,
+    agora: datetime | None = None,
+) -> dict[str, Any]:
+    """Calcula uso diario do flow_bot a partir do integracao_log.
+
+    O flow real `robo_envia_teamsv1` foi contado em 2026-07-09:
+    sucesso = 9 acoes; erro = 3 acoes.
+    """
+    try:
+        agora_ref = agora or datetime.now(timezone.utc)
+        inicio_dia = datetime.combine(agora_ref.date(), time.min, tzinfo=agora_ref.tzinfo)
+        fim_dia = datetime.combine(agora_ref.date(), time.max, tzinfo=agora_ref.tzinfo)
+
+        q = (
+            select(IntegracaoLog)
+            .where(IntegracaoLog.criado_em >= inicio_dia)
+            .where(IntegracaoLog.criado_em <= fim_dia)
+            .where(IntegracaoLog.tipo == 'teams_gateway')
+            .order_by(IntegracaoLog.criado_em.desc())
+        )
+        rows = db.execute(q).scalars().all()
+
+        por_dono: dict[str, dict[str, Any]] = {}
+        total_mensagens = 0
+        total_acoes = 0
+        for row in rows:
+            detalhes = _try_parse_json(row.detalhes)
+            if detalhes.get('canal_usado') != 'flow_bot':
+                continue
+
+            total_mensagens += 1
+            provider = _try_parse_json(detalhes.get('provider_response'))
+            dono = (
+                provider.get('owner')
+                or detalhes.get('owner')
+                or row.autor
+                or 'env:TEAMS_FLOW_BOT_WEBHOOK_URL'
+            )
+            acoes = _FLOW_BOT_ACOES_SUCESSO if row.status == 'sucesso' else _FLOW_BOT_ACOES_ERRO
+            item = por_dono.setdefault(
+                dono,
+                {
+                    'dono': dono,
+                    'mensagens': 0,
+                    'sucessos': 0,
+                    'erros': 0,
+                    'acoes_usadas': 0,
+                    'limite_acoes_dia': limite_acoes_dia,
+                    'percentual_usado': 0,
+                    'mensagens_restantes_estimadas': 0,
+                },
+            )
+            item['mensagens'] += 1
+            item['sucessos'] += 1 if row.status == 'sucesso' else 0
+            item['erros'] += 1 if row.status != 'sucesso' else 0
+            item['acoes_usadas'] += acoes
+            total_acoes += acoes
+
+        for item in por_dono.values():
+            restante = max(limite_acoes_dia - item['acoes_usadas'], 0)
+            item['percentual_usado'] = round((item['acoes_usadas'] / limite_acoes_dia) * 100, 1) if limite_acoes_dia else 0
+            item['mensagens_restantes_estimadas'] = restante // _FLOW_BOT_ACOES_SUCESSO
+
+        owners = sorted(por_dono.values(), key=lambda item: item['acoes_usadas'], reverse=True)
+        capacidade_total = limite_acoes_dia * max(len(owners), 1)
+        return {
+            'configurado': True,
+            'data': agora_ref.date().isoformat(),
+            'janela_inicio': inicio_dia.isoformat(),
+            'janela_fim': fim_dia.isoformat(),
+            'limite_acoes_dia_por_dono': limite_acoes_dia,
+            'acoes_por_mensagem_sucesso': _FLOW_BOT_ACOES_SUCESSO,
+            'acoes_por_mensagem_erro': _FLOW_BOT_ACOES_ERRO,
+            'mensagens': total_mensagens,
+            'acoes_usadas': total_acoes,
+            'capacidade_acoes_total_estimado': capacidade_total,
+            'percentual_usado_total': round((total_acoes / capacidade_total) * 100, 1) if capacidade_total else 0,
+            'mensagens_restantes_estimadas': max(capacidade_total - total_acoes, 0) // _FLOW_BOT_ACOES_SUCESSO,
+            'owners': owners,
+            'erro': None,
+        }
+
+    except Exception as exc:
+        logger.warning('hub_lowcode: erro ao calcular uso flow_bot: %s', exc)
+        return {'configurado': True, 'owners': [], 'mensagens': 0, 'acoes_usadas': 0, 'erro': str(exc)}
 
 
 # ---------------------------------------------------------------------------

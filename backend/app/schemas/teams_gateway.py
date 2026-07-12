@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 TeamsGatewayDestinoTipo = Literal['auto', 'chat', 'chat_1a1', 'canal', 'webhook']
-TeamsGatewayModo = Literal['auto', 'graph_delegado', 'webhook', 'graph_app_only', 'bot']
+TeamsGatewayModo = Literal['auto', 'graph_delegado', 'webhook', 'graph_app_only', 'bot', 'flow_bot']
 TeamsGatewayContentType = Literal['text', 'html']
 
 
@@ -73,3 +73,88 @@ class TeamsGatewayMessageResult(BaseModel):
     erro: str | None = None
     motivo: str | None = None
     provider_response: dict[str, Any] = Field(default_factory=dict)
+
+
+class TeamsFlowBotOwnerCreate(BaseModel):
+    owner_email: str = Field(..., min_length=3, max_length=200)
+    webhook_url: str = Field(..., min_length=10, max_length=2000)
+    prioridade: int = Field(default=100, ge=0, le=100000)
+    ativo: bool = True
+    observacao: str = Field(default='', max_length=500)
+
+    @field_validator('owner_email', 'webhook_url', 'observacao', mode='before')
+    @classmethod
+    def _normalizar(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @field_validator('owner_email')
+    @classmethod
+    def _validar_email(cls, value: str) -> str:
+        if '@' not in value:
+            raise ValueError('owner_email invalido.')
+        return value
+
+
+class TeamsFlowBotOwnerUpdate(BaseModel):
+    webhook_url: str | None = Field(default=None, min_length=10, max_length=2000)
+    prioridade: int | None = Field(default=None, ge=0, le=100000)
+    ativo: bool | None = None
+    observacao: str | None = Field(default=None, max_length=500)
+
+    @field_validator('webhook_url', 'observacao', mode='before')
+    @classmethod
+    def _normalizar(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
+class TeamsFlowBotOwnerOut(BaseModel):
+    id: int
+    owner_email: str
+    prioridade: int
+    ativo: bool
+    observacao: str
+    webhook_configurado: bool = True
+
+
+class TeamsFlowBotClonarFlowRequest(BaseModel):
+    environment: str = Field(..., min_length=3, max_length=200)
+    flow_id_origem: str = Field(..., min_length=3, max_length=200)
+    nova_connection_id: str = Field(..., min_length=3, max_length=500)
+    novo_display_name: str = Field(..., min_length=3, max_length=200)
+    connection_reference_key: str | None = Field(default=None, max_length=200)
+
+    @field_validator(
+        'environment', 'flow_id_origem', 'nova_connection_id', 'novo_display_name', 'connection_reference_key',
+        mode='before',
+    )
+    @classmethod
+    def _normalizar(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            texto = value.strip()
+            return texto or None
+        return value
+
+
+class TeamsFlowBotPromoverSolutionRequest(BaseModel):
+    environment_url_origem: str = Field(..., min_length=10, max_length=500)
+    environment_url_destino: str = Field(..., min_length=10, max_length=500)
+    solution_name: str = Field(..., min_length=2, max_length=200)
+    connection_reference_logical_name: str = Field(..., min_length=2, max_length=200)
+    connection_id_destino: str = Field(..., min_length=3, max_length=500)
+    novo_flow_display_name: str = Field(..., min_length=3, max_length=200)
+    managed: bool = False
+
+    @field_validator(
+        'environment_url_origem', 'environment_url_destino', 'solution_name',
+        'connection_reference_logical_name', 'connection_id_destino', 'novo_flow_display_name',
+        mode='before',
+    )
+    @classmethod
+    def _normalizar(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip()
+        return value

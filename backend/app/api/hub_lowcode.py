@@ -20,6 +20,7 @@ from app.services.hub_lowcode import (
     listar_runs_github,
     obter_planner_webhook_config,
     publicar_tarefas_planner,
+    resumo_uso_flow_bot_hoje,
     salvar_log_integracao,
     salvar_planner_webhook_config,
     status_consolidado,
@@ -444,3 +445,9 @@ def integracoes_historico(
     Usado pelo Painel de Integrações no frontend.
     """
     return ok(listar_historico_integracoes(db, tipo, status, limit))
+
+
+@router.get('/integracoes/flow-bot/uso-hoje')
+def integracoes_flow_bot_uso_hoje(db: Session = Depends(get_db)):
+    """Resumo de uso diario do flow_bot por dono do Power Automate."""
+    return ok(resumo_uso_flow_bot_hoje(db))

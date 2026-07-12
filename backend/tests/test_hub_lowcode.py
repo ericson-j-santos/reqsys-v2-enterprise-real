@@ -131,3 +131,27 @@ def test_hub_lowcode_limit_invalido_retorna_422(client):
     resp = client.get('/v1/hub-lowcode/github?limit=0')
 
     assert resp.status_code == 422
+
+
+def test_hub_lowcode_flow_bot_uso_hoje(client, monkeypatch):
+    def _fake_resumo_uso_flow_bot_hoje(db):
+        return {
+            'configurado': True,
+            'mensagens': 2,
+            'acoes_usadas': 12,
+            'limite_acoes_dia_por_dono': 6000,
+            'acoes_por_mensagem_sucesso': 9,
+            'acoes_por_mensagem_erro': 3,
+            'owners': [{'dono': 'owner-a@example.com', 'acoes_usadas': 12}],
+            'erro': None,
+        }
+
+    monkeypatch.setattr(hub_api, 'resumo_uso_flow_bot_hoje', _fake_resumo_uso_flow_bot_hoje)
+
+    resp = client.get('/v1/hub-lowcode/integracoes/flow-bot/uso-hoje')
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body['success'] is True
+    assert body['data']['acoes_usadas'] == 12
+    assert body['data']['acoes_por_mensagem_sucesso'] == 9
