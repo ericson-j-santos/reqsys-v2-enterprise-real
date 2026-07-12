@@ -18,7 +18,7 @@ services:
     # apontando pra `localhost` (uso nativo, fora de Docker) que dentro do container
     # aponta pro proprio container, nao pro host — quebraria a conexao com o servico `db`.
     environment:
-      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-reqsys_app}:${POSTGRES_PASSWORD:-reqsys_local_dev}@db:5432/${POSTGRES_DB:-reqsys}
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-reqsys_app}:${POSTGRES_PASSWORD:-reqsys_local_dev_changeme}@db:5432/${POSTGRES_DB:-reqsys}
       - JWT_SECRET=${JWT_SECRET:-trocar-em-producao}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:${GATEWAY_PORT:-8081},https://tieridev.duckdns.org,https://tierin.duckdns.org,https://tieriprod.duckdns.org}
       - SSRS_BASE_URL=${SSRS_BASE_URL:-}
@@ -54,7 +54,7 @@ services:
     logging: *default-logging
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-reqsys_app}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-reqsys_local_dev}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-reqsys_local_dev_changeme}
       - POSTGRES_DB=${POSTGRES_DB:-reqsys}
     volumes:
       - reqsys-db-data:/var/lib/postgresql/data
