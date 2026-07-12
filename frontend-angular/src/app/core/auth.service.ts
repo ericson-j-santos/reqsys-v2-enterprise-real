@@ -34,21 +34,13 @@ export class AuthService {
 
   login(email: string, senha: string) {
     return this.http.post<any>('/api/v1/auth/login', { email, senha }).pipe(
-      tap(res => {
-        const token = res.access_token ?? res.token;
-        localStorage.setItem(this.TOKEN_KEY, token);
-        const u = res.usuario ?? res.user ?? {};
-        const fixEncoding = (s: string) => {
-          try { return decodeURIComponent(escape(s)); } catch { return s; }
-        };
-        this.usuarioSubject.next({
-          id: u.id ?? 0,
-          nome: fixEncoding(u.nome ?? u.name ?? ''),
-          email: fixEncoding(u.email ?? email),
-          papel: fixEncoding(u.papel ?? u.role ?? ''),
-          permissoes: u.permissoes ?? u.permissions ?? []
-        });
-      })
+      tap(res => this.aplicarSessao(res, email))
+    );
+  }
+
+  loginMicrosoftComIdToken(idToken: string) {
+    return this.http.post<any>('/api/v1/auth/azure', { id_token: idToken }).pipe(
+      tap(res => this.aplicarSessao(res))
     );
   }
 
@@ -65,5 +57,22 @@ export class AuthService {
   iniciais(): string {
     const nome = this.usuario?.nome ?? '';
     return nome.split(' ').slice(0, 2).map(p => p[0]?.toUpperCase() ?? '').join('');
+  }
+
+  private aplicarSessao(res: any, emailFallback = ''): void {
+    const payload = res?.data ?? res;
+    const token = payload.access_token ?? payload.token;
+    localStorage.setItem(this.TOKEN_KEY, token);
+    const u = payload.usuario ?? payload.user ?? {};
+    const fixEncoding = (s: string) => {
+      try { return decodeURIComponent(escape(s)); } catch { return s; }
+    };
+    this.usuarioSubject.next({
+      id: u.id ?? 0,
+      nome: fixEncoding(u.nome ?? u.name ?? ''),
+      email: fixEncoding(u.email ?? emailFallback),
+      papel: fixEncoding(u.papel ?? u.role ?? ''),
+      permissoes: u.permissoes ?? u.permissions ?? []
+    });
   }
 }

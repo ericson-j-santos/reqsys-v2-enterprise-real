@@ -21,8 +21,22 @@
           Entrar com conta Microsoft
         </v-btn>
 
+        <v-btn
+          v-if="certificadoDisponivel"
+          block
+          size="large"
+          variant="outlined"
+          class="mb-4 btn-certificado"
+          :loading="carregandoCertificado"
+          :disabled="carregandoAzure || carregandoDemo"
+          prepend-icon="mdi-certificate-outline"
+          @click="entrarCertificado"
+        >
+          Entrar com certificado digital
+        </v-btn>
+
         <v-alert
-          v-if="!azureDisponivel && !demoLoginDisponivel"
+          v-if="!azureDisponivel && !certificadoDisponivel && !demoLoginDisponivel"
           type="warning"
           variant="tonal"
           density="compact"
@@ -103,8 +117,10 @@ const senha = ref('')
 const erro = ref('')
 const carregandoDemo = ref(false)
 const carregandoAzure = ref(false)
+const carregandoCertificado = ref(false)
 const mostrarSenha = ref(false)
 const azureDisponivel = ref(false)
+const certificadoDisponivel = ref(false)
 const demoLoginDisponivel = ref(false)
 const azureConfig = ref(null)
 
@@ -128,6 +144,7 @@ onMounted(async () => {
     const { data } = await api.get('/v1/auth/config')
     azureConfig.value = data.data
     azureDisponivel.value = Boolean(data.data.azure_enabled)
+    certificadoDisponivel.value = Boolean(data.data.certificate_enabled)
     demoLoginDisponivel.value = Boolean(data.data.demo_login_enabled)
   } catch {
     erro.value = 'Nao foi possivel obter a configuracao de autenticacao do servidor.'
@@ -158,6 +175,19 @@ async function entrarDemo() {
     carregandoDemo.value = false
   }
 }
+
+async function entrarCertificado() {
+  carregandoCertificado.value = true
+  erro.value = ''
+  try {
+    await auth.loginCertificado()
+    router.push('/')
+  } catch (e) {
+    erro.value = e.response?.data?.detail || e.message || 'Falha no login com certificado digital'
+  } finally {
+    carregandoCertificado.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -181,5 +211,10 @@ async function entrarDemo() {
 .btn-microsoft {
   border-color: #38bdf8 !important;
   color: #38bdf8 !important;
+}
+
+.btn-certificado {
+  border-color: #16a34a !important;
+  color: #166534 !important;
 }
 </style>

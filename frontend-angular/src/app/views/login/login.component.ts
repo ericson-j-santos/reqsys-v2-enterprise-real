@@ -9,6 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../core/auth.service';
+import { MicrosoftAuthService } from '../../core/microsoft-auth.service';
 
 @Component({
   selector: 'app-login',
@@ -23,6 +24,7 @@ import { AuthService } from '../../core/auth.service';
 })
 export class LoginComponent {
   loading = signal(false);
+  loadingMicrosoft = signal(false);
   erro = signal('');
   mostrarSenha = signal(false);
 
@@ -40,6 +42,7 @@ export class LoginComponent {
   constructor(
     private fb: FormBuilder,
     private auth: AuthService,
+    private microsoftAuth: MicrosoftAuthService,
     private router: Router
   ) {}
 
@@ -61,6 +64,22 @@ export class LoginComponent {
       error: (e) => {
         this.loading.set(false);
         this.erro.set(e?.error?.detail ?? e?.error?.message ?? 'Credenciais inválidas');
+      }
+    });
+  }
+
+  entrarComMicrosoft(): void {
+    this.loadingMicrosoft.set(true);
+    this.erro.set('');
+
+    this.microsoftAuth.login().subscribe({
+      next: () => {
+        this.loadingMicrosoft.set(false);
+        this.router.navigate(['/']);
+      },
+      error: (e) => {
+        this.loadingMicrosoft.set(false);
+        this.erro.set(e?.error?.detail ?? e?.error?.message ?? e?.message ?? 'Login Microsoft indisponivel');
       }
     });
   }

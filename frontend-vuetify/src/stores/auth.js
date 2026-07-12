@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '../services/api'
+import { loginMicrosoft as iniciarLoginMicrosoft } from '../services/microsoftAuth'
 
 function fixUtf8(str) {
   if (!str) return str
@@ -19,14 +20,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function login(email, senha) {
     const { data } = await api.post('/v1/auth/login', { email, senha })
-    token.value = data.access_token
-    localStorage.setItem('reqsys_token', token.value)
-    usuario.value = {
-      ...data.usuario,
-      nome: fixUtf8(data.usuario.nome),
-      email: fixUtf8(data.usuario.email),
-      papel: fixUtf8(data.usuario.papel),
-    }
+    aplicarSessao(data)
+  }
+
+  async function loginMicrosoft() {
+    const data = await iniciarLoginMicrosoft()
+    aplicarSessao(data)
   }
 
   function sair() {
@@ -40,5 +39,18 @@ export const useAuthStore = defineStore('auth', () => {
     return usuario.value.permissoes.includes(recurso)
   }
 
-  return { token, usuario, autenticado, login, sair, pode }
+  function aplicarSessao(response) {
+    const data = response?.data ?? response
+    token.value = data.access_token ?? data.token
+    localStorage.setItem('reqsys_token', token.value)
+    const user = data.usuario ?? data.user ?? {}
+    usuario.value = {
+      ...user,
+      nome: fixUtf8(user.nome),
+      email: fixUtf8(user.email),
+      papel: fixUtf8(user.papel),
+    }
+  }
+
+  return { token, usuario, autenticado, login, loginMicrosoft, sair, pode }
 })

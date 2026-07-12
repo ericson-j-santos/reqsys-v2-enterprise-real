@@ -4,7 +4,12 @@ vi.mock('../../services/api', () => ({
   api: { post: vi.fn(), get: vi.fn() },
 }))
 
+vi.mock('../../auth/certificate', () => ({
+  loginWithCertificateAgent: vi.fn(),
+}))
+
 import { api } from '../../services/api'
+import { loginWithCertificateAgent } from '../../auth/certificate'
 import { useAuthStore } from '../auth'
 
 const sessao = {

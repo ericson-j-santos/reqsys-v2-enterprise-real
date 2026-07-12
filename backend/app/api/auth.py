@@ -13,6 +13,7 @@ from app.core.security import criar_token
 from app.db import get_db
 from app.services.auditoria import registrar_evento
 from app.services.azure_auth import extrair_usuario, validar_token_azure
+from app.services.certificate_auth import CertificateAuthError, criar_desafio, validar_login_certificado
 from app.services.rbac import permissoes
 
 logger = logging.getLogger('reqsys.security')
@@ -44,6 +45,12 @@ def _nome_from_email(email: str) -> str:
 
 class AzureLoginInput(BaseModel):
     id_token: str
+
+
+class CertificateVerifyInput(BaseModel):
+    certificate_pem: str
+    challenge: str
+    signature_base64: str
 
 
 @router.post('/azure')
@@ -132,6 +139,51 @@ def login_azure_code(body: AzureCodeInput, request: Request, db: Session = Depen
 
 # ─── Config pública (sem autenticação) ────────────────────────────────────────
 
+# Certificado digital (fluxo hibrido)
+
+@router.post('/certificate/challenge')
+def certificate_challenge():
+    """Emite desafio curto para assinatura local com certificado digital."""
+    if not settings.certificate_login_enabled:
+        raise HTTPException(503, 'Login com certificado digital nao configurado')
+    return ok(criar_desafio(settings.certificate_challenge_ttl_seconds))
+
+
+@router.post('/certificate/verify')
+def certificate_verify(body: CertificateVerifyInput, request: Request, db: Session = Depends(get_db)):
+    """Valida certificado + assinatura do desafio e emite JWT interno ReqSys."""
+    if not settings.certificate_login_enabled:
+        raise HTTPException(503, 'Login com certificado digital nao configurado')
+
+    try:
+        identidade = validar_login_certificado(
+            certificate_pem=body.certificate_pem,
+            challenge=body.challenge,
+            signature_base64=body.signature_base64,
+            allowed_issuers=settings.certificate_allowed_issuers,
+            trust_store_path=settings.certificate_trust_store_path,
+        )
+    except CertificateAuthError as exc:
+        logger.warning('certificate_login_falhou ip=%s erro=%s', request.client.host if request.client else '?', exc)
+        raise HTTPException(401, str(exc))
+
+    email = identidade.reqsys_email
+    papel = _papel_from_email(email)
+    usuario = {
+        'email': email,
+        'nome': identidade.display_name,
+        'papel': papel,
+        'permissoes': permissoes(papel),
+        'auth_provider': 'certificate',
+        'certificate_subject': identidade.subject,
+        'certificate_issuer': identidade.issuer,
+    }
+    logger.info('certificate_login ip=%s email=%s papel=%s', request.client.host if request.client else '?', mascarar_email(email), papel)
+    registrar_evento(db, obter_correlation_id(), email, 'LOGIN_CERTIFICADO', 'usuario', email)
+    token = criar_token({'sub': email, 'papel': papel, 'auth_provider': 'certificate'})
+    return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})
+
+
 @router.get('/config')
 def auth_config():
     """Retorna configuração pública do Azure AD para o frontend, sem expor segredo."""
@@ -142,6 +194,8 @@ def auth_config():
         'azure_enabled': azure_enabled,
         'azure_tenant_id': settings.azure_tenant_id or None,
         'azure_client_id': settings.azure_client_id or None,
+        'certificate_enabled': bool(settings.certificate_login_enabled),
+        'certificate_mode': 'challenge-signature',
         'demo_login_enabled': bool(settings.allow_demo_login and not settings.is_production),
         'environment': settings.normalized_public_environment,
         'expected_redirect_uri': redirect_uri or None,

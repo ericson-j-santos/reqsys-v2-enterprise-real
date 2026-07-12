@@ -11,6 +11,7 @@
     },
     "dependencies": {
         "@mdi/font": "^7.4.47",
+        "@azure/msal-browser": "^4.0.0",
         "@vitejs/plugin-vue": "^5.2.1",
         "axios": "^1.7.9",
         "pinia": "^2.3.0",

@@ -5,11 +5,16 @@ import { Router } from '@angular/router'
 import { of, throwError } from 'rxjs'
 import { LoginComponent } from './login.component'
 import { AuthService } from '../../core/auth.service'
+import { MicrosoftAuthService } from '../../core/microsoft-auth.service'
 
 const makeAuthSpy = () => ({
   login: jest.fn().mockReturnValue(of({})),
   autenticado: false,
   pode: jest.fn().mockReturnValue(false),
+})
+
+const makeMicrosoftAuthSpy = () => ({
+  login: jest.fn().mockReturnValue(of({})),
 })
 
 const makeRouterSpy = () => ({
@@ -20,16 +25,19 @@ describe('LoginComponent', () => {
   let fixture: ComponentFixture<LoginComponent>
   let component: LoginComponent
   let authSpy: ReturnType<typeof makeAuthSpy>
+  let microsoftAuthSpy: ReturnType<typeof makeMicrosoftAuthSpy>
   let routerSpy: ReturnType<typeof makeRouterSpy>
 
   beforeEach(async () => {
     authSpy = makeAuthSpy()
+    microsoftAuthSpy = makeMicrosoftAuthSpy()
     routerSpy = makeRouterSpy()
 
     await TestBed.configureTestingModule({
       imports: [LoginComponent, ReactiveFormsModule, NoopAnimationsModule],
       providers: [
         { provide: AuthService, useValue: authSpy },
+        { provide: MicrosoftAuthService, useValue: microsoftAuthSpy },
         { provide: Router, useValue: routerSpy },
       ],
     }).compileComponents()
