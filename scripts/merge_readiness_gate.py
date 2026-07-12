@@ -29,6 +29,7 @@ class GateConfig:
     max_workflow_files: int
     max_domains: int
     output: Path
+    block_when_behind: bool
 
 
 @dataclass(frozen=True)
@@ -112,12 +113,16 @@ def evaluate(config: GateConfig) -> GateResult:
     blocking: list[str] = []
     warnings: list[str] = []
 
-    if behind_by > 0:
-        blocking.append(
-            f"Branch está {behind_by} commit(s) atrás de {config.base_ref}; rebase/update obrigatório antes do merge."
-        )
+    conflict = has_merge_conflict(config.base_ref)
 
-    if has_merge_conflict(config.base_ref):
+    if behind_by > 0:
+        message = f"Branch está {behind_by} commit(s) atrás de {config.base_ref}; atualizar antes do merge é recomendado."
+        if config.block_when_behind or conflict:
+            blocking.append(message)
+        else:
+            warnings.append(message)
+
+    if conflict:
         blocking.append("Merge dry-run detectou conflito com a branch base.")
 
     if len(files) > config.max_changed_files:
@@ -155,6 +160,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-changed-files", type=int, default=25)
     parser.add_argument("--max-workflow-files", type=int, default=3)
     parser.add_argument("--max-domains", type=int, default=4)
+    parser.add_argument("--block-when-behind", action="store_true", help="Bloqueia quando a branch estiver atrás da base, mesmo sem conflito.")
     parser.add_argument("--output", type=Path, default=Path("artifacts/merge-readiness/merge-readiness.json"))
     return parser.parse_args()
 
@@ -167,6 +173,7 @@ def main() -> int:
         max_workflow_files=args.max_workflow_files,
         max_domains=args.max_domains,
         output=args.output,
+        block_when_behind=args.block_when_behind,
     )
 
     result = evaluate(config)

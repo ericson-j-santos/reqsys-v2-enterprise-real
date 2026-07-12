@@ -1,0 +1,154 @@
+name: Executive Promotion Advisor
+
+on:
+  workflow_run:
+    workflows:
+      - "Workflow Efficiency State Readiness Integration"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID do workflow State Readiness Integration"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: executive-promotion-advisor-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  advise:
+    name: Build executive promotion recommendation
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate advisor implementation
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/build_executive_promotion_advisor.py
+          python -m unittest tests/test_build_executive_promotion_advisor.py
+
+      - name: Resolve source run
+        id: source
+        env:
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_RUN_ID"
+          echo "run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Download enriched executive contracts
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow-efficiency-state-readiness
+          path: artifacts/workflow-efficiency-state-readiness
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+
+      - name: Download homologation history
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow-efficiency-homologation-history
+          path: artifacts/workflow-efficiency-homologation-history
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+
+      - name: Prepare advisor inputs
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/executive-promotion-advisor/input
+          cp artifacts/workflow-efficiency-state-readiness/runtime-executive-index.json \
+            artifacts/executive-promotion-advisor/input/runtime-executive-index.json
+          cp artifacts/workflow-efficiency-state-readiness/executive-readiness-gate.json \
+            artifacts/executive-promotion-advisor/input/executive-readiness-gate.json
+          cp artifacts/workflow-efficiency-homologation-history/history.json \
+            artifacts/executive-promotion-advisor/input/workflow-efficiency-history.json
+
+          if [ -f docs/ops-dashboard/data/security-executive-summary.json ]; then
+            cp docs/ops-dashboard/data/security-executive-summary.json \
+              artifacts/executive-promotion-advisor/input/security-executive-summary.json
+          else
+            printf '{}\n' > artifacts/executive-promotion-advisor/input/security-executive-summary.json
+          fi
+
+          if [ -f docs/ops-dashboard/data/merge-lane-priority.json ]; then
+            cp docs/ops-dashboard/data/merge-lane-priority.json \
+              artifacts/executive-promotion-advisor/input/merge-readiness.json
+          elif [ -f docs/ops-dashboard/data/merge-intelligence-index.json ]; then
+            cp docs/ops-dashboard/data/merge-intelligence-index.json \
+              artifacts/executive-promotion-advisor/input/merge-readiness.json
+          else
+            printf '{}\n' > artifacts/executive-promotion-advisor/input/merge-readiness.json
+          fi
+
+      - name: Build Executive Promotion Advisor
+        run: |
+          set -euo pipefail
+          python scripts/build_executive_promotion_advisor.py \
+            --runtime-index artifacts/executive-promotion-advisor/input/runtime-executive-index.json \
+            --executive-readiness artifacts/executive-promotion-advisor/input/executive-readiness-gate.json \
+            --security-summary artifacts/executive-promotion-advisor/input/security-executive-summary.json \
+            --merge-readiness artifacts/executive-promotion-advisor/input/merge-readiness.json \
+            --workflow-efficiency-history artifacts/executive-promotion-advisor/input/workflow-efficiency-history.json \
+            --output artifacts/executive-promotion-advisor/executive-promotion-advisor.json \
+            --correlation-id "${{ steps.source.outputs.run_id }}-${{ github.run_id }}-${{ github.run_attempt }}"
+
+      - name: Validate report-only contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('artifacts/executive-promotion-advisor/executive-promotion-advisor.json')
+          payload = json.loads(path.read_text())
+          assert payload['decision'] in {'READY', 'REVIEW', 'HOLD'}
+          assert payload['mode'] == 'report-only'
+          assert payload['production_blocker'] is False
+          assert payload['human_approval_required'] is True
+          assert 0 <= payload['confidence_percent'] <= 100
+          PY
+
+      - name: Publish Executive Promotion Advisor
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-promotion-advisor
+          path: artifacts/executive-promotion-advisor
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summarize recommendation
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('artifacts/executive-promotion-advisor/executive-promotion-advisor.json').read_text())
+          print('# Executive Promotion Advisor')
+          print()
+          print(f"- Decisão: {payload['decision']}")
+          print(f"- Confiança: {payload['confidence_percent']}%")
+          print(f"- Domínios de risco: {len(payload['risk_domains'])}")
+          print(f"- Recomendação: {payload['recommendation']}")
+          print('- Modo: report-only')
+          print('- Bloqueio automático de produção: não')
+          print('- Aprovação humana: obrigatória')
+          PY

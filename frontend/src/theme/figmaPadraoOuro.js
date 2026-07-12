@@ -5,6 +5,7 @@
  * - Azul DSC como cor primária institucional.
  * - Laranja DSC como ação/destaque executivo.
  * - Turquesa DSC como apoio informacional e analytics.
+ * - Vermelho de erro escurecido para garantir contraste WCAG AA com texto branco.
  *
  * Mantém compatibilidade com o nome histórico `figmaPadraoOuro`
  * para não quebrar persistência local nem seleção de tema existente.
@@ -29,7 +30,7 @@ export const DSC_TOKENS = {
   primaryOn: '#FFFFFF',
   green: '#22C55E',
   amber: '#F59E0B',
-  red: '#EF4444',
+  red: '#DC2626',
   radiusCard: '16px',
   radiusFrame: '24px',
   fontFamily: 'Inter, system-ui, sans-serif',
@@ -56,6 +57,7 @@ export const figmaVuetifyTheme = {
     'on-surface': DSC_TOKENS.text,
     'on-primary': DSC_TOKENS.primaryOn,
     'on-secondary': '#001F2E',
+    'on-error': '#FFFFFF',
   },
 }
 
@@ -69,7 +71,7 @@ export const figmaVuetifyLightTheme = {
     primary: DSC_TOKENS.primary,
     secondary: DSC_TOKENS.tealDeep,
     accent: DSC_TOKENS.accent,
-    error: '#DC2626',
+    error: DSC_TOKENS.red,
     warning: DSC_TOKENS.accentDeep,
     info: DSC_TOKENS.primary,
     success: '#16803A',
@@ -77,5 +79,6 @@ export const figmaVuetifyLightTheme = {
     'on-surface': '#111827',
     'on-primary': DSC_TOKENS.primaryOn,
     'on-secondary': '#FFFFFF',
+    'on-error': '#FFFFFF',
   },
 }

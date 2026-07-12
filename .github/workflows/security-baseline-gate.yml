@@ -1,0 +1,120 @@
+name: Security Baseline Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: "Falhar quando houver achados críticos"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      scope:
+        description: "Escopo da varredura"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - "all"
+          - "changed"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-baseline-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-baseline:
+    name: Security Baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile validator
+        run: python -m py_compile scripts/validate_security_baseline.py
+
+      - name: Resolve scan scope
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_SCOPE: ${{ inputs.scope || 'all' }}
+        run: |
+          mkdir -p artifacts/security-baseline
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" > artifacts/security-baseline/changed-files.txt
+            echo "scope=changed" >> "$GITHUB_OUTPUT"
+            echo "changed_files=artifacts/security-baseline/changed-files.txt" >> "$GITHUB_OUTPUT"
+          elif [ "$WORKFLOW_SCOPE" = "changed" ]; then
+            git diff --name-only "HEAD~1...HEAD" > artifacts/security-baseline/changed-files.txt
+            echo "scope=changed" >> "$GITHUB_OUTPUT"
+            echo "changed_files=artifacts/security-baseline/changed-files.txt" >> "$GITHUB_OUTPUT"
+          else
+            echo "scope=all" >> "$GITHUB_OUTPUT"
+            echo "changed_files=" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "### Security Baseline - arquivos alterados" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s artifacts/security-baseline/changed-files.txt ]; then
+            sed 's/^/- `/' artifacts/security-baseline/changed-files.txt | sed 's/$/`/' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Nenhum arquivo alterado identificado para escopo incremental." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Run Security Baseline Gate
+        env:
+          STRICT_INPUT: ${{ inputs.strict || 'true' }}
+          SCAN_SCOPE: ${{ steps.scope.outputs.scope }}
+          CHANGED_FILES: ${{ steps.scope.outputs.changed_files }}
+        shell: bash
+        run: |
+          args=("--output-dir" "artifacts/security-baseline" "--scope" "$SCAN_SCOPE")
+          if [ "$SCAN_SCOPE" = "changed" ]; then
+            args+=("--changed-files" "$CHANGED_FILES")
+          fi
+
+          if [ "$STRICT_INPUT" = "false" ]; then
+            python scripts/validate_security_baseline.py "${args[@]}"
+          else
+            python scripts/validate_security_baseline.py --strict "${args[@]}"
+          fi
+
+      - name: Publish security baseline artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-baseline-report
+          path: artifacts/security-baseline/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Append security summary
+        if: always()
+        run: |
+          if [ -f artifacts/security-baseline/security-baseline-report.md ]; then
+            cat artifacts/security-baseline/security-baseline-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Security baseline report não foi gerado." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

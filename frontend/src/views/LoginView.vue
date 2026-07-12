@@ -81,7 +81,15 @@
           />
         </template>
 
-        <v-alert v-if="erro" type="error" density="compact" class="mt-1">{{ erro }}</v-alert>
+        <v-alert
+          v-if="erro"
+          type="error"
+          color="#b91c1c"
+          density="compact"
+          class="mt-1 login-error-alert"
+        >
+          {{ erro }}
+        </v-alert>
       </v-card-text>
 
       <v-card-actions v-if="demoLoginDisponivel" class="px-4 pb-4">
@@ -103,7 +111,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
 import { loginMicrosoftRedirect } from '../auth/msal'
@@ -126,6 +134,7 @@ const azureConfig = ref(null)
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
 const camposAusentes = computed(() => azureConfig.value?.missing_fields || [])
 const redirectEsperado = computed(() => azureConfig.value?.expected_redirect_uri || '')
@@ -168,7 +177,8 @@ async function entrarDemo() {
   erro.value = ''
   try {
     await auth.login({ email: email.value, senha: senha.value })
-    router.push('/')
+    const destino = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    router.push(destino.startsWith('/login') ? '/' : destino)
   } catch (e) {
     erro.value = e.response?.data?.detail || 'Falha no login demo'
   } finally {
@@ -216,5 +226,9 @@ async function entrarCertificado() {
 .btn-certificado {
   border-color: #16a34a !important;
   color: #166534 !important;
+}
+
+.login-error-alert {
+  color: #ffffff !important;
 }
 </style>

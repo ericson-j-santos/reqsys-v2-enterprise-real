@@ -1,0 +1,212 @@
+name: Runtime Executive Post-Deploy Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL pública onde o Ops Dashboard está servido"
+        required: true
+        default: "https://reqsys-app.fly.dev"
+      page_path:
+        description: "Caminho público da página Runtime Executive"
+        required: true
+        default: "/runtime-executive.html"
+      contract_path:
+        description: "Caminho público do contrato Runtime Executive"
+        required: true
+        default: "/data/runtime-executive-index.json"
+      strict:
+        description: "Falhar o workflow se o smoke público ou regressão temporal falhar"
+        required: true
+        type: boolean
+        default: true
+  schedule:
+    - cron: "37 */6 * * *"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: runtime-executive-post-deploy-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  post-deploy-smoke:
+    name: Smoke endpoint público Runtime Executive
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve inputs
+        id: inputs
+        env:
+          INPUT_BASE_URL: ${{ inputs.base_url }}
+          INPUT_PAGE_PATH: ${{ inputs.page_path }}
+          INPUT_CONTRACT_PATH: ${{ inputs.contract_path }}
+          INPUT_STRICT: ${{ inputs.strict }}
+        run: |
+          set -euo pipefail
+          base_url="${INPUT_BASE_URL:-https://reqsys-app.fly.dev}"
+          page_path="${INPUT_PAGE_PATH:-/runtime-executive.html}"
+          contract_path="${INPUT_CONTRACT_PATH:-/data/runtime-executive-index.json}"
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            strict="false"
+          else
+            strict="${INPUT_STRICT:-true}"
+          fi
+          mkdir -p artifacts/runtime-executive-post-deploy-smoke
+          echo "base_url=${base_url}" >> "$GITHUB_OUTPUT"
+          echo "page_path=${page_path}" >> "$GITHUB_OUTPUT"
+          echo "contract_path=${contract_path}" >> "$GITHUB_OUTPUT"
+          echo "strict=${strict}" >> "$GITHUB_OUTPUT"
+
+      - name: Compile smoke, history and regression scripts
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/smoke_runtime_executive_public_endpoint.py
+          python -m py_compile scripts/build_runtime_executive_post_deploy_history.py
+          python -m py_compile scripts/validate_runtime_executive_post_deploy_history.py
+          python -m py_compile scripts/evaluate_runtime_executive_temporal_regression.py
+          python -m py_compile scripts/validate_runtime_executive_regression_alert.py
+
+      - name: Run Runtime Executive post-deploy smoke
+        id: smoke
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          strict_arg=""
+          if [[ "${{ steps.inputs.outputs.strict }}" == "true" ]]; then
+            strict_arg="--strict"
+          fi
+          python scripts/smoke_runtime_executive_public_endpoint.py \
+            --base-url "${{ steps.inputs.outputs.base_url }}" \
+            --page-path "${{ steps.inputs.outputs.page_path }}" \
+            --contract-path "${{ steps.inputs.outputs.contract_path }}" \
+            --output artifacts/runtime-executive-post-deploy-smoke/runtime-executive-post-deploy-smoke.json \
+            ${strict_arg}
+
+      - name: Build Runtime Executive post-deploy history
+        if: always()
+        run: |
+          set -euo pipefail
+          python scripts/build_runtime_executive_post_deploy_history.py \
+            --output docs/ops-dashboard/data/runtime-executive-post-deploy-history.json \
+            --artifact-output artifacts/runtime-executive-post-deploy-history/runtime-executive-post-deploy-history.json \
+            --executive-brief docs/ops-dashboard/data/executive-brief.json
+          python scripts/validate_runtime_executive_post_deploy_history.py
+
+      - name: Evaluate Runtime Executive temporal regression
+        id: regression
+        if: always()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          strict_arg=""
+          if [[ "${{ steps.inputs.outputs.strict }}" == "true" ]]; then
+            strict_arg="--strict"
+          fi
+          python scripts/evaluate_runtime_executive_temporal_regression.py \
+            --history docs/ops-dashboard/data/runtime-executive-post-deploy-history.json \
+            --output artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json \
+            --executive-brief docs/ops-dashboard/data/executive-brief.json \
+            ${strict_arg}
+          python scripts/validate_runtime_executive_regression_alert.py
+
+      - name: Build summary
+        if: always()
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("artifacts/runtime-executive-post-deploy-smoke/runtime-executive-post-deploy-smoke.json")
+          history_path = Path("artifacts/runtime-executive-post-deploy-history/runtime-executive-post-deploy-history.json")
+          regression_path = Path("artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json")
+          if path.exists():
+              payload = json.loads(path.read_text(encoding="utf-8"))
+          else:
+              payload = {
+                  "status": "failed",
+                  "ok": False,
+                  "base_url": "${{ steps.inputs.outputs.base_url }}",
+                  "page_url": "",
+                  "contract_url": "",
+                  "failures": ["smoke_artifact_missing"],
+                  "checks": {},
+              }
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          history = json.loads(history_path.read_text(encoding="utf-8")) if history_path.exists() else {"summary": {}}
+          regression = json.loads(regression_path.read_text(encoding="utf-8")) if regression_path.exists() else {"status": "missing", "production_blocked": False, "risk": "medium", "violations": []}
+          hs = history.get("summary", {})
+          summary = [
+              "# Runtime Executive Post-Deploy Smoke",
+              "",
+              f"- Status: `{payload.get('status')}`",
+              f"- Base URL: `{payload.get('base_url')}`",
+              f"- Page URL: `{payload.get('page_url')}`",
+              f"- Contract URL: `{payload.get('contract_url')}`",
+              f"- Failures: `{len(payload.get('failures') or [])}`",
+              f"- Histórico samples: `{hs.get('samples', 0)}`",
+              f"- Histórico disponibilidade: `{hs.get('availability_percent', 0)}%`",
+              f"- Histórico estabilidade: `{hs.get('stability', 'unknown')}`",
+              f"- Regressão temporal: `{regression.get('status')}`",
+              f"- Produção bloqueada: `{regression.get('production_blocked')}`",
+              f"- Risco regressão: `{regression.get('risk')}`",
+              "",
+              "## Regression violations",
+              *(f"- `{item.get('code')}` · `{item.get('severity')}` — {item.get('detail')}" for item in (regression.get('violations') or [])),
+              "",
+              "## Failures",
+              *(f"- `{item}`" for item in (payload.get('failures') or ["none"])),
+              "",
+          ]
+          summary_path = Path("artifacts/runtime-executive-post-deploy-smoke/summary.md")
+          summary_path.write_text("\n".join(summary), encoding="utf-8")
+          print("\n".join(summary))
+          PY
+
+      - name: Upload post-deploy smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-executive-post-deploy-smoke
+          path: artifacts/runtime-executive-post-deploy-smoke
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Upload post-deploy history evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-executive-post-deploy-history
+          path: artifacts/runtime-executive-post-deploy-history
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload regression alert evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-executive-regression-alert
+          path: artifacts/runtime-executive-regression-alert
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce strict post-deploy smoke
+        if: ${{ always() && steps.inputs.outputs.strict == 'true' && (steps.smoke.outcome != 'success' || steps.regression.outcome != 'success') }}
+        run: |
+          echo "Runtime Executive post-deploy smoke/regression failed in strict mode."
+          exit 1

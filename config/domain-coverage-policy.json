@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "record_then_regression",
+  "allowed_regression_percentage_points": 0.0,
+  "domains": {
+    "core": {
+      "paths": ["backend/app/core/"],
+      "target_percent": 80.0
+    },
+    "services": {
+      "paths": ["backend/app/services/"],
+      "target_percent": 75.0
+    },
+    "api": {
+      "paths": ["backend/app/api/", "backend/app/routers/"],
+      "target_percent": 70.0
+    },
+    "repositories": {
+      "paths": ["backend/app/repositories/"],
+      "target_percent": 70.0
+    },
+    "runtime": {
+      "paths": [
+        "backend/app/core/runtime_boot.py",
+        "backend/app/services/runtime_core.py",
+        "backend/app/services/actions_runtime_monitor.py",
+        "backend/app/api/runtime_analytics.py"
+      ],
+      "target_percent": 70.0
+    }
+  },
+  "baseline": {}
+}

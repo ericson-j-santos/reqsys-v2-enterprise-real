@@ -1,0 +1,86 @@
+name: Executive Promotion Advisor Public Smoke
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente alvo"
+        required: true
+        type: choice
+        options: [dev, stg, prod]
+      base_url:
+        description: "URL pública base do Ops Dashboard"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: executive-promotion-advisor-public-smoke-${{ github.event.deployment.environment || inputs.environment }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      TARGET_ENVIRONMENT: ${{ github.event.deployment.environment || inputs.environment }}
+      TARGET_URL: ${{ github.event.deployment_status.environment_url || inputs.base_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate smoke implementation
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/smoke_executive_promotion_advisor_public_url.py
+          python -m unittest tests/test_smoke_executive_promotion_advisor_public_url.py
+
+      - name: Resolve public target
+        run: |
+          set -euo pipefail
+          test -n "$TARGET_ENVIRONMENT"
+          test -n "$TARGET_URL"
+          case "$TARGET_ENVIRONMENT" in
+            dev|development|stg|staging|prod|production|github-pages) ;;
+            *) echo "Ambiente não governado: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
+          esac
+
+      - name: Smoke public Promotion Advisor
+        run: |
+          set -euo pipefail
+          python scripts/smoke_executive_promotion_advisor_public_url.py \
+            --base-url "$TARGET_URL" \
+            --environment "$TARGET_ENVIRONMENT" \
+            --output "artifacts/executive-promotion-advisor-public-smoke/${TARGET_ENVIRONMENT}.json"
+
+      - name: Publish public smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-promotion-advisor-public-smoke-${{ env.TARGET_ENVIRONMENT }}
+          path: artifacts/executive-promotion-advisor-public-smoke
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "# Executive Promotion Advisor Public Smoke"
+            echo ""
+            echo "- Ambiente: ${TARGET_ENVIRONMENT}"
+            echo "- URL: ${TARGET_URL}"
+            echo "- Contrato esperado: report-only"
+            echo "- Bloqueio automático: proibido"
+            echo "- Aprovação humana: obrigatória"
+          } >> "$GITHUB_STEP_SUMMARY"
