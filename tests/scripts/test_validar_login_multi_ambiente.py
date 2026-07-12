@@ -84,3 +84,37 @@ def test_build_payload_uses_manifest(monkeypatch):
     assert payload["summary"]["environments_total"] == 3
     assert payload["ok"] is False
     assert any("prod" in issue for issue in payload["blocking_issues"])
+
+
+def test_validate_environment_login_dev_respeita_demo_login_enabled_false(monkeypatch):
+    observed: list[bool] = []
+
+    monkeypatch.setattr(
+        "scripts.validar_login_multi_ambiente.validar_config",
+        lambda api_url, expected_redirect_uri: {
+            "success": True,
+            "errors": [],
+            "warnings": [],
+            "data": {"demo_login_enabled": False},
+        },
+    )
+    monkeypatch.setattr(
+        "scripts.validar_login_multi_ambiente.validate_public_frontend",
+        lambda frontend_url: {"success": True, "errors": []},
+    )
+
+    def fake_probe(api_url, *, timeout, expect_allowed):
+        observed.append(expect_allowed)
+        return LoginProbeResult(name="demo_login", ok=True, status_code=403)
+
+    monkeypatch.setattr("scripts.validar_login_multi_ambiente._probe_demo_login", fake_probe)
+
+    result = validate_environment_login(
+        "dev",
+        {"api_url": "https://reqsys-api-dev.fly.dev", "frontend_url": "https://reqsys-app-dev.fly.dev", "app_env": "development"},
+        timeout=1.0,
+    )
+
+    assert observed == [False]
+    assert result["login_ready"] is True
+    assert result["expect_demo_allowed"] is False

@@ -100,6 +100,9 @@ def validate_environment_login(
         checks["azure_config"] = azure_result
         if not azure_result["success"]:
             errors.extend(azure_result.get("errors") or [])
+        demo_login_enabled = azure_result.get("data", {}).get("demo_login_enabled")
+        if app_env == "development" and isinstance(demo_login_enabled, bool):
+            expect_demo_allowed = demo_login_enabled
         for warning in azure_result.get("warnings") or []:
             if app_env == "development" and "demo_login_enabled" in warning:
                 continue
