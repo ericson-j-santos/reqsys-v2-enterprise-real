@@ -113,6 +113,22 @@ class Settings(BaseSettings):
     azure_tenant_id: str = Field(default_factory=lambda: get_secret('AZURE_TENANT_ID', '') or '')
     azure_client_id: str = Field(default_factory=lambda: get_secret('AZURE_CLIENT_ID', '') or '')
     azure_client_secret: str = Field(default_factory=lambda: get_secret('AZURE_CLIENT_SECRET', '') or '')
+    certificate_login_enabled: bool = Field(default_factory=lambda: _bool_secret('CERT_LOGIN_ENABLED', 'false'))
+    certificate_trust_store_path: str = Field(default_factory=lambda: get_secret('CERT_TRUST_STORE_PATH', '') or '')
+    certificate_allowed_issuers: str = Field(default_factory=lambda: get_secret('CERT_ALLOWED_ISSUERS', '') or '')
+    certificate_challenge_ttl_seconds: int = Field(default_factory=lambda: int(get_secret('CERT_CHALLENGE_TTL_SECONDS', '300') or '300'))
+
+    # Teams Bot (Azure Bot Service / Bot Framework) — App Registration dedicado,
+    # separado do AZURE_CLIENT_ID usado para login/Graph delegado.
+    teams_bot_app_id: str = Field(default_factory=lambda: get_secret('TEAMS_BOT_APP_ID', '') or '')
+    teams_bot_app_tenant_id: str = Field(default_factory=lambda: get_secret('TEAMS_BOT_APP_TENANT_ID', '') or '')
+    teams_bot_secret: str = Field(default_factory=lambda: get_secret('TEAMS_BOT_SECRET', '') or '')
+
+    # Teams "Chat with Flow bot" (Power Automate) — URL do trigger "When a Teams
+    # webhook request is received" de um flow que faz "Post message in a chat or
+    # channel" (Post as: Flow bot, Post in: Chat with Flow bot). Nao exige Azure
+    # Bot Service/assinatura Azure — usa o bot Workflows ja existente no tenant.
+    teams_flow_bot_webhook_url: str = Field(default_factory=lambda: get_secret('TEAMS_FLOW_BOT_WEBHOOK_URL', '') or '')
 
     # Hub Low-Code & IA
     sharepoint_site_id: str = Field(default_factory=lambda: get_secret('SHAREPOINT_SITE_ID', '') or '')
@@ -182,6 +198,25 @@ class Settings(BaseSettings):
         return self.teams_graph_configurado
 
     @property
+    def teams_bot_configurado(self) -> bool:
+        return bool(
+            self.teams_bot_app_id.strip()
+            and self.teams_bot_app_tenant_id.strip()
+            and self.teams_bot_secret.strip()
+        )
+
+    @property
+    def teams_bot_missing_fields(self) -> list[str]:
+        missing: list[str] = []
+        if not self.teams_bot_app_id.strip():
+            missing.append('TEAMS_BOT_APP_ID')
+        if not self.teams_bot_app_tenant_id.strip():
+            missing.append('TEAMS_BOT_APP_TENANT_ID')
+        if not self.teams_bot_secret.strip():
+            missing.append('TEAMS_BOT_SECRET')
+        return missing
+
+    @property
     def azure_expected_redirect_uri(self) -> str:
         frontend_origin = (self.app_public_url or self.ambiente_atual_info.get('frontend', '')).rstrip('/')
         return f'{frontend_origin}/auth/callback.html' if frontend_origin else ''
@@ -212,6 +247,9 @@ class Settings(BaseSettings):
             errors.append('ALLOW_DEMO_LOGIN deve ser false em produção')
         if not self.azure_configured:
             errors.append('Azure AD obrigatório em produção: configure AZURE_TENANT_ID e AZURE_CLIENT_ID')
+
+        if self.certificate_login_enabled and not self.certificate_trust_store_path.strip():
+            errors.append('CERT_TRUST_STORE_PATH obrigatorio quando CERT_LOGIN_ENABLED=true em producao')
 
         from app.services.external_sources_registry import validar_registry_producao
 
