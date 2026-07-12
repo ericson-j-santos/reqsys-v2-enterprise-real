@@ -1,0 +1,156 @@
+name: Executive Promotion Advisor Public Smoke Comparative Dashboard
+
+on:
+  workflow_run:
+    workflows:
+      - "Executive Promotion Advisor Public Smoke Comparative State"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      state_run_id:
+        description: "Run ID do estado comparativo"
+        required: true
+        type: string
+      ops_dashboard_run_id:
+        description: "Run ID opcional do Ops Dashboard; vazio usa o último sucesso"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: advisor-public-smoke-comparative-dashboard-${{ github.event.workflow_run.id || inputs.state_run_id }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish comparative state in canonical Ops Dashboard
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate implementation
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/inject_executive_promotion_advisor_public_smoke_comparative_card.py
+          python -m py_compile scripts/validate_executive_promotion_advisor_public_smoke_comparative_card.py
+          python -m unittest tests/test_executive_promotion_advisor_public_smoke_comparative_dashboard.py
+
+      - name: Resolve source runs
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STATE_RUN_ID: ${{ github.event.workflow_run.id || inputs.state_run_id }}
+          INPUT_OPS_RUN_ID: ${{ inputs.ops_dashboard_run_id }}
+        run: |
+          set -euo pipefail
+          test -n "$STATE_RUN_ID"
+          ops_run_id="$INPUT_OPS_RUN_ID"
+          if [ -z "$ops_run_id" ]; then
+            ops_run_id="$(gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/ops-dashboard.yml/runs?status=success&per_page=20" \
+              --jq '.workflow_runs[0].id')"
+          fi
+          test -n "$ops_run_id"
+          echo "state_run_id=$STATE_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "ops_run_id=$ops_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download comparative State
+        uses: actions/download-artifact@v4
+        with:
+          name: executive-promotion-advisor-public-smoke-comparative-state
+          path: artifacts/executive-promotion-advisor-public-smoke-comparative-state
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.state_run_id }}
+
+      - name: Download canonical Ops Dashboard artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ops-dashboard-static
+          path: artifacts/ops-dashboard-static
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.ops_run_id }}
+
+      - name: Inject comparative card
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/executive-promotion-advisor-public-smoke-comparative-dashboard
+          python scripts/inject_executive_promotion_advisor_public_smoke_comparative_card.py \
+            --dashboard artifacts/ops-dashboard-static/index.html \
+            --runtime-index artifacts/ops-dashboard-static/data/runtime-executive-index.json \
+            --comparative-state artifacts/executive-promotion-advisor-public-smoke-comparative-state/runtime-executive-index.json
+          python scripts/validate_executive_promotion_advisor_public_smoke_comparative_card.py \
+            --dashboard artifacts/ops-dashboard-static/index.html \
+            --runtime-index artifacts/ops-dashboard-static/data/runtime-executive-index.json \
+            --output artifacts/executive-promotion-advisor-public-smoke-comparative-dashboard/evidence.json
+
+      - name: Validate canonical guardrails
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('artifacts/ops-dashboard-static')
+          runtime = json.loads((root / 'data/runtime-executive-index.json').read_text())
+          card = runtime['cards']['executive_promotion_advisor_public_smoke_comparative']
+          assert card['mode'] == 'report-only'
+          assert card['production_blocker'] is False
+          assert card['human_approval_required'] is True
+          assert isinstance(card['eligible_for_human_review'], bool)
+          assert isinstance(card['complete_environment_coverage'], bool)
+          assert (root / 'index.html').read_text().count(
+              'id="executive-promotion-advisor-public-smoke-comparative-card"'
+          ) == 1
+          PY
+
+      - name: Publish canonical Ops Dashboard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops-dashboard-static
+          path: artifacts/ops-dashboard-static
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Publish comparative evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-promotion-advisor-public-smoke-comparative-dashboard
+          path: artifacts/executive-promotion-advisor-public-smoke-comparative-dashboard
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summarize publication
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          evidence = json.loads(Path(
+              'artifacts/executive-promotion-advisor-public-smoke-comparative-dashboard/evidence.json'
+          ).read_text())
+          print('# Advisor Public Smoke — comparativo DEV/STG/PROD')
+          print()
+          print(f"- Ambientes cobertos: {evidence['environment_count']}/3")
+          print(f"- Tendência: {evidence['trend']}")
+          print(f"- Elegível para revisão humana: {evidence['eligible_for_human_review']}")
+          print('- Modo: report-only')
+          print('- Aprovação humana: obrigatória')
+          print('- Promoção automática: não')
+          print('- Artifact canônico publicado: ops-dashboard-static')
+          PY
