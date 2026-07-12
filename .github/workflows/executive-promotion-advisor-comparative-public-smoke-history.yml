@@ -1,0 +1,126 @@
+name: Executive Promotion Advisor Comparative Public Smoke History
+
+on:
+  workflow_run:
+    workflows: ["Executive Promotion Advisor Public Smoke Comparative Dashboard"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente a validar
+        required: true
+        default: all
+        type: choice
+        options: [all, dev, stg, prod]
+      public_url:
+        description: URL opcional para execução de um único ambiente
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: advisor-comparative-public-smoke-history
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DEV_URL: ${{ vars.REQSYS_OPS_DASHBOARD_DEV_URL }}
+      STG_URL: ${{ vars.REQSYS_OPS_DASHBOARD_STG_URL }}
+      PROD_URL: ${{ vars.REQSYS_OPS_DASHBOARD_PROD_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/smoke_executive_promotion_advisor_comparative_public.py
+          python -m unittest tests/test_smoke_executive_promotion_advisor_comparative_public.py
+
+      - name: Recover previous governed history
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: executive-promotion-advisor-comparative-public-smoke-history.yml
+          name: executive-promotion-advisor-comparative-public-smoke-history
+          path: previous
+          if_no_artifact_found: warn
+          search_artifacts: true
+
+      - name: Prepare history
+        shell: bash
+        run: |
+          mkdir -p evidence
+          if [ -f previous/history.json ]; then
+            cp previous/history.json evidence/history.json
+          else
+            printf '{}\n' > evidence/history.json
+          fi
+
+      - name: Run governed public smoke
+        shell: bash
+        env:
+          INPUT_ENV: ${{ inputs.environment || 'all' }}
+          INPUT_URL: ${{ inputs.public_url }}
+        run: |
+          set -euo pipefail
+          run_smoke() {
+            local env_name="$1"
+            local env_url="$2"
+            if [ -z "$env_url" ]; then
+              echo "URL não configurada para $env_name; registrando ausência sem promover produção"
+              return 0
+            fi
+            python scripts/smoke_executive_promotion_advisor_comparative_public.py \
+              --environment "$env_name" \
+              --url "$env_url" \
+              --history evidence/history.json \
+              --evidence "evidence/${env_name}.json"
+          }
+
+          if [ "$INPUT_ENV" != "all" ]; then
+            case "$INPUT_ENV" in
+              dev) resolved_url="${INPUT_URL:-$DEV_URL}" ;;
+              stg) resolved_url="${INPUT_URL:-$STG_URL}" ;;
+              prod) resolved_url="${INPUT_URL:-$PROD_URL}" ;;
+            esac
+            run_smoke "$INPUT_ENV" "$resolved_url"
+          else
+            run_smoke dev "$DEV_URL"
+            run_smoke stg "$STG_URL"
+            run_smoke prod "$PROD_URL"
+          fi
+
+      - name: Validate immutable guardrails
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('evidence/history.json').read_text())
+          assert payload['mode'] == 'report-only'
+          assert payload['production_blocker'] is False
+          assert payload['human_approval_required'] is True
+          for environment in payload.get('environments', {}).values():
+              assert environment['summary']['production_blocker'] is False
+          print(json.dumps(payload.get('summary', {}), indent=2))
+          PY
+
+      - name: Publish governed history
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-promotion-advisor-comparative-public-smoke-history
+          path: evidence/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Executive summary
+        run: |
+          echo '## Advisor comparative public smoke' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Mode: report-only' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production blocker: false' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Human approval: required' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Environments: DEV / STG / PROD' >> "$GITHUB_STEP_SUMMARY"
