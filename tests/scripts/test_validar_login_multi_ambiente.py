@@ -60,6 +60,44 @@ def test_validate_environment_login_compara_redirect_uri_com_sufixo_callback(mon
     assert chamadas == [('https://reqsys-api.fly.dev', 'https://reqsys-app.fly.dev/auth/callback.html')]
 
 
+def test_validate_environment_login_usa_demo_login_publicado_quando_dev_desabilita_demo(monkeypatch):
+    expect_allowed_calls = []
+
+    monkeypatch.setattr(
+        "scripts.validar_login_multi_ambiente.validar_config",
+        lambda api_url, expected_redirect_uri: {
+            "success": True,
+            "errors": [],
+            "warnings": [],
+            "data": {"demo_login_enabled": False},
+        },
+    )
+    monkeypatch.setattr(
+        "scripts.validar_login_multi_ambiente.validate_public_frontend",
+        lambda frontend_url: {"success": True, "errors": []},
+    )
+
+    def fake_probe(api_url, timeout, expect_allowed):
+        expect_allowed_calls.append(expect_allowed)
+        return LoginProbeResult(name="demo_login", ok=True, status_code=403)
+
+    monkeypatch.setattr("scripts.validar_login_multi_ambiente._probe_demo_login", fake_probe)
+
+    result = validate_environment_login(
+        "dev",
+        {
+            "api_url": "https://reqsys-api-dev.fly.dev",
+            "frontend_url": "https://reqsys-app-dev.fly.dev",
+            "app_env": "development",
+        },
+        timeout=1.0,
+    )
+
+    assert result["login_ready"] is True
+    assert expect_allowed_calls == [False]
+    assert any("demo_login_enabled está false em desenvolvimento" in warning for warning in result["warnings"])
+
+
 def test_build_payload_uses_manifest(monkeypatch):
     def fake_validate(env_name, cfg, *, timeout):
         return {

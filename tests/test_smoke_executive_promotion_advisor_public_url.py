@@ -1,4 +1,5 @@
 import json
+import urllib.error
 import unittest
 from unittest.mock import patch
 
@@ -39,6 +40,27 @@ class ExecutivePromotionAdvisorPublicSmokeTests(unittest.TestCase):
         evidence = smoke("https://example.test", "prod")
         self.assertEqual(evidence["status"], "failed")
         self.assertIn("production_blocker_disabled", evidence["errors"])
+
+    @patch("scripts.smoke_executive_promotion_advisor_public_url.fetch_text")
+    def test_falls_back_to_ops_dashboard_path_when_root_contract_is_missing(self, fetch_text):
+        html, contract = self.responses()
+        fetch_text.side_effect = [
+            "<html><body>root landing</body></html>",
+            urllib.error.HTTPError(
+                "https://example.test/data/runtime-executive-index.json",
+                404,
+                "Not Found",
+                hdrs=None,
+                fp=None,
+            ),
+            html,
+            contract,
+        ]
+
+        evidence = smoke("https://example.test", "github-pages")
+
+        self.assertEqual(evidence["status"], "passed")
+        self.assertEqual(evidence["base_url"], "https://example.test/docs/ops-dashboard")
 
 
 if __name__ == "__main__":

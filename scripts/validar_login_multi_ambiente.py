@@ -86,7 +86,7 @@ def validate_environment_login(
     api_url = str(cfg["api_url"]).rstrip("/")
     frontend_url = str(cfg["frontend_url"]).rstrip("/")
     app_env = str(cfg.get("app_env") or "")
-    expect_demo_allowed = app_env == "development"
+    expected_demo_allowed_default = app_env == "development"
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -107,6 +107,16 @@ def validate_environment_login(
     except Exception as exc:  # noqa: BLE001
         checks["azure_config"] = {"success": False, "errors": [str(exc)]}
         errors.append(f"azure_config: {exc}")
+
+    azure_demo_enabled = checks.get("azure_config", {}).get("data", {}).get("demo_login_enabled")
+    if isinstance(azure_demo_enabled, bool):
+        expect_demo_allowed = azure_demo_enabled
+        if app_env == "development" and not azure_demo_enabled:
+            warnings.append(
+                "demo_login_enabled está false em desenvolvimento; validação seguirá o estado operacional publicado"
+            )
+    else:
+        expect_demo_allowed = expected_demo_allowed_default
 
     try:
         frontend_result = validate_public_frontend(frontend_url)

@@ -18,53 +18,78 @@ def fetch_text(url: str, timeout: float = 15.0) -> str:
         return response.read().decode("utf-8")
 
 
-def smoke(base_url: str, environment: str, timeout: float = 15.0) -> dict[str, Any]:
+def candidate_dashboard_bases(base_url: str) -> list[str]:
     base = base_url.rstrip("/")
-    dashboard_url = f"{base}/"
-    contract_url = f"{base}/data/runtime-executive-index.json"
-    errors: list[str] = []
+    candidates = [base]
+    ops_dashboard_suffix = "/docs/ops-dashboard"
+    if not base.endswith(ops_dashboard_suffix):
+        candidates.append(f"{base}{ops_dashboard_suffix}")
+    return candidates
 
-    try:
-        html = fetch_text(dashboard_url, timeout)
-    except (OSError, urllib.error.URLError, UnicodeDecodeError) as exc:
-        html = ""
-        errors.append(f"dashboard_unavailable: {exc}")
 
-    try:
-        contract = json.loads(fetch_text(contract_url, timeout))
-    except (OSError, urllib.error.URLError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        contract = {}
-        errors.append(f"contract_unavailable: {exc}")
+def smoke(base_url: str, environment: str, timeout: float = 15.0) -> dict[str, Any]:
+    best_result: dict[str, Any] | None = None
 
-    card = ((contract.get("cards") or {}).get("executive_promotion_advisor") or {}) if isinstance(contract, dict) else {}
-    checks = {
-        "dashboard_card_present": 'id="executive-promotion-advisor-card"' in html,
-        "render_hook_present": "renderExecutivePromotionAdvisor(payload);" in html,
-        "contract_card_present": bool(card),
-        "report_only": card.get("mode") == "report-only",
-        "production_blocker_disabled": card.get("production_blocker") is False,
-        "human_approval_required": card.get("human_approval_required") is True,
-    }
-    errors.extend(name for name, passed in checks.items() if not passed)
+    for candidate_base in candidate_dashboard_bases(base_url):
+        dashboard_url = f"{candidate_base}/"
+        contract_url = f"{candidate_base}/data/runtime-executive-index.json"
+        errors: list[str] = []
 
-    return {
-        "schema_version": "1.0.0",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "environment": environment,
-        "base_url": base,
-        "status": "passed" if not errors else "failed",
-        "decision": "HOMOLOGATED" if not errors else "BLOCKED",
-        "checks": checks,
-        "advisor": {
-            "decision": card.get("decision"),
-            "confidence_percent": card.get("confidence_percent"),
-            "risk_domains": card.get("risk_domains") or [],
-            "mode": card.get("mode"),
-            "production_blocker": card.get("production_blocker"),
-            "human_approval_required": card.get("human_approval_required"),
-        },
-        "errors": errors,
-    }
+        try:
+            html = fetch_text(dashboard_url, timeout)
+        except (OSError, urllib.error.URLError, UnicodeDecodeError) as exc:
+            html = ""
+            errors.append(f"dashboard_unavailable: {exc}")
+
+        try:
+            contract = json.loads(fetch_text(contract_url, timeout))
+        except (OSError, urllib.error.URLError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            contract = {}
+            errors.append(f"contract_unavailable: {exc}")
+
+        card = ((contract.get("cards") or {}).get("executive_promotion_advisor") or {}) if isinstance(contract, dict) else {}
+        checks = {
+            "dashboard_card_present": 'id="executive-promotion-advisor-card"' in html,
+            "render_hook_present": "renderExecutivePromotionAdvisor(payload);" in html,
+            "contract_card_present": bool(card),
+            "report_only": card.get("mode") == "report-only",
+            "production_blocker_disabled": card.get("production_blocker") is False,
+            "human_approval_required": card.get("human_approval_required") is True,
+        }
+        errors.extend(name for name, passed in checks.items() if not passed)
+        location_checks = (
+            "dashboard_card_present",
+            "render_hook_present",
+            "contract_card_present",
+        )
+
+        result = {
+            "schema_version": "1.0.0",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "environment": environment,
+            "base_url": candidate_base,
+            "status": "passed" if not errors else "failed",
+            "decision": "HOMOLOGATED" if not errors else "BLOCKED",
+            "checks": checks,
+            "advisor": {
+                "decision": card.get("decision"),
+                "confidence_percent": card.get("confidence_percent"),
+                "risk_domains": card.get("risk_domains") or [],
+                "mode": card.get("mode"),
+                "production_blocker": card.get("production_blocker"),
+                "human_approval_required": card.get("human_approval_required"),
+            },
+            "errors": errors,
+        }
+        if not errors:
+            return result
+        if all(checks[name] for name in location_checks):
+            return result
+        if best_result is None or len(errors) < len(best_result["errors"]):
+            best_result = result
+
+    assert best_result is not None
+    return best_result
 
 
 def main() -> int:
