@@ -1,0 +1,77 @@
+name: Executive Promotion Advisor Comparative Smoke Trend Dashboard
+
+on:
+  workflow_run:
+    workflows:
+      - Executive Promotion Advisor Comparative Public Smoke Trend State
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  publish-report-only-card:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download canonical Ops Dashboard
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ops-dashboard.yml
+          workflow_conclusion: success
+          name: ops-dashboard-static
+          path: dist/ops-dashboard
+          if_no_artifact_found: fail
+
+      - name: Download comparative smoke trend state
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: executive-promotion-advisor-comparative-public-smoke-trend-state.yml
+          workflow_conclusion: success
+          name: executive-promotion-advisor-comparative-public-smoke-trend-state
+          path: evidence/trend-state
+          if_no_artifact_found: fail
+
+      - name: Resolve trend state artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          TREND_FILE="$(find evidence/trend-state -type f -name 'runtime-executive-index.json' | head -n 1)"
+          test -n "$TREND_FILE"
+          cp "$TREND_FILE" evidence/trend-state.json
+
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/inject_executive_promotion_advisor_comparative_public_smoke_trend_card.py
+          python -m py_compile scripts/validate_executive_promotion_advisor_comparative_public_smoke_trend_card.py
+          python -m unittest tests/test_executive_promotion_advisor_comparative_public_smoke_trend_dashboard.py
+
+      - name: Inject and validate report-only card
+        run: |
+          python scripts/inject_executive_promotion_advisor_comparative_public_smoke_trend_card.py \
+            --html dist/ops-dashboard/index.html \
+            --runtime-index dist/ops-dashboard/data/runtime-executive-index.json \
+            --trend-state evidence/trend-state.json
+          python scripts/validate_executive_promotion_advisor_comparative_public_smoke_trend_card.py \
+            --html dist/ops-dashboard/index.html \
+            --runtime-index dist/ops-dashboard/data/runtime-executive-index.json
+
+      - name: Publish canonical artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops-dashboard-static
+          path: dist/ops-dashboard
+          retention-days: 90
+
+      - name: Publish evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-promotion-advisor-comparative-smoke-trend-dashboard-evidence
+          path: |
+            dist/ops-dashboard/index.html
+            dist/ops-dashboard/data/runtime-executive-index.json
+          retention-days: 90
