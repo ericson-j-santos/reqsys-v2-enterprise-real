@@ -179,8 +179,6 @@ def certificate_verify(body: CertificateVerifyInput, request: Request, db: Sessi
         'papel': papel,
         'permissoes': permissoes(papel),
         'auth_provider': 'certificate',
-        'certificate_subject': identidade.subject,
-        'certificate_issuer': identidade.issuer,
     }
     logger.info('certificate_login ip=%s email=%s papel=%s', request.client.host if request.client else '?', mascarar_email(email), papel)
     registrar_evento(db, obter_correlation_id(), email, 'LOGIN_CERTIFICADO', 'usuario', email)

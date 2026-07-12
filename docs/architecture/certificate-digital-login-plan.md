@@ -93,6 +93,46 @@ Adicionar ao ReqSys um fluxo de login hibrido que mantenha Microsoft Entra ID co
    - manter Entra ID como fallback;
    - revisar auditoria e revogacao.
 
+## Checklist de ativacao por ambiente
+
+### Desenvolvimento
+
+- `CERT_LOGIN_ENABLED=false` no `.env` local por padrao.
+- Executar `pytest tests/test_azure_auth.py tests/test_certificate_auth.py`.
+- Executar build do frontend.
+- Validar que `/v1/auth/config` retorna `certificate_enabled=false`.
+
+### Homologacao
+
+- Criar diretorio seguro para trust store, por exemplo `/app/config/cert-trust`.
+- Instalar certificados CA de homologacao no `CERT_TRUST_STORE_PATH`.
+- Definir:
+  - `CERT_LOGIN_ENABLED=true`
+  - `CERT_TRUST_STORE_PATH=/app/config/cert-trust`
+  - `CERT_ALLOWED_ISSUERS=<issuer esperado, opcional>`
+  - `CERT_CHALLENGE_TTL_SECONDS=300`
+- Publicar o agente local/Web PKI homologado para os usuarios piloto.
+- Validar A1/A3 com assinatura de desafio real.
+- Validar erro esperado para certificado expirado, emissor nao permitido e assinatura invalida.
+- Conferir evento `LOGIN_CERTIFICADO` na auditoria.
+
+### Producao
+
+- Repetir trust store com CAs produtivas aprovadas.
+- Validar politica de revogacao ICP-Brasil/corporativa antes de ampliar o publico.
+- Ativar `CERT_LOGIN_ENABLED=true` apenas depois de existir `CERT_TRUST_STORE_PATH`.
+- Manter Microsoft Entra ID habilitado como fallback corporativo.
+- Executar piloto com usuarios de baixo risco operacional.
+- Promover para geral somente depois de revisar auditoria, suporte e rollback.
+
+## Estado final do incremento
+
+- Codigo do fluxo hibrido: pronto.
+- UI e contrato de agente local/Web PKI: pronto.
+- Gates de seguranca de producao: pronto.
+- Testes automatizados do backend: pronto.
+- Ativacao produtiva: depende da trust store real, do agente local/Web PKI escolhido e da politica de revogacao aprovada.
+
 ## Criterios de aceite
 
 - `GET /v1/auth/config` informa corretamente quando certificado esta habilitado.
