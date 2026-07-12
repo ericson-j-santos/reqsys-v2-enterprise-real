@@ -13,7 +13,11 @@ from app.core.security import criar_token
 from app.db import get_db
 from app.services.auditoria import registrar_evento
 from app.services.azure_auth import extrair_usuario, validar_token_azure
-from app.services.certificate_auth import CertificateAuthError, criar_desafio, validar_login_certificado
+from app.services.certificate_auth import (
+    CertificateAuthError,
+    criar_desafio,
+    validar_login_certificado,
+)
 from app.services.rbac import permissoes
 
 logger = logging.getLogger('reqsys.security')
