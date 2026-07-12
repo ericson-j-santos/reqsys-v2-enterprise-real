@@ -9,7 +9,6 @@ vi.mock('../../auth/certificate', () => ({
 }))
 
 import { api } from '../../services/api'
-import { loginWithCertificateAgent } from '../../auth/certificate'
 import { useAuthStore } from '../auth'
 
 const sessao = {
