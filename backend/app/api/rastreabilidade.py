@@ -112,16 +112,20 @@ def matriz_rastreabilidade(
             work_item = candidatos[0] if candidatos else None
 
         entrega = vinculo.referencia
+        redmine = '—'
         if vinculo.tipo == 'pr':
             entrega = f"PR #{vinculo.referencia}"
         elif vinculo.tipo == 'merge_request':
             entrega = f"MR #{vinculo.referencia}"
+        elif vinculo.provedor == 'redmine' and vinculo.tipo == 'issue':
+            entrega = f"Redmine #{vinculo.referencia}"
+            redmine = f"#{vinculo.referencia}"
 
         linhas.append(
             {
                 'requisito': vinculo.requisito_codigo,
                 'historia': work_item.codigo if work_item else '—',
-                'redmine': '—',
+                'redmine': redmine,
                 'planner': '—',
                 'entrega': entrega,
                 'entrega_tipo': vinculo.tipo,

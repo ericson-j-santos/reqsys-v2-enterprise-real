@@ -1,4 +1,4 @@
-deploy_staging_placeholder:
+deploy_staging_fly:
   stage: deploy
   image: alpine:3.20
   environment:
@@ -7,5 +7,16 @@ deploy_staging_placeholder:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: manual
+  before_script:
+    - apk add --no-cache curl bash
+    - curl -L https://fly.io/install.sh | sh
   script:
-    - echo "Deploy staging placeholder governado para GitLab Edition"
+    - |
+      if [ -z "$FLY_API_TOKEN" ]; then
+        echo "FLY_API_TOKEN não configurado nas variáveis de CI deste projeto GitLab." >&2
+        echo "Configure a variável em Settings > CI/CD > Variables para habilitar o deploy real." >&2
+        exit 1
+      fi
+    - export FLYCTL_INSTALL="/root/.fly"
+    - export PATH="$FLYCTL_INSTALL/bin:$PATH"
+    - flyctl deploy --remote-only -c backend/fly.toml

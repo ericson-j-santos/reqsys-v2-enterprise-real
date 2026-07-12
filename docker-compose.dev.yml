@@ -9,6 +9,10 @@ services:
       - ./backend:/app
       - ${SDD_SPECS_HOST_PATH:-../../my-first-spec-project/.sdd}:/sdd:ro
 
+  db:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
   frontend:
     expose:
       - "5173"

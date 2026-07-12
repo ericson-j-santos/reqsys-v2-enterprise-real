@@ -50,6 +50,7 @@ Data: YYYY-MM-DD
 | [ADR-031](../adr/ADR-031-runtime-risk-and-promotion-pipeline.md) | Runtime Risk and Promotion Pipeline | aceito | Risco runtime + promoção |
 | [ADR-PR-AUTO-RECOVERY-V2](../adr/ADR-PR-AUTO-RECOVERY-V2.md) | PR Auto Recovery V2 | aceito | Recuperação automática de PR |
 | [ADR-PR-AUTO-RECOVERY-V3](../adr/ADR-PR-AUTO-RECOVERY-V3.md) | PR Auto Recovery V3 | aceito | Recuperação controlada V3 |
+| [ADR-044](../adr/ADR-044-gitlab-edition-pipeline-paralela.md) | GitLab Edition: Pipeline Paralela Fortalecida, Não-Ativa | aceito | CI ativa continua sendo só GitHub Actions; GitLab Edition é scaffolding local com jobs reais, sem projeto GitLab provisionado |
 
 ---
 
@@ -72,6 +73,8 @@ Data: YYYY-MM-DD
 | [ADR-020](../adr/ADR-020-connection-broker-permission-on-demand.md) | Connection Broker Permission on Demand | aceito | Permissões de conector sob demanda |
 | [ADR-021](../adr/ADR-021-figma-github-retorno-em-tela.md) | Figma-GitHub Retorno em Tela | aceito | Integração visual Figma |
 | [ADR-041](../adr/ADR-041-cofre-segredos-locais.md) | Cofre de Segredos Locais | aceito | AES-GCM + keyring, API REST, diagnóstico |
+| [ADR-042](../adr/ADR-042-postgres-local-dev-alembic.md) | Postgres Local para Dev + Migrations Alembic | parcialmente superado | Schema versionado com Alembic; opção de Compose superada pelo ADR-043 |
+| [ADR-043](../adr/ADR-043-backup-rotacao-retencao.md) | Backup, Rotação de Logs, Retenção de Auditoria e Centralização de Banco | aceito | Postgres padrão em dev/test/prod-local/CI; backup + purge + log rotation |
 | [ADR-033](../adr/ADR-033-product-intelligence-final-evidence-index.md) | Product Intelligence Final Evidence Index | aceito | Índice final de evidências PI |
 | [ADR-ESTATISTICAS](../adr/ADR-ESTATISTICAS-INTERNAS-EXTERNAS.md) | Estatísticas Internas/Externas | aceito | Abas de estatísticas |
 | [ADR-USER-FINAL-SHELL](../adr/ADR-USER-FINAL-SHELL-001.md) | User Final Shell | aceito | Shell visual final do usuário |
@@ -97,6 +100,8 @@ Data: YYYY-MM-DD
 ADR-0001 (arquitetura)
   ├── ADR-0002 (segurança)
   ├── ADR-0003 (ambientes)
+  │     ├── ADR-042 (postgres local dev + alembic)
+  │     └── ADR-043 (backup/rotacao/retencao + centralizacao de banco)
   ├── ADR-0004 (CI/CD)
   │     ├── ADR-0021/0024 (revisão IA)
   │     ├── ADR-030 (automerge)

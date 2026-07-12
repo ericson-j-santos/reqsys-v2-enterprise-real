@@ -67,5 +67,8 @@ logs/
 bin/
 obj/
 
+# Runtime-generated artifacts (e.g. LLM telemetry JSONL)
+backend/artifacts/
+
 # Keep the .NET solution scaffold tracked even though IDE solution files are ignored globally
 !backend-dotnet/*.sln

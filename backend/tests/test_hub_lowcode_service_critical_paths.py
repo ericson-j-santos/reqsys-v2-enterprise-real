@@ -1,6 +1,7 @@
 """Testes de caminhos críticos — serviço hub_lowcode (degradação e persistência)."""
 
 import os
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -542,5 +543,47 @@ def test_listar_historico_integracoes_filtra_status():
         historico = svc.listar_historico_integracoes(db, tipo='planner', status='erro', limit=5)
         assert historico['total'] >= 1
         assert all(evento['status'] == 'erro' for evento in historico['eventos'])
+    finally:
+        db.close()
+
+
+def test_resumo_uso_flow_bot_hoje_distingue_sucesso_erro_e_dono():
+    db = SessionLocal()
+    owner_email = f'owner-{uuid.uuid4().hex}@example.com'
+    try:
+        svc.salvar_log_integracao(
+            db,
+            tipo='teams_gateway',
+            status='sucesso',
+            autor='reqsys',
+            detalhes={'canal_usado': 'flow_bot', 'provider_response': {'owner': owner_email}},
+            correlation_id='flow-ok-1',
+        )
+        svc.salvar_log_integracao(
+            db,
+            tipo='teams_gateway',
+            status='erro',
+            autor='reqsys',
+            detalhes={'canal_usado': 'flow_bot', 'provider_response': {'owner': owner_email}},
+            correlation_id='flow-err-1',
+        )
+        svc.salvar_log_integracao(
+            db,
+            tipo='teams_gateway',
+            status='sucesso',
+            autor='reqsys',
+            detalhes={'canal_usado': 'webhook'},
+            correlation_id='webhook-ignore-1',
+        )
+
+        resumo = svc.resumo_uso_flow_bot_hoje(db)
+
+        owner = next(item for item in resumo['owners'] if item['dono'] == owner_email)
+        assert owner['mensagens'] == 2
+        assert owner['sucessos'] == 1
+        assert owner['erros'] == 1
+        assert owner['acoes_usadas'] == 12
+        assert resumo['acoes_por_mensagem_sucesso'] == 9
+        assert resumo['acoes_por_mensagem_erro'] == 3
     finally:
         db.close()

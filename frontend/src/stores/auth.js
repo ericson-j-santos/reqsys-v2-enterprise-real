@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { api } from '../services/api'
+import { loginWithCertificateAgent } from '../auth/certificate'
 
 function fixMojibake(value) {
   if (typeof value !== 'string' || !/[ÃÂ]/.test(value)) return value
@@ -44,6 +45,10 @@ export const useAuthStore = defineStore('auth', {
     async login(credenciais) {
       const { data } = await api.post('/v1/auth/login', credenciais)
       this.salvarSessao(data.data)
+    },
+    async loginCertificado() {
+      const dados = await loginWithCertificateAgent()
+      this.salvarSessao(dados)
     },
     sair() {
       this.token = null

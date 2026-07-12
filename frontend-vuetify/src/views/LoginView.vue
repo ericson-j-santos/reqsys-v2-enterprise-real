@@ -55,6 +55,22 @@
                 Entrar
               </v-btn>
             </v-form>
+
+            <div class="login-divider">
+              <span>ou</span>
+            </div>
+
+            <v-btn
+              color="primary"
+              variant="outlined"
+              block
+              size="large"
+              :loading="carregandoMicrosoft"
+              @click="entrarComMicrosoft"
+            >
+              <v-icon start>mdi-microsoft</v-icon>
+              Entrar com Microsoft
+            </v-btn>
           </v-card-text>
 
           <v-divider />
@@ -92,6 +108,7 @@ const email = ref('admin@reqsys.local')
 const senha = ref('admin123')
 const mostrarSenha = ref(false)
 const carregando = ref(false)
+const carregandoMicrosoft = ref(false)
 const errMsg = ref('')
 const errors = reactive({ email: '', senha: '' })
 
@@ -124,4 +141,36 @@ async function efetuarLogin() {
     carregando.value = false
   }
 }
+
+async function entrarComMicrosoft() {
+  errMsg.value = ''
+  carregandoMicrosoft.value = true
+  try {
+    await auth.loginMicrosoft()
+    router.push('/')
+  } catch (e) {
+    errMsg.value = e?.response?.data?.detail || e?.message || 'Login Microsoft indisponivel.'
+  } finally {
+    carregandoMicrosoft.value = false
+  }
+}
 </script>
+
+<style scoped>
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 14px;
+  color: rgba(var(--v-theme-on-surface), 0.58);
+  font-size: 0.75rem;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(var(--v-theme-on-surface), 0.14);
+}
+</style>

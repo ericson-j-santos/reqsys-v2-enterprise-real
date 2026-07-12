@@ -49,12 +49,19 @@ REQUIRED_CI_TERMS = [
 REQUIRED_INCLUDE_TERMS = {
     "gitlab/ci/classify.yml": ["classify_changes", "semantic_pipeline_routing", "artifacts:"],
     "gitlab/ci/governance.yml": ["gitlab_governance_validation", "artifacts:"],
-    "gitlab/ci/runtime.yml": ["runtime_backend_smoke", "rules:", "changes:"],
-    "gitlab/ci/security.yml": ["security_baseline_smoke", "artifacts:"],
-    "gitlab/ci/devsecops.yml": ["gitlab_devsecops_baseline", "secret_detection_placeholder", "artifacts:"],
+    "gitlab/ci/runtime.yml": ["runtime_backend_smoke", "pytest", "rules:", "changes:"],
+    "gitlab/ci/security.yml": ["security_baseline_smoke", "backend_sast_bandit", "artifacts:"],
+    "gitlab/ci/devsecops.yml": [
+        "gitlab_devsecops_baseline",
+        "secret_detection_gitleaks",
+        "backend_dependency_scanning_pip_audit",
+        "frontend_dependency_scanning_npm_audit",
+        "container_scanning_trivy",
+        "artifacts:",
+    ],
     "gitlab/ci/environments.yml": ["gitlab_environments_baseline", "review_app_placeholder", "stop_review_app_placeholder", "environment:"],
     "gitlab/ci/evidence.yml": ["gitlab_evidence_summary", "artifacts:"],
-    "gitlab/ci/deploy.yml": ["deploy_staging_placeholder", "environment:"],
+    "gitlab/ci/deploy.yml": ["deploy_staging_fly", "FLY_API_TOKEN", "environment:"],
 }
 
 FORBIDDEN_CI_TERMS = [

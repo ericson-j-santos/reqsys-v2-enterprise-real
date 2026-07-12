@@ -78,6 +78,32 @@
   display: inline-block;
 }
 
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #8b949e;
+  font-size: 12px;
+  margin: 18px 0 14px;
+
+  &::before,
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #30363d;
+  }
+}
+
+.microsoft-btn {
+  height: 44px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
 .demo-label {
   text-align: center;
   color: #8b949e;

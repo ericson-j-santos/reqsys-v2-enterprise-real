@@ -70,6 +70,27 @@
           <span *ngIf="!loading()">Entrar</span>
         </button>
       </form>
+
+      <div class="login-divider">
+        <span>ou</span>
+      </div>
+
+      <button
+        mat-stroked-button
+        color="primary"
+        class="full-width microsoft-btn"
+        type="button"
+        [disabled]="loadingMicrosoft()"
+        (click)="entrarComMicrosoft()"
+      >
+        <mat-spinner
+          *ngIf="loadingMicrosoft()"
+          diameter="20"
+          class="spinner"
+        ></mat-spinner>
+        <mat-icon *ngIf="!loadingMicrosoft()">account_circle</mat-icon>
+        <span>Entrar com Microsoft</span>
+      </button>
     </mat-card-content>
 
     <mat-card-footer>

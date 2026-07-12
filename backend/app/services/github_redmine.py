@@ -146,6 +146,7 @@ def publish_requisito_to_redmine(
     if not base_url or not api_key or not effective_project_id:
         return {
             'issue_principal_id': None,
+            'redmine_url': None,
             'subtarefas': [],
             'warnings': ['Redmine nao configurado. Defina REDMINE_BASE_URL, REDMINE_API_KEY e REDMINE_PROJECT_ID.'],
         }
@@ -181,9 +182,10 @@ def publish_requisito_to_redmine(
     try:
         created = _request_json('POST', f'{base_url}/issues.json', headers=headers, payload=issue_payload)
     except IntegracaoError as exc:
-        return {'issue_principal_id': None, 'subtarefas': [], 'warnings': [str(exc)]}
+        return {'issue_principal_id': None, 'redmine_url': None, 'subtarefas': [], 'warnings': [str(exc)]}
 
     principal_id = (created.get('issue') or {}).get('id')
+    redmine_url = f'{base_url}/issues/{principal_id}' if principal_id else None
     subtarefas: list[dict[str, Any]] = []
     warnings: list[str] = []
 
@@ -204,7 +206,7 @@ def publish_requisito_to_redmine(
         except IntegracaoError as exc:
             warnings.append(f'Subtarefa {componente}: {exc}')
 
-    return {'issue_principal_id': principal_id, 'subtarefas': subtarefas, 'warnings': warnings}
+    return {'issue_principal_id': principal_id, 'redmine_url': redmine_url, 'subtarefas': subtarefas, 'warnings': warnings}
 
 
 def publish_issues_to_redmine(repo: str, issues: list[dict[str, Any]], project_id: int | None = None, tracker_id: int | None = None, priority_id: int | None = None) -> dict[str, Any]:

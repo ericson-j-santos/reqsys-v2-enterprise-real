@@ -89,7 +89,7 @@ jobs:
             COMMENT_FLAG="--comment"
           fi
 
-          python scripts/pr_quality_review.py \
+          python scripts/pr_quality_review_entry.py \
             --repo "${GITHUB_REPOSITORY}" \
             --pr-number "${{ steps.ctx.outputs.pr_number }}" \
             --report-dir "${REPORT_DIR}" \

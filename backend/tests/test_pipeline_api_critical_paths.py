@@ -5,6 +5,7 @@ from unittest.mock import patch
 from app.api import pipeline as pipeline_api
 from app.models.auditoria import AuditoriaEvento
 from app.models.requisito import Requisito
+from app.models.vinculo_git import VinculoGit
 
 
 def test_inferir_rfs_detecta_termos_de_cadastro():
@@ -173,6 +174,79 @@ def test_publicar_redmine_com_github_import_filtra_issues(
     data = response.json()['data']
     assert data['github_imported_count'] == 1
     assert data['redmine_published_count'] == 1
+
+
+def test_publicar_redmine_registra_vinculo_rastreabilidade(client, monkeypatch):
+    monkeypatch.setattr(
+        pipeline_api,
+        'publish_requisito_to_redmine',
+        lambda **_kwargs: {
+            'issue_principal_id': 321,
+            'redmine_url': 'https://redmine.local/issues/321',
+            'subtarefas': [],
+            'warnings': [],
+        },
+    )
+
+    criado = client.post(
+        '/v1/solicitacoes',
+        json={
+            'origem': 'portal',
+            'titulo': 'Publicar redmine rastreavel',
+            'descricao': 'Descricao longa para validar rastreabilidade redmine.',
+            'solicitante': 'qa@reqsys.local',
+            'area': 'Integracoes',
+            'sistema': 'Redmine',
+            'urgencia': 'media',
+        },
+    )
+    requisito_id = criado.json()['data']['id']
+
+    response = client.post(f'/v1/backlog/publicar-redmine/{requisito_id}', json={})
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['issue_principal_id'] == 321
+    assert data['redmine_url'] == 'https://redmine.local/issues/321'
+
+    rastreabilidade = client.get(f'/v1/rastreabilidade/requisitos/{requisito_id}')
+    vinculos = rastreabilidade.json()['data']['vinculos']
+    assert any(
+        v['provedor'] == 'redmine'
+        and v['tipo'] == 'issue'
+        and v['referencia'] == '321'
+        and v['url'] == 'https://redmine.local/issues/321'
+        for v in vinculos
+    )
+
+
+def test_registrar_vinculo_redmine_nao_duplica(db_session):
+    requisito = Requisito(
+        codigo='REQ-REDMINE-DUP',
+        titulo='Redmine sem duplicar',
+        descricao='Descricao suficiente para teste.',
+        urgencia='media',
+        area='QA',
+        sistema='Pipeline',
+        solicitante='qa@reqsys.local',
+        status='estruturado',
+    )
+    db_session.add(requisito)
+    db_session.commit()
+    db_session.refresh(requisito)
+
+    pipeline_api.registrar_vinculo_redmine(db_session, requisito, 654, 'https://redmine.local/issues/654')
+    pipeline_api.registrar_vinculo_redmine(db_session, requisito, 654, 'https://redmine.local/issues/654')
+    db_session.commit()
+
+    total = (
+        db_session.query(VinculoGit)
+        .filter(VinculoGit.requisito_id == requisito.id)
+        .filter(VinculoGit.provedor == 'redmine')
+        .filter(VinculoGit.referencia == '654')
+        .count()
+    )
+    assert total == 1
 
 
 @patch('app.api.pipeline.fetch_github_issues', side_effect=pipeline_api.IntegracaoError('repo invalido'))

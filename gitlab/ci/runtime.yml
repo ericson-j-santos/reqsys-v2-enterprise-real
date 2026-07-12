@@ -8,5 +8,47 @@ runtime_backend_smoke:
         - infra/**/*
         - gitlab/**/*
         - .gitlab-ci.yml
+  services:
+    - postgres:16-alpine
+  variables:
+    POSTGRES_USER: reqsys_app
+    POSTGRES_PASSWORD: ci-postgres-password
+    POSTGRES_DB: reqsys_test
+    DATABASE_URL: "postgresql+psycopg2://reqsys_app:ci-postgres-password@postgres:5432/reqsys_test"
+    JWT_SECRET_KEY: ci-secret-key-for-testing-only
+    JWT_SECRET: ci-secret-key-for-testing-only-minimum-32-characters
+    JWT_ISSUER: reqsys-ci
+    JWT_AUDIENCE: reqsys-ci-tests
+    JWT_EXP_MINUTES: "60"
+    ALLOW_DEMO_LOGIN: "true"
+    APP_ENV: test
+    AZURE_TENANT_ID: "00000000-0000-0000-0000-000000000000"
+    AZURE_CLIENT_ID: "11111111-1111-1111-1111-111111111111"
+    AZURE_AUTHORITY: "https://login.microsoftonline.com/00000000-0000-0000-0000-000000000000"
+    REDMINE_URL: "https://placeholder.example.com"
+    REDMINE_API_KEY: "placeholder"
+    ENABLE_GITHUB_REDMINE_IMPORT: "false"
+    SSRS_BASE_URL: ""
+    GITHUB_WEBHOOK_SECRET: ""
+    GITLAB_WEBHOOK_TOKEN: ""
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq unixodbc-dev
+    - python -m pip install --upgrade pip
+    - pip install -r backend/requirements.txt
   script:
-    - python -m compileall gitlab/scripts
+    - mkdir -p audit
+    - cd backend
+    - python -m pytest tests/ -v --tb=short
+        --cov=app
+        --cov-report=term-missing:skip-covered
+        --cov-report=xml:../audit/gitlab-backend-coverage.xml
+        --cov-fail-under=60
+  artifacts:
+    when: always
+    expire_in: 14 days
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: audit/gitlab-backend-coverage.xml
+    paths:
+      - audit/gitlab-backend-coverage.xml

@@ -143,6 +143,50 @@
       </v-expansion-panel>
     </v-expansion-panels>
 
+    <v-card class="mb-4 flow-quota-card" variant="outlined">
+      <v-card-text>
+        <div class="flow-quota-header">
+          <div>
+            <div class="text-subtitle-2 font-weight-bold">Capacidade Flow bot hoje</div>
+            <div class="text-caption text-medium-emphasis">
+              {{ flowBotUso.acoes_usadas || 0 }} de {{ flowBotUso.capacidade_acoes_total_estimado || flowBotUso.limite_acoes_dia_por_dono || 6000 }} acoes usadas.
+              Restam ~{{ flowBotUso.mensagens_restantes_estimadas || 0 }} mensagens no caminho feliz.
+            </div>
+          </div>
+          <v-chip size="small" :color="flowBotQuotaColor" variant="tonal">
+            {{ flowBotUso.percentual_usado_total || 0 }}%
+          </v-chip>
+        </div>
+        <v-progress-linear
+          class="mt-3"
+          :model-value="flowBotUso.percentual_usado_total || 0"
+          :color="flowBotQuotaColor"
+          height="8"
+          rounded
+        />
+        <div class="flow-owner-grid mt-3">
+          <div
+            v-for="owner in flowBotOwners"
+            :key="owner.dono"
+            class="flow-owner-row"
+          >
+            <div>
+              <div class="text-caption font-weight-medium">{{ owner.dono }}</div>
+              <div class="text-caption text-medium-emphasis">
+                {{ owner.mensagens }} mensagens · {{ owner.sucessos }} sucesso · {{ owner.erros }} erro
+              </div>
+            </div>
+            <div class="text-caption text-right">
+              <strong>{{ owner.acoes_usadas }}</strong>/{{ owner.limite_acoes_dia }} acoes
+            </div>
+          </div>
+          <div v-if="!flowBotOwners.length" class="text-caption text-medium-emphasis">
+            Nenhum envio flow_bot registrado hoje.
+          </div>
+        </div>
+      </v-card-text>
+    </v-card>
+
     <!-- Cards de resumo clicáveis -->
     <v-row class="mb-4">
       <v-col
@@ -388,6 +432,7 @@ const route = useRoute()
 const router = useRouter()
 
 const itens = ref([])
+const flowBotUso = ref({})
 const carregando = ref(false)
 const dialogAberto = ref(false)
 const itemSelecionado = ref(null)
@@ -439,6 +484,13 @@ const totalTeams = computed(() => {
       return det?.teams_notificado === true
     } catch (_) { return false }
   }).length
+})
+const flowBotOwners = computed(() => flowBotUso.value?.owners || [])
+const flowBotQuotaColor = computed(() => {
+  const pct = flowBotUso.value?.percentual_usado_total || 0
+  if (pct >= 90) return 'error'
+  if (pct >= 70) return 'warning'
+  return 'success'
 })
 
 const ultimoStatus = computed(() => itens.value[0]?.status || '')
@@ -607,8 +659,12 @@ async function enviarMensagemGraph() {
 async function carregar() {
   carregando.value = true
   try {
-    const resp = await api.get('/v1/hub-lowcode/integracoes/historico?limit=100')
+    const [resp, flowResp] = await Promise.all([
+      api.get('/v1/hub-lowcode/integracoes/historico?limit=100'),
+      api.get('/v1/hub-lowcode/integracoes/flow-bot/uso-hoje'),
+    ])
     itens.value = resp.data?.data?.eventos || []
+    flowBotUso.value = flowResp.data?.data || {}
   } catch (e) {
     snackbar.value = { aberto: true, msg: 'Erro ao carregar histórico: ' + (e?.response?.data?.detail || e.message), cor: 'error' }
   } finally {
@@ -658,6 +714,21 @@ onMounted(async () => {
 .filter-actions {
   display: flex;
   justify-content: flex-end;
+}
+.flow-quota-header,
+.flow-owner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.flow-owner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 16px;
+}
+.flow-owner-row {
+  min-height: 44px;
 }
 .correlation-link {
   color: rgb(var(--v-theme-primary));

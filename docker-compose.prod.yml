@@ -6,7 +6,10 @@ services:
     environment:
       - APP_ENV=production
       - ALLOW_DEMO_LOGIN=false
-      - DATABASE_URL=sqlite:////data/reqsys.db
+      # Postgres centralizado (ADR-042/ADR-043): POSTGRES_PASSWORD obrigatorio em prod,
+      # sem fallback fraco. Se este ambiente ainda tem dados reais no volume `reqsys-db`
+      # (sqlite legado), migre-os ANTES de trocar (ver docs/runbooks/migracao-postgres.md).
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-reqsys_app}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatorio em prod}@db:5432/${POSTGRES_DB:-reqsys}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET obrigatorio em prod}
       - JWT_ISSUER=${JWT_ISSUER:?JWT_ISSUER obrigatorio em prod}
       - JWT_AUDIENCE=${JWT_AUDIENCE:?JWT_AUDIENCE obrigatorio em prod}
@@ -16,7 +19,6 @@ services:
       - WIKI_SYNC_TOKEN=${WIKI_SYNC_TOKEN:-}
       - SDD_SPECS_PATH=/sdd
     volumes:
-      - reqsys-db:/data
       - ${SDD_SPECS_HOST_PATH:?SDD_SPECS_HOST_PATH obrigatorio em prod}:/sdd:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -24,6 +26,15 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  db:
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatorio em prod}
     deploy:
       resources:
         limits:
@@ -66,4 +77,7 @@ services:
           memory: 64M
 
 volumes:
-  reqsys-db:
+  # reqsys-db (sqlite legado) nao e mais montado por nenhum servico. O volume Docker
+  # em si nao e apagado automaticamente — se este ambiente tinha dados reais nele,
+  # recupere com `docker run --rm -v reqsys-db:/data -v $(pwd):/backup alpine cp /data/reqsys.db /backup/`
+  # ANTES de rodar `docker compose down -v`.

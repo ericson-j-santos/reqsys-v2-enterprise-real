@@ -96,8 +96,11 @@ npm run dev
 
 ### Docker
 
+`docker-compose.yml` sozinho não publica porta de nginx nem Postgres (ADR-043)
+— sempre combine com um dos overlays de ambiente abaixo:
+
 ```bash
-docker compose up --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
 ## Matriz de ambientes (URLs explícitas)
@@ -496,7 +499,8 @@ npm run test:e2e:stable
 
 ## Próximos incrementos já previstos
 
-- SQL Server real com migrations Alembic
+- Cortar hml/prod (Fly.io) de SQLite para Postgres — dev/test/prod-local (Docker) e CI já centralizados em Postgres ([ADR-043](docs/ADR/ADR-043-backup-rotacao-retencao.md)); runbook manual em [docs/runbooks/migracao-postgres-fly.md](docs/runbooks/migracao-postgres-fly.md)
+- SQL Server real em produção, alternativa ainda não provisionada (migrations Alembic já cobrem o schema atual — ver [ADR-042](docs/ADR/ADR-042-postgres-local-dev-alembic.md))
 - Refresh token
 - RBAC validado no backend por dependência FastAPI
 - Integrações reais Redmine / Planner / SharePoint
