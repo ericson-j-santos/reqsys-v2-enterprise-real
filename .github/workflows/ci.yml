@@ -217,6 +217,22 @@ jobs:
     runs-on: ubuntu-latest
     needs: ci-router
     if: needs.ci-router.outputs.backend == 'true' || needs.ci-router.outputs.full_ci == 'true'
+    # Postgres centralizado (ADR-042/ADR-043): mesmo engine usado em dev/test/prod,
+    # nao mais SQLite so no CI.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: reqsys_app
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: reqsys_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reqsys_app -d reqsys_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: backend
@@ -244,7 +260,7 @@ jobs:
           echo "OK: Nenhum mojibake encontrado."
       - name: Run tests with coverage
         env:
-          DATABASE_URL: sqlite:///./reqsys_test.db
+          DATABASE_URL: postgresql+psycopg2://reqsys_app:ci-postgres-password@localhost:5432/reqsys_test
           JWT_SECRET_KEY: ci-secret-key-for-testing-only
           JWT_SECRET: ci-secret-key-for-testing-only-minimum-32-characters
           JWT_ISSUER: reqsys-ci

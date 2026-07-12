@@ -52,3 +52,19 @@ def test_auditoria_limit_invalido_retorna_422(client):
     assert resp.status_code == 422
     detail = resp.json().get('detail', [])
     assert any(err.get('loc') == ['query', 'limit'] for err in detail)
+
+
+def test_auditoria_purgar_exige_admin(client):
+    resp = client.post('/v1/auditoria/purgar')
+
+    assert resp.status_code in (401, 403)
+
+
+def test_auditoria_purgar_com_admin_retorna_retencao_aplicada(client, auth_headers):
+    # retention_days bem alto para nao apagar nada de real neste ambiente de teste
+    resp = client.post('/v1/auditoria/purgar?retention_days=36500', headers=auth_headers)
+
+    assert resp.status_code == 200
+    data = resp.json()['data']
+    assert data['retention_days'] == 36500
+    assert data['registros_removidos'] == 0

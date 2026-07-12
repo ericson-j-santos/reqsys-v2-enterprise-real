@@ -2,9 +2,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.core.correlation import obter_correlation_id
 from app.core.envelope import ok
+from app.core.security import require_admin
 from app.db import get_db
 from app.models.auditoria import AuditoriaEvento
+from app.services.data_retention import purgar_auditoria_eventos
 
 router = APIRouter(prefix='/v1/auditoria', tags=['Auditoria'])
 
@@ -81,3 +84,17 @@ def listar_eventos_config_infra(
     ]
 
     return ok({'config_historico': resultado, 'total': len(resultado)})
+
+@router.post('/purgar', dependencies=[Depends(require_admin)])
+def purgar_eventos_antigos(
+    retention_days: int | None = Query(default=None, ge=1, description='Override do padrao (ADR-043); default via AUDITORIA_RETENTION_DAYS'),
+    db: Session = Depends(get_db)
+):
+    """
+    Remove auditoria_eventos mais antigos que a retencao configurada (ADR-043).
+
+    Restrito a administradores. A purga em si gera um AuditoriaEvento
+    (`AUDITORIA_PURGE_EXECUTADO`) antes de remover os registros antigos.
+    """
+    resultado = purgar_auditoria_eventos(db, retention_days=retention_days, correlation_id=obter_correlation_id())
+    return ok(resultado)

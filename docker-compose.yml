@@ -1,10 +1,24 @@
+# Retencao/rotacao de logs de container (ADR-043): limita crescimento de disco
+# em todos os ambientes que herdam deste arquivo base (dev/test/prod).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   api:
     build: ./backend
     restart: unless-stopped
+    logging: *default-logging
     # JWT_SECRET padrao fraco — substitua via env var ou .env antes de prod
+    # Postgres centralizado em todos os ambientes (ADR-042/ADR-043) — SQLite deixou
+    # de ser o default; senha fraca so serve de fallback dev local (db roda so em rede interna).
+    # NAO usar `${DATABASE_URL:-...}` aqui: o .env do host pode ter um DATABASE_URL
+    # apontando pra `localhost` (uso nativo, fora de Docker) que dentro do container
+    # aponta pro proprio container, nao pro host — quebraria a conexao com o servico `db`.
     environment:
-      - DATABASE_URL=sqlite:///./reqsys.db
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-reqsys_app}:${POSTGRES_PASSWORD:-reqsys_local_dev}@db:5432/${POSTGRES_DB:-reqsys}
       - JWT_SECRET=${JWT_SECRET:-trocar-em-producao}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:${GATEWAY_PORT:-8081},https://tieridev.duckdns.org,https://tierin.duckdns.org,https://tieriprod.duckdns.org}
       - SSRS_BASE_URL=${SSRS_BASE_URL:-}
@@ -25,12 +39,37 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - reqsys-net
+
+  db:
+    # Sem `ports:` aqui de proposito: compose nao permite "desfazer" uma publicacao
+    # de porta da base via override (uma lista vazia no overlay nao limpa a da base),
+    # entao a porta so e exposta ao host explicitamente em dev/test — nunca em prod.
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-reqsys_app}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-reqsys_local_dev}
+      - POSTGRES_DB=${POSTGRES_DB:-reqsys}
+    volumes:
+      - reqsys-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-reqsys_app} -d $${POSTGRES_DB:-reqsys}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - reqsys-net
 
   frontend:
     build: ./frontend
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - VITE_API_URL=/api
     depends_on: [api]
@@ -40,6 +79,7 @@ services:
   kb:
     build: ../../kb
     restart: unless-stopped
+    logging: *default-logging
     expose: ["8080"]
     command: uvicorn main:app --host 0.0.0.0 --port 8080 --root-path /kb
     environment:
@@ -50,9 +90,12 @@ services:
       - reqsys-net
 
   nginx:
+    # Sem `ports:` aqui de proposito (mesmo motivo do `db`): Compose concatena
+    # `ports:` entre arquivos quando os valores diferem, em vez de substituir.
+    # dev/test/prod publicam a porta explicitamente, cada um com seu proprio valor.
     image: nginx:alpine
     restart: unless-stopped
-    ports: ["${GATEWAY_PORT:-8081}:80"]
+    logging: *default-logging
     volumes:
       - ./infra/nginx/default.prod.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
@@ -71,3 +114,4 @@ networks:
 
 volumes:
   kb-data:
+  reqsys-db-data:
