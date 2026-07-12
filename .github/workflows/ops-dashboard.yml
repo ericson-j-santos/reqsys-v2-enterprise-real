@@ -35,6 +35,7 @@ jobs:
           python -m py_compile scripts/generate_ops_dashboard_data.py
           python -m py_compile scripts/build_runtime_executive_index.py
           python -m py_compile scripts/build_strategic_governance_index.py
+          python -m py_compile scripts/validate_ops_dashboard_runtime_executive_panel.py
           python -m py_compile scripts/enrich_runtime_executive_deeplinks.py
           python -m py_compile scripts/validate_runtime_executive_public_page.py
           python -m py_compile scripts/validate_runtime_executive_deeplink_state.py
@@ -252,6 +253,7 @@ jobs:
           python3 scripts/validate_ops_dashboard_navigation.py
           python3 scripts/validate_ops_dashboard_trilha_d_pareto_cards.py
           python3 scripts/validate_ops_dashboard_runtime_validation.py
+          python3 scripts/validate_ops_dashboard_runtime_executive_panel.py
           python3 scripts/validate_runtime_executive_public_page.py
           python3 scripts/validate_runtime_executive_deeplink_state.py
           python3 scripts/validate_ops_dashboard_runtime_executive_post_deploy_card.py
@@ -335,6 +337,7 @@ jobs:
             echo "Executive readiness publicado: executive-readiness-gate"
             echo ""
             echo "Runtime executive index publicado em data/runtime-executive-index.json."
+            echo "Runtime executive panel validado em index.html."
             echo "Runtime executive page publicada em runtime-executive.html."
             echo "Runtime executive post-deploy card publicado no Ops Dashboard."
             echo "Security executive summary card publicado no Ops Dashboard."
