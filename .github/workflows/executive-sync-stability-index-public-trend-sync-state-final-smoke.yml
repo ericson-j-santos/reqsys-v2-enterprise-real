@@ -1,0 +1,129 @@
+name: Executive Sync Stability Index Public Trend Sync State Final Smoke
+
+on:
+  workflow_run:
+    workflows:
+      - Executive Sync Stability Index Public Trend Sync State Dashboard
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente da evidência
+        required: true
+        type: choice
+        options: [dev, stg, prod]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: executive-sync-stability-index-public-trend-sync-state-final-smoke-${{ github.event.inputs.environment || 'prod' }}
+  cancel-in-progress: false
+
+jobs:
+  final-smoke:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ENVIRONMENT: ${{ github.event.inputs.environment || 'prod' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/smoke_executive_sync_stability_index_public_trend_sync_state_final.py
+          python -m unittest tests/test_smoke_executive_sync_stability_index_public_trend_sync_state_final.py
+
+      - name: Download latest canonical dashboard
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: executive-sync-stability-index-public-trend-sync-state-dashboard.yml
+          name: ops-dashboard-static
+          path: input/dashboard
+          workflow_conclusion: success
+          branch: main
+          if_no_artifact_found: fail
+
+      - name: Download latest synchronized state
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: executive-sync-stability-index-public-trend-sync-state.yml
+          name: executive-sync-stability-index-public-trend-sync-state
+          path: input/state
+          workflow_conclusion: success
+          branch: main
+          if_no_artifact_found: fail
+
+      - name: Download previous environment history
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          workflow: executive-sync-stability-index-public-trend-sync-state-final-smoke.yml
+          name: executive-sync-stability-index-public-trend-sync-state-final-history-${{ env.ENVIRONMENT }}
+          path: input/history
+          workflow_conclusion: success
+          branch: main
+          if_no_artifact_found: ignore
+
+      - name: Resolve contracts
+        run: |
+          set -euo pipefail
+          mkdir -p output evidence
+          html=$(find input/dashboard -type f -name 'index.html' | head -n 1)
+          runtime=$(find input/dashboard -type f -name 'runtime-executive-index.json' | head -n 1)
+          brief=$(find input/state -type f -name 'executive-brief.json' | head -n 1)
+          test -n "$html"
+          test -n "$runtime"
+          test -n "$brief"
+          history=$(find input/history -type f -name '*history*.json' | head -n 1 || true)
+          if [ -n "$history" ]; then cp "$history" output/history.json; else echo '{}' > output/history.json; fi
+          cp "$html" output/index.html
+          cp "$runtime" output/runtime-executive-index.json
+          cp "$brief" output/executive-brief.json
+
+      - name: Run final public synchronization smoke
+        run: |
+          python scripts/smoke_executive_sync_stability_index_public_trend_sync_state_final.py \
+            --html output/index.html \
+            --runtime-index output/runtime-executive-index.json \
+            --executive-brief output/executive-brief.json \
+            --environment "$ENVIRONMENT" \
+            --history output/history.json \
+            --evidence evidence/final-sync.json
+
+      - name: Validate report-only guardrails
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path('evidence/final-sync.json').read_text())
+          assert value['mode'] == 'report-only'
+          assert value['production_blocker'] is False
+          assert value['human_approval_required'] is True
+          PY
+
+      - name: Publish final environment history
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-sync-stability-index-public-trend-sync-state-final-history-${{ env.ENVIRONMENT }}
+          path: output/history.json
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Publish final synchronization evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-sync-stability-index-public-trend-sync-state-final-evidence-${{ env.ENVIRONMENT }}
+          path: evidence/final-sync.json
+          retention-days: 90
+          if-no-files-found: error
