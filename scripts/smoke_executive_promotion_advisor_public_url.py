@@ -9,7 +9,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 
 def fetch_text(url: str, timeout: float = 15.0) -> str:
@@ -18,20 +18,51 @@ def fetch_text(url: str, timeout: float = 15.0) -> str:
         return response.read().decode("utf-8")
 
 
+def fetch_first(urls: Iterable[str], timeout: float = 15.0) -> tuple[str, str]:
+    """Retorna o primeiro recurso público disponível e a URL efetivamente usada."""
+    failures: list[str] = []
+    for url in urls:
+        try:
+            return fetch_text(url, timeout), url
+        except (OSError, urllib.error.URLError, UnicodeDecodeError) as exc:
+            failures.append(f"{url}: {exc}")
+
+    raise urllib.error.URLError("; ".join(failures))
+
+
+def public_candidates(base: str, environment: str) -> tuple[list[str], list[str]]:
+    """Resolve caminhos públicos por ambiente, preservando fallback compatível."""
+    if environment == "github-pages":
+        return (
+            [f"{base}/ops-dashboard/", f"{base}/"],
+            [
+                f"{base}/ops-dashboard/data/runtime-executive-index.json",
+                f"{base}/data/runtime-executive-index.json",
+            ],
+        )
+
+    return (
+        [f"{base}/"],
+        [f"{base}/data/runtime-executive-index.json"],
+    )
+
+
 def smoke(base_url: str, environment: str, timeout: float = 15.0) -> dict[str, Any]:
     base = base_url.rstrip("/")
-    dashboard_url = f"{base}/"
-    contract_url = f"{base}/data/runtime-executive-index.json"
+    dashboard_candidates, contract_candidates = public_candidates(base, environment)
     errors: list[str] = []
+    dashboard_url: str | None = None
+    contract_url: str | None = None
 
     try:
-        html = fetch_text(dashboard_url, timeout)
+        html, dashboard_url = fetch_first(dashboard_candidates, timeout)
     except (OSError, urllib.error.URLError, UnicodeDecodeError) as exc:
         html = ""
         errors.append(f"dashboard_unavailable: {exc}")
 
     try:
-        contract = json.loads(fetch_text(contract_url, timeout))
+        contract_text, contract_url = fetch_first(contract_candidates, timeout)
+        contract = json.loads(contract_text)
     except (OSError, urllib.error.URLError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         contract = {}
         errors.append(f"contract_unavailable: {exc}")
@@ -52,6 +83,10 @@ def smoke(base_url: str, environment: str, timeout: float = 15.0) -> dict[str, A
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "environment": environment,
         "base_url": base,
+        "resolved_urls": {
+            "dashboard": dashboard_url,
+            "contract": contract_url,
+        },
         "status": "passed" if not errors else "failed",
         "decision": "HOMOLOGATED" if not errors else "BLOCKED",
         "checks": checks,
