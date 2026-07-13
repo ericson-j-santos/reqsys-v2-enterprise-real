@@ -89,8 +89,27 @@ def smoke(base_url: str, environment: str, timeout: float = 15.0) -> dict[str, A
         if best_result is None or len(errors) < len(best_result["errors"]):
             best_result = result
 
-    assert best_result is not None
-    return best_result
+    if best_result is not None:
+        return best_result
+
+    return {
+        "schema_version": "1.0.0",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "environment": environment,
+        "base_url": base_url.rstrip("/"),
+        "status": "failed",
+        "decision": "BLOCKED",
+        "checks": {name: False for name in LOCATION_DISCOVERY_CHECKS},
+        "advisor": {
+            "decision": None,
+            "confidence_percent": None,
+            "risk_domains": [],
+            "mode": None,
+            "production_blocker": None,
+            "human_approval_required": None,
+        },
+        "errors": ["no_dashboard_candidates"],
+    }
 
 
 def main() -> int:

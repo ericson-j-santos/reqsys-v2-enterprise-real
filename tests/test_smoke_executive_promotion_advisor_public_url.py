@@ -47,9 +47,9 @@ class ExecutivePromotionAdvisorPublicSmokeTests(unittest.TestCase):
         fetch_text.side_effect = [
             "<html><body>root landing</body></html>",
             urllib.error.HTTPError(
-                "https://example.test/data/runtime-executive-index.json",
-                404,
-                "Not Found",
+                url="https://example.test/data/runtime-executive-index.json",
+                code=404,
+                msg="Not Found",
                 hdrs=None,
                 fp=None,
             ),
