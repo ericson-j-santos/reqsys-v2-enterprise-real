@@ -1,0 +1,57 @@
+name: Executive Final Trend Sync History State Dashboard
+
+on:
+  workflow_run:
+    workflows: ["Executive Final Trend Sync History State"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: executive-final-trend-sync-history-state-dashboard
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/inject_executive_final_trend_sync_history_state_card.py
+          python -m py_compile scripts/validate_executive_final_trend_sync_history_state_card.py
+          python -m unittest tests/test_executive_final_trend_sync_history_state_dashboard.py
+
+      - name: Prepare auditable dashboard evidence
+        run: |
+          mkdir -p evidence
+          cat > evidence/runtime-executive-index.json <<'JSON'
+          {"cards": {}}
+          JSON
+          cat > evidence/dashboard.json <<'JSON'
+          {"cards": []}
+          JSON
+          python scripts/inject_executive_final_trend_sync_history_state_card.py \
+            --index evidence/runtime-executive-index.json \
+            --dashboard evidence/dashboard.json \
+            --output evidence/dashboard-enriched.json
+          python scripts/validate_executive_final_trend_sync_history_state_card.py \
+            --dashboard evidence/dashboard-enriched.json
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-final-trend-sync-history-state-dashboard
+          path: evidence/
+          retention-days: 90
