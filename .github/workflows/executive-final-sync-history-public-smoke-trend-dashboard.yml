@@ -1,0 +1,44 @@
+name: Executive Final Sync History Public Smoke Trend Dashboard
+
+on:
+  workflow_run:
+    workflows: ["Executive Final Sync History Public Smoke Trend State"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: executive-final-sync-history-public-smoke-trend-dashboard
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Python
+        run: |
+          python -m py_compile scripts/inject_executive_final_sync_history_public_smoke_trend_card.py
+          python -m py_compile scripts/validate_executive_final_sync_history_public_smoke_trend_card.py
+          python -m unittest tests/test_executive_final_sync_history_public_smoke_trend_dashboard.py
+
+      - name: Prepare safe fallback evidence
+        run: |
+          mkdir -p out
+          cat > out/state.json <<'JSON'
+          {"cards":{"executive_final_sync_history_public_smoke_trend":{"status":"collecting-evidence","environment_coverage":"0/3","samples":0,"pass_rate":0,"minimum_stable_sequence":0,"eligible_for_human_review":false,"mode":"report-only","production_blocker":false,"human_approval_required":true}}}
+          JSON
+          printf '<main></main>\n' > out/index.html
+          python scripts/inject_executive_final_sync_history_public_smoke_trend_card.py --state out/state.json --html out/index.html --output out/dashboard.html
+          python scripts/validate_executive_final_sync_history_public_smoke_trend_card.py --html out/dashboard.html
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: executive-final-sync-history-public-smoke-trend-dashboard-evidence
+          path: out/
+          retention-days: 90
