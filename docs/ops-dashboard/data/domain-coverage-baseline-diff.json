@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "status": "proposal_ready",
+  "requires_human_approval": true,
+  "baseline_mode_before": "record_then_regression",
+  "baseline_mode_after": "regression_gate",
+  "domains": {
+    "core": {
+      "previous_percent": null,
+      "current_percent": 93.77,
+      "delta_percentage_points": null,
+      "target_percent": 80.0,
+      "regression": false,
+      "improvement": false
+    },
+    "services": {
+      "previous_percent": null,
+      "current_percent": 93.42,
+      "delta_percentage_points": null,
+      "target_percent": 75.0,
+      "regression": false,
+      "improvement": false
+    },
+    "api": {
+      "previous_percent": null,
+      "current_percent": 93.25,
+      "delta_percentage_points": null,
+      "target_percent": 70.0,
+      "regression": false,
+      "improvement": false
+    },
+    "repositories": {
+      "previous_percent": null,
+      "current_percent": 100.0,
+      "delta_percentage_points": null,
+      "target_percent": 70.0,
+      "regression": false,
+      "improvement": false
+    },
+    "runtime": {
+      "previous_percent": null,
+      "current_percent": 99.25,
+      "delta_percentage_points": null,
+      "target_percent": 70.0,
+      "regression": false,
+      "improvement": false
+    }
+  }
+}
