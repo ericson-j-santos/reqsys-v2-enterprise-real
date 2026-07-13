@@ -41,12 +41,34 @@ class ExecutivePromotionAdvisorPublicSmokeTests(unittest.TestCase):
         self.assertEqual(evidence["status"], "failed")
         self.assertIn("production_blocker_disabled", evidence["errors"])
 
+    @patch("scripts.smoke_executive_promotion_advisor_public_url.fetch_text")
+    def test_resolves_github_pages_ops_dashboard_paths(self, fetch_text):
+        fetch_text.side_effect = self.responses()
+        evidence = smoke("https://example.test/project/", "github-pages")
+
+        self.assertEqual(evidence["status"], "passed")
+        self.assertEqual(
+            evidence["resolved_urls"]["dashboard"],
+            "https://example.test/project/ops-dashboard/",
+        )
+        self.assertEqual(
+            evidence["resolved_urls"]["contract"],
+            "https://example.test/project/ops-dashboard/data/runtime-executive-index.json",
+        )
+        self.assertEqual(
+            [call.args[0] for call in fetch_text.call_args_list],
+            [
+                "https://example.test/project/ops-dashboard/",
+                "https://example.test/project/ops-dashboard/data/runtime-executive-index.json",
+            ],
+        )
+
     @patch("scripts.smoke_executive_promotion_advisor_public_url.time.sleep")
     @patch("scripts.smoke_executive_promotion_advisor_public_url.urllib.request.urlopen")
     def test_retries_transient_publication_failure(self, urlopen_mock, sleep_mock):
         response = MagicMock()
         response.__enter__.return_value.read.return_value = b"published"
-        urlopen_mock.side_effect = [urllib.error.URLError("not propagated"), response]
+        urlopen_mock.side_effect = [urllib.error.URLError("temporary unavailability"), response]
 
         content = fetch_text(
             "https://example.test/data/runtime-executive-index.json",
