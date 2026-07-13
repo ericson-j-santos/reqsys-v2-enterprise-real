@@ -26,19 +26,14 @@ def fetch_text(
         raise ValueError("retry_delay não pode ser negativo")
 
     request = urllib.request.Request(url, headers={"User-Agent": "ReqSys-Advisor-Smoke/1.0"})
-    last_error: BaseException | None = None
-
     for attempt in range(1, attempts + 1):
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 return response.read().decode("utf-8")
         except (OSError, urllib.error.URLError, UnicodeDecodeError) as exc:
-            last_error = exc
             if attempt == attempts:
                 raise
             time.sleep(retry_delay)
-
-    raise RuntimeError(f"Falha inesperada ao consultar {url}: {last_error}")
 
 
 def fetch_first(
