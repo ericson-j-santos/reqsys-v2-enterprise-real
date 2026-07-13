@@ -1,0 +1,95 @@
+name: Executive Final Sync History Public Smoke Trend Sync
+
+on:
+  workflow_run:
+    workflows:
+      - Executive Final Sync History Public Smoke Trend Dashboard
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente governado
+        required: true
+        type: choice
+        options: [dev, stg, prod]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: executive-final-sync-history-public-smoke-trend-sync-${{ github.event.inputs.environment || 'post-dashboard' }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/smoke_executive_final_sync_history_public_smoke_trend_sync.py
+          python -m unittest tests/test_smoke_executive_final_sync_history_public_smoke_trend_sync.py
+
+      - name: Resolve environment
+        id: env
+        shell: bash
+        run: |
+          ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
+          case "$ENVIRONMENT" in dev|stg|prod) ;; *) exit 1 ;; esac
+          echo "value=$ENVIRONMENT" >> "$GITHUB_OUTPUT"
+
+      - name: Download canonical dashboard artifact
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: executive-final-sync-history-public-smoke-trend-dashboard.yml
+          workflow_conclusion: success
+          branch: main
+          name: ops-dashboard-static
+          path: artifacts/dashboard
+          if_no_artifact_found: fail
+
+      - name: Download consolidated state artifact
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: executive-final-sync-history-public-smoke-trend-state.yml
+          workflow_conclusion: success
+          branch: main
+          name: executive-final-sync-history-public-smoke-trend-state
+          path: artifacts/state
+          if_no_artifact_found: fail
+
+      - name: Download previous history when available
+        continue-on-error: true
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: executive-final-sync-history-public-smoke-trend-sync.yml
+          workflow_conclusion: success
+          branch: main
+          name: executive-final-sync-history-public-smoke-trend-sync-${{ steps.env.outputs.value }}
+          path: artifacts/previous
+          if_no_artifact_found: ignore
+
+      - name: Locate inputs and execute smoke
+        shell: bash
+        run: |
+          DASHBOARD=$(find artifacts/dashboard -name index.html -print -quit)
+          RUNTIME=$(find artifacts/state -name '*runtime*executive*index*.json' -o -name 'runtime-executive-index.json' | head -n1)
+          BRIEF=$(find artifacts/state -name '*executive*brief*.json' -o -name 'executive-brief.json' | head -n1)
+          test -n "$DASHBOARD" && test -n "$RUNTIME" && test -n "$BRIEF"
+          HISTORY=$(find artifacts/previous -name 'history.json' -print -quit 2>/dev/null || true)
+          mkdir -p evidence
+          ARGS=(--dashboard "$DASHBOARD" --runtime "$RUNTIME" --brief "$BRIEF" --environment "${{ steps.env.outputs.value }}" --evidence-out evidence/evidence.json --history-out evidence/history.json)
+          if [ -n "$HISTORY" ]; then ARGS+=(--history "$HISTORY"); fi
+          python scripts/smoke_executive_final_sync_history_public_smoke_trend_sync.py "${ARGS[@]}"
+
+      - name: Upload synchronized evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-final-sync-history-public-smoke-trend-sync-${{ steps.env.outputs.value }}
+          path: evidence/
+          retention-days: 90
