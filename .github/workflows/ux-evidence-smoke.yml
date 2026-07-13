@@ -52,7 +52,7 @@ jobs:
       - name: Executar smoke UX
         env:
           E2E_BASE_URL: http://127.0.0.1:8084
-        run: npx playwright test tests/e2e/ux-evidence.spec.js --project=chromium --reporter=line
+        run: npx playwright test tests/e2e/ux-evidence.spec.js --reporter=line
 
       - name: Publicar evidências UX
         if: always()
