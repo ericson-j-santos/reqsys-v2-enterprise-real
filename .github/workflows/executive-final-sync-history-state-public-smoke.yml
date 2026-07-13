@@ -1,0 +1,134 @@
+name: Executive Final Sync History State Public Smoke
+
+on:
+  workflow_run:
+    workflows:
+      - Executive Final Sync History State Dashboard
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente público validado
+        required: true
+        default: dev
+        type: choice
+        options: [dev, stg, prod]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: executive-final-sync-history-state-public-smoke-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  smoke-public:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/smoke_executive_final_sync_history_state_public.py
+          python -m unittest tests/test_smoke_executive_final_sync_history_state_public.py
+
+      - name: Download canonical dashboard
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: executive-final-sync-history-state-dashboard.yml
+          name: ops-dashboard-static
+          path: input/dashboard
+          workflow_conclusion: success
+          branch: main
+          if_no_artifact_found: fail
+
+      - name: Download final synchronized state
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: executive-final-sync-history-state.yml
+          name: executive-final-sync-history-state
+          path: input/state
+          workflow_conclusion: success
+          branch: main
+          if_no_artifact_found: fail
+
+      - name: Download previous environment history
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          workflow: executive-final-sync-history-state-public-smoke.yml
+          name: executive-final-sync-history-state-public-history-${{ env.ENVIRONMENT }}
+          path: input/history
+          workflow_conclusion: success
+          branch: main
+          if_no_artifact_found: ignore
+
+      - name: Resolve contracts and history
+        run: |
+          set -euo pipefail
+          mkdir -p output/evidence output/history
+          html=$(find input/dashboard -type f -name 'index.html' | head -n 1)
+          runtime=$(find input/dashboard input/state -type f -name 'runtime-executive-index.json' | head -n 1)
+          brief=$(find input/state -type f -name 'executive-brief.json' | head -n 1)
+          test -n "$html"
+          test -n "$runtime"
+          test -n "$brief"
+          cp "$html" output/index.html
+          cp "$runtime" output/runtime-executive-index.json
+          cp "$brief" output/executive-brief.json
+          previous=$(find input/history -type f -name '*history*.json' 2>/dev/null | head -n 1 || true)
+          if [ -n "$previous" ]; then
+            cp "$previous" output/history/history.json
+          else
+            echo '{}' > output/history/history.json
+          fi
+
+      - name: Execute public smoke
+        run: |
+          python scripts/smoke_executive_final_sync_history_state_public.py \
+            --html output/index.html \
+            --runtime-index output/runtime-executive-index.json \
+            --executive-brief output/executive-brief.json \
+            --environment "$ENVIRONMENT" \
+            --history output/history/history.json \
+            --evidence output/evidence/evidence.json
+
+      - name: Validate non-blocking guardrails
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          evidence = json.loads(Path('output/evidence/evidence.json').read_text())
+          assert evidence['mode'] == 'report-only'
+          assert evidence['production_blocker'] is False
+          assert evidence['human_approval_required'] is True
+          PY
+
+      - name: Publish smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-final-sync-history-state-public-smoke-${{ env.ENVIRONMENT }}
+          path: output/evidence
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Publish environment history
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-final-sync-history-state-public-history-${{ env.ENVIRONMENT }}
+          path: output/history
+          retention-days: 90
+          if-no-files-found: error
