@@ -32,6 +32,7 @@ def fetch_text(
                 return response.read().decode("utf-8")
         except (OSError, urllib.error.URLError, UnicodeDecodeError) as exc:
             if attempt == attempts:
+                exc.add_note(f"Falha após {attempts} tentativas para {url}")
                 raise
             time.sleep(retry_delay)
 

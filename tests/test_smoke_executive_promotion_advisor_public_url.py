@@ -68,7 +68,7 @@ class ExecutivePromotionAdvisorPublicSmokeTests(unittest.TestCase):
     def test_retries_transient_publication_failure(self, urlopen_mock, sleep_mock):
         response = MagicMock()
         response.__enter__.return_value.read.return_value = b"published"
-        urlopen_mock.side_effect = [urllib.error.URLError("not propagated"), response]
+        urlopen_mock.side_effect = [urllib.error.URLError("temporary unavailability"), response]
 
         content = fetch_text(
             "https://example.test/data/runtime-executive-index.json",
