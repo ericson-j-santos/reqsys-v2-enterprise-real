@@ -84,7 +84,7 @@ def smoke(base_url: str, environment: str, timeout: float = 15.0) -> dict[str, A
         }
         if not errors:
             return result
-        if all(checks[name] for name in LOCATION_DISCOVERY_CHECKS):
+        if all(checks.get(name, False) for name in LOCATION_DISCOVERY_CHECKS):
             return result
         if best_result is None or len(errors) < len(best_result["errors"]):
             best_result = result

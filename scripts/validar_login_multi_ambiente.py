@@ -77,7 +77,7 @@ def _probe_demo_login(api_url: str, *, timeout: float, expect_allowed: bool) -> 
     return LoginProbeResult("demo_login", ok, status, detail, has_token)
 
 
-def _resolve_expected_demo_login_state(app_env: str, azure_result: dict[str, Any]) -> tuple[bool, str | None]:
+def _resolve_demo_login_config(app_env: str, azure_result: dict[str, Any]) -> tuple[bool, str | None]:
     default_expected = app_env == "development"
     azure_demo_enabled = azure_result.get("data", {}).get("demo_login_enabled")
     if isinstance(azure_demo_enabled, bool):
@@ -117,7 +117,7 @@ def validate_environment_login(
         checks["azure_config"] = {"success": False, "errors": [str(exc)]}
         errors.append(f"azure_config: {exc}")
 
-    expect_demo_allowed, demo_login_warning = _resolve_expected_demo_login_state(
+    expect_demo_allowed, demo_login_warning = _resolve_demo_login_config(
         app_env,
         checks.get("azure_config", {}),
     )
