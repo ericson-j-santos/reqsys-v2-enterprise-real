@@ -47,6 +47,21 @@ Adicionar ao ReqSys um fluxo de login hibrido que mantenha Microsoft Entra ID co
 - O login por certificado fica desligado por padrao.
 - Em producao, se `CERT_LOGIN_ENABLED=true`, `CERT_TRUST_STORE_PATH` e obrigatorio.
 - Microsoft Entra ID continua suportado e pode ser usado com Certificate-Based Authentication quando o tenant tiver essa politica.
+- Decisao de rollout: Microsoft Entra CBA e o caminho primario para certificado digital corporativo; ICP-Brasil nativo entra em piloto logo depois.
+- Opcoes de login devem permanecer ativas como fallback sempre que o ambiente permitir: Microsoft/Entra, certificado nativo e, apenas fora de producao, login demo.
+- mTLS fica como fallback de arquitetura de borda para cenarios em que o agente local/Web PKI nao for aceitavel ou a politica exigir certificado no handshake TLS.
+
+## Politica de fallback
+
+| Provider | Ambiente | Papel | Condicao de ativacao |
+| --- | --- | --- | --- |
+| Microsoft Entra ID | Homologacao/producao | Primario e fallback universal | `AZURE_TENANT_ID` e `AZURE_CLIENT_ID` configurados |
+| Microsoft Entra CBA | Homologacao/producao | Primario para certificado corporativo | Politica CBA configurada no tenant Entra |
+| Certificado nativo ICP-Brasil | Homologacao/piloto/producao controlada | Fallback e trilha brasileira nativa | `CERT_LOGIN_ENABLED=true`, trust store e agente local/Web PKI |
+| mTLS no gateway | Piloto especializado | Contingencia de borda | Gateway com validacao de certificado cliente e CRL |
+| Login demo | Desenvolvimento/testes | Conveniencia local | `ALLOW_DEMO_LOGIN=true` e ambiente nao produtivo |
+
+Regra operacional: nunca ativar uma opcao nova removendo a anterior no mesmo deploy. Primeiro habilita, mede auditoria, valida suporte e so depois decide se muda prioridade visual ou politica de acesso.
 
 ## Pendencias para producao
 
@@ -80,17 +95,20 @@ Adicionar ao ReqSys um fluxo de login hibrido que mantenha Microsoft Entra ID co
    - rodar testes automatizados do servico e endpoints;
    - validar UI sem agente local.
 2. Homologacao:
+   - manter Microsoft Entra ID habilitado;
+   - ativar Microsoft Entra CBA como caminho primario de certificado corporativo;
    - habilitar `CERT_LOGIN_ENABLED=true`;
    - configurar trust store de homologacao;
    - integrar agente local/Web PKI;
    - testar A1, A3 e erro de certificado expirado.
 3. Producao piloto:
+   - manter Microsoft Entra ID e Entra CBA ativos;
    - liberar para grupo pequeno;
    - monitorar eventos `LOGIN_CERTIFICADO`;
    - comparar identidade extraida com cadastro corporativo.
 4. Producao geral:
    - ativar para todos os perfis aprovados;
-   - manter Entra ID como fallback;
+   - manter Entra ID como fallback permanente;
    - revisar auditoria e revogacao.
 
 ## Checklist de ativacao por ambiente
@@ -104,6 +122,8 @@ Adicionar ao ReqSys um fluxo de login hibrido que mantenha Microsoft Entra ID co
 
 ### Homologacao
 
+- Manter Microsoft Entra ID habilitado no app registration existente.
+- Configurar Microsoft Entra CBA no tenant como primeira experiencia de certificado digital.
 - Criar diretorio seguro para trust store, por exemplo `/app/config/cert-trust`.
 - Instalar certificados CA de homologacao no `CERT_TRUST_STORE_PATH`.
 - Definir:
@@ -118,6 +138,8 @@ Adicionar ao ReqSys um fluxo de login hibrido que mantenha Microsoft Entra ID co
 
 ### Producao
 
+- Manter Microsoft Entra ID habilitado como fallback permanente.
+- Manter Microsoft Entra CBA como caminho primario para certificado corporativo.
 - Repetir trust store com CAs produtivas aprovadas.
 - Validar politica de revogacao ICP-Brasil/corporativa antes de ampliar o publico.
 - Ativar `CERT_LOGIN_ENABLED=true` apenas depois de existir `CERT_TRUST_STORE_PATH`.
