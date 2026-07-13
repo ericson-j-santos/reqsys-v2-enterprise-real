@@ -45,6 +45,18 @@ def _nome_from_email(email: str) -> str:
     return ' '.join(p.capitalize() for p in parts) if len(parts) > 1 else prefix.capitalize()
 
 
+def _demo_login_is_enabled() -> bool:
+    """Resolve o gate pelo ambiente público efetivo, preservando bloqueio em produção.
+
+    APP_ENV pode permanecer ``production`` em imagens otimizadas de DEV/STG. O ambiente
+    funcional exposto deve ser determinado por PUBLIC_ENVIRONMENT quando configurado.
+    """
+    return bool(
+        settings.allow_demo_login
+        and settings.normalized_public_environment != 'producao'
+    )
+
+
 # ─── Azure AD (Microsoft Entra ID) ────────────────────────────────────────────
 
 class AzureLoginInput(BaseModel):
@@ -200,7 +212,7 @@ def auth_config():
         'azure_client_id': settings.azure_client_id or None,
         'certificate_enabled': bool(settings.certificate_login_enabled),
         'certificate_mode': 'challenge-signature',
-        'demo_login_enabled': bool(settings.allow_demo_login and not settings.is_production),
+        'demo_login_enabled': _demo_login_is_enabled(),
         'environment': settings.normalized_public_environment,
         'expected_redirect_uri': redirect_uri or None,
         'auth_status': 'ready' if azure_enabled else 'misconfigured',
@@ -218,9 +230,14 @@ class LoginInput(BaseModel):
 
 @router.post('/login')
 def login(body: LoginInput, request: Request, db: Session = Depends(get_db)):
-    """Login demo — permitido apenas quando ALLOW_DEMO_LOGIN=true e fora de produção."""
-    if settings.is_production or not settings.allow_demo_login:
-        logger.warning('demo_login_bloqueado ip=%s environment=%s', request.client.host if request.client else '?', settings.app_environment)
+    """Login demo — permitido quando ALLOW_DEMO_LOGIN=true e o ambiente público não é produção."""
+    if not _demo_login_is_enabled():
+        logger.warning(
+            'demo_login_bloqueado ip=%s app_environment=%s public_environment=%s',
+            request.client.host if request.client else '?',
+            settings.app_environment,
+            settings.normalized_public_environment,
+        )
         raise HTTPException(403, 'Login demo desabilitado neste ambiente')
 
     email = body.email
