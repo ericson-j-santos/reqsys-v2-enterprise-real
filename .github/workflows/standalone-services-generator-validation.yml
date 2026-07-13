@@ -1,0 +1,95 @@
+name: Standalone Services Generator Validation
+
+on:
+  pull_request:
+    paths:
+      - "tools/geradores/gerar_servicos_email_teams.py"
+      - "docs/servicos/gerador-email-teams.md"
+      - ".github/workflows/standalone-services-generator-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: standalone-services-generator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-generator:
+    name: Validate standalone services generator
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Precheck dry-run
+        run: |
+          set -euo pipefail
+          python tools/geradores/gerar_servicos_email_teams.py --dry-run
+
+      - name: Generate standalone services and run tests
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/reqsys-standalone-services
+          python tools/geradores/gerar_servicos_email_teams.py \
+            --output /tmp/reqsys-standalone-services \
+            --force \
+            --run-tests
+
+      - name: Validate generated contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          root = Path('/tmp/reqsys-standalone-services')
+          expected = [
+              root / 'email-report-service' / 'README.md',
+              root / 'email-report-service' / 'pyproject.toml',
+              root / 'email-report-service' / 'src' / 'service.py',
+              root / 'email-report-service' / 'tests' / 'test_service.py',
+              root / 'teams-gateway-service' / 'README.md',
+              root / 'teams-gateway-service' / 'pyproject.toml',
+              root / 'teams-gateway-service' / 'src' / 'service.py',
+              root / 'teams-gateway-service' / 'tests' / 'test_service.py',
+              root / 'VALIDATION.md',
+          ]
+          missing = [str(path) for path in expected if not path.exists()]
+          if missing:
+              raise SystemExit('Arquivos esperados não gerados: ' + ', '.join(missing))
+
+          email_service = (root / 'email-report-service' / 'src' / 'service.py').read_text(encoding='utf-8')
+          teams_service = (root / 'teams-gateway-service' / 'src' / 'service.py').read_text(encoding='utf-8')
+
+          checks = {
+              'email_correlation_id': 'X-Correlation-ID' in email_service,
+              'email_dry_run': 'dry_run' in email_service,
+              'teams_fallback': 'fallback_usado' in teams_service,
+              'teams_webhook': 'webhook_payload' in teams_service,
+              'teams_token_sanitization': 'access_token' in teams_service and 'provider_response' in teams_service,
+          }
+          failed = [name for name, ok in checks.items() if not ok]
+          if failed:
+              raise SystemExit('Contratos gerados inválidos: ' + ', '.join(failed))
+
+          print('Contrato validado: 9 arquivos, email-report-service e teams-gateway-service íntegros.')
+          PY
+
+      - name: Upload generated services artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: standalone-services-generated
+          path: /tmp/reqsys-standalone-services
+          if-no-files-found: error
