@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from scripts.evaluate_domain_coverage import evaluate
 
 
@@ -74,3 +77,33 @@ def test_improvement_passes_and_reports_target_state() -> None:
     assert report["status"] == "passed"
     assert report["domains"]["core"]["target_met"] is True
     assert report["domains"]["services"]["target_met"] is True
+
+
+def test_committed_policy_maps_runtime_to_measurable_backend_files() -> None:
+    policy = json.loads(
+        Path("config/domain-coverage-policy.json").read_text(encoding="utf-8")
+    )
+    coverage = {
+        "files": {
+            "backend/app/core/config.py": {
+                "summary": {"covered_lines": 10, "num_statements": 10}
+            },
+            "backend/app/services/actions_runtime_monitor.py": {
+                "summary": {"covered_lines": 10, "num_statements": 10}
+            },
+            "backend/app/api/actions_runtime_center.py": {
+                "summary": {"covered_lines": 10, "num_statements": 10}
+            },
+            "backend/app/repositories/requisito_repository.py": {
+                "summary": {"covered_lines": 10, "num_statements": 10}
+            },
+        }
+    }
+
+    report = evaluate(coverage, policy)
+
+    assert report["invalid_domains"] == []
+    assert report["domains"]["runtime"]["statements"] == 10
+    assert report["domains"]["runtime"]["matched_files"] == [
+        "app/services/actions_runtime_monitor.py"
+    ]
