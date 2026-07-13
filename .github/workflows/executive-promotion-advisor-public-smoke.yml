@@ -47,7 +47,9 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile scripts/smoke_executive_promotion_advisor_public_url.py
-          python -m unittest tests/test_smoke_executive_promotion_advisor_public_url.py
+          python -m unittest \
+            tests/test_smoke_executive_promotion_advisor_public_url.py \
+            tests/test_executive_promotion_advisor_public_smoke_workflow.py
 
       - name: Resolve public target
         run: |
