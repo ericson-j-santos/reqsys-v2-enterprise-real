@@ -11,6 +11,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+LOCATION_DISCOVERY_CHECKS = (
+    "dashboard_card_present",
+    "render_hook_present",
+    "contract_card_present",
+)
+
 
 def fetch_text(url: str, timeout: float = 15.0) -> str:
     request = urllib.request.Request(url, headers={"User-Agent": "ReqSys-Advisor-Smoke/1.0"})
@@ -57,11 +63,6 @@ def smoke(base_url: str, environment: str, timeout: float = 15.0) -> dict[str, A
             "human_approval_required": card.get("human_approval_required") is True,
         }
         errors.extend(name for name, passed in checks.items() if not passed)
-        location_checks = (
-            "dashboard_card_present",
-            "render_hook_present",
-            "contract_card_present",
-        )
 
         result = {
             "schema_version": "1.0.0",
@@ -83,7 +84,7 @@ def smoke(base_url: str, environment: str, timeout: float = 15.0) -> dict[str, A
         }
         if not errors:
             return result
-        if all(checks[name] for name in location_checks):
+        if all(checks[name] for name in LOCATION_DISCOVERY_CHECKS):
             return result
         if best_result is None or len(errors) < len(best_result["errors"]):
             best_result = result
