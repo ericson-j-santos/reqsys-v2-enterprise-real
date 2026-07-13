@@ -25,7 +25,11 @@ jobs:
   smoke:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success')
+      (
+        github.event_name == 'deployment_status' &&
+        github.event.deployment_status.state == 'success' &&
+        github.event.deployment.environment != 'github-pages'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 6
     env:
@@ -51,7 +55,7 @@ jobs:
           test -n "$TARGET_ENVIRONMENT"
           test -n "$TARGET_URL"
           case "$TARGET_ENVIRONMENT" in
-            dev|development|stg|staging|prod|production|github-pages) ;;
+            dev|development|stg|staging|prod|production) ;;
             *) echo "Ambiente não governado: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
           esac
 
