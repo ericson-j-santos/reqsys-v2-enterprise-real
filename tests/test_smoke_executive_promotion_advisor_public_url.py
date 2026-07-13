@@ -40,6 +40,28 @@ class ExecutivePromotionAdvisorPublicSmokeTests(unittest.TestCase):
         self.assertEqual(evidence["status"], "failed")
         self.assertIn("production_blocker_disabled", evidence["errors"])
 
+    @patch("scripts.smoke_executive_promotion_advisor_public_url.fetch_text")
+    def test_resolves_github_pages_ops_dashboard_paths(self, fetch_text):
+        fetch_text.side_effect = self.responses()
+        evidence = smoke("https://example.test/project/", "github-pages")
+
+        self.assertEqual(evidence["status"], "passed")
+        self.assertEqual(
+            evidence["resolved_urls"]["dashboard"],
+            "https://example.test/project/ops-dashboard/",
+        )
+        self.assertEqual(
+            evidence["resolved_urls"]["contract"],
+            "https://example.test/project/ops-dashboard/data/runtime-executive-index.json",
+        )
+        self.assertEqual(
+            [call.args[0] for call in fetch_text.call_args_list],
+            [
+                "https://example.test/project/ops-dashboard/",
+                "https://example.test/project/ops-dashboard/data/runtime-executive-index.json",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
