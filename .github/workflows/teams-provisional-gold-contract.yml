@@ -1,0 +1,49 @@
+name: Teams Provisional Gold Contract
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/teams-evidence-acceleration.yml
+      - .github/workflows/teams-provisional-gold-certification.yml
+      - .github/workflows/teams-provisional-gold-contract.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar política provisória e aceleração
+        shell: bash
+        run: |
+          set -euo pipefail
+          provisional='.github/workflows/teams-provisional-gold-certification.yml'
+          accelerator='.github/workflows/teams-evidence-acceleration.yml'
+          test -s "$provisional"
+          test -s "$accelerator"
+          markers=(
+            'MIN_OBSERVATION_DAYS: "7"'
+            'MIN_SUCCESS_PERCENT: "99.0"'
+            'MIN_DELIVERY_RUNS: "20"'
+            'MIN_MONITOR_RUNS: "20"'
+            'provisional_gold'
+            'provisional_suspended'
+            'retention-days: 365'
+            'teams-commit-notification.yml'
+            'teams-dashboard-availability-monitor.yml'
+            'definitive_certification'
+          )
+          for marker in "${markers[@]}"; do
+            grep -Fq "$marker" "$provisional" || { echo "::error::Marcador ausente: $marker"; exit 1; }
+          done
+          grep -Fq 'ACCELERATION_END_UTC: "2026-07-22T00:00:00Z"' "$accelerator"
+          grep -Fq 'actions: write' "$accelerator"
+          grep -Fq 'gh workflow run teams-dashboard-availability-monitor.yml' "$accelerator"
+          grep -Fq 'gh workflow run teams-commit-notification.yml' "$accelerator"
+          ! grep -Fq 'TEAMS_WEBHOOK_URL:' "$provisional"
+          ! grep -Fq 'TEAMS_WEBHOOK_URL:' "$accelerator"
+          echo 'Contrato provisório e acelerador validados.'
