@@ -1,0 +1,70 @@
+name: Teams Public Dashboard Smoke Contract
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/teams-public-dashboard-smoke.yml
+      - .github/workflows/teams-public-dashboard-smoke-contract.yml
+      - docs/teams-certification-public-status.md
+      - .github/workflows/teams-notification-dashboard.yml
+      - ops-dashboard/teams-notification/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validar contrato do status público
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar workflow, badge e segurança
+        shell: bash
+        run: |
+          set -euo pipefail
+          smoke='.github/workflows/teams-public-dashboard-smoke.yml'
+          docs='docs/teams-certification-public-status.md'
+
+          test -s "$smoke"
+          test -s "$docs"
+
+          markers=(
+            'Teams Public Dashboard Smoke'
+            'cron: "25 * * * *"'
+            'MAX_DATA_AGE_HOURS: "48"'
+            'data.json'
+            'certification-status.json'
+            'evidence_sha256'
+            'Microsoft Teams'
+            'raise SystemExit'
+          )
+          for marker in "${markers[@]}"; do
+            grep -Fq "$marker" "$smoke" || {
+              echo "::error title=Contrato público incompleto::Marcador ausente: $marker"
+              exit 1
+            }
+          done
+
+          grep -Fq 'actions/workflows/teams-public-dashboard-smoke.yml/badge.svg?branch=main' "$docs"
+          grep -Fq 'https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/' "$docs"
+          grep -Fq 'certification-status.json' "$docs"
+          grep -Fq 'gold_certified' "$docs"
+          grep -Fq 'provisional_gold' "$docs"
+
+          ! grep -R -E 'TEAMS_WEBHOOK_URL:|AZURE_CLIENT_SECRET:|ghp_[A-Za-z0-9]+' "$smoke" "$docs"
+
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/teams-public-dashboard-smoke.yml').read_text(encoding='utf-8')
+          required_permissions = ['permissions:', 'contents: read']
+          missing = [item for item in required_permissions if item not in workflow]
+          if missing:
+              raise SystemExit(f'Permissões obrigatórias ausentes: {missing}')
+          if 'issues: write' in workflow or 'actions: write' in workflow:
+              raise SystemExit('Smoke público possui permissões de escrita desnecessárias.')
+          print('Contrato do status público validado.')
+          PY
