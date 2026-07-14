@@ -1,0 +1,66 @@
+name: UX Evidence Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/ux-evidence-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux-evidence-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ux-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Compilar frontend
+        run: npm run build
+
+      - name: Iniciar preview
+        run: |
+          nohup npm run preview -- --host 127.0.0.1 --port 8084 > /tmp/reqsys-ux-preview.log 2>&1 &
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:8084/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/reqsys-ux-preview.log
+          exit 1
+
+      - name: Executar smoke UX
+        env:
+          E2E_BASE_URL: http://127.0.0.1:8084
+        run: npx playwright test tests/e2e/ux-evidence.spec.js --reporter=line
+
+      - name: Publicar evidências UX
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-evidence-${{ github.sha }}
+          path: |
+            frontend/test-results
+            frontend/playwright-report
+          if-no-files-found: warn
+          retention-days: 90
