@@ -1,0 +1,55 @@
+mcs.metadata:
+  componentName: ResumoRelease
+  description: Consolidar evidencias e gerar recomendacao go/no-go de release, sem decidir automaticamente.
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    displayName: Resumo de release
+    triggerQueries:
+      - gerar go ou no go
+      - resumo executivo do release
+      - posso liberar essa release
+      - status de release
+
+  actions:
+    - kind: Question
+      id: question_versao
+      variable: Topic.Versao
+      prompt: Qual a versao do release?
+      entity: StringPrebuiltEntity
+
+    - kind: ConditionGroup
+      id: conditionGroup_rbac
+      conditions:
+        - id: conditionItem_rbac
+          condition: =User.Papel <> "ReqSys Administrador Low-Code"
+          actions:
+            - kind: SendActivity
+              id: sendMessage_unauthorized
+              activity: Acao nao autorizada. Papel minimo exigido: ReqSys Administrador Low-Code.
+
+            - kind: EndDialog
+              id: endDialog_unauthorized
+
+      elseActions:
+        - kind: Question
+          id: question_confirmacao
+          variable: Topic.Confirmacao
+          prompt: Confirma a execucao de resumo de release?
+          entity: BooleanPrebuiltEntity
+
+        - kind: InvokeFlowAction
+          id: invokeFlow_resumo_release
+          flowId: 768fde7b-db2e-500f-8be1-7b4cbf1ed31e
+          flow: reqsys_ReqSysReleaseGovernance
+      inputs:
+            versao: =Topic.Versao
+            correlation_id: =System.Conversation.Id
+          output:
+            resultado: Topic.ResultadoFlow
+
+        - kind: SendActivity
+          id: sendMessage_success
+          activity: Recomendacao gerada para {Topic.Versao}. Decisao final permanece humana. Correlation-Id: {System.Conversation.Id}
