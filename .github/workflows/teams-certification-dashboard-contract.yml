@@ -1,0 +1,55 @@
+name: Teams Certification Dashboard Contract
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/teams-notification-dashboard.yml
+      - .github/workflows/teams-certification-dashboard-contract.yml
+      - ops-dashboard/teams-notification/index.html
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar contrato do dashboard de certificação
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow='.github/workflows/teams-notification-dashboard.yml'
+          html='ops-dashboard/teams-notification/index.html'
+          test -s "$workflow"
+          test -s "$html"
+          markers=(
+            'PROVISIONAL_DAYS: "7"'
+            'STATUS_ISSUE_TITLE:'
+            'provisional_gold'
+            'quality_blocked'
+            'certification-status.json'
+            'sample_progress_percent'
+            'provisional_time_progress_percent'
+            'definitive_time_progress_percent'
+            'status_issue_url'
+            'issues: read'
+          )
+          for marker in "${markers[@]}"; do
+            grep -Fq "$marker" "$workflow" || { echo "::error::Marcador ausente no workflow: $marker"; exit 1; }
+          done
+          ui_markers=(
+            'OURO PROVISÓRIO'
+            'QUALIDADE BLOQUEADA'
+            'samplebar'
+            'provisionaleta'
+            'definitiveeta'
+            'abrir status operacional'
+          )
+          for marker in "${ui_markers[@]}"; do
+            grep -Fq "$marker" "$html" || { echo "::error::Marcador ausente na interface: $marker"; exit 1; }
+          done
+          ! grep -R "TEAMS_WEBHOOK_URL\|AZURE_CLIENT_SECRET" "$workflow" "$html"
+          echo 'Contrato do dashboard de certificação validado.'
