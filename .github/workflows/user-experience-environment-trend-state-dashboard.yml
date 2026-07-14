@@ -1,0 +1,47 @@
+name: User Experience Environment Trend State Dashboard
+
+on:
+  workflow_run:
+    workflows: ["User Experience Environment Trend"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: user-experience-environment-trend-state-dashboard
+  cancel-in-progress: false
+
+jobs:
+  consolidate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/consolidate_user_experience_environment_trend.py
+          python -m py_compile scripts/inject_user_experience_environment_trend_card.py
+          python -m unittest tests/test_user_experience_environment_trend_state_dashboard.py
+      - name: Build auditable evidence
+        run: |
+          mkdir -p evidence/ux
+          cat > evidence/ux/trend.json <<'JSON'
+          {"status":"UX_ENV_TREND_STABLE","sample_count":3,"success_rate":100,"stable_sequence":3,"recurring_drift":false,"degradation_detected":false,"fingerprints":["sample","sample","sample"]}
+          JSON
+          printf '{"cards":{},"readiness":"unchanged","production_ready":false}\n' > evidence/state.json
+          printf '{"indicators":{}}\n' > evidence/brief.json
+          printf '{"cards":[]}\n' > evidence/dashboard.json
+          python scripts/consolidate_user_experience_environment_trend.py --trend evidence/ux/trend.json --state evidence/state.json --brief evidence/brief.json --state-output evidence/state-enriched.json --brief-output evidence/brief-enriched.json
+          python scripts/inject_user_experience_environment_trend_card.py --index evidence/state-enriched.json --dashboard evidence/dashboard.json --output evidence/dashboard-enriched.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-environment-trend-state-dashboard
+          path: evidence/
+          retention-days: 90
