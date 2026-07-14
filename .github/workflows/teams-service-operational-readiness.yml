@@ -69,7 +69,7 @@ jobs:
           grep -Fq 'upload-artifact' .github/workflows/teams-notification-observability.yml
           grep -Fq 'SLO_TARGET' .github/workflows/teams-notification-slo.yml
           grep -Fq 'deploy-pages' .github/workflows/teams-notification-dashboard.yml
-          grep -Fq 'MAX_AGE_HOURS' .github/workflows/teams-dashboard-availability-monitor.yml
+          grep -Fq 'MAX_DATA_AGE_HOURS' .github/workflows/teams-dashboard-availability-monitor.yml
           ! grep -R --include='*.json' --include='*.html' -E 'https://[^ ]*(webhook|logic\.azure|powerautomate)' ops-dashboard/teams-notification
 
       - name: Registrar evidência
