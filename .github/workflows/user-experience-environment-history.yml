@@ -1,0 +1,46 @@
+name: User Experience Environment History
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/smoke_user_experience_environments.py'
+      - 'tests/test_smoke_user_experience_environments.py'
+      - '.github/workflows/user-experience-environment-history.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: user-experience-environment-history-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/smoke_user_experience_environments.py
+          python -m unittest tests/test_smoke_user_experience_environments.py
+
+      - name: Execute DEV STG PROD report-only smoke
+        run: |
+          python scripts/smoke_user_experience_environments.py \
+            --output evidence/ux/user-experience-environment-history.json \
+            --timeout 15
+
+      - name: Publish auditable evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-environment-history-${{ github.sha }}
+          path: evidence/ux/user-experience-environment-history.json
+          retention-days: 90
