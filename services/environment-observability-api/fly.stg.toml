@@ -6,6 +6,8 @@ primary_region = "gru"
 
 [env]
   APP_ENV = "staging"
+  PUBLIC_ENVIRONMENT = "staging"
+  API_PUBLIC_URL = "https://reqsys-env-api-stg.fly.dev"
   SERVICE_NAME = "environment-observability-api"
   SERVICE_VERSION = "0.1.0"
   LOG_LEVEL = "INFO"
