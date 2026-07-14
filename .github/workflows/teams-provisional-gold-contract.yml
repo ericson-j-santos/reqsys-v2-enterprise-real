@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Validar política provisória e aceleração
+      - name: Validar política provisória e aceleração adaptativa
         shell: bash
         run: |
           set -euo pipefail
@@ -40,10 +40,21 @@ jobs:
           for marker in "${markers[@]}"; do
             grep -Fq "$marker" "$provisional" || { echo "::error::Marcador ausente: $marker"; exit 1; }
           done
-          grep -Fq 'ACCELERATION_END_UTC: "2026-07-22T00:00:00Z"' "$accelerator"
-          grep -Fq 'actions: write' "$accelerator"
-          grep -Fq 'gh workflow run teams-dashboard-availability-monitor.yml' "$accelerator"
-          grep -Fq 'gh workflow run teams-commit-notification.yml' "$accelerator"
+          accelerator_markers=(
+            'ACCELERATION_END_UTC: "2026-07-22T00:00:00Z"'
+            'MIN_DELIVERY_RUNS: "20"'
+            'MIN_MONITOR_RUNS: "20"'
+            'count_completed'
+            'delivery_count < MIN_DELIVERY_RUNS'
+            'monitor_count < MIN_MONITOR_RUNS'
+            'amostras mínimas concluídas'
+            'actions: write'
+            'gh workflow run "$MONITOR_WORKFLOW"'
+            'gh workflow run "$DELIVERY_WORKFLOW"'
+          )
+          for marker in "${accelerator_markers[@]}"; do
+            grep -Fq "$marker" "$accelerator" || { echo "::error::Acelerador incompleto: $marker"; exit 1; }
+          done
           ! grep -Fq 'TEAMS_WEBHOOK_URL:' "$provisional"
           ! grep -Fq 'TEAMS_WEBHOOK_URL:' "$accelerator"
-          echo 'Contrato provisório e acelerador validados.'
+          echo 'Contrato provisório e acelerador adaptativo validados.'
