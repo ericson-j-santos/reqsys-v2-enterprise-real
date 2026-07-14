@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: "0 12 * * 1"
   workflow_dispatch:
     inputs:
       message:
@@ -79,8 +81,9 @@ jobs:
           server_url = os.environ["SERVER_URL"]
           commit_url = f"{server_url}/{repository}/commit/{sha}"
           run_url = f"{server_url}/{repository}/actions/runs/{os.environ['RUN_ID']}"
+          event_name = os.environ["EVENT_NAME"]
 
-          if os.environ["EVENT_NAME"] == "push":
+          if event_name == "push":
               head = event.get("head_commit") or {}
               commit_message = str(head.get("message") or "Commit sem mensagem").splitlines()[0]
               author = (head.get("author") or {}).get("name") or os.environ["ACTOR"]
@@ -96,6 +99,15 @@ jobs:
                   f"Workflow: {run_url}"
               )
               title = "ReqSys — novo commit"
+          elif event_name == "schedule":
+              message = (
+                  f"Canário semanal da integração GitHub → Teams\n"
+                  f"Repositório: {repository}\n"
+                  f"Branch monitorada: main\n"
+                  f"Commit atual: {short_sha}\n"
+                  f"Workflow: {run_url}"
+              )
+              title = "ReqSys — canário Teams"
           else:
               manual = os.environ.get("MANUAL_MESSAGE", "").strip()
               message = manual or (
@@ -146,6 +158,7 @@ jobs:
           {
             echo "### Teams Commit Notification"
             echo "- Status: entregue/aceito"
+            echo "- Evento: ${{ github.event_name }}"
             echo "- HTTP: ${{ steps.notify.outputs.status_code }}"
             echo "- Correlation ID: ${{ steps.notify.outputs.correlation_id }}"
             echo "- Commit: ${{ github.sha }}"
