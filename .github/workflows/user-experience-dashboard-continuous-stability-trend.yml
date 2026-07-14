@@ -1,0 +1,49 @@
+name: User Experience Dashboard Continuous Stability Trend
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 7 * * *'
+  pull_request:
+    paths:
+      - 'scripts/build_user_experience_dashboard_continuous_stability_trend.py'
+      - 'tests/test_build_user_experience_dashboard_continuous_stability_trend.py'
+      - '.github/workflows/user-experience-dashboard-continuous-stability-trend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  consolidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: python -m py_compile scripts/build_user_experience_dashboard_continuous_stability_trend.py
+      - name: Test
+        run: python -m unittest tests/test_build_user_experience_dashboard_continuous_stability_trend.py
+      - name: Build governed evidence
+        run: |
+          mkdir -p build/ux-dashboard-continuous-stability
+          cat > build/ux-dashboard-continuous-stability/history.json <<'JSON'
+          {"samples": []}
+          JSON
+          cat > build/ux-dashboard-continuous-stability/state.json <<'JSON'
+          {"readiness":"UNCHANGED","production_ready":false}
+          JSON
+          cp build/ux-dashboard-continuous-stability/state.json build/ux-dashboard-continuous-stability/executive.json
+          python scripts/build_user_experience_dashboard_continuous_stability_trend.py \
+            --history build/ux-dashboard-continuous-stability/history.json \
+            --state build/ux-dashboard-continuous-stability/state.json \
+            --executive build/ux-dashboard-continuous-stability/executive.json \
+            --state-output build/ux-dashboard-continuous-stability/state-out.json \
+            --executive-output build/ux-dashboard-continuous-stability/executive-out.json \
+            --indicator-output build/ux-dashboard-continuous-stability/indicator.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-dashboard-continuous-stability-trend
+          path: build/ux-dashboard-continuous-stability
+          retention-days: 90
