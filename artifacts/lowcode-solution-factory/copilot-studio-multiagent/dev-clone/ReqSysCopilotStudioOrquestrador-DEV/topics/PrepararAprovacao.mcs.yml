@@ -41,13 +41,14 @@ beginDialog:
 
         - kind: InvokeFlowAction
           id: invokeFlow_preparar_aprovacao
+          flowId: 780422ae-8c74-57fc-8895-04f7f3513c33
           flow: reqsys_ReqSysPrepararAprovacao
-          input:
+      inputs:
             referencia: =Topic.Referencia
-            correlation_id: =System.ConversationId
+            correlation_id: =System.Conversation.Id
           output:
             resultado: Topic.ResultadoFlow
 
         - kind: SendActivity
           id: sendMessage_success
-          activity: Resumo preparado. Decisao final permanece humana. Correlation-Id: {System.ConversationId}
+          activity: Resumo preparado. Decisao final permanece humana. Correlation-Id: {System.Conversation.Id}

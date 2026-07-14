@@ -133,6 +133,8 @@ Assert-True "checker sarif present" ($checkerZipEntries -contains "2026071400574
 
 $devAgentPath = Join-Path $devClonePath "agent.mcs.yml"
 $devSettingsPath = Join-Path $devClonePath "settings.mcs.yml"
+$devApprovalTopicPath = Join-Path $devClonePath "topics/PrepararAprovacao.mcs.yml"
+$devReleaseTopicPath = Join-Path $devClonePath "topics/ResumoRelease.mcs.yml"
 $stgSettingsPath = Join-Path $stgClonePath "settings.mcs.yml"
 $devTopicFiles = @(Get-ChildItem (Join-Path $devClonePath "topics") -Filter "*.mcs.yml" -File)
 
@@ -142,6 +144,10 @@ Assert-True "STG settings metadata exists" (Test-Path $stgSettingsPath)
 Assert-Equal "DEV topic file count" $devTopicFiles.Count 17
 Assert-True "DEV clone documents multiagent orchestration" ((Get-Content -Raw $devAgentPath).Contains("orquestrador multiagente low-code"))
 Assert-True "DEV clone disables direct external writes" ((Get-Content -Raw $devAgentPath).Contains("Nunca execute escrita externa diretamente"))
+Assert-True "DEV approval topic preserves RBAC guard" ((Get-Content -Raw $devApprovalTopicPath).Contains("conditionGroup_rbac"))
+Assert-True "DEV approval topic preserves managed flow id" ((Get-Content -Raw $devApprovalTopicPath).Contains("780422ae-8c74-57fc-8895-04f7f3513c33"))
+Assert-True "DEV release topic preserves RBAC guard" ((Get-Content -Raw $devReleaseTopicPath).Contains("conditionGroup_rbac"))
+Assert-True "DEV release topic preserves managed flow id" ((Get-Content -Raw $devReleaseTopicPath).Contains("768fde7b-db2e-500f-8be1-7b4cbf1ed31e"))
 Assert-True "STG clone preserves GroupMembership" ((Get-Content -Raw $stgSettingsPath).Contains("accessControlPolicy: GroupMembership"))
 Assert-True "STG clone preserves Integrated authentication" ((Get-Content -Raw $stgSettingsPath).Contains("authenticationMode: Integrated"))
 
