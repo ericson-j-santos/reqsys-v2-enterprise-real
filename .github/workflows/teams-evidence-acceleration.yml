@@ -15,14 +15,18 @@ concurrency:
 
 jobs:
   accelerate:
-    name: Disparar evidências canônicas
+    name: Disparar evidências canônicas conforme necessidade
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       GH_TOKEN: ${{ github.token }}
       ACCELERATION_END_UTC: "2026-07-22T00:00:00Z"
+      MIN_DELIVERY_RUNS: "20"
+      MIN_MONITOR_RUNS: "20"
+      DELIVERY_WORKFLOW: teams-commit-notification.yml
+      MONITOR_WORKFLOW: teams-dashboard-availability-monitor.yml
     steps:
-      - name: Avaliar janela e disparar workflows
+      - name: Avaliar amostras e disparar apenas o necessário
         shell: bash
         run: |
           set -euo pipefail
@@ -30,23 +34,48 @@ jobs:
           end_epoch=$(date -u -d "$ACCELERATION_END_UTC" +%s)
           if (( now_epoch >= end_epoch )); then
             echo "### Aceleração encerrada" >> "$GITHUB_STEP_SUMMARY"
-            echo "Janela encerrada em $ACCELERATION_END_UTC; nenhuma evidência artificial foi criada." >> "$GITHUB_STEP_SUMMARY"
+            echo "Janela encerrada em $ACCELERATION_END_UTC; nenhum workflow foi disparado." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          gh workflow run teams-dashboard-availability-monitor.yml --ref main
+          count_completed() {
+            local workflow="$1"
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?status=completed&per_page=100" \
+              --jq '[.workflow_runs[] | select(.created_at >= "2026-07-14T00:00:00Z")] | length' \
+              | awk '{total += $1} END {print total + 0}'
+          }
+
+          delivery_count=$(count_completed "$DELIVERY_WORKFLOW")
+          monitor_count=$(count_completed "$MONITOR_WORKFLOW")
+          delivery="não necessário"
+          monitor="não necessário"
+
+          if (( monitor_count < MIN_MONITOR_RUNS )); then
+            gh workflow run "$MONITOR_WORKFLOW" --ref main
+            monitor="sim"
+          fi
+
           hour=$(date -u +%H)
-          if (( 10#$hour % 6 == 0 )); then
-            gh workflow run teams-commit-notification.yml --ref main -f message="Canário acelerado governado GitHub → Teams"
+          if (( delivery_count < MIN_DELIVERY_RUNS && 10#$hour % 6 == 0 )); then
+            gh workflow run "$DELIVERY_WORKFLOW" --ref main \
+              -f message="Canário acelerado governado GitHub → Teams"
             delivery="sim"
+          fi
+
+          if (( delivery_count >= MIN_DELIVERY_RUNS && monitor_count >= MIN_MONITOR_RUNS )); then
+            state="amostras mínimas concluídas; aguardando janela temporal de 7 dias"
           else
-            delivery="não"
+            state="coleta adaptativa em andamento"
           fi
 
           {
-            echo "### Aceleração de evidências"
-            echo "- Monitor canônico disparado: sim"
+            echo "### Aceleração adaptativa de evidências"
+            echo "- Entregas concluídas: ${delivery_count}/${MIN_DELIVERY_RUNS}"
+            echo "- Monitores concluídos: ${monitor_count}/${MIN_MONITOR_RUNS}"
+            echo "- Monitor canônico disparado: $monitor"
             echo "- Canário canônico disparado: $delivery"
-            echo "- Encerramento automático: $ACCELERATION_END_UTC"
+            echo "- Estado: $state"
+            echo "- Encerramento máximo: $ACCELERATION_END_UTC"
             echo "- Fonte de verdade preservada: workflows canônicos"
           } >> "$GITHUB_STEP_SUMMARY"
