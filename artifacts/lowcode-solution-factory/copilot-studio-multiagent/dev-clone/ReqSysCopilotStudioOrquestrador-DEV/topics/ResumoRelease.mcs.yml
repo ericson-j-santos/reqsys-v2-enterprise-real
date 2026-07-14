@@ -42,13 +42,14 @@ beginDialog:
 
         - kind: InvokeFlowAction
           id: invokeFlow_resumo_release
+          flowId: 768fde7b-db2e-500f-8be1-7b4cbf1ed31e
           flow: reqsys_ReqSysReleaseGovernance
-          input:
+      inputs:
             versao: =Topic.Versao
-            correlation_id: =System.ConversationId
+            correlation_id: =System.Conversation.Id
           output:
             resultado: Topic.ResultadoFlow
 
         - kind: SendActivity
           id: sendMessage_success
-          activity: Recomendacao gerada para {Topic.Versao}. Decisao final permanece humana. Correlation-Id: {System.ConversationId}
+          activity: Recomendacao gerada para {Topic.Versao}. Decisao final permanece humana. Correlation-Id: {System.Conversation.Id}
