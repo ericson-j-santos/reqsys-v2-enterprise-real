@@ -12,7 +12,7 @@ Cadastre no repositório o secret:
 TEAMS_WEBHOOK_URL
 ```
 
-O valor deve ser a URL de entrada criada no canal do Microsoft Teams, preferencialmente por um fluxo do aplicativo Workflows que aceite uma solicitação webhook e publique o Adaptive Card no canal.
+O valor deve ser a URL de gatilho HTTP de um fluxo do Power Automate (app Workflows) que receba `{to, title, content, signature, stampDate, correlationId}` e publique a mensagem no canal do Microsoft Teams. Este é o mesmo contrato de payload usado pela família de fluxos `robo_envia_teams*` já em produção neste tenant — reutilizar um desses fluxos (ou um clone) em vez de criar um novo com schema diferente.
 
 ## Validação
 
