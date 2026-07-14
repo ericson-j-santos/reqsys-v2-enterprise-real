@@ -1,0 +1,53 @@
+name: Environment Observability API
+
+on:
+  pull_request:
+    paths:
+      - 'services/environment-observability-api/**'
+      - '.github/workflows/environment-observability-api.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/environment-observability-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install --disable-pip-version-check -r requirements.txt
+      - name: Compile
+        run: python -m compileall -q app tests
+      - name: Tests
+        run: pytest -q
+      - name: Validate isolated Fly contracts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          expected = {
+              'fly.dev.toml': ('reqsys-env-api-dev', 'development', 'DEBUG'),
+              'fly.stg.toml': ('reqsys-env-api-stg', 'staging', 'INFO'),
+              'fly.prod.toml': ('reqsys-env-api-prod', 'production', 'INFO'),
+          }
+          apps = set()
+          for filename, values in expected.items():
+              content = Path(filename).read_text(encoding='utf-8')
+              app, environment, level = values
+              assert f'app = "{app}"' in content
+              assert f'APP_ENV = "{environment}"' in content
+              assert f'LOG_LEVEL = "{level}"' in content
+              assert app not in apps
+              apps.add(app)
+          assert len(apps) == 3
+          print('Contratos DEV/STG/PROD isolados e válidos.')
+          PY
+      - name: Build container
+        run: docker build -t environment-observability-api:test .
