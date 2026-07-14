@@ -1,0 +1,238 @@
+name: Teams Certification Progress Status
+
+on:
+  schedule:
+    - cron: "25 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: teams-certification-progress-status
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publicar progresso da certificação
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STATUS_TITLE: "[STATUS][TEAMS] Progresso da certificação operacional"
+      DELIVERY_WORKFLOW: teams-commit-notification.yml
+      MONITOR_WORKFLOW: teams-dashboard-availability-monitor.yml
+      MIN_DELIVERY_RUNS: "20"
+      MIN_MONITOR_RUNS: "20"
+      PROVISIONAL_DAYS: "7"
+      DEFINITIVE_DAYS: "30"
+      TARGET_PERCENT: "99.0"
+    steps:
+      - name: Calcular progresso e previsão
+        id: progress
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import math
+          import os
+          import subprocess
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          repository = os.environ["GITHUB_REPOSITORY"]
+          now = datetime.now(timezone.utc)
+          min_delivery = int(os.environ["MIN_DELIVERY_RUNS"])
+          min_monitor = int(os.environ["MIN_MONITOR_RUNS"])
+          provisional_days = int(os.environ["PROVISIONAL_DAYS"])
+          definitive_days = int(os.environ["DEFINITIVE_DAYS"])
+          target = float(os.environ["TARGET_PERCENT"])
+
+          def runs(filename: str) -> list[dict]:
+              result = subprocess.run(
+                  [
+                      "gh", "api", "--paginate",
+                      f"repos/{repository}/actions/workflows/{filename}/runs?per_page=100",
+                  ],
+                  text=True,
+                  capture_output=True,
+                  check=False,
+              )
+              if result.returncode != 0:
+                  raise SystemExit(result.stderr or f"Falha ao consultar {filename}")
+              items: list[dict] = []
+              for document in result.stdout.splitlines():
+                  if not document.strip():
+                      continue
+                  payload = json.loads(document)
+                  items.extend(
+                      run for run in payload.get("workflow_runs", [])
+                      if run.get("status") == "completed"
+                  )
+              items.sort(key=lambda item: item["created_at"])
+              return items
+
+          def metrics(items: list[dict], minimum: int) -> dict:
+              total = len(items)
+              successes = sum(item.get("conclusion") == "success" for item in items)
+              rate = round((successes / total * 100.0), 2) if total else 0.0
+              first = None
+              observed_days = 0.0
+              if items:
+                  first = datetime.fromisoformat(items[0]["created_at"].replace("Z", "+00:00"))
+                  observed_days = max(0.0, (now - first).total_seconds() / 86400)
+              return {
+                  "total": total,
+                  "successes": successes,
+                  "failures": total - successes,
+                  "success_rate_percent": rate,
+                  "minimum": minimum,
+                  "remaining": max(0, minimum - total),
+                  "sample_percent": round(min(100.0, total / minimum * 100.0), 2),
+                  "first_run_at": first.isoformat() if first else None,
+                  "observed_days": round(observed_days, 2),
+              }
+
+          delivery = metrics(runs(os.environ["DELIVERY_WORKFLOW"]), min_delivery)
+          monitor = metrics(runs(os.environ["MONITOR_WORKFLOW"]), min_monitor)
+          observed_days = min(delivery["observed_days"], monitor["observed_days"])
+          provisional_remaining_days = max(0.0, provisional_days - observed_days)
+          definitive_remaining_days = max(0.0, definitive_days - observed_days)
+          sample_ready = delivery["remaining"] == 0 and monitor["remaining"] == 0
+          quality_ready = (
+              delivery["success_rate_percent"] >= target
+              and monitor["success_rate_percent"] >= target
+          )
+
+          if observed_days >= definitive_days and sample_ready and quality_ready:
+              state = "gold_certified"
+              next_state = "manutenção contínua"
+              eta = now
+          elif observed_days >= provisional_days and sample_ready and quality_ready:
+              state = "provisional_gold"
+              next_state = "gold_certified"
+              eta = now + timedelta(days=definitive_remaining_days)
+          elif sample_ready and not quality_ready:
+              state = "quality_blocked"
+              next_state = "recuperar SLO para 99%"
+              eta = None
+          else:
+              state = "observation"
+              next_state = "provisional_gold"
+              eta = now + timedelta(days=provisional_remaining_days)
+
+          temporal_percent = round(min(100.0, observed_days / provisional_days * 100.0), 2)
+          overall_percent = round(min(
+              delivery["sample_percent"],
+              monitor["sample_percent"],
+              temporal_percent,
+              delivery["success_rate_percent"] if delivery["total"] else 0.0,
+              monitor["success_rate_percent"] if monitor["total"] else 0.0,
+          ), 2)
+
+          blockers: list[str] = []
+          if delivery["remaining"]:
+              blockers.append(f"faltam {delivery['remaining']} entregas")
+          if monitor["remaining"]:
+              blockers.append(f"faltam {monitor['remaining']} monitores")
+          if provisional_remaining_days > 0:
+              blockers.append(f"faltam {provisional_remaining_days:.2f} dias para a janela provisória")
+          if delivery["total"] and delivery["success_rate_percent"] < target:
+              blockers.append(f"SLO de entrega em {delivery['success_rate_percent']:.2f}%")
+          if monitor["total"] and monitor["success_rate_percent"] < target:
+              blockers.append(f"SLO do monitor em {monitor['success_rate_percent']:.2f}%")
+
+          report = {
+              "schema_version": "1.0.0",
+              "service": "github-teams-notification",
+              "generated_at": now.isoformat(),
+              "state": state,
+              "next_state": next_state,
+              "overall_progress_percent": overall_percent,
+              "target_percent": target,
+              "observed_days": round(observed_days, 2),
+              "provisional_window_days": provisional_days,
+              "definitive_window_days": definitive_days,
+              "provisional_remaining_days": round(provisional_remaining_days, 2),
+              "definitive_remaining_days": round(definitive_remaining_days, 2),
+              "estimated_next_state_at": eta.isoformat() if eta else None,
+              "delivery": delivery,
+              "availability_monitor": monitor,
+              "blockers": blockers,
+              "run_url": f"{os.environ['GITHUB_SERVER_URL']}/{repository}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }
+
+          output = Path("teams-certification-progress")
+          output.mkdir(exist_ok=True)
+          (output / "progress.json").write_text(
+              json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+
+          eta_text = eta.strftime("%d/%m/%Y %H:%M UTC") if eta else "indeterminada até recuperação do SLO"
+          blockers_text = "\n".join(f"- {item}" for item in blockers) or "- nenhum bloqueio atual"
+          body = f"""## Progresso da certificação GitHub → Teams
+
+**Estado atual:** `{state}`  
+**Próximo estado:** `{next_state}`  
+**Progresso consolidado:** **{overall_percent:.2f}%**  
+**Atualizado em:** {now.strftime('%d/%m/%Y %H:%M UTC')}  
+**Previsão do próximo estado:** {eta_text}
+
+| Dimensão | Atual | Meta | Progresso | SLO |
+|---|---:|---:|---:|---:|
+| Entregas Teams | {delivery['total']} | {min_delivery} | {delivery['sample_percent']:.2f}% | {delivery['success_rate_percent']:.2f}% |
+| Monitor do dashboard | {monitor['total']} | {min_monitor} | {monitor['sample_percent']:.2f}% | {monitor['success_rate_percent']:.2f}% |
+| Janela provisória | {observed_days:.2f} dias | {provisional_days} dias | {temporal_percent:.2f}% | — |
+| Janela definitiva | {observed_days:.2f} dias | {definitive_days} dias | {min(100.0, observed_days / definitive_days * 100.0):.2f}% | — |
+
+### Bloqueios atuais
+
+{blockers_text}
+
+### Evidência
+
+- Execução: {report['run_url']}
+- Critério provisório: 7 dias, 20 entregas, 20 monitores e SLO ≥ 99%
+- Critério definitivo: 30 dias, amostras mínimas e SLO ≥ 99%
+- Fonte: histórico dos workflows canônicos do GitHub Actions
+
+> Esta issue é atualizada automaticamente e funciona como painel operacional persistente.
+"""
+          (output / "status.md").write_text(body, encoding="utf-8")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as gh_output:
+              gh_output.write(f"state={state}\n")
+              gh_output.write(f"progress={overall_percent}\n")
+              gh_output.write(f"eta={eta_text}\n")
+          PY
+
+      - name: Publicar artifact de progresso
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-certification-progress-${{ github.run_id }}
+          path: teams-certification-progress/
+          retention-days: 365
+
+      - name: Criar ou atualizar status persistente
+        shell: bash
+        run: |
+          existing=$(gh issue list --state open --search '"${{ env.STATUS_TITLE }}" in:title' --json number,title --jq '.[] | select(.title == "${{ env.STATUS_TITLE }}") | .number' | head -n1)
+          if [[ -n "$existing" ]]; then
+            gh issue edit "$existing" --body-file teams-certification-progress/status.md
+          else
+            gh issue create --title "${STATUS_TITLE}" --body-file teams-certification-progress/status.md --label governance
+          fi
+
+      - name: Resumo
+        run: |
+          {
+            echo "### Certificação Teams"
+            echo "- Estado: **${{ steps.progress.outputs.state }}**"
+            echo "- Progresso: **${{ steps.progress.outputs.progress }}%**"
+            echo "- ETA: **${{ steps.progress.outputs.eta }}**"
+          } >> "$GITHUB_STEP_SUMMARY"
