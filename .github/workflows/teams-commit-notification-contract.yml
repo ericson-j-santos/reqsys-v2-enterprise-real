@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/teams-commit-notification.yml
+      - .github/workflows/teams-commit-notification-contract.yml
       - tools/geradores/teams_graph_gateway_autocontido.py
       - tests/test_teams_graph_gateway_autocontido.py
   workflow_dispatch:
@@ -24,4 +25,4 @@ jobs:
         run: |
           python -m py_compile tools/geradores/teams_graph_gateway_autocontido.py
           python tools/geradores/teams_graph_gateway_autocontido.py self-test
-          python -m pytest tests/test_teams_graph_gateway_autocontido.py -q
+          python tests/test_teams_graph_gateway_autocontido.py
