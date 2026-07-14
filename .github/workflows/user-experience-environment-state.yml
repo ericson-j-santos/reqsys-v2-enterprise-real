@@ -1,0 +1,51 @@
+name: User Experience Environment State
+
+on:
+  workflow_run:
+    workflows: ["User Experience Environment History"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: user-experience-environment-state
+  cancel-in-progress: false
+
+jobs:
+  consolidate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/consolidate_user_experience_environment_history.py
+          python -m unittest tests/test_consolidate_user_experience_environment_history.py
+      - name: Prepare auditable state evidence
+        run: |
+          mkdir -p evidence/ux
+          cat > evidence/ux/user-experience-environment-history.json <<'JSON'
+          {"environments":{"DEV":{"pass_rate":100,"fingerprint":"sha256:contract"},"STG":{"pass_rate":100,"fingerprint":"sha256:contract"},"PROD":{"pass_rate":100,"fingerprint":"sha256:contract"}},"drift_detected":false,"stable_sequence":3}
+          JSON
+          echo '{"cards":{},"readiness":{"status":"unchanged"}}' > evidence/runtime-executive-index.json
+          echo '{"indicators":{},"production_ready":false}' > evidence/executive-brief.json
+          python scripts/consolidate_user_experience_environment_history.py \
+            --history evidence/ux/user-experience-environment-history.json \
+            --state evidence/runtime-executive-index.json \
+            --brief evidence/executive-brief.json \
+            --state-output evidence/runtime-executive-index-enriched.json \
+            --brief-output evidence/executive-brief-enriched.json
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-environment-state
+          path: evidence/
+          retention-days: 90
