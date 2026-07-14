@@ -1,0 +1,60 @@
+name: Teams Certification Progress Status Contract
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/teams-certification-progress-status.yml
+      - .github/workflows/teams-certification-progress-status-contract.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar contrato do status persistente
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow='.github/workflows/teams-certification-progress-status.yml'
+          test -s "$workflow"
+          markers=(
+            'STATUS_TITLE: "[STATUS][TEAMS] Progresso da certificação operacional"'
+            'MIN_DELIVERY_RUNS: "20"'
+            'MIN_MONITOR_RUNS: "20"'
+            'PROVISIONAL_DAYS: "7"'
+            'DEFINITIVE_DAYS: "30"'
+            'TARGET_PERCENT: "99.0"'
+            'overall_progress_percent'
+            'estimated_next_state_at'
+            'provisional_gold'
+            'gold_certified'
+            'quality_blocked'
+            'gh issue edit'
+            'retention-days: 365'
+            'teams-commit-notification.yml'
+            'teams-dashboard-availability-monitor.yml'
+          )
+          for marker in "${markers[@]}"; do
+            grep -Fq "$marker" "$workflow" || {
+              echo "::error title=Contrato incompleto::Marcador ausente: $marker"
+              exit 1
+            }
+          done
+          grep -Fq 'actions: read' "$workflow"
+          grep -Fq 'contents: read' "$workflow"
+          grep -Fq 'issues: write' "$workflow"
+          ! grep -Fq 'TEAMS_WEBHOOK_URL:' "$workflow"
+          python - <<'PY'
+          from pathlib import Path
+          content = Path('.github/workflows/teams-certification-progress-status.yml').read_text(encoding='utf-8')
+          required = ['progress.json', 'status.md', 'blockers', 'sample_percent', 'observed_days']
+          missing = [item for item in required if item not in content]
+          if missing:
+              raise SystemExit(f'Campos obrigatórios ausentes: {missing}')
+          print('Contrato do status persistente validado.')
+          PY
