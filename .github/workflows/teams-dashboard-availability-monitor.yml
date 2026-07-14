@@ -1,0 +1,182 @@
+name: Teams Dashboard Availability Monitor
+
+on:
+  schedule:
+    - cron: "15 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: teams-dashboard-availability-monitor
+  cancel-in-progress: true
+
+jobs:
+  monitor:
+    name: Validar dashboard público
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DASHBOARD_URL: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/
+      INCIDENT_TITLE: "[INCIDENT][TEAMS] Dashboard de SLO indisponível"
+      MAX_DATA_AGE_HOURS: "48"
+    steps:
+      - name: Verificar HTTP, contrato e frescor
+        id: health
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          base_url = os.environ["DASHBOARD_URL"].rstrip("/") + "/"
+          max_age_hours = float(os.environ["MAX_DATA_AGE_HOURS"])
+          evidence_dir = Path("dashboard-health-evidence")
+          evidence_dir.mkdir(exist_ok=True)
+          started = time.monotonic()
+          errors: list[str] = []
+          http_status: int | None = None
+          data_age_hours: float | None = None
+          payload: dict[str, object] | None = None
+
+          def fetch(url: str) -> tuple[int, bytes]:
+              request = urllib.request.Request(
+                  url,
+                  headers={"User-Agent": "ReqSys-Dashboard-Health/1.0"},
+              )
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  return int(response.status), response.read()
+
+          try:
+              http_status, html = fetch(base_url)
+              text = html.decode("utf-8", errors="replace")
+              if http_status != 200:
+                  errors.append(f"dashboard HTTP {http_status}")
+              if "Teams" not in text or "SLO" not in text:
+                  errors.append("marcadores do dashboard ausentes")
+          except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+              errors.append(f"dashboard inacessível: {exc}")
+
+          try:
+              data_status, raw_data = fetch(base_url + "data.json")
+              if data_status != 200:
+                  errors.append(f"data.json HTTP {data_status}")
+              payload = json.loads(raw_data)
+              required = {
+                  "schema_version",
+                  "service",
+                  "generated_at",
+                  "state",
+                  "success_rate_percent",
+                  "total_runs",
+                  "recent_runs",
+              }
+              missing = sorted(required.difference(payload))
+              if missing:
+                  errors.append("campos ausentes: " + ", ".join(missing))
+              generated_at = datetime.fromisoformat(
+                  str(payload["generated_at"]).replace("Z", "+00:00")
+              )
+              data_age_hours = round(
+                  (datetime.now(timezone.utc) - generated_at).total_seconds() / 3600,
+                  2,
+              )
+              if data_age_hours < 0 or data_age_hours > max_age_hours:
+                  errors.append(f"dados desatualizados: {data_age_hours}h")
+          except (urllib.error.URLError, TimeoutError, ValueError, KeyError, json.JSONDecodeError) as exc:
+              errors.append(f"data.json inválido: {exc}")
+
+          latency_ms = round((time.monotonic() - started) * 1000, 2)
+          state = "healthy" if not errors else "unhealthy"
+          evidence = {
+              "schema_version": "1.0.0",
+              "service": "teams-notification-dashboard",
+              "checked_at": datetime.now(timezone.utc).isoformat(),
+              "dashboard_url": base_url,
+              "state": state,
+              "http_status": http_status,
+              "latency_ms": latency_ms,
+              "data_age_hours": data_age_hours,
+              "dashboard_state": None if payload is None else payload.get("state"),
+              "errors": errors,
+          }
+          (evidence_dir / "health.json").write_text(
+              json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"state={state}\n")
+              output.write(f"http_status={http_status or 'n/a'}\n")
+              output.write(f"latency_ms={latency_ms}\n")
+              output.write(f"data_age_hours={data_age_hours if data_age_hours is not None else 'n/a'}\n")
+              output.write(f"error_count={len(errors)}\n")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("### Teams Dashboard Availability\n")
+              summary.write(f"- Estado: **{state}**\n")
+              summary.write(f"- HTTP: **{http_status or 'n/a'}**\n")
+              summary.write(f"- Latência: **{latency_ms} ms**\n")
+              summary.write(f"- Idade dos dados: **{data_age_hours if data_age_hours is not None else 'n/a'} h**\n")
+              if errors:
+                  summary.write("- Falhas: " + "; ".join(errors) + "\n")
+          PY
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-dashboard-health-${{ github.run_id }}
+          path: dashboard-health-evidence/
+          retention-days: 90
+
+      - name: Abrir ou atualizar incidente
+        if: steps.health.outputs.state == 'unhealthy'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          existing=$(gh issue list --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
+          body=$(cat <<EOF
+          ## Dashboard GitHub → Teams indisponível
+
+          - URL: ${DASHBOARD_URL}
+          - HTTP: **${{ steps.health.outputs.http_status }}**
+          - Latência: **${{ steps.health.outputs.latency_ms }} ms**
+          - Idade dos dados: **${{ steps.health.outputs.data_age_hours }} h**
+          - Falhas detectadas: **${{ steps.health.outputs.error_count }}**
+          - Evidência: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          A issue será fechada automaticamente quando o dashboard voltar a atender ao contrato.
+          EOF
+          )
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "${INCIDENT_TITLE}" --body "$body" --label incident
+          fi
+
+      - name: Fechar incidente após recuperação
+        if: steps.health.outputs.state == 'healthy'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          existing=$(gh issue list --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body "Dashboard recuperado. HTTP ${{ steps.health.outputs.http_status }}, latência ${{ steps.health.outputs.latency_ms }} ms. Evidência: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            gh issue close "$existing" --reason completed
+          fi
+
+      - name: Aplicar gate de disponibilidade
+        if: steps.health.outputs.state != 'healthy'
+        run: exit 1
