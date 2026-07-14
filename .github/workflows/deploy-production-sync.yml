@@ -315,3 +315,42 @@ jobs:
             echo "| Deploy frontend | ${{ needs.deploy-frontend.result || 'skipped' }} |"
             echo "| Pós-sync | ${{ needs.post-sync-check.result || 'skipped' }} |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Notificar Teams (ambiente produção)
+        continue-on-error: true
+        env:
+          TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
+          RESULTADO_DEPLOY_API: ${{ needs.deploy-backend.result || 'skipped' }}
+          RESULTADO_DEPLOY_FRONTEND: ${{ needs.deploy-frontend.result || 'skipped' }}
+          RESULTADO_POS_SYNC: ${{ needs.post-sync-check.result || 'skipped' }}
+        run: |
+          set -euo pipefail
+          FALHOU="false"
+          if [ "$RESULTADO_DEPLOY_API" = "failure" ] || [ "$RESULTADO_DEPLOY_FRONTEND" = "failure" ] || [ "$RESULTADO_POS_SYNC" = "failure" ]; then
+            FALHOU="true"
+          fi
+          TITULO="ReqSys - Deploy produção OK"
+          if [ "$FALHOU" = "true" ]; then
+            TITULO="ReqSys - Deploy produção FALHOU"
+          fi
+          TEXTO="$(printf 'Ambiente: producao\nSHA: %s\nDeploy API: %s\nDeploy frontend: %s\nPós-sync: %s\nDetalhes: %s/%s/actions/runs/%s' \
+            "$CORRELATION_ID" "$RESULTADO_DEPLOY_API" "$RESULTADO_DEPLOY_FRONTEND" "$RESULTADO_POS_SYNC" \
+            "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          python scripts/notificar_teams.py \
+            --titulo "$TITULO" \
+            --texto "$TEXTO" \
+            --modo auto \
+            --destino-tipo chat \
+            --output notify-teams-deploy-producao.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: notify-teams-deploy-producao
+          path: notify-teams-deploy-producao.json
+          if-no-files-found: warn

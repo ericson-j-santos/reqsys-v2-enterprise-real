@@ -393,3 +393,40 @@ jobs:
             echo "| Sync ambientes | ${SYNC_RESULT:-skipped} |"
             echo "| Smoke read-only | ${SMOKE_RESULT:-skipped} |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v4
+        if: needs.plan-environments.outputs.should_deploy == 'true'
+      - uses: actions/setup-python@v5
+        if: needs.plan-environments.outputs.should_deploy == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Notificar Teams (ambientes)
+        if: needs.plan-environments.outputs.should_deploy == 'true'
+        continue-on-error: true
+        env:
+          TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
+          TARGETS: ${{ needs.plan-environments.outputs.targets }}
+          SYNC_RESULT: ${{ needs.sync-environment.result || 'skipped' }}
+        run: |
+          set -euo pipefail
+          TITULO="ReqSys - Sync de ambiente OK"
+          if [ "$SYNC_RESULT" != "success" ]; then
+            TITULO="ReqSys - Sync de ambiente FALHOU"
+          fi
+          TEXTO="$(printf 'Ambientes alvo: %s\nResultado: %s\nSHA: %s\nDetalhes: %s/%s/actions/runs/%s' \
+            "$TARGETS" "$SYNC_RESULT" "${GITHUB_SHA:0:8}" \
+            "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          python scripts/notificar_teams.py \
+            --titulo "$TITULO" \
+            --texto "$TEXTO" \
+            --modo auto \
+            --destino-tipo chat \
+            --output notify-teams-fly-sync.json
+
+      - uses: actions/upload-artifact@v4
+        if: always() && needs.plan-environments.outputs.should_deploy == 'true'
+        with:
+          name: notify-teams-fly-sync
+          path: notify-teams-fly-sync.json
+          if-no-files-found: warn

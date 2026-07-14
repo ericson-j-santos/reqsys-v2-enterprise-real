@@ -6,6 +6,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-07-14
+
+### Adicionado (Teams Gateway · notificações automáticas)
+
+- `scripts/notificar_teams.py`: wrapper stdlib (sem dependências externas) para `POST /v1/teams-gateway/messages`, reutilizável por qualquer automação/CI; escreve evidência JSON (`--output`) e não derruba o build por padrão em caso de falha de entrega (usar `--strict` para propagar erro).
+- `.github/workflows/notify-teams-repo-changes.yml`: notifica o Teams a cada push em `main` com autor/mensagem/link do commit.
+- `deploy-production-sync.yml` e `fly-enterprise-sync.yml`: job `summary` passa a notificar o Teams com o resultado do deploy/sync por ambiente (produção sempre; demais ambientes só quando um deploy real foi executado via `workflow_dispatch`).
+- Requer o secret de repositório `TEAMS_GATEWAY_DESTINO_ID` (e-mail/UPN do destinatário) configurado no GitHub Actions — ver `docs/architecture/teams-messaging-gateway.md`.
+- **Produção**: registrado o primeiro `flow_bot_owner` real (reaproveitando o fluxo Power Automate já validado) via `POST /v1/teams-gateway/flow-bot/owners`; canal `flow_bot` confirmado `disponivel=true` e testado com envio real (`entregue: true`).
+
 ## [Unreleased] - 2026-07-05
 
 ### Adicionado (Financeiro · CDI)

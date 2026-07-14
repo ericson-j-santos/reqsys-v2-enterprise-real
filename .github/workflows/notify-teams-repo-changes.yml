@@ -1,0 +1,82 @@
+name: Notify Teams - Repo Changes
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notify-teams-repo-changes-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  notificar:
+    name: Notificar commit no Teams
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Notificar Teams (novo commit em main)
+        continue-on-error: true
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_AUTHOR: ${{ github.event.head_commit.author.name }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+          COMMIT_COUNT: ${{ github.event.commits && github.event.commits[0] && toJSON(github.event.commits) || '[]' }}
+          TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          sha = os.environ.get("GITHUB_SHA", "")[:8]
+          commit_message = os.environ.get("COMMIT_MESSAGE", "") or "(sem mensagem)"
+          titulo_linha = commit_message.splitlines()[0] if commit_message else "(sem mensagem)"
+          autor = os.environ.get("COMMIT_AUTHOR") or "desconhecido"
+          url = os.environ.get("COMMIT_URL") or ""
+
+          try:
+              commits = json.loads(os.environ.get("COMMIT_COUNT") or "[]")
+          except json.JSONDecodeError:
+              commits = []
+          total = len(commits) if isinstance(commits, list) else 1
+
+          linhas = [
+              f"Novo push em main ({sha})",
+              f"Autor: {autor}",
+              f"Mensagem: {titulo_linha}",
+          ]
+          if total > 1:
+              linhas.append(f"Total de commits neste push: {total}")
+          if url:
+              linhas.append(f"Link: {url}")
+          texto = "\n".join(linhas)
+
+          resultado = subprocess.run(
+              [
+                  sys.executable, "scripts/notificar_teams.py",
+                  "--titulo", "ReqSys - Novo commit em main",
+                  "--texto", texto,
+                  "--modo", "auto",
+                  "--destino-tipo", "chat",
+                  "--output", "notify-teams-commit.json",
+              ],
+              check=False,
+          )
+          sys.exit(resultado.returncode)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: notify-teams-commit
+          path: notify-teams-commit.json
+          if-no-files-found: warn
