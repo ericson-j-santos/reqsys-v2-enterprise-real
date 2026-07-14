@@ -30,6 +30,8 @@ REQUIRED_FILES = [
     "gitlab/scripts/generate_devsecops_baseline.py",
     "gitlab/scripts/generate_environments_baseline.py",
     "gitlab/scripts/validate_gitlab_governance.py",
+    "gitlab/scripts/validate_gitlab_operational_evidence.py",
+    "gitlab/tests/test_validate_gitlab_operational_evidence.py",
 ]
 
 REQUIRED_CI_TERMS = [
@@ -60,7 +62,14 @@ REQUIRED_INCLUDE_TERMS = {
         "artifacts:",
     ],
     "gitlab/ci/environments.yml": ["gitlab_environments_baseline", "review_app_placeholder", "stop_review_app_placeholder", "environment:"],
-    "gitlab/ci/evidence.yml": ["gitlab_evidence_summary", "artifacts:"],
+    "gitlab/ci/evidence.yml": [
+        "gitlab_evidence_summary",
+        "gitlab_operational_evidence_gate",
+        "GITLAB_GOVERNANCE_TOKEN",
+        "validate_gitlab_operational_evidence.py",
+        "gitlab-operational-evidence.json",
+        "artifacts:",
+    ],
     "gitlab/ci/deploy.yml": ["deploy_staging_fly", "FLY_API_TOKEN", "environment:"],
 }
 

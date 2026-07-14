@@ -18,3 +18,33 @@ gitlab_evidence_summary:
     expire_in: 14 days
     paths:
       - audit/gitlab-evidence-summary.md
+
+# Blocking operational gate. Configure GITLAB_GOVERNANCE_TOKEN as a masked,
+# protected project/group variable with read_api scope. The token is never
+# printed or persisted in artifacts.
+gitlab_operational_evidence_gate:
+  stage: evidence
+  image: python:3.12-alpine
+  needs:
+    - job: backend_sast_bandit
+    - job: secret_detection_gitleaks
+    - job: backend_dependency_scanning_pip_audit
+    - job: frontend_dependency_scanning_npm_audit
+    - job: container_scanning_trivy
+    - job: deploy_staging_fly
+      optional: true
+  variables:
+    GITLAB_EVIDENCE_ENVIRONMENT: "staging"
+    GITLAB_API_TIMEOUT_SECONDS: "20"
+  script:
+    - python gitlab/scripts/validate_gitlab_operational_evidence.py --output-dir audit
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - audit/gitlab-operational-evidence.json
+      - audit/gitlab-operational-evidence.md
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
