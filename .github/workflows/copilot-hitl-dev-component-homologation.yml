@@ -1,0 +1,102 @@
+name: Copilot HITL DEV Component Homologation
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Digite HOMOLOGATE_DEV para validar os componentes no tenant DEV'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: copilot-hitl-dev-component-homologation
+  cancel-in-progress: false
+
+jobs:
+  validate-code:
+    name: Validate homologation implementation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: python -m pip install -r backend/requirements.txt
+      - run: python -m pytest backend/tests/test_homologate_copilot_hitl_dev_components.py -q
+      - run: python -m py_compile scripts/homologate_copilot_hitl_dev_components.py
+
+  homologate-dev:
+    name: Export and homologate DEV components
+    needs: validate-code
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: reqsys-power-platform-dev
+    env:
+      SOLUTION_NAME: ReqSysCopilotHITL
+      EVIDENCE_DIR: evidence/lowcode/copilot-hitl-dev
+    steps:
+      - name: Enforce explicit confirmation
+        shell: bash
+        run: |
+          if [[ '${{ inputs.confirmation }}' != 'HOMOLOGATE_DEV' ]]; then
+            echo '::error::Confirmação inválida. Informe HOMOLOGATE_DEV.'
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Power Platform CLI
+        uses: microsoft/powerplatform-actions/actions-install@v1
+
+      - name: Validate service principal against DEV
+        uses: microsoft/powerplatform-actions/who-am-i@v1
+        with:
+          environment-url: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
+          app-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          client-secret: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+
+      - name: List DEV solutions
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE_DIR"
+          pac solution list | tee "$EVIDENCE_DIR/solution-list.txt"
+
+      - name: Export imported DEV Solution
+        uses: microsoft/powerplatform-actions/export-solution@v1
+        with:
+          environment-url: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
+          app-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          client-secret: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          solution-name: ${{ env.SOLUTION_NAME }}
+          solution-output-file: ${{ env.EVIDENCE_DIR }}/ReqSysCopilotHITL_DEV_export.zip
+          managed: false
+          run-asynchronously: true
+          max-async-wait-time: 20
+
+      - name: Validate agents, tables and workflows
+        run: |
+          python scripts/homologate_copilot_hitl_dev_components.py \
+            --solution-list "$EVIDENCE_DIR/solution-list.txt" \
+            --exported-package "$EVIDENCE_DIR/ReqSysCopilotHITL_DEV_export.zip" \
+            --output "$EVIDENCE_DIR/component-homologation.json"
+
+      - name: Publish homologation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-copilot-hitl-dev-component-homologation
+          path: ${{ env.EVIDENCE_DIR }}
+          retention-days: 90
+          if-no-files-found: warn
