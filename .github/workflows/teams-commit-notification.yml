@@ -47,14 +47,19 @@ jobs:
           python tools/geradores/teams_graph_gateway_autocontido.py self-test
 
       - name: Validar configuração do Teams
+        id: teams-config
         shell: bash
         run: |
           if [[ -z "${TEAMS_WEBHOOK_URL}" ]]; then
-            echo "::error title=Teams não configurado::Cadastre o secret TEAMS_WEBHOOK_URL no repositório."
-            exit 1
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Teams não configurado::Secret TEAMS_WEBHOOK_URL ausente; envio foi ignorado sem invalidar o CI."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Secret TEAMS_WEBHOOK_URL disponível; notificação será enviada."
           fi
 
       - name: Enviar notificação
+        if: steps.teams-config.outputs.configured == 'true'
         id: notify
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -156,13 +161,20 @@ jobs:
           PY
 
       - name: Registrar evidência
+        if: always()
         shell: bash
         run: |
           {
             echo "### Teams Commit Notification"
-            echo "- Status: entregue/aceito"
             echo "- Evento: ${{ github.event_name }}"
-            echo "- HTTP: ${{ steps.notify.outputs.status_code }}"
-            echo "- Correlation ID: ${{ steps.notify.outputs.correlation_id }}"
             echo "- Commit: ${{ github.sha }}"
+            if [[ "${{ steps.teams-config.outputs.configured }}" == "true" ]]; then
+              echo "- Status: entregue/aceito"
+              echo "- HTTP: ${{ steps.notify.outputs.status_code }}"
+              echo "- Correlation ID: ${{ steps.notify.outputs.correlation_id }}"
+            else
+              echo "- Status: ignorado"
+              echo "- Motivo: secret TEAMS_WEBHOOK_URL não configurado"
+              echo "- Ação manual: Settings → Secrets and variables → Actions → New repository secret"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
