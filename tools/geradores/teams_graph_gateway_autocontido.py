@@ -37,6 +37,8 @@ class GatewayConfig:
     timeout_seconds: int = 20
     max_attempts: int = 3
 
+    webhook_recipient: str | None = None
+
     @classmethod
     def from_env(cls) -> "GatewayConfig":
         return cls(
@@ -44,6 +46,7 @@ class GatewayConfig:
             client_id=os.getenv("AZURE_CLIENT_ID"),
             client_secret=os.getenv("AZURE_CLIENT_SECRET"),
             webhook_url=os.getenv("TEAMS_WEBHOOK_URL"),
+            webhook_recipient=os.getenv("TEAMS_WEBHOOK_RECIPIENT"),
             timeout_seconds=int(os.getenv("HTTP_TIMEOUT_SECONDS", "20")),
             max_attempts=int(os.getenv("HTTP_MAX_ATTEMPTS", "3")),
         )
@@ -147,9 +150,15 @@ class TeamsGateway:
         self._validate_message(message)
         if not self.config.webhook_url:
             raise GatewayError("TEAMS_WEBHOOK_URL não configurado")
+        if not self.config.webhook_recipient or "@" not in self.config.webhook_recipient:
+            raise GatewayError(
+                "TEAMS_WEBHOOK_RECIPIENT não configurado ou inválido "
+                "(o flow de destino só entrega em 'Chat with Flow bot' 1:1; "
+                "precisa ser o e-mail/UPN de uma pessoa, não um nome de canal)"
+            )
         correlation_id = str(uuid.uuid4())
         payload = {
-            "to": "Canal ReqSys - Commits",
+            "to": self.config.webhook_recipient,
             "title": title,
             "content": message,
             "signature": "ReqSys",
@@ -235,15 +244,22 @@ class TeamsGateway:
 def self_test() -> dict[str, Any]:
     assert HttpClient.safe_json("1") == {"value": 1}
     assert HttpClient.safe_json("ok") == {"message": "ok"}
-    config = GatewayConfig(webhook_url="https://example.invalid/hook")
+    config = GatewayConfig(webhook_url="https://example.invalid/hook", webhook_recipient="teste@example.invalid")
     result = TeamsGateway(config).send_webhook("teste", "ReqSys", dry_run=True)
     assert result.success and result.route == "webhook"
+    try:
+        TeamsGateway(GatewayConfig(webhook_url="https://example.invalid/hook")).send_webhook(
+            "teste", "ReqSys", dry_run=True
+        )
+        raise AssertionError("destinatário ausente deveria falhar")
+    except GatewayError:
+        pass
     try:
         TeamsGateway(config).send_chat("chat", "teste", "")
         raise AssertionError("token vazio deveria falhar")
     except GatewayError:
         pass
-    return {"passed": 4, "status": "ok"}
+    return {"passed": 5, "status": "ok"}
 
 
 def parser() -> argparse.ArgumentParser:

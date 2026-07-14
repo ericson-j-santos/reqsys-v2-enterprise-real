@@ -19,13 +19,17 @@ class TeamsGraphGatewayAutocontidoTest(unittest.TestCase):
         self.assertEqual(module.HttpClient.safe_json(""), {})
 
     def test_webhook_dry_run_gera_evidencia_sem_rede(self):
-        config = module.GatewayConfig(webhook_url="https://example.invalid/hook")
+        config = module.GatewayConfig(
+            webhook_url="https://example.invalid/hook",
+            webhook_recipient="pessoa@example.invalid",
+        )
         result = module.TeamsGateway(config).send_webhook("commit abc123", "ReqSys", dry_run=True)
 
         self.assertTrue(result.success)
         self.assertEqual(result.route, "webhook")
         self.assertTrue(result.correlation_id)
         self.assertTrue(result.response["planned"])
+        self.assertEqual(result.response["payload"]["to"], "pessoa@example.invalid")
 
     def test_webhook_exige_configuracao(self):
         gateway = module.TeamsGateway(module.GatewayConfig())
@@ -33,6 +37,21 @@ class TeamsGraphGatewayAutocontidoTest(unittest.TestCase):
         with self.assertRaises(module.GatewayError) as context:
             gateway.send_webhook("mensagem", "ReqSys")
         self.assertIn("TEAMS_WEBHOOK_URL", str(context.exception))
+
+    def test_webhook_exige_destinatario_valido(self):
+        config = module.GatewayConfig(webhook_url="https://example.invalid/hook")
+        gateway = module.TeamsGateway(config)
+
+        with self.assertRaises(module.GatewayError) as context:
+            gateway.send_webhook("mensagem", "ReqSys", dry_run=True)
+        self.assertIn("TEAMS_WEBHOOK_RECIPIENT", str(context.exception))
+
+        config_sem_arroba = module.GatewayConfig(
+            webhook_url="https://example.invalid/hook",
+            webhook_recipient="Canal ReqSys - Commits",
+        )
+        with self.assertRaises(module.GatewayError):
+            module.TeamsGateway(config_sem_arroba).send_webhook("mensagem", "ReqSys", dry_run=True)
 
 
 if __name__ == "__main__":
