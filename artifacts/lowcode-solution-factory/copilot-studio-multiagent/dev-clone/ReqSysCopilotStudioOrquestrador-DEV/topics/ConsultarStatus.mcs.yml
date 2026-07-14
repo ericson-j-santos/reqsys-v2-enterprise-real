@@ -1,0 +1,34 @@
+mcs.metadata:
+  componentName: ConsultarStatus
+  description: Consultar status de demanda ou requisito.
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    displayName: Consultar status
+    triggerQueries:
+      - consultar status da demanda
+      - como esta minha solicitacao
+      - ver andamento do requisito
+
+  actions:
+    - kind: Question
+      id: question_referencia
+      variable: Topic.Referencia
+      prompt: Informe o numero ou referencia.
+      entity: StringPrebuiltEntity
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_consultar_status
+      flowId: 69a54f8b-caec-53c4-9f5b-887230cf43d2
+      flow: reqsys_ReqSysConsultarStatus
+      input:
+        referencia: =Topic.Referencia
+        correlation_id: =System.Conversation.Id
+      output:
+        resultado: Topic.ResultadoFlow
+
+    - kind: SendActivity
+      id: sendMessage_success
+      activity: Status consultado. Correlation-Id: {System.Conversation.Id}

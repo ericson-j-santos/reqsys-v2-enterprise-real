@@ -1,0 +1,11 @@
+mcs.metadata:
+  componentName: MultipleTopicsMatched
+  description: This system topic triggers when the user's utterance matches multiple topics.
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnEndOfConversation
+  id: main
+  actions:
+    - kind: SendActivity
+      id: sendMessage_eoc
+      activity: Conversa encerrada.

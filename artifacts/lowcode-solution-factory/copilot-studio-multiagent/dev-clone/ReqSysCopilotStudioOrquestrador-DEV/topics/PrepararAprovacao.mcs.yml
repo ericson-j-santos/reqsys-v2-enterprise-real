@@ -1,0 +1,53 @@
+mcs.metadata:
+  componentName: PrepararAprovacao
+  description: Preparar resumo rastreavel para aprovacao humana.
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    displayName: Preparar aprovacao
+    triggerQueries:
+      - preparar aprovacao
+      - gerar resumo para aprovador
+      - enviar para aprovacao
+
+  actions:
+    - kind: Question
+      id: question_referencia
+      variable: Topic.Referencia
+      prompt: Informe a referencia da demanda ou requisito.
+      entity: StringPrebuiltEntity
+
+    - kind: ConditionGroup
+      id: conditionGroup_rbac
+      conditions:
+        - id: conditionItem_rbac
+          condition: =User.Papel <> "ReqSys Aprovador" && User.Papel <> "ReqSys Administrador Low-Code"
+          actions:
+            - kind: SendActivity
+              id: sendMessage_unauthorized
+              activity: Acao nao autorizada. Papel minimo exigido: ReqSys Aprovador ou ReqSys Administrador Low-Code.
+
+            - kind: EndDialog
+              id: endDialog_unauthorized
+
+      elseActions:
+        - kind: Question
+          id: question_confirmacao
+          variable: Topic.Confirmacao
+          prompt: Confirma a execucao de preparar aprovacao?
+          entity: BooleanPrebuiltEntity
+
+        - kind: InvokeFlowAction
+          id: invokeFlow_preparar_aprovacao
+          flow: reqsys_ReqSysPrepararAprovacao
+          input:
+            referencia: =Topic.Referencia
+            correlation_id: =System.ConversationId
+          output:
+            resultado: Topic.ResultadoFlow
+
+        - kind: SendActivity
+          id: sendMessage_success
+          activity: Resumo preparado. Decisao final permanece humana. Correlation-Id: {System.ConversationId}
