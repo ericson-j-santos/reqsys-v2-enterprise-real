@@ -1,0 +1,75 @@
+name: User Experience Dashboard Executive Stability
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "31 9 * * *"
+  pull_request:
+    paths:
+      - "scripts/build_user_experience_dashboard_executive_stability.py"
+      - "tests/test_build_user_experience_dashboard_executive_stability.py"
+      - ".github/workflows/user-experience-dashboard-executive-stability.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_user_experience_dashboard_executive_stability.py"
+      - "tests/test_build_user_experience_dashboard_executive_stability.py"
+      - ".github/workflows/user-experience-dashboard-executive-stability.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile
+        run: python -m py_compile scripts/build_user_experience_dashboard_executive_stability.py
+      - name: Unit tests
+        run: python -m unittest tests/test_build_user_experience_dashboard_executive_stability.py
+      - name: Build synthetic evidence
+        run: |
+          mkdir -p evidence
+          cat > evidence/history.json <<'JSON'
+          {"samples":[
+            {"status":"UX_CONFIDENCE_DASHBOARD_RELIABILITY_CARD_OK","drift":false,"fingerprint":"stable-contract"},
+            {"status":"UX_CONFIDENCE_DASHBOARD_RELIABILITY_CARD_OK","drift":false,"fingerprint":"stable-contract"},
+            {"status":"UX_CONFIDENCE_DASHBOARD_RELIABILITY_CARD_OK","drift":false,"fingerprint":"stable-contract"}
+          ]}
+          JSON
+          echo '{"readiness":{"status":"preserved"},"production_ready":false}' > evidence/state.json
+          echo '{"title":"ReqSys Executive Brief"}' > evidence/brief.json
+          python scripts/build_user_experience_dashboard_executive_stability.py \
+            --history evidence/history.json \
+            --state evidence/state.json \
+            --brief evidence/brief.json \
+            --output evidence/dashboard-executive-stability.json \
+            --state-output evidence/state-output.json \
+            --brief-output evidence/brief-output.json
+      - name: Validate guardrails
+        run: |
+          python - <<'PY'
+          import json
+          indicator=json.load(open('evidence/dashboard-executive-stability.json'))
+          state=json.load(open('evidence/state-output.json'))
+          assert indicator['mode']=='report-only'
+          assert indicator['production_blocker'] is False
+          assert indicator['human_approval_required'] is True
+          assert state['readiness']=={'status':'preserved'}
+          assert state['production_ready'] is False
+          PY
+      - name: Summary
+        run: |
+          echo '## Dashboard Executive Stability' >> "$GITHUB_STEP_SUMMARY"
+          echo '- mode: report-only' >> "$GITHUB_STEP_SUMMARY"
+          echo '- production blocker: false' >> "$GITHUB_STEP_SUMMARY"
+          echo '- human approval required: true' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-dashboard-executive-stability-${{ github.run_id }}
+          path: evidence/
+          retention-days: 90
