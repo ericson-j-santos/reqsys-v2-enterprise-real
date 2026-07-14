@@ -1,0 +1,116 @@
+name: Teams Public Dashboard Smoke
+
+on:
+  schedule:
+    - cron: "25 * * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/teams-public-dashboard-smoke.yml
+      - .github/workflows/teams-notification-dashboard.yml
+      - ops-dashboard/teams-notification/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-public-dashboard-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Validar dashboard e evidências públicas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DASHBOARD_URL: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/
+      MAX_DATA_AGE_HOURS: "48"
+    steps:
+      - name: Validar HTTP, schemas e frescor
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+          from datetime import datetime, timezone
+
+          base = os.environ["DASHBOARD_URL"].rstrip("/") + "/"
+          max_age = float(os.environ["MAX_DATA_AGE_HOURS"])
+          started = time.monotonic()
+
+          def fetch(path: str) -> tuple[int, bytes]:
+              request = urllib.request.Request(
+                  base + path,
+                  headers={"User-Agent": "ReqSys-Public-Dashboard-Smoke/1.0"},
+              )
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  return int(response.status), response.read()
+
+          errors: list[str] = []
+          evidence: dict[str, object] = {"base_url": base}
+
+          try:
+              status, html = fetch("")
+              text = html.decode("utf-8", errors="replace")
+              evidence["dashboard_http"] = status
+              if status != 200:
+                  errors.append(f"dashboard HTTP {status}")
+              for marker in ("GitHub", "Microsoft Teams", "Certificação"):
+                  if marker not in text:
+                      errors.append(f"marcador ausente no HTML: {marker}")
+          except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+              errors.append(f"dashboard inacessível: {exc}")
+
+          for filename, required in {
+              "data.json": {"schema_version", "generated_at", "state", "certification"},
+              "certification-status.json": {
+                  "state",
+                  "delivery_rate",
+                  "monitor_rate",
+                  "observed_days",
+                  "blockers",
+                  "evidence_sha256",
+              },
+          }.items():
+              try:
+                  status, raw = fetch(filename)
+                  payload = json.loads(raw)
+                  evidence[f"{filename}_http"] = status
+                  evidence[f"{filename}_schema"] = payload.get("schema_version", "embedded")
+                  if status != 200:
+                      errors.append(f"{filename} HTTP {status}")
+                  missing = sorted(required.difference(payload))
+                  if missing:
+                      errors.append(f"{filename} sem campos: {', '.join(missing)}")
+                  generated = payload.get("generated_at")
+                  if generated:
+                      generated_at = datetime.fromisoformat(str(generated).replace("Z", "+00:00"))
+                      age_hours = (datetime.now(timezone.utc) - generated_at).total_seconds() / 3600
+                      evidence[f"{filename}_age_hours"] = round(age_hours, 2)
+                      if age_hours < 0 or age_hours > max_age:
+                          errors.append(f"{filename} desatualizado: {age_hours:.2f}h")
+              except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+                  errors.append(f"{filename} inválido: {exc}")
+
+          evidence["latency_ms"] = round((time.monotonic() - started) * 1000, 2)
+          evidence["errors"] = errors
+          print(json.dumps(evidence, ensure_ascii=False, indent=2))
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("### Teams Public Dashboard Smoke\n")
+              summary.write(f"- URL: {base}\n")
+              summary.write(f"- Latência total: **{evidence['latency_ms']} ms**\n")
+              summary.write(f"- Estado: **{'healthy' if not errors else 'unhealthy'}**\n")
+              if errors:
+                  summary.write("- Falhas: " + "; ".join(errors) + "\n")
+
+          if errors:
+              raise SystemExit("; ".join(errors))
+          PY
