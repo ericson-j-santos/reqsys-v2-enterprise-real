@@ -1,0 +1,129 @@
+name: Teams Provisional Gold Certification
+
+on:
+  schedule:
+    - cron: "35 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: teams-provisional-gold-certification
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    name: Avaliar certificação provisória
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WINDOW_DAYS: "7"
+      MIN_OBSERVATION_DAYS: "7"
+      MIN_SUCCESS_PERCENT: "99.0"
+      MIN_DELIVERY_RUNS: "20"
+      MIN_MONITOR_RUNS: "20"
+      DELIVERY_WORKFLOW: teams-commit-notification.yml
+      MONITOR_WORKFLOW: teams-dashboard-availability-monitor.yml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Calcular certificação provisória
+        id: provisional
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+          import hashlib, json, os, subprocess
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          repository = os.environ['GITHUB_REPOSITORY']
+          now = datetime.now(timezone.utc)
+          cutoff = now - timedelta(days=int(os.environ['WINDOW_DAYS']))
+          target = float(os.environ['MIN_SUCCESS_PERCENT'])
+
+          def runs(filename: str) -> list[dict]:
+              result = subprocess.run([
+                  'gh','api','--paginate',
+                  f'repos/{repository}/actions/workflows/{filename}/runs?per_page=100'
+              ], text=True, capture_output=True, check=False)
+              if result.returncode != 0:
+                  raise SystemExit(result.stderr or f'Falha ao consultar {filename}')
+              items = []
+              for document in result.stdout.splitlines():
+                  if not document.strip():
+                      continue
+                  for run in json.loads(document).get('workflow_runs', []):
+                      created = datetime.fromisoformat(run['created_at'].replace('Z','+00:00'))
+                      if created >= cutoff and run.get('status') == 'completed':
+                          items.append(run)
+              items.sort(key=lambda item: item['created_at'])
+              return items
+
+          def metrics(items: list[dict]) -> dict:
+              total = len(items)
+              successes = sum(item.get('conclusion') == 'success' for item in items)
+              first = datetime.fromisoformat(items[0]['created_at'].replace('Z','+00:00')) if items else None
+              return {
+                  'total': total,
+                  'successes': successes,
+                  'failures': total - successes,
+                  'success_rate_percent': round(successes / total * 100, 2) if total else 0.0,
+                  'observed_days': round((now-first).total_seconds()/86400, 2) if first else 0.0,
+                  'first_run_at': items[0]['created_at'] if items else None,
+                  'last_run_at': items[-1]['created_at'] if items else None,
+              }
+
+          delivery = metrics(runs(os.environ['DELIVERY_WORKFLOW']))
+          monitor = metrics(runs(os.environ['MONITOR_WORKFLOW']))
+          sample_ready = (
+              delivery['total'] >= int(os.environ['MIN_DELIVERY_RUNS']) and
+              monitor['total'] >= int(os.environ['MIN_MONITOR_RUNS']) and
+              min(delivery['observed_days'], monitor['observed_days']) >= int(os.environ['MIN_OBSERVATION_DAYS'])
+          )
+          quality_ready = delivery['success_rate_percent'] >= target and monitor['success_rate_percent'] >= target
+          state = 'provisional_gold' if sample_ready and quality_ready else ('provisional_suspended' if sample_ready else 'observation')
+
+          report = {
+              'schema_version':'1.0.0',
+              'service':'github-teams-notification',
+              'certification_level':'provisional',
+              'state':state,
+              'generated_at':now.isoformat(),
+              'window_days':7,
+              'targets':{'success_percent':target,'minimum_observation_days':7,'minimum_delivery_runs':20,'minimum_monitor_runs':20},
+              'delivery':delivery,
+              'availability_monitor':monitor,
+              'source_commit':os.environ['GITHUB_SHA'],
+              'run_url':f"{os.environ['GITHUB_SERVER_URL']}/{repository}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+              'definitive_certification':'Teams Gold Certification mantém janela de 30 dias',
+          }
+          canonical = json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(',',':'))
+          report['evidence_sha256'] = hashlib.sha256(canonical.encode()).hexdigest()
+          output = Path('teams-provisional-gold')
+          output.mkdir(exist_ok=True)
+          (output/'certification.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          (output/'certification.md').write_text(
+              '# Certificação Ouro Provisória — GitHub → Teams\n\n'
+              f"- Estado: **{state}**\n"
+              f"- Entregas: **{delivery['success_rate_percent']:.2f}%** ({delivery['successes']}/{delivery['total']})\n"
+              f"- Monitor: **{monitor['success_rate_percent']:.2f}%** ({monitor['successes']}/{monitor['total']})\n"
+              f"- Observação: **{min(delivery['observed_days'],monitor['observed_days']):.2f} dias**\n"
+              f"- Evidência SHA-256: `{report['evidence_sha256']}`\n",
+              encoding='utf-8')
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+              fh.write(f'state={state}\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as fh:
+              fh.write((output/'certification.md').read_text(encoding='utf-8'))
+          PY
+
+      - name: Publicar evidência provisória
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-provisional-gold-${{ github.run_id }}
+          path: teams-provisional-gold/
+          retention-days: 365

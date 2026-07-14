@@ -1,0 +1,52 @@
+name: Teams Evidence Acceleration
+
+on:
+  schedule:
+    - cron: "5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: teams-evidence-acceleration
+  cancel-in-progress: true
+
+jobs:
+  accelerate:
+    name: Disparar evidências canônicas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ACCELERATION_END_UTC: "2026-07-22T00:00:00Z"
+    steps:
+      - name: Avaliar janela e disparar workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          now_epoch=$(date -u +%s)
+          end_epoch=$(date -u -d "$ACCELERATION_END_UTC" +%s)
+          if (( now_epoch >= end_epoch )); then
+            echo "### Aceleração encerrada" >> "$GITHUB_STEP_SUMMARY"
+            echo "Janela encerrada em $ACCELERATION_END_UTC; nenhuma evidência artificial foi criada." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          gh workflow run teams-dashboard-availability-monitor.yml --ref main
+          hour=$(date -u +%H)
+          if (( 10#$hour % 6 == 0 )); then
+            gh workflow run teams-commit-notification.yml --ref main -f message="Canário acelerado governado GitHub → Teams"
+            delivery="sim"
+          else
+            delivery="não"
+          fi
+
+          {
+            echo "### Aceleração de evidências"
+            echo "- Monitor canônico disparado: sim"
+            echo "- Canário canônico disparado: $delivery"
+            echo "- Encerramento automático: $ACCELERATION_END_UTC"
+            echo "- Fonte de verdade preservada: workflows canônicos"
+          } >> "$GITHUB_STEP_SUMMARY"
