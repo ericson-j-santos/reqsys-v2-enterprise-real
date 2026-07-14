@@ -38,16 +38,26 @@ jobs:
               'fly.prod.toml': ('reqsys-env-api-prod', 'production', 'INFO'),
           }
           apps = set()
+          urls = set()
           for filename, values in expected.items():
               content = Path(filename).read_text(encoding='utf-8')
               app, environment, level = values
+              url = f'https://{app}.fly.dev'
               assert f'app = "{app}"' in content
               assert f'APP_ENV = "{environment}"' in content
+              assert f'PUBLIC_ENVIRONMENT = "{environment}"' in content
+              assert f'API_PUBLIC_URL = "{url}"' in content
               assert f'LOG_LEVEL = "{level}"' in content
               assert app not in apps
+              assert url not in urls
               apps.add(app)
-          assert len(apps) == 3
-          print('Contratos DEV/STG/PROD isolados e válidos.')
+              urls.add(url)
+          assert len(apps) == len(urls) == 3
+          print('Contratos DEV/STG/PROD isolados, coerentes e sem URL cruzada.')
           PY
+      - name: Validate production logging policy
+        run: |
+          ! grep -Eq 'LOG_LEVEL = "(TRACE|DEBUG)"' fly.prod.toml
+          grep -Fq 'LOG_LEVEL = "INFO"' fly.prod.toml
       - name: Build container
         run: docker build -t environment-observability-api:test .
