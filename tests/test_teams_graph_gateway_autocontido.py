@@ -1,10 +1,13 @@
+import sys
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
+MODULE_NAME = "teams_graph_gateway_autocontido"
 MODULE_PATH = Path(__file__).parents[1] / "tools" / "geradores" / "teams_graph_gateway_autocontido.py"
-spec = spec_from_file_location("teams_graph_gateway_autocontido", MODULE_PATH)
+spec = spec_from_file_location(MODULE_NAME, MODULE_PATH)
 assert spec and spec.loader
 module = module_from_spec(spec)
+sys.modules[MODULE_NAME] = module
 spec.loader.exec_module(module)
 
 
