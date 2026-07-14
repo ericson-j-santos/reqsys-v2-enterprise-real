@@ -1,0 +1,70 @@
+name: User Experience Sync Confidence
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/build_user_experience_sync_confidence.py'
+      - 'tests/test_build_user_experience_sync_confidence.py'
+      - '.github/workflows/user-experience-sync-confidence.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build_user_experience_sync_confidence.py'
+      - 'tests/test_build_user_experience_sync_confidence.py'
+      - '.github/workflows/user-experience-sync-confidence.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '41 5 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: user-experience-sync-confidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: python -m py_compile scripts/build_user_experience_sync_confidence.py
+      - name: Test
+        run: python -m unittest tests/test_build_user_experience_sync_confidence.py
+      - name: Build report-only evidence
+        shell: bash
+        run: |
+          mkdir -p evidence/ux
+          cat > /tmp/ux-sync-input.json <<'JSON'
+          {
+            "samples": [],
+            "state": {},
+            "executive_brief": {}
+          }
+          JSON
+          python scripts/build_user_experience_sync_confidence.py \
+            --input /tmp/ux-sync-input.json \
+            --output evidence/ux/user-experience-sync-confidence.json
+      - name: Executive summary
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          p=json.load(open('evidence/ux/user-experience-sync-confidence.json'))['indicator']
+          print('## User Experience Sync Confidence')
+          print(f"- Status: `{p['status']}`")
+          print(f"- Confidence: **{p['confidence_level']}** ({p['confidence_score']}%)")
+          print(f"- Sync rate: **{p['sync_rate_percent']}%**")
+          print(f"- Stable streak: **{p['stable_streak']}**")
+          print(f"- Recurring drift: **{p['recurring_drift']}**")
+          print('- Mode: `report-only`')
+          print('- Human approval required: `true`')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-sync-confidence-${{ github.sha }}
+          path: evidence/ux/user-experience-sync-confidence.json
+          retention-days: 90
