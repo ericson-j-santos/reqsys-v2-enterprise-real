@@ -1,0 +1,167 @@
+name: Teams Notification Dashboard
+
+on:
+  schedule:
+    - cron: "35 12 * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ops-dashboard/teams-notification/**
+      - .github/workflows/teams-notification-dashboard.yml
+
+permissions:
+  actions: read
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: teams-notification-dashboard
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Gerar dashboard executivo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SLO_TARGET: "99.0"
+      WINDOW_DAYS: "30"
+      WORKFLOW_FILE: "teams-commit-notification.yml"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Calcular dados públicos do dashboard
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import math
+          import os
+          import subprocess
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          repository = os.environ["GITHUB_REPOSITORY"]
+          workflow_file = os.environ["WORKFLOW_FILE"]
+          window_days = int(os.environ["WINDOW_DAYS"])
+          target = float(os.environ["SLO_TARGET"])
+          cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
+
+          command = [
+              "gh", "api", "--paginate",
+              f"repos/{repository}/actions/workflows/{workflow_file}/runs?per_page=100",
+          ]
+          completed = subprocess.run(command, text=True, capture_output=True, check=False)
+          if completed.returncode != 0:
+              raise SystemExit(completed.stderr or "Falha ao consultar execuções Teams")
+
+          runs = []
+          for document in completed.stdout.splitlines():
+              if not document.strip():
+                  continue
+              payload = json.loads(document)
+              for run in payload.get("workflow_runs", []):
+                  created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+                  if created >= cutoff and run.get("status") == "completed":
+                      runs.append(run)
+          runs.sort(key=lambda item: item["created_at"], reverse=True)
+
+          total = len(runs)
+          successes = sum(run.get("conclusion") == "success" for run in runs)
+          failures = total - successes
+          success_rate = round(successes / total * 100.0, 2) if total else 0.0
+          allowed_failures = math.floor(total * (100.0 - target) / 100.0)
+          remaining_budget = allowed_failures - failures
+
+          durations = []
+          for run in runs:
+              start_value = run.get("run_started_at") or run.get("created_at")
+              end_value = run.get("updated_at")
+              if start_value and end_value:
+                  start = datetime.fromisoformat(start_value.replace("Z", "+00:00"))
+                  end = datetime.fromisoformat(end_value.replace("Z", "+00:00"))
+                  durations.append(max(0.0, (end - start).total_seconds()))
+          mean_duration = round(sum(durations) / len(durations), 2) if durations else 0.0
+
+          consecutive_failures = 0
+          for run in runs:
+              if run.get("conclusion") == "success":
+                  break
+              consecutive_failures += 1
+
+          state = "insufficient_data" if total == 0 else ("healthy" if success_rate >= target else "breached")
+          report = {
+              "schema_version": "1.0.0",
+              "service": "github-teams-commit-notification",
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "window_days": window_days,
+              "target_percent": target,
+              "state": state,
+              "total_runs": total,
+              "successful_runs": successes,
+              "failed_runs": failures,
+              "success_rate_percent": success_rate,
+              "allowed_failures": allowed_failures,
+              "remaining_error_budget": remaining_budget,
+              "consecutive_failures": consecutive_failures,
+              "mean_duration_seconds": mean_duration,
+              "recent_runs": [
+                  {
+                      "id": run.get("id"),
+                      "event": run.get("event"),
+                      "conclusion": run.get("conclusion"),
+                      "created_at": run.get("created_at"),
+                      "html_url": run.get("html_url"),
+                  }
+                  for run in runs[:20]
+              ],
+          }
+
+          site = Path("site")
+          site.mkdir(exist_ok=True)
+          source = Path("ops-dashboard/teams-notification/index.html")
+          (site / "index.html").write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+          (site / "data.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          (site / ".nojekyll").write_text("", encoding="utf-8")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("### Teams Notification Dashboard\n")
+              summary.write(f"- Estado: **{state}**\n")
+              summary.write(f"- Taxa de sucesso: **{success_rate:.2f}%**\n")
+              summary.write(f"- Execuções: **{total}**\n")
+              summary.write(f"- Orçamento restante: **{remaining_budget}**\n")
+          PY
+
+      - name: Validar conteúdo público
+        run: |
+          test -s site/index.html
+          test -s site/data.json
+          python -m json.tool site/data.json >/dev/null
+          ! grep -R "TEAMS_WEBHOOK_URL\|AZURE_CLIENT_SECRET" site/
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Empacotar página
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Publicar dashboard
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publicar no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
