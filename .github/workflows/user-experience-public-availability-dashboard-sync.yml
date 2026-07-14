@@ -1,0 +1,54 @@
+name: User Experience Public Availability Dashboard Sync
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/inject_user_experience_public_availability_card.py'
+      - 'scripts/smoke_user_experience_public_availability_sync.py'
+      - 'tests/test_user_experience_public_availability_dashboard_sync.py'
+      - '.github/workflows/user-experience-public-availability-dashboard-sync.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/inject_user_experience_public_availability_card.py'
+      - 'scripts/smoke_user_experience_public_availability_sync.py'
+      - 'tests/test_user_experience_public_availability_dashboard_sync.py'
+      - '.github/workflows/user-experience-public-availability-dashboard-sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/inject_user_experience_public_availability_card.py
+          python -m py_compile scripts/smoke_user_experience_public_availability_sync.py
+          python -m unittest tests/test_user_experience_public_availability_dashboard_sync.py
+      - name: Build governed evidence
+        run: |
+          mkdir -p evidence/ux-public-availability
+          cat > evidence/ux-public-availability/state.json <<'JSON'
+          {"cards":{"user_experience_public_availability":{"status":"PUBLIC_AVAILABILITY_STABLE","coverage":["DEV","STG","PROD"],"minimum_pass_rate":100,"sample_count":3,"stable_sequence":3,"common_fingerprint":"abc","drift_detected":false,"degradation_detected":false,"human_review_eligible":true,"mode":"report-only","production_blocker":false,"human_approval_required":true}}}
+          JSON
+          cat > evidence/ux-public-availability/brief.json <<'JSON'
+          {"indicators":{"user_experience_public_availability":{"status":"PUBLIC_AVAILABILITY_STABLE","coverage":["DEV","STG","PROD"],"minimum_pass_rate":100,"sample_count":3,"stable_sequence":3,"common_fingerprint":"abc","drift_detected":false,"degradation_detected":false,"human_review_eligible":true,"mode":"report-only","production_blocker":false,"human_approval_required":true}}}
+          JSON
+          echo '{"cards":[]}' > evidence/ux-public-availability/dashboard.json
+          cat > evidence/ux-public-availability/runtime.json <<'JSON'
+          {"status":"PUBLIC_AVAILABILITY_STABLE","coverage":["DEV","STG","PROD"],"minimum_pass_rate":100,"sample_count":3,"stable_sequence":3,"common_fingerprint":"abc","drift_detected":false,"degradation_detected":false,"human_review_eligible":true,"mode":"report-only","production_blocker":false,"human_approval_required":true}
+          JSON
+          python scripts/inject_user_experience_public_availability_card.py --state evidence/ux-public-availability/state.json --dashboard evidence/ux-public-availability/dashboard.json
+          python scripts/smoke_user_experience_public_availability_sync.py --state evidence/ux-public-availability/state.json --brief evidence/ux-public-availability/brief.json --dashboard evidence/ux-public-availability/dashboard.json --runtime evidence/ux-public-availability/runtime.json --output evidence/ux-public-availability/sync-result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-public-availability-dashboard-sync-${{ github.sha }}
+          path: evidence/ux-public-availability/
+          retention-days: 90
