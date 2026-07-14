@@ -9,3 +9,39 @@ gitlab_governance_validation:
     expire_in: 14 days
     paths:
       - audit/gitlab-governance-report.md
+
+# Manual, protected and idempotent governance provisioning.
+# Required protected variable: GITLAB_PROVISIONING_TOKEN (api scope).
+# Optional source variables are copied without being printed:
+# GITLAB_GOVERNANCE_TOKEN_SOURCE and FLY_API_TOKEN_SOURCE.
+gitlab_governance_provision_dry_run:
+  stage: governance
+  image: python:3.12-alpine
+  script:
+    - python gitlab/scripts/provision_gitlab_governance.py --output-dir audit
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - audit/gitlab-governance-provisioning.json
+      - audit/gitlab-governance-provisioning.md
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual
+  allow_failure: false
+
+gitlab_governance_provision_apply:
+  stage: governance
+  image: python:3.12-alpine
+  script:
+    - python gitlab/scripts/provision_gitlab_governance.py --apply --output-dir audit
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - audit/gitlab-governance-provisioning.json
+      - audit/gitlab-governance-provisioning.md
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual
+  allow_failure: false
