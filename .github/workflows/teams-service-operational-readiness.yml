@@ -1,0 +1,84 @@
+name: Teams Service Operational Readiness
+
+on:
+  pull_request:
+    paths:
+      - docs/runbooks/teams-notification-service.md
+      - .github/workflows/teams-*.yml
+      - tools/geradores/teams_graph_gateway_autocontido.py
+      - ops-dashboard/teams-notification/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-readiness:
+    name: Validar prontidão operacional Teams
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar componentes obrigatórios
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            '.github/workflows/teams-commit-notification.yml'
+            '.github/workflows/teams-commit-notification-contract.yml'
+            '.github/workflows/teams-notification-observability.yml'
+            '.github/workflows/teams-notification-slo.yml'
+            '.github/workflows/teams-notification-dashboard.yml'
+            '.github/workflows/teams-dashboard-availability-monitor.yml'
+            'tools/geradores/teams_graph_gateway_autocontido.py'
+            'ops-dashboard/teams-notification/index.html'
+            'docs/runbooks/teams-notification-service.md'
+          )
+          for path in "${required[@]}"; do
+            test -s "$path" || { echo "::error title=Componente ausente::$path"; exit 1; }
+          done
+
+      - name: Validar contrato do runbook
+        shell: bash
+        run: |
+          set -euo pipefail
+          runbook='docs/runbooks/teams-notification-service.md'
+          markers=(
+            'RTO para falha de entrega'
+            'RPO das evidências'
+            'CFG-001'
+            'AUTH-001'
+            'PAGE-001'
+            'Critérios de recuperação'
+            'Definição de padrão ouro consolidado'
+          )
+          for marker in "${markers[@]}"; do
+            grep -Fq "$marker" "$runbook" || { echo "::error title=Runbook incompleto::Marcador ausente: $marker"; exit 1; }
+          done
+
+      - name: Validar segurança e automações
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile tools/geradores/teams_graph_gateway_autocontido.py
+          python tools/geradores/teams_graph_gateway_autocontido.py self-test
+          grep -Fq 'TEAMS_WEBHOOK_URL' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'schedule:' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'upload-artifact' .github/workflows/teams-notification-observability.yml
+          grep -Fq 'SLO_TARGET' .github/workflows/teams-notification-slo.yml
+          grep -Fq 'deploy-pages' .github/workflows/teams-notification-dashboard.yml
+          grep -Fq 'MAX_DATA_AGE_HOURS' .github/workflows/teams-dashboard-availability-monitor.yml
+          ! grep -R --include='*.json' --include='*.html' -E 'https://[^ ]*(webhook|logic\.azure|powerautomate)' ops-dashboard/teams-notification
+
+      - name: Registrar evidência
+        run: |
+          {
+            echo '### Teams Service Operational Readiness'
+            echo '- Componentes: OK'
+            echo '- Runbook: OK'
+            echo '- Gateway: OK'
+            echo '- Segurança: OK'
+            echo '- Resultado: padrão operacional validado'
+          } >> "$GITHUB_STEP_SUMMARY"
