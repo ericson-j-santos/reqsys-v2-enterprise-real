@@ -389,3 +389,38 @@ Resposta padronizada:
 - `POST /v1/teams-gateway/flow-bot/promover-solution` — promove o flow_bot entre ambientes via Power Platform Solutions (`require_admin`, Opcao B da secao "Automacao").
 - `GET /v1/teams-gateway/flow-bot/flows?environment=...&nome_contem=...` — lista cloud flows cujo nome contem o texto informado, com status/data de modificacao — resolve ambiguidade entre flows/versoes parecidos sem precisar adivinhar no portal (`require_admin`).
 - `GET /v1/teams-gateway/flow-bot/solutions/{solution_name}/flows?environment=...` — lista os flows que estao DE FATO dentro de uma Solution especifica, via `solutioncomponents` (`require_admin`).
+
+## Automacao de CI: notificacoes de commit e de ambiente
+
+Ponta a ponta com o gateway em producao (nao invoca nenhum outro sistema Teams).
+
+- `scripts/notificar_teams.py`: wrapper de linha de comando (stdlib apenas, sem
+  dependencias) para `POST /v1/teams-gateway/messages`. Le `TEAMS_GATEWAY_DESTINO_ID`
+  do ambiente (ou `--destino-id`), usa `modo=auto`/`destino_tipo=chat` por padrao —
+  quem decide a rota real e o gateway (`/routes`), nao o script. Escreve evidencia
+  JSON via `--output` e, por padrao, **nao falha o job** quando a entrega falha
+  (usa `::warning::` + `continue-on-error: true` no workflow) — use `--strict` se
+  quiser propagar o erro.
+- `.github/workflows/notify-teams-repo-changes.yml`: dispara em todo `push` em
+  `main`; monta a mensagem (autor/mensagem/link do commit) inteiramente em Python
+  via `subprocess` com env vars (nunca interpolando `${{ github.event.head_commit.* }}`
+  direto num `run:` em shell — evita injecao de comando a partir de uma mensagem de
+  commit maliciosa).
+- `deploy-production-sync.yml` (job `summary`) e `fly-enterprise-sync.yml` (job
+  `summary`) ganharam um step "Notificar Teams" que roda sempre (`if: always()`)
+  apos o resumo em Markdown, reaproveitando os mesmos resultados de job (`needs.*.result`)
+  ja usados no `$GITHUB_STEP_SUMMARY`. Em `fly-enterprise-sync.yml` o step so
+  dispara quando `plan-environments.outputs.should_deploy == 'true'` (deploy real
+  via `workflow_dispatch`), evitando notificar em todo push que so faz o
+  drift-check read-only.
+- **Pre-requisito obrigatorio**: secret de repositorio `TEAMS_GATEWAY_DESTINO_ID`
+  (e-mail/UPN do destinatario) no GitHub Actions — sem ele, `modo=flow_bot`/
+  `graph_delegado` nao tem para quem enviar. `TEAMS_GATEWAY_BASE_URL` e opcional
+  (default `https://reqsys-api.fly.dev`).
+- **Estado em producao (2026-07-14)**: primeiro `flow_bot_owner` real registrado
+  (`POST /v1/teams-gateway/flow-bot/owners`, reaproveitando o mesmo fluxo Power
+  Automate ja validado em sessao anterior), canal `flow_bot` confirmado
+  `disponivel: true` com `donos_ativos: 1`, envio real testado (`entregue: true`,
+  `status_code: 200`) tanto via curl direto quanto via `scripts/notificar_teams.py`.
+  Sem redundancia ainda (1 dono so) — ver secao "Redundancia" acima se for
+  adicionar um segundo dono de backup.
