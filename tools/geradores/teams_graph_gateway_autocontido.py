@@ -16,6 +16,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -148,20 +149,12 @@ class TeamsGateway:
             raise GatewayError("TEAMS_WEBHOOK_URL não configurado")
         correlation_id = str(uuid.uuid4())
         payload = {
-            "type": "message",
-            "attachments": [{
-                "contentType": "application/vnd.microsoft.card.adaptive",
-                "content": {
-                    "$schema": "https://adaptivecards.io/schemas/adaptive-card.json",
-                    "type": "AdaptiveCard",
-                    "version": "1.4",
-                    "body": [
-                        {"type": "TextBlock", "weight": "Bolder", "size": "Medium", "text": title},
-                        {"type": "TextBlock", "wrap": True, "text": message},
-                        {"type": "TextBlock", "isSubtle": True, "text": f"Correlation ID: {correlation_id}"},
-                    ],
-                },
-            }],
+            "to": "Canal ReqSys - Commits",
+            "title": title,
+            "content": message,
+            "signature": "ReqSys",
+            "stampDate": datetime.now(timezone.utc).isoformat(),
+            "correlationId": correlation_id,
         }
         if dry_run:
             return GatewayResult(True, "webhook", correlation_id, response={"planned": True, "payload": payload})
