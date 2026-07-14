@@ -169,7 +169,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     needs: [guardrails, backend-fast, frontend-fast]
-    if: always()
+    if: ${{ always() && !cancelled() }}
     steps:
       - name: Consolidar status
         shell: bash
