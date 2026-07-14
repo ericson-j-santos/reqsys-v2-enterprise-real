@@ -27,7 +27,7 @@ jobs:
       - name: Compile
         run: python -m compileall -q app tests
       - name: Tests
-        run: pytest -q
+        run: python -m pytest -q
       - name: Validate isolated Fly contracts
         run: |
           python - <<'PY'
