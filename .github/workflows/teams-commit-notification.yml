@@ -1,0 +1,152 @@
+name: Teams Commit Notification
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      message:
+        description: Mensagem opcional para validar o canal do Teams
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-commit-notification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  notify-teams:
+    name: Enviar commit ao Teams
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar gateway
+        run: |
+          python -m py_compile tools/geradores/teams_graph_gateway_autocontido.py
+          python tools/geradores/teams_graph_gateway_autocontido.py self-test
+
+      - name: Validar configuração do Teams
+        shell: bash
+        run: |
+          if [[ -z "${TEAMS_WEBHOOK_URL}" ]]; then
+            echo "::error title=Teams não configurado::Cadastre o secret TEAMS_WEBHOOK_URL no repositório."
+            exit 1
+          fi
+
+      - name: Enviar notificação
+        id: notify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
+          SHA: ${{ github.sha }}
+          SERVER_URL: ${{ github.server_url }}
+          RUN_ID: ${{ github.run_id }}
+          MANUAL_MESSAGE: ${{ inputs.message }}
+          EVENT_PATH: ${{ github.event_path }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          event = json.loads(Path(os.environ["EVENT_PATH"]).read_text(encoding="utf-8"))
+          repository = os.environ["REPOSITORY"]
+          sha = os.environ["SHA"]
+          short_sha = sha[:7]
+          server_url = os.environ["SERVER_URL"]
+          commit_url = f"{server_url}/{repository}/commit/{sha}"
+          run_url = f"{server_url}/{repository}/actions/runs/{os.environ['RUN_ID']}"
+
+          if os.environ["EVENT_NAME"] == "push":
+              head = event.get("head_commit") or {}
+              commit_message = str(head.get("message") or "Commit sem mensagem").splitlines()[0]
+              author = (head.get("author") or {}).get("name") or os.environ["ACTOR"]
+              compare_url = event.get("compare") or commit_url
+              commits = event.get("commits") or []
+              message = (
+                  f"Novo commit em {repository}\n"
+                  f"Branch: {os.environ['REF_NAME']}\n"
+                  f"Commit: {short_sha} — {commit_message}\n"
+                  f"Autor: {author}\n"
+                  f"Commits no push: {len(commits) or 1}\n"
+                  f"Detalhes: {compare_url}\n"
+                  f"Workflow: {run_url}"
+              )
+              title = "ReqSys — novo commit"
+          else:
+              manual = os.environ.get("MANUAL_MESSAGE", "").strip()
+              message = manual or (
+                  f"Teste manual da integração GitHub → Teams\n"
+                  f"Repositório: {repository}\n"
+                  f"Executado por: {os.environ['ACTOR']}\n"
+                  f"Workflow: {run_url}"
+              )
+              title = "ReqSys — teste de notificação"
+
+          completed = subprocess.run(
+              [
+                  sys.executable,
+                  "tools/geradores/teams_graph_gateway_autocontido.py",
+                  "send-webhook",
+                  "--title",
+                  title,
+                  "--message",
+                  message,
+              ],
+              text=True,
+              capture_output=True,
+              check=False,
+          )
+          if completed.stdout:
+              print(completed.stdout)
+          if completed.stderr:
+              print(completed.stderr, file=sys.stderr)
+          if completed.returncode != 0:
+              raise SystemExit(completed.returncode)
+
+          result = json.loads(completed.stdout)
+          if not result.get("success"):
+              raise SystemExit(f"Teams Gateway não confirmou envio: {result}")
+          status_code = result.get("status_code")
+          if status_code is not None and not 200 <= int(status_code) < 300:
+              raise SystemExit(f"Teams retornou HTTP inesperado: {status_code}")
+
+          correlation_id = result.get("correlation_id", "n/a")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"correlation_id={correlation_id}\n")
+              output.write(f"status_code={status_code or 'accepted'}\n")
+          PY
+
+      - name: Registrar evidência
+        shell: bash
+        run: |
+          {
+            echo "### Teams Commit Notification"
+            echo "- Status: entregue/aceito"
+            echo "- HTTP: ${{ steps.notify.outputs.status_code }}"
+            echo "- Correlation ID: ${{ steps.notify.outputs.correlation_id }}"
+            echo "- Commit: ${{ github.sha }}"
+          } >> "$GITHUB_STEP_SUMMARY"
