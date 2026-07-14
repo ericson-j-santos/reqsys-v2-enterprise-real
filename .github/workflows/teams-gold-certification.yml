@@ -1,0 +1,246 @@
+name: Teams Gold Certification
+
+on:
+  schedule:
+    - cron: "50 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: teams-gold-certification
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    name: Certificar operação GitHub → Teams
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WINDOW_DAYS: "30"
+      MIN_OBSERVATION_DAYS: "30"
+      MIN_DELIVERY_SUCCESS_PERCENT: "99.0"
+      MIN_MONITOR_SUCCESS_PERCENT: "99.0"
+      MIN_DELIVERY_RUNS: "20"
+      MIN_MONITOR_RUNS: "20"
+      DELIVERY_WORKFLOW: teams-commit-notification.yml
+      MONITOR_WORKFLOW: teams-dashboard-availability-monitor.yml
+      INCIDENT_TITLE: "[GOVERNANCE][TEAMS] Certificação Padrão Ouro suspensa"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Calcular certificação
+        id: certification
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          repository = os.environ["GITHUB_REPOSITORY"]
+          window_days = int(os.environ["WINDOW_DAYS"])
+          min_observation_days = int(os.environ["MIN_OBSERVATION_DAYS"])
+          delivery_target = float(os.environ["MIN_DELIVERY_SUCCESS_PERCENT"])
+          monitor_target = float(os.environ["MIN_MONITOR_SUCCESS_PERCENT"])
+          min_delivery_runs = int(os.environ["MIN_DELIVERY_RUNS"])
+          min_monitor_runs = int(os.environ["MIN_MONITOR_RUNS"])
+          now = datetime.now(timezone.utc)
+          cutoff = now - timedelta(days=window_days)
+
+          def workflow_runs(filename: str) -> list[dict]:
+              completed = subprocess.run(
+                  [
+                      "gh", "api", "--paginate",
+                      f"repos/{repository}/actions/workflows/{filename}/runs?per_page=100",
+                  ],
+                  text=True,
+                  capture_output=True,
+                  check=False,
+              )
+              if completed.returncode != 0:
+                  raise SystemExit(completed.stderr or f"Falha ao consultar {filename}")
+              results: list[dict] = []
+              for document in completed.stdout.splitlines():
+                  if not document.strip():
+                      continue
+                  payload = json.loads(document)
+                  for run in payload.get("workflow_runs", []):
+                      created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+                      if created >= cutoff and run.get("status") == "completed":
+                          results.append(run)
+              results.sort(key=lambda item: item["created_at"])
+              return results
+
+          def metrics(runs: list[dict]) -> dict:
+              total = len(runs)
+              successes = sum(run.get("conclusion") == "success" for run in runs)
+              failures = total - successes
+              rate = round(successes / total * 100.0, 2) if total else 0.0
+              first_at = runs[0]["created_at"] if runs else None
+              last_at = runs[-1]["created_at"] if runs else None
+              observed_days = 0.0
+              if first_at:
+                  first = datetime.fromisoformat(first_at.replace("Z", "+00:00"))
+                  observed_days = round((now - first).total_seconds() / 86400, 2)
+              return {
+                  "total": total,
+                  "successes": successes,
+                  "failures": failures,
+                  "success_rate_percent": rate,
+                  "first_run_at": first_at,
+                  "last_run_at": last_at,
+                  "observed_days": observed_days,
+              }
+
+          delivery = metrics(workflow_runs(os.environ["DELIVERY_WORKFLOW"]))
+          monitor = metrics(workflow_runs(os.environ["MONITOR_WORKFLOW"]))
+
+          structural_files = [
+              ".github/workflows/teams-commit-notification.yml",
+              ".github/workflows/teams-notification-observability.yml",
+              ".github/workflows/teams-notification-slo.yml",
+              ".github/workflows/teams-notification-dashboard.yml",
+              ".github/workflows/teams-dashboard-availability-monitor.yml",
+              ".github/workflows/teams-service-operational-readiness.yml",
+              "docs/runbooks/teams-notification-service.md",
+              "tools/geradores/teams_graph_gateway_autocontido.py",
+              "ops-dashboard/teams-notification/index.html",
+          ]
+          missing_files = [path for path in structural_files if not Path(path).is_file()]
+
+          requirements = {
+              "structure_complete": not missing_files,
+              "delivery_sample_sufficient": delivery["total"] >= min_delivery_runs,
+              "monitor_sample_sufficient": monitor["total"] >= min_monitor_runs,
+              "observation_window_complete": min(
+                  delivery["observed_days"], monitor["observed_days"]
+              ) >= min_observation_days,
+              "delivery_slo_met": delivery["success_rate_percent"] >= delivery_target,
+              "monitor_slo_met": monitor["success_rate_percent"] >= monitor_target,
+              "no_recent_delivery_failure": delivery["failures"] == 0 or delivery["success_rate_percent"] >= delivery_target,
+              "no_recent_monitor_failure": monitor["failures"] == 0 or monitor["success_rate_percent"] >= monitor_target,
+          }
+
+          sample_ready = (
+              requirements["delivery_sample_sufficient"]
+              and requirements["monitor_sample_sufficient"]
+              and requirements["observation_window_complete"]
+          )
+          quality_ready = all(
+              requirements[name]
+              for name in (
+                  "structure_complete",
+                  "delivery_slo_met",
+                  "monitor_slo_met",
+                  "no_recent_delivery_failure",
+                  "no_recent_monitor_failure",
+              )
+          )
+
+          if sample_ready and quality_ready:
+              state = "gold_certified"
+          elif sample_ready and not quality_ready:
+              state = "certification_suspended"
+          else:
+              state = "observation"
+
+          report = {
+              "schema_version": "1.0.0",
+              "service": "github-teams-notification",
+              "generated_at": now.isoformat(),
+              "window_days": window_days,
+              "state": state,
+              "targets": {
+                  "delivery_success_percent": delivery_target,
+                  "monitor_success_percent": monitor_target,
+                  "minimum_observation_days": min_observation_days,
+                  "minimum_delivery_runs": min_delivery_runs,
+                  "minimum_monitor_runs": min_monitor_runs,
+              },
+              "delivery": delivery,
+              "availability_monitor": monitor,
+              "requirements": requirements,
+              "missing_files": missing_files,
+              "source_commit": os.environ["GITHUB_SHA"],
+              "run_url": f"{os.environ['GITHUB_SERVER_URL']}/{repository}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }
+          canonical = json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+          report["evidence_sha256"] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+          output_dir = Path("teams-gold-certification")
+          output_dir.mkdir(exist_ok=True)
+          (output_dir / "certification.json").write_text(
+              json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          markdown = [
+              "# Certificação Padrão Ouro — GitHub → Teams",
+              "",
+              f"- Estado: **{state}**",
+              f"- Janela: **{window_days} dias**",
+              f"- Entregas: **{delivery['success_rate_percent']:.2f}%** ({delivery['successes']}/{delivery['total']})",
+              f"- Monitor: **{monitor['success_rate_percent']:.2f}%** ({monitor['successes']}/{monitor['total']})",
+              f"- Observação: **{min(delivery['observed_days'], monitor['observed_days']):.2f} dias**",
+              f"- Evidência SHA-256: `{report['evidence_sha256']}`",
+          ]
+          (output_dir / "certification.md").write_text("\n".join(markdown) + "\n", encoding="utf-8")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"state={state}\n")
+              output.write(f"delivery_rate={delivery['success_rate_percent']}\n")
+              output.write(f"monitor_rate={monitor['success_rate_percent']}\n")
+              output.write(f"evidence_sha256={report['evidence_sha256']}\n")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("\n".join(markdown) + "\n")
+          PY
+
+      - name: Publicar evidência de certificação
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-gold-certification-${{ github.run_id }}
+          path: teams-gold-certification/
+          retention-days: 365
+
+      - name: Abrir ou atualizar suspensão
+        if: steps.certification.outputs.state == 'certification_suspended'
+        shell: bash
+        run: |
+          existing=$(gh issue list --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
+          body=$(cat <<EOF
+          ## Certificação Padrão Ouro suspensa
+
+          - Entregas: **${{ steps.certification.outputs.delivery_rate }}%**
+          - Disponibilidade: **${{ steps.certification.outputs.monitor_rate }}%**
+          - Evidência SHA-256: `${{ steps.certification.outputs.evidence_sha256 }}`
+          - Execução: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          A certificação será restaurada automaticamente quando todos os critérios voltarem à meta.
+          EOF
+          )
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "${INCIDENT_TITLE}" --body "$body" --label incident
+          fi
+
+      - name: Fechar suspensão após recuperação
+        if: steps.certification.outputs.state == 'gold_certified'
+        shell: bash
+        run: |
+          existing=$(gh issue list --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body "Certificação restaurada. Evidência SHA-256: `${{ steps.certification.outputs.evidence_sha256 }}`. Execução: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            gh issue close "$existing" --reason completed
+          fi
