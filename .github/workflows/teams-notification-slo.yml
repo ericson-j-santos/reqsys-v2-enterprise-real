@@ -1,0 +1,216 @@
+name: Teams Notification SLO
+
+on:
+  schedule:
+    - cron: "20 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: teams-notification-slo
+  cancel-in-progress: true
+
+jobs:
+  calculate-slo:
+    name: Calcular SLO GitHub → Teams
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SLO_TARGET: "99.0"
+      WINDOW_DAYS: "30"
+      WORKFLOW_FILE: "teams-commit-notification.yml"
+      INCIDENT_TITLE: "[INCIDENT][TEAMS] SLO de notificações abaixo da meta"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Coletar execuções e calcular indicadores
+        id: slo
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import math
+          import os
+          import subprocess
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          repository = os.environ["GITHUB_REPOSITORY"]
+          workflow_file = os.environ["WORKFLOW_FILE"]
+          window_days = int(os.environ["WINDOW_DAYS"])
+          target = float(os.environ["SLO_TARGET"])
+          cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
+
+          completed = subprocess.run(
+              [
+                  "gh", "api", "--paginate",
+                  f"repos/{repository}/actions/workflows/{workflow_file}/runs?per_page=100",
+              ],
+              text=True,
+              capture_output=True,
+              check=False,
+          )
+          if completed.returncode != 0:
+              raise SystemExit(completed.stderr or "Falha ao consultar execuções do workflow Teams")
+
+          runs = []
+          for document in completed.stdout.splitlines():
+              if not document.strip():
+                  continue
+              payload = json.loads(document)
+              for run in payload.get("workflow_runs", []):
+                  created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+                  if created >= cutoff and run.get("status") == "completed":
+                      runs.append(run)
+
+          runs.sort(key=lambda item: item["created_at"], reverse=True)
+          total = len(runs)
+          successes = sum(1 for run in runs if run.get("conclusion") == "success")
+          failures = total - successes
+          success_rate = round((successes / total * 100.0), 2) if total else 0.0
+          allowed_failures = math.floor(total * (100.0 - target) / 100.0)
+          remaining_budget = allowed_failures - failures
+
+          durations = []
+          for run in runs:
+              started = run.get("run_started_at") or run.get("created_at")
+              updated = run.get("updated_at")
+              if started and updated:
+                  start = datetime.fromisoformat(started.replace("Z", "+00:00"))
+                  end = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                  durations.append(max(0.0, (end - start).total_seconds()))
+          mean_duration = round(sum(durations) / len(durations), 2) if durations else 0.0
+
+          consecutive_failures = 0
+          for run in runs:
+              if run.get("conclusion") == "success":
+                  break
+              consecutive_failures += 1
+
+          state = "insufficient_data" if total == 0 else ("healthy" if success_rate >= target else "breached")
+          latest = runs[0] if runs else None
+          report = {
+              "schema_version": "1.0.0",
+              "service": "github-teams-commit-notification",
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "window_days": window_days,
+              "target_percent": target,
+              "state": state,
+              "total_runs": total,
+              "successful_runs": successes,
+              "failed_runs": failures,
+              "success_rate_percent": success_rate,
+              "allowed_failures": allowed_failures,
+              "remaining_error_budget": remaining_budget,
+              "consecutive_failures": consecutive_failures,
+              "mean_duration_seconds": mean_duration,
+              "latest_run": None if latest is None else {
+                  "id": latest.get("id"),
+                  "event": latest.get("event"),
+                  "conclusion": latest.get("conclusion"),
+                  "created_at": latest.get("created_at"),
+                  "html_url": latest.get("html_url"),
+                  "head_sha": latest.get("head_sha"),
+              },
+              "recent_runs": [
+                  {
+                      "id": run.get("id"),
+                      "event": run.get("event"),
+                      "conclusion": run.get("conclusion"),
+                      "created_at": run.get("created_at"),
+                      "html_url": run.get("html_url"),
+                  }
+                  for run in runs[:20]
+              ],
+          }
+
+          output_dir = Path("teams-slo-evidence")
+          output_dir.mkdir(exist_ok=True)
+          (output_dir / "teams-notification-slo.json").write_text(
+              json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+
+          markdown = [
+              "# Teams Notification SLO",
+              "",
+              f"- Estado: **{state}**",
+              f"- Janela: **{window_days} dias**",
+              f"- Meta: **{target:.2f}%**",
+              f"- Taxa de sucesso: **{success_rate:.2f}%**",
+              f"- Execuções: **{total}**",
+              f"- Sucessos: **{successes}**",
+              f"- Falhas: **{failures}**",
+              f"- Orçamento de erro restante: **{remaining_budget}**",
+              f"- Falhas consecutivas: **{consecutive_failures}**",
+              f"- Duração média: **{mean_duration:.2f}s**",
+          ]
+          (output_dir / "teams-notification-slo.md").write_text("\n".join(markdown) + "\n", encoding="utf-8")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"state={state}\n")
+              output.write(f"success_rate={success_rate}\n")
+              output.write(f"total={total}\n")
+              output.write(f"failures={failures}\n")
+              output.write(f"remaining_budget={remaining_budget}\n")
+              output.write(f"consecutive_failures={consecutive_failures}\n")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("\n".join(markdown) + "\n")
+          PY
+
+      - name: Publicar evidência SLO
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-notification-slo-${{ github.run_id }}
+          path: teams-slo-evidence/
+          retention-days: 90
+
+      - name: Abrir ou atualizar incidente de SLO
+        if: steps.slo.outputs.state == 'breached'
+        shell: bash
+        run: |
+          existing=$(gh issue list --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
+          body=$(cat <<EOF
+          ## SLO GitHub → Teams abaixo da meta
+
+          - Meta: **${SLO_TARGET}%**
+          - Taxa atual: **${{ steps.slo.outputs.success_rate }}%**
+          - Janela: **${WINDOW_DAYS} dias**
+          - Execuções: **${{ steps.slo.outputs.total }}**
+          - Falhas: **${{ steps.slo.outputs.failures }}**
+          - Orçamento restante: **${{ steps.slo.outputs.remaining_budget }}**
+          - Falhas consecutivas: **${{ steps.slo.outputs.consecutive_failures }}**
+          - Evidência: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          A issue será fechada automaticamente quando o SLO voltar à meta.
+          EOF
+          )
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "${INCIDENT_TITLE}" --body "$body" --label incident
+          fi
+
+      - name: Fechar incidente após recuperação
+        if: steps.slo.outputs.state == 'healthy'
+        shell: bash
+        run: |
+          existing=$(gh issue list --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body "SLO recuperado para ${{ steps.slo.outputs.success_rate }}%. Evidência: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            gh issue close "$existing" --reason completed
+          fi
+
+      - name: Aplicar gate de dados mínimos
+        if: steps.slo.outputs.state == 'insufficient_data'
+        run: |
+          echo "::warning title=SLO sem amostra::Ainda não há execuções concluídas na janela de 30 dias."

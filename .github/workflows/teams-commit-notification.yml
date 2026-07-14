@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "ops-dashboard/data/teams-notification-slo.json"
+      - "ops-dashboard/data/teams-notification-slo.md"
   schedule:
     - cron: "0 12 * * 1"
   workflow_dispatch:
