@@ -1,0 +1,27 @@
+name: Teams Commit Notification Contract
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/teams-commit-notification.yml
+      - tools/geradores/teams_graph_gateway_autocontido.py
+      - tests/test_teams_graph_gateway_autocontido.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validar sintaxe e contrato
+        run: |
+          python -m py_compile tools/geradores/teams_graph_gateway_autocontido.py
+          python tools/geradores/teams_graph_gateway_autocontido.py self-test
+          python -m pytest tests/test_teams_graph_gateway_autocontido.py -q
