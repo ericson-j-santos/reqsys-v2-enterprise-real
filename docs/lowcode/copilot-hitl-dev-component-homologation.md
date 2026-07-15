@@ -16,6 +16,31 @@ A execução é exclusivamente manual, usa o GitHub Environment `reqsys-power-pl
 HOMOLOGATE_DEV
 ```
 
+## Secrets do environment `reqsys-power-platform-dev`
+
+O job `homologate-dev` exige 4 secrets nesse GitHub Environment:
+`POWER_PLATFORM_ENVIRONMENT_URL`, `POWER_PLATFORM_CLIENT_ID`,
+`POWER_PLATFORM_CLIENT_SECRET`, `POWER_PLATFORM_TENANT_ID`.
+
+A app "ReqSys Enterprise" (mesma usada para login/Graph) já tem Application
+User no Dataverse do ambiente **ReqSys Dev** (`https://orge9b920f1.crm2.dynamics.com`)
+com papel *System Customizer* — confirmado via leitura direta na Dataverse
+Web API (`systemusers`/`systemuserroles_association`), sem necessidade de um
+app novo. Para reaproveitar essas credenciais e propagar via cofre:
+
+```bash
+export REQSYS_ADMIN_TOKEN="<jwt admin>"
+export COFRE_API_URL="http://localhost:8000"
+python scripts/configurar_copilot_hitl_dev_secrets.py capturar --reuse-azure-app
+
+export COFRE_SERVICE_TOKEN="<vault token>"
+python scripts/configurar_copilot_hitl_dev_secrets.py sincronizar
+```
+
+O script nunca imprime o valor do client secret; `capturar` grava no cofre
+ReqSys, `sincronizar` lê de volta e aplica via `gh secret set --env
+reqsys-power-platform-dev`.
+
 ## Contrato validado
 
 - Solution `ReqSysCopilotHITL` presente no DEV;
