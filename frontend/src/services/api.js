@@ -5,6 +5,7 @@ import {
   showJourneyLoading,
   showJourneySuccess,
 } from './userJourneyFeedback'
+import { emitDashboardEmptyResult, isEmptyDashboardResponse } from './dashboardEmptyStateIntegration'
 
 export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' })
 
@@ -102,6 +103,9 @@ api.interceptors.response.use(
       if (isEmptyGovBIResponse(response)) {
         clearJourneyFeedback()
         emitGovBIEmptyResult(response)
+      } else if (isEmptyDashboardResponse(response)) {
+        clearJourneyFeedback()
+        emitDashboardEmptyResult(response)
       } else if (['post', 'put', 'patch', 'delete'].includes(method)) {
         showJourneySuccess('Operação concluída. As informações exibidas foram atualizadas.')
       } else {
