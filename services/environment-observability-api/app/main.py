@@ -14,6 +14,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from app.metrics import metrics_response, normalize_route, record_request
+
 
 LOG_SCHEMA_VERSION = "1.0"
 W3C_TRACEPARENT = re.compile(
@@ -127,7 +129,7 @@ logger = configure_logging()
 app = FastAPI(
     title="Environment Observability API",
     version=settings.version,
-    description="Serviço reutilizável para identificação de ambiente, health checks e logs estruturados.",
+    description="Serviço reutilizável para identificação de ambiente, health checks, logs estruturados e métricas RED.",
 )
 
 
@@ -149,13 +151,17 @@ async def structured_access_log(request: Request, call_next):
     try:
         response = await call_next(request)
     except Exception:
+        duration_seconds = time.perf_counter() - started
+        route = normalize_route(request)
+        record_request(request.method, route, 500, duration_seconds)
         logger.exception(
             "Falha não tratada na requisição",
             extra={
                 **context,
+                "http_route": route,
                 "event_name": "http.request.failed",
                 "http_status_code": 500,
-                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                "duration_ms": round(duration_seconds * 1000, 2),
             },
         )
         return JSONResponse(
@@ -163,15 +169,19 @@ async def structured_access_log(request: Request, call_next):
             content={"detail": "internal_error", "correlation_id": correlation_id},
         )
 
+    duration_seconds = time.perf_counter() - started
+    route = normalize_route(request)
+    record_request(request.method, route, response.status_code, duration_seconds)
     response.headers["x-correlation-id"] = correlation_id
     response.headers["x-request-id"] = request_id
     logger.info(
         "Requisição concluída",
         extra={
             **context,
+            "http_route": route,
             "event_name": "http.request.completed",
             "http_status_code": response.status_code,
-            "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            "duration_ms": round(duration_seconds * 1000, 2),
         },
     )
     return response
@@ -204,6 +214,11 @@ def runtime_health() -> dict[str, Any]:
     }
 
 
+@app.get("/metrics", include_in_schema=False)
+def prometheus_metrics():
+    return metrics_response()
+
+
 @app.get("/api/v1/environment")
 def environment_contract() -> dict[str, Any]:
     return {
@@ -220,5 +235,12 @@ def environment_contract() -> dict[str, Any]:
             "trace_context": "w3c",
             "redaction": True,
             "sensitive_data_policy": "redact",
+        },
+        "metrics": {
+            "format": "prometheus",
+            "endpoint": "/metrics",
+            "methodology": "RED",
+            "dimensions": ["method", "route", "status_class"],
+            "high_cardinality_labels": False,
         },
     }
