@@ -1,4 +1,6 @@
-export const DASHBOARD_CLEAR_FILTERS_EVENT = 'reqsys:dashboard-clear-filters'
+import { DASHBOARD_CLEAR_FILTERS_EVENT } from './emptyStateEvents'
+
+export { DASHBOARD_CLEAR_FILTERS_EVENT } from './emptyStateEvents'
 
 const PRIORITY_ROUTES = new Set(['/analytics', '/estatisticas', '/monitoramento-operacional', '/'])
 

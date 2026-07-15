@@ -6,12 +6,12 @@ import {
   showJourneySuccess,
 } from './userJourneyFeedback'
 import { emitDashboardEmptyResult, isEmptyDashboardResponse } from './dashboardEmptyStateIntegration'
+import { GOVBI_EMPTY_EVENT } from './emptyStateEvents'
 
 export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' })
 
 const CORRELATION_STORAGE_KEY = 'reqsys_correlation_id'
 const JOURNEY_PATHS = ['/govbi', '/runtime', '/dashboard', '/monitoramento', '/analytics']
-export const GOVBI_EMPTY_EVENT = 'reqsys:govbi-empty-result'
 
 const generateCorrelationId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {

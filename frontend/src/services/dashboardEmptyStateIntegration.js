@@ -1,4 +1,6 @@
-export const DASHBOARD_EMPTY_EVENT = 'reqsys:dashboard-empty-result'
+import { DASHBOARD_EMPTY_EVENT } from './emptyStateEvents'
+
+export { DASHBOARD_EMPTY_EVENT } from './emptyStateEvents'
 
 const DASHBOARD_PATHS = ['/dashboard', '/monitoramento', '/analytics', '/estatisticas']
 
