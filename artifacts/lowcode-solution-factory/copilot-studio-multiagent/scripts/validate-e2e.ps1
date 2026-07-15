@@ -29,6 +29,10 @@ $managedZipPath = Join-Path $ArtifactRoot "ReqSysLowCodeCopilot_stg_managed.zip"
 $unmanagedZipPath = Join-Path $ArtifactRoot "ReqSysLowCodeCopilot_stg_unmanaged.zip"
 $checkerZipPath = Join-Path $ArtifactRoot "checker-stg-managed/202607140057493654_ReqSysLowCodeCopilot_df56.zip"
 $fetchXmlPath = Join-Path $ArtifactRoot "fetch-stg-workflows.xml"
+$fetchRbacPath = Join-Path $ArtifactRoot "fetch-stg-bot-rbac.xml"
+$stgLiveScriptPath = Join-Path $ArtifactRoot "scripts/validate-stg-live.ps1"
+$httpSmokeEvidencePath = Join-Path $ArtifactRoot "evidence/stg-http-trigger-smoke.json"
+$rbacEvidencePath = Join-Path $ArtifactRoot "evidence/stg-rbac-live.json"
 $devClonePath = Join-Path $ArtifactRoot "dev-clone/ReqSysCopilotStudioOrquestrador-DEV"
 $stgClonePath = Join-Path $ArtifactRoot "stg-clone/ReqSysCopilotStudioOrquestrador-STG"
 
@@ -41,12 +45,18 @@ Assert-True "managed solution zip exists" (Test-Path $managedZipPath)
 Assert-True "unmanaged solution zip exists" (Test-Path $unmanagedZipPath)
 Assert-True "checker zip exists" (Test-Path $checkerZipPath)
 Assert-True "fetch-stg-workflows.xml exists" (Test-Path $fetchXmlPath)
+Assert-True "fetch-stg-bot-rbac.xml exists" (Test-Path $fetchRbacPath)
+Assert-True "validate-stg-live.ps1 exists" (Test-Path $stgLiveScriptPath)
+Assert-True "stg-http-trigger-smoke.json exists" (Test-Path $httpSmokeEvidencePath)
+Assert-True "stg-rbac-live.json exists" (Test-Path $rbacEvidencePath)
 Assert-True "DEV clone exists" (Test-Path $devClonePath)
 Assert-True "STG clone exists" (Test-Path $stgClonePath)
 
 $bot = Get-Content -Raw $botPath | ConvertFrom-Json
 $conn = Get-Content -Raw $connPath | ConvertFrom-Json
 $delivery = Get-Content -Raw $deliveryPath
+$httpSmokeEvidence = Get-Content -Raw $httpSmokeEvidencePath | ConvertFrom-Json
+$rbacEvidence = Get-Content -Raw $rbacEvidencePath | ConvertFrom-Json
 
 Assert-Equal "bot kind" $bot.'$kind' "BotDefinition"
 Assert-Equal "agent name" $bot.entity.displayName "ReqSys Copilot Studio Orquestrador"
@@ -151,12 +161,27 @@ Assert-True "DEV release topic preserves managed flow id" ((Get-Content -Raw $de
 Assert-True "STG clone preserves GroupMembership" ((Get-Content -Raw $stgSettingsPath).Contains("accessControlPolicy: GroupMembership"))
 Assert-True "STG clone preserves Integrated authentication" ((Get-Content -Raw $stgSettingsPath).Contains("authenticationMode: Integrated"))
 
+Assert-Equal "HTTP trigger smoke result count" $httpSmokeEvidence.results.Count 4
+foreach ($result in $httpSmokeEvidence.results) {
+    Assert-Equal "HTTP trigger passed: $($result.name)" $result.passed $true
+    Assert-Equal "HTTP trigger status: $($result.name)" $result.http_status 200
+    Assert-Equal "HTTP trigger response status: $($result.name)" $result.response_status "materialized_native_p0"
+    Assert-True "HTTP trigger callback redacted: $($result.name)" ($result.callback_url_redacted.Contains("?<redacted>"))
+    Assert-True "HTTP trigger callback has no signature: $($result.name)" (-not $result.callback_url_redacted.Contains("sig="))
+}
+
+Assert-Equal "RBAC live evidence passed" $rbacEvidence.passed $true
+Assert-Equal "RBAC live access policy" $rbacEvidence.accesscontrolpolicy "Associacao de grupo"
+Assert-Equal "RBAC live auth mode" $rbacEvidence.authenticationmode "Integrado"
+Assert-Equal "RBAC live auth trigger" $rbacEvidence.authenticationtrigger "Sempre"
+
 Assert-True "FINAL_DELIVERY documents agent id" $delivery.Contains("62303236-29a7-4d5e-acd3-68de1287d9df")
 Assert-True "FINAL_DELIVERY documents dataverse endpoint" $delivery.Contains("https://orga258f260.crm2.dynamics.com/")
 Assert-True "FINAL_DELIVERY documents E2E validation" $delivery.Contains("scripts/validate-e2e.ps1")
 Assert-True "FINAL_DELIVERY documents managed zip" $delivery.Contains("ReqSysLowCodeCopilot_stg_managed.zip")
 Assert-True "FINAL_DELIVERY documents STG validation" $delivery.Contains("STG_VALIDATION.md")
 Assert-True "FINAL_DELIVERY documents DEV clone" $delivery.Contains("dev-clone/ReqSysCopilotStudioOrquestrador-DEV")
+Assert-True "FINAL_DELIVERY documents live STG validation" $delivery.Contains("scripts/validate-stg-live.ps1")
 
 Write-Host ""
 Write-Host "E2E validation completed successfully."

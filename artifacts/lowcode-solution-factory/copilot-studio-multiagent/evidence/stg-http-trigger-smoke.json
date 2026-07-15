@@ -1,0 +1,54 @@
+﻿{
+    "generated_at_local":  "2026-07-14",
+    "environment":  "ReqSys Test",
+    "environment_id":  "b6717f20-2dcb-ed70-8b1c-e9a3c236afe7",
+    "environment_url":  "https://orgf2ca7436.crm2.dynamics.com/",
+    "validation":  "real_http_trigger_smoke",
+    "secret_policy":  "callback URLs redacted; token never written to disk",
+    "results":  [
+                    {
+                        "name":  "ReqSys - Aprovacao de requisito",
+                        "workflow_id":  "780422ae-8c74-57fc-8895-04f7f3513c33",
+                        "callback_url_obtained":  true,
+                        "callback_url_redacted":  "https://b6717f202dcbed708b1ce9a3c236af.e7.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/29/workflows/bdd6b2e604064a08bd127eb8b4c497fb/triggers/manual/paths/invoke?\u003credacted\u003e",
+                        "http_status":  200,
+                        "response_workflow":  "ReqSys - Aprovacao de requisito",
+                        "response_status":  "materialized_native_p0",
+                        "response_correlation_id":  "reqsys-stg-e2e-aprovacao-20260714",
+                        "passed":  true
+                    },
+                    {
+                        "name":  "ReqSys - Consulta de status",
+                        "workflow_id":  "69a54f8b-caec-53c4-9f5b-887230cf43d2",
+                        "callback_url_obtained":  true,
+                        "callback_url_redacted":  "https://b6717f202dcbed708b1ce9a3c236af.e7.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/28/workflows/06988d9191614dd995d04c458bfe0dcc/triggers/manual/paths/invoke?\u003credacted\u003e",
+                        "http_status":  200,
+                        "response_workflow":  "ReqSys - Consulta de status",
+                        "response_status":  "materialized_native_p0",
+                        "response_correlation_id":  "reqsys-stg-e2e-status-20260714",
+                        "passed":  true
+                    },
+                    {
+                        "name":  "ReqSys - Intake de demanda",
+                        "workflow_id":  "ae83d82a-8e04-5eb4-bf4a-dfadd5443a7a",
+                        "callback_url_obtained":  true,
+                        "callback_url_redacted":  "https://b6717f202dcbed708b1ce9a3c236af.e7.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/11/workflows/0e0c7a1a761a49e28f3ac3e4afddfef7/triggers/manual/paths/invoke?\u003credacted\u003e",
+                        "http_status":  200,
+                        "response_workflow":  "ReqSys - Intake de demanda",
+                        "response_status":  "materialized_native_p0",
+                        "response_correlation_id":  "reqsys-stg-e2e-intake-20260714",
+                        "passed":  true
+                    },
+                    {
+                        "name":  "ReqSys - Release governance",
+                        "workflow_id":  "768fde7b-db2e-500f-8be1-7b4cbf1ed31e",
+                        "callback_url_obtained":  true,
+                        "callback_url_redacted":  "https://b6717f202dcbed708b1ce9a3c236af.e7.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/18/workflows/b00762968c1248d9afac050dd3c4c283/triggers/manual/paths/invoke?\u003credacted\u003e",
+                        "http_status":  200,
+                        "response_workflow":  "ReqSys - Release governance",
+                        "response_status":  "materialized_native_p0",
+                        "response_correlation_id":  "reqsys-stg-e2e-release-20260714",
+                        "passed":  true
+                    }
+                ]
+}

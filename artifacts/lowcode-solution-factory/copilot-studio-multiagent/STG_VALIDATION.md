@@ -6,7 +6,7 @@ URL: `https://orgf2ca7436.crm2.dynamics.com/`
 
 ## Resultado
 
-Status: validado em STG/Test para smoke estrutural, ALM governado e leitura funcional app-only dos flows.
+Status: validado em STG/Test para smoke estrutural, ALM governado, leitura funcional app-only dos flows, smoke HTTP real dos triggers e RBAC/autenticacao live do Copilot.
 
 ## Pacote promovido
 
@@ -88,18 +88,47 @@ Passou:
   - `componentState = Published`;
   - `isManaged = true`;
   - `triggerSchema` com `correlation_id` obrigatorio.
+- Smoke HTTP real por callback URL executado para os quatro flows:
+  - `ReqSys - Aprovacao de requisito`;
+  - `ReqSys - Consulta de status`;
+  - `ReqSys - Intake de demanda`;
+  - `ReqSys - Release governance`.
+- Todos os triggers retornaram HTTP 200, `status = materialized_native_p0` e `correlation_id` correspondente ao payload.
 
-Nao executado como chamada HTTP de trigger real:
+## RBAC live
 
-- a API de gerenciamento confirmou definicao e estado dos flows com a identidade app-only;
-- o endpoint publico de trigger HTTP nao foi extraido/executado nesta rodada;
-- proxima correcao antes de PROD: executar chamada real de trigger por URL callback ou via acao Copilot Studio, preservando `correlation_id`.
+Consulta usada:
+
+```powershell
+pac env fetch --environment https://orgf2ca7436.crm2.dynamics.com/ --xmlFile fetch-stg-bot-rbac.xml
+```
+
+Resultado relevante:
+
+| Bot | Bot ID | Estado | Status | Auth | Trigger | Access |
+| --- | --- | --- | --- | --- | --- | --- |
+| `ReqSys Copilot Studio Orquestrador` | `5da35c84-3153-4b22-857c-56dc6415365e` | `Com atividade` | `Provisionado` | `Integrado` | `Sempre` | `Associacao de grupo` |
+
+Usuario autorizado validado:
+
+- `ericsonjosedossantos@tieri659.onmicrosoft.com` conectou no ambiente STG/Test e conseguiu listar o Copilot.
+
+Nao executado:
+
+- teste negativo com usuario fora do grupo, porque nao havia principal secundario disponivel nesta sessao.
+
+## Evidencias versionadas
+
+- `evidence/stg-http-trigger-smoke.json`
+- `evidence/stg-rbac-live.json`
+- `scripts/validate-stg-live.ps1`
 
 ## Decisao
 
-Pode continuar para correcoes em STG/Test, especialmente:
+Pode continuar para preparacao de PROD, especialmente:
 
 - estender o custom connector com as operacoes finais;
-- validar RBAC real do Copilot Studio com grupo/usuario autorizado.
+- revisar variaveis finais de Teams, Grupo, Canal e Planner;
+- executar teste negativo RBAC com usuario fora do grupo quando houver principal secundario.
 
-Nao promover para PROD ainda sem smoke HTTP real por trigger/action e validacao de RBAC no STG/Test.
+Nao ha mais bloqueio de smoke HTTP real ou RBAC/autenticacao live em STG/Test. A ressalva restante e apenas o teste negativo com usuario nao autorizado.

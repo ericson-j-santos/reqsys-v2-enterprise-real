@@ -29,7 +29,11 @@ Esta entrega nao e um prototipo documental. O pacote contem workspace real expor
 | Clone STG do agente | `stg-clone/ReqSysCopilotStudioOrquestrador-STG/` | Snapshot de settings do agente em STG/Test |
 | Validacao STG/Test | `STG_VALIDATION.md` | Evidencia de import, publish, Copilot, flows e identidade app-only |
 | Consulta de workflows STG | `fetch-stg-workflows.xml` | FetchXML usado para validar flows no ambiente STG/Test |
+| Consulta RBAC STG | `fetch-stg-bot-rbac.xml` | FetchXML usado para validar RBAC/autenticacao live do bot |
+| Evidencia HTTP STG | `evidence/stg-http-trigger-smoke.json` | Smoke real dos quatro triggers HTTP com callbacks redigidos |
+| Evidencia RBAC STG | `evidence/stg-rbac-live.json` | Configuracao live de RBAC/autenticacao e usuario autorizado |
 | Validador E2E | `scripts/validate-e2e.ps1` | Teste reexecutavel de integridade, governanca, metadados e rastreabilidade |
+| Validador live STG | `scripts/validate-stg-live.ps1` | Teste live de solution, Copilot, workflows, RBAC e triggers HTTP |
 
 ## Identidade do agente
 
@@ -143,6 +147,9 @@ As instrucoes do agente DEV reforcam que o orquestrador nao executa escrita exte
 | Workflows ativados | 4 de 4 |
 | Identidade app-only | Corrigida com application user e role `System Customizer` |
 | Flow API app-only | Leitura `200` dos quatro flows gerenciados |
+| Trigger HTTP real | 4 de 4 callbacks obtidos e executados com HTTP 200 |
+| RBAC live | `accesscontrolpolicy = Associacao de grupo`, autenticacao integrada e trigger sempre |
+| Usuario autorizado | `ericsonjosedossantos@tieri659.onmicrosoft.com` conectado e autorizado no STG/Test |
 
 ### Workflows validados em STG/Test
 
@@ -171,9 +178,12 @@ As instrucoes do agente DEV reforcam que o orquestrador nao executa escrita exte
 | Checker SARIF presente | Aprovado |
 | Import e publish em STG/Test | Aprovado |
 | Workflows gerenciados ativos em STG/Test | Aprovado |
+| Smoke HTTP real dos flows em STG/Test | Aprovado |
+| RBAC/autenticacao live do Copilot em STG/Test | Aprovado |
 | Clone DEV editavel presente | Aprovado |
 | Clone STG de settings presente | Aprovado |
 | Teste E2E local reexecutavel | Aprovado via `scripts/validate-e2e.ps1` |
+| Teste live STG reexecutavel | Aprovado via `scripts/validate-stg-live.ps1` |
 
 ## Teste end-to-end
 
@@ -183,6 +193,12 @@ Comando:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File artifacts/lowcode-solution-factory/copilot-studio-multiagent/scripts/validate-e2e.ps1
+```
+
+Teste live STG:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File artifacts/lowcode-solution-factory/copilot-studio-multiagent/scripts/validate-stg-live.ps1
 ```
 
 Cobertura do teste:
@@ -235,21 +251,20 @@ As variaveis de ambiente de Teams, Planner e grupo estao presentes como contrato
 
 O workspace DEV em `botdefinition.json` ainda registra sincronizacao `Provisioning`, mas a validacao STG/Test registrou o Copilot gerenciado como `Published`, `Active` e `Provisioned`.
 
-Ainda nao foi executado smoke HTTP real de trigger/action dos flows. A API de gerenciamento confirmou definicao, estado e leitura app-only dos flows, mas a promocao para PROD deve esperar a chamada real por URL callback ou acao Copilot Studio, com `correlation_id`.
+O smoke HTTP real dos quatro flows foi executado em STG/Test por callback URL, com token apenas em memoria e URLs redigidas na evidencia. Todos retornaram HTTP 200 e preservaram `correlation_id`.
 
-Tambem falta validar RBAC real do Copilot Studio com usuario/grupo autorizado no STG/Test antes de PROD.
+O RBAC live do Copilot Studio foi validado em STG/Test via Dataverse/PAC: politica por grupo, autenticacao integrada e gatilho de autenticacao sempre. O usuario autorizado atual tambem foi validado. Nao foi executado teste negativo com segundo usuario fora do grupo, porque nao havia principal secundario disponivel nesta sessao.
 
 ## Proximas acoes recomendadas
 
 | Prioridade | Acao | Resultado esperado |
 | --- | --- | --- |
-| P0 | Executar smoke HTTP real de trigger/action dos flows em STG/Test | Evidencia funcional de ponta a ponta antes de PROD |
-| P0 | Validar RBAC real com grupo/usuario autorizado no Copilot Studio STG/Test | Governanca de acesso comprovada |
 | P0 | Preencher/revisar variaveis de ambiente de Teams, Grupo, Canal e Planner | Integracoes governadas por ambiente |
+| P0 | Executar teste negativo RBAC com usuario fora do grupo, quando houver principal secundario | Evidencia de bloqueio de acesso nao autorizado |
 | P1 | Estender o custom connector com as operacoes finais | Superficie funcional completa para consumo |
 | P1 | Conectar agentes especializados ReqSys | Rede multiagente operacional |
 | P2 | Criar runbook de suporte e promocao PROD | Operacao repetivel e auditavel |
 
 ## Conclusao
 
-O artefato `copilot-studio-multiagent` esta finalizado como entrega tecnica auditavel do orquestrador ReqSys no Copilot Studio. A base esta sincronizada, empacotada, validada em STG/Test e testada end-to-end localmente. A promocao para PROD deve aguardar apenas o smoke HTTP real dos flows e a validacao RBAC com usuario/grupo autorizado.
+O artefato `copilot-studio-multiagent` esta finalizado como entrega tecnica auditavel do orquestrador ReqSys no Copilot Studio. A base esta sincronizada, empacotada, validada em STG/Test, testada end-to-end localmente e validada live com triggers HTTP reais e RBAC/autenticacao do Copilot. Para PROD, resta apenas executar o teste negativo RBAC com usuario fora do grupo quando houver principal secundario disponivel e revisar variaveis finais por ambiente.
