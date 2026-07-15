@@ -17,13 +17,10 @@
   </v-dialog>
 </template>
 
-<script>
-export const GOVBI_EMPTY_EVENT = 'reqsys:govbi-empty-result'
-</script>
-
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import GovBIEmptyState from './GovBIEmptyState.vue'
+import { GOVBI_EMPTY_EVENT } from '../services/emptyStateEvents'
 
 const visible = ref(false)
 const reason = ref('Não existem linhas compatíveis com a consulta atual.')
