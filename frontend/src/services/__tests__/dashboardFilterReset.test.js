@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clearDashboardFilters, DASHBOARD_CLEAR_FILTERS_EVENT } from '../dashboardFilterReset'
+
+afterEach(() => {
+  window.history.replaceState({}, '', '/')
+  vi.restoreAllMocks()
+})
 
 describe('dashboardFilterReset', () => {
   it('remove query string nas rotas prioritárias e emite evento', () => {
