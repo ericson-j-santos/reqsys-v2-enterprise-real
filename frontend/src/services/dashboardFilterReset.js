@@ -11,7 +11,8 @@ export function clearDashboardFilters(context = 'operational-dashboard') {
     return false
   }
 
-  window.history.replaceState({}, '', pathname)
+  const cleanUrl = pathname
+  window.history.replaceState({}, '', cleanUrl)
   window.dispatchEvent(new CustomEvent(DASHBOARD_CLEAR_FILTERS_EVENT, {
     detail: { context, route: pathname, cleared: true },
   }))
