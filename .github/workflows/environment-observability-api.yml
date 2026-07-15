@@ -4,7 +4,10 @@ on:
   pull_request:
     paths:
       - 'services/environment-observability-api/**'
+      - 'scripts/smoke_environment_observability_api.sh'
+      - 'scripts/write_environment_observability_evidence.sh'
       - '.github/workflows/environment-observability-api.yml'
+      - '.github/workflows/environment-observability-promotion.yml'
   workflow_dispatch:
 
 permissions:
@@ -59,5 +62,20 @@ jobs:
         run: |
           ! grep -Eq 'LOG_LEVEL = "(TRACE|DEBUG)"' fly.prod.toml
           grep -Fq 'LOG_LEVEL = "INFO"' fly.prod.toml
+      - name: Validate deployment scripts
+        working-directory: .
+        run: |
+          bash -n scripts/smoke_environment_observability_api.sh
+          bash -n scripts/write_environment_observability_evidence.sh
+      - name: Validate immutable promotion contract
+        working-directory: .
+        run: |
+          workflow='.github/workflows/environment-observability-promotion.yml'
+          grep -Fq 'Build and publish once' "$workflow"
+          grep -Fq 'needs.validate-and-publish.outputs.image_digest' "$workflow"
+          test "$(grep -Fc 'Deploy same immutable image' "$workflow")" -eq 2
+          test "$(grep -Fc 'FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}' "$workflow")" -eq 3
+          grep -Fq 'environment:' "$workflow"
+          grep -Fq 'name: production' "$workflow"
       - name: Build container
         run: docker build -t environment-observability-api:test .
