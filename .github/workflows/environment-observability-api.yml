@@ -85,7 +85,7 @@ jobs:
         run: |
           workflow='.github/workflows/environment-observability-rollback.yml'
           grep -Fq 'ROLLBACK-${TARGET_ENVIRONMENT^^}' "$workflow"
-          grep -Fq 'ghcr\\.io/.+@sha256:' "$workflow"
+          grep -Eq 'ghcr\\.io/.+@sha256:' "$workflow"
           grep -Fq 'environment:' "$workflow"
           grep -Fq 'scripts/rollback_environment_observability_api.sh' "$workflow"
           grep -Fq 'Upload immutable rollback evidence' "$workflow"
