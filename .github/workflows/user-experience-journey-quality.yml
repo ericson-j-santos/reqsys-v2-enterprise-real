@@ -1,0 +1,55 @@
+name: User Experience Journey Quality
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_user_experience_journey_quality.py"
+      - "scripts/smoke_user_experience_journey_quality.py"
+      - "tests/test_user_experience_journey_quality.py"
+      - ".github/workflows/user-experience-journey-quality.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux-journey-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile
+        run: |
+          python -m py_compile scripts/build_user_experience_journey_quality.py
+          python -m py_compile scripts/smoke_user_experience_journey_quality.py
+      - name: Unit tests
+        run: python -m unittest tests/test_user_experience_journey_quality.py -v
+      - name: Generate governed evidence
+        run: |
+          mkdir -p .tmp/ux-journey
+          printf '%s\n' '{"perceived_load_ms":1200,"actionable_error_rate":100,"empty_state_coverage":100,"accessibility_score":95,"feedback_coverage":100}' > .tmp/ux-journey/evidence.json
+          printf '%s\n' '{}' > .tmp/ux-journey/state.json
+          printf '%s\n' '{}' > .tmp/ux-journey/brief.json
+          printf '%s\n' '{"cards":[]}' > .tmp/ux-journey/dashboard.json
+          python scripts/build_user_experience_journey_quality.py \
+            --evidence .tmp/ux-journey/evidence.json \
+            --state .tmp/ux-journey/state.json \
+            --brief .tmp/ux-journey/brief.json \
+            --dashboard .tmp/ux-journey/dashboard.json \
+            --output-dir .tmp/ux-journey/output
+          python scripts/smoke_user_experience_journey_quality.py \
+            --state .tmp/ux-journey/output/estado-unico.json \
+            --brief .tmp/ux-journey/output/executive-brief.json \
+            --dashboard .tmp/ux-journey/output/ops-dashboard.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-journey-quality
+          path: .tmp/ux-journey/output
+          retention-days: 90
