@@ -1,0 +1,126 @@
+name: User Experience Recovery Evidence Chain
+
+on:
+  pull_request:
+    paths:
+      - "scripts/chain_ux_recovery_evidence.py"
+      - "tests/test_chain_ux_recovery_evidence.py"
+      - ".github/workflows/user-experience-recovery-evidence-chain.yml"
+  workflow_run:
+    workflows: ["User Experience Empty State Recovery Trend"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ux-recovery-evidence-chain-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test evidence chain
+        run: |
+          python -m py_compile scripts/chain_ux_recovery_evidence.py
+          python -m unittest tests/test_chain_ux_recovery_evidence.py -v
+
+  chain-post-merge-evidence:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      SOURCE_WORKFLOW: ${{ github.event.workflow_run.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download current recovery evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: user-experience-empty-state-recovery-trend
+          path: .tmp/ux-chain/current
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+
+      - name: Restore latest persisted evidence chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/ux-chain/previous
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ux-recovery-evidence-chain&per_page=100" \
+            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/ux-chain/previous.zip
+            unzip -q .tmp/ux-chain/previous.zip -d .tmp/ux-chain/previous
+          else
+            printf '%s\n' '[]' > .tmp/ux-chain/previous/ux-recovery-evidence-chain.json
+          fi
+
+      - name: Append traceable evidence and evaluate stability
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_report="$(find .tmp/ux-chain/current -name empty-state-recovery-trend.json -print -quit)"
+          previous_chain="$(find .tmp/ux-chain/previous -name ux-recovery-evidence-chain.json -print -quit)"
+          test -n "$current_report"
+          if [ -z "$previous_chain" ]; then
+            previous_chain=.tmp/ux-chain/previous/ux-recovery-evidence-chain.json
+            printf '%s\n' '[]' > "$previous_chain"
+          fi
+          mkdir -p .tmp/ux-chain/output
+          python scripts/chain_ux_recovery_evidence.py \
+            --previous "$previous_chain" \
+            --current "$current_report" \
+            --run-id "$SOURCE_RUN_ID" \
+            --head-sha "$SOURCE_HEAD_SHA" \
+            --source-workflow "$SOURCE_WORKFLOW" \
+            --output .tmp/ux-chain/output/ux-recovery-evidence-chain.json
+          python scripts/build_ux_recovery_stability.py \
+            --history .tmp/ux-chain/output/ux-recovery-evidence-chain.json \
+            --output .tmp/ux-chain/output/ux-recovery-stability.json
+
+      - name: Validate traceability contract
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          chain = json.loads(Path('.tmp/ux-chain/output/ux-recovery-evidence-chain.json').read_text(encoding='utf-8'))
+          stability = json.loads(Path('.tmp/ux-chain/output/ux-recovery-stability.json').read_text(encoding='utf-8'))
+          latest = chain[-1]
+          assert latest['source_run_id'] == os.environ['SOURCE_RUN_ID']
+          assert latest['source_head_sha'] == os.environ['SOURCE_HEAD_SHA']
+          assert len(chain) <= 30
+          assert stability['sample_count'] == len(chain)
+          assert stability['mode'] == 'advisory'
+          assert stability['production_blocker'] is False
+          print(f"evidence chain smoke: OK; samples={len(chain)}")
+          PY
+
+      - name: Publish persistent evidence chain
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-recovery-evidence-chain
+          path: .tmp/ux-chain/output
+          retention-days: 90
