@@ -53,18 +53,22 @@ jobs:
         run: |
           if [[ -z "${TEAMS_WEBHOOK_URL}" ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "reason=Secret TEAMS_WEBHOOK_URL ausente" >> "$GITHUB_OUTPUT"
             echo "::warning title=Teams não configurado::Secret TEAMS_WEBHOOK_URL ausente; envio foi ignorado sem invalidar o CI."
           elif [[ -z "${TEAMS_WEBHOOK_RECIPIENT}" || "${TEAMS_WEBHOOK_RECIPIENT}" != *"@"* ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "reason=Secret TEAMS_WEBHOOK_RECIPIENT ausente ou inválido" >> "$GITHUB_OUTPUT"
             echo "::warning title=Teams não configurado::Secret TEAMS_WEBHOOK_RECIPIENT ausente ou inválido (precisa ser e-mail/UPN); envio foi ignorado sem invalidar o CI."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "reason=configuração disponível" >> "$GITHUB_OUTPUT"
             echo "Secrets TEAMS_WEBHOOK_URL/TEAMS_WEBHOOK_RECIPIENT disponíveis; notificação será enviada."
           fi
 
       - name: Enviar notificação
         if: steps.teams-config.outputs.configured == 'true'
         id: notify
+        continue-on-error: ${{ github.event_name == 'push' }}
         env:
           EVENT_NAME: ${{ github.event_name }}
           REPOSITORY: ${{ github.repository }}
@@ -113,9 +117,9 @@ jobs:
               title = "ReqSys — novo commit"
           elif event_name == "schedule":
               message = (
-                  f"Canário semanal da integração GitHub → Teams\n"
+                  "Canário semanal da integração GitHub → Teams\n"
                   f"Repositório: {repository}\n"
-                  f"Branch monitorada: main\n"
+                  "Branch monitorada: main\n"
                   f"Commit atual: {short_sha}\n"
                   f"Workflow: {run_url}"
               )
@@ -123,7 +127,7 @@ jobs:
           else:
               manual = os.environ.get("MANUAL_MESSAGE", "").strip()
               message = manual or (
-                  f"Teste manual da integração GitHub → Teams\n"
+                  "Teste manual da integração GitHub → Teams\n"
                   f"Repositório: {repository}\n"
                   f"Executado por: {os.environ['ACTOR']}\n"
                   f"Workflow: {run_url}"
@@ -172,13 +176,20 @@ jobs:
             echo "### Teams Commit Notification"
             echo "- Evento: ${{ github.event_name }}"
             echo "- Commit: ${{ github.sha }}"
-            if [[ "${{ steps.teams-config.outputs.configured }}" == "true" ]]; then
+            echo "- Modo: $([[ '${{ github.event_name }}' == 'push' ]] && echo 'report-only' || echo 'estrito')"
+            if [[ "${{ steps.teams-config.outputs.configured }}" != "true" ]]; then
+              echo "- Status: ignorado"
+              echo "- Motivo: ${{ steps.teams-config.outputs.reason }}"
+              echo "- Ação manual: Settings → Secrets and variables → Actions"
+            elif [[ "${{ steps.notify.outcome }}" == "success" ]]; then
               echo "- Status: entregue/aceito"
               echo "- HTTP: ${{ steps.notify.outputs.status_code }}"
               echo "- Correlation ID: ${{ steps.notify.outputs.correlation_id }}"
             else
-              echo "- Status: ignorado"
-              echo "- Motivo: secret TEAMS_WEBHOOK_URL não configurado"
-              echo "- Ação manual: Settings → Secrets and variables → Actions → New repository secret"
+              echo "- Status: degradado — entrega não confirmada"
+              echo "- Resultado da etapa: ${{ steps.notify.outcome }}"
+              echo "- CI bloqueado: $([[ '${{ github.event_name }}' == 'push' ]] && echo 'não' || echo 'sim')"
+              echo "- Ação: validar o contrato/execução do fluxo Power Automate e repetir via workflow_dispatch"
+              echo "::warning title=Entrega ao Teams não confirmada::A integração falhou; em push o evento é report-only e não bloqueia o CI."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
