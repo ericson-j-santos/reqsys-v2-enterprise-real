@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from copy import deepcopy
 
 from scripts.build_user_experience_journey_quality import consolidate, evaluate
 from scripts.smoke_user_experience_journey_quality import validate
@@ -52,8 +53,9 @@ class UserExperienceJourneyQualityTests(unittest.TestCase):
     def test_smoke_detects_drift(self) -> None:
         indicator = evaluate({"perceived_load_ms": 1000, "actionable_error_rate": 100, "empty_state_coverage": 100, "accessibility_score": 100, "feedback_coverage": 100})
         state, brief, dashboard = consolidate({}, {}, {}, indicator)
-        brief["indicators"]["user_experience_journey_quality"]["quality_score"] = 1
-        self.assertTrue(any("drift" in error for error in validate(state, brief, dashboard)))
+        drifted_brief = deepcopy(brief)
+        drifted_brief["indicators"]["user_experience_journey_quality"]["quality_score"] = 1
+        self.assertTrue(any("drift" in error for error in validate(state, drifted_brief, dashboard)))
 
 
 if __name__ == "__main__":
