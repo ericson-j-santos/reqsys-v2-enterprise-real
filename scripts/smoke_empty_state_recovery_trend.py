@@ -22,11 +22,13 @@ def main() -> int:
     assert report["production_blocker"] is False
     assert report["human_approval_required"] is True
     assert 0 <= report["recovery_rate"] <= 100
-    assert report["average_recovery_seconds"] >= 0
+    assert report["median_recovery_seconds"] is None or report["median_recovery_seconds"] >= 0
+    assert isinstance(report["alerts"], list)
     cards = dashboard.get("cards", [])
     assert sum(1 for card in cards if isinstance(card, dict) and card.get("id") == CARD_ID) == 1
     assert isinstance(history, list) and 1 <= len(history) <= 30
     assert history[-1]["recovery_rate"] == report["recovery_rate"]
+    assert history[-1]["median_recovery_seconds"] == report["median_recovery_seconds"]
     print("empty-state recovery trend smoke: OK")
     return 0
 
