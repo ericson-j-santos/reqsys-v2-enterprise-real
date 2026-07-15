@@ -1,0 +1,83 @@
+services:
+  api:
+    build: .
+    environment:
+      APP_ENV: development
+      OTEL_TRACING_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://collector:4318/v1/traces
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      collector:
+        condition: service_healthy
+    networks: [observability]
+
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.128.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    environment:
+      APP_ENV: development
+      OTEL_UPSTREAM_ENDPOINT: http://collector:4318/v1/traces
+      OTEL_UPSTREAM_AUTHORIZATION: ""
+    volumes:
+      - ./collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - collector-queue:/var/lib/otelcol
+    ports:
+      - "127.0.0.1:13133:13133"
+      - "127.0.0.1:8888:8888"
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol-contrib/config.yaml"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    networks: [observability]
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./observability/dev/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus-alerts.yaml:/etc/prometheus/rules/alerts.yaml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on: [api, collector, alertmanager]
+    networks: [observability]
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    volumes:
+      - ./observability/dev/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks: [observability]
+
+  grafana:
+    image: grafana/grafana:12.0.1
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-dev-only-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/dev/grafana-provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana-dashboard.json:/var/lib/grafana/dashboards/environment-observability.json:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on: [prometheus]
+    networks: [observability]
+
+networks:
+  observability:
+    internal: true
+
+volumes:
+  collector-queue:
+  prometheus-data:
+  grafana-data:
