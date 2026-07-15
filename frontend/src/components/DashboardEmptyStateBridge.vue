@@ -20,6 +20,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import OperationalDashboardEmptyState from './OperationalDashboardEmptyState.vue'
 import { DASHBOARD_EMPTY_EVENT } from '../services/dashboardEmptyStateIntegration'
+import { clearDashboardFilters } from '../services/dashboardFilterReset'
 
 const visible = ref(false)
 const context = ref('operational-dashboard')
@@ -36,8 +37,9 @@ function refresh() {
   callback?.()
 }
 function clearFilters() {
+  const currentContext = context.value
   close()
-  window.dispatchEvent(new CustomEvent('reqsys:dashboard-clear-filters', { detail: { context: context.value } }))
+  clearDashboardFilters(currentContext)
 }
 function onEmpty(event) {
   const detail = event?.detail || {}
