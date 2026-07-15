@@ -21,7 +21,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import GovBIEmptyState from './GovBIEmptyState.vue'
 
-export const GOVBI_EMPTY_EVENT = 'reqsys:govbi-empty-result'
+const GOVBI_EMPTY_EVENT = 'reqsys:govbi-empty-result'
 
 const visible = ref(false)
 const reason = ref('Não existem linhas compatíveis com a consulta atual.')
