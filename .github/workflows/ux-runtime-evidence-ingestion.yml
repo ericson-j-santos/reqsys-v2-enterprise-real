@@ -1,0 +1,101 @@
+name: UX Runtime Evidence Ingestion
+
+on:
+  pull_request:
+    paths:
+      - "scripts/ingest_ux_runtime_evidence.py"
+      - "tests/test_ingest_ux_runtime_evidence.py"
+      - ".github/workflows/ux-runtime-evidence-ingestion.yml"
+  workflow_run:
+    workflows: ["User Experience Empty State Recovery Trend"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ux-runtime-evidence-ingestion-${{ github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/ingest_ux_runtime_evidence.py
+          python -m unittest tests/test_ingest_ux_runtime_evidence.py -v
+
+      - name: Prepare evidence fixture
+        run: |
+          mkdir -p .tmp/ux-runtime-input .tmp/ux-runtime-output
+          printf '%s\n' '{"recovery_rate":80,"average_recovery_seconds":22,"ux_100_ready":true}' > .tmp/ux-runtime-input/report.json
+          printf '%s\n' '{"origin":"post-merge-smoke","environment":"stg","timestamp":"2026-07-15T18:20:00Z","correlation_id":"reqsys-runtime-20260715-001","merge_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}' > .tmp/ux-runtime-input/metadata.json
+          printf '%s\n' '[]' > .tmp/ux-runtime-input/history.json
+
+      - name: Ingest verified runtime evidence
+        run: |
+          python scripts/ingest_ux_runtime_evidence.py \
+            --report .tmp/ux-runtime-input/report.json \
+            --metadata .tmp/ux-runtime-input/metadata.json \
+            --history .tmp/ux-runtime-input/history.json \
+            --output-dir .tmp/ux-runtime-output
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          evidence = json.loads(Path('.tmp/ux-runtime-output/runtime-evidence-normalized.json').read_text())
+          audit = json.loads(Path('.tmp/ux-runtime-output/runtime-evidence-ingestion-audit.json').read_text())
+          assert evidence['evidence_source'] == 'runtime'
+          assert audit['accepted'] is True
+          assert audit['production_blocker'] is False
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-runtime-evidence-ingestion
+          path: .tmp/ux-runtime-output
+          retention-days: 90
+
+  ingest-post-merge-artifact:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download post-merge evidence artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: user-experience-empty-state-recovery-trend
+          path: .tmp/upstream
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Enforce verified runtime metadata
+        run: |
+          mkdir -p .tmp/runtime-ingestion
+          REPORT=.tmp/upstream/empty-state-recovery-trend.json
+          METADATA=.tmp/upstream/runtime-evidence-metadata.json
+          HISTORY=.tmp/upstream/empty-state-recovery-history.json
+          test -f "$REPORT"
+          test -f "$HISTORY" || printf '%s\n' '[]' > "$HISTORY"
+          test -f "$METADATA" || printf '%s\n' '{}' > "$METADATA"
+          python scripts/ingest_ux_runtime_evidence.py \
+            --report "$REPORT" \
+            --metadata "$METADATA" \
+            --history "$HISTORY" \
+            --output-dir .tmp/runtime-ingestion
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-runtime-evidence-post-merge-audit
+          path: .tmp/runtime-ingestion
+          retention-days: 90
