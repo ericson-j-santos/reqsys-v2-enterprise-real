@@ -1,0 +1,52 @@
+name: UX Recovery Evidence Maturity
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_ux_recovery_evidence_maturity.py"
+      - "tests/test_build_ux_recovery_evidence_maturity.py"
+      - ".github/workflows/ux-recovery-evidence-maturity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux-recovery-evidence-maturity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/build_ux_recovery_evidence_maturity.py
+          python -m unittest tests/test_build_ux_recovery_evidence_maturity.py -v
+      - name: Generate governed maturity evidence
+        run: |
+          mkdir -p .tmp/ux-evidence-maturity/output
+          cat > .tmp/ux-evidence-maturity/history.json <<'JSON'
+          [
+            {"evidence_source":"runtime","recovery_rate":80,"average_recovery_seconds":20,"ux_100_ready":true},
+            {"evidence_source":"runtime","recovery_rate":75,"average_recovery_seconds":24,"ux_100_ready":true},
+            {"evidence_source":"runtime","recovery_rate":70,"average_recovery_seconds":28,"ux_100_ready":true},
+            {"evidence_source":"runtime","recovery_rate":65,"average_recovery_seconds":26,"ux_100_ready":false},
+            {"evidence_source":"runtime","recovery_rate":68,"average_recovery_seconds":25,"ux_100_ready":false}
+          ]
+          JSON
+          printf '%s\n' '{"cards":[]}' > .tmp/ux-evidence-maturity/dashboard.json
+          python scripts/build_ux_recovery_evidence_maturity.py \
+            --history .tmp/ux-evidence-maturity/history.json \
+            --dashboard .tmp/ux-evidence-maturity/dashboard.json \
+            --output-dir .tmp/ux-evidence-maturity/output
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-recovery-evidence-maturity
+          path: .tmp/ux-evidence-maturity/output
+          retention-days: 90
