@@ -1,0 +1,91 @@
+name: User Experience Remediation Governance Metrics
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_ux_remediation_governance_metrics.py"
+      - "tests/test_build_ux_remediation_governance_metrics.py"
+      - ".github/workflows/user-experience-remediation-governance-metrics.yml"
+  workflow_run:
+    workflows: ["User Experience Remediation Governed Transition"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ux-remediation-governance-metrics-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test governance metrics
+        run: |
+          python -m py_compile scripts/build_ux_remediation_governance_metrics.py
+          python -m unittest tests/test_build_ux_remediation_governance_metrics.py -v
+
+  publish-governance-metrics:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restore dashboard, governed history and audits
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/ux-governance/dashboard .tmp/ux-governance/transition
+          dashboard_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ux-remediation-lifecycle&per_page=100" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          transition_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts | map(select(.expired == false and (.name | startswith("ux-remediation-governed-transition-")))) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          test -n "$dashboard_id"
+          test -n "$transition_id"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${dashboard_id}/zip" > .tmp/ux-governance/dashboard.zip
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${transition_id}/zip" > .tmp/ux-governance/transition.zip
+          unzip -q .tmp/ux-governance/dashboard.zip -d .tmp/ux-governance/dashboard
+          unzip -q .tmp/ux-governance/transition.zip -d .tmp/ux-governance/transition
+      - name: Publish governed state and compliance metrics
+        shell: bash
+        run: |
+          set -euo pipefail
+          dashboard="$(find .tmp/ux-governance/dashboard -name ops-dashboard.json -print -quit)"
+          history="$(find .tmp/ux-governance/transition -name ux-remediation-lifecycle-history.json -print -quit)"
+          audit="$(find .tmp/ux-governance/transition -name ux-remediation-transition-audit.json -print -quit)"
+          test -n "$dashboard"
+          test -n "$history"
+          mkdir -p .tmp/ux-governance/output
+          if [ -n "$audit" ]; then
+            printf '[%s]\n' "$(cat "$audit")" > .tmp/ux-governance/audits.json
+          else
+            printf '%s\n' '[]' > .tmp/ux-governance/audits.json
+          fi
+          python scripts/build_ux_remediation_governance_metrics.py \
+            --dashboard "$dashboard" \
+            --history "$history" \
+            --audits .tmp/ux-governance/audits.json \
+            --output .tmp/ux-governance/output/ops-dashboard.json
+          cp "$history" .tmp/ux-governance/output/ux-remediation-lifecycle-history.json
+      - name: Upload governed dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-remediation-governance-metrics
+          path: .tmp/ux-governance/output
+          retention-days: 90
