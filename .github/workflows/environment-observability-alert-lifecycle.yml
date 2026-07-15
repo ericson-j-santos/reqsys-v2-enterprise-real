@@ -1,0 +1,51 @@
+name: Environment Observability Alert Lifecycle
+
+on:
+  pull_request:
+    paths:
+      - "services/environment-observability-api/**"
+      - ".github/workflows/environment-observability-alert-lifecycle.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: environment-observability-alert-lifecycle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  alert-lifecycle-dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/environment-observability-api
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar configuração Docker Compose
+        run: docker compose -f compose.observability.dev.yml config
+      - name: Subir stack DEV
+        run: docker compose -f compose.observability.dev.yml up -d --build
+      - name: Validar coleta e provisionamento
+        run: python scripts/smoke_observability_dev.py
+      - name: Validar disparo e recuperação do alerta
+        run: python scripts/verify_alert_lifecycle_dev.py
+      - name: Coletar diagnóstico
+        if: always()
+        run: |
+          mkdir -p evidence
+          docker compose -f compose.observability.dev.yml ps > evidence/compose-ps.txt
+          docker compose -f compose.observability.dev.yml logs --no-color > evidence/compose.log 2>&1 || true
+          curl -fsS http://127.0.0.1:9090/api/v1/rules > evidence/prometheus-rules.json || true
+          curl -fsS http://127.0.0.1:9093/api/v2/alerts > evidence/alertmanager-alerts.json || true
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-observability-alert-lifecycle-${{ github.run_id }}
+          path: services/environment-observability-api/evidence
+          retention-days: 14
+      - name: Encerrar stack
+        if: always()
+        run: docker compose -f compose.observability.dev.yml down -v --remove-orphans
