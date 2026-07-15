@@ -5,6 +5,7 @@ import {
   showJourneyLoading,
   showJourneySuccess,
 } from './userJourneyFeedback'
+import { emitDashboardEmptyResult, isEmptyDashboardResponse } from './dashboardEmptyStateIntegration'
 
 export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' })
 
@@ -13,16 +14,12 @@ const JOURNEY_PATHS = ['/govbi', '/runtime', '/dashboard', '/monitoramento', '/a
 export const GOVBI_EMPTY_EVENT = 'reqsys:govbi-empty-result'
 
 const generateCorrelationId = () => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   return `cid-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 export const obterCorrelationIdSessao = () => {
-  if (typeof sessionStorage === 'undefined') {
-    return generateCorrelationId()
-  }
+  if (typeof sessionStorage === 'undefined') return generateCorrelationId()
   const atual = sessionStorage.getItem(CORRELATION_STORAGE_KEY)
   if (atual) return atual
   const novo = generateCorrelationId()
@@ -31,9 +28,7 @@ export const obterCorrelationIdSessao = () => {
 }
 
 export const definirCorrelationIdSessao = (correlationId) => {
-  if (typeof sessionStorage !== 'undefined' && correlationId) {
-    sessionStorage.setItem(CORRELATION_STORAGE_KEY, correlationId)
-  }
+  if (typeof sessionStorage !== 'undefined' && correlationId) sessionStorage.setItem(CORRELATION_STORAGE_KEY, correlationId)
 }
 
 export const isJourneyRequest = (config = {}) => {
@@ -50,15 +45,12 @@ export const journeyLoadingMessage = (config = {}) => {
   return 'Atualizando dashboard operacional…'
 }
 
-export const extractGovBIRows = (payload) => {
-  const candidates = [
-    payload?.resultado?.linhas,
-    payload?.data?.resultado?.linhas,
-    payload?.linhas,
-    payload?.data?.linhas,
-  ]
-  return candidates.find(Array.isArray)
-}
+export const extractGovBIRows = (payload) => [
+  payload?.resultado?.linhas,
+  payload?.data?.resultado?.linhas,
+  payload?.linhas,
+  payload?.data?.linhas,
+].find(Array.isArray)
 
 export const isEmptyGovBIResponse = (response = {}) => {
   const url = String(response?.config?.url || '')
@@ -104,6 +96,9 @@ api.interceptors.response.use(
       if (isEmptyGovBIResponse(response)) {
         clearJourneyFeedback()
         emitGovBIEmptyResult(response)
+      } else if (isEmptyDashboardResponse(response)) {
+        clearJourneyFeedback()
+        emitDashboardEmptyResult(response)
       } else if (['post', 'put', 'patch', 'delete'].includes(method)) {
         showJourneySuccess('Operação concluída. As informações exibidas foram atualizadas.')
       } else {
@@ -118,10 +113,7 @@ api.interceptors.response.use(
       limparSessaoExpirada()
     } else if (isJourneyRequest(error?.config)) {
       const retryConfig = error.config
-      showJourneyError(
-        'Não foi possível atualizar esta jornada. Verifique a conexão e tente novamente.',
-        () => api.request(retryConfig),
-      )
+      showJourneyError('Não foi possível atualizar esta jornada. Verifique a conexão e tente novamente.', () => api.request(retryConfig))
     }
     return Promise.reject(error)
   },
