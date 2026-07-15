@@ -1,0 +1,79 @@
+{
+  "title": "Environment Observability API",
+  "uid": "environment-observability-api",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "Ambiente",
+        "type": "query",
+        "query": "label_values(environment_observability_http_requests_total, environment)",
+        "includeAll": true,
+        "current": {"text": "All", "value": "$__all"}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Taxa de requisições",
+      "type": "timeseries",
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(environment_observability_http_requests_total[5m]))", "legendFormat": "req/s"}
+      ],
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "title": "Taxa de erros",
+      "type": "timeseries",
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(environment_observability_http_errors_total[5m])) / clamp_min(sum(rate(environment_observability_http_requests_total[5m])), 0.001)", "legendFormat": "error rate"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit"}},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0}
+    },
+    {
+      "id": 3,
+      "title": "Latência p95",
+      "type": "timeseries",
+      "targets": [
+        {"refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(environment_observability_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0}
+    },
+    {
+      "id": 4,
+      "title": "Falhas de exportação OTEL",
+      "type": "timeseries",
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(otelcol_exporter_send_failed_spans[5m]))", "legendFormat": "failed spans/s"}
+      ],
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8}
+    },
+    {
+      "id": 5,
+      "title": "Spans recusados",
+      "type": "timeseries",
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(otelcol_receiver_refused_spans[5m]))", "legendFormat": "refused spans/s"}
+      ],
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8}
+    },
+    {
+      "id": 6,
+      "title": "Ocupação da fila OTEL",
+      "type": "gauge",
+      "targets": [
+        {"refId": "A", "expr": "max(otelcol_exporter_queue_size) / clamp_min(max(otelcol_exporter_queue_capacity), 1)", "legendFormat": "queue utilization"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"value": null}, {"value": 0.8}, {"value": 0.95}]}}},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8}
+    }
+  ]
+}
