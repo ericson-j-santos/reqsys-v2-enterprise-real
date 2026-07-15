@@ -6,8 +6,10 @@ on:
       - 'services/environment-observability-api/**'
       - 'scripts/smoke_environment_observability_api.sh'
       - 'scripts/write_environment_observability_evidence.sh'
+      - 'scripts/rollback_environment_observability_api.sh'
       - '.github/workflows/environment-observability-api.yml'
       - '.github/workflows/environment-observability-promotion.yml'
+      - '.github/workflows/environment-observability-rollback.yml'
   workflow_dispatch:
 
 permissions:
@@ -67,6 +69,7 @@ jobs:
         run: |
           bash -n scripts/smoke_environment_observability_api.sh
           bash -n scripts/write_environment_observability_evidence.sh
+          bash -n scripts/rollback_environment_observability_api.sh
       - name: Validate immutable promotion contract
         working-directory: .
         run: |
@@ -77,5 +80,15 @@ jobs:
           test "$(grep -Fc 'FLY_API_TOKEN:' "$workflow")" -eq 3
           grep -Fq 'environment:' "$workflow"
           grep -Fq 'name: production' "$workflow"
+      - name: Validate governed rollback contract
+        working-directory: .
+        run: |
+          workflow='.github/workflows/environment-observability-rollback.yml'
+          grep -Fq 'ROLLBACK-${TARGET_ENVIRONMENT^^}' "$workflow"
+          grep -Fq 'ghcr\\.io/.+@sha256:' "$workflow"
+          grep -Fq 'environment:' "$workflow"
+          grep -Fq 'scripts/rollback_environment_observability_api.sh' "$workflow"
+          grep -Fq 'Upload immutable rollback evidence' "$workflow"
+          ! grep -Eq 'environment:[[:space:]]*development' "$workflow"
       - name: Build container
         run: docker build -t environment-observability-api:test .
