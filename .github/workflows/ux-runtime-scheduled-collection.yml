@@ -1,0 +1,116 @@
+name: UX Runtime Scheduled Collection
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ux-runtime-scheduled-collection
+  cancel-in-progress: false
+
+jobs:
+  collect-runtime-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - environment: dev
+            base_url: https://reqsys-app-dev.fly.dev
+          - environment: stg
+            base_url: https://reqsys-app-stg.fly.dev
+          - environment: prod
+            base_url: https://reqsys-app.fly.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate history contract
+        run: |
+          python -m py_compile scripts/merge_ux_runtime_environment_history.py scripts/build_runtime_evidence_metadata.py
+          python -m unittest tests/test_merge_ux_runtime_environment_history.py -v
+
+      - name: Execute governed health smoke
+        id: smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=.tmp/runtime-${{ matrix.environment }}
+          mkdir -p "$OUT"
+          HTTP_CODE=$(curl --silent --show-error --location \
+            --connect-timeout 10 --max-time 30 \
+            --dump-header "$OUT/health-headers.txt" \
+            --output "$OUT/health-body.json" \
+            --write-out '%{http_code}' \
+            "${{ matrix.base_url }}/health")
+          printf '%s\n' "$HTTP_CODE" > "$OUT/http-status.txt"
+          test "$HTTP_CODE" = "200"
+          CORRELATION_ID=$(awk 'BEGIN{IGNORECASE=1} /^x-correlation-id:/ {gsub("\r", "", $2); print $2; exit}' "$OUT/health-headers.txt")
+          if [ -z "$CORRELATION_ID" ]; then
+            CORRELATION_ID="ux-scheduled-${{ matrix.environment }}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            printf '%s\n' workflow-fallback > "$OUT/correlation-source.txt"
+          else
+            printf '%s\n' response-header > "$OUT/correlation-source.txt"
+          fi
+          echo "correlation_id=$CORRELATION_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Generate verified smoke metadata
+        run: |
+          python scripts/build_runtime_evidence_metadata.py \
+            --environment "${{ matrix.environment }}" \
+            --correlation-id "${{ steps.smoke.outputs.correlation_id }}" \
+            --merge-sha "${{ github.sha }}" \
+            --origin integrated-runtime \
+            --output ".tmp/runtime-${{ matrix.environment }}/runtime-evidence-metadata.json"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          env = "${{ matrix.environment }}"
+          path = Path(f".tmp/runtime-{env}/runtime-evidence-metadata.json")
+          metadata = json.loads(path.read_text(encoding="utf-8"))
+          assert metadata["evidence_source"] == "runtime"
+          assert metadata["verification_status"] == "verified"
+          assert metadata["environment"] == env
+          assert metadata["production_blocker"] is False
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-runtime-scheduled-${{ matrix.environment }}
+          path: .tmp/runtime-${{ matrix.environment }}
+          retention-days: 90
+
+  publish-advisory-summary:
+    if: always()
+    needs: collect-runtime-evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish collection summary
+        run: |
+          mkdir -p .tmp/runtime-summary
+          cat > .tmp/runtime-summary/collection-summary.json <<JSON
+          {
+            "id": "ux-runtime-scheduled-collection",
+            "status": "${{ needs.collect-runtime-evidence.result }}",
+            "environments": ["dev", "stg", "prod"],
+            "mode": "advisory",
+            "production_blocker": false,
+            "human_approval_required": true,
+            "automatic_promotion": false,
+            "run_id": "${{ github.run_id }}",
+            "merge_sha": "${{ github.sha }}"
+          }
+          JSON
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-runtime-scheduled-collection-summary
+          path: .tmp/runtime-summary
+          retention-days: 90
