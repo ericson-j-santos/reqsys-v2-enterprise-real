@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import GuidedEmptyState from './GuidedEmptyState.vue'
 import GovBIEmptyState from './GovBIEmptyState.vue'
 import OperationalDashboardEmptyState from './OperationalDashboardEmptyState.vue'
@@ -8,7 +8,7 @@ import { readEmptyStateTelemetry } from '../services/emptyStateTelemetry'
 const global = {
   stubs: {
     VIcon: { template: '<span />' },
-    VBtn: { template: '<button @click="$emit(\'click\')"><slot/></button>' },
+    VBtn: { template: '<button><slot/></button>' },
   },
 }
 
