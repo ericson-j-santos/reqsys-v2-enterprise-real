@@ -71,7 +71,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$EVIDENCE_DIR"
-          pac solution list | tee "$EVIDENCE_DIR/solution-list.txt"
+          "$POWERPLATFORMTOOLS_PACPATH" solution list | tee "$EVIDENCE_DIR/solution-list.txt"
 
       - name: Export imported DEV Solution
         uses: microsoft/powerplatform-actions/export-solution@v1
