@@ -1,0 +1,94 @@
+name: User Experience Remediation Lifecycle
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_ux_remediation_lifecycle.py"
+      - "tests/test_build_ux_remediation_lifecycle.py"
+      - ".github/workflows/user-experience-remediation-lifecycle.yml"
+  workflow_run:
+    workflows: ["User Experience Recovery Remediation Advisory"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ux-remediation-lifecycle-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test lifecycle
+        run: |
+          python -m py_compile scripts/build_ux_remediation_lifecycle.py
+          python -m unittest tests/test_build_ux_remediation_lifecycle.py -v
+
+  publish-post-merge-lifecycle:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download remediation advisory artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ux-recovery-remediation-advisory
+          path: .tmp/ux-lifecycle/source
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+      - name: Restore previous lifecycle history
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/ux-lifecycle/previous
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ux-remediation-lifecycle&per_page=100" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/ux-lifecycle/previous.zip
+            unzip -q .tmp/ux-lifecycle/previous.zip -d .tmp/ux-lifecycle/previous
+          else
+            printf '%s\n' '[]' > .tmp/ux-lifecycle/previous/ux-remediation-lifecycle-history.json
+          fi
+      - name: Build lifecycle and SLA summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          dashboard="$(find .tmp/ux-lifecycle/source -name ops-dashboard.json -print -quit)"
+          previous="$(find .tmp/ux-lifecycle/previous -name ux-remediation-lifecycle-history.json -print -quit)"
+          test -n "$dashboard"
+          if [ -z "$previous" ]; then
+            previous=.tmp/ux-lifecycle/previous/ux-remediation-lifecycle-history.json
+            printf '%s\n' '[]' > "$previous"
+          fi
+          mkdir -p .tmp/ux-lifecycle/output
+          python scripts/build_ux_remediation_lifecycle.py \
+            --dashboard "$dashboard" \
+            --previous "$previous" \
+            --dashboard-output .tmp/ux-lifecycle/output/ops-dashboard.json \
+            --history-output .tmp/ux-lifecycle/output/ux-remediation-lifecycle-history.json
+      - name: Publish lifecycle evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-remediation-lifecycle
+          path: .tmp/ux-lifecycle/output
+          retention-days: 90
