@@ -1,5 +1,7 @@
 <template>
   <div class="journey-feedback" aria-live="polite" aria-atomic="true">
+    <GovBIEmptyStateBridge />
+
     <v-progress-linear
       v-if="state.type === 'loading'"
       indeterminate
@@ -39,6 +41,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { EVENT_NAME } from '../services/userJourneyFeedback'
+import GovBIEmptyStateBridge from './GovBIEmptyStateBridge.vue'
 
 const visible = ref(false)
 const state = reactive({ type: 'clear', message: '', persistent: false, retry: null })
