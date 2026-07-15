@@ -1,0 +1,136 @@
+name: User Experience Remediation Governed Transition
+
+on:
+  pull_request:
+    paths:
+      - "scripts/apply_ux_remediation_transition.py"
+      - "tests/test_apply_ux_remediation_transition.py"
+      - ".github/workflows/user-experience-remediation-governed-transition.yml"
+  workflow_dispatch:
+    inputs:
+      remediation_id:
+        description: Remediation lifecycle identifier
+        required: true
+        type: string
+      target_state:
+        description: Governed target state
+        required: true
+        type: choice
+        options: [in_progress, open, resolved]
+      actor:
+        description: Responsible role or operator
+        required: true
+        type: string
+      resolution_summary:
+        description: Resolution summary, required for resolved
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ux-remediation-transition-${{ github.event.inputs.remediation_id || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test governed transition contract
+        run: |
+          python -m py_compile scripts/apply_ux_remediation_transition.py
+          python -m unittest tests/test_apply_ux_remediation_transition.py -v
+
+  apply-governed-transition:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EVIDENCE_HMAC_KEY: ${{ secrets.UX_REMEDIATION_EVIDENCE_HMAC_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require governed signing secret
+        run: test -n "$EVIDENCE_HMAC_KEY"
+      - name: Restore latest lifecycle and qualified evidence artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/ux-transition/lifecycle .tmp/ux-transition/evidence
+          lifecycle_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ux-remediation-lifecycle&per_page=100" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          evidence_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ux-recovery-evidence-chain&per_page=100" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          test -n "$lifecycle_id"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${lifecycle_id}/zip" > .tmp/ux-transition/lifecycle.zip
+          unzip -q .tmp/ux-transition/lifecycle.zip -d .tmp/ux-transition/lifecycle
+          if [ -n "$evidence_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${evidence_id}/zip" > .tmp/ux-transition/evidence.zip
+            unzip -q .tmp/ux-transition/evidence.zip -d .tmp/ux-transition/evidence
+          fi
+      - name: Build signed transition request
+        shell: bash
+        env:
+          REMEDIATION_ID: ${{ inputs.remediation_id }}
+          TARGET_STATE: ${{ inputs.target_state }}
+          ACTOR: ${{ inputs.actor }}
+          RESOLUTION_SUMMARY: ${{ inputs.resolution_summary }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/ux-transition/output
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from scripts.apply_ux_remediation_transition import sign_evidence
+          evidence = {
+              "summary": os.environ.get("RESOLUTION_SUMMARY", ""),
+              "source": "workflow_dispatch",
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "workflow_run_id": os.environ["GITHUB_RUN_ID"],
+          }
+          request = {
+              "remediation_id": os.environ["REMEDIATION_ID"],
+              "target_state": os.environ["TARGET_STATE"],
+              "actor": os.environ["ACTOR"],
+          }
+          if request["target_state"] == "resolved":
+              request["resolution_evidence"] = evidence
+              request["signature"] = sign_evidence(evidence, os.environ["EVIDENCE_HMAC_KEY"])
+          Path('.tmp/ux-transition/request.json').write_text(json.dumps(request, indent=2), encoding='utf-8')
+          PY
+      - name: Apply validated transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          history="$(find .tmp/ux-transition/lifecycle -name ux-remediation-lifecycle-history.json -print -quit)"
+          test -n "$history"
+          args=(--history "$history" --request .tmp/ux-transition/request.json --secret "$EVIDENCE_HMAC_KEY" --history-output .tmp/ux-transition/output/ux-remediation-lifecycle-history.json --audit-output .tmp/ux-transition/output/ux-remediation-transition-audit.json)
+          if [ "${{ inputs.target_state }}" = "resolved" ]; then
+            chain="$(find .tmp/ux-transition/evidence -name ux-recovery-evidence-chain.json -print -quit)"
+            test -n "$chain"
+            python - "$chain" <<'PY'
+          import json, sys
+          from pathlib import Path
+          chain = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          Path('.tmp/ux-transition/qualified.json').write_text(json.dumps(chain[-1], indent=2), encoding='utf-8')
+          PY
+            args+=(--qualified-evidence .tmp/ux-transition/qualified.json)
+          fi
+          python scripts/apply_ux_remediation_transition.py "${args[@]}"
+      - name: Publish governed transition evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-remediation-governed-transition-${{ github.run_id }}
+          path: .tmp/ux-transition/output
+          retention-days: 90
