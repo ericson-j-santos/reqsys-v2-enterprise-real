@@ -10,6 +10,7 @@ export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api
 
 const CORRELATION_STORAGE_KEY = 'reqsys_correlation_id'
 const JOURNEY_PATHS = ['/govbi', '/runtime', '/dashboard', '/monitoramento', '/analytics']
+export const GOVBI_EMPTY_EVENT = 'reqsys:govbi-empty-result'
 
 const generateCorrelationId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -49,6 +50,34 @@ export const journeyLoadingMessage = (config = {}) => {
   return 'Atualizando dashboard operacional…'
 }
 
+export const extractGovBIRows = (payload) => {
+  const candidates = [
+    payload?.resultado?.linhas,
+    payload?.data?.resultado?.linhas,
+    payload?.linhas,
+    payload?.data?.linhas,
+  ]
+  return candidates.find(Array.isArray)
+}
+
+export const isEmptyGovBIResponse = (response = {}) => {
+  const url = String(response?.config?.url || '')
+  const method = String(response?.config?.method || 'get').toLowerCase()
+  const rows = extractGovBIRows(response?.data)
+  return url.includes('/govbi/perguntas') && method === 'post' && Array.isArray(rows) && rows.length === 0
+}
+
+function emitGovBIEmptyResult(response) {
+  if (typeof window === 'undefined') return
+  const retryConfig = response?.config
+  window.dispatchEvent(new CustomEvent(GOVBI_EMPTY_EVENT, {
+    detail: {
+      reason: 'A consulta foi concluída, mas nenhum registro corresponde aos filtros informados.',
+      retry: retryConfig ? () => api.request(retryConfig) : null,
+    },
+  }))
+}
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('reqsys_token')
   config.headers['X-Correlation-Id'] = obterCorrelationIdSessao()
@@ -72,7 +101,10 @@ api.interceptors.response.use(
   (response) => {
     if (isJourneyRequest(response?.config)) {
       const method = String(response?.config?.method || 'get').toLowerCase()
-      if (['post', 'put', 'patch', 'delete'].includes(method)) {
+      if (isEmptyGovBIResponse(response)) {
+        clearJourneyFeedback()
+        emitGovBIEmptyResult(response)
+      } else if (['post', 'put', 'patch', 'delete'].includes(method)) {
         showJourneySuccess('Operação concluída. As informações exibidas foram atualizadas.')
       } else {
         clearJourneyFeedback()
