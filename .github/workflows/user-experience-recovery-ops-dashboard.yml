@@ -1,0 +1,136 @@
+name: User Experience Recovery Ops Dashboard
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_ux_recovery_ops_dashboard.py"
+      - "tests/test_build_ux_recovery_ops_dashboard.py"
+      - ".github/workflows/user-experience-recovery-ops-dashboard.yml"
+  workflow_run:
+    workflows: ["User Experience Recovery Evidence Chain"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ux-recovery-ops-dashboard-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test dashboard builder
+        run: |
+          python -m py_compile scripts/build_ux_recovery_ops_dashboard.py
+          python -m unittest tests/test_build_ux_recovery_ops_dashboard.py -v
+      - name: Smoke deterministic contract
+        run: |
+          mkdir -p .tmp/ux-dashboard
+          cat > .tmp/ux-dashboard/history.json <<'JSON'
+          [
+            {"source_run_id":"101","source_head_sha":"abcdef123456","source_workflow":"recovery-trend","generated_at":"2026-07-15T18:00:00Z"}
+          ]
+          JSON
+          cat > .tmp/ux-dashboard/stability.json <<'JSON'
+          {
+            "status":"UX_STABILITY_EVIDENCE_PENDING",
+            "standard_gold_ready":false,
+            "sample_count":1,
+            "qualified_sample_count":1,
+            "consecutive_qualified_samples":1,
+            "recovery_rate_average":80,
+            "recovery_seconds_average":22,
+            "criteria":{"minimum_samples":3,"minimum_consecutive_qualified":2}
+          }
+          JSON
+          printf '%s\n' '{"cards":[]}' > .tmp/ux-dashboard/dashboard.json
+          python scripts/build_ux_recovery_ops_dashboard.py \
+            --history .tmp/ux-dashboard/history.json \
+            --stability .tmp/ux-dashboard/stability.json \
+            --dashboard .tmp/ux-dashboard/dashboard.json \
+            --output .tmp/ux-dashboard/ops-dashboard.json
+          python - <<'PY'
+          import json
+          report = json.load(open('.tmp/ux-dashboard/ops-dashboard.json', encoding='utf-8'))
+          card = next(item for item in report['cards'] if item['id'] == 'ux-recovery-standard-gold-readiness')
+          assert card['confidence_percent'] == 53
+          assert card['latest_evidence']['source_run_id'] == '101'
+          assert card['mode'] == 'advisory'
+          assert card['production_blocker'] is False
+          print('ux recovery ops dashboard smoke: OK')
+          PY
+
+  publish-post-merge-summary:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download evidence chain artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ux-recovery-evidence-chain
+          path: .tmp/ux-dashboard/source
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+      - name: Restore latest Ops Dashboard artifact when available
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/ux-dashboard/previous
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ux-recovery-ops-dashboard&per_page=100" \
+            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/ux-dashboard/previous.zip
+            unzip -q .tmp/ux-dashboard/previous.zip -d .tmp/ux-dashboard/previous
+          else
+            printf '%s\n' '{"cards":[]}' > .tmp/ux-dashboard/previous/ops-dashboard.json
+          fi
+      - name: Build navigable operational summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          history="$(find .tmp/ux-dashboard/source -name ux-recovery-evidence-chain.json -print -quit)"
+          stability="$(find .tmp/ux-dashboard/source -name ux-recovery-stability.json -print -quit)"
+          dashboard="$(find .tmp/ux-dashboard/previous -name ops-dashboard.json -print -quit)"
+          test -n "$history"
+          test -n "$stability"
+          if [ -z "$dashboard" ]; then
+            dashboard=.tmp/ux-dashboard/previous/ops-dashboard.json
+            printf '%s\n' '{"cards":[]}' > "$dashboard"
+          fi
+          mkdir -p .tmp/ux-dashboard/output
+          python scripts/build_ux_recovery_ops_dashboard.py \
+            --history "$history" \
+            --stability "$stability" \
+            --dashboard "$dashboard" \
+            --output .tmp/ux-dashboard/output/ops-dashboard.json
+          cp "$history" .tmp/ux-dashboard/output/ux-recovery-evidence-chain.json
+          cp "$stability" .tmp/ux-dashboard/output/ux-recovery-stability.json
+      - name: Publish operational dashboard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-recovery-ops-dashboard
+          path: .tmp/ux-dashboard/output
+          retention-days: 90
