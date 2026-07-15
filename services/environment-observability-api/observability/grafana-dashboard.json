@@ -2,21 +2,10 @@
   "title": "Environment Observability API",
   "uid": "environment-observability-api",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": {"from": "now-6h", "to": "now"},
-  "templating": {
-    "list": [
-      {
-        "name": "environment",
-        "label": "Ambiente",
-        "type": "query",
-        "query": "label_values(environment_observability_http_requests_total, environment)",
-        "includeAll": true,
-        "current": {"text": "All", "value": "$__all"}
-      }
-    ]
-  },
+  "templating": {"list": []},
   "panels": [
     {
       "id": 1,
