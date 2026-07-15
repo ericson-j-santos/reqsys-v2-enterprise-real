@@ -1,0 +1,111 @@
+name: UX Integrated Runtime Evidence Producer
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente integrado alvo
+        required: true
+        type: choice
+        options: [dev, stg, prod]
+        default: dev
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_runtime_evidence_metadata.py"
+      - "scripts/build_empty_state_recovery_trend.py"
+      - ".github/workflows/ux-integrated-runtime-evidence-producer.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux-integrated-runtime-evidence-${{ github.ref }}-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  integrated-smoke-and-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+      MERGE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve integrated environment
+        id: environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$TARGET_ENVIRONMENT" in
+            dev) BASE_URL="https://reqsys-app-dev.fly.dev" ;;
+            stg) BASE_URL="https://reqsys-app-stg.fly.dev" ;;
+            prod) BASE_URL="https://reqsys-app.fly.dev" ;;
+            *) echo "Ambiente não permitido: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
+          esac
+          echo "base_url=$BASE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Execute public runtime smoke
+        id: smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/ux-runtime-evidence
+          HEADERS=.tmp/ux-runtime-evidence/health-headers.txt
+          BODY=.tmp/ux-runtime-evidence/health-body.json
+          HTTP_CODE=$(curl --silent --show-error --location \
+            --connect-timeout 10 --max-time 30 \
+            --dump-header "$HEADERS" \
+            --output "$BODY" \
+            --write-out '%{http_code}' \
+            "${{ steps.environment.outputs.base_url }}/health")
+          test "$HTTP_CODE" = "200"
+
+          CORRELATION_ID=$(awk 'BEGIN{IGNORECASE=1} /^x-correlation-id:/ {gsub("\r", "", $2); print $2; exit}' "$HEADERS")
+          if [ -z "$CORRELATION_ID" ]; then
+            CORRELATION_ID="ux-runtime-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            CORRELATION_SOURCE="workflow-fallback"
+          else
+            CORRELATION_SOURCE="response-header"
+          fi
+
+          printf '%s\n' "$CORRELATION_ID" > .tmp/ux-runtime-evidence/correlation-id.txt
+          printf '%s\n' "$HTTP_CODE" > .tmp/ux-runtime-evidence/http-status.txt
+          printf '%s\n' "$CORRELATION_SOURCE" > .tmp/ux-runtime-evidence/correlation-source.txt
+          echo "correlation_id=$CORRELATION_ID" >> "$GITHUB_OUTPUT"
+          echo "correlation_source=$CORRELATION_SOURCE" >> "$GITHUB_OUTPUT"
+
+      - name: Generate verified runtime metadata
+        run: |
+          python -m py_compile scripts/build_runtime_evidence_metadata.py
+          python scripts/build_runtime_evidence_metadata.py \
+            --environment "$TARGET_ENVIRONMENT" \
+            --correlation-id "${{ steps.smoke.outputs.correlation_id }}" \
+            --merge-sha "$MERGE_SHA" \
+            --origin post-merge-smoke \
+            --output .tmp/ux-runtime-evidence/runtime-evidence-metadata.json
+
+      - name: Publish smoke contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          metadata = json.loads(Path('.tmp/ux-runtime-evidence/runtime-evidence-metadata.json').read_text())
+          assert metadata['evidence_source'] == 'runtime'
+          assert metadata['verification_status'] == 'verified'
+          assert metadata['environment'] in {'dev', 'stg', 'prod'}
+          assert metadata['production_blocker'] is False
+          assert metadata['human_approval_required'] is True
+          print('integrated runtime evidence producer: OK')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-integrated-runtime-evidence-${{ env.TARGET_ENVIRONMENT }}
+          path: .tmp/ux-runtime-evidence
+          retention-days: 90
