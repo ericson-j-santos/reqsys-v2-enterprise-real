@@ -35,23 +35,36 @@ jobs:
     outputs:
       pr_number: ${{ steps.ctx.outputs.pr_number }}
       head_sha: ${{ steps.ctx.outputs.head_sha }}
+      base_ref: ${{ steps.ctx.outputs.base_ref }}
+      base_sha: ${{ steps.ctx.outputs.base_sha }}
     steps:
-      - name: Resolver PR e head SHA
+      - name: Resolver PR, head e base reais
         id: ctx
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
-            echo "head_sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            BASE_REF="${{ github.event.pull_request.base.ref }}"
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
           else
             PR_NUMBER="${{ github.event.inputs.pr_number }}"
-            HEAD_SHA="$(gh pr view "$PR_NUMBER" --json headRefOid -q .headRefOid)"
-            echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-            echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+            PR_JSON="$(gh pr view "$PR_NUMBER" --json headRefOid,baseRefName,baseRefOid)"
+            HEAD_SHA="$(jq -r '.headRefOid' <<<"$PR_JSON")"
+            BASE_REF="$(jq -r '.baseRefName' <<<"$PR_JSON")"
+            BASE_SHA="$(jq -r '.baseRefOid' <<<"$PR_JSON")"
           fi
+
+          git check-ref-format --branch "$BASE_REF" >/dev/null
+
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
 
   isolated-validation:
     name: Validação isolada do PR
@@ -129,7 +142,7 @@ jobs:
           npm run typecheck --if-present
 
   temporary-integration:
-    name: Integração temporária contra main
+    name: Integração temporária contra base real do PR
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [resolve-context, isolated-validation]
@@ -140,14 +153,38 @@ jobs:
           fetch-depth: 0
 
       - name: Preparar branch temporária de integração
+        env:
+          PR_NUMBER: ${{ needs.resolve-context.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.resolve-context.outputs.head_sha }}
+          BASE_REF: ${{ needs.resolve-context.outputs.base_ref }}
+          BASE_SHA: ${{ needs.resolve-context.outputs.base_sha }}
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "reqsys-governed-merge-queue"
           git config user.email "actions@github.com"
-          git fetch origin main
-          git checkout -B "tmp/governed-merge-queue/${{ needs.resolve-context.outputs.pr_number }}" origin/main
-          git merge --no-commit --no-ff "${{ needs.resolve-context.outputs.head_sha }}"
+          git check-ref-format --branch "$BASE_REF" >/dev/null
+
+          mkdir -p artifacts/governed-merge-queue
+          jq -n \
+            --arg correlation_id "${{ env.CORRELATION_ID }}" \
+            --arg pr_number "$PR_NUMBER" \
+            --arg head_sha "$HEAD_SHA" \
+            --arg base_ref "$BASE_REF" \
+            --arg base_sha "$BASE_SHA" \
+            '{
+              correlation_id: $correlation_id,
+              pr_number: ($pr_number | tonumber),
+              head_sha: $head_sha,
+              base_ref: $base_ref,
+              base_sha: $base_sha,
+              integration_strategy: "merge-head-onto-real-pr-base"
+            }' > artifacts/governed-merge-queue/integration-context.json
+
+          git fetch --no-tags origin \
+            "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          git checkout -B "tmp/governed-merge-queue/${PR_NUMBER}" "origin/${BASE_REF}"
+          git merge --no-commit --no-ff "$HEAD_SHA"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -169,7 +206,7 @@ jobs:
         with:
           name: governed-merge-queue-evidence
           path: artifacts/governed-merge-queue/
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 30
 
   merge-queue-gate:
@@ -242,6 +279,8 @@ jobs:
             --arg correlation_id "${{ env.CORRELATION_ID }}" \
             --arg pr_number "${{ needs.resolve-context.outputs.pr_number }}" \
             --arg head_sha "${{ needs.resolve-context.outputs.head_sha }}" \
+            --arg base_ref "${{ needs.resolve-context.outputs.base_ref }}" \
+            --arg base_sha "${{ needs.resolve-context.outputs.base_sha }}" \
             --arg eligible "$ELIGIBLE" \
             --arg allow_auto_merge "$ALLOW_AUTO_MERGE" \
             --arg native_auto_merge_available "$NATIVE_AUTO_MERGE" \
@@ -253,10 +292,13 @@ jobs:
               correlation_id: $correlation_id,
               pr_number: ($pr_number | tonumber),
               head_sha: $head_sha,
+              base_ref: $base_ref,
+              base_sha: $base_sha,
               eligible: ($eligible == "true"),
               allow_auto_merge: ($allow_auto_merge == "true"),
               native_auto_merge_available: ($native_auto_merge_available == "true"),
               merge_path: $merge_path,
+              integration_strategy: "merge-head-onto-real-pr-base",
               runtime_merge_queue_gate: $runtime_gate[0],
               preview_environment_contract: "progressive-required-via-workflow",
               validation_results: {
@@ -264,6 +306,7 @@ jobs:
                 temporary_integration: $integration_result
               },
               notes: [
+                "A integração temporária usa a base real declarada pelo PR, incluindo PRs empilhados.",
                 "Auto-merge nativo depende de allow_auto_merge=true no repositório.",
                 "Preview Environment Contract é evidencia progressiva obrigatoria quando workflow estiver presente.",
                 "Com allow_auto_merge=false, usar Governed PR Automation ou merge manual após demais gates."
@@ -278,6 +321,8 @@ jobs:
 
           | Estágio | Resultado |
           |---|---|
+          | Base real do PR | \`${{ needs.resolve-context.outputs.base_ref }}\` |
+          | Base SHA | \`${{ needs.resolve-context.outputs.base_sha }}\` |
           | Validação isolada | \`$ISOLATED\` |
           | Integração temporária | \`$INTEGRATION\` |
           | Runtime merge queue gate | \`$ELIGIBLE\` |
@@ -288,6 +333,7 @@ jobs:
 
           - \`success\`: PR elegível para fila de merge após demais checks obrigatórios.
           - \`failure\`: bloquear merge e corrigir regressão antes de revalidar.
+          - PRs empilhados são validados contra sua base declarada, sem falso conflito contra \`main\`.
           - Auto-merge nativo depende de \`allow_auto_merge=true\` no repositório.
           - Enquanto \`allow_auto_merge=false\`, o merge segue via **Governed PR Automation** ou manual com label \`governed-merge-approved\`.
           EOF
