@@ -12,6 +12,23 @@ services:
         condition: service_healthy
     networks: [observability]
 
+  collector-queue-init:
+    image: alpine:3.22
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        mkdir -p /var/lib/otelcol/queue
+        chown -R 10001:10001 /var/lib/otelcol
+        chmod 0750 /var/lib/otelcol /var/lib/otelcol/queue
+    user: "0:0"
+    volumes:
+      - collector-queue:/var/lib/otelcol
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "DAC_OVERRIDE", "FOWNER"]
+    networks: [observability]
+
   collector:
     image: otel/opentelemetry-collector-contrib:0.128.0
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
@@ -25,6 +42,9 @@ services:
     ports:
       - "127.0.0.1:13133:13133"
       - "127.0.0.1:8888:8888"
+    depends_on:
+      collector-queue-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol-contrib/config.yaml"]
       interval: 30s
@@ -43,6 +63,7 @@ services:
     volumes:
       - ./observability/dev/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./observability/prometheus-alerts.yaml:/etc/prometheus/rules/alerts.yaml:ro
+      - ./observability/dev/synthetic-alerts.yaml:/etc/prometheus/rules/synthetic-alerts.yaml:ro
       - prometheus-data:/prometheus
     ports:
       - "127.0.0.1:9090:9090"

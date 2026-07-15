@@ -7,6 +7,7 @@ extensions:
     endpoint: 127.0.0.1:55679
   file_storage:
     directory: /var/lib/otelcol/queue
+    create_directory: true
     timeout: 10s
     compaction:
       on_start: true
