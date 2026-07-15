@@ -43,6 +43,7 @@ services:
     volumes:
       - ./observability/dev/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./observability/prometheus-alerts.yaml:/etc/prometheus/rules/alerts.yaml:ro
+      - ./observability/dev/synthetic-alerts.yaml:/etc/prometheus/rules/synthetic-alerts.yaml:ro
       - prometheus-data:/prometheus
     ports:
       - "127.0.0.1:9090:9090"
