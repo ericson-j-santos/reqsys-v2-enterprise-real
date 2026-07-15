@@ -1,0 +1,251 @@
+name: Environment Observability API Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      promote_to:
+        description: Highest environment to promote the immutable image to
+        required: true
+        default: development
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: environment-observability-promotion
+  cancel-in-progress: false
+
+env:
+  SERVICE_DIR: services/environment-observability-api
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/reqsys-environment-observability-api
+
+jobs:
+  validate-and-publish:
+    name: Validate and publish immutable image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      image_ref: ${{ steps.image.outputs.ref }}
+      image_digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: ${{ env.SERVICE_DIR }}/requirements.txt
+
+      - name: Install dependencies
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Compile and test
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          python -m compileall -q app tests
+          python -m pytest -q
+
+      - name: Set image reference
+        id: image
+        shell: bash
+        run: echo "ref=${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish once
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.SERVICE_DIR }}
+          file: ${{ env.SERVICE_DIR }}/Dockerfile
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ${{ steps.image.outputs.ref }}:${{ github.sha }}
+
+      - name: Publish build evidence
+        shell: bash
+        run: |
+          mkdir -p evidence
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          evidence = {
+              "schema_version": "1.0",
+              "service": "environment-observability-api",
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "commit": os.environ["GITHUB_SHA"],
+              "image": "${{ steps.image.outputs.ref }}",
+              "digest": "${{ steps.build.outputs.digest }}",
+              "built_at": datetime.now(timezone.utc).isoformat(),
+              "workflow_run_id": os.environ["GITHUB_RUN_ID"],
+          }
+          Path("evidence/build.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True), encoding="utf-8"
+          )
+          PY
+
+      - name: Upload build evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-observability-build-evidence
+          path: evidence/build.json
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy-development:
+    name: Deploy development
+    needs: validate-and-publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: development
+      url: https://reqsys-env-api-dev.fly.dev
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      APP_NAME: reqsys-env-api-dev
+      PUBLIC_URL: https://reqsys-env-api-dev.fly.dev
+      CONFIG_FILE: services/environment-observability-api/fly.dev.toml
+      IMAGE_REF: ${{ needs.validate-and-publish.outputs.image_ref }}@${{ needs.validate-and-publish.outputs.image_digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require environment-scoped token
+        shell: bash
+        run: test -n "$FLY_API_TOKEN"
+
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy immutable image
+        run: flyctl deploy --config "$CONFIG_FILE" --app "$APP_NAME" --image "$IMAGE_REF" --strategy rolling --yes
+
+      - name: Smoke and validate environment contract
+        shell: bash
+        run: scripts/smoke_environment_observability_api.sh "$PUBLIC_URL" development
+
+      - name: Create deployment evidence
+        shell: bash
+        run: scripts/write_environment_observability_evidence.sh development "$PUBLIC_URL" "$APP_NAME" "$IMAGE_REF"
+
+      - name: Upload development evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-observability-development-evidence
+          path: evidence/development.json
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy-staging:
+    name: Promote to staging
+    if: ${{ inputs.promote_to == 'staging' || inputs.promote_to == 'production' }}
+    needs:
+      - validate-and-publish
+      - deploy-development
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: https://reqsys-env-api-stg.fly.dev
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      APP_NAME: reqsys-env-api-stg
+      PUBLIC_URL: https://reqsys-env-api-stg.fly.dev
+      CONFIG_FILE: services/environment-observability-api/fly.stg.toml
+      IMAGE_REF: ${{ needs.validate-and-publish.outputs.image_ref }}@${{ needs.validate-and-publish.outputs.image_digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require environment-scoped token
+        shell: bash
+        run: test -n "$FLY_API_TOKEN"
+
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy same immutable image
+        run: flyctl deploy --config "$CONFIG_FILE" --app "$APP_NAME" --image "$IMAGE_REF" --strategy rolling --yes
+
+      - name: Smoke and validate environment contract
+        shell: bash
+        run: scripts/smoke_environment_observability_api.sh "$PUBLIC_URL" staging
+
+      - name: Create deployment evidence
+        shell: bash
+        run: scripts/write_environment_observability_evidence.sh staging "$PUBLIC_URL" "$APP_NAME" "$IMAGE_REF"
+
+      - name: Upload staging evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-observability-staging-evidence
+          path: evidence/staging.json
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy-production:
+    name: Promote to production
+    if: ${{ inputs.promote_to == 'production' }}
+    needs:
+      - validate-and-publish
+      - deploy-development
+      - deploy-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://reqsys-env-api-prod.fly.dev
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      APP_NAME: reqsys-env-api-prod
+      PUBLIC_URL: https://reqsys-env-api-prod.fly.dev
+      CONFIG_FILE: services/environment-observability-api/fly.prod.toml
+      IMAGE_REF: ${{ needs.validate-and-publish.outputs.image_ref }}@${{ needs.validate-and-publish.outputs.image_digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require environment-scoped token
+        shell: bash
+        run: test -n "$FLY_API_TOKEN"
+
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy same immutable image
+        run: flyctl deploy --config "$CONFIG_FILE" --app "$APP_NAME" --image "$IMAGE_REF" --strategy rolling --yes
+
+      - name: Smoke and validate environment contract
+        shell: bash
+        run: scripts/smoke_environment_observability_api.sh "$PUBLIC_URL" production
+
+      - name: Create deployment evidence
+        shell: bash
+        run: scripts/write_environment_observability_evidence.sh production "$PUBLIC_URL" "$APP_NAME" "$IMAGE_REF"
+
+      - name: Upload production evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-observability-production-evidence
+          path: evidence/production.json
+          if-no-files-found: error
+          retention-days: 90
