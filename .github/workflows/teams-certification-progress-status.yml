@@ -41,6 +41,7 @@ jobs:
           import math
           import os
           import subprocess
+          import textwrap
           from datetime import datetime, timedelta, timezone
           from pathlib import Path
 
@@ -175,34 +176,35 @@ jobs:
 
           eta_text = eta.strftime("%d/%m/%Y %H:%M UTC") if eta else "indeterminada até recuperação do SLO"
           blockers_text = "\n".join(f"- {item}" for item in blockers) or "- nenhum bloqueio atual"
-          body = f"""## Progresso da certificação GitHub → Teams
+          body = textwrap.dedent(f"""\
+              ## Progresso da certificação GitHub → Teams
 
-**Estado atual:** `{state}`  
-**Próximo estado:** `{next_state}`  
-**Progresso consolidado:** **{overall_percent:.2f}%**  
-**Atualizado em:** {now.strftime('%d/%m/%Y %H:%M UTC')}  
-**Previsão do próximo estado:** {eta_text}
+              **Estado atual:** `{state}`  
+              **Próximo estado:** `{next_state}`  
+              **Progresso consolidado:** **{overall_percent:.2f}%**  
+              **Atualizado em:** {now.strftime('%d/%m/%Y %H:%M UTC')}  
+              **Previsão do próximo estado:** {eta_text}
 
-| Dimensão | Atual | Meta | Progresso | SLO |
-|---|---:|---:|---:|---:|
-| Entregas Teams | {delivery['total']} | {min_delivery} | {delivery['sample_percent']:.2f}% | {delivery['success_rate_percent']:.2f}% |
-| Monitor do dashboard | {monitor['total']} | {min_monitor} | {monitor['sample_percent']:.2f}% | {monitor['success_rate_percent']:.2f}% |
-| Janela provisória | {observed_days:.2f} dias | {provisional_days} dias | {temporal_percent:.2f}% | — |
-| Janela definitiva | {observed_days:.2f} dias | {definitive_days} dias | {min(100.0, observed_days / definitive_days * 100.0):.2f}% | — |
+              | Dimensão | Atual | Meta | Progresso | SLO |
+              |---|---:|---:|---:|---:|
+              | Entregas Teams | {delivery['total']} | {min_delivery} | {delivery['sample_percent']:.2f}% | {delivery['success_rate_percent']:.2f}% |
+              | Monitor do dashboard | {monitor['total']} | {min_monitor} | {monitor['sample_percent']:.2f}% | {monitor['success_rate_percent']:.2f}% |
+              | Janela provisória | {observed_days:.2f} dias | {provisional_days} dias | {temporal_percent:.2f}% | — |
+              | Janela definitiva | {observed_days:.2f} dias | {definitive_days} dias | {min(100.0, observed_days / definitive_days * 100.0):.2f}% | — |
 
-### Bloqueios atuais
+              ### Bloqueios atuais
 
-{blockers_text}
+              {blockers_text}
 
-### Evidência
+              ### Evidência
 
-- Execução: {report['run_url']}
-- Critério provisório: 7 dias, 20 entregas, 20 monitores e SLO ≥ 99%
-- Critério definitivo: 30 dias, amostras mínimas e SLO ≥ 99%
-- Fonte: histórico dos workflows canônicos do GitHub Actions
+              - Execução: {report['run_url']}
+              - Critério provisório: 7 dias, 20 entregas, 20 monitores e SLO ≥ 99%
+              - Critério definitivo: 30 dias, amostras mínimas e SLO ≥ 99%
+              - Fonte: histórico dos workflows canônicos do GitHub Actions
 
-> Esta issue é atualizada automaticamente e funciona como painel operacional persistente.
-"""
+              > Esta issue é atualizada automaticamente e funciona como painel operacional persistente.
+              """)
           (output / "status.md").write_text(body, encoding="utf-8")
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as gh_output:

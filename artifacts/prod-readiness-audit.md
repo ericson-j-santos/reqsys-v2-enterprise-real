@@ -1,7 +1,7 @@
 # Levantamento automatizado — produção ReqSys/Fly.io
 
 Status: **action_required**
-Validado em: `2026-07-02T16:43:14.715239Z`
+Validado em: `2026-07-14T22:57:28.441761Z`
 Blocked: **0** · Action required/manual: **2**
 
 | Área | Check | Status | Humano? | Detalhe |

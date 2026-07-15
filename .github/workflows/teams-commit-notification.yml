@@ -30,6 +30,7 @@ jobs:
     timeout-minutes: 5
     env:
       TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
       PYTHONUNBUFFERED: "1"
 
     steps:
@@ -53,9 +54,12 @@ jobs:
           if [[ -z "${TEAMS_WEBHOOK_URL}" ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "::warning title=Teams não configurado::Secret TEAMS_WEBHOOK_URL ausente; envio foi ignorado sem invalidar o CI."
+          elif [[ -z "${TEAMS_WEBHOOK_RECIPIENT}" || "${TEAMS_WEBHOOK_RECIPIENT}" != *"@"* ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Teams não configurado::Secret TEAMS_WEBHOOK_RECIPIENT ausente ou inválido (precisa ser e-mail/UPN); envio foi ignorado sem invalidar o CI."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
-            echo "Secret TEAMS_WEBHOOK_URL disponível; notificação será enviada."
+            echo "Secrets TEAMS_WEBHOOK_URL/TEAMS_WEBHOOK_RECIPIENT disponíveis; notificação será enviada."
           fi
 
       - name: Enviar notificação
