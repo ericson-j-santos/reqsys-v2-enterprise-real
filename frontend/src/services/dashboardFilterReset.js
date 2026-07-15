@@ -1,4 +1,6 @@
-export const DASHBOARD_CLEAR_FILTERS_EVENT = 'reqsys:dashboard-clear-filters'
+import { DASHBOARD_CLEAR_FILTERS_EVENT } from './emptyStateEvents'
+
+export { DASHBOARD_CLEAR_FILTERS_EVENT } from './emptyStateEvents'
 
 const PRIORITY_ROUTES = new Set(['/analytics', '/estatisticas', '/monitoramento-operacional', '/'])
 
@@ -11,8 +13,7 @@ export function clearDashboardFilters(context = 'operational-dashboard') {
     return false
   }
 
-  const cleanUrl = pathname
-  window.history.replaceState({}, '', cleanUrl)
+  window.history.replaceState({}, '', pathname)
   window.dispatchEvent(new CustomEvent(DASHBOARD_CLEAR_FILTERS_EVENT, {
     detail: { context, route: pathname, cleared: true },
   }))
