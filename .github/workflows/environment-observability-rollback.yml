@@ -1,0 +1,113 @@
+name: Environment Observability API Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to roll back
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      image_ref:
+        description: Previous immutable GHCR image (ghcr.io/...@sha256:...)
+        required: true
+        type: string
+      confirmation:
+        description: Type ROLLBACK-STAGING or ROLLBACK-PRODUCTION
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: environment-observability-rollback-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  validate-request:
+    name: Validate rollback request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      app_name: ${{ steps.contract.outputs.app_name }}
+      public_url: ${{ steps.contract.outputs.public_url }}
+      config_file: ${{ steps.contract.outputs.config_file }}
+      environment_name: ${{ steps.contract.outputs.environment_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate immutable digest and explicit confirmation
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          IMAGE_REF: ${{ inputs.image_ref }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          [[ "$IMAGE_REF" =~ ^ghcr\.io/.+@sha256:[a-f0-9]{64}$ ]]
+          expected="ROLLBACK-${TARGET_ENVIRONMENT^^}"
+          test "$CONFIRMATION" = "$expected"
+
+      - name: Resolve isolated environment contract
+        id: contract
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          case "$TARGET_ENVIRONMENT" in
+            staging)
+              echo 'environment_name=staging' >> "$GITHUB_OUTPUT"
+              echo 'app_name=reqsys-env-api-stg' >> "$GITHUB_OUTPUT"
+              echo 'public_url=https://reqsys-env-api-stg.fly.dev' >> "$GITHUB_OUTPUT"
+              echo 'config_file=services/environment-observability-api/fly.stg.toml' >> "$GITHUB_OUTPUT"
+              ;;
+            production)
+              echo 'environment_name=production' >> "$GITHUB_OUTPUT"
+              echo 'app_name=reqsys-env-api-prod' >> "$GITHUB_OUTPUT"
+              echo 'public_url=https://reqsys-env-api-prod.fly.dev' >> "$GITHUB_OUTPUT"
+              echo 'config_file=services/environment-observability-api/fly.prod.toml' >> "$GITHUB_OUTPUT"
+              ;;
+            *) exit 2 ;;
+          esac
+
+      - name: Validate rollback executor
+        run: bash -n scripts/rollback_environment_observability_api.sh
+
+  rollback:
+    name: Roll back ${{ inputs.environment }}
+    needs: validate-request
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ needs.validate-request.outputs.public_url }}
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      IMAGE_REF: ${{ inputs.image_ref }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Execute governed rollback and smoke
+        shell: bash
+        run: |
+          scripts/rollback_environment_observability_api.sh \
+            '${{ needs.validate-request.outputs.environment_name }}' \
+            '${{ needs.validate-request.outputs.app_name }}' \
+            '${{ needs.validate-request.outputs.config_file }}' \
+            "$IMAGE_REF" \
+            '${{ needs.validate-request.outputs.public_url }}'
+
+      - name: Upload immutable rollback evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-observability-rollback-${{ inputs.environment }}
+          path: evidence/rollback-${{ inputs.environment }}.json
+          if-no-files-found: error
+          retention-days: ${{ inputs.environment == 'production' && 90 || 30 }}
