@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import apiDefault, { api, definirCorrelationIdSessao, obterCorrelationIdSessao } from '../api'
+import apiDefault, {
+  api,
+  definirCorrelationIdSessao,
+  isJourneyRequest,
+  journeyLoadingMessage,
+  obterCorrelationIdSessao,
+} from '../api'
 
-// Executa manualmente o interceptor de request configurado em services/api.js,
-// validando os headers que ele injeta.
 function runRequestInterceptor(config) {
   const handler = api.interceptors.request.handlers.find(Boolean)
   return handler.fulfilled(config)
@@ -55,6 +59,19 @@ describe('services/api — interceptor de request', () => {
   it('não anexa Authorization quando não há token', () => {
     const config = runRequestInterceptor({ headers: {} })
     expect(config.headers.Authorization).toBeUndefined()
+  })
+
+  it('identifica jornadas críticas do GovBI e dashboards', () => {
+    expect(isJourneyRequest({ url: '/govbi/perguntas' })).toBe(true)
+    expect(isJourneyRequest({ url: '/runtime/health' })).toBe(true)
+    expect(isJourneyRequest({ url: '/dashboard/resumo' })).toBe(true)
+    expect(isJourneyRequest({ url: '/requisitos' })).toBe(false)
+  })
+
+  it('gera mensagens específicas por jornada', () => {
+    expect(journeyLoadingMessage({ url: '/govbi/perguntas' })).toContain('GovBI IA')
+    expect(journeyLoadingMessage({ url: '/runtime/health' })).toContain('runtime')
+    expect(journeyLoadingMessage({ url: '/analytics/resumo' })).toContain('analíticos')
   })
 
   it('limpa sessão e redireciona para login preservando rota em 401', async () => {
