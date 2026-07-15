@@ -9,6 +9,39 @@ on:
   workflow_run:
     workflows: ["User Experience Empty State Recovery Trend"]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Run ID que publicou o artifact real de recuperação UX"
+        required: true
+        type: string
+      source_head_sha:
+        description: "Commit SHA implantado no ambiente integrado"
+        required: true
+        type: string
+      source_workflow:
+        description: "Nome do workflow produtor do artifact"
+        required: true
+        default: "User Experience Empty State Recovery Trend"
+        type: string
+      environment:
+        description: "Ambiente integrado de origem"
+        required: true
+        default: "stg"
+        type: choice
+        options:
+          - dev
+          - stg
+          - prod
+      observed_at:
+        description: "Timestamp ISO-8601 da observação no ambiente"
+        required: true
+        type: string
+      artifact_name:
+        description: "Nome do artifact contendo empty-state-recovery-trend.json"
+        required: true
+        default: "user-experience-empty-state-recovery-trend"
+        type: string
 
 permissions:
   actions: read
@@ -35,16 +68,21 @@ jobs:
 
   chain-post-merge-evidence:
     if: >-
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
-      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
-      SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-      SOURCE_WORKFLOW: ${{ github.event.workflow_run.name }}
+      SOURCE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.source_run_id || github.event.workflow_run.id }}
+      SOURCE_HEAD_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.source_head_sha || github.event.workflow_run.head_sha }}
+      SOURCE_WORKFLOW: ${{ github.event_name == 'workflow_dispatch' && inputs.source_workflow || github.event.workflow_run.name }}
+      SOURCE_ENVIRONMENT: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'ci' }}
+      EVIDENCE_SOURCE: ${{ github.event_name == 'workflow_dispatch' && 'runtime' || 'synthetic' }}
+      OBSERVED_AT: ${{ github.event_name == 'workflow_dispatch' && inputs.observed_at || github.event.workflow_run.updated_at }}
+      SOURCE_ARTIFACT_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.artifact_name || 'user-experience-empty-state-recovery-trend' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,9 +94,9 @@ jobs:
       - name: Download current recovery evidence
         uses: actions/download-artifact@v4
         with:
-          name: user-experience-empty-state-recovery-trend
+          name: ${{ env.SOURCE_ARTIFACT_NAME }}
           path: .tmp/ux-chain/current
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
 
@@ -94,6 +132,9 @@ jobs:
             --run-id "$SOURCE_RUN_ID" \
             --head-sha "$SOURCE_HEAD_SHA" \
             --source-workflow "$SOURCE_WORKFLOW" \
+            --evidence-source "$EVIDENCE_SOURCE" \
+            --environment "$SOURCE_ENVIRONMENT" \
+            --observed-at "$OBSERVED_AT" \
             --output .tmp/ux-chain/output/ux-recovery-evidence-chain.json
           python scripts/build_ux_recovery_stability.py \
             --history .tmp/ux-chain/output/ux-recovery-evidence-chain.json \
@@ -111,11 +152,17 @@ jobs:
           latest = chain[-1]
           assert latest['source_run_id'] == os.environ['SOURCE_RUN_ID']
           assert latest['source_head_sha'] == os.environ['SOURCE_HEAD_SHA']
+          assert latest['evidence_source'] == os.environ['EVIDENCE_SOURCE']
+          assert latest['environment'] == os.environ['SOURCE_ENVIRONMENT']
+          assert latest['observed_at']
           assert len(chain) <= 30
           assert stability['sample_count'] == len(chain)
           assert stability['mode'] == 'advisory'
           assert stability['production_blocker'] is False
-          print(f"evidence chain smoke: OK; samples={len(chain)}")
+          print(
+              f"evidence chain smoke: OK; samples={len(chain)}; "
+              f"source={latest['evidence_source']}; environment={latest['environment']}"
+          )
           PY
 
       - name: Publish persistent evidence chain

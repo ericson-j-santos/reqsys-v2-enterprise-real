@@ -16,10 +16,64 @@ class UxRecoveryEvidenceChainTests(unittest.TestCase):
             run_id="12345",
             head_sha="abcdef1234567890",
             source_workflow="recovery-trend",
+            evidence_source="runtime",
+            environment="stg",
+            observed_at="2026-07-15T12:05:00-03:00",
         )
-        self.assertEqual(chain[-1]["source_run_id"], "12345")
-        self.assertEqual(chain[-1]["source_head_sha"], "abcdef1234567890")
-        self.assertEqual(chain[-1]["source_workflow"], "recovery-trend")
+        latest = chain[-1]
+        self.assertEqual(latest["source_run_id"], "12345")
+        self.assertEqual(latest["source_head_sha"], "abcdef1234567890")
+        self.assertEqual(latest["source_workflow"], "recovery-trend")
+        self.assertEqual(latest["evidence_source"], "runtime")
+        self.assertEqual(latest["environment"], "stg")
+        self.assertEqual(latest["observed_at"], "2026-07-15T15:05:00+00:00")
+
+    def test_defaults_automatic_evidence_to_synthetic_ci(self):
+        chain = build_chain(
+            [],
+            {
+                "recovery_rate": 80,
+                "average_recovery_seconds": 22,
+                "ux_100_ready": True,
+            },
+            run_id="12345",
+            head_sha="abcdef1234567890",
+            source_workflow="recovery-trend",
+        )
+        self.assertEqual(chain[-1]["evidence_source"], "synthetic")
+        self.assertEqual(chain[-1]["environment"], "ci")
+
+    def test_rejects_runtime_evidence_in_ci(self):
+        with self.assertRaises(ValueError):
+            build_chain(
+                [],
+                {
+                    "recovery_rate": 80,
+                    "average_recovery_seconds": 22,
+                    "ux_100_ready": True,
+                },
+                run_id="12345",
+                head_sha="abcdef1234567890",
+                source_workflow="recovery-trend",
+                evidence_source="runtime",
+                environment="ci",
+            )
+
+    def test_rejects_synthetic_evidence_outside_ci(self):
+        with self.assertRaises(ValueError):
+            build_chain(
+                [],
+                {
+                    "recovery_rate": 80,
+                    "average_recovery_seconds": 22,
+                    "ux_100_ready": True,
+                },
+                run_id="12345",
+                head_sha="abcdef1234567890",
+                source_workflow="recovery-trend",
+                evidence_source="synthetic",
+                environment="prod",
+            )
 
     def test_is_idempotent_by_run_id(self):
         previous = [{
