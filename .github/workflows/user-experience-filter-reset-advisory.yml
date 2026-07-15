@@ -1,0 +1,59 @@
+name: User Experience Filter Reset Advisory
+
+on:
+  pull_request:
+    paths:
+      - "frontend/src/services/dashboardFilterReset.js"
+      - "frontend/src/services/__tests__/dashboardFilterReset.test.js"
+      - "frontend/src/components/DashboardEmptyStateBridge.vue"
+      - "scripts/build_empty_state_recovery_advisory.py"
+      - "tests/test_empty_state_recovery_ops_dashboard.py"
+      - ".github/workflows/user-experience-filter-reset-advisory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux-filter-reset-advisory-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Frontend tests
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run test:unit -- src/services/__tests__/dashboardFilterReset.test.js
+          npm run build
+      - name: Advisory tests
+        run: |
+          python -m py_compile scripts/build_empty_state_recovery_advisory.py
+          python -m unittest tests/test_empty_state_recovery_ops_dashboard.py -v
+      - name: Generate Ops Dashboard evidence
+        run: |
+          mkdir -p .tmp/ux-filter-reset
+          printf '%s\n' '{"contexts":{"analytics":5,"monitoramento":3},"recovery_by_context":{"analytics":10,"monitoramento":35}}' > .tmp/ux-filter-reset/indicator.json
+          printf '%s\n' '{"cards":[]}' > .tmp/ux-filter-reset/dashboard.json
+          python scripts/build_empty_state_recovery_advisory.py \
+            --indicator .tmp/ux-filter-reset/indicator.json \
+            --output .tmp/ux-filter-reset/advisory.json \
+            --dashboard .tmp/ux-filter-reset/dashboard.json \
+            --dashboard-output .tmp/ux-filter-reset/ops-dashboard.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-filter-reset-advisory
+          path: .tmp/ux-filter-reset
+          retention-days: 90
