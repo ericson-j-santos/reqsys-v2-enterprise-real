@@ -1,0 +1,120 @@
+name: ReqSys Single State Runtime UX Correlation
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_reqsys_single_state_runtime_ux.py"
+      - "tests/test_build_reqsys_single_state_runtime_ux.py"
+      - ".github/workflows/reqsys-single-state-runtime-ux.yml"
+  workflow_run:
+    workflows:
+      - "Runtime Environment Evidence Attestation"
+      - "User Experience Recovery Evidence Chain"
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  attestations: read
+
+concurrency:
+  group: reqsys-single-state-runtime-ux-${{ github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/build_reqsys_single_state_runtime_ux.py
+          python -m unittest tests/test_build_reqsys_single_state_runtime_ux.py -v
+
+  materialize:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore latest governed artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/single-state/runtime .tmp/single-state/ux .tmp/single-state/output
+
+          runtime_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=runtime-environment-evidence-ledger&per_page=100" \
+            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          ux_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ux-recovery-evidence-chain&per_page=100" \
+            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+
+          if [ -n "$runtime_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${runtime_id}/zip" > .tmp/single-state/runtime.zip
+            unzip -q .tmp/single-state/runtime.zip -d .tmp/single-state/runtime
+          else
+            printf '%s\n' '[]' > .tmp/single-state/runtime/runtime-environment-evidence-ledger.json
+          fi
+
+          if [ -n "$ux_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ux_id}/zip" > .tmp/single-state/ux.zip
+            unzip -q .tmp/single-state/ux.zip -d .tmp/single-state/ux
+          else
+            printf '%s\n' '[]' > .tmp/single-state/ux/ux-recovery-evidence-chain.json
+          fi
+
+          runtime_record="$(find .tmp/single-state/runtime -name runtime-environment-evidence.json -print -quit)"
+          if [ -n "$runtime_record" ]; then
+            gh attestation verify "$runtime_record" --repo "$GITHUB_REPOSITORY"
+          fi
+
+          runtime_ledger="$(find .tmp/single-state/runtime -name runtime-environment-evidence-ledger.json -print -quit)"
+          ux_chain="$(find .tmp/single-state/ux -name ux-recovery-evidence-chain.json -print -quit)"
+          test -n "$runtime_ledger"
+          test -n "$ux_chain"
+          echo "RUNTIME_LEDGER=$runtime_ledger" >> "$GITHUB_ENV"
+          echo "UX_CHAIN=$ux_chain" >> "$GITHUB_ENV"
+
+      - name: Build Estado Único correlation
+        run: |
+          python scripts/build_reqsys_single_state_runtime_ux.py \
+            --runtime-ledger "$RUNTIME_LEDGER" \
+            --ux-chain "$UX_CHAIN" \
+            --output .tmp/single-state/output/reqsys-single-state-runtime-ux.json
+
+      - name: Validate advisory guardrails
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path('.tmp/single-state/output/reqsys-single-state-runtime-ux.json').read_text())
+          decision = value['decision']
+          assert decision['mode'] == 'advisory'
+          assert decision['production_blocker'] is False
+          assert decision['promotion_allowed'] is False
+          assert decision['human_approval_required'] is True
+          print(f"single state: {decision['status']}; matches={value['correlated_evidence_count']}")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-single-state-runtime-ux
+          path: .tmp/single-state/output
+          retention-days: 90
