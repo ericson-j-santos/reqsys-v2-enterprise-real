@@ -6,10 +6,12 @@ on:
       - "scripts/build_reqsys_single_state_runtime_ux.py"
       - "tests/test_build_reqsys_single_state_runtime_ux.py"
       - ".github/workflows/reqsys-single-state-runtime-ux.yml"
+      - ".github/workflows/runtime-ux-telemetry-from-homologation.yml"
   workflow_run:
     workflows:
       - "Runtime Environment Evidence Attestation"
       - "User Experience Recovery Evidence Chain"
+      - "Runtime UX Telemetry From Homologation"
     types: [completed]
   workflow_dispatch:
 
