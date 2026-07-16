@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
@@ -22,14 +22,20 @@ from app.services.diagram_generator import (
     MermaidGenerator,
     diagram_types_from_option,
 )
+from app.services.process_artifact_repository import (
+    ProcessArtifactComparisonError,
+    ProcessArtifactNotFoundError,
+    VersionedProcessArtifactRepository,
+)
 
 router = APIRouter(prefix="/v1/diagramas", tags=["Arquitetura Viva"])
 
 _repository = FileDiagramRepository()
+_artifact_repository = VersionedProcessArtifactRepository()
 _analyzer = ASTAnalyzer()
 _generator = MermaidGenerator()
 _usecase = DiagramGenerationUseCase(_analyzer, _generator, _repository)
-_automatic_server = AutomaticDiagramServer()
+_automatic_server = AutomaticDiagramServer(repository=_artifact_repository)
 
 
 class CodeAnalysisRequest(BaseModel):
@@ -76,6 +82,21 @@ class AutomaticProcessRequest(BaseModel):
                 for edge in self.edges
             ],
         )
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "process_id": self.process_id,
+            "name": self.name,
+            "version": self.version,
+            "nodes": [
+                {"id": node.id, "name": node.name, "type": node.type.value, "metadata": node.metadata}
+                for node in self.nodes
+            ],
+            "edges": [
+                {"source": edge.source, "target": edge.target, "label": edge.label}
+                for edge in self.edges
+            ],
+        }
 
 
 @router.post("/analisar")
@@ -126,6 +147,19 @@ def gerar_processo_automatico(
     correlation_id = (x_correlation_id or "diagram-api-local").strip()[:160]
     try:
         result = _automatic_server.generate(payload.to_domain(), correlation_id=correlation_id)
+        result["definition"] = payload.snapshot()
+        persisted = _artifact_repository.save(result)
+        result["persistence"] = {
+            "process_id": persisted.process_id,
+            "version": persisted.version,
+            "revision": persisted.revision,
+            "content_hash": persisted.content_hash,
+            "generated_at": persisted.generated_at,
+            "directory": persisted.directory,
+            "mermaid_file": persisted.mermaid_file,
+            "bpmn_file": persisted.bpmn_file,
+            "metadata_file": persisted.metadata_file,
+        }
     except ProcessValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return ok(result)
@@ -157,11 +191,45 @@ def gerar_bpmn(payload: AutomaticProcessRequest):
     )
 
 
+@router.get("/automatico/processos/{process_id}/versoes")
+def listar_versoes(process_id: str):
+    versions = _artifact_repository.list_versions(process_id)
+    return ok({"process_id": process_id, "total": len(versions), "versions": versions})
+
+
+@router.get("/automatico/processos/{process_id}/versoes/{revision}")
+def obter_versao(process_id: str, revision: str, include_formats: bool = Query(default=True)):
+    try:
+        artifact = _artifact_repository.get_version(process_id, revision)
+    except ProcessArtifactNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not include_formats:
+        artifact.pop("formats", None)
+    return ok(artifact)
+
+
+@router.get("/automatico/processos/{process_id}/comparar")
+def comparar_versoes(
+    process_id: str,
+    base_revision: str = Query(min_length=1, max_length=200),
+    target_revision: str = Query(min_length=1, max_length=200),
+):
+    if base_revision == target_revision:
+        raise HTTPException(status_code=400, detail="base_revision e target_revision devem ser diferentes")
+    try:
+        comparison = _artifact_repository.compare_versions(process_id, base_revision, target_revision)
+    except ProcessArtifactNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ProcessArtifactComparisonError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return ok(comparison)
+
+
 @router.get("/automatico/contrato")
 def contrato_automatico():
     return ok(
         {
-            "schema_version": "1.0.0",
+            "schema_version": "1.2.0",
             "service": "reqsys-automatic-diagram-server",
             "supported_formats": ["mermaid", "bpmn_2_0_xml"],
             "supported_node_types": [item.value for item in NodeType],
@@ -170,6 +238,9 @@ def contrato_automatico():
                 {"method": "POST", "path": "/v1/diagramas/automatico/gerar"},
                 {"method": "POST", "path": "/v1/diagramas/automatico/mermaid"},
                 {"method": "POST", "path": "/v1/diagramas/automatico/bpmn"},
+                {"method": "GET", "path": "/v1/diagramas/automatico/processos/{process_id}/versoes"},
+                {"method": "GET", "path": "/v1/diagramas/automatico/processos/{process_id}/versoes/{revision}"},
+                {"method": "GET", "path": "/v1/diagramas/automatico/processos/{process_id}/comparar"},
             ],
         }
     )
@@ -191,6 +262,8 @@ def stats():
             "automatic_server": {
                 "status": "available",
                 "formats": ["mermaid", "bpmn_2_0_xml"],
+                "version_history": True,
+                "structural_diff": True,
             },
         }
     )
@@ -202,8 +275,14 @@ def health():
         {
             "status": "healthy",
             "service": "diagram-generator",
-            "version": "1.1.0",
-            "capabilities": ["python_ast", "mermaid", "bpmn_2_0_xml"],
+            "version": "1.2.0",
+            "capabilities": [
+                "python_ast",
+                "mermaid",
+                "bpmn_2_0_xml",
+                "version_history",
+                "structural_diff",
+            ],
         }
     )
 
@@ -228,7 +307,6 @@ def dashboard():
     .card { border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; padding: 16px; }
     .stat { font-size: 28px; font-weight: 700; margin-top: 6px; }
     .mermaid { overflow: auto; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin: 12px 0; }
-    code { color: #334155; word-break: break-all; }
   </style>
 </head>
 <body>
@@ -236,7 +314,7 @@ def dashboard():
   <header>
     <div>
       <h1>ReqSys Arquitetura Viva</h1>
-      <p>Diagramas Mermaid, fluxogramas e BPMN 2.0 gerados automaticamente.</p>
+      <p>Diagramas, BPMN 2.0, histórico de versões e comparação estrutural.</p>
     </div>
     <a href="/v1/diagramas/automatico/contrato">Contrato JSON</a>
   </header>
@@ -260,6 +338,7 @@ async function loadStats() {
     ["Class", byType.class || 0],
     ["Flowchart", byType.flowchart || 0],
     ["BPMN", data.automatic_server?.status === "available" ? "Ativo" : "Indisponivel"],
+    ["Versionamento", data.automatic_server?.version_history ? "Ativo" : "Indisponivel"],
   ].map(([label, value]) => `<article class="card"><span>${label}</span><div class="stat">${value}</div></article>`).join("");
 }
 async function analyzeFile() {
