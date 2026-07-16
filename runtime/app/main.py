@@ -7,6 +7,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 
 from app.api import jobs
+from app.core.async_compat import resolve_maybe_awaitable
 from app.core.components import build_runtime_components
 from app.core.config import get_settings
 from app.workers.processar_jobs import executar_worker_local
@@ -43,7 +44,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="ReqSys Runtime API",
     version=settings.schema_version,
-    description="Runtime assíncrono com fila durável Redis, worker desacoplado e fallback local.",
+    description="Runtime executável com workflow assíncrono, fila em memória DEV, worker local e httpx.",
     lifespan=lifespan,
 )
 app.dependency_overrides[jobs.get_job_service] = resolver_job_service
@@ -51,26 +52,23 @@ app.include_router(jobs.router)
 
 
 @app.get("/health", tags=["runtime"])
-async def health() -> dict[str, object]:
+async def health() -> dict[str, str]:
     queue_ok = await queue_gateway.ping()
     return {
         "status": "ok" if queue_ok else "degraded",
         "service": settings.service_name,
         "version": settings.schema_version,
-        "queue_backend": settings.queue_backend,
-        "storage_backend": settings.storage_backend,
     }
 
 
 @app.get("/api/runtime/health", tags=["runtime"])
 async def runtime_health() -> dict[str, object]:
+    queue_size = await resolve_maybe_awaitable(queue_gateway.tamanho())
     return {
         "status": "operational" if await queue_gateway.ping() else "degraded",
         "service": settings.service_name,
-        "worker_enabled_in_api": settings.enable_async_worker,
-        "queue_backend": settings.queue_backend,
-        "storage_backend": settings.storage_backend,
-        "queue_size": await queue_gateway.tamanho(),
+        "worker_enabled": settings.enable_async_worker,
+        "queue_size": queue_size,
     }
 
 
