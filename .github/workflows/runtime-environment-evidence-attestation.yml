@@ -1,0 +1,126 @@
+name: Runtime Environment Evidence Attestation
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_runtime_environment_evidence.py"
+      - "tests/test_build_runtime_environment_evidence.py"
+      - ".github/workflows/runtime-environment-evidence-attestation.yml"
+  workflow_run:
+    workflows: ["Fly Environment Homologation Gate"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: runtime-environment-evidence-attestation-${{ github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/build_runtime_environment_evidence.py
+          python -m unittest tests/test_build_runtime_environment_evidence.py -v
+
+  attest-and-ingest:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      SOURCE_WORKFLOW: ${{ github.event.workflow_run.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download approved environment evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/runtime-attestation/source
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100" \
+            --jq '.artifacts | map(select(.expired == false and (.name | test("^fly-homologation-(dev|stg|prod)$")))) | .[0].id // empty')"
+          test -n "$artifact_id"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/runtime-attestation/source.zip
+          unzip -q .tmp/runtime-attestation/source.zip -d .tmp/runtime-attestation/source
+          evidence_path="$(find .tmp/runtime-attestation/source -name 'evidence-*.json' -print -quit)"
+          test -n "$evidence_path"
+          echo "EVIDENCE_PATH=$evidence_path" >> "$GITHUB_ENV"
+
+      - name: Restore latest runtime evidence ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/runtime-attestation/previous
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=runtime-environment-evidence-ledger&per_page=100" \
+            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/runtime-attestation/previous.zip
+            unzip -q .tmp/runtime-attestation/previous.zip -d .tmp/runtime-attestation/previous
+          else
+            printf '%s\n' '[]' > .tmp/runtime-attestation/previous/runtime-environment-evidence-ledger.json
+          fi
+          ledger_path="$(find .tmp/runtime-attestation/previous -name runtime-environment-evidence-ledger.json -print -quit)"
+          if [ -z "$ledger_path" ]; then
+            ledger_path=.tmp/runtime-attestation/previous/runtime-environment-evidence-ledger.json
+            printf '%s\n' '[]' > "$ledger_path"
+          fi
+          echo "PREVIOUS_LEDGER=$ledger_path" >> "$GITHUB_ENV"
+
+      - name: Build governed runtime evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/runtime-attestation/output
+          python scripts/build_runtime_environment_evidence.py \
+            --evidence "$EVIDENCE_PATH" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-head-sha "$SOURCE_HEAD_SHA" \
+            --source-workflow "$SOURCE_WORKFLOW" \
+            --previous-ledger "$PREVIOUS_LEDGER" \
+            --output .tmp/runtime-attestation/output/runtime-environment-evidence.json \
+            --ledger-output .tmp/runtime-attestation/output/runtime-environment-evidence-ledger.json
+
+      - name: Generate GitHub provenance attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: .tmp/runtime-attestation/output/runtime-environment-evidence.json
+
+      - name: Verify attestation before ingestion
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh attestation verify \
+            .tmp/runtime-attestation/output/runtime-environment-evidence.json \
+            --repo "$GITHUB_REPOSITORY" \
+            | tee .tmp/runtime-attestation/output/attestation-verification.txt
+          grep -q "runtime" .tmp/runtime-attestation/output/runtime-environment-evidence.json
+
+      - name: Publish attested evidence and persistent ledger
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-environment-evidence-ledger
+          path: .tmp/runtime-attestation/output
+          retention-days: 90
