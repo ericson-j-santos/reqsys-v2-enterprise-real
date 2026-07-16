@@ -14,15 +14,13 @@ from app.domain.models.job_assincrono import (
     JobStatus,
 )
 from app.infrastructure.http.httpx_gateway import HttpxGateway
-from app.infrastructure.queue.asyncio_queue import AsyncioQueueGateway
-from app.infrastructure.repositories.job_repository_memoria import JobRepositoryMemoria
 
 
 class JobService:
     def __init__(
         self,
-        repository: JobRepositoryMemoria,
-        queue: AsyncioQueueGateway,
+        repository: Any,
+        queue: Any,
         http_gateway: HttpxGateway,
         settings: RuntimeSettings,
     ) -> None:
@@ -78,7 +76,9 @@ class JobService:
         por_status = await self._repository.metricas_por_status()
         return {
             "schema_version": self._settings.schema_version,
-            "queue_size": self._queue.tamanho(),
+            "queue_backend": self._settings.queue_backend,
+            "storage_backend": self._settings.storage_backend,
+            "queue_size": await self._queue.tamanho(),
             "jobs_por_status": por_status,
         }
 
