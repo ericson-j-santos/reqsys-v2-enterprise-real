@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405 - only builds XML; never parses untrusted XML
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
