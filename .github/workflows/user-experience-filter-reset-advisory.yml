@@ -7,6 +7,17 @@ on:
       - "frontend/src/services/__tests__/dashboardFilterReset.test.js"
       - "frontend/src/components/DashboardEmptyStateBridge.vue"
       - "scripts/build_empty_state_recovery_advisory.py"
+      - "tests/test_build_empty_state_recovery_advisory.py"
+      - "tests/test_empty_state_recovery_ops_dashboard.py"
+      - ".github/workflows/user-experience-filter-reset-advisory.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/src/services/dashboardFilterReset.js"
+      - "frontend/src/services/__tests__/dashboardFilterReset.test.js"
+      - "frontend/src/components/DashboardEmptyStateBridge.vue"
+      - "scripts/build_empty_state_recovery_advisory.py"
+      - "tests/test_build_empty_state_recovery_advisory.py"
       - "tests/test_empty_state_recovery_ops_dashboard.py"
       - ".github/workflows/user-experience-filter-reset-advisory.yml"
   workflow_dispatch:
@@ -41,7 +52,10 @@ jobs:
       - name: Advisory tests
         run: |
           python -m py_compile scripts/build_empty_state_recovery_advisory.py
-          python -m unittest tests/test_empty_state_recovery_ops_dashboard.py -v
+          python -m unittest \
+            tests/test_build_empty_state_recovery_advisory.py \
+            tests/test_empty_state_recovery_ops_dashboard.py \
+            -v
       - name: Generate Ops Dashboard evidence
         run: |
           mkdir -p .tmp/ux-filter-reset
