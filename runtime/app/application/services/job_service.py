@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from app.core.async_compat import resolve_maybe_awaitable
 from app.core.config import RuntimeSettings
 from app.domain.models.job_assincrono import (
     AsyncJobAcceptedResponse,
@@ -74,11 +75,12 @@ class JobService:
 
     async def metricas(self) -> dict[str, Any]:
         por_status = await self._repository.metricas_por_status()
+        queue_size = await resolve_maybe_awaitable(self._queue.tamanho())
         return {
             "schema_version": self._settings.schema_version,
             "queue_backend": self._settings.queue_backend,
             "storage_backend": self._settings.storage_backend,
-            "queue_size": await self._queue.tamanho(),
+            "queue_size": queue_size,
             "jobs_por_status": por_status,
         }
 
