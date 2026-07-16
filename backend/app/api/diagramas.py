@@ -1,11 +1,20 @@
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import Any
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from fastapi import APIRouter, Header, HTTPException
+from fastapi.responses import HTMLResponse, Response
+from pydantic import BaseModel, Field
 
 from app.core.envelope import ok
+from app.services.automatic_diagram_server import (
+    AutomaticDiagramServer,
+    NodeType,
+    ProcessDefinition,
+    ProcessEdge,
+    ProcessNode,
+    ProcessValidationError,
+)
 from app.services.diagram_generator import (
     ASTAnalyzer,
     DiagramGenerationUseCase,
@@ -20,11 +29,53 @@ _repository = FileDiagramRepository()
 _analyzer = ASTAnalyzer()
 _generator = MermaidGenerator()
 _usecase = DiagramGenerationUseCase(_analyzer, _generator, _repository)
+_automatic_server = AutomaticDiagramServer()
 
 
 class CodeAnalysisRequest(BaseModel):
     filename: str
     content: str
+
+
+class ProcessNodeRequest(BaseModel):
+    id: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=240)
+    type: NodeType
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProcessEdgeRequest(BaseModel):
+    source: str = Field(min_length=1, max_length=120)
+    target: str = Field(min_length=1, max_length=120)
+    label: str | None = Field(default=None, max_length=240)
+
+
+class AutomaticProcessRequest(BaseModel):
+    process_id: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=240)
+    version: str = Field(default="1.0.0", min_length=1, max_length=40)
+    nodes: list[ProcessNodeRequest] = Field(min_length=1, max_length=500)
+    edges: list[ProcessEdgeRequest] = Field(default_factory=list, max_length=1000)
+
+    def to_domain(self) -> ProcessDefinition:
+        return ProcessDefinition(
+            process_id=self.process_id,
+            name=self.name,
+            version=self.version,
+            nodes=[
+                ProcessNode(
+                    node_id=node.id,
+                    name=node.name,
+                    node_type=node.type,
+                    metadata=node.metadata,
+                )
+                for node in self.nodes
+            ],
+            edges=[
+                ProcessEdge(source=edge.source, target=edge.target, label=edge.label)
+                for edge in self.edges
+            ],
+        )
 
 
 @router.post("/analisar")
@@ -67,6 +118,63 @@ def gerar_diagramas(filepath: str, types: str = "all", correlation_id: str = "ap
     return ok(_usecase.execute(path, diagram_types, correlation_id=correlation_id))
 
 
+@router.post("/automatico/gerar")
+def gerar_processo_automatico(
+    payload: AutomaticProcessRequest,
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
+):
+    correlation_id = (x_correlation_id or "diagram-api-local").strip()[:160]
+    try:
+        result = _automatic_server.generate(payload.to_domain(), correlation_id=correlation_id)
+    except ProcessValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return ok(result)
+
+
+@router.post("/automatico/mermaid", response_class=Response)
+def gerar_mermaid(payload: AutomaticProcessRequest):
+    try:
+        definition = payload.to_domain()
+        _automatic_server.validate(definition)
+        content = _automatic_server.to_mermaid(definition)
+    except ProcessValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(content=content, media_type="text/plain; charset=utf-8")
+
+
+@router.post("/automatico/bpmn", response_class=Response)
+def gerar_bpmn(payload: AutomaticProcessRequest):
+    try:
+        definition = payload.to_domain()
+        _automatic_server.validate(definition)
+        content = _automatic_server.to_bpmn_xml(definition)
+    except ProcessValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(
+        content=content,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'inline; filename="{payload.process_id}.bpmn"'},
+    )
+
+
+@router.get("/automatico/contrato")
+def contrato_automatico():
+    return ok(
+        {
+            "schema_version": "1.0.0",
+            "service": "reqsys-automatic-diagram-server",
+            "supported_formats": ["mermaid", "bpmn_2_0_xml"],
+            "supported_node_types": [item.value for item in NodeType],
+            "limits": {"nodes": 500, "edges": 1000},
+            "endpoints": [
+                {"method": "POST", "path": "/v1/diagramas/automatico/gerar"},
+                {"method": "POST", "path": "/v1/diagramas/automatico/mermaid"},
+                {"method": "POST", "path": "/v1/diagramas/automatico/bpmn"},
+            ],
+        }
+    )
+
+
 @router.get("/stats")
 def stats():
     manifest = _repository.list_diagrams()
@@ -80,13 +188,24 @@ def stats():
             "by_type": by_type,
             "last_updated": manifest.get("last_updated"),
             "diagrams": manifest.get("diagrams", {}),
+            "automatic_server": {
+                "status": "available",
+                "formats": ["mermaid", "bpmn_2_0_xml"],
+            },
         }
     )
 
 
 @router.get("/health")
 def health():
-    return ok({"status": "healthy", "service": "diagram-generator", "version": "1.0.0"})
+    return ok(
+        {
+            "status": "healthy",
+            "service": "diagram-generator",
+            "version": "1.1.0",
+            "capabilities": ["python_ast", "mermaid", "bpmn_2_0_xml"],
+        }
+    )
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -117,13 +236,13 @@ def dashboard():
   <header>
     <div>
       <h1>ReqSys Arquitetura Viva</h1>
-      <p>Diagramas Mermaid gerados a partir do codigo Python.</p>
+      <p>Diagramas Mermaid, fluxogramas e BPMN 2.0 gerados automaticamente.</p>
     </div>
-    <a href="/v1/diagramas/stats">Stats JSON</a>
+    <a href="/v1/diagramas/automatico/contrato">Contrato JSON</a>
   </header>
   <section class="grid" id="stats"></section>
   <section class="card">
-    <h2>Analisar arquivo</h2>
+    <h2>Analisar arquivo Python</h2>
     <input type="file" id="fileInput" accept=".py">
     <button onclick="analyzeFile()">Analisar</button>
   </section>
@@ -140,7 +259,7 @@ async function loadStats() {
     ["Total", data.total || 0],
     ["Class", byType.class || 0],
     ["Flowchart", byType.flowchart || 0],
-    ["Hexagonal", byType.hexagonal || 0],
+    ["BPMN", data.automatic_server?.status === "available" ? "Ativo" : "Indisponivel"],
   ].map(([label, value]) => `<article class="card"><span>${label}</span><div class="stat">${value}</div></article>`).join("");
 }
 async function analyzeFile() {
