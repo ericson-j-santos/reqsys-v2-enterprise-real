@@ -13,8 +13,14 @@ class AsyncioQueueGateway:
     async def consumir(self) -> str:
         return await self._queue.get()
 
-    def confirmar(self) -> None:
+    async def confirmar(self) -> None:
         self._queue.task_done()
 
-    def tamanho(self) -> int:
+    async def tamanho(self) -> int:
         return self._queue.qsize()
+
+    async def ping(self) -> bool:
+        return True
+
+    async def fechar(self) -> None:
+        return None
