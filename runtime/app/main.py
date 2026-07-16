@@ -7,22 +7,18 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 
 from app.api import jobs
-from app.application.services.job_service import JobService
+from app.core.components import build_runtime_components
 from app.core.config import get_settings
-from app.infrastructure.http.httpx_gateway import HttpxGateway
-from app.infrastructure.queue.asyncio_queue import AsyncioQueueGateway
-from app.infrastructure.repositories.job_repository_memoria import JobRepositoryMemoria
 from app.workers.processar_jobs import executar_worker_local
 
 settings = get_settings()
-repository = JobRepositoryMemoria()
-queue_gateway = AsyncioQueueGateway()
-http_gateway = HttpxGateway()
-job_service = JobService(repository, queue_gateway, http_gateway, settings)
+components = build_runtime_components(settings)
+job_service = components.service
+queue_gateway = components.queue
 worker_task: asyncio.Task[None] | None = None
 
 
-def resolver_job_service() -> JobService:
+def resolver_job_service():
     return job_service
 
 
@@ -41,12 +37,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await worker_task
         except asyncio.CancelledError:
             pass
+    await queue_gateway.fechar()
 
 
 app = FastAPI(
     title="ReqSys Runtime API",
     version=settings.schema_version,
-    description="Runtime executável com workflow assíncrono, fila em memória DEV, worker local e httpx.",
+    description="Runtime assíncrono com fila durável Redis, worker desacoplado e fallback local.",
     lifespan=lifespan,
 )
 app.dependency_overrides[jobs.get_job_service] = resolver_job_service
@@ -54,17 +51,26 @@ app.include_router(jobs.router)
 
 
 @app.get("/health", tags=["runtime"])
-async def health() -> dict[str, str]:
-    return {"status": "ok", "service": settings.service_name, "version": settings.schema_version}
+async def health() -> dict[str, object]:
+    queue_ok = await queue_gateway.ping()
+    return {
+        "status": "ok" if queue_ok else "degraded",
+        "service": settings.service_name,
+        "version": settings.schema_version,
+        "queue_backend": settings.queue_backend,
+        "storage_backend": settings.storage_backend,
+    }
 
 
 @app.get("/api/runtime/health", tags=["runtime"])
 async def runtime_health() -> dict[str, object]:
     return {
-        "status": "operational",
+        "status": "operational" if await queue_gateway.ping() else "degraded",
         "service": settings.service_name,
-        "worker_enabled": settings.enable_async_worker,
-        "queue_size": queue_gateway.tamanho(),
+        "worker_enabled_in_api": settings.enable_async_worker,
+        "queue_backend": settings.queue_backend,
+        "storage_backend": settings.storage_backend,
+        "queue_size": await queue_gateway.tamanho(),
     }
 
 
