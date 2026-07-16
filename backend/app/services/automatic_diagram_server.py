@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
-from xml.dom import minidom
 
 
 class NodeType(str, Enum):
@@ -208,8 +207,8 @@ class AutomaticDiagramServer:
                 attrs["name"] = edge.label
             ET.SubElement(process, f"{{{namespace}}}sequenceFlow", attrs)
 
-        rough = ET.tostring(definitions, encoding="utf-8", xml_declaration=True)
-        return minidom.parseString(rough).toprettyxml(indent="  ", encoding="utf-8").decode("utf-8")
+        ET.indent(definitions, space="  ")
+        return ET.tostring(definitions, encoding="utf-8", xml_declaration=True).decode("utf-8")
 
     @staticmethod
     def _reachable_nodes(start_id: str, edges: list[ProcessEdge]) -> set[str]:
