@@ -8,7 +8,7 @@ from pydantic import BaseModel, model_validator
 
 class RuntimeSettings(BaseModel):
     service_name: str = "reqsys-runtime"
-    schema_version: str = "0.7.0"
+    schema_version: str = "0.6.0"
     enable_async_worker: bool = False
     queue_backend: str = "memory"
     storage_backend: str = "memory"
