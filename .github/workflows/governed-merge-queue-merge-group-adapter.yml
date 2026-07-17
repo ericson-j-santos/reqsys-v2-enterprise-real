@@ -1,0 +1,64 @@
+name: Governed Merge Queue Merge Group Adapter
+
+on:
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+
+concurrency:
+  group: governed-merge-group-${{ github.event.merge_group.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  governed-merge-group:
+    name: Governed merge group validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolve merge group context
+        id: ctx
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.merge_group.base_sha }}"
+          HEAD_SHA="${{ github.event.merge_group.head_sha }}"
+          test -n "$BASE_SHA"
+          test -n "$HEAD_SHA"
+          git cat-file -e "${BASE_SHA}^{commit}"
+          git cat-file -e "${HEAD_SHA}^{commit}"
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+      - name: Run governed queue guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci_enterprise_guardrails.py
+          python -m py_compile scripts/ci_enterprise_guardrails.py
+          if [ -f scripts/runtime_merge_queue_gate.py ]; then
+            python -m py_compile scripts/runtime_merge_queue_gate.py
+          fi
+      - name: Publish governed merge group decision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/governed-merge-group
+          jq -n \
+            --arg base_sha "${{ steps.ctx.outputs.base_sha }}" \
+            --arg head_sha "${{ steps.ctx.outputs.head_sha }}" \
+            '{schema_version:"1.0.0",contract:"reqsys-governed-merge-group",status:"QUEUE_VALIDATED",base_sha:$base_sha,head_sha:$head_sha,eligible:true,throughput_increase_allowed:false,promotion_allowed:false,human_approval_required:true}' \
+            > artifacts/governed-merge-group/decision.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: governed-merge-group-evidence
+          path: artifacts/governed-merge-group/
+          retention-days: 90

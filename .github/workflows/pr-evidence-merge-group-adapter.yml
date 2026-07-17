@@ -1,0 +1,53 @@
+name: PR Evidence Gate Merge Group Adapter
+
+on:
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+
+concurrency:
+  group: pr-evidence-merge-group-${{ github.event.merge_group.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  evidence-merge-group:
+    name: Validate merge group evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve merge group context
+        id: ctx
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.merge_group.base_sha }}"
+          HEAD_SHA="${{ github.event.merge_group.head_sha }}"
+          test -n "$BASE_SHA"
+          test -n "$HEAD_SHA"
+          git cat-file -e "${BASE_SHA}^{commit}"
+          git cat-file -e "${HEAD_SHA}^{commit}"
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+      - name: Validate strict workflow evidence on merge-group head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.ctx.outputs.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/pr-evidence-merge-group
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&per_page=100" > artifacts/pr-evidence-merge-group/runs.json
+          jq -e '[.workflow_runs[] | select(.name == "CI — ReqSys v2 Enterprise" or .name == "CI Merge Group Adapter") | select(.status == "completed" and .conclusion == "success")] | length > 0' artifacts/pr-evidence-merge-group/runs.json
+          jq -n --arg base_sha "${{ steps.ctx.outputs.base_sha }}" --arg head_sha "$HEAD_SHA" '{schema_version:"1.0.0",contract:"reqsys-pr-evidence-merge-group",status:"EVIDENCE_VERIFIED",base_sha:$base_sha,head_sha:$head_sha,promotion_allowed:false,human_approval_required:true}' > artifacts/pr-evidence-merge-group/evidence.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-evidence-merge-group
+          path: artifacts/pr-evidence-merge-group/
+          retention-days: 90
