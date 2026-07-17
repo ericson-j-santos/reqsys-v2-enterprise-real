@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.1.0",
+  "contract": "reqsys-critical-workflow-event-coverage",
+  "status": "COVERAGE_GAPS_FOUND",
+  "critical_workflow_count": 5,
+  "complete_workflow_count": 0,
+  "coverage_percent": 0,
+  "risk": "high",
+  "throughput_increase_allowed": false,
+  "parallelism_decision": "KEEP_CURRENT_LIMITS",
+  "human_approval_required": true,
+  "promotion_allowed": false,
+  "mode": "advisory",
+  "workflows": [
+    {"workflow": "ci.yml", "exists": true, "pull_request": true, "merge_group": false, "gap_reason": "MERGE_GROUP_MISSING"},
+    {"workflow": "ci-enterprise-fast.yml", "exists": true, "pull_request": true, "merge_group": false, "gap_reason": "MERGE_GROUP_MISSING"},
+    {"workflow": "pr-evidence-gate.yml", "exists": true, "pull_request": true, "merge_group": false, "gap_reason": "MERGE_GROUP_MISSING"},
+    {"workflow": "governed-merge-queue.yml", "exists": true, "pull_request": true, "merge_group": false, "gap_reason": "MERGE_GROUP_MISSING"},
+    {"workflow": "security-baseline-gate.yml", "exists": true, "pull_request": true, "merge_group": false, "gap_reason": "MERGE_GROUP_MISSING"}
+  ],
+  "gaps": [
+    {"workflow": "ci.yml", "gap_reason": "MERGE_GROUP_MISSING"},
+    {"workflow": "ci-enterprise-fast.yml", "gap_reason": "MERGE_GROUP_MISSING"},
+    {"workflow": "pr-evidence-gate.yml", "gap_reason": "MERGE_GROUP_MISSING"},
+    {"workflow": "governed-merge-queue.yml", "gap_reason": "MERGE_GROUP_MISSING"},
+    {"workflow": "security-baseline-gate.yml", "gap_reason": "MERGE_GROUP_MISSING"}
+  ]
+}
