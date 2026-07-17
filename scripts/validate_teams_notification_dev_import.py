@@ -30,6 +30,26 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _declared_file_paths(files: object) -> list[str]:
+    if not isinstance(files, list):
+        raise ValueError('Campo files do manifesto deve ser uma lista.')
+
+    paths: list[str] = []
+    for item in files:
+        if isinstance(item, str):
+            path = item
+        elif isinstance(item, dict):
+            path = item.get('path')
+        else:
+            raise ValueError('Cada item de files deve ser string ou objeto com campo path.')
+
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError('Cada item de files deve declarar um path não vazio.')
+        paths.append(path)
+
+    return sorted(paths)
+
+
 def validate(package_dir: Path) -> dict[str, object]:
     manifest_path = package_dir / 'materialization-manifest.json'
     if not manifest_path.is_file():
@@ -76,7 +96,7 @@ def validate(package_dir: Path) -> dict[str, object]:
     if bad_file:
         raise ValueError(f'Arquivo corrompido dentro do ZIP: {bad_file}')
 
-    declared_files = sorted(manifest['files'])
+    declared_files = _declared_file_paths(manifest['files'])
     missing_from_zip = sorted(set(declared_files) - set(archive_files))
     if missing_from_zip:
         raise ValueError(f'Arquivos declarados ausentes no ZIP: {missing_from_zip}')
