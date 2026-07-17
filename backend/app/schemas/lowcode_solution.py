@@ -5,9 +5,11 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 LowCodeModule = Literal['dataverse', 'powerapps', 'powerautomate', 'copilot', 'security']
+LowCodeSolutionProfile = Literal['standard', 'teams_notification_v2']
 
 
 class LowCodeSolutionGenerateRequest(BaseModel):
+    profile: LowCodeSolutionProfile = 'standard'
     solution_name: str = Field(default='ReqSysLowCode', min_length=3, max_length=80)
     display_name: str = Field(default='ReqSys Low-Code', min_length=3, max_length=120)
     description: str = Field(
@@ -39,4 +41,3 @@ class LowCodeSolutionGenerateRequest(BaseModel):
         if not value:
             raise ValueError('Informe ao menos um modulo.')
         return list(dict.fromkeys(value))
-
