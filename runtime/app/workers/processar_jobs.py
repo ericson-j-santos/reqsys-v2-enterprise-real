@@ -11,15 +11,16 @@ from app.core.async_compat import resolve_maybe_awaitable
 logger = logging.getLogger("reqsys.runtime.worker")
 
 
-async def _renovar_lease_periodicamente(queue: Any, intervalo_segundos: int = 20) -> None:
+async def _renovar_lease_periodicamente(queue: Any) -> None:
     renovar = getattr(queue, "renovar_lease", None)
     if renovar is None:
         return
+    intervalo_segundos = getattr(queue, "lease_renew_interval_seconds", 20)
     while True:
         await asyncio.sleep(intervalo_segundos)
         renovado = await resolve_maybe_awaitable(renovar())
         if not renovado:
-            logger.warning("lease_nao_renovado")
+            logger.warning("lease_nao_renovado", extra={"intervalo_segundos": intervalo_segundos})
             return
 
 
