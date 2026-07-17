@@ -71,6 +71,7 @@ jobs:
             --output-dir artifacts/lowcode-solution-factory/teams-notifications-v2-ci
 
       - name: Validate generated evidence
+        working-directory: .
         run: |
           test -s artifacts/lowcode-solution-factory/teams-notifications-v2-ci/reqsys-teams-notifications-v2.zip
           test -s artifacts/lowcode-solution-factory/teams-notifications-v2-ci/materialization-manifest.json
