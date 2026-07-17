@@ -24,6 +24,7 @@ from app.services.adr_orchestrator import (
 from app.services.adr_orchestrator import (
     analytics_summary as adr_analytics_summary,
 )
+from app.services.agile_project_intelligence import AgileProjectDemand, gerar_pacote_agil
 from app.services.agent_generator import (
     PACKAGE_NAME,
     catalogo_agentes,
@@ -31,7 +32,6 @@ from app.services.agent_generator import (
     gerar_zip_bytes,
     montar_arquivos_pacote,
 )
-from app.services.agile_project_intelligence import AgileProjectDemand, gerar_pacote_agil
 from app.services.copilot_studio_provisioner import provisionar_copilot_studio
 from app.services.reqsys_orchestrator import (
     OrchestratorDemand,
@@ -74,19 +74,25 @@ class LoteDemandasAdrIn(BaseModel):
     demandas: list[DemandaAdrIn] = Field(..., min_length=1, max_length=50)
 
 
-def _anexar_pacote_agil(rota: dict, payload: DemandaOrquestradorIn, correlation_id: str | None) -> dict:
+def _anexar_pacote_agil(
+    rota: dict,
+    payload: DemandaOrquestradorIn,
+    correlation_id: str | None,
+) -> dict:
     if rota.get('tema') != 'agile_scrum':
         return rota
 
-    rota['agile_project_package'] = gerar_pacote_agil(AgileProjectDemand(
-        titulo=payload.titulo,
-        descricao=payload.descricao,
-        objetivo=payload.objetivo,
-        publico_alvo=payload.publico_alvo,
-        owner=payload.owner,
-        prioridade=payload.prioridade_informada or rota['prioridade_sugerida'],
-        correlation_id=correlation_id,
-    ))
+    rota['agile_project_package'] = gerar_pacote_agil(
+        AgileProjectDemand(
+            titulo=payload.titulo,
+            descricao=payload.descricao,
+            objetivo=payload.objetivo,
+            publico_alvo=payload.publico_alvo,
+            owner=payload.owner,
+            prioridade=payload.prioridade_informada or rota['prioridade_sugerida'],
+            correlation_id=correlation_id,
+        )
+    )
     return rota
 
 
