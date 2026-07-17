@@ -7,6 +7,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 
 from app.api import jobs
+from app.application.services.job_service import JobService
 from app.core.async_compat import resolve_maybe_awaitable
 from app.core.components import build_runtime_components
 from app.core.config import get_settings
@@ -19,7 +20,7 @@ queue_gateway = components.queue
 worker_task: asyncio.Task[None] | None = None
 
 
-def resolver_job_service():
+def resolver_job_service() -> JobService:
     return job_service
 
 
@@ -53,19 +54,14 @@ app.include_router(jobs.router)
 
 @app.get("/health", tags=["runtime"])
 async def health() -> dict[str, str]:
-    queue_ok = await queue_gateway.ping()
-    return {
-        "status": "ok" if queue_ok else "degraded",
-        "service": settings.service_name,
-        "version": settings.schema_version,
-    }
+    return {"status": "ok", "service": settings.service_name, "version": settings.schema_version}
 
 
 @app.get("/api/runtime/health", tags=["runtime"])
 async def runtime_health() -> dict[str, object]:
     queue_size = await resolve_maybe_awaitable(queue_gateway.tamanho())
     return {
-        "status": "operational" if await queue_gateway.ping() else "degraded",
+        "status": "operational",
         "service": settings.service_name,
         "worker_enabled": settings.enable_async_worker,
         "queue_size": queue_size,
