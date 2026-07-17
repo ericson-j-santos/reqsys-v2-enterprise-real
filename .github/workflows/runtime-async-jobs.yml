@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -38,8 +38,36 @@ jobs:
         run: pytest -q
 
       - name: Validate generated OpenAPI sync
+        id: openapi-check
+        continue-on-error: true
         working-directory: runtime
         run: python scripts/export_openapi.py --check
+
+      - name: Synchronize canonical OpenAPI on PR branch
+        if: steps.openapi-check.outcome == 'failure' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ github.head_ref }}"
+          git checkout -B "${{ github.head_ref }}" "origin/${{ github.head_ref }}"
+          cd runtime
+          python scripts/export_openapi.py
+          cd ..
+          if git diff --quiet -- docs-site/assets/openapi/reqsys-runtime-openapi-v0.6.0.json; then
+            echo "OpenAPI generator reported divergence but produced no file diff." >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs-site/assets/openapi/reqsys-runtime-openapi-v0.6.0.json
+          git commit -m "docs(runtime): synchronize generated OpenAPI contract"
+          git push origin "HEAD:${{ github.head_ref }}"
+
+      - name: Fail when OpenAPI remains divergent
+        if: steps.openapi-check.outcome == 'failure'
+        run: |
+          echo "OpenAPI canonical contract was divergent. A synchronization commit was requested; this run remains failed by design." >&2
+          exit 1
 
       - name: Publish OpenAPI mismatch diagnostics
         if: failure()
@@ -49,40 +77,3 @@ jobs:
           path: runtime/.tmp/openapi-diff/
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Comment OpenAPI mismatch on PR
-        if: failure() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = 'runtime/.tmp/openapi-diff/openapi.diff';
-            if (!fs.existsSync(path)) {
-              core.info('OpenAPI diff file not found; skipping diagnostic comment.');
-              return;
-            }
-            const diff = fs.readFileSync(path, 'utf8').slice(0, 60000);
-            const marker = '<!-- reqsys-runtime-openapi-diff -->';
-            const body = `${marker}\n## Runtime OpenAPI mismatch\n\n\`\`\`diff\n${diff}\n\`\`\``;
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              per_page: 100,
-            });
-            const previous = comments.find((comment) => comment.body?.includes(marker));
-            if (previous) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: previous.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
