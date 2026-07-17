@@ -13,7 +13,7 @@ DEFAULT_CRITICAL = {
     "ci-enterprise-fast.yml",
     "pr-evidence-gate.yml",
     "governed-merge-queue.yml",
-    "security-baseline.yml",
+    "security-baseline-gate.yml",
 }
 
 
@@ -23,7 +23,13 @@ def audit(workflow_dir: Path, critical: set[str] | None = None) -> dict[str, Any
     for name in sorted(critical):
         path = workflow_dir / name
         if not path.exists():
-            rows.append({"workflow": name, "exists": False, "pull_request": False, "merge_group": False})
+            rows.append({
+                "workflow": name,
+                "exists": False,
+                "pull_request": False,
+                "merge_group": False,
+                "gap_reason": "WORKFLOW_NOT_FOUND",
+            })
             continue
         value = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         triggers = value.get("on") or value.get(True) or {}
@@ -35,25 +41,41 @@ def audit(workflow_dir: Path, critical: set[str] | None = None) -> dict[str, Any
             trigger_names = set(triggers)
         else:
             trigger_names = set()
+        has_pr = "pull_request" in trigger_names
+        has_merge_group = "merge_group" in trigger_names
+        gap_reason = None
+        if not has_pr and not has_merge_group:
+            gap_reason = "PULL_REQUEST_AND_MERGE_GROUP_MISSING"
+        elif not has_pr:
+            gap_reason = "PULL_REQUEST_MISSING"
+        elif not has_merge_group:
+            gap_reason = "MERGE_GROUP_MISSING"
         rows.append({
             "workflow": name,
             "exists": True,
-            "pull_request": "pull_request" in trigger_names,
-            "merge_group": "merge_group" in trigger_names,
+            "pull_request": has_pr,
+            "merge_group": has_merge_group,
+            "gap_reason": gap_reason,
         })
 
     complete = [r for r in rows if r["exists"] and r["pull_request"] and r["merge_group"]]
     gaps = [r for r in rows if r not in complete]
+    coverage_percent = round((len(complete) / len(rows)) * 100, 2) if rows else 100
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "contract": "reqsys-critical-workflow-event-coverage",
         "status": "COVERAGE_COMPLETE" if not gaps else "COVERAGE_GAPS_FOUND",
         "critical_workflow_count": len(rows),
         "complete_workflow_count": len(complete),
-        "coverage_percent": round((len(complete) / len(rows)) * 100, 2) if rows else 100,
+        "coverage_percent": coverage_percent,
+        "risk": "low" if not gaps else "high",
         "workflows": rows,
         "gaps": gaps,
         "throughput_increase_allowed": not gaps,
+        "parallelism_decision": "INCREASE_ALLOWED" if not gaps else "KEEP_CURRENT_LIMITS",
+        "human_approval_required": True,
+        "promotion_allowed": False,
+        "mode": "advisory",
     }
 
 
