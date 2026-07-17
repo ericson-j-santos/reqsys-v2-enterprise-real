@@ -15,6 +15,7 @@ from app.domain.models.job_assincrono import (
     JobStatus,
 )
 from app.infrastructure.http.httpx_gateway import HttpxGateway
+from app.observability.lease_slo import avaliar_lease_slo
 
 
 class JobService:
@@ -90,6 +91,7 @@ class JobService:
                 "ttl_seconds": self._settings.redis_lease_ttl_seconds,
                 "renew_interval_seconds": self._settings.redis_lease_renew_interval_seconds,
                 "metrics": metricas_lease,
+                "slo": avaliar_lease_slo(metricas_lease),
             },
         }
 
