@@ -1,0 +1,9 @@
+{
+  "artifact": "frontend/artifacts/figma-tokens/reqsys.tokens.json",
+  "driftDetected": false,
+  "policy": "Generated artifact must match canonical design tokens; CI fails on repository diff.",
+  "sha256": "5d4f8c5799a68059719f5509ed6914777f031a8ada38d0be7e265e337d24d7e9",
+  "source": "frontend/src/theme/design-tokens.json",
+  "status": "clean",
+  "version": "1.0.0"
+}
