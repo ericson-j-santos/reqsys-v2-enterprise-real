@@ -18,6 +18,8 @@ DEFAULT_CRITICAL = {
 
 DEFAULT_ALIASES = {
     "ci.yml": ("ci.yml", "ci-merge-group-adapter.yml"),
+    "pr-evidence-gate.yml": ("pr-evidence-gate.yml", "pr-evidence-merge-group-adapter.yml"),
+    "governed-merge-queue.yml": ("governed-merge-queue.yml", "governed-merge-queue-merge-group-adapter.yml"),
 }
 
 
@@ -69,7 +71,7 @@ def audit(workflow_dir: Path, critical: set[str] | None = None) -> dict[str, Any
     gaps = [row for row in rows if row not in complete]
     coverage_percent = round((len(complete) / len(rows)) * 100, 2) if rows else 100
     return {
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "contract": "reqsys-critical-workflow-event-coverage",
         "status": "COVERAGE_COMPLETE" if not gaps else "COVERAGE_GAPS_FOUND",
         "critical_workflow_count": len(rows),
