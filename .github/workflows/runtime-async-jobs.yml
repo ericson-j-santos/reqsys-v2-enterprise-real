@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   runtime-tests:
@@ -37,46 +37,14 @@ jobs:
         run: pytest -q
 
       - name: Validate generated OpenAPI sync
-        id: openapi-check
-        continue-on-error: true
         working-directory: runtime
         run: python scripts/export_openapi.py --check
 
-      - name: Persist OpenAPI diff on PR branch
-        if: steps.openapi-check.outcome == 'failure' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v7
+      - name: Publish OpenAPI mismatch diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const fs = require('fs');
-            const sourcePath = 'runtime/.tmp/openapi-diff/openapi.diff';
-            const targetPath = 'artifacts/runtime-openapi-diff.txt';
-            if (!fs.existsSync(sourcePath)) {
-              core.setFailed(`Diagnostic file not found: ${sourcePath}`);
-              return;
-            }
-            const content = fs.readFileSync(sourcePath, 'utf8');
-            let sha;
-            try {
-              const current = await github.rest.repos.getContent({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                path: targetPath,
-                ref: context.payload.pull_request.head.ref,
-              });
-              sha = current.data.sha;
-            } catch (error) {
-              if (error.status !== 404) throw error;
-            }
-            await github.rest.repos.createOrUpdateFileContents({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path: targetPath,
-              branch: context.payload.pull_request.head.ref,
-              message: 'chore(runtime): persist OpenAPI diff diagnostic',
-              content: Buffer.from(content, 'utf8').toString('base64'),
-              ...(sha ? { sha } : {}),
-            });
-
-      - name: Fail while OpenAPI is divergent
-        if: steps.openapi-check.outcome == 'failure'
-        run: exit 1
+          name: runtime-openapi-diff-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime/.tmp/openapi-diff/
+          if-no-files-found: ignore
+          retention-days: 7
