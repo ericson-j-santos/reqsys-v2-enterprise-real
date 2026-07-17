@@ -36,3 +36,12 @@ jobs:
       - name: Validate generated OpenAPI sync
         working-directory: runtime
         run: python scripts/export_openapi.py --check
+
+      - name: Publish OpenAPI mismatch diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-openapi-diff-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime/.tmp/openapi-diff/
+          if-no-files-found: ignore
+          retention-days: 7
