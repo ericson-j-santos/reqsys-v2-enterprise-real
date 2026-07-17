@@ -37,10 +37,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Compile and test policy
+      - name: Compile and test policy contracts
         run: |
-          python -m py_compile scripts/evaluate_parallelism_policy.py
-          python -m unittest tests/test_evaluate_parallelism_policy.py -v
+          python -m py_compile scripts/evaluate_parallelism_policy.py scripts/build_parallelism_change_request.py
+          python -m unittest tests/test_evaluate_parallelism_policy.py tests/test_build_parallelism_change_request.py -v
 
       - name: Restore recent parallelism indices
         shell: bash
@@ -73,12 +73,27 @@ jobs:
             --current-stage "$CURRENT_STAGE" \
             --output .tmp/parallelism-history/staged-parallelism-policy.json
 
+      - name: Build auditable change request
+        run: |
+          python scripts/build_parallelism_change_request.py \
+            --policy .tmp/parallelism-history/staged-parallelism-policy.json \
+            --output .tmp/parallelism-history/parallelism-change-request.json
+
+      - name: Validate governance invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.approval.required == true and .approval.approved == false' .tmp/parallelism-history/parallelism-change-request.json >/dev/null
+          jq -e '.execution.automatic_application_allowed == false and .execution.applied == false' .tmp/parallelism-history/parallelism-change-request.json >/dev/null
+          jq -e '.production.promotion_allowed == false' .tmp/parallelism-history/parallelism-change-request.json >/dev/null
+
       - name: Publish executive summary
         shell: bash
         run: |
           decision="$(jq -r '.decision' .tmp/parallelism-history/staged-parallelism-policy.json)"
           stage="$(jq -r '.recommended_stage' .tmp/parallelism-history/staged-parallelism-policy.json)"
           reason="$(jq -r '.reason' .tmp/parallelism-history/staged-parallelism-policy.json)"
+          request_status="$(jq -r '.request_status' .tmp/parallelism-history/parallelism-change-request.json)"
           {
             echo "# Staged Parallelism Policy"
             echo ""
@@ -87,12 +102,16 @@ jobs:
             echo "| Decision | \`$decision\` |"
             echo "| Recommended stage | \`$stage\` |"
             echo "| Reason | \`$reason\` |"
+            echo "| Change request | \`$request_status\` |"
             echo "| Automatic application | \`false\` |"
             echo "| Human approval | \`required\` |"
+            echo "| Production promotion | \`false\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
           name: reqsys-staged-parallelism-policy
-          path: .tmp/parallelism-history/staged-parallelism-policy.json
+          path: |
+            .tmp/parallelism-history/staged-parallelism-policy.json
+            .tmp/parallelism-history/parallelism-change-request.json
           retention-days: 90
