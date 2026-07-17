@@ -5,7 +5,6 @@ import re
 from dataclasses import dataclass
 from typing import Iterable
 
-
 _SENTENCE_SPLIT = re.compile(r'(?<=[.!?;])\s+|\n+')
 _TECHNICAL_TERMS = (
     'api', 'endpoint', 'backend', 'frontend', 'database', 'banco', 'sql', 'fila',
@@ -36,7 +35,10 @@ def _sentences(text: str) -> list[str]:
 
 def _contains_any(text: str, terms: Iterable[str]) -> bool:
     normalized = text.casefold()
-    return any(term in normalized for term in terms)
+    return any(
+        re.search(rf'(?<!\w){re.escape(term.casefold())}(?!\w)', normalized)
+        for term in terms
+    )
 
 
 def _stable_id(prefix: str, demand: AgileProjectDemand) -> str:
