@@ -14,9 +14,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT / 'scripts') not in sys.path:
     sys.path.insert(0, str(ROOT / 'scripts'))
 
-from app.schemas.lowcode_solution import LowCodeSolutionGenerateRequest
-from app.services.lowcode_solution_factory import gerar_lowcode_solution
-from materialize_teams_notification_solution import materialize
+from app.schemas.lowcode_solution import LowCodeSolutionGenerateRequest  # noqa: E402
+from app.services.lowcode_solution_factory import gerar_lowcode_solution  # noqa: E402
+from materialize_teams_notification_solution import materialize  # noqa: E402
 
 
 def _request(**overrides):
