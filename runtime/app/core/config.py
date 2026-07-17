@@ -19,6 +19,8 @@ class RuntimeSettings(BaseModel):
     redis_job_index: str = "reqsys:runtime:jobs:index"
     redis_block_timeout_seconds: int = 5
     redis_job_ttl_seconds: int = 604800
+    redis_lease_ttl_seconds: int = 60
+    redis_lease_renew_interval_seconds: int = 20
     max_tentativas: int = 3
 
     @model_validator(mode="after")
@@ -31,6 +33,12 @@ class RuntimeSettings(BaseModel):
             raise ValueError("STORAGE_BACKEND deve ser 'memory' ou 'redis'")
         if queue_backend == "redis" and storage_backend != "redis":
             raise ValueError("QUEUE_BACKEND=redis exige STORAGE_BACKEND=redis para worker desacoplado")
+        if self.redis_lease_ttl_seconds < 5:
+            raise ValueError("REDIS_LEASE_TTL_SECONDS deve ser >= 5")
+        if self.redis_lease_renew_interval_seconds < 1:
+            raise ValueError("REDIS_LEASE_RENEW_INTERVAL_SECONDS deve ser >= 1")
+        if self.redis_lease_renew_interval_seconds >= self.redis_lease_ttl_seconds:
+            raise ValueError("REDIS_LEASE_RENEW_INTERVAL_SECONDS deve ser menor que REDIS_LEASE_TTL_SECONDS")
         self.queue_backend = queue_backend
         self.storage_backend = storage_backend
         return self
@@ -49,5 +57,7 @@ def get_settings() -> RuntimeSettings:
         redis_job_index=os.getenv("REDIS_JOB_INDEX", "reqsys:runtime:jobs:index"),
         redis_block_timeout_seconds=int(os.getenv("REDIS_BLOCK_TIMEOUT_SECONDS", "5")),
         redis_job_ttl_seconds=int(os.getenv("REDIS_JOB_TTL_SECONDS", "604800")),
+        redis_lease_ttl_seconds=int(os.getenv("REDIS_LEASE_TTL_SECONDS", "60")),
+        redis_lease_renew_interval_seconds=int(os.getenv("REDIS_LEASE_RENEW_INTERVAL_SECONDS", "20")),
         max_tentativas=int(os.getenv("ASYNC_JOB_MAX_TENTATIVAS", "3")),
     )

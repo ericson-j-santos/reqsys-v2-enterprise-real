@@ -21,7 +21,6 @@ class RuntimeComponents:
     repository: Any
 
 
-
 def build_runtime_components(settings: RuntimeSettings) -> RuntimeComponents:
     http_gateway = HttpxGateway()
 
@@ -32,6 +31,8 @@ def build_runtime_components(settings: RuntimeSettings) -> RuntimeComponents:
             settings.redis_queue_name,
             settings.redis_processing_queue_name,
             settings.redis_block_timeout_seconds,
+            settings.redis_lease_ttl_seconds,
+            settings.redis_lease_renew_interval_seconds,
         )
         repository = JobRepositoryRedis(
             redis,
