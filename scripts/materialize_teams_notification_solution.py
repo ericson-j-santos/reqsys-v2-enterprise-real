@@ -23,8 +23,12 @@ def materialize(output_dir: Path, *, target_environment: str, dry_run: bool) -> 
     package = solution['package']
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    zip_path = output_dir / package['zip_filename']
-    zip_path.write_bytes(base64.b64decode(package['zip_base64']))
+    zip_filename = package.get('filename') or package.get('zip_filename')
+    if not zip_filename:
+        raise ValueError('Pacote Teams v2 sem nome de arquivo ZIP no contrato.')
+
+    zip_path = output_dir / zip_filename
+    zip_path.write_bytes(base64.b64decode(package['zip_base64'], validate=True))
 
     manifest = {
         'profile': 'teams_notification_v2',
@@ -34,7 +38,7 @@ def materialize(output_dir: Path, *, target_environment: str, dry_run: bool) -> 
         'target_environment': target_environment,
         'correlation_id': solution['correlation_id'],
         'sha256': package['sha256'],
-        'zip_filename': package['zip_filename'],
+        'zip_filename': zip_filename,
         'files': package['files'],
         'import_guardrails': {
             'dev_only_without_approval': True,
