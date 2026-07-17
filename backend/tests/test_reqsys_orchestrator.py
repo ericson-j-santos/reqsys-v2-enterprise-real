@@ -1,4 +1,8 @@
-from app.services.reqsys_orchestrator import OrchestratorDemand, classificar_demanda, listar_coordenadores
+from app.services.reqsys_orchestrator import (
+    OrchestratorDemand,
+    classificar_demanda,
+    listar_coordenadores,
+)
 
 
 def test_classificador_direciona_ci_para_coordenador_cicd():
@@ -77,9 +81,16 @@ def test_endpoint_orchestrator_batch(client):
     assert data['total'] == 2
     assert data['por_tema']['agile_scrum'] == 1
     assert data['por_tema']['seguranca_governanca'] == 1
-    agile_route = next(item for item in data['rotas'] if item['tema'] == 'agile_scrum')
-    security_route = next(item for item in data['rotas'] if item['tema'] == 'seguranca_governanca')
-    assert agile_route['agile_project_package']['scrum']['sprint_recommendation'] == 'refinamento'
+    agile_route = next(
+        item for item in data['rotas'] if item['tema'] == 'agile_scrum'
+    )
+    security_route = next(
+        item for item in data['rotas'] if item['tema'] == 'seguranca_governanca'
+    )
+    assert (
+        agile_route['agile_project_package']['scrum']['sprint_recommendation']
+        == 'refinamento'
+    )
     assert 'agile_project_package' not in security_route
 
 
@@ -113,7 +124,10 @@ def test_endpoint_orchestrator_persiste_evento_e_expõe_analytics(client, correl
 
     coordinators = client.get('/v1/agents/orchestrator/analytics/coordinators')
     assert coordinators.status_code == 200
-    assert any(item['valor'] == 'reqsys-ci-coordinator' for item in coordinators.json()['data']['coordinators'])
+    assert any(
+        item['valor'] == 'reqsys-ci-coordinator'
+        for item in coordinators.json()['data']['coordinators']
+    )
 
     risk = client.get('/v1/agents/orchestrator/analytics/risk')
     assert risk.status_code == 200
