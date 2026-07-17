@@ -8,17 +8,15 @@ from fastapi import FastAPI
 
 from app.api import jobs
 from app.application.services.job_service import JobService
+from app.core.async_compat import resolve_maybe_awaitable
+from app.core.components import build_runtime_components
 from app.core.config import get_settings
-from app.infrastructure.http.httpx_gateway import HttpxGateway
-from app.infrastructure.queue.asyncio_queue import AsyncioQueueGateway
-from app.infrastructure.repositories.job_repository_memoria import JobRepositoryMemoria
 from app.workers.processar_jobs import executar_worker_local
 
 settings = get_settings()
-repository = JobRepositoryMemoria()
-queue_gateway = AsyncioQueueGateway()
-http_gateway = HttpxGateway()
-job_service = JobService(repository, queue_gateway, http_gateway, settings)
+components = build_runtime_components(settings)
+job_service = components.service
+queue_gateway = components.queue
 worker_task: asyncio.Task[None] | None = None
 
 
@@ -41,6 +39,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await worker_task
         except asyncio.CancelledError:
             pass
+    await queue_gateway.fechar()
 
 
 app = FastAPI(
@@ -60,11 +59,12 @@ async def health() -> dict[str, str]:
 
 @app.get("/api/runtime/health", tags=["runtime"])
 async def runtime_health() -> dict[str, object]:
+    queue_size = await resolve_maybe_awaitable(queue_gateway.tamanho())
     return {
         "status": "operational",
         "service": settings.service_name,
         "worker_enabled": settings.enable_async_worker,
-        "queue_size": queue_gateway.tamanho(),
+        "queue_size": queue_size,
     }
 
 

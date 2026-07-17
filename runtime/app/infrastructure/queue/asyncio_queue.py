@@ -18,3 +18,9 @@ class AsyncioQueueGateway:
 
     def tamanho(self) -> int:
         return self._queue.qsize()
+
+    async def ping(self) -> bool:
+        return True
+
+    async def fechar(self) -> None:
+        return None

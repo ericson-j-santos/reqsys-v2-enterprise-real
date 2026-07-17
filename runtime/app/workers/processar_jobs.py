@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 from app.application.services.job_service import JobService
-from app.infrastructure.queue.asyncio_queue import AsyncioQueueGateway
+from app.core.async_compat import resolve_maybe_awaitable
 
 logger = logging.getLogger("reqsys.runtime.worker")
 
 
-async def executar_worker_local(service: JobService, queue: AsyncioQueueGateway) -> None:
-    logger.info("worker_local_iniciado")
+async def executar_worker_local(service: JobService, queue: Any) -> None:
+    logger.info("worker_iniciado")
     while True:
         job_id = await queue.consumir()
         try:
@@ -18,5 +19,5 @@ async def executar_worker_local(service: JobService, queue: AsyncioQueueGateway)
         except Exception:  # pragma: no cover - proteção operacional do loop
             logger.exception("erro_nao_tratado_no_worker", extra={"job_id": job_id})
         finally:
-            queue.confirmar()
+            await resolve_maybe_awaitable(queue.confirmar())
             await asyncio.sleep(0)
