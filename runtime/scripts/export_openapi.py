@@ -7,6 +7,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+RUNTIME_DIR = Path(__file__).resolve().parents[1]
+if str(RUNTIME_DIR) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_DIR))
+
 from app.main import app
 
 
@@ -83,8 +87,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="Valida semanticamente o contrato OpenAPI canônico.")
     args = parser.parse_args()
 
-    runtime_dir = Path(__file__).resolve().parents[1]
-    output_path = (runtime_dir / args.output).resolve()
+    output_path = (RUNTIME_DIR / args.output).resolve()
     schema = gerar_openapi()
 
     if args.check:
@@ -94,7 +97,7 @@ def main() -> int:
         atual = carregar_json(output_path)
         if normalizar_contrato(atual) != normalizar_contrato(schema):
             print("Contrato OpenAPI semanticamente divergente do runtime FastAPI.", file=sys.stderr)
-            escrever_diagnostico(runtime_dir, atual, schema, output_path)
+            escrever_diagnostico(RUNTIME_DIR, atual, schema, output_path)
             return 1
         print(f"Contrato OpenAPI semanticamente sincronizado: {output_path}")
         return 0
