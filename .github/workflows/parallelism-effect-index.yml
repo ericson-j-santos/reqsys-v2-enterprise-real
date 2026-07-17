@@ -39,8 +39,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .tmp/parallelism artifacts/parallelism-effect
-          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=all&sort=updated&direction=desc&per_page=50" \
-            --jq '[.[] | {number, created_at, merged_at, mergeable, mergeable_state}]' \
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls?state=all&sort=updated&direction=desc&per_page=50" \
+            --jq '[.[][] | {number, created_at, merged_at, mergeable, mergeable_state}]' \
             > .tmp/parallelism/prs.json
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
             --jq '[.workflow_runs[] | {name, event, status, conclusion, run_attempt, created_at, updated_at}]' \
