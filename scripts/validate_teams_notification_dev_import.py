@@ -50,6 +50,19 @@ def _declared_file_paths(files: object) -> list[str]:
     return sorted(paths)
 
 
+def _relative_archive_file_paths(archive_files: list[str], solution_name: str) -> list[str]:
+    root = solution_name.strip('/')
+    if not root:
+        raise ValueError('solution_name deve definir a pasta raiz do pacote.')
+
+    prefix = f'{root}/'
+    unexpected_paths = sorted(name for name in archive_files if not name.startswith(prefix))
+    if unexpected_paths:
+        raise ValueError(f'Arquivos fora da pasta raiz {root!r}: {unexpected_paths}')
+
+    return sorted(name.removeprefix(prefix) for name in archive_files)
+
+
 def validate(package_dir: Path) -> dict[str, object]:
     manifest_path = package_dir / 'materialization-manifest.json'
     if not manifest_path.is_file():
@@ -97,7 +110,8 @@ def validate(package_dir: Path) -> dict[str, object]:
         raise ValueError(f'Arquivo corrompido dentro do ZIP: {bad_file}')
 
     declared_files = _declared_file_paths(manifest['files'])
-    missing_from_zip = sorted(set(declared_files) - set(archive_files))
+    relative_archive_files = _relative_archive_file_paths(archive_files, manifest['solution_name'])
+    missing_from_zip = sorted(set(declared_files) - set(relative_archive_files))
     if missing_from_zip:
         raise ValueError(f'Arquivos declarados ausentes no ZIP: {missing_from_zip}')
 
