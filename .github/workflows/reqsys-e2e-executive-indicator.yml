@@ -1,0 +1,95 @@
+name: ReqSys E2E Executive Indicator
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_reqsys_e2e_executive_indicator.py"
+      - "tests/test_build_reqsys_e2e_executive_indicator.py"
+      - ".github/workflows/reqsys-e2e-executive-indicator.yml"
+  workflow_run:
+    workflows: ["Runtime UX Single State E2E Gate"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: reqsys-e2e-executive-indicator-${{ github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/build_reqsys_e2e_executive_indicator.py
+          python -m unittest tests/test_build_reqsys_e2e_executive_indicator.py -v
+
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore latest E2E evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/e2e-indicator/source .tmp/e2e-indicator/output
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=runtime-ux-single-state-e2e&per_page=100" \
+            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          test -n "$artifact_id"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/e2e-indicator/source.zip
+          unzip -q .tmp/e2e-indicator/source.zip -d .tmp/e2e-indicator/source
+          e2e_file="$(find .tmp/e2e-indicator/source -name runtime-ux-single-state-e2e.json -print -quit)"
+          test -n "$e2e_file"
+          echo "E2E_FILE=$e2e_file" >> "$GITHUB_ENV"
+
+      - name: Build official Estado Único indicator
+        run: |
+          python scripts/build_reqsys_e2e_executive_indicator.py \
+            --e2e "$E2E_FILE" \
+            --output .tmp/e2e-indicator/output/reqsys-e2e-executive-indicator.json
+
+      - name: Preserve production governance
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path('.tmp/e2e-indicator/output/reqsys-e2e-executive-indicator.json').read_text())
+          assert value['mode'] == 'advisory'
+          assert value['production_blocker'] is False
+          assert value['production_readiness']['promotion_allowed'] is False
+          assert value['production_readiness']['human_approval_required'] is True
+          if value['official_indicator'] == 'E2E_CORRELATION_VERIFIED':
+              assert value['evidence_accepted'] is True
+              assert value['confidence']['score'] == 100
+          print(f"official indicator: {value['official_indicator']}; confidence={value['confidence']['score']}")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-e2e-executive-indicator
+          path: .tmp/e2e-indicator/output
+          retention-days: 90
