@@ -11,7 +11,9 @@
         "test:e2e": "playwright test",
         "test:e2e:stable": "node scripts/run-e2e-safe.js --reporter=line",
         "validate:design-tokens": "node scripts/validate-design-tokens.mjs",
-        "quality:design-system": "npm run validate:design-tokens && npm run build"
+        "export:figma-tokens": "node scripts/export-figma-tokens.mjs",
+        "check:figma-token-drift": "npm run export:figma-tokens && git diff --exit-code -- artifacts/figma-tokens",
+        "quality:design-system": "npm run validate:design-tokens && npm run check:figma-token-drift && npm run build"
     },
     "dependencies": {
         "@azure/msal-browser": "^5.12.0",
