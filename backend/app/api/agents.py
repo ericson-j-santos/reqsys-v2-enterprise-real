@@ -24,13 +24,16 @@ from app.services.adr_orchestrator import (
 from app.services.adr_orchestrator import (
     analytics_summary as adr_analytics_summary,
 )
-from app.services.agile_project_intelligence import AgileProjectDemand, gerar_pacote_agil
 from app.services.agent_generator import (
     PACKAGE_NAME,
     catalogo_agentes,
     gerar_pacote_agentes,
     gerar_zip_bytes,
     montar_arquivos_pacote,
+)
+from app.services.agile_project_intelligence import (
+    AgileProjectDemand,
+    gerar_pacote_agil,
 )
 from app.services.copilot_studio_provisioner import provisionar_copilot_studio
 from app.services.reqsys_orchestrator import (
