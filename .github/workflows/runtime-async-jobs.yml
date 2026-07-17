@@ -45,7 +45,7 @@ jobs:
       - name: Generate canonical OpenAPI for synchronization
         if: steps.openapi-check.outcome == 'failure' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         working-directory: runtime
-        run: python scripts/export_openapi.py --output .tmp/generated-openapi.json
+        run: python scripts/export_openapi.py
 
       - name: Synchronize canonical OpenAPI through GitHub API
         if: steps.openapi-check.outcome == 'failure' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -54,7 +54,7 @@ jobs:
           script: |
             const fs = require('fs');
             const targetPath = 'docs-site/assets/openapi/reqsys-runtime-openapi-v0.6.0.json';
-            const generated = fs.readFileSync('runtime/.tmp/generated-openapi.json', 'utf8');
+            const generated = fs.readFileSync(targetPath, 'utf8');
             const current = await github.rest.repos.getContent({
               owner: context.repo.owner,
               repo: context.repo.repo,
