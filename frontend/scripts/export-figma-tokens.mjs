@@ -20,8 +20,24 @@ function sortObjectEntries(object, mapper) {
   )
 }
 
+function normalize(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalize)
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nestedValue]) => [key, normalize(nestedValue)]),
+    )
+  }
+
+  return value
+}
+
 function serialize(value) {
-  return `${JSON.stringify(value, null, 2)}\n`
+  return `${JSON.stringify(normalize(value), null, 2)}\n`
 }
 
 async function main() {
