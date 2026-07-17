@@ -1,0 +1,98 @@
+name: Staged Parallelism Policy
+
+on:
+  workflow_run:
+    workflows: ["Parallelism Effect Index"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      current_stage:
+        description: "Current governed parallelism stage (0-3)"
+        required: false
+        default: "0"
+        type: choice
+        options: ["0", "1", "2", "3"]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: staged-parallelism-policy
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CURRENT_STAGE: ${{ inputs.current_stage || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile and test policy
+        run: |
+          python -m py_compile scripts/evaluate_parallelism_policy.py
+          python -m unittest tests/test_evaluate_parallelism_policy.py -v
+
+      - name: Restore recent parallelism indices
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/parallelism-history/downloads
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=reqsys-parallelism-effect-index&per_page=20" \
+            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[:3] | .[].id' \
+            > .tmp/parallelism-history/artifact-ids.txt
+
+          : > .tmp/parallelism-history/history.ndjson
+          while read -r artifact_id; do
+            [ -n "$artifact_id" ] || continue
+            archive=".tmp/parallelism-history/${artifact_id}.zip"
+            target=".tmp/parallelism-history/downloads/${artifact_id}"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$archive"
+            mkdir -p "$target"
+            unzip -q "$archive" -d "$target"
+            index_file="$(find "$target" -name '*parallelism*index*.json' -print -quit)"
+            [ -n "$index_file" ] || continue
+            jq -c . "$index_file" >> .tmp/parallelism-history/history.ndjson
+          done < .tmp/parallelism-history/artifact-ids.txt
+
+          jq -s 'reverse' .tmp/parallelism-history/history.ndjson > .tmp/parallelism-history/history.json
+
+      - name: Evaluate staged policy
+        run: |
+          python scripts/evaluate_parallelism_policy.py \
+            --history .tmp/parallelism-history/history.json \
+            --current-stage "$CURRENT_STAGE" \
+            --output .tmp/parallelism-history/staged-parallelism-policy.json
+
+      - name: Publish executive summary
+        shell: bash
+        run: |
+          decision="$(jq -r '.decision' .tmp/parallelism-history/staged-parallelism-policy.json)"
+          stage="$(jq -r '.recommended_stage' .tmp/parallelism-history/staged-parallelism-policy.json)"
+          reason="$(jq -r '.reason' .tmp/parallelism-history/staged-parallelism-policy.json)"
+          {
+            echo "# Staged Parallelism Policy"
+            echo ""
+            echo "| Indicator | Value |"
+            echo "|---|---:|"
+            echo "| Decision | \`$decision\` |"
+            echo "| Recommended stage | \`$stage\` |"
+            echo "| Reason | \`$reason\` |"
+            echo "| Automatic application | \`false\` |"
+            echo "| Human approval | \`required\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-staged-parallelism-policy
+          path: .tmp/parallelism-history/staged-parallelism-policy.json
+          retention-days: 90
