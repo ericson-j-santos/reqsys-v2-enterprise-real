@@ -1,0 +1,71 @@
+name: Parallelism Effect Index
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+  pull_request:
+    paths:
+      - "scripts/build_parallelism_effect_index.py"
+      - "tests/test_build_parallelism_effect_index.py"
+      - ".github/workflows/parallelism-effect-index.yml"
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: parallelism-effect-index-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/build_parallelism_effect_index.py
+          python -m unittest tests/test_build_parallelism_effect_index.py -v
+      - name: Collect recent PR and workflow samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/parallelism artifacts/parallelism-effect
+          gh api "repos/${GITHUB_REPOSITORY}/pulls?state=all&sort=updated&direction=desc&per_page=50" \
+            --jq '[.[] | {number, created_at, merged_at, mergeable, mergeable_state}]' \
+            > .tmp/parallelism/prs.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+            --jq '[.workflow_runs[] | {name, event, status, conclusion, run_attempt, created_at, updated_at}]' \
+            > .tmp/parallelism/runs.json
+      - name: Build governed effect index
+        run: |
+          python scripts/build_parallelism_effect_index.py \
+            --prs .tmp/parallelism/prs.json \
+            --runs .tmp/parallelism/runs.json \
+            --output artifacts/parallelism-effect/parallelism-effect-index.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('artifacts/parallelism-effect/parallelism-effect-index.json').read_text())
+          with open(Path(__import__('os').environ['GITHUB_STEP_SUMMARY']), 'a') as summary:
+              summary.write('# Parallelism Effect Index\n\n')
+              summary.write(f"- Status: `{data['status']}`\n")
+              summary.write(f"- Decisão: `{data['parallelism_decision']}`\n")
+              summary.write(f"- Lead time médio: `{data['metrics']['average_lead_time_minutes']}` min\n")
+              summary.write(f"- Rerun: `{data['metrics']['rerun_rate_percent']}%`\n")
+              summary.write(f"- Conflitos: `{data['metrics']['conflict_rate_percent']}%`\n")
+              summary.write(f"- Merge Queue estável: `{data['metrics']['merge_queue_success_rate_percent']}%`\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-parallelism-effect-index
+          path: artifacts/parallelism-effect/parallelism-effect-index.json
+          retention-days: 90
