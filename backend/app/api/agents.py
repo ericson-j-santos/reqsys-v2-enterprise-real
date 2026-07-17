@@ -31,6 +31,7 @@ from app.services.agent_generator import (
     gerar_zip_bytes,
     montar_arquivos_pacote,
 )
+from app.services.agile_project_intelligence import AgileProjectDemand, gerar_pacote_agil
 from app.services.copilot_studio_provisioner import provisionar_copilot_studio
 from app.services.reqsys_orchestrator import (
     OrchestratorDemand,
@@ -52,6 +53,9 @@ class DemandaOrquestradorIn(BaseModel):
     origem: str = Field(default='chat', max_length=80)
     prioridade_informada: str | None = Field(default=None, max_length=40)
     ambiente: str | None = Field(default=None, max_length=40)
+    objetivo: str | None = Field(default=None, max_length=1000)
+    publico_alvo: str | None = Field(default=None, max_length=180)
+    owner: str | None = Field(default=None, max_length=180)
 
 
 class LoteDemandasOrquestradorIn(BaseModel):
@@ -68,6 +72,22 @@ class DemandaAdrIn(BaseModel):
 
 class LoteDemandasAdrIn(BaseModel):
     demandas: list[DemandaAdrIn] = Field(..., min_length=1, max_length=50)
+
+
+def _anexar_pacote_agil(rota: dict, payload: DemandaOrquestradorIn, correlation_id: str | None) -> dict:
+    if rota.get('tema') != 'agile_scrum':
+        return rota
+
+    rota['agile_project_package'] = gerar_pacote_agil(AgileProjectDemand(
+        titulo=payload.titulo,
+        descricao=payload.descricao,
+        objetivo=payload.objetivo,
+        publico_alvo=payload.publico_alvo,
+        owner=payload.owner,
+        prioridade=payload.prioridade_informada or rota['prioridade_sugerida'],
+        correlation_id=correlation_id,
+    ))
+    return rota
 
 
 @router.get('/catalog')
@@ -128,7 +148,7 @@ def rotear_demanda_orquestrador(
     x_correlation_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    """Classifica uma demanda e sugere o coordenador IA, backlog, labels e automacoes assistidas."""
+    """Classifica a demanda e, para Agile/Scrum, gera o pacote negocial, tecnico e de projeto."""
     demanda = OrchestratorDemand(
         titulo=payload.titulo,
         descricao=payload.descricao,
@@ -137,7 +157,8 @@ def rotear_demanda_orquestrador(
         ambiente=payload.ambiente,
         correlation_id=x_correlation_id,
     )
-    return ok(classificar_e_persistir_demanda(db, demanda), x_correlation_id)
+    rota = classificar_e_persistir_demanda(db, demanda)
+    return ok(_anexar_pacote_agil(rota, payload, x_correlation_id), x_correlation_id)
 
 
 @router.post('/orchestrator/route/batch')
@@ -146,7 +167,7 @@ def rotear_lote_orquestrador(
     x_correlation_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    """Classifica um lote de demandas para alimentar filas tematicas e dashboards operacionais."""
+    """Classifica um lote e enriquece as demandas Agile/Scrum com pacotes de projeto."""
     demandas = [
         OrchestratorDemand(
             titulo=item.titulo,
@@ -158,7 +179,12 @@ def rotear_lote_orquestrador(
         )
         for item in payload.demandas
     ]
-    return ok(classificar_e_persistir_lote(db, demandas), x_correlation_id)
+    resultado = classificar_e_persistir_lote(db, demandas)
+    resultado['rotas'] = [
+        _anexar_pacote_agil(rota, item, x_correlation_id)
+        for rota, item in zip(resultado['rotas'], payload.demandas, strict=True)
+    ]
+    return ok(resultado, x_correlation_id)
 
 
 @router.get('/orchestrator/analytics/summary')
