@@ -42,46 +42,41 @@ jobs:
         working-directory: runtime
         run: python scripts/export_openapi.py --check
 
-      - name: Generate canonical OpenAPI for synchronization
-        if: steps.openapi-check.outcome == 'failure' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        working-directory: runtime
-        run: python scripts/export_openapi.py
-
-      - name: Synchronize canonical OpenAPI through GitHub API
+      - name: Persist OpenAPI diff on PR branch
         if: steps.openapi-check.outcome == 'failure' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const targetPath = 'docs-site/assets/openapi/reqsys-runtime-openapi-v0.6.0.json';
-            const generated = fs.readFileSync(targetPath, 'utf8');
-            const current = await github.rest.repos.getContent({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path: targetPath,
-              ref: context.payload.pull_request.head.ref,
-            });
+            const sourcePath = 'runtime/.tmp/openapi-diff/openapi.diff';
+            const targetPath = 'artifacts/runtime-openapi-diff.txt';
+            if (!fs.existsSync(sourcePath)) {
+              core.setFailed(`Diagnostic file not found: ${sourcePath}`);
+              return;
+            }
+            const content = fs.readFileSync(sourcePath, 'utf8');
+            let sha;
+            try {
+              const current = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: targetPath,
+                ref: context.payload.pull_request.head.ref,
+              });
+              sha = current.data.sha;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
             await github.rest.repos.createOrUpdateFileContents({
               owner: context.repo.owner,
               repo: context.repo.repo,
               path: targetPath,
               branch: context.payload.pull_request.head.ref,
-              message: 'docs(runtime): synchronize generated OpenAPI contract',
-              content: Buffer.from(generated, 'utf8').toString('base64'),
-              sha: current.data.sha,
+              message: 'chore(runtime): persist OpenAPI diff diagnostic',
+              content: Buffer.from(content, 'utf8').toString('base64'),
+              ...(sha ? { sha } : {}),
             });
 
-      - name: Fail current run after synchronization request
+      - name: Fail while OpenAPI is divergent
         if: steps.openapi-check.outcome == 'failure'
-        run: |
-          echo "OpenAPI was divergent. The canonical file was synchronized on the PR branch; a new CI run will validate it." >&2
-          exit 1
-
-      - name: Publish OpenAPI mismatch diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: runtime-openapi-diff-${{ github.run_id }}-${{ github.run_attempt }}
-          path: runtime/.tmp/openapi-diff/
-          if-no-files-found: ignore
-          retention-days: 7
+        run: exit 1
