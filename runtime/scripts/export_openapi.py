@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import sys
 from pathlib import Path
@@ -20,13 +21,29 @@ def gerar_openapi() -> dict[str, Any]:
     return schema
 
 
+def serializar_json(schema: dict[str, Any]) -> str:
+    return json.dumps(schema, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+
 def escrever_json(path: Path, schema: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(schema, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(serializar_json(schema), encoding="utf-8")
 
 
 def carregar_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def imprimir_diff(atual: dict[str, Any], gerado: dict[str, Any], output_path: Path) -> None:
+    diff = difflib.unified_diff(
+        serializar_json(atual).splitlines(),
+        serializar_json(gerado).splitlines(),
+        fromfile=str(output_path),
+        tofile="runtime-generated-openapi.json",
+        lineterm="",
+    )
+    for linha in diff:
+        print(linha, file=sys.stderr)
 
 
 def main() -> int:
@@ -46,6 +63,7 @@ def main() -> int:
         atual = carregar_json(output_path)
         if atual != schema:
             print("Contrato OpenAPI divergente do runtime FastAPI. Execute export_openapi.py e versione o resultado.", file=sys.stderr)
+            imprimir_diff(atual, schema, output_path)
             return 1
         print(f"Contrato OpenAPI sincronizado: {output_path}")
         return 0
