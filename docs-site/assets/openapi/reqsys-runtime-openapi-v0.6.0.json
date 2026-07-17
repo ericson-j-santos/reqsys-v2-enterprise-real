@@ -17,7 +17,11 @@
             "type": "string"
           },
           "status": {
-            "$ref": "#/components/schemas/JobStatus",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobStatus"
+              }
+            ],
             "default": "queued"
           },
           "status_url": {
@@ -72,7 +76,6 @@
             "type": "string"
           },
           "payload": {
-            "additionalProperties": true,
             "title": "Payload",
             "type": "object"
           },
@@ -121,7 +124,6 @@
           "resultado": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -215,13 +217,6 @@
       },
       "ValidationError": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
           "loc": {
             "items": {
               "anyOf": [
@@ -356,7 +351,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Runtime Analytics Api Runtime Analytics Get",
                   "type": "object"
                 }
@@ -379,7 +373,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Runtime Health Api Runtime Health Get",
                   "type": "object"
                 }
