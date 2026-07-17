@@ -48,6 +48,12 @@ _EXACT_SENSITIVE_NAMES = {
     "service_account.json",
 }
 _SENSITIVE_MARKERS = ("credential", "private_key", "secret", "token")
+_SAFE_PUBLIC_ARTIFACTS = {
+    "frontend/artifacts/figma-tokens/drift-report.json",
+    "frontend/artifacts/figma-tokens/manifest.json",
+    "frontend/artifacts/figma-tokens/reqsys.tokens.json",
+    "frontend/artifacts/figma-tokens/reqsys.tokens.sha256",
+}
 
 
 def _is_sensitive(self: review.ChangedFile) -> bool:
@@ -55,6 +61,8 @@ def _is_sensitive(self: review.ChangedFile) -> bool:
     name = Path(lowered).name
     suffix = Path(name).suffix.lower()
 
+    if lowered in _SAFE_PUBLIC_ARTIFACTS:
+        return False
     if any(lowered.endswith(template_suffix) for template_suffix in review.SAFE_TEMPLATE_SUFFIXES):
         return False
     if name == ".env" or name.startswith(".env."):

@@ -1,0 +1,15 @@
+{
+  "artifact": "reqsys-figma-tokens",
+  "format": "figma-tokens-studio",
+  "schemaVersion": "1",
+  "sha256": "5d4f8c5799a68059719f5509ed6914777f031a8ada38d0be7e265e337d24d7e9",
+  "source": "frontend/src/theme/design-tokens.json",
+  "tokenCounts": {
+    "colors": 17,
+    "fontFamily": 1,
+    "radius": 3,
+    "semantic": 6,
+    "total": 27
+  },
+  "version": "1.0.0"
+}

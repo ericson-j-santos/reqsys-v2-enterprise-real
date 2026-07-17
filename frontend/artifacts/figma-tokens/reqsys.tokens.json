@@ -1,0 +1,135 @@
+{
+  "$metadata": {
+    "tokenSetOrder": [
+      "reqsys"
+    ],
+    "version": "1.0.0"
+  },
+  "$themes": [
+    {
+      "id": "reqsys-default",
+      "name": "ReqSys Default",
+      "selectedTokenSets": {
+        "reqsys": "enabled"
+      }
+    }
+  ],
+  "reqsys": {
+    "color": {
+      "accent": {
+        "$type": "color",
+        "$value": "#F39200"
+      },
+      "accentDeep": {
+        "$type": "color",
+        "$value": "#B56D00"
+      },
+      "analytics": {
+        "$type": "color",
+        "$value": "#00B3AD"
+      },
+      "analyticsDeep": {
+        "$type": "color",
+        "$value": "#007C78"
+      },
+      "background": {
+        "$type": "color",
+        "$value": "#071526"
+      },
+      "backgroundDeep": {
+        "$type": "color",
+        "$value": "#03101F"
+      },
+      "border": {
+        "$type": "color",
+        "$value": "rgba(184, 199, 217, 0.24)"
+      },
+      "critical": {
+        "$type": "color",
+        "$value": "#EF4444"
+      },
+      "muted": {
+        "$type": "color",
+        "$value": "#B8C7D9"
+      },
+      "primary": {
+        "$type": "color",
+        "$value": "#005CA9"
+      },
+      "primaryDeep": {
+        "$type": "color",
+        "$value": "#003B73"
+      },
+      "primarySoft": {
+        "$type": "color",
+        "$value": "#E6F0FA"
+      },
+      "success": {
+        "$type": "color",
+        "$value": "#22C55E"
+      },
+      "surface": {
+        "$type": "color",
+        "$value": "#0B2038"
+      },
+      "surfaceElevated": {
+        "$type": "color",
+        "$value": "#102B49"
+      },
+      "text": {
+        "$type": "color",
+        "$value": "#F8FAFC"
+      },
+      "warning": {
+        "$type": "color",
+        "$value": "#F59E0B"
+      }
+    },
+    "fontFamily": {
+      "base": {
+        "$type": "fontFamily",
+        "$value": "Inter, system-ui, sans-serif"
+      }
+    },
+    "radius": {
+      "card": {
+        "$type": "dimension",
+        "$value": "16px"
+      },
+      "frame": {
+        "$type": "dimension",
+        "$value": "24px"
+      },
+      "pill": {
+        "$type": "dimension",
+        "$value": "999px"
+      }
+    },
+    "semantic": {
+      "criticalState": {
+        "$type": "color",
+        "$value": "{reqsys.color.critical}"
+      },
+      "degraded": {
+        "$type": "color",
+        "$value": "{reqsys.color.warning}"
+      },
+      "executiveHighlight": {
+        "$type": "color",
+        "$value": "{reqsys.color.accent}"
+      },
+      "governance": {
+        "$type": "color",
+        "$value": "{reqsys.color.primary}"
+      },
+      "healthy": {
+        "$type": "color",
+        "$value": "{reqsys.color.success}"
+      },
+      "informational": {
+        "$type": "color",
+        "$value": "{reqsys.color.analytics}"
+      }
+    }
+  }
+}
