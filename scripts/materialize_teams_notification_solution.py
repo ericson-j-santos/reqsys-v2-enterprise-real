@@ -12,7 +12,9 @@ BACKEND = ROOT / 'backend'
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-from app.services.teams_notification_solution_factory import gerar_teams_notification_solution
+from app.services.teams_notification_solution_factory import (  # noqa: E402
+    gerar_teams_notification_solution,
+)
 
 
 def materialize(output_dir: Path, *, target_environment: str, dry_run: bool) -> dict[str, object]:
