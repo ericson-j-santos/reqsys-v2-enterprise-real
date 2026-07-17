@@ -16,8 +16,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import datetime, timezone
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Mapping
 
 GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
@@ -36,7 +37,6 @@ class GatewayConfig:
     webhook_url: str | None = None
     timeout_seconds: int = 20
     max_attempts: int = 3
-
     webhook_recipient: str | None = None
 
     @classmethod
@@ -144,10 +144,19 @@ class TeamsGateway:
             "webhook_configured": bool(self.config.webhook_url),
             "graph_configured": self.config.graph_configured,
             "routes": ["webhook", "graph_delegated_chat", "graph_app_channel"],
+            "capabilities": ["plain_text", "adaptive_card_1_5"],
         }
 
-    def send_webhook(self, message: str, title: str, dry_run: bool = False) -> GatewayResult:
+    def send_webhook(
+        self,
+        message: str,
+        title: str,
+        dry_run: bool = False,
+        adaptive_card: Mapping[str, Any] | None = None,
+    ) -> GatewayResult:
         self._validate_message(message)
+        if adaptive_card is not None:
+            self._validate_adaptive_card(adaptive_card)
         if not self.config.webhook_url:
             raise GatewayError("TEAMS_WEBHOOK_URL não configurado")
         if not self.config.webhook_recipient or "@" not in self.config.webhook_recipient:
@@ -157,7 +166,7 @@ class TeamsGateway:
                 "precisa ser o e-mail/UPN de uma pessoa, não um nome de canal)"
             )
         correlation_id = str(uuid.uuid4())
-        payload = {
+        payload: dict[str, Any] = {
             "to": self.config.webhook_recipient,
             "title": title,
             "content": message,
@@ -165,6 +174,10 @@ class TeamsGateway:
             "stampDate": datetime.now(timezone.utc).isoformat(),
             "correlationId": correlation_id,
         }
+        if adaptive_card is not None:
+            payload["renderMode"] = "adaptive-card"
+            payload["adaptiveCard"] = dict(adaptive_card)
+            payload["adaptiveCardJson"] = json.dumps(adaptive_card, ensure_ascii=False, separators=(",", ":"))
         if dry_run:
             return GatewayResult(True, "webhook", correlation_id, response={"planned": True, "payload": payload})
         status, response = self.http.request(
@@ -240,13 +253,46 @@ class TeamsGateway:
         if len(message) > 28_000:
             raise GatewayError("Mensagem excede 28.000 caracteres")
 
+    @staticmethod
+    def _validate_adaptive_card(card: Mapping[str, Any]) -> None:
+        if card.get("type") != "AdaptiveCard":
+            raise GatewayError("Adaptive Card precisa ter type=AdaptiveCard")
+        version = card.get("version")
+        if not isinstance(version, str) or not version.strip():
+            raise GatewayError("Adaptive Card precisa declarar version")
+        body = card.get("body")
+        if not isinstance(body, list) or not body:
+            raise GatewayError("Adaptive Card precisa ter body não vazio")
+        encoded = json.dumps(card, ensure_ascii=False)
+        if len(encoded) > 28_000:
+            raise GatewayError("Adaptive Card excede 28.000 caracteres")
+
+
+def load_adaptive_card(path: str | None) -> dict[str, Any] | None:
+    if not path:
+        return None
+    try:
+        parsed = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise GatewayError(f"Não foi possível carregar Adaptive Card: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise GatewayError("Adaptive Card deve ser um objeto JSON")
+    return parsed
+
 
 def self_test() -> dict[str, Any]:
     assert HttpClient.safe_json("1") == {"value": 1}
     assert HttpClient.safe_json("ok") == {"message": "ok"}
     config = GatewayConfig(webhook_url="https://example.invalid/hook", webhook_recipient="teste@example.invalid")
-    result = TeamsGateway(config).send_webhook("teste", "ReqSys", dry_run=True)
+    card = {"type": "AdaptiveCard", "version": "1.5", "body": [{"type": "TextBlock", "text": "teste"}]}
+    result = TeamsGateway(config).send_webhook("teste", "ReqSys", dry_run=True, adaptive_card=card)
     assert result.success and result.route == "webhook"
+    assert result.response and result.response["payload"]["renderMode"] == "adaptive-card"
+    try:
+        TeamsGateway(config).send_webhook("teste", "ReqSys", dry_run=True, adaptive_card={"type": "MessageCard"})
+        raise AssertionError("card inválido deveria falhar")
+    except GatewayError:
+        pass
     try:
         TeamsGateway(GatewayConfig(webhook_url="https://example.invalid/hook")).send_webhook(
             "teste", "ReqSys", dry_run=True
@@ -259,7 +305,7 @@ def self_test() -> dict[str, Any]:
         raise AssertionError("token vazio deveria falhar")
     except GatewayError:
         pass
-    return {"passed": 5, "status": "ok"}
+    return {"passed": 7, "status": "ok"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -270,6 +316,7 @@ def parser() -> argparse.ArgumentParser:
     webhook = sub.add_parser("send-webhook")
     webhook.add_argument("--message", required=True)
     webhook.add_argument("--title", default="ReqSys Teams Gateway")
+    webhook.add_argument("--adaptive-card-file")
     webhook.add_argument("--dry-run", action="store_true")
     channel = sub.add_parser("send-channel")
     channel.add_argument("--team-id", required=True)
@@ -293,7 +340,8 @@ def main() -> int:
         elif args.command == "self-test":
             result = self_test()
         elif args.command == "send-webhook":
-            result = gateway.send_webhook(args.message, args.title, args.dry_run).as_dict()
+            card = load_adaptive_card(args.adaptive_card_file)
+            result = gateway.send_webhook(args.message, args.title, args.dry_run, adaptive_card=card).as_dict()
         elif args.command == "send-channel":
             result = gateway.send_channel(args.team_id, args.channel_id, args.message, args.dry_run).as_dict()
         else:
