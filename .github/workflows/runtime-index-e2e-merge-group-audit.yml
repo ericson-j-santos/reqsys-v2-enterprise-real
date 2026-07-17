@@ -1,0 +1,93 @@
+name: Runtime Index E2E and Merge Group Audit
+
+on:
+  pull_request:
+    paths:
+      - "scripts/enrich_runtime_executive_index_with_e2e.py"
+      - "scripts/audit_critical_workflow_event_coverage.py"
+      - "tests/test_enrich_runtime_executive_index_with_e2e.py"
+      - "tests/test_audit_critical_workflow_event_coverage.py"
+      - ".github/workflows/runtime-index-e2e-merge-group-audit.yml"
+  merge_group:
+  workflow_run:
+    workflows: ["ReqSys E2E Executive Indicator"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: runtime-index-e2e-merge-group-audit-${{ github.event.workflow_run.id || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install PyYAML
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/enrich_runtime_executive_index_with_e2e.py scripts/audit_critical_workflow_event_coverage.py
+          python -m unittest tests/test_enrich_runtime_executive_index_with_e2e.py tests/test_audit_critical_workflow_event_coverage.py -v
+      - name: Audit critical workflow events
+        run: |
+          python scripts/audit_critical_workflow_event_coverage.py \
+            --output .tmp/workflow-event-coverage.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-critical-workflow-event-coverage
+          path: .tmp/workflow-event-coverage.json
+          retention-days: 90
+
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restore executive artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/runtime-index/source .tmp/runtime-index/output
+          for artifact in runtime-executive-index reqsys-e2e-executive-indicator; do
+            artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${artifact}&per_page=100" \
+              --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+            test -n "$artifact_id"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > ".tmp/runtime-index/${artifact}.zip"
+            unzip -q ".tmp/runtime-index/${artifact}.zip" -d ".tmp/runtime-index/source/${artifact}"
+          done
+          echo "INDEX_FILE=$(find .tmp/runtime-index/source/runtime-executive-index -name runtime-executive-index.json -print -quit)" >> "$GITHUB_ENV"
+          echo "E2E_FILE=$(find .tmp/runtime-index/source/reqsys-e2e-executive-indicator -name '*.json' -print -quit)" >> "$GITHUB_ENV"
+      - name: Enrich runtime executive index
+        run: |
+          test -n "$INDEX_FILE"
+          test -n "$E2E_FILE"
+          python scripts/enrich_runtime_executive_index_with_e2e.py \
+            --index "$INDEX_FILE" \
+            --indicator "$E2E_FILE" \
+            --output .tmp/runtime-index/output/runtime-executive-index.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-executive-index-e2e-enriched
+          path: .tmp/runtime-index/output/runtime-executive-index.json
+          retention-days: 90
