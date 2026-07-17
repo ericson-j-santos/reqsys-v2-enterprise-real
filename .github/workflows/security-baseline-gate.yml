@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - main
+  merge_group:
+    types: [checks_requested]
   push:
     branches:
       - main
@@ -64,6 +66,10 @@ jobs:
 
           if [ "$EVENT_NAME" = "pull_request" ]; then
             git diff --name-only "origin/${{ github.base_ref }}...HEAD" > artifacts/security-baseline/changed-files.txt
+            echo "scope=changed" >> "$GITHUB_OUTPUT"
+            echo "changed_files=artifacts/security-baseline/changed-files.txt" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT_NAME" = "merge_group" ]; then
+            git diff --name-only "${{ github.event.merge_group.base_sha }}...${{ github.event.merge_group.head_sha }}" > artifacts/security-baseline/changed-files.txt
             echo "scope=changed" >> "$GITHUB_OUTPUT"
             echo "changed_files=artifacts/security-baseline/changed-files.txt" >> "$GITHUB_OUTPUT"
           elif [ "$WORKFLOW_SCOPE" = "changed" ]; then
