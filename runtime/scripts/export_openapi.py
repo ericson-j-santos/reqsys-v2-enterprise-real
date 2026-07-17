@@ -11,6 +11,7 @@ from app.main import app
 
 
 DEFAULT_OUTPUT = "../docs-site/assets/openapi/reqsys-runtime-openapi-v0.6.0.json"
+DIAGNOSTIC_DIR = ".tmp/openapi-diff"
 
 
 def gerar_openapi() -> dict[str, Any]:
@@ -34,16 +35,26 @@ def carregar_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def imprimir_diff(atual: dict[str, Any], gerado: dict[str, Any], output_path: Path) -> None:
-    diff = difflib.unified_diff(
-        serializar_json(atual).splitlines(),
-        serializar_json(gerado).splitlines(),
-        fromfile=str(output_path),
-        tofile="runtime-generated-openapi.json",
-        lineterm="",
-    )
-    for linha in diff:
-        print(linha, file=sys.stderr)
+def gerar_diff(atual: dict[str, Any], gerado: dict[str, Any], output_path: Path) -> str:
+    return "\n".join(
+        difflib.unified_diff(
+            serializar_json(atual).splitlines(),
+            serializar_json(gerado).splitlines(),
+            fromfile=str(output_path),
+            tofile="runtime-generated-openapi.json",
+            lineterm="",
+        )
+    ) + "\n"
+
+
+def escrever_diagnostico(runtime_dir: Path, atual: dict[str, Any], gerado: dict[str, Any], output_path: Path) -> None:
+    diagnostic_dir = runtime_dir / DIAGNOSTIC_DIR
+    diagnostic_dir.mkdir(parents=True, exist_ok=True)
+    escrever_json(diagnostic_dir / "canonical-openapi.json", atual)
+    escrever_json(diagnostic_dir / "generated-openapi.json", gerado)
+    diff_text = gerar_diff(atual, gerado, output_path)
+    (diagnostic_dir / "openapi.diff").write_text(diff_text, encoding="utf-8")
+    print(diff_text, file=sys.stderr, end="")
 
 
 def main() -> int:
@@ -63,7 +74,7 @@ def main() -> int:
         atual = carregar_json(output_path)
         if atual != schema:
             print("Contrato OpenAPI divergente do runtime FastAPI. Execute export_openapi.py e versione o resultado.", file=sys.stderr)
-            imprimir_diff(atual, schema, output_path)
+            escrever_diagnostico(runtime_dir, atual, schema, output_path)
             return 1
         print(f"Contrato OpenAPI sincronizado: {output_path}")
         return 0
