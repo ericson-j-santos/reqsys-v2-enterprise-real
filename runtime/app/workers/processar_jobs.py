@@ -11,6 +11,11 @@ logger = logging.getLogger("reqsys.runtime.worker")
 
 
 async def executar_worker_local(service: JobService, queue: Any) -> None:
+    recuperar = getattr(queue, "recuperar_jobs_orfaos", None)
+    if recuperar is not None:
+        recuperados = await resolve_maybe_awaitable(recuperar())
+        logger.info("jobs_orfaos_recuperados", extra={"quantidade": recuperados})
+
     logger.info("worker_iniciado")
     while True:
         job_id = await queue.consumir()

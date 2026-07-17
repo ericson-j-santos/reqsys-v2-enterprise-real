@@ -4,7 +4,7 @@ from redis.asyncio import Redis
 
 
 class RedisQueueGateway:
-    """Fila Redis durável com lista de processamento para confirmação explícita."""
+    """Fila Redis durável com confirmação explícita e recuperação de jobs órfãos."""
 
     def __init__(
         self,
@@ -38,6 +38,23 @@ class RedisQueueGateway:
             return
         await self._redis.lrem(self._processing_queue_name, 1, self._current_job_id)
         self._current_job_id = None
+
+    async def recuperar_jobs_orfaos(self) -> int:
+        """Move jobs deixados em processamento de volta para a fila principal.
+
+        A operação é idempotente: quando a fila de processamento está vazia,
+        nenhuma alteração é realizada. O movimento usa RPOPLPUSH para evitar
+        perda entre leitura e reentrada na fila principal.
+        """
+        recuperados = 0
+        while True:
+            job_id = await self._redis.rpoplpush(
+                self._processing_queue_name,
+                self._queue_name,
+            )
+            if job_id is None:
+                return recuperados
+            recuperados += 1
 
     async def tamanho(self) -> int:
         return int(await self._redis.llen(self._queue_name))
