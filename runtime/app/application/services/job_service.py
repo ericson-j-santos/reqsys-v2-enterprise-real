@@ -76,12 +76,21 @@ class JobService:
     async def metricas(self) -> dict[str, Any]:
         por_status = await self._repository.metricas_por_status()
         queue_size = await resolve_maybe_awaitable(self._queue.tamanho())
+        metricas_lease: dict[str, int] = {}
+        coletar_metricas = getattr(self._queue, "metricas_operacionais", None)
+        if coletar_metricas is not None:
+            metricas_lease = await resolve_maybe_awaitable(coletar_metricas())
         return {
             "schema_version": self._settings.schema_version,
             "queue_backend": self._settings.queue_backend,
             "storage_backend": self._settings.storage_backend,
             "queue_size": queue_size,
             "jobs_por_status": por_status,
+            "lease": {
+                "ttl_seconds": self._settings.redis_lease_ttl_seconds,
+                "renew_interval_seconds": self._settings.redis_lease_renew_interval_seconds,
+                "metrics": metricas_lease,
+            },
         }
 
     async def _executar_operacao(self, job: JobAssincrono) -> dict[str, Any]:
