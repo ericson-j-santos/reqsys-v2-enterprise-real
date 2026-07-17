@@ -61,6 +61,7 @@ def test_endpoint_orchestrator_route(client, correlation_id):
     assert data['coordinator']['id'] == 'reqsys-runtime-coordinator'
     assert data['governanca']['modo_execucao'] == 'assistido'
     assert 'ambiente:hml' in data['labels']
+    assert 'agile_project_package' not in data
 
 
 def test_endpoint_orchestrator_batch(client):
@@ -76,6 +77,10 @@ def test_endpoint_orchestrator_batch(client):
     assert data['total'] == 2
     assert data['por_tema']['agile_scrum'] == 1
     assert data['por_tema']['seguranca_governanca'] == 1
+    agile_route = next(item for item in data['rotas'] if item['tema'] == 'agile_scrum')
+    security_route = next(item for item in data['rotas'] if item['tema'] == 'seguranca_governanca')
+    assert agile_route['agile_project_package']['scrum']['sprint_recommendation'] == 'refinamento'
+    assert 'agile_project_package' not in security_route
 
 
 def test_endpoint_orchestrator_persiste_evento_e_expõe_analytics(client, correlation_id):
@@ -113,3 +118,34 @@ def test_endpoint_orchestrator_persiste_evento_e_expõe_analytics(client, correl
     risk = client.get('/v1/agents/orchestrator/analytics/risk')
     assert risk.status_code == 200
     assert risk.json()['data']['risk']['prioridade_alta'] >= 1
+
+
+def test_endpoint_orchestrator_gera_pacote_agil_completo(client, correlation_id):
+    resp = client.post(
+        '/v1/agents/orchestrator/route',
+        json={
+            'titulo': 'Planejar sprint Scrum para aprovação de requisitos',
+            'descricao': (
+                'O analista precisa reduzir o prazo de aprovação e dar visibilidade ao gestor. '
+                'A API deve persistir o histórico no SQL e registrar logs com correlation_id.'
+            ),
+            'origem': 'pytest-agile',
+            'prioridade_informada': 'alta',
+            'objetivo': 'Reduzir o lead time e o retrabalho da aprovação.',
+            'publico_alvo': 'analista de requisitos',
+            'owner': 'Product Owner',
+        },
+        headers={'X-Correlation-ID': correlation_id},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()['data']
+    assert data['tema'] == 'agile_scrum'
+    pacote = data['agile_project_package']
+    assert pacote['correlation_id'] == correlation_id
+    assert pacote['project']['owner'] == 'Product Owner'
+    assert pacote['project']['priority'] == 'alta'
+    assert pacote['business']['requirements']
+    assert pacote['technical']['requirements']
+    assert pacote['scrum']['sprint_recommendation'] == 'proxima_sprint'
+    assert pacote['governance']['gaps'] == []
