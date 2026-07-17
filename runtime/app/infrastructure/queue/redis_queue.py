@@ -50,7 +50,14 @@ class RedisQueueGateway:
         return f"{self._lease_prefix}:{job_id}"
 
     async def _incrementar_metrica(self, nome: str, quantidade: int = 1) -> None:
-        await self._redis.hincrby(self._metrics_key, nome, quantidade)
+        """Métricas são best-effort e nunca podem interromper o processamento."""
+        hincrby = getattr(self._redis, "hincrby", None)
+        if hincrby is None:
+            return
+        try:
+            await hincrby(self._metrics_key, nome, quantidade)
+        except Exception:  # pragma: no cover - degradação segura de observabilidade
+            return
 
     async def publicar(self, job_id: str) -> None:
         await self._redis.lpush(self._queue_name, job_id)
@@ -125,7 +132,13 @@ class RedisQueueGateway:
         return recuperados
 
     async def metricas_operacionais(self) -> dict[str, int]:
-        raw = await self._redis.hgetall(self._metrics_key)
+        hgetall = getattr(self._redis, "hgetall", None)
+        if hgetall is None:
+            return {}
+        try:
+            raw = await hgetall(self._metrics_key)
+        except Exception:  # pragma: no cover - degradação segura de observabilidade
+            return {}
         return {key: int(value) for key, value in raw.items()}
 
     async def tamanho(self) -> int:
