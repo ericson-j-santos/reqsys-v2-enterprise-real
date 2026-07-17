@@ -88,6 +88,7 @@ jobs:
           import os
           import subprocess
           import sys
+          import tempfile
           from pathlib import Path
 
           event = json.loads(Path(os.environ["EVENT_PATH"]).read_text(encoding="utf-8"))
@@ -97,6 +98,7 @@ jobs:
           server_url = os.environ["SERVER_URL"]
           commit_url = f"{server_url}/{repository}/commit/{sha}"
           run_url = f"{server_url}/{repository}/actions/runs/{os.environ['RUN_ID']}"
+          repository_url = f"{server_url}/{repository}"
           event_name = os.environ["EVENT_NAME"]
 
           if event_name == "push":
@@ -105,34 +107,133 @@ jobs:
               author = (head.get("author") or {}).get("name") or os.environ["ACTOR"]
               compare_url = event.get("compare") or commit_url
               commits = event.get("commits") or []
-              message = (
-                  f"Novo commit em {repository}\n"
-                  f"Branch: {os.environ['REF_NAME']}\n"
-                  f"Commit: {short_sha} — {commit_message}\n"
-                  f"Autor: {author}\n"
-                  f"Commits no push: {len(commits) or 1}\n"
-                  f"Detalhes: {compare_url}\n"
-                  f"Workflow: {run_url}"
-              )
+              commit_count = len(commits) or 1
               title = "ReqSys — novo commit"
-          elif event_name == "schedule":
+              subtitle = commit_message
+              facts = [
+                  {"title": "Repositório", "value": repository},
+                  {"title": "Branch", "value": os.environ["REF_NAME"]},
+                  {"title": "Commit", "value": short_sha},
+                  {"title": "Autor", "value": author},
+                  {"title": "Commits no push", "value": str(commit_count)},
+              ]
+              actions = [
+                  {"type": "Action.OpenUrl", "title": "Ver alterações", "url": compare_url},
+                  {"type": "Action.OpenUrl", "title": "Abrir workflow", "url": run_url},
+              ]
               message = (
-                  "Canário semanal da integração GitHub → Teams\n"
-                  f"Repositório: {repository}\n"
-                  "Branch monitorada: main\n"
-                  f"Commit atual: {short_sha}\n"
-                  f"Workflow: {run_url}"
+                  f"**{title}**\n\n"
+                  f"{commit_message}\n\n"
+                  f"**Repositório:** {repository}\n\n"
+                  f"**Branch:** {os.environ['REF_NAME']}\n\n"
+                  f"**Commit:** {short_sha}\n\n"
+                  f"**Autor:** {author}\n\n"
+                  f"[Ver alterações]({compare_url}) · [Abrir workflow]({run_url})"
               )
+          elif event_name == "schedule":
               title = "ReqSys — canário Teams"
+              subtitle = "Validação semanal da integração GitHub → Teams"
+              facts = [
+                  {"title": "Repositório", "value": repository},
+                  {"title": "Branch monitorada", "value": "main"},
+                  {"title": "Commit atual", "value": short_sha},
+                  {"title": "Status", "value": "Canário executado"},
+              ]
+              actions = [
+                  {"type": "Action.OpenUrl", "title": "Abrir workflow", "url": run_url},
+                  {"type": "Action.OpenUrl", "title": "Abrir repositório", "url": repository_url},
+              ]
+              message = f"**{title}**\n\n{subtitle}\n\n[ Abrir workflow ]({run_url})"
           else:
               manual = os.environ.get("MANUAL_MESSAGE", "").strip()
-              message = manual or (
-                  "Teste manual da integração GitHub → Teams\n"
-                  f"Repositório: {repository}\n"
-                  f"Executado por: {os.environ['ACTOR']}\n"
-                  f"Workflow: {run_url}"
-              )
               title = "ReqSys — teste de notificação"
+              subtitle = manual or "Teste manual da integração GitHub → Teams"
+              facts = [
+                  {"title": "Repositório", "value": repository},
+                  {"title": "Executado por", "value": os.environ["ACTOR"]},
+                  {"title": "Commit", "value": short_sha},
+                  {"title": "Status", "value": "Teste solicitado"},
+              ]
+              actions = [
+                  {"type": "Action.OpenUrl", "title": "Abrir workflow", "url": run_url},
+                  {"type": "Action.OpenUrl", "title": "Abrir repositório", "url": repository_url},
+              ]
+              message = f"**{title}**\n\n{subtitle}\n\n[Abrir workflow]({run_url})"
+
+          card = {
+              "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+              "type": "AdaptiveCard",
+              "version": "1.5",
+              "msteams": {"width": "Full"},
+              "body": [
+                  {
+                      "type": "Container",
+                      "style": "emphasis",
+                      "bleed": True,
+                      "items": [
+                          {
+                              "type": "ColumnSet",
+                              "columns": [
+                                  {
+                                      "type": "Column",
+                                      "width": "stretch",
+                                      "items": [
+                                          {
+                                              "type": "TextBlock",
+                                              "text": title,
+                                              "weight": "Bolder",
+                                              "size": "Large",
+                                              "wrap": True,
+                                          },
+                                          {
+                                              "type": "TextBlock",
+                                              "text": subtitle,
+                                              "spacing": "Small",
+                                              "isSubtle": True,
+                                              "wrap": True,
+                                              "maxLines": 3,
+                                          },
+                                      ],
+                                  },
+                                  {
+                                      "type": "Column",
+                                      "width": "auto",
+                                      "verticalContentAlignment": "Center",
+                                      "items": [
+                                          {
+                                              "type": "TextBlock",
+                                              "text": "✓",
+                                              "weight": "Bolder",
+                                              "size": "ExtraLarge",
+                                              "color": "Good",
+                                              "horizontalAlignment": "Right",
+                                          }
+                                      ],
+                                  },
+                              ],
+                          }
+                      ],
+                  },
+                  {
+                      "type": "FactSet",
+                      "spacing": "Medium",
+                      "facts": facts,
+                  },
+                  {
+                      "type": "TextBlock",
+                      "text": "Entrega automatizada pelo ReqSys",
+                      "spacing": "Medium",
+                      "isSubtle": True,
+                      "size": "Small",
+                      "wrap": True,
+                  },
+              ],
+              "actions": actions,
+          }
+
+          with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as card_file:
+              json.dump(card, card_file, ensure_ascii=False)
+              card_path = card_file.name
 
           completed = subprocess.run(
               [
@@ -143,11 +244,14 @@ jobs:
                   title,
                   "--message",
                   message,
+                  "--adaptive-card-file",
+                  card_path,
               ],
               text=True,
               capture_output=True,
               check=False,
           )
+          Path(card_path).unlink(missing_ok=True)
           if completed.stdout:
               print(completed.stdout)
           if completed.stderr:
@@ -176,6 +280,7 @@ jobs:
             echo "### Teams Commit Notification"
             echo "- Evento: ${{ github.event_name }}"
             echo "- Commit: ${{ github.sha }}"
+            echo "- Layout: Adaptive Card 1.5 com fallback Markdown"
             echo "- Modo: $([[ '${{ github.event_name }}' == 'push' ]] && echo 'report-only' || echo 'estrito')"
             if [[ "${{ steps.teams-config.outputs.configured }}" != "true" ]]; then
               echo "- Status: ignorado"
