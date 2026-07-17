@@ -7,6 +7,8 @@ on:
       - "scripts/audit_critical_workflow_event_coverage.py"
       - "tests/test_enrich_runtime_executive_index_with_e2e.py"
       - "tests/test_audit_critical_workflow_event_coverage.py"
+      - "docs/ops-dashboard/critical-workflow-event-coverage.html"
+      - "docs/ops-dashboard/data/critical-workflow-event-coverage.json"
       - ".github/workflows/runtime-index-e2e-merge-group-audit.yml"
   merge_group:
   workflow_run:
@@ -41,10 +43,27 @@ jobs:
         run: |
           python scripts/audit_critical_workflow_event_coverage.py \
             --output .tmp/workflow-event-coverage.json
+      - name: Validate published dashboard evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          generated = json.loads(Path('.tmp/workflow-event-coverage.json').read_text())
+          published = json.loads(Path('docs/ops-dashboard/data/critical-workflow-event-coverage.json').read_text())
+          keys = ('status', 'critical_workflow_count', 'complete_workflow_count', 'coverage_percent', 'throughput_increase_allowed', 'parallelism_decision')
+          for key in keys:
+              assert generated[key] == published[key], f'dashboard coverage diverges at {key}'
+          assert generated['promotion_allowed'] is False
+          assert generated['human_approval_required'] is True
+          print(f"coverage={generated['coverage_percent']} status={generated['status']}")
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: reqsys-critical-workflow-event-coverage
-          path: .tmp/workflow-event-coverage.json
+          path: |
+            .tmp/workflow-event-coverage.json
+            docs/ops-dashboard/data/critical-workflow-event-coverage.json
+            docs/ops-dashboard/critical-workflow-event-coverage.html
           retention-days: 90
 
   publish:
@@ -86,8 +105,13 @@ jobs:
             --index "$INDEX_FILE" \
             --indicator "$E2E_FILE" \
             --output .tmp/runtime-index/output/runtime-executive-index.json
+      - name: Generate current workflow coverage
+        run: |
+          pip install PyYAML
+          python scripts/audit_critical_workflow_event_coverage.py \
+            --output .tmp/runtime-index/output/critical-workflow-event-coverage.json
       - uses: actions/upload-artifact@v4
         with:
           name: runtime-executive-index-e2e-enriched
-          path: .tmp/runtime-index/output/runtime-executive-index.json
+          path: .tmp/runtime-index/output
           retention-days: 90
