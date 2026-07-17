@@ -1,40 +1,39 @@
+import designTokens from './design-tokens.json'
+
 /**
- * Tokens e tema Vuetify alinhados ao DSC atual do ReqSys.
+ * Tokens e tema Vuetify alinhados ao contrato canônico do DSC ReqSys.
  *
- * Decisão de marca:
- * - Azul DSC como cor primária institucional.
- * - Laranja DSC como ação/destaque executivo.
- * - Turquesa DSC como apoio informacional e analytics.
- * - Vermelho de erro escurecido para garantir contraste WCAG AA com texto branco.
- *
- * Mantém compatibilidade com o nome histórico `figmaPadraoOuro`
- * para não quebrar persistência local nem seleção de tema existente.
+ * `design-tokens.json` é a fonte única de verdade. Este adaptador preserva os
+ * nomes históricos usados pelos componentes e pelo tema `figmaPadraoOuro`,
+ * evitando duplicação e drift entre Figma, documentação e runtime.
  */
-export const DSC_TOKENS = {
-  primary: '#005CA9',
-  primaryDeep: '#003B73',
-  primarySoft: '#E6F0FA',
-  accent: '#F39200',
-  accentDeep: '#B56D00',
-  teal: '#00B3AD',
-  tealDeep: '#007C78',
-  bg: '#071526',
-  bgDeep: '#03101F',
-  bgGradientTop: '#062A4F',
-  panel: '#0B2038',
-  panelElevated: '#102B49',
-  text: '#F8FAFC',
-  muted: '#B8C7D9',
-  line: 'rgba(184, 199, 217, 0.24)',
+const { colors, radius, typography } = designTokens
+
+export const DSC_TOKENS = Object.freeze({
+  primary: colors.primary,
+  primaryDeep: colors.primaryDeep,
+  primarySoft: colors.primarySoft,
+  accent: colors.accent,
+  accentDeep: colors.accentDeep,
+  teal: colors.analytics,
+  tealDeep: colors.analyticsDeep,
+  bg: colors.background,
+  bgDeep: colors.backgroundDeep,
+  bgGradientTop: colors.primaryDeep,
+  panel: colors.surface,
+  panelElevated: colors.surfaceElevated,
+  text: colors.text,
+  muted: colors.muted,
+  line: colors.border,
   accentOn: '#111827',
   primaryOn: '#FFFFFF',
-  green: '#22C55E',
-  amber: '#F59E0B',
-  red: '#DC2626',
-  radiusCard: '16px',
-  radiusFrame: '24px',
-  fontFamily: 'Inter, system-ui, sans-serif',
-}
+  green: colors.success,
+  amber: colors.warning,
+  red: colors.critical,
+  radiusCard: radius.card,
+  radiusFrame: radius.frame,
+  fontFamily: typography.fontFamily,
+})
 
 /** Alias preservado para retrocompatibilidade com componentes existentes. */
 export const FIGMA_TOKENS = DSC_TOKENS
