@@ -16,53 +16,60 @@ DEFAULT_CRITICAL = {
     "security-baseline-gate.yml",
 }
 
+DEFAULT_ALIASES = {
+    "ci.yml": ("ci.yml", "ci-merge-group-adapter.yml"),
+}
+
+
+def _triggers(path: Path) -> set[str]:
+    value = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    triggers = value.get("on") or value.get(True) or {}
+    if isinstance(triggers, str):
+        return {triggers}
+    if isinstance(triggers, list):
+        return set(triggers)
+    if isinstance(triggers, dict):
+        return set(triggers)
+    return set()
+
 
 def audit(workflow_dir: Path, critical: set[str] | None = None) -> dict[str, Any]:
     critical = critical or DEFAULT_CRITICAL
     rows = []
     for name in sorted(critical):
-        path = workflow_dir / name
-        if not path.exists():
-            rows.append({
-                "workflow": name,
-                "exists": False,
-                "pull_request": False,
-                "merge_group": False,
-                "gap_reason": "WORKFLOW_NOT_FOUND",
-            })
-            continue
-        value = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        triggers = value.get("on") or value.get(True) or {}
-        if isinstance(triggers, str):
-            trigger_names = {triggers}
-        elif isinstance(triggers, list):
-            trigger_names = set(triggers)
-        elif isinstance(triggers, dict):
-            trigger_names = set(triggers)
-        else:
-            trigger_names = set()
-        has_pr = "pull_request" in trigger_names
-        has_merge_group = "merge_group" in trigger_names
+        candidates = DEFAULT_ALIASES.get(name, (name,)) if critical == DEFAULT_CRITICAL else (name,)
+        existing = [candidate for candidate in candidates if (workflow_dir / candidate).exists()]
+        trigger_union: set[str] = set()
+        for candidate in existing:
+            trigger_union.update(_triggers(workflow_dir / candidate))
+
+        has_pr = "pull_request" in trigger_union
+        has_merge_group = "merge_group" in trigger_union
         gap_reason = None
-        if not has_pr and not has_merge_group:
+        if not existing:
+            gap_reason = "WORKFLOW_NOT_FOUND"
+        elif not has_pr and not has_merge_group:
             gap_reason = "PULL_REQUEST_AND_MERGE_GROUP_MISSING"
         elif not has_pr:
             gap_reason = "PULL_REQUEST_MISSING"
         elif not has_merge_group:
             gap_reason = "MERGE_GROUP_MISSING"
+
         rows.append({
             "workflow": name,
-            "exists": True,
+            "exists": bool(existing),
             "pull_request": has_pr,
             "merge_group": has_merge_group,
+            "coverage_sources": existing,
+            "coverage_mode": "logical_adapter" if len(existing) > 1 else "direct",
             "gap_reason": gap_reason,
         })
 
-    complete = [r for r in rows if r["exists"] and r["pull_request"] and r["merge_group"]]
-    gaps = [r for r in rows if r not in complete]
+    complete = [row for row in rows if row["exists"] and row["pull_request"] and row["merge_group"]]
+    gaps = [row for row in rows if row not in complete]
     coverage_percent = round((len(complete) / len(rows)) * 100, 2) if rows else 100
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "contract": "reqsys-critical-workflow-event-coverage",
         "status": "COVERAGE_COMPLETE" if not gaps else "COVERAGE_GAPS_FOUND",
         "critical_workflow_count": len(rows),
