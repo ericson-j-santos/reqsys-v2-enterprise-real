@@ -1,0 +1,101 @@
+name: Teams Notification Solution Contract
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/schemas/lowcode_solution.py'
+      - 'backend/app/services/lowcode_solution_factory.py'
+      - 'backend/app/services/teams_notification_solution_factory.py'
+      - 'backend/tests/test_lowcode_teams_notification_profile.py'
+      - 'backend/tests/test_teams_notification_solution_factory.py'
+      - 'scripts/materialize_teams_notification_solution.py'
+      - '.github/workflows/teams-notification-solution-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-notification-solution-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Validate profile, package and materialization
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      APP_ENV: test
+      DATABASE_URL: sqlite:///./teams_notification_solution_contract.db
+      JWT_SECRET: reqsys-test-secret-with-minimum-safe-length
+      PYTHONPATH: ${{ github.workspace }}/backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile changed modules
+        run: |
+          python -m py_compile \
+            app/schemas/lowcode_solution.py \
+            app/services/lowcode_solution_factory.py \
+            app/services/teams_notification_solution_factory.py \
+            ../scripts/materialize_teams_notification_solution.py
+
+      - name: Run focused contract tests
+        run: |
+          python -m pytest -q \
+            tests/test_teams_notification_solution_factory.py \
+            tests/test_lowcode_solution_factory.py \
+            tests/test_lowcode_teams_notification_profile.py
+
+      - name: Materialize DEV package
+        working-directory: .
+        run: |
+          python scripts/materialize_teams_notification_solution.py \
+            --target-environment dev \
+            --ready-for-import \
+            --output-dir artifacts/lowcode-solution-factory/teams-notifications-v2-ci
+
+      - name: Validate generated evidence
+        working-directory: .
+        run: |
+          test -s artifacts/lowcode-solution-factory/teams-notifications-v2-ci/reqsys-teams-notifications-v2.zip
+          test -s artifacts/lowcode-solution-factory/teams-notifications-v2-ci/materialization-manifest.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest_path = Path(
+              'artifacts/lowcode-solution-factory/'
+              'teams-notifications-v2-ci/materialization-manifest.json'
+          )
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          assert manifest['profile'] == 'teams_notification_v2'
+          assert manifest['flow_name'] == 'robo_envia_teamsv2'
+          assert manifest['target_environment'] == 'dev'
+          assert manifest['import_guardrails']['flow_state_after_import'] == 'off_after_import'
+          assert len(manifest['sha256']) == 64
+          PY
+
+      - name: Upload governed package evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-teams-notifications-v2
+          path: artifacts/lowcode-solution-factory/teams-notifications-v2-ci/
+          if-no-files-found: error
+          retention-days: 14
