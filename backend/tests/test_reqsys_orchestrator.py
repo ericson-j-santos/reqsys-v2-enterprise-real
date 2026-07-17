@@ -126,6 +126,7 @@ def test_endpoint_orchestrator_gera_pacote_agil_completo(client, correlation_id)
         json={
             'titulo': 'Planejar sprint Scrum para aprovação de requisitos',
             'descricao': (
+                'Refinar o backlog agile, detalhar a story e planejar a cerimônia da próxima sprint. '
                 'O analista precisa reduzir o prazo de aprovação e dar visibilidade ao gestor. '
                 'A API deve persistir o histórico no SQL e registrar logs com correlation_id.'
             ),
