@@ -65,7 +65,9 @@ jobs:
         run: npm run check:figma-token-drift
 
       - name: Verify artifact checksum
-        run: sha256sum --check artifacts/figma-tokens/reqsys.tokens.sha256
+        run: |
+          cd artifacts/figma-tokens
+          sha256sum --check reqsys.tokens.sha256
 
       - name: Build frontend
         run: npm run build
