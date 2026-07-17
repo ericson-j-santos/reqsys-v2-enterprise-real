@@ -12,7 +12,9 @@ from typing import Any
 
 from app.core.config import settings
 from app.schemas.lowcode_solution import LowCodeSolutionGenerateRequest
-from app.services.teams_notification_solution_factory import gerar_teams_notification_solution
+from app.services.teams_notification_solution_factory import (
+    gerar_teams_notification_solution,
+)
 
 FACTORY_VERSION = '0.2.0'
 PACKAGE_NAME = 'reqsys-lowcode-solution'
