@@ -23,7 +23,7 @@ jobs:
   contract:
     name: Validate profile, package and materialization
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
@@ -42,10 +42,10 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements*.txt
 
-      - name: Install focused dependencies
+      - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest fastapi httpx pydantic pydantic-settings sqlalchemy
+          pip install -r requirements.txt
 
       - name: Compile changed modules
         run: |
@@ -78,7 +78,12 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          manifest = json.loads(Path('artifacts/lowcode-solution-factory/teams-notifications-v2-ci/materialization-manifest.json').read_text())
+
+          manifest_path = Path(
+              'artifacts/lowcode-solution-factory/'
+              'teams-notifications-v2-ci/materialization-manifest.json'
+          )
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
           assert manifest['profile'] == 'teams_notification_v2'
           assert manifest['flow_name'] == 'robo_envia_teamsv2'
           assert manifest['target_environment'] == 'dev'
