@@ -9,6 +9,7 @@ on:
       - 'backend/tests/test_lowcode_teams_notification_profile.py'
       - 'backend/tests/test_teams_notification_solution_factory.py'
       - 'scripts/materialize_teams_notification_solution.py'
+      - 'scripts/validate_teams_notification_dev_import.py'
       - '.github/workflows/teams-notification-solution-contract.yml'
   workflow_dispatch:
 
@@ -54,7 +55,8 @@ jobs:
             app/schemas/lowcode_solution.py \
             app/services/lowcode_solution_factory.py \
             app/services/teams_notification_solution_factory.py \
-            ../scripts/materialize_teams_notification_solution.py
+            ../scripts/materialize_teams_notification_solution.py \
+            ../scripts/validate_teams_notification_dev_import.py
 
       - name: Run focused contract tests
         run: |
@@ -71,26 +73,12 @@ jobs:
             --ready-for-import \
             --output-dir artifacts/lowcode-solution-factory/teams-notifications-v2-ci
 
-      - name: Validate generated evidence
+      - name: Validate DEV import readiness
         working-directory: .
         run: |
-          test -s artifacts/lowcode-solution-factory/teams-notifications-v2-ci/reqsys-teams-notifications-v2.zip
-          test -s artifacts/lowcode-solution-factory/teams-notifications-v2-ci/materialization-manifest.json
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          manifest_path = Path(
-              'artifacts/lowcode-solution-factory/'
-              'teams-notifications-v2-ci/materialization-manifest.json'
-          )
-          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-          assert manifest['profile'] == 'teams_notification_v2'
-          assert manifest['flow_name'] == 'robo_envia_teamsv2'
-          assert manifest['target_environment'] == 'dev'
-          assert manifest['import_guardrails']['flow_state_after_import'] == 'off_after_import'
-          assert len(manifest['sha256']) == 64
-          PY
+          python scripts/validate_teams_notification_dev_import.py \
+            artifacts/lowcode-solution-factory/teams-notifications-v2-ci
+          test -s artifacts/lowcode-solution-factory/teams-notifications-v2-ci/dev-import-readiness.json
 
       - name: Upload governed package evidence
         uses: actions/upload-artifact@v4
