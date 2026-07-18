@@ -1,0 +1,189 @@
+name: Teams Notification DEV Import
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Run ID que publicou o artifact oficial exportado pelo Power Platform'
+        required: true
+        type: string
+      artifact_name:
+        description: 'Nome do artifact com o ZIP oficial'
+        required: true
+        default: 'reqsys-teams-notifications-v2-official'
+        type: string
+      confirmation:
+        description: 'Digite IMPORT-REQSYS-TEAMS-V2-DEV'
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: teams-notification-dev-import
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate official Power Platform package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      solution_file: ${{ steps.package.outputs.solution_file }}
+      sha256: ${{ steps.validation.outputs.sha256 }}
+    steps:
+      - name: Validate dispatch confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          test "$CONFIRMATION" = 'IMPORT-REQSYS-TEAMS-V2-DEV' || {
+            echo 'Confirmação inválida; importação DEV bloqueada.' >&2
+            exit 1
+          }
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download official solution artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        run: |
+          mkdir -p artifacts/official
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$ARTIFACT_NAME" \
+            --dir artifacts/official
+
+      - name: Resolve a single solution ZIP
+        id: package
+        run: |
+          mapfile -t packages < <(find artifacts/official -type f -name '*.zip' -print)
+          test "${#packages[@]}" -eq 1 || {
+            echo "Esperado exatamente um ZIP oficial; encontrados: ${#packages[@]}" >&2
+            exit 1
+          }
+          echo "solution_file=${packages[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate official package contract
+        id: validation
+        env:
+          SOLUTION_FILE: ${{ steps.package.outputs.solution_file }}
+        run: |
+          python scripts/validate_powerplatform_solution_zip.py \
+            "$SOLUTION_FILE" \
+            --expected-solution ReqSysTeamsNotifications \
+            --output artifacts/official-validation.json
+          echo "sha256=$(python -c "import json; print(json.load(open('artifacts/official-validation.json'))['sha256'])")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload pre-import evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-teams-v2-dev-import-precheck
+          path: |
+            artifacts/official-validation.json
+            ${{ steps.package.outputs.solution_file }}
+          if-no-files-found: error
+          retention-days: 30
+
+  import-dev:
+    name: Import unmanaged solution into DEV
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: powerplatform-development
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download official solution artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        run: |
+          mkdir -p artifacts/official
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$ARTIFACT_NAME" \
+            --dir artifacts/official
+
+      - name: Resolve solution ZIP
+        id: package
+        run: |
+          mapfile -t packages < <(find artifacts/official -type f -name '*.zip' -print)
+          test "${#packages[@]}" -eq 1
+          echo "solution_file=${packages[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Revalidate immutable package
+        env:
+          SOLUTION_FILE: ${{ steps.package.outputs.solution_file }}
+          EXPECTED_SHA256: ${{ needs.validate.outputs.sha256 }}
+        run: |
+          python scripts/validate_powerplatform_solution_zip.py \
+            "$SOLUTION_FILE" \
+            --expected-solution ReqSysTeamsNotifications \
+            --output artifacts/import-validation.json
+          ACTUAL_SHA256="$(python -c "import json; print(json.load(open('artifacts/import-validation.json'))['sha256'])")"
+          test "$ACTUAL_SHA256" = "$EXPECTED_SHA256"
+
+      - name: Import solution into Power Platform DEV
+        uses: microsoft/powerplatform-actions/import-solution@v1
+        with:
+          environment-url: ${{ secrets.POWERPLATFORM_DEV_ENVIRONMENT_URL }}
+          app-id: ${{ secrets.POWERPLATFORM_APP_ID }}
+          client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.POWERPLATFORM_TENANT_ID }}
+          solution-file: ${{ steps.package.outputs.solution_file }}
+          force-overwrite: false
+          publish-changes: false
+          use-deployment-settings-file: false
+          skip-dependency-check: false
+
+      - name: Generate governed import evidence
+        env:
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+          PACKAGE_SHA256: ${{ needs.validate.outputs.sha256 }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          evidence = {
+              'status': 'imported_to_dev_flow_not_activated',
+              'solution_name': 'ReqSysTeamsNotifications',
+              'flow_name': 'robo_envia_teamsv2',
+              'target_environment': 'dev',
+              'source_run_id': os.environ['SOURCE_RUN_ID'],
+              'artifact_name': os.environ['ARTIFACT_NAME'],
+              'sha256': os.environ['PACKAGE_SHA256'],
+              'imported_at': datetime.now(timezone.utc).isoformat(),
+              'publish_changes': False,
+              'flow_activation': 'blocked_pending_configuration_and_smoke_test',
+              'pending_configuration': [
+                  'reqsys_sharedteams connection reference',
+                  'ReqSys Teams environment variables',
+                  'real Teams desktop/mobile smoke test',
+                  'rollback verification to robo_envia_teamsv1',
+              ],
+          }
+          Path('artifacts/dev-import-evidence.json').write_text(
+              json.dumps(evidence, ensure_ascii=False, indent=2), encoding='utf-8'
+          )
+          PY
+
+      - name: Upload DEV import evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-teams-v2-dev-import-evidence
+          path: |
+            artifacts/import-validation.json
+            artifacts/dev-import-evidence.json
+          if-no-files-found: error
+          retention-days: 90
