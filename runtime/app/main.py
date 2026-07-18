@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI
 from redis.asyncio import Redis
 
-from app.api import jobs, parallelism_control
+from app.api import jobs, parallelism_control, parallelism_reconciliation
 from app.application.services.job_service import JobService
 from app.core.async_compat import resolve_maybe_awaitable
 from app.core.components import build_runtime_components
@@ -19,6 +20,7 @@ components = build_runtime_components(settings)
 job_service = components.service
 queue_gateway = components.queue
 worker_task: asyncio.Task[None] | None = None
+reconciliation_task: asyncio.Task[None] | None = None
 parallelism_redis: Redis | None = None
 
 if settings.storage_backend == "redis":
@@ -28,6 +30,25 @@ if settings.storage_backend == "redis":
     )
 else:
     parallelism_store = parallelism_control.InMemoryParallelismStore()
+
+
+async def resolver_smoke_check(target: parallelism_control.Target) -> dict[str, object]:
+    if target == "api":
+        return {"healthy": True, "service": settings.service_name}
+    if target == "queue":
+        queue_size = await resolve_maybe_awaitable(queue_gateway.tamanho())
+        return {"healthy": queue_size >= 0, "queue_size": queue_size}
+    running = bool(worker_task and not worker_task.done())
+    return {"healthy": settings.enable_async_worker and running, "worker_enabled": settings.enable_async_worker}
+
+
+validation_slo_seconds = int(os.getenv("PARALLELISM_VALIDATION_SLO_SECONDS", "300"))
+reconciliation_interval_seconds = int(os.getenv("PARALLELISM_RECONCILIATION_INTERVAL_SECONDS", "30"))
+parallelism_reconciler = parallelism_reconciliation.ParallelismReconciler(
+    parallelism_store,
+    resolver_smoke_check,
+    validation_slo_seconds=validation_slo_seconds,
+)
 
 
 def resolver_job_service() -> JobService:
@@ -44,32 +65,36 @@ def resolver_control_token() -> str:
     return settings.parallelism_control_token
 
 
-async def resolver_smoke_check(target: parallelism_control.Target) -> dict[str, object]:
-    if target == "api":
-        return {"healthy": True, "service": settings.service_name}
-    if target == "queue":
-        queue_size = await resolve_maybe_awaitable(queue_gateway.tamanho())
-        return {"healthy": queue_size >= 0, "queue_size": queue_size}
-    running = bool(worker_task and not worker_task.done())
-    return {"healthy": settings.enable_async_worker and running, "worker_enabled": settings.enable_async_worker}
+def resolver_reconciler() -> parallelism_reconciliation.ParallelismReconciler:
+    return parallelism_reconciler
+
+
+async def run_reconciliation_loop() -> None:
+    while True:
+        await asyncio.sleep(reconciliation_interval_seconds)
+        await parallelism_reconciler.reconcile_all()
 
 
 jobs.router.dependency_overrides_provider = None
 parallelism_control.router.dependency_overrides_provider = None
+parallelism_reconciliation.router.dependency_overrides_provider = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global worker_task
+    global worker_task, reconciliation_task
     if settings.enable_async_worker:
         worker_task = asyncio.create_task(executar_worker_local(job_service, queue_gateway))
+    if settings.runtime_environment != "prod":
+        reconciliation_task = asyncio.create_task(run_reconciliation_loop())
     yield
-    if worker_task:
-        worker_task.cancel()
-        try:
-            await worker_task
-        except asyncio.CancelledError:
-            pass
+    for task in (reconciliation_task, worker_task):
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
     await queue_gateway.fechar()
     if parallelism_redis is not None:
         await parallelism_redis.aclose()
@@ -85,8 +110,10 @@ app.dependency_overrides[jobs.get_job_service] = resolver_job_service
 app.dependency_overrides[parallelism_control.get_parallelism_store] = resolver_parallelism_store
 app.dependency_overrides[parallelism_control.get_control_token] = resolver_control_token
 app.dependency_overrides[parallelism_control.get_smoke_check] = lambda: resolver_smoke_check
+app.dependency_overrides[parallelism_reconciliation.get_reconciler] = resolver_reconciler
 app.include_router(jobs.router)
 app.include_router(parallelism_control.router)
+app.include_router(parallelism_reconciliation.router)
 
 
 @app.get("/health", tags=["runtime"])
@@ -103,9 +130,13 @@ async def runtime_health() -> dict[str, object]:
         "worker_enabled": settings.enable_async_worker,
         "queue_size": queue_size,
         "environment": settings.runtime_environment,
+        "parallelism_reconciliation_enabled": settings.runtime_environment != "prod",
+        "parallelism_validation_slo_seconds": validation_slo_seconds,
     }
 
 
 @app.get("/api/runtime/analytics", tags=["runtime"])
 async def runtime_analytics() -> dict[str, object]:
-    return await job_service.metricas()
+    metrics = await job_service.metricas()
+    metrics["parallelism_reconciliation"] = parallelism_reconciler.metrics.snapshot()
+    return metrics
