@@ -11,6 +11,7 @@ from app.models.configuracao_lowcode import ConfiguracaoLowCode  # noqa: F401
 from app.models.integracao_log import IntegracaoLog  # noqa: F401
 from app.models.orchestrator import (  # noqa: F401
     AdrCoordinationEvent,
+    AgileProjectPackage,
     OrchestratorRoutingEvent,
 )
 from app.models.power_automate_provisioning import (
