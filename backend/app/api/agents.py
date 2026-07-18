@@ -1,6 +1,6 @@
 from io import BytesIO
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -18,12 +18,8 @@ from app.services.adr_orchestrator import (
 from app.services.adr_orchestrator import (
     analytics_coordinators as adr_analytics_coordinators,
 )
-from app.services.adr_orchestrator import (
-    analytics_risk as adr_analytics_risk,
-)
-from app.services.adr_orchestrator import (
-    analytics_summary as adr_analytics_summary,
-)
+from app.services.adr_orchestrator import analytics_risk as adr_analytics_risk
+from app.services.adr_orchestrator import analytics_summary as adr_analytics_summary
 from app.services.agent_generator import (
     PACKAGE_NAME,
     catalogo_agentes,
@@ -31,10 +27,8 @@ from app.services.agent_generator import (
     gerar_zip_bytes,
     montar_arquivos_pacote,
 )
-from app.services.agile_project_intelligence import (
-    AgileProjectDemand,
-    gerar_pacote_agil,
-)
+from app.services.agile_package_registry import get_package, list_packages, persist_package
+from app.services.agile_project_intelligence import AgileProjectDemand, gerar_pacote_agil
 from app.services.copilot_studio_provisioner import provisionar_copilot_studio
 from app.services.reqsys_orchestrator import (
     OrchestratorDemand,
@@ -78,6 +72,7 @@ class LoteDemandasAdrIn(BaseModel):
 
 
 def _anexar_pacote_agil(
+    db: Session,
     rota: dict,
     payload: DemandaOrquestradorIn,
     correlation_id: str | None,
@@ -85,7 +80,7 @@ def _anexar_pacote_agil(
     if rota.get('tema') != 'agile_scrum':
         return rota
 
-    rota['agile_project_package'] = gerar_pacote_agil(
+    pacote = gerar_pacote_agil(
         AgileProjectDemand(
             titulo=payload.titulo,
             descricao=payload.descricao,
@@ -96,24 +91,23 @@ def _anexar_pacote_agil(
             correlation_id=correlation_id,
         )
     )
+    rota['agile_project_package'] = pacote
+    rota['agile_package_registry'] = persist_package(db, pacote)
     return rota
 
 
 @router.get('/catalog')
 def obter_catalogo_agentes():
-    """Retorna o catalogo padrao de agentes do ciclo de vida de software."""
     return ok(catalogo_agentes())
 
 
 @router.post('/generate')
 def gerar_agentes(payload: AgentGenerateRequest):
-    """Gera um pacote Copilot Studio para orquestrador e agentes especialistas."""
     return ok(gerar_pacote_agentes(payload))
 
 
 @router.post('/generate.zip')
 def baixar_zip_agentes(payload: AgentGenerateRequest):
-    """Gera e retorna o ZIP do pacote Copilot Studio."""
     files = montar_arquivos_pacote(payload)
     zip_bytes = gerar_zip_bytes(files)
     return StreamingResponse(
@@ -125,24 +119,22 @@ def baixar_zip_agentes(payload: AgentGenerateRequest):
 
 @router.post('/provision/copilot-studio')
 async def provisionar_agentes_copilot_studio(payload: AgentProvisionRequest):
-    """Provisiona o pacote de agentes via conector/webhook ou Dataverse ImportSolution."""
     return ok(await provisionar_copilot_studio(payload))
 
 
 @router.get('/orchestrator/health')
 def health_orquestrador():
-    """Health check do roteador central de coordenadores IA."""
     return ok({
         'status': 'ok',
         'service': 'reqsys-orchestrator',
-        'schema_version': '1.0.0',
+        'schema_version': '1.1.0',
         'mode': 'assistido',
+        'agile_package_registry': 'enabled',
     })
 
 
 @router.get('/orchestrator/coordinators')
 def listar_coordenadores_orquestrador():
-    """Lista coordenadores IA por frente operacional."""
     coordenadores = listar_coordenadores()
     return ok({
         'schema_version': '1.0.0',
@@ -157,7 +149,6 @@ def rotear_demanda_orquestrador(
     x_correlation_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    """Classifica a demanda e, para Agile/Scrum, gera o pacote negocial, tecnico e de projeto."""
     demanda = OrchestratorDemand(
         titulo=payload.titulo,
         descricao=payload.descricao,
@@ -167,7 +158,7 @@ def rotear_demanda_orquestrador(
         correlation_id=x_correlation_id,
     )
     rota = classificar_e_persistir_demanda(db, demanda)
-    return ok(_anexar_pacote_agil(rota, payload, x_correlation_id), x_correlation_id)
+    return ok(_anexar_pacote_agil(db, rota, payload, x_correlation_id), x_correlation_id)
 
 
 @router.post('/orchestrator/route/batch')
@@ -176,7 +167,6 @@ def rotear_lote_orquestrador(
     x_correlation_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    """Classifica um lote e enriquece as demandas Agile/Scrum com pacotes de projeto."""
     demandas = [
         OrchestratorDemand(
             titulo=item.titulo,
@@ -190,39 +180,53 @@ def rotear_lote_orquestrador(
     ]
     resultado = classificar_e_persistir_lote(db, demandas)
     resultado['rotas'] = [
-        _anexar_pacote_agil(rota, item, x_correlation_id)
+        _anexar_pacote_agil(db, rota, item, x_correlation_id)
         for rota, item in zip(resultado['rotas'], payload.demandas, strict=True)
     ]
     return ok(resultado, x_correlation_id)
 
 
+@router.get('/orchestrator/agile/packages/{package_id}')
+def consultar_pacote_agil(package_id: str, db: Session = Depends(get_db)):
+    pacote = get_package(db, package_id)
+    if pacote is None:
+        raise HTTPException(status_code=404, detail='agile_package_not_found')
+    return ok(pacote)
+
+
+@router.get('/orchestrator/agile/packages')
+def listar_pacotes_agile(
+    correlation_id: str | None = Query(default=None, max_length=120),
+    status: str | None = Query(default=None, max_length=40),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    pacotes = list_packages(db, correlation_id=correlation_id, status=status, limit=limit)
+    return ok({'total': len(pacotes), 'packages': pacotes})
+
+
 @router.get('/orchestrator/analytics/summary')
 def resumo_analytics_orquestrador(db: Session = Depends(get_db)):
-    """Resume volume, score medio e confianca media do historico operacional do orquestrador."""
     return ok(analytics_summary(db))
 
 
 @router.get('/orchestrator/analytics/themes')
 def analytics_temas_orquestrador(db: Session = Depends(get_db)):
-    """Agrupa eventos persistidos por tema classificado."""
     return ok(analytics_themes(db))
 
 
 @router.get('/orchestrator/analytics/coordinators')
 def analytics_coordenadores_orquestrador(db: Session = Depends(get_db)):
-    """Agrupa eventos persistidos por coordenador IA acionado."""
     return ok(analytics_coordinators(db))
 
 
 @router.get('/orchestrator/analytics/risk')
 def analytics_risco_orquestrador(db: Session = Depends(get_db)):
-    """Calcula indicadores iniciais de risco operacional do roteamento IA."""
     return ok(analytics_risk(db))
 
 
 @router.get('/adr-orchestrator/health')
 def health_coordenacao_adr():
-    """Health check da coordenação geral de ADRs."""
     return ok({
         'status': 'ok',
         'service': 'reqsys-adr-orchestrator',
@@ -234,7 +238,6 @@ def health_coordenacao_adr():
 
 @router.get('/adr-orchestrator/coordinators')
 def listar_coordenadores_adr_endpoint():
-    """Lista os coordenadores especialistas, um por ADR, sob a coordenação geral."""
     coordenadores = listar_coordenadores_adr()
     return ok({
         'schema_version': '1.0.0',
@@ -250,7 +253,6 @@ def rotear_demanda_adr(
     x_correlation_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    """Classifica uma demanda pela coordenação geral e aciona o(s) coordenador(es) de ADR pertinentes."""
     demanda = AdrDemand(
         titulo=payload.titulo,
         descricao=payload.descricao,
@@ -268,7 +270,6 @@ def rotear_lote_adr(
     x_correlation_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    """Classifica um lote de demandas pela coordenação geral de ADRs."""
     demandas = [
         AdrDemand(
             titulo=item.titulo,
@@ -285,23 +286,19 @@ def rotear_lote_adr(
 
 @router.get('/adr-orchestrator/analytics/summary')
 def resumo_analytics_adr(db: Session = Depends(get_db)):
-    """Resume volume, score medio e confianca media do historico de coordenacao de ADRs."""
     return ok(adr_analytics_summary(db))
 
 
 @router.get('/adr-orchestrator/analytics/adrs')
 def analytics_por_adr(db: Session = Depends(get_db)):
-    """Agrupa eventos persistidos por ADR primario acionado."""
     return ok(analytics_adrs(db))
 
 
 @router.get('/adr-orchestrator/analytics/coordinators')
 def analytics_coordenadores_adr(db: Session = Depends(get_db)):
-    """Agrupa eventos persistidos por coordenador de ADR acionado."""
     return ok(adr_analytics_coordinators(db))
 
 
 @router.get('/adr-orchestrator/analytics/risk')
 def analytics_risco_adr(db: Session = Depends(get_db)):
-    """Calcula indicadores de risco e violacoes de gate detectadas pela coordenacao de ADRs."""
     return ok(adr_analytics_risk(db))
