@@ -1,0 +1,79 @@
+name: Cofre Production Promotion Precondition
+
+on:
+  workflow_dispatch:
+    inputs:
+      timeout_seconds:
+        description: Timeout HTTP por chamada no gate STG
+        required: true
+        type: string
+        default: "20"
+  workflow_call:
+    inputs:
+      timeout_seconds:
+        required: false
+        type: string
+        default: "20"
+    secrets:
+      COFRE_ADMIN_JWT:
+        required: true
+      FLY_API_TOKEN:
+        required: true
+    outputs:
+      approved:
+        description: Indica que a pré-condição do Cofre foi aprovada
+        value: ${{ jobs.promotion-guard.outputs.approved }}
+      evidence_environment:
+        description: Ambiente validado pelo gate
+        value: ${{ jobs.promotion-guard.outputs.evidence_environment }}
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cofre-production-promotion-precondition
+  cancel-in-progress: false
+
+jobs:
+  cofre-stg-evidence:
+    name: Validar Cofre em STG
+    uses: ./.github/workflows/cofre-runtime-evidence-gate.yml
+    with:
+      environment: stg
+      timeout_seconds: ${{ inputs.timeout_seconds }}
+    secrets:
+      COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  promotion-guard:
+    name: Autorizar promoção após evidência STG
+    runs-on: ubuntu-latest
+    needs: cofre-stg-evidence
+    if: ${{ always() }}
+    outputs:
+      approved: ${{ steps.guard.outputs.approved }}
+      evidence_environment: ${{ steps.guard.outputs.evidence_environment }}
+    steps:
+      - name: Consolidar decisão bloqueante
+        id: guard
+        env:
+          COFRE_GATE_RESULT: ${{ needs.cofre-stg-evidence.result }}
+        run: |
+          set -euo pipefail
+          if [ "$COFRE_GATE_RESULT" != "success" ]; then
+            echo "approved=false" >> "$GITHUB_OUTPUT"
+            echo "evidence_environment=stg" >> "$GITHUB_OUTPUT"
+            echo "Promoção bloqueada: Cofre Runtime Evidence Gate em STG terminou como $COFRE_GATE_RESULT." >&2
+            exit 1
+          fi
+
+          echo "approved=true" >> "$GITHUB_OUTPUT"
+          echo "evidence_environment=stg" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Cofre — pré-condição de produção"
+            echo "- Ambiente validado: \`stg\`"
+            echo "- Gate runtime: **aprovado**"
+            echo "- Promoção para produção: **liberada para o workflow chamador**"
+            echo "- Produção não foi alterada por este workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
