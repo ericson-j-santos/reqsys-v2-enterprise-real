@@ -8,7 +8,8 @@ from pydantic import BaseModel, model_validator
 
 class RuntimeSettings(BaseModel):
     service_name: str = "reqsys-runtime"
-    schema_version: str = "0.6.0"
+    schema_version: str = "0.7.0"
+    runtime_environment: str = "dev"
     enable_async_worker: bool = False
     queue_backend: str = "memory"
     storage_backend: str = "memory"
@@ -21,18 +22,23 @@ class RuntimeSettings(BaseModel):
     redis_job_ttl_seconds: int = 604800
     redis_lease_ttl_seconds: int = 60
     redis_lease_renew_interval_seconds: int = 20
+    parallelism_control_token: str = ""
+    parallelism_control_redis_prefix: str = "reqsys:runtime:parallelism"
     max_tentativas: int = 3
 
     @model_validator(mode="after")
     def validar_backends(self) -> "RuntimeSettings":
         queue_backend = self.queue_backend.lower()
         storage_backend = self.storage_backend.lower()
+        environment = self.runtime_environment.lower()
         if queue_backend not in {"memory", "redis"}:
             raise ValueError("QUEUE_BACKEND deve ser 'memory' ou 'redis'")
         if storage_backend not in {"memory", "redis"}:
             raise ValueError("STORAGE_BACKEND deve ser 'memory' ou 'redis'")
         if queue_backend == "redis" and storage_backend != "redis":
             raise ValueError("QUEUE_BACKEND=redis exige STORAGE_BACKEND=redis para worker desacoplado")
+        if environment not in {"dev", "stg", "prod", "test"}:
+            raise ValueError("RUNTIME_ENVIRONMENT deve ser dev, stg, prod ou test")
         if self.redis_lease_ttl_seconds < 5:
             raise ValueError("REDIS_LEASE_TTL_SECONDS deve ser >= 5")
         if self.redis_lease_renew_interval_seconds < 1:
@@ -41,12 +47,14 @@ class RuntimeSettings(BaseModel):
             raise ValueError("REDIS_LEASE_RENEW_INTERVAL_SECONDS deve ser menor que REDIS_LEASE_TTL_SECONDS")
         self.queue_backend = queue_backend
         self.storage_backend = storage_backend
+        self.runtime_environment = environment
         return self
 
 
 @lru_cache
 def get_settings() -> RuntimeSettings:
     return RuntimeSettings(
+        runtime_environment=os.getenv("RUNTIME_ENVIRONMENT", "dev"),
         enable_async_worker=os.getenv("ENABLE_ASYNC_WORKER", "false").lower() == "true",
         queue_backend=os.getenv("QUEUE_BACKEND", "memory"),
         storage_backend=os.getenv("STORAGE_BACKEND", "memory"),
@@ -59,5 +67,9 @@ def get_settings() -> RuntimeSettings:
         redis_job_ttl_seconds=int(os.getenv("REDIS_JOB_TTL_SECONDS", "604800")),
         redis_lease_ttl_seconds=int(os.getenv("REDIS_LEASE_TTL_SECONDS", "60")),
         redis_lease_renew_interval_seconds=int(os.getenv("REDIS_LEASE_RENEW_INTERVAL_SECONDS", "20")),
+        parallelism_control_token=os.getenv("REQSYS_PARALLELISM_CONTROL_TOKEN", ""),
+        parallelism_control_redis_prefix=os.getenv(
+            "PARALLELISM_CONTROL_REDIS_PREFIX", "reqsys:runtime:parallelism"
+        ),
         max_tentativas=int(os.getenv("ASYNC_JOB_MAX_TENTATIVAS", "3")),
     )
