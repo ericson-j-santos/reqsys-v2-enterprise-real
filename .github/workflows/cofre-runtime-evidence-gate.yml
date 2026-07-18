@@ -40,7 +40,7 @@ concurrency:
 
 env:
   ARTIFACT_DIR: artifacts/cofre-runtime-evidence
-  STATE_FILE: ${{ runner.temp }}/cofre-runtime-state.json
+  STATE_FILE: ${{ runner.temp }}/cofre-runtime-state.bin
   CORRELATION_ID: cofre-runtime-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.environment }}
 
 jobs:
@@ -75,6 +75,7 @@ jobs:
               exit 1
               ;;
           esac
+
           if ! [[ "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || [ "$TIMEOUT_SECONDS" -lt 1 ] || [ "$TIMEOUT_SECONDS" -gt 120 ]; then
             echo "timeout_seconds deve estar entre 1 e 120." >&2
             exit 1
@@ -96,8 +97,18 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Preparar diretório de evidências
-        run: mkdir -p "$ARTIFACT_DIR"
+      - name: Instalar dependência criptográfica mínima
+        run: python -m pip install --disable-pip-version-check "cryptography>=44,<46"
+
+      - name: Preparar estado efêmero criptografado
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          chmod 700 "$ARTIFACT_DIR"
+          state_key="$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+          echo "::add-mask::$state_key"
+          echo "COFRE_STATE_FERNET_KEY=$state_key" >> "$GITHUB_ENV"
 
       - name: Validar ciclo antes do restart
         env:
@@ -125,7 +136,10 @@ jobs:
           FLY_APP: ${{ needs.validate-inputs.outputs.fly_app }}
         run: |
           set -euo pipefail
-          mapfile -t machine_ids < <(flyctl machines list --app "$FLY_APP" --json | python -c 'import json,sys; print("\n".join(m["id"] for m in json.load(sys.stdin) if m.get("state") != "destroyed"))')
+          mapfile -t machine_ids < <(
+            flyctl machines list --app "$FLY_APP" --json |
+              python -c 'import json,sys; print("\n".join(m["id"] for m in json.load(sys.stdin) if m.get("state") != "destroyed"))'
+          )
           if [ "${#machine_ids[@]}" -eq 0 ]; then
             echo "Nenhuma máquina ativa encontrada para $FLY_APP." >&2
             exit 1
@@ -172,6 +186,8 @@ jobs:
           TARGET_ENV: ${{ inputs.environment }}
           BASE_URL: ${{ needs.validate-inputs.outputs.base_url }}
         run: |
+          set -euo pipefail
+          umask 077
           python - <<'PY'
           import json
           import os
@@ -184,14 +200,16 @@ jobs:
               path = root / f"{name}.json"
               if path.exists():
                   phases[name] = json.loads(path.read_text(encoding="utf-8"))
+
           ok = len(phases) == 2 and all(item.get("ok") is True for item in phases.values())
           payload = {
-              "schema_version": "1.0.0",
+              "schema_version": "1.1.0",
               "contract": "reqsys-cofre-runtime-evidence-summary",
               "ok": ok,
               "environment": os.environ["TARGET_ENV"],
               "base_url": os.environ["BASE_URL"],
               "restart_runtime": True,
+              "transient_state_encrypted": True,
               "workflow_sha": os.environ["GITHUB_SHA"],
               "run_id": os.environ["GITHUB_RUN_ID"],
               "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
@@ -200,14 +218,19 @@ jobs:
               "phases": phases,
               "sensitive_values_exposed": False,
           }
-          (root / "summary.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          (root / "summary.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
           if not ok:
               raise SystemExit("Evidência consolidada incompleta ou com falha")
           PY
 
       - name: Remover estado sensível residual
         if: always()
-        run: rm -f "$STATE_FILE"
+        run: |
+          rm -f "$STATE_FILE"
+          unset COFRE_STATE_FERNET_KEY || true
 
       - name: Upload das evidências
         if: always()
@@ -227,5 +250,6 @@ jobs:
             echo "- Runtime: \`${{ needs.validate-inputs.outputs.fly_app }}\`"
             echo "- Correlation ID: \`$CORRELATION_ID\`"
             echo "- Evidência: \`cofre-runtime-evidence-${{ inputs.environment }}-${{ github.run_id }}\`"
+            echo "- Estado transitório criptografado: **sim**"
             echo "- Valores sensíveis publicados: **não**"
           } >> "$GITHUB_STEP_SUMMARY"
