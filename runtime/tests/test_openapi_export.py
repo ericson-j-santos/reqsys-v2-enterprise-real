@@ -7,7 +7,7 @@ def test_openapi_export_inclui_metadados_reqsys() -> None:
     schema = gerar_openapi()
 
     assert schema["info"]["title"] == "ReqSys Runtime API"
-    assert schema["info"]["version"] == "0.6.0"
+    assert schema["info"]["version"] == "0.7.0"
     assert schema["info"]["x-reqsys-contract-source"] == "runtime-fastapi"
     assert schema["info"]["x-reqsys-contract-mode"] == "canonical-generated"
     assert schema["info"]["x-reqsys-generated-by"] == "runtime/scripts/export_openapi.py"
@@ -23,6 +23,6 @@ def test_openapi_export_inclui_rotas_de_jobs() -> None:
 
 
 def test_openapi_canonico_esta_presente() -> None:
-    path = Path(__file__).resolve().parents[2] / "docs-site/assets/openapi/reqsys-runtime-openapi-v0.6.0.json"
+    path = Path(__file__).resolve().parents[2] / "docs-site/assets/openapi/reqsys-runtime-openapi-v0.7.0.json"
 
     assert path.exists()

@@ -14,7 +14,7 @@ if str(RUNTIME_DIR) not in sys.path:
 from app.main import app
 
 
-DEFAULT_OUTPUT = "../docs-site/assets/openapi/reqsys-runtime-openapi-v0.6.0.json"
+DEFAULT_OUTPUT = "../docs-site/assets/openapi/reqsys-runtime-openapi-v0.7.0.json"
 DIAGNOSTIC_DIR = ".tmp/openapi-diff"
 VOLATILE_OPENAPI_KEYS = {"title"}
 
