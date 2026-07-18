@@ -1,0 +1,222 @@
+name: Nonprod Parallelism Target Adapters
+
+on:
+  workflow_dispatch:
+    inputs:
+      execution_artifact_id:
+        description: "Artifact ID produced by Nonprod Parallelism Governed Executor"
+        required: true
+        type: string
+      state_artifact_id:
+        description: "Latest target state artifact ID"
+        required: true
+        type: string
+      target_environment:
+        description: "Non-production target environment"
+        required: true
+        type: choice
+        options: [dev, stg]
+      target:
+        description: "Runtime target adapter"
+        required: true
+        type: choice
+        options: [worker, queue, api]
+      expected_version:
+        description: "Compare-and-swap state version"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: parallelism-target-${{ inputs.target_environment }}-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.target_environment }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CONTROL_TOKEN: ${{ secrets.REQSYS_PARALLELISM_CONTROL_TOKEN }}
+      EXECUTION_ARTIFACT_ID: ${{ inputs.execution_artifact_id }}
+      STATE_ARTIFACT_ID: ${{ inputs.state_artifact_id }}
+      TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+      TARGET: ${{ inputs.target }}
+      EXPECTED_VERSION: ${{ inputs.expected_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile and test target adapters
+        run: |
+          python -m py_compile scripts/apply_parallelism_target_adapter.py
+          python -m unittest tests/test_apply_parallelism_target_adapter.py -v
+
+      - name: Resolve governed target endpoint
+        shell: bash
+        env:
+          WORKER_ENDPOINT: ${{ vars.REQSYS_WORKER_PARALLELISM_ENDPOINT }}
+          QUEUE_ENDPOINT: ${{ vars.REQSYS_QUEUE_PARALLELISM_ENDPOINT }}
+          API_ENDPOINT: ${{ vars.REQSYS_API_PARALLELISM_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          case "$TARGET" in
+            worker) endpoint="$WORKER_ENDPOINT" ;;
+            queue) endpoint="$QUEUE_ENDPOINT" ;;
+            api) endpoint="$API_ENDPOINT" ;;
+            *) echo "unsupported target" >&2; exit 2 ;;
+          esac
+          test -n "$endpoint"
+          case "$endpoint" in
+            https://*) ;;
+            *) echo "target endpoint must use HTTPS" >&2; exit 2 ;;
+          esac
+          printf '%s' "$endpoint" > .target-endpoint
+
+      - name: Download execution and target state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/target-adapter/execution .tmp/target-adapter/state
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${EXECUTION_ARTIFACT_ID}" \
+            --jq '{name, expired}' > .tmp/target-adapter/execution-artifact.json
+          jq -e '.expired == false and (.name | startswith("reqsys-parallelism-execution-"))' \
+            .tmp/target-adapter/execution-artifact.json >/dev/null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${EXECUTION_ARTIFACT_ID}/zip" \
+            > .tmp/target-adapter/execution.zip
+          unzip -q .tmp/target-adapter/execution.zip -d .tmp/target-adapter/execution
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${STATE_ARTIFACT_ID}" \
+            --jq '{name, expired}' > .tmp/target-adapter/state-artifact.json
+          jq -e --arg target "$TARGET" --arg env "$TARGET_ENVIRONMENT" \
+            '.expired == false and .name == ("reqsys-parallelism-target-state-" + $env + "-" + $target)' \
+            .tmp/target-adapter/state-artifact.json >/dev/null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${STATE_ARTIFACT_ID}/zip" \
+            > .tmp/target-adapter/state.zip
+          unzip -q .tmp/target-adapter/state.zip -d .tmp/target-adapter/state
+
+          execution_file="$(find .tmp/target-adapter/execution -name parallelism-execution-receipt.json -print -quit)"
+          state_file="$(find .tmp/target-adapter/state -name parallelism-target-state.json -print -quit)"
+          test -n "$execution_file" && test -n "$state_file"
+          cp "$execution_file" .tmp/target-adapter/execution.json
+          cp "$state_file" .tmp/target-adapter/state.json
+
+      - name: Validate state and prevent overlapping execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg target "$TARGET" --arg env "$TARGET_ENVIRONMENT" --argjson version "$EXPECTED_VERSION" \
+            '.contract == "reqsys-parallelism-target-state" and .target == $target and .environment == $env and .version == $version and .validation_pending == false' \
+            .tmp/target-adapter/state.json >/dev/null
+
+      - name: Apply with compare-and-swap
+        id: runtime_apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="$(cat .target-endpoint)"
+          target_stage="$(jq -r '.change.target_stage' .tmp/target-adapter/execution.json)"
+          execution_sha="$(jq -r '.execution_sha256' .tmp/target-adapter/execution.json)"
+          current_stage="$(jq -r '.stage' .tmp/target-adapter/state.json)"
+
+          jq -n \
+            --argjson stage "$target_stage" \
+            --arg execution_sha "$execution_sha" \
+            --arg actor "$GITHUB_ACTOR" \
+            '{stage: $stage, execution_sha256: $execution_sha, actor: $actor, validation_pending: true}' \
+            > .tmp/target-adapter/apply-request.json
+
+          http_code="$(curl --silent --show-error --output .tmp/target-adapter/apply-response.json \
+            --write-out '%{http_code}' --request PATCH "$endpoint" \
+            --header "Authorization: Bearer ${CONTROL_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --header "If-Match: ${EXPECTED_VERSION}" \
+            --data-binary @.tmp/target-adapter/apply-request.json)"
+          test "$http_code" = "200"
+          jq -e --argjson stage "$target_stage" '.stage == $stage and .validation_pending == true' \
+            .tmp/target-adapter/apply-response.json >/dev/null
+          printf '%s' "$current_stage" > .tmp/target-adapter/previous-stage
+          jq -r '.version' .tmp/target-adapter/apply-response.json > .tmp/target-adapter/applied-version
+
+      - name: Execute target smoke test
+        id: smoke
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="$(cat .target-endpoint)"
+          smoke_url="${endpoint%/}/smoke"
+          response="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer ${CONTROL_TOKEN}" "$smoke_url")"
+          jq -e '.healthy == true' <<<"$response" >/dev/null
+
+      - name: Roll back on smoke failure
+        if: steps.smoke.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="$(cat .target-endpoint)"
+          previous_stage="$(cat .tmp/target-adapter/previous-stage)"
+          applied_version="$(cat .tmp/target-adapter/applied-version)"
+          execution_sha="$(jq -r '.execution_sha256' .tmp/target-adapter/execution.json)"
+          jq -n --argjson stage "$previous_stage" --arg execution_sha "$execution_sha" \
+            '{stage: $stage, rollback_of: $execution_sha, validation_pending: false, reason: "post-change smoke failed"}' \
+            > .tmp/target-adapter/rollback-request.json
+          http_code="$(curl --silent --show-error --output .tmp/target-adapter/rollback-response.json \
+            --write-out '%{http_code}' --request PATCH "$endpoint" \
+            --header "Authorization: Bearer ${CONTROL_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --header "If-Match: ${applied_version}" \
+            --data-binary @.tmp/target-adapter/rollback-request.json)"
+          test "$http_code" = "200"
+          jq -e --argjson stage "$previous_stage" '.stage == $stage and .validation_pending == false' \
+            .tmp/target-adapter/rollback-response.json >/dev/null
+
+      - name: Build immutable adapter receipt and next state
+        shell: bash
+        run: |
+          set -euo pipefail
+          smoke_healthy=true
+          [ "${{ steps.smoke.outcome }}" = "success" ] || smoke_healthy=false
+          python scripts/apply_parallelism_target_adapter.py \
+            --state .tmp/target-adapter/state.json \
+            --execution .tmp/target-adapter/execution.json \
+            --target "$TARGET" \
+            --environment "$TARGET_ENVIRONMENT" \
+            --expected-version "$EXPECTED_VERSION" \
+            --smoke-healthy "$smoke_healthy" \
+            --actor "$GITHUB_ACTOR" \
+            --state-output .tmp/target-adapter/parallelism-target-state.json \
+            --receipt-output .tmp/target-adapter/parallelism-target-adapter-receipt.json
+
+      - name: Validate final invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.validation_pending == false' .tmp/target-adapter/parallelism-target-state.json >/dev/null
+          jq -e '.production_promotion_allowed == false' .tmp/target-adapter/parallelism-target-adapter-receipt.json >/dev/null
+          jq -e '.receipt_sha256 | length == 64' .tmp/target-adapter/parallelism-target-adapter-receipt.json >/dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-parallelism-target-state-${{ inputs.target_environment }}-${{ inputs.target }}
+          path: |
+            .tmp/target-adapter/parallelism-target-state.json
+            .tmp/target-adapter/parallelism-target-adapter-receipt.json
+            .tmp/target-adapter/apply-response.json
+            .tmp/target-adapter/rollback-response.json
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Fail after governed rollback
+        if: steps.smoke.outcome != 'success'
+        run: |
+          echo "Smoke failed; rollback executed and evidenced." >&2
+          exit 1
