@@ -14,18 +14,13 @@ permissions:
   pull-requests: read
 
 jobs:
-  validate-approved-baseline:
-    if: >-
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'pull_request_review' && github.event.pull_request.base.ref == 'main')
+  scope-router:
+    name: Detectar alteração de baseline
     runs-on: ubuntu-latest
+    outputs:
+      run_gate: ${{ steps.scope.outputs.run_gate }}
     steps:
-      - name: Checkout PR
-        uses: actions/checkout@v4
-        with:
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
-
-      - name: Verificar escopo do baseline
+      - name: Verificar arquivos alterados no PR
         id: scope
         env:
           GH_TOKEN: ${{ github.token }}
@@ -33,22 +28,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          CHANGED_FILES="$(gh api \
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "run_gate=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          RUN_GATE="$(gh api \
             --repo "${{ github.repository }}" \
             --paginate \
             "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
-            --jq '.[].filename')"
+            --jq '[.[].filename | select(
+              . == "config/domain-coverage-policy.json" or
+              . == "docs/ops-dashboard/data/domain-coverage-baseline-diff.json"
+            )] | length > 0')"
 
-          if grep -Fxq "config/domain-coverage-policy.json" <<<"${CHANGED_FILES}" || \
-             grep -Fxq "docs/ops-dashboard/data/domain-coverage-baseline-diff.json" <<<"${CHANGED_FILES}"; then
-            echo "relevant=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "relevant=false" >> "$GITHUB_OUTPUT"
-            echo "PR sem alteração de baseline; validação não aplicável."
-          fi
+          echo "run_gate=${RUN_GATE}" >> "$GITHUB_OUTPUT"
+
+  validate-approved-baseline:
+    name: Validar baseline aprovado
+    needs: scope-router
+    if: needs.scope-router.outputs.run_gate == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
 
       - name: Validar escopo e política
-        if: steps.scope.outputs.relevant == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -59,8 +65,8 @@ jobs:
           policy_path = Path('config/domain-coverage-policy.json')
           diff_path = Path('docs/ops-dashboard/data/domain-coverage-baseline-diff.json')
 
-          assert policy_path.is_file(), 'política de cobertura ausente'
-          assert diff_path.is_file(), 'diff do baseline ausente'
+          assert policy_path.is_file(), f'política ausente: {policy_path}'
+          assert diff_path.is_file(), f'evidência de diff ausente: {diff_path}'
 
           policy = json.loads(policy_path.read_text(encoding='utf-8'))
           diff = json.loads(diff_path.read_text(encoding='utf-8'))
@@ -74,7 +80,6 @@ jobs:
           PY
 
       - name: Exigir revisão APPROVED
-        if: steps.scope.outputs.relevant == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -92,8 +97,4 @@ jobs:
         if: always()
         run: |
           echo "## Domain Coverage Baseline Approval" >> "$GITHUB_STEP_SUMMARY"
-          if [[ "${{ steps.scope.outputs.relevant }}" == "true" ]]; then
-            echo "A substituição do baseline exige política válida e ao menos uma revisão APPROVED." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Validação não aplicável: o PR não altera os arquivos governados de baseline." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo "A substituição do baseline exige política válida e ao menos uma revisão APPROVED." >> "$GITHUB_STEP_SUMMARY"
