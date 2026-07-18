@@ -1,22 +1,31 @@
 {
-  "schema_version": "1.0.0",
-  "mode": "record_then_regression",
+  "schema_version": "1.1.0",
+  "mode": "regression_gate",
   "allowed_regression_percentage_points": 0.0,
   "domains": {
     "core": {
-      "paths": ["backend/app/core/"],
+      "paths": [
+        "backend/app/core/"
+      ],
       "target_percent": 80.0
     },
     "services": {
-      "paths": ["backend/app/services/"],
+      "paths": [
+        "backend/app/services/"
+      ],
       "target_percent": 75.0
     },
     "api": {
-      "paths": ["backend/app/api/", "backend/app/routers/"],
+      "paths": [
+        "backend/app/api/",
+        "backend/app/routers/"
+      ],
       "target_percent": 70.0
     },
     "repositories": {
-      "paths": ["backend/app/repositories/"],
+      "paths": [
+        "backend/app/repositories/"
+      ],
       "target_percent": 70.0
     },
     "runtime": {
@@ -29,5 +38,11 @@
       "target_percent": 70.0
     }
   },
-  "baseline": {}
+  "baseline": {
+    "core": 93.77,
+    "services": 93.72,
+    "api": 91.32,
+    "repositories": 100.0,
+    "runtime": 99.25
+  }
 }
