@@ -1,9 +1,9 @@
 def _payload() -> dict:
     return {
-        'titulo': 'Planejar sprint Scrum para aprovação de requisitos',
+        'titulo': 'Planejar sprint Scrum e backlog Kanban do projeto',
         'descricao': (
-            'O analista precisa reduzir o prazo de aprovação. '
-            'A API deve persistir o histórico no SQL e registrar logs com correlation_id.'
+            'O Product Owner precisa organizar histórias, cerimônias e entregas da sprint. '
+            'A API deve persistir o pacote Agile com rastreabilidade e correlation_id.'
         ),
         'origem': 'pytest-agile-registry',
         'prioridade_informada': 'alta',
@@ -23,6 +23,8 @@ def test_orchestrator_persiste_pacote_agile_idempotente(client):
     assert second.status_code == 200
     first_data = first.json()['data']
     second_data = second.json()['data']
+    assert first_data['tema'] == 'agile_scrum'
+    assert second_data['tema'] == 'agile_scrum'
     package_id = first_data['agile_project_package']['package_id']
 
     assert first_data['agile_package_registry']['created'] is True
@@ -47,6 +49,7 @@ def test_lista_pacotes_agile_por_correlation_id(client):
     headers = {'X-Correlation-ID': 'corr-agile-registry-list'}
     response = client.post('/v1/agents/orchestrator/route', json=_payload(), headers=headers)
     assert response.status_code == 200
+    assert response.json()['data']['tema'] == 'agile_scrum'
 
     listed = client.get(
         '/v1/agents/orchestrator/agile/packages',
