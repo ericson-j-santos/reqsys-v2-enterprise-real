@@ -24,7 +24,7 @@ class AgileWorkItemPublisher(Protocol):
     provider: str
 
     def publish(self, package: dict, request: AgilePublishRequest) -> dict:
-        ...
+        raise NotImplementedError
 
 
 def build_idempotency_key(package_id: str, provider: str) -> str:
