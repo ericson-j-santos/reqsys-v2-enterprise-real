@@ -8,9 +8,12 @@ on:
       - 'backend/app/services/teams_notification_solution_factory.py'
       - 'backend/tests/test_lowcode_teams_notification_profile.py'
       - 'backend/tests/test_teams_notification_solution_factory.py'
+      - 'backend/tests/test_validate_powerplatform_solution_zip.py'
       - 'scripts/materialize_teams_notification_solution.py'
       - 'scripts/validate_teams_notification_dev_import.py'
+      - 'scripts/validate_powerplatform_solution_zip.py'
       - '.github/workflows/teams-notification-solution-contract.yml'
+      - '.github/workflows/teams-notification-dev-import.yml'
   workflow_dispatch:
 
 permissions:
@@ -32,7 +35,7 @@ jobs:
       APP_ENV: test
       DATABASE_URL: sqlite:///./teams_notification_solution_contract.db
       JWT_SECRET: reqsys-test-secret-with-minimum-safe-length
-      PYTHONPATH: ${{ github.workspace }}/backend
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,14 +59,16 @@ jobs:
             app/services/lowcode_solution_factory.py \
             app/services/teams_notification_solution_factory.py \
             ../scripts/materialize_teams_notification_solution.py \
-            ../scripts/validate_teams_notification_dev_import.py
+            ../scripts/validate_teams_notification_dev_import.py \
+            ../scripts/validate_powerplatform_solution_zip.py
 
       - name: Run focused contract tests
         run: |
           python -m pytest -q \
             tests/test_teams_notification_solution_factory.py \
             tests/test_lowcode_solution_factory.py \
-            tests/test_lowcode_teams_notification_profile.py
+            tests/test_lowcode_teams_notification_profile.py \
+            tests/test_validate_powerplatform_solution_zip.py
 
       - name: Materialize DEV package
         working-directory: .
