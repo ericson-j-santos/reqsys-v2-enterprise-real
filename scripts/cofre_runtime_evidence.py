@@ -2,8 +2,8 @@
 """Runtime evidence gate for the ReqSys vault.
 
 Runs a governed write/read/audit cycle before and after a controlled runtime
-restart. Sensitive values are stored only in a local state file and are never
-written to the public evidence artifact.
+restart. Sensitive transient state is encrypted at rest with an ephemeral
+Fernet key supplied by the workflow and is never published as an artifact.
 """
 from __future__ import annotations
 
@@ -21,7 +21,9 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-SCHEMA_VERSION = "1.0.0"
+from cryptography.fernet import Fernet, InvalidToken
+
+SCHEMA_VERSION = "1.1.0"
 CONTRACT = "reqsys-cofre-runtime-evidence"
 
 
@@ -54,7 +56,7 @@ class ApiClient:
         headers = {
             "Accept": "application/json",
             "X-Correlation-ID": self.correlation_id,
-            "User-Agent": "reqsys-cofre-runtime-evidence/1.0",
+            "User-Agent": "reqsys-cofre-runtime-evidence/1.1",
         }
         if self.admin_jwt:
             headers["Authorization"] = f"Bearer {self.admin_jwt}"
@@ -64,6 +66,7 @@ class ApiClient:
         if payload is not None:
             body = json.dumps(payload).encode("utf-8")
             headers["Content-Type"] = "application/json"
+
         request = Request(f"{self.base_url}{path}", data=body, headers=headers, method=method)
         try:
             with urlopen(request, timeout=self.timeout) as response:  # nosec B310
@@ -79,6 +82,7 @@ class ApiClient:
             status = int(exc.code)
         except (URLError, TimeoutError) as exc:
             raise GateError(f"Falha HTTP em {method} {path}: {exc}") from exc
+
         if status not in expected:
             detail = parsed.get("detail") or parsed.get("message") or "resposta inesperada"
             raise GateError(f"{method} {path} retornou HTTP {status}: {detail}")
@@ -97,14 +101,40 @@ def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _write_json(path: Path, payload: dict[str, Any], mode: int = 0o644) -> None:
+def _write_private_bytes(path: Path, content: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.chmod(path, mode)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(content)
+    except Exception:
+        os.close(descriptor)
+        raise
 
 
-def _load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+def _write_public_json(path: Path, payload: dict[str, Any]) -> None:
+    serialized = (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    _write_private_bytes(path, serialized)
+
+
+def _encrypt_state(path: Path, payload: dict[str, Any], key: str) -> None:
+    try:
+        cipher = Fernet(key.encode("ascii"))
+    except (ValueError, TypeError) as exc:
+        raise GateError("COFRE_STATE_FERNET_KEY inválida") from exc
+    plaintext = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    _write_private_bytes(path, cipher.encrypt(plaintext))
+
+
+def _decrypt_state(path: Path, key: str) -> dict[str, Any]:
+    try:
+        plaintext = Fernet(key.encode("ascii")).decrypt(path.read_bytes())
+        value = json.loads(plaintext.decode("utf-8"))
+    except (InvalidToken, ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise GateError("Estado transitório inválido ou não autenticado") from exc
+    if not isinstance(value, dict):
+        raise GateError("Estado transitório descriptografado não é objeto")
+    return value
 
 
 def _check_audit(client: ApiClient, actions: set[str]) -> dict[str, Any]:
@@ -173,7 +203,8 @@ def before_restart(args: argparse.Namespace) -> dict[str, Any]:
         "token_id": token_id,
         "token_label": token_label,
     }
-    _write_json(Path(args.state_file), state, mode=0o600)
+    _encrypt_state(Path(args.state_file), state, args.state_key)
+
     return {
         "phase": "before_restart",
         "ok": True,
@@ -185,6 +216,7 @@ def before_restart(args: argparse.Namespace) -> dict[str, Any]:
         "secret_value_sha256": state["secret_value_sha256"],
         "scoped_token_id": token_id,
         "scope_denial_validated": True,
+        "transient_state_encrypted": True,
         "audit": audit,
         "duration_ms": int((time.monotonic() - started) * 1000),
     }
@@ -195,8 +227,9 @@ def after_restart(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     state_path = Path(args.state_file)
     if not state_path.exists():
-        raise GateError("Arquivo de estado seguro não encontrado para fase pós-restart")
-    state = _load_json(state_path)
+        raise GateError("Arquivo de estado criptografado não encontrado para fase pós-restart")
+
+    state = _decrypt_state(state_path, args.state_key)
     secret_key = str(state["secret_key"])
     secret_value = str(state["secret_value"])
     scoped_token = str(state["scoped_token"])
@@ -214,19 +247,17 @@ def after_restart(args: argparse.Namespace) -> dict[str, Any]:
     client.request("DELETE", f"/v1/cofre/tokens/{token_id}")
     audit = _check_audit(
         client,
-        {
-            "COFRE_SEGREDO_LIDO",
-            "COFRE_SEGREDO_REMOVIDO",
-            "COFRE_TOKEN_REVOGADO",
-        },
+        {"COFRE_SEGREDO_LIDO", "COFRE_SEGREDO_REMOVIDO", "COFRE_TOKEN_REVOGADO"},
     )
     state_path.unlink(missing_ok=True)
+
     return {
         "phase": "after_restart",
         "ok": True,
         "vault_initialized": True,
         "persistence_after_restart": True,
         "cleanup_completed": True,
+        "transient_state_encrypted": True,
         "secret_key_sha256": _sha256(secret_key),
         "secret_value_sha256": _sha256(secret_value),
         "scoped_token_id": token_id,
@@ -235,7 +266,12 @@ def after_restart(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def build_evidence(args: argparse.Namespace, phase_result: dict[str, Any], *, error: str | None = None) -> dict[str, Any]:
+def build_evidence(
+    args: argparse.Namespace,
+    phase_result: dict[str, Any],
+    *,
+    error: str | None = None,
+) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "contract": CONTRACT,
@@ -259,6 +295,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--environment", required=True, choices=("dev", "stg"))
     parser.add_argument("--admin-jwt", default=os.getenv("COFRE_ADMIN_JWT", ""))
+    parser.add_argument("--state-key", default=os.getenv("COFRE_STATE_FERNET_KEY", ""))
     parser.add_argument("--correlation-id", required=True)
     parser.add_argument("--state-file", required=True)
     parser.add_argument("--evidence-file", required=True)
@@ -269,6 +306,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if not args.admin_jwt.strip():
         parser.error("--admin-jwt ou COFRE_ADMIN_JWT é obrigatório")
+    if not args.state_key.strip():
+        parser.error("--state-key ou COFRE_STATE_FERNET_KEY é obrigatório")
     if args.timeout < 1 or args.timeout > 120:
         parser.error("--timeout deve estar entre 1 e 120 segundos")
     return args
@@ -279,14 +318,13 @@ def main(argv: list[str] | None = None) -> int:
     evidence_path = Path(args.evidence_file)
     try:
         result = before_restart(args) if args.phase == "before-restart" else after_restart(args)
-        evidence = build_evidence(args, result)
-        _write_json(evidence_path, evidence)
+        _write_public_json(evidence_path, build_evidence(args, result))
         print(json.dumps({"ok": True, "phase": result["phase"], "evidence_file": str(evidence_path)}))
         return 0
     except Exception as exc:
         error = str(exc)
-        evidence = build_evidence(args, {"phase": args.phase.replace("-", "_"), "ok": False}, error=error)
-        _write_json(evidence_path, evidence)
+        failure = {"phase": args.phase.replace("-", "_"), "ok": False}
+        _write_public_json(evidence_path, build_evidence(args, failure, error=error))
         print(f"Cofre Runtime Evidence Gate falhou: {error}", file=sys.stderr)
         return 1
 
