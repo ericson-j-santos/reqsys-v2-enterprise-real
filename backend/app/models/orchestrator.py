@@ -1,4 +1,4 @@
-from sqlalchemy import DateTime, Float, Integer, String, Text, func
+from sqlalchemy import DateTime, Float, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -37,3 +37,27 @@ class AdrCoordinationEvent(Base):
     ambiente: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     payload_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class AgileProjectPackage(Base):
+    __tablename__ = 'agile_project_packages'
+    __table_args__ = (
+        UniqueConstraint('package_id', name='uq_agile_project_packages_package_id'),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    package_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    schema_version: Mapped[str] = mapped_column(String(20), nullable=False, default='1.0.0')
+    status: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    integration_targets_json: Mapped[str] = mapped_column(Text, nullable=False, default='[]')
+    external_references_json: Mapped[str] = mapped_column(Text, nullable=False, default='{}')
+    created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at: Mapped[str] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        index=True,
+    )
