@@ -246,6 +246,74 @@ python scripts/scaffold_cdi_feature.py [--dry-run] [--force]  # scaffold autocon
 python scripts/replicate_requisitos_anonimizado.py --dry-run  # replica requisitos com anonimização LGPD (dry-run por padrão)
 ```
 
+### Migração e operação de banco de dados
+
+Runbook completo de migração SQLite→Postgres no Fly.io: `docs/runbooks/migracao-postgres-fly.md`.
+
+```bash
+python scripts/backup_database.py                        # backup SQLite (BACKUP_DIR, BACKUP_RETENTION_DAYS=14); apaga antigos após retenção
+python scripts/backup_database.py --dry-run              # mostra o plano sem escrever nem apagar
+python scripts/migrate_sqlite_to_postgres.py --sqlite-url sqlite:///./reqsys.db --postgres-url "$DATABASE_URL" --dry-run  # conta linhas por tabela (não escreve)
+python scripts/cutover_fly_postgres.py --app reqsys-api-dev --fly-config infra/dev/fly.toml --postgres-url "$DATABASE_URL" --dry-run  # cutover Fly SQLite→Postgres (exige --yes fora de dry-run)
+python scripts/purge_auditoria_eventos.py                # purge de auditoria por retenção (AUDITORIA_RETENTION_DAYS=180)
+```
+
+### Cobertura por domínio (ratchet)
+
+Política em `config/domain-coverage-policy.json`. O ratchet só eleva o baseline, nunca reduz.
+
+```bash
+python scripts/evaluate_domain_coverage.py --json        # avalia cobertura por domínio vs política
+python scripts/propose_domain_coverage_baseline.py --report artifacts/domain-coverage/coverage-by-domain.json  # propõe novo baseline
+python scripts/ratchet_domain_coverage_baseline.py --report artifacts/domain-coverage/coverage-by-domain.json  # ratchet (default --minimum-gain 0.5)
+```
+
+### Recuperação e diagnóstico de CI
+
+```bash
+python scripts/auto_rerun_governed.py                    # audit-only: lista reruns elegíveis (falha transitória)
+python scripts/auto_rerun_governed.py --execute          # executa reruns elegíveis
+python scripts/pr_auto_recovery.py                       # diagnósticos de recuperação de PR (report-only)
+python scripts/workflow_auto_remediation.py              # rerun de jobs falhos (dry-run por padrão; --execute aplica, --max-reruns 3)
+python scripts/github_actions_deep_diagnostic.py --repo owner/repo [--run-id N] [--job-id J]  # dossiê profundo de run/job
+python scripts/repository_health_watchdog.py --repo owner/repo  # watchdog: frescor de artifact + CI (--fail-on-critical)
+python scripts/operational_governance_orchestrator.py    # relatório report-only de governança operacional
+```
+
+### Validação de release e qualidade de testes
+
+```bash
+python scripts/release_validation_layer.py               # consolida evidência de release (audit/release-validation/)
+python scripts/validate_test_quality_gate.py --json      # maturidade mínima da estratégia de testes (config/test-quality-gate.json)
+python scripts/camada_testes_padrao_ouro.py              # camada de testes do Padrão Ouro
+```
+
+### Notificações e integrações externas
+
+```bash
+python scripts/notificar_teams.py --texto "mensagem" --titulo "ReqSys"  # envia via Teams Messaging Gateway (TEAMS_GATEWAY_BASE_URL, TEAMS_GATEWAY_DESTINO_ID)
+python scripts/notificar_teams.py --texto "..." --dry-run              # simula envio sem chamar o gateway
+python scripts/trigger_gitlab_pipeline.py --ref main     # dispara pipeline no GitLab espelho (GITLAB_TOKEN; default: ericson-j-santos/reqsys-v2-enterprise-real)
+```
+
+### Arquitetura viva — diagramas e BPMN
+
+Gerador Mermaid standalone (sem dependência de backend):
+
+```bash
+python scripts/diagram_generator.py --path backend/app --type all   # gera flowchart/class/hexagonal em .diagrams/
+python scripts/diagram_generator.py --show-versions                 # manifest de versões
+```
+
+Servidor automático de diagramas/BPMN no backend (prefixo `/v1/diagramas`, ver `docs/AUTOMATIC_DIAGRAM_BPMN_SERVER.md`): geração de Mermaid + BPMN 2.0 XML com hash SHA-256, histórico/comparação de versões e governança de promoção (`POST .../versoes/{revision}/promover`, `GET .../ativo`, `GET .../auditoria-promocoes`).
+
+### Rollback governado de observabilidade (Fly.io)
+
+```bash
+bash scripts/rollback_environment_observability_api.sh staging reqsys-api-stg infra/hml/fly.toml ghcr.io/...@sha256:<digest> https://reqsys-app-stg.fly.dev
+# Rollback permitido somente staging/production; exige digest imutável e FLY_API_TOKEN.
+```
+
 ## CI obrigatório
 
 Antes de merge em `main`, validar o workflow `CI — ReqSys v2 Enterprise` com os jobs:
@@ -295,6 +363,22 @@ Não considerar um PR pronto para merge quando o E2E responsivo estiver ausente,
 | `Workflow Command Center` | `workflow_dispatch` | Monitora e dispatcha workflows governados |
 | `Operational Intelligence Hub` | Agendado | Hub de inteligência operacional |
 | `Failure Pattern Engine` | Agendado, `workflow_dispatch` | Detecção de padrões de falha em CI |
+| `Domain Coverage Governance` | PR/push (paths: backend, domain-coverage), `workflow_dispatch` | Avalia cobertura por domínio e propõe baseline |
+| `Domain Coverage Ratchet` | `workflow_dispatch` | Ratchet de baseline de cobertura (só eleva, nunca reduz) |
+| `Domain Coverage Baseline Automation` | `workflow_dispatch` | Automação de proposta/aprovação de baseline de cobertura |
+| `Test Quality Gate — Padrão Ouro` | PR/push, `workflow_dispatch` | Maturidade mínima da estratégia de testes |
+| `Camada de Testes — Padrão Ouro` | PR/push, `workflow_dispatch` | Camada de testes do Padrão Ouro |
+| `Release Validation Layer` | Agendado, `workflow_dispatch` | Consolidação de evidência de release |
+| `Repository Health Watchdog` | Agendado, `workflow_dispatch` | Watchdog de health do repo (frescor de artifact + CI) |
+| `Actions Deep Diagnostic` | `workflow_dispatch` | Dossiê profundo de run/job do GitHub Actions |
+| `PR Auto Recovery Diagnostics` | Agendado, `workflow_dispatch` | Diagnóstico de recuperação de PRs |
+| `Notify Teams - Repo Changes` | Push main | Notificação Teams de mudanças no repo |
+| `Parallel Safe Lanes Governance` | PR, `workflow_dispatch` | Governança de lanes paralelas seguras |
+| `Main Operational Validation Fast` | Push main, `workflow_dispatch` | Validação operacional rápida pós-merge |
+| `Auto-Generate Diagrams` | Push/PR (paths: backend) | Geração automática de diagramas da arquitetura viva |
+| `Stale PR Governance Watch` | Agendado, `workflow_dispatch` | Monitoramento de PRs estagnados |
+| `Branch Protection Audit` | PR, `workflow_dispatch`, agendado | Auditoria de proteção de branches |
+| `Self-Hosted Runner Governance Guard` | PR/push, `workflow_dispatch` | Governança de self-hosted runners |
 
 ## Gates de produção
 
