@@ -9,9 +9,11 @@ on:
       - 'backend/tests/test_lowcode_teams_notification_profile.py'
       - 'backend/tests/test_teams_notification_solution_factory.py'
       - 'backend/tests/test_validate_powerplatform_solution_zip.py'
+      - 'backend/tests/test_activate_powerautomate_flow.py'
       - 'scripts/materialize_teams_notification_solution.py'
       - 'scripts/validate_teams_notification_dev_import.py'
       - 'scripts/validate_powerplatform_solution_zip.py'
+      - 'scripts/activate_powerautomate_flow.py'
       - '.github/workflows/teams-notification-solution-contract.yml'
       - '.github/workflows/teams-notification-dev-import.yml'
   workflow_dispatch:
@@ -60,7 +62,8 @@ jobs:
             app/services/teams_notification_solution_factory.py \
             ../scripts/materialize_teams_notification_solution.py \
             ../scripts/validate_teams_notification_dev_import.py \
-            ../scripts/validate_powerplatform_solution_zip.py
+            ../scripts/validate_powerplatform_solution_zip.py \
+            ../scripts/activate_powerautomate_flow.py
 
       - name: Run focused contract tests
         run: |
@@ -68,7 +71,8 @@ jobs:
             tests/test_teams_notification_solution_factory.py \
             tests/test_lowcode_solution_factory.py \
             tests/test_lowcode_teams_notification_profile.py \
-            tests/test_validate_powerplatform_solution_zip.py
+            tests/test_validate_powerplatform_solution_zip.py \
+            tests/test_activate_powerautomate_flow.py
 
       - name: Materialize DEV package
         working-directory: .
