@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -23,7 +24,9 @@ class AgilePublishRequest:
 class AgileWorkItemPublisher(Protocol):
     provider: str
 
+    @abstractmethod
     def publish(self, package: dict, request: AgilePublishRequest) -> dict:
+        """Publica um pacote Agile no provider configurado."""
         raise NotImplementedError
 
 
