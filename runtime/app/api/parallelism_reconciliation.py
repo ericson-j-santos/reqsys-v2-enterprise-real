@@ -133,14 +133,17 @@ class ParallelismReconciler:
         return results
 
 
-router = APIRouter(prefix="/api/runtime/parallelism", tags=["runtime-parallelism-reconciliation"])
+router = APIRouter(
+    prefix="/api/runtime/parallelism/reconciliation",
+    tags=["runtime-parallelism-reconciliation"],
+)
 
 
 def get_reconciler() -> ParallelismReconciler:  # pragma: no cover
     raise RuntimeError("ParallelismReconciler não configurado")
 
 
-@router.post("/{target}/confirm")
+@router.post("/confirm/{target}")
 async def confirm_target(target: Target, reconciler: ParallelismReconciler = Depends(get_reconciler)) -> dict[str, Any]:
     result = await reconciler.reconcile_target(target)
     if result["action"] == "WAITING":
@@ -148,7 +151,7 @@ async def confirm_target(target: Target, reconciler: ParallelismReconciler = Dep
     return result
 
 
-@router.post("/reconcile")
+@router.post("/run")
 async def reconcile(reconciler: ParallelismReconciler = Depends(get_reconciler)) -> dict[str, Any]:
     return {"results": await reconciler.reconcile_all(), "metrics": reconciler.metrics.snapshot()}
 
