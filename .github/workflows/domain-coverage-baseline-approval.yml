@@ -14,10 +14,41 @@ permissions:
   pull-requests: read
 
 jobs:
+  scope-router:
+    name: Detectar alteração de baseline
+    runs-on: ubuntu-latest
+    outputs:
+      run_gate: ${{ steps.scope.outputs.run_gate }}
+    steps:
+      - name: Verificar arquivos alterados no PR
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "run_gate=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          RUN_GATE="$(gh api \
+            --repo "${{ github.repository }}" \
+            --paginate \
+            "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
+            --jq '[.[].filename | select(
+              . == "config/domain-coverage-policy.json" or
+              . == "docs/ops-dashboard/data/domain-coverage-baseline-diff.json"
+            )] | length > 0')"
+
+          echo "run_gate=${RUN_GATE}" >> "$GITHUB_OUTPUT"
+
   validate-approved-baseline:
-    if: >-
-      github.event_name == 'pull_request' ||
-      (github.event.pull_request.base.ref == 'main')
+    name: Validar baseline aprovado
+    needs: scope-router
+    if: needs.scope-router.outputs.run_gate == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR
@@ -31,8 +62,14 @@ jobs:
           import json
           from pathlib import Path
 
-          policy = json.loads(Path('config/domain-coverage-policy.json').read_text(encoding='utf-8'))
-          diff = json.loads(Path('docs/ops-dashboard/data/domain-coverage-baseline-diff.json').read_text(encoding='utf-8'))
+          policy_path = Path('config/domain-coverage-policy.json')
+          diff_path = Path('docs/ops-dashboard/data/domain-coverage-baseline-diff.json')
+
+          assert policy_path.is_file(), f'política ausente: {policy_path}'
+          assert diff_path.is_file(), f'evidência de diff ausente: {diff_path}'
+
+          policy = json.loads(policy_path.read_text(encoding='utf-8'))
+          diff = json.loads(diff_path.read_text(encoding='utf-8'))
 
           assert policy.get('mode') == 'regression_gate', 'modo regression_gate não ativado'
           assert policy.get('baseline'), 'baseline não pode ser vazio'
