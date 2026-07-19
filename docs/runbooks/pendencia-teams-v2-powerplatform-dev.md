@@ -21,6 +21,33 @@ não rodar assim antes de validar manualmente a escrita fora do CI.
 2. a solution/flow oficial do Teams v2 ainda precisa ser definida/empacotada
    e seu `solution_name` e `novo_flow_display_name` reais confirmados.
 
+## Atualização (2026-07-19, mesmo dia) — REQSYS_API_BASE_URL cadastrado e corrigido
+
+Cadastrado `REQSYS_API_BASE_URL` no environment `reqsys-power-platform-dev`
+(valor não sensível — URL pública, não é segredo). Primeira tentativa usou
+`https://reqsys-api.fly.dev` (produção) por engano; corrigido para
+**`https://reqsys-api-dev.fly.dev`** (app Fly `reqsys-api-dev`,
+`backend/fly.dev.toml`) — é o backend correto para um workflow de import em
+DEV. Confirmado ao vivo: `GET /health` responde `200 ok`.
+
+**Investigado e descartado: login demo como fonte do `REQSYS_API_ADMIN_TOKEN`.**
+O código (`backend/app/api/auth.py`, `POST /v1/auth/login`) tem um login demo
+sem senha, e `backend/fly.dev.toml` no repo declara `ALLOW_DEMO_LOGIN=true` +
+`PUBLIC_ENVIRONMENT=development` para esse app — em teoria habilitado. Testado
+ao vivo contra `https://reqsys-api-dev.fly.dev`:
+
+- `GET /v1/auth/config` → `"demo_login_enabled": false`
+- `POST /v1/auth/login` → `403 Forbidden`
+
+Ou seja, **na prática o login demo está desligado** no deploy real, apesar do
+`fly.dev.toml` do repo sugerir o contrário (provável override via `fly
+secrets set` direto no app, não versionado) — postura de segurança correta,
+mas fecha esse atalho. `REQSYS_API_ADMIN_TOKEN` continua sem um mecanismo de
+emissão: não existe hoje nenhum token de serviço para rotas `require_admin`
+(diferente do `VAULT_API_TOKEN`/tokens escopados do cofre). Precisa de um
+mecanismo novo (fora do escopo de "configurar secrets" — é trabalho de
+design/código) antes de rodar o workflow com `dry_run=false`.
+
 ## Workflow criado
 
 `.github/workflows/teams-notification-dev-import.yml` — chama
@@ -43,8 +70,8 @@ os `POWER_PLATFORM_*` da nota original):**
 
 | Secret | Uso | Status |
 | --- | --- | --- |
-| `REQSYS_API_BASE_URL` | Base URL da API ReqSys (ex.: `https://reqsys-api.fly.dev`) | Não confirmado se já existe no environment — checar antes do primeiro uso real. |
-| `REQSYS_API_ADMIN_TOKEN` | JWT de usuário com `papel=admin`, exigido por `require_admin` no endpoint `/v1/teams-gateway/flow-bot/promover-solution` | **Não existe hoje nenhum secret assim no repositório** — não há endpoint de emissão de token de serviço para rotas admin (diferente do `VAULT_API_TOKEN`/tokens escopados do cofre); hoje só existe login humano via JWT normal. Precisa decidir como esse token será gerado/rotacionado antes do primeiro uso real (`dry_run=false`). |
+| `REQSYS_API_BASE_URL` | Base URL da API ReqSys DEV | **Cadastrado em 2026-07-19** com `https://reqsys-api-dev.fly.dev` (corrigido de uma primeira tentativa errada com a URL de produção). |
+| `REQSYS_API_ADMIN_TOKEN` | JWT de usuário com `papel=admin`, exigido por `require_admin` no endpoint `/v1/teams-gateway/flow-bot/promover-solution` | **Ainda não existe.** Login demo (`POST /v1/auth/login`) foi testado como atalho e está de fato desligado em produção do app DEV (`demo_login_enabled: false`, `403` ao chamar) — não há mecanismo de token de serviço para rotas admin hoje. Precisa de trabalho de design/código antes do primeiro uso real (`dry_run=false`). |
 
 **Inputs do workflow** (`environment_url_origem`, `environment_url_destino`,
 `solution_name`, `connection_reference_logical_name`, `connection_id_destino`,
