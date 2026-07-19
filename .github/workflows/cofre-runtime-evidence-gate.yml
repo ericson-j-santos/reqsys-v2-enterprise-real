@@ -35,13 +35,13 @@ permissions:
   actions: read
 
 concurrency:
-  group: cofre-runtime-evidence-${{ inputs.environment }}
+  group: cofre-runtime-evidence-${{ github.workflow }}-${{ github.ref_name }}
   cancel-in-progress: false
 
 env:
   ARTIFACT_DIR: artifacts/cofre-runtime-evidence
   STATE_FILE: ${{ runner.temp }}/cofre-runtime-state.bin
-  CORRELATION_ID: cofre-runtime-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.environment }}
+  CORRELATION_ID: cofre-runtime-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
   validate-inputs:
