@@ -41,6 +41,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "$EVENT_NAME" = "workflow_run" ]; then
             echo "run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
@@ -54,8 +55,6 @@ jobs:
             test -n "$run_id"
             echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           fi
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Download comparative smoke history
         env:
