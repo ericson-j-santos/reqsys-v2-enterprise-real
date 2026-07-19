@@ -108,6 +108,12 @@ cd backend
 python -m pytest tests/test_cofre_api.py tests/test_cofre_service.py -v
 ```
 
+## Pendências relacionadas
+
+- [Pendência manual — Teams v2 no Power Platform DEV](pendencia-teams-v2-powerplatform-dev.md):
+  cadastro/revalidação de secrets do environment `reqsys-power-platform-dev` e
+  criação do workflow de import ainda inexistente.
+
 ## Referências
 
 - [ADR-041](../adr/ADR-041-cofre-segredos-locais.md)
