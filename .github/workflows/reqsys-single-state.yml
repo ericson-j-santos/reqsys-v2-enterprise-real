@@ -1,0 +1,49 @@
+name: ReqSys Single State
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Unified Executive Integration Index"]
+    types: [completed]
+  schedule:
+    - cron: "23 */6 * * *"
+
+permissions:
+  contents: read
+
+env:
+  SOURCE: docs/ops-dashboard/data/unified-executive-integration-index.json
+  OUTPUT: docs/ops-dashboard/data/reqsys-single-state.json
+
+jobs:
+  publish-single-state:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate publisher
+        run: python -m pytest -q tests/test_publish_reqsys_single_state.py
+      - name: Publish canonical contract
+        run: python scripts/publish_reqsys_single_state.py --source "$SOURCE" --output "$OUTPUT"
+      - name: Add executive summary
+        run: |
+          python - <<'PY'
+          import json, os
+          data = json.load(open(os.environ["OUTPUT"], encoding="utf-8"))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write("# ReqSys Single State\n\n")
+              out.write(f"- Status: **{data['status']}**\n")
+              out.write(f"- Confidence: **{data['confidence']}**\n")
+              out.write(f"- Human approval required: **{data['human_approval_required']}**\n")
+              out.write("- Consumers: **Governance, Runtime, Analytics**\n")
+              out.write(f"- Next safe increment: {data['state']['next_safe_increment']}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-single-state
+          path: ${{ env.OUTPUT }}
+          retention-days: 90
