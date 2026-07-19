@@ -6,16 +6,52 @@ Repositório: `ericson-j-santos/reqsys-v2-enterprise-real`
 
 ## Decisão registrada (2026-07-19)
 
-Após a avaliação abaixo, decisão do usuário: **apenas documentar por ora — não
-criar ainda o workflow `Teams Notification DEV Import`**. Motivo: falta
-validar manualmente a escrita (`ImportSolution`/vínculo de conexão/ativação)
-contra o tenant real antes de automatizar via CI, e falta confirmar se a
-solution `ReqSysTeamsNotifications` existe de fato (não localizada no
-Dataverse nem no repositório). Retomar este runbook quando:
+Decisão inicial do usuário foi "apenas documentar por ora". Revista no mesmo
+dia: o usuário pediu para montar o workflow assim mesmo, com os bloqueios
+sinalizados (opção B da avaliação). Criado
+`.github/workflows/teams-notification-dev-import.yml` — ver seção
+"Workflow criado" abaixo. **O bloqueio de escrita nunca validada ao vivo
+continua de pé**: o workflow nasce com `dry_run: true` por padrão e só
+executa a chamada real quando disparado explicitamente com `dry_run=false` —
+não rodar assim antes de validar manualmente a escrita fora do CI.
 
-1. a escrita via `promover_flow_para_ambiente` tiver sido validada manualmente
-   uma vez em DEV (fora de CI, com rollback manual disponível); e
-2. a solution/flow oficial do Teams v2 estiver de fato empacotada e nomeada.
+1. a escrita via `promover_flow_para_ambiente` ainda precisa ser validada
+   manualmente uma vez em DEV (fora de CI, com rollback manual disponível)
+   antes de disparar este workflow com `dry_run=false`; e
+2. a solution/flow oficial do Teams v2 ainda precisa ser definida/empacotada
+   e seu `solution_name` e `novo_flow_display_name` reais confirmados.
+
+## Workflow criado
+
+`.github/workflows/teams-notification-dev-import.yml` — chama
+`POST /v1/teams-gateway/flow-bot/promover-solution` (reaproveita o código já
+implementado, não reimplementa chamadas Dataverse na Action) em vez de
+espelhar literalmente o `pac solution import` do `copilot-hitl-dev-import.yml`
+— ver justificativa na seção "Avaliação" abaixo.
+
+**Reaproveitado de `copilot-hitl-dev-import.yml`:** `environment:
+reqsys-power-platform-dev`, guard rail de `confirmation` com string exata
+(`IMPORT-REQSYS-TEAMS-V2-DEV`, conforme pedido na nota original),
+`concurrency` dedicado, upload de evidência em artifact.
+
+**Diferente do original, por ser uma operação nunca validada ao vivo:**
+input extra `dry_run` (default `'true'`) — só gera e valida o payload da
+requisição como evidência; a chamada real só acontece com `dry_run=false`.
+
+**Secrets necessários no environment `reqsys-power-platform-dev` (novos, não
+os `POWER_PLATFORM_*` da nota original):**
+
+| Secret | Uso | Status |
+| --- | --- | --- |
+| `REQSYS_API_BASE_URL` | Base URL da API ReqSys (ex.: `https://reqsys-api.fly.dev`) | Não confirmado se já existe no environment — checar antes do primeiro uso real. |
+| `REQSYS_API_ADMIN_TOKEN` | JWT de usuário com `papel=admin`, exigido por `require_admin` no endpoint `/v1/teams-gateway/flow-bot/promover-solution` | **Não existe hoje nenhum secret assim no repositório** — não há endpoint de emissão de token de serviço para rotas admin (diferente do `VAULT_API_TOKEN`/tokens escopados do cofre); hoje só existe login humano via JWT normal. Precisa decidir como esse token será gerado/rotacionado antes do primeiro uso real (`dry_run=false`). |
+
+**Inputs do workflow** (`environment_url_origem`, `environment_url_destino`,
+`solution_name`, `connection_reference_logical_name`, `connection_id_destino`,
+`novo_flow_display_name`, `managed`) mapeiam direto para o corpo de
+`TeamsFlowBotPromoverSolutionRequest` — precisam ser preenchidos manualmente a
+cada execução real, não há defaults seguros (dependem do ambiente/solution/
+conexão reais no momento).
 
 ## Nota original recebida
 
@@ -104,22 +140,20 @@ limite de tentativas antes de produção).
 
 ## O que falta de fato (gap real, só cadastro de secret não resolve)
 
-1. **Criar o workflow `Teams Notification DEV Import`** — hoje ele não existe.
-   Se for para seguir o padrão já estabelecido, o caminho natural é espelhar
-   `.github/workflows/copilot-hitl-dev-import.yml` (mesmo `environment:
-   reqsys-power-platform-dev`, mesmo padrão de confirmação obrigatória,
-   materialização de solution + `pac solution import` + smoke test), trocando
-   os artefatos para a solution/flow do Teams v2.
-2. **Confirmar se os 4 secrets já existentes em `reqsys-power-platform-dev`
-   ainda são válidos** (não rotacionados/expirados) antes de reusá-los —
-   evita assumir que "cadastrar" ainda é necessário quando na verdade é só
-   "revalidar".
+1. ~~Criar o workflow `Teams Notification DEV Import`~~ — **feito**, ver
+   "Workflow criado" acima. Continua faltando: cadastrar `REQSYS_API_BASE_URL`
+   e `REQSYS_API_ADMIN_TOKEN` (novo tipo de secret, sem precedente no repo) e
+   validar manualmente a escrita antes de rodar com `dry_run=false`.
+2. **Confirmar se os 4 secrets `POWER_PLATFORM_*` já existentes em
+   `reqsys-power-platform-dev` ainda são válidos** (não rotacionados/expirados)
+   — relevante se algum dia o caminho `pac`/`microsoft/powerplatform-actions`
+   for adotado em vez do endpoint ReqSys; não são usados pelo workflow criado.
 3. **Definir e empacotar a solution oficial** (`ReqSysTeamsNotifications` ou
    nome definitivo) e o flow correspondente, já que hoje o ambiente Dataverse
    só tem o flow `robo_envia_teams20260108v2` dentro de
    `robo_envia_mensagem_teams`.
 
-## Caminho no GitHub (quando o workflow existir)
+## Caminho no GitHub
 
 ```text
 Repository → Settings → Environments → reqsys-power-platform-dev → Environment secrets

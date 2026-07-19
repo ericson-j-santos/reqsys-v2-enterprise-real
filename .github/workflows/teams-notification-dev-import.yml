@@ -1,0 +1,163 @@
+name: Teams Notification DEV Import
+
+# Promove/importa a Solution do Teams (flow_bot) para o ambiente DEV chamando
+# a API ja implementada do ReqSys (POST /v1/teams-gateway/flow-bot/promover-solution),
+# em vez de reimplementar chamadas Dataverse aqui — ver avaliacao completa em
+# docs/runbooks/pendencia-teams-v2-powerplatform-dev.md.
+#
+# BLOQUEIO CONHECIDO (ler antes de rodar com dry_run=false):
+# a escrita desse endpoint (ImportSolution / vincular connection reference /
+# ativar flow) nunca foi validada ao vivo contra o tenant real — so leitura
+# foi confirmada (ver docs/architecture/teams-messaging-gateway.md, secao
+# "Automacao"). Rodar com dry_run=false aciona essa escrita pela primeira vez
+# em producao. Validar manualmente uma vez, fora deste workflow, antes disso.
+#
+# connection_id_destino tem que ser coletado manualmente: e o GUID de uma
+# conexao Teams ja autorizada interativamente por um humano no ambiente de
+# destino — a Microsoft nao permite criar/autorizar essa conexao via API.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Digite IMPORT-REQSYS-TEAMS-V2-DEV para autorizar a operacao em DEV'
+        required: true
+        type: string
+      dry_run:
+        description: 'true = so valida e gera o payload de evidencia, sem chamar a API (escrita nunca validada ao vivo — ver aviso acima)'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      environment_url_origem:
+        description: 'Dataverse URL de origem da Solution (ex.: https://<org>.crm.dynamics.com)'
+        required: true
+        type: string
+      environment_url_destino:
+        description: 'Dataverse URL de destino (DEV)'
+        required: true
+        type: string
+      solution_name:
+        description: 'Nome unico (nao display name) da Solution, ex.: robo_envia_mensagem_teams'
+        required: true
+        type: string
+      connection_reference_logical_name:
+        description: 'Logical name da connection reference do conector Teams dentro da Solution'
+        required: true
+        type: string
+      connection_id_destino:
+        description: 'GUID da conexao Teams ja autorizada manualmente no ambiente de destino'
+        required: true
+        type: string
+      novo_flow_display_name:
+        description: 'Display name do cloud flow a localizar/ativar apos o import'
+        required: true
+        type: string
+      managed:
+        description: 'Exportar/importar como Solution managed'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-notification-dev-import
+  cancel-in-progress: false
+
+jobs:
+  import-dev:
+    name: Promover/importar flow Teams via API ReqSys
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: reqsys-power-platform-dev
+    env:
+      CONFIRMATION: ${{ inputs.confirmation }}
+      DRY_RUN: ${{ inputs.dry_run }}
+      ENVIRONMENT_URL_ORIGEM: ${{ inputs.environment_url_origem }}
+      ENVIRONMENT_URL_DESTINO: ${{ inputs.environment_url_destino }}
+      SOLUTION_NAME: ${{ inputs.solution_name }}
+      CONNECTION_REFERENCE_LOGICAL_NAME: ${{ inputs.connection_reference_logical_name }}
+      CONNECTION_ID_DESTINO: ${{ inputs.connection_id_destino }}
+      NOVO_FLOW_DISPLAY_NAME: ${{ inputs.novo_flow_display_name }}
+      MANAGED: ${{ inputs.managed }}
+      REQSYS_API_BASE_URL: ${{ secrets.REQSYS_API_BASE_URL }}
+      REQSYS_API_ADMIN_TOKEN: ${{ secrets.REQSYS_API_ADMIN_TOKEN }}
+    steps:
+      - name: Enforce explicit DEV confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$CONFIRMATION" != 'IMPORT-REQSYS-TEAMS-V2-DEV' ]]; then
+            echo '::error::Confirmacao invalida. Informe IMPORT-REQSYS-TEAMS-V2-DEV.'
+            exit 1
+          fi
+
+      - name: Build promover-solution request payload (evidencia — nunca contem secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python3 - <<'PY'
+          import json
+          import os
+
+          payload = {
+              "environment_url_origem": os.environ["ENVIRONMENT_URL_ORIGEM"],
+              "environment_url_destino": os.environ["ENVIRONMENT_URL_DESTINO"],
+              "solution_name": os.environ["SOLUTION_NAME"],
+              "connection_reference_logical_name": os.environ["CONNECTION_REFERENCE_LOGICAL_NAME"],
+              "connection_id_destino": os.environ["CONNECTION_ID_DESTINO"],
+              "novo_flow_display_name": os.environ["NOVO_FLOW_DISPLAY_NAME"],
+              "managed": os.environ["MANAGED"] == "true",
+          }
+          with open("artifacts/promover-solution-request.json", "w", encoding="utf-8") as fh:
+              json.dump(payload, fh, indent=2, ensure_ascii=False)
+          print(json.dumps(payload, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Skip real call (dry_run)
+        if: ${{ inputs.dry_run == 'true' }}
+        shell: bash
+        run: |
+          echo '::notice::dry_run=true — nenhuma chamada real foi feita. Apenas o payload em artifacts/promover-solution-request.json foi validado/gerado.'
+
+      - name: Call POST /v1/teams-gateway/flow-bot/promover-solution (escrita real)
+        if: ${{ inputs.dry_run == 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${REQSYS_API_BASE_URL:-}" ]]; then
+            echo '::error::Secret REQSYS_API_BASE_URL nao configurado no Environment reqsys-power-platform-dev.'
+            exit 1
+          fi
+          if [[ -z "${REQSYS_API_ADMIN_TOKEN:-}" ]]; then
+            echo '::error::Secret REQSYS_API_ADMIN_TOKEN nao configurado no Environment reqsys-power-platform-dev.'
+            exit 1
+          fi
+          http_code="$(curl -sS -o artifacts/promover-solution-response.json -w '%{http_code}' \
+            -X POST "${REQSYS_API_BASE_URL%/}/v1/teams-gateway/flow-bot/promover-solution" \
+            -H "Authorization: Bearer ${REQSYS_API_ADMIN_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data @artifacts/promover-solution-request.json)"
+          echo "HTTP $http_code"
+          cat artifacts/promover-solution-response.json
+          if [[ "$http_code" -ge 300 ]]; then
+            echo '::error::Falha em POST /v1/teams-gateway/flow-bot/promover-solution.'
+            exit 1
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-notification-dev-import-evidence
+          path: artifacts/*.json
+          retention-days: 30
+          if-no-files-found: warn
