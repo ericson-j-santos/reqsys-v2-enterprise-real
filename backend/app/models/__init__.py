@@ -25,6 +25,7 @@ from app.models.requisito import (  # noqa: F401
     RecommendationIAOutcome,
     Requisito,
 )
+from app.models.service_token import ServiceToken  # noqa: F401
 from app.models.teams_flow_bot_owner import TeamsFlowBotOwner  # noqa: F401
 from app.models.teams_notification_queue import TeamsNotificationQueueItem  # noqa: F401
 from app.models.teams_notification_recipient import (
