@@ -38,6 +38,7 @@ from app.api import (
     relatorios,
     requisitos,
     runtime_analytics,
+    service_tokens,
     sistema,
     specs,
     teams_gateway,
@@ -112,6 +113,7 @@ app.include_router(processos.router)
 app.include_router(wiki.router)
 app.include_router(specs.router)
 app.include_router(cofre.router)
+app.include_router(service_tokens.router)
 app.include_router(connectors.router)
 app.include_router(ia.router)
 app.include_router(incidentes.router)

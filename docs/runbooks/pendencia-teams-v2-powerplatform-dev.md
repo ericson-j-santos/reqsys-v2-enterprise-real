@@ -42,11 +42,67 @@ ao vivo contra `https://reqsys-api-dev.fly.dev`:
 Ou seja, **na prática o login demo está desligado** no deploy real, apesar do
 `fly.dev.toml` do repo sugerir o contrário (provável override via `fly
 secrets set` direto no app, não versionado) — postura de segurança correta,
-mas fecha esse atalho. `REQSYS_API_ADMIN_TOKEN` continua sem um mecanismo de
-emissão: não existe hoje nenhum token de serviço para rotas `require_admin`
-(diferente do `VAULT_API_TOKEN`/tokens escopados do cofre). Precisa de um
-mecanismo novo (fora do escopo de "configurar secrets" — é trabalho de
-design/código) antes de rodar o workflow com `dry_run=false`.
+mas fecha esse atalho. `REQSYS_API_ADMIN_TOKEN` continuava sem um mecanismo de
+emissão: não existia nenhum token de serviço para rotas `require_admin`
+(diferente do `VAULT_API_TOKEN`/tokens escopados do cofre). **Resolvido** —
+ver seção "Mecanismo de token de serviço admin" abaixo.
+
+## Atualização (2026-07-19, mesmo dia) — mecanismo de token de serviço admin implementado
+
+Desenhado e implementado, espelhando o padrão já usado pelo cofre
+(`VaultToken`/ADR-041: hash SHA-256, revogável, auditável, escopado — nunca
+grava o token em claro):
+
+- **Modelo** `backend/app/models/service_token.py` (`ServiceToken`): `label`,
+  `token_hash`, `scopes` (JSON), `expires_at` opcional, `last_used_at`,
+  `revoked_at`. Registrado em `app/models/__init__.py` para
+  `Base.metadata.create_all` criar a tabela automaticamente (mesmo mecanismo
+  do `vault_tokens`, sem migration Alembic dedicada — consistente com o
+  padrão já usado no repo).
+- **Dependência** `backend/app/core/service_tokens.py`:
+  `require_admin_or_service_token(escopo)` — aceita **ou** JWT com
+  `papel=admin` (humano, via `Authorization: Bearer`) **ou** header
+  `X-Service-Token` com um token não revogado/não expirado cujo `scopes`
+  contenha o escopo pedido ou `"*"`. Generalizado — qualquer rota
+  `require_admin` pode passar a aceitar automação trocando a dependência.
+- **Rotas de gestão** `backend/app/api/service_tokens.py`
+  (`/v1/admin/service-tokens`, só admin JWT):
+  - `POST` — cria o token (`label`, `scopes`, `expires_in_days` opcional); o
+    valor em claro só aparece nessa resposta, uma vez.
+  - `GET` — lista sem expor o valor.
+  - `DELETE /{id}` — revoga (idempotente).
+  - Toda criação/revogação gera `AuditoriaEvento`
+    (`SERVICE_TOKEN_CRIADO`/`SERVICE_TOKEN_REVOGADO`), igual ao cofre.
+- **Endpoint `POST /v1/teams-gateway/flow-bot/promover-solution`** trocou
+  `require_admin` por `require_admin_or_service_token('teams_gateway:promover_solution')`
+  e ganhou auditoria própria (`TEAMS_FLOW_BOT_PROMOCAO_INICIADA/CONCLUIDA/FALHA`),
+  que não existia antes.
+- **Testes**: `backend/tests/test_service_tokens_api.py` (CRUD, RBAC, não
+  vazamento do valor) e `backend/tests/test_teams_gateway_flow_bot_promover_api.py`
+  atualizado (JWT admin humano continua funcionando; casos novos de token
+  válido/escopo errado/revogado/inválido). 16/16 passando.
+- **Workflow** `teams-notification-dev-import.yml` atualizado: secret
+  renomeado de `REQSYS_API_ADMIN_TOKEN` para **`REQSYS_API_SERVICE_TOKEN`**
+  (nome reflete que não é mais um JWT humano) e o header mudou de
+  `Authorization: Bearer` para `X-Service-Token`.
+
+**Para gerar o `REQSYS_API_SERVICE_TOKEN` de verdade (ainda pendente):**
+alguém com JWT admin precisa chamar uma vez, contra `reqsys-api-dev.fly.dev`:
+
+```bash
+curl -X POST https://reqsys-api-dev.fly.dev/v1/admin/service-tokens \
+  -H "Authorization: Bearer <jwt_admin>" \
+  -H "Content-Type: application/json" \
+  -d '{"label": "github-actions-teams-import", "scopes": ["teams_gateway:promover_solution"]}'
+```
+
+O `token` da resposta vai direto para
+`gh secret set REQSYS_API_SERVICE_TOKEN --env reqsys-power-platform-dev` —
+**nunca** deve ser colado em chat, issue, PR ou commit. Como o login demo está
+desligado em `reqsys-api-dev.fly.dev`, esse JWT admin inicial só sai de um
+login humano real (Azure AD ou certificado) — segue sendo um passo manual,
+mas agora existe *onde* apontar esse passo, em vez de faltar o mecanismo
+inteiro.
 
 ## Workflow criado
 
@@ -71,7 +127,7 @@ os `POWER_PLATFORM_*` da nota original):**
 | Secret | Uso | Status |
 | --- | --- | --- |
 | `REQSYS_API_BASE_URL` | Base URL da API ReqSys DEV | **Cadastrado em 2026-07-19** com `https://reqsys-api-dev.fly.dev` (corrigido de uma primeira tentativa errada com a URL de produção). |
-| `REQSYS_API_ADMIN_TOKEN` | JWT de usuário com `papel=admin`, exigido por `require_admin` no endpoint `/v1/teams-gateway/flow-bot/promover-solution` | **Ainda não existe.** Login demo (`POST /v1/auth/login`) foi testado como atalho e está de fato desligado em produção do app DEV (`demo_login_enabled: false`, `403` ao chamar) — não há mecanismo de token de serviço para rotas admin hoje. Precisa de trabalho de design/código antes do primeiro uso real (`dry_run=false`). |
+| `REQSYS_API_SERVICE_TOKEN` | Token de serviço escopado (`teams_gateway:promover_solution`), exigido por `require_admin_or_service_token` no endpoint `/v1/teams-gateway/flow-bot/promover-solution` — mecanismo novo, ver "mecanismo de token de serviço admin" acima | **Mecanismo implementado; token ainda não gerado/cadastrado.** Precisa de um JWT admin humano (login real, já que o demo está desligado) para mintar o token uma vez via `POST /v1/admin/service-tokens`. |
 
 **Inputs do workflow** (`environment_url_origem`, `environment_url_destino`,
 `solution_name`, `connection_reference_logical_name`, `connection_id_destino`,
@@ -167,10 +223,13 @@ limite de tentativas antes de produção).
 
 ## O que falta de fato (gap real, só cadastro de secret não resolve)
 
-1. ~~Criar o workflow `Teams Notification DEV Import`~~ — **feito**, ver
-   "Workflow criado" acima. Continua faltando: cadastrar `REQSYS_API_BASE_URL`
-   e `REQSYS_API_ADMIN_TOKEN` (novo tipo de secret, sem precedente no repo) e
-   validar manualmente a escrita antes de rodar com `dry_run=false`.
+1. ~~Criar o workflow `Teams Notification DEV Import`~~ — **feito**.
+   ~~Cadastrar `REQSYS_API_BASE_URL`~~ — **feito**.
+   ~~Mecanismo de token de serviço admin~~ — **feito**
+   (`require_admin_or_service_token`, ver acima). Continua faltando: gerar o
+   `REQSYS_API_SERVICE_TOKEN` de verdade (exige login admin humano, uma vez)
+   e cadastrá-lo, e validar manualmente a escrita antes de rodar com
+   `dry_run=false`.
 2. **Confirmar se os 4 secrets `POWER_PLATFORM_*` já existentes em
    `reqsys-power-platform-dev` ainda são válidos** (não rotacionados/expirados)
    — relevante se algum dia o caminho `pac`/`microsoft/powerplatform-actions`

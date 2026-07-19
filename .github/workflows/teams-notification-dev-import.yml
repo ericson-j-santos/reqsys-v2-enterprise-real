@@ -15,6 +15,10 @@ name: Teams Notification DEV Import
 # connection_id_destino tem que ser coletado manualmente: e o GUID de uma
 # conexao Teams ja autorizada interativamente por um humano no ambiente de
 # destino — a Microsoft nao permite criar/autorizar essa conexao via API.
+#
+# Autenticacao na API ReqSys: X-Service-Token escopado para
+# "teams_gateway:promover_solution" (nao um JWT admin humano) — ver
+# backend/app/core/service_tokens.py e POST /v1/admin/service-tokens.
 
 on:
   workflow_dispatch:
@@ -88,7 +92,7 @@ jobs:
       NOVO_FLOW_DISPLAY_NAME: ${{ inputs.novo_flow_display_name }}
       MANAGED: ${{ inputs.managed }}
       REQSYS_API_BASE_URL: ${{ secrets.REQSYS_API_BASE_URL }}
-      REQSYS_API_ADMIN_TOKEN: ${{ secrets.REQSYS_API_ADMIN_TOKEN }}
+      REQSYS_API_SERVICE_TOKEN: ${{ secrets.REQSYS_API_SERVICE_TOKEN }}
     steps:
       - name: Enforce explicit DEV confirmation
         shell: bash
@@ -137,13 +141,13 @@ jobs:
             echo '::error::Secret REQSYS_API_BASE_URL nao configurado no Environment reqsys-power-platform-dev.'
             exit 1
           fi
-          if [[ -z "${REQSYS_API_ADMIN_TOKEN:-}" ]]; then
-            echo '::error::Secret REQSYS_API_ADMIN_TOKEN nao configurado no Environment reqsys-power-platform-dev.'
+          if [[ -z "${REQSYS_API_SERVICE_TOKEN:-}" ]]; then
+            echo '::error::Secret REQSYS_API_SERVICE_TOKEN nao configurado no Environment reqsys-power-platform-dev.'
             exit 1
           fi
           http_code="$(curl -sS -o artifacts/promover-solution-response.json -w '%{http_code}' \
             -X POST "${REQSYS_API_BASE_URL%/}/v1/teams-gateway/flow-bot/promover-solution" \
-            -H "Authorization: Bearer ${REQSYS_API_ADMIN_TOKEN}" \
+            -H "X-Service-Token: ${REQSYS_API_SERVICE_TOKEN}" \
             -H 'Content-Type: application/json' \
             --data @artifacts/promover-solution-request.json)"
           echo "HTTP $http_code"
