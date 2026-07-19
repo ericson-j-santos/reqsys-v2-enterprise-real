@@ -4,6 +4,19 @@ Status: **PENDENTE** (ação humana fora do código)
 Data de registro: 2026-07-19
 Repositório: `ericson-j-santos/reqsys-v2-enterprise-real`
 
+## Decisão registrada (2026-07-19)
+
+Após a avaliação abaixo, decisão do usuário: **apenas documentar por ora — não
+criar ainda o workflow `Teams Notification DEV Import`**. Motivo: falta
+validar manualmente a escrita (`ImportSolution`/vínculo de conexão/ativação)
+contra o tenant real antes de automatizar via CI, e falta confirmar se a
+solution `ReqSysTeamsNotifications` existe de fato (não localizada no
+Dataverse nem no repositório). Retomar este runbook quando:
+
+1. a escrita via `promover_flow_para_ambiente` tiver sido validada manualmente
+   uma vez em DEV (fora de CI, com rollback manual disponível); e
+2. a solution/flow oficial do Teams v2 estiver de fato empacotada e nomeada.
+
 ## Nota original recebida
 
 > Cadastrar 4 Environment secrets (`POWERPLATFORM_DEV_ENVIRONMENT_URL`,
