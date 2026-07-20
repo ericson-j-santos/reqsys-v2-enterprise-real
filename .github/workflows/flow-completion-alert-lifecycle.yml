@@ -40,6 +40,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check pytest
+
       - name: Validar lifecycle
         run: python -m pytest -q tests/test_build_flow_completion_alert_state.py
 
