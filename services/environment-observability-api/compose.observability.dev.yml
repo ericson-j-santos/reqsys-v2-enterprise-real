@@ -10,7 +10,7 @@ services:
     depends_on:
       collector:
         condition: service_healthy
-    networks: [observability]
+    networks: [observability, host-access]
 
   collector-queue-init:
     image: alpine:3.22
@@ -31,6 +31,7 @@ services:
 
   collector:
     image: otel/opentelemetry-collector-contrib:0.128.0
+    user: "10001:10001"
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     environment:
       APP_ENV: development
@@ -47,13 +48,14 @@ services:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol-contrib/config.yaml"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 2s
     read_only: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
-    networks: [observability]
+    networks: [observability, host-access]
 
   prometheus:
     image: prom/prometheus:v3.4.1
@@ -68,7 +70,7 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
     depends_on: [api, collector, alertmanager]
-    networks: [observability]
+    networks: [observability, host-access]
 
   alertmanager:
     image: prom/alertmanager:v0.28.1
@@ -77,7 +79,7 @@ services:
       - ./observability/dev/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     ports:
       - "127.0.0.1:9093:9093"
-    networks: [observability]
+    networks: [observability, host-access]
 
   grafana:
     image: grafana/grafana:12.0.1
@@ -92,11 +94,12 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     depends_on: [prometheus]
-    networks: [observability]
+    networks: [observability, host-access]
 
 networks:
   observability:
     internal: true
+  host-access:
 
 volumes:
   collector-queue:
