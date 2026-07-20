@@ -12,9 +12,9 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows:
-      - "CI ReqSys v2 Enterprise"
-      - "CI Enterprise Fast"
-      - "CI Enterprise Regression"
+      - "CI — ReqSys v2 Enterprise"
+      - "Fast CI - Operational Guardrails"
+      - "Governança Padrão Ouro"
       - "Fly Environment Homologation Gate"
     types: [completed]
   schedule:
@@ -41,16 +41,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Install tests
         run: python -m pip install --disable-pip-version-check pytest
-
       - name: Validate monitor and collectors
         run: >-
           python -m pytest -q
           tests/test_build_flow_completion_monitor.py
           tests/test_collect_flow_completion_evidence.py
-
       - name: Collect GitHub Actions runs and artifacts
         shell: bash
         run: |
@@ -58,7 +55,6 @@ jobs:
           mkdir -p .tmp/flow-completion artifacts/flow-completion-monitor
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs?branch=main&per_page=100" > .tmp/flow-completion/runs.json
           echo '{"artifacts":[]}' > .tmp/flow-completion/artifacts.json
-
           jq -r '.workflow_runs[] | select(.name == "Fly Environment Homologation Gate") | .id' \
             .tmp/flow-completion/runs.json | head -20 | while read -r run_id; do
               [ -n "$run_id" ] || continue
@@ -66,7 +62,6 @@ jobs:
                 | jq --argjson run_id "$run_id" '.artifacts |= map(. + {workflow_run_id: $run_id})' \
                 > ".tmp/flow-completion/artifacts-${run_id}.json"
           done
-
           python - <<'PY'
           import glob, json
           artifacts = []
@@ -74,7 +69,6 @@ jobs:
               artifacts.extend(json.load(open(path, encoding='utf-8')).get('artifacts', []))
           json.dump({'artifacts': artifacts}, open('.tmp/flow-completion/artifacts.json', 'w', encoding='utf-8'), indent=2)
           PY
-
       - name: Probe production runtime
         shell: bash
         run: |
@@ -89,12 +83,10 @@ jobs:
           latest = max(prod_runs, key=lambda run: run.get('updated_at', ''), default={})
           Path('.tmp/flow-completion/prod-context.json').write_text(json.dumps(latest), encoding='utf-8')
           PY
-
           python - <<'PY'
           import json, os, urllib.error, urllib.request
           from datetime import datetime, timezone
           from pathlib import Path
-
           context = json.loads(Path('.tmp/flow-completion/prod-context.json').read_text(encoding='utf-8'))
           base = os.environ['PROD_BASE_URL'].rstrip('/')
           paths = ['/health', '/api/runtime/health', '/api/runtime/readiness', '/api/runtime/liveness']
@@ -116,7 +108,6 @@ jobs:
           }
           Path('.tmp/flow-completion/health.json').write_text(json.dumps(payload, indent=2), encoding='utf-8')
           PY
-
       - name: Normalize real evidence
         run: |
           python scripts/collect_flow_completion_evidence.py \
@@ -124,7 +115,6 @@ jobs:
             --artifacts .tmp/flow-completion/artifacts.json \
             --health .tmp/flow-completion/health.json \
             --output .tmp/flow-completion/executions.json
-
       - name: Build completion report
         run: |
           python scripts/build_flow_completion_monitor.py \
@@ -132,7 +122,6 @@ jobs:
             --executions .tmp/flow-completion/executions.json \
             --output artifacts/flow-completion-monitor/report.json
           cp .tmp/flow-completion/health.json artifacts/flow-completion-monitor/runtime-health.json
-
       - name: Publish summary
         run: |
           python - <<'PY'
@@ -150,7 +139,6 @@ jobs:
               out.write('- Fontes: **GitHub Actions, artifacts Fly e runtime PROD**\n')
               out.write('- Modo: **report-only**\n')
           PY
-
       - uses: actions/upload-artifact@v4
         with:
           name: reqsys-flow-completion-monitor
