@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0.0",
+  "flow": "application-delivery",
+  "stale_after_hours": 24,
+  "environments": [
+    {
+      "name": "dev",
+      "order": 10,
+      "required": true,
+      "stages": [
+        {"name": "build", "order": 10, "required": true},
+        {"name": "deploy", "order": 20, "required": true},
+        {"name": "smoke-test", "order": 30, "required": true}
+      ]
+    },
+    {
+      "name": "stg",
+      "order": 20,
+      "required": true,
+      "stages": [
+        {"name": "deploy", "order": 10, "required": true},
+        {"name": "integration-test", "order": 20, "required": true},
+        {"name": "homologation", "order": 30, "required": true}
+      ]
+    },
+    {
+      "name": "prod",
+      "order": 30,
+      "required": true,
+      "stages": [
+        {"name": "deploy", "order": 10, "required": true},
+        {"name": "runtime-health", "order": 20, "required": true},
+        {"name": "post-deploy-validation", "order": 30, "required": true}
+      ]
+    }
+  ]
+}
