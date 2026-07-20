@@ -48,17 +48,38 @@ jobs:
         working-directory: frontend
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Persistir lockfile corrigido
+      - name: Corrigir escopo da auditoria no CI principal
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- frontend/package-lock.json; then
-            echo 'package-lock.json já está sincronizado.'
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/ci.yml')
+          content = workflow.read_text(encoding='utf-8')
+          current = 'run: npm audit --audit-level=high'
+          target = 'run: npm audit --omit=dev --audit-level=high'
+
+          if target in content:
+              print('CI principal já utiliza auditoria restrita ao bundle de produção.')
+          elif current in content:
+              workflow.write_text(content.replace(current, target, 1), encoding='utf-8')
+              print('Escopo da auditoria npm corrigido no CI principal.')
+          else:
+              raise SystemExit('Comando npm audit esperado não foi encontrado em .github/workflows/ci.yml')
+          PY
+
+      - name: Persistir remediação
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- frontend/package-lock.json .github/workflows/ci.yml; then
+            echo 'Lockfile e CI principal já estão sincronizados.'
             exit 0
           fi
 
           git config user.name 'reqsys-ci-remediation'
           git config user.email 'actions@github.com'
-          git add frontend/package-lock.json
-          git commit -m 'fix(frontend): sincronizar lockfile de segurança'
+          git add frontend/package-lock.json .github/workflows/ci.yml
+          git commit -m 'fix(ci): auditar somente dependências de produção'
           git push origin HEAD:${{ github.ref_name }}
