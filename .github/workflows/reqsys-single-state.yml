@@ -12,8 +12,8 @@ permissions:
   contents: read
 
 env:
-  SOURCE: docs/ops-dashboard/data/unified-executive-integration-index.json
-  OUTPUT: docs/ops-dashboard/data/reqsys-single-state.json
+  SOURCE: .tmp/reqsys-single-state/unified-executive-integration-index.json
+  OUTPUT: .tmp/reqsys-single-state/reqsys-single-state.json
 
 jobs:
   publish-single-state:
@@ -25,8 +25,27 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Validate publisher
-        run: python -m pytest -q tests/test_publish_reqsys_single_state.py
+      - name: Validate publisher and source builder
+        run: |
+          python -m pytest -q \
+            tests/test_publish_reqsys_single_state.py \
+            tests/test_build_unified_executive_integration_index.py
+      - name: Build deterministic executive source
+        shell: bash
+        run: |
+          set -euo pipefail
+          workdir=.tmp/reqsys-single-state
+          mkdir -p "$workdir"
+          cp docs/ops-dashboard/data/runtime-executive-index.json "$workdir/runtime.json" 2>/dev/null || echo '{}' > "$workdir/runtime.json"
+          cp docs/ops-dashboard/data/merge-intelligence-index.json "$workdir/quality.json" 2>/dev/null || echo '{}' > "$workdir/quality.json"
+          echo '{}' > "$workdir/parallelism.json"
+          python scripts/build_unified_executive_integration_index.py \
+            --parallelism "$workdir/parallelism.json" \
+            --runtime "$workdir/runtime.json" \
+            --quality "$workdir/quality.json" \
+            --output "$SOURCE"
+      - name: Validate governance invariants
+        run: jq -e '.production.promotion_allowed == false and .production.human_approval_required == true' "$SOURCE" >/dev/null
       - name: Publish canonical contract
         run: python scripts/publish_reqsys_single_state.py --source "$SOURCE" --output "$OUTPUT"
       - name: Add executive summary
