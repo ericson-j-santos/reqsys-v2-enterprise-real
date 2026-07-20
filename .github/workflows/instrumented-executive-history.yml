@@ -1,0 +1,74 @@
+name: Instrumented Executive History
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Instrumented Executive Readiness"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: instrumented-executive-history-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  persist:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependency
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_update_instrumented_executive_history.py
+      - name: Download latest instrumented readiness and history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/readiness .tmp/history artifacts/instrumented-executive-history
+          READINESS_RUN="$(gh run list --workflow instrumented-executive-readiness.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -n "$READINESS_RUN" ]; then
+            gh run download "$READINESS_RUN" -n instrumented-executive-readiness -D .tmp/readiness
+          fi
+          HISTORY_RUN="$(gh run list --workflow instrumented-executive-history.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -n "$HISTORY_RUN" ]; then
+            gh run download "$HISTORY_RUN" -n instrumented-executive-history -D .tmp/history || true
+          fi
+          SNAPSHOT="$(find .tmp/readiness -name report.json -print -quit)"
+          test -n "$SNAPSHOT"
+          cp "$SNAPSHOT" .tmp/current-readiness.json
+          PREVIOUS="$(find .tmp/history -name history.json -print -quit)"
+          if [ -n "$PREVIOUS" ]; then cp "$PREVIOUS" .tmp/previous-history.json; else echo '{}' > .tmp/previous-history.json; fi
+      - name: Update history and derive ETA
+        run: |
+          python scripts/update_instrumented_executive_history.py \
+            --snapshot .tmp/current-readiness.json \
+            --history .tmp/previous-history.json \
+            --output artifacts/instrumented-executive-history/history.json
+      - name: Publish executive summary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = json.loads(Path('artifacts/instrumented-executive-history/history.json').read_text(encoding='utf-8'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('# Instrumented Executive History\n\n')
+              out.write(f"- Snapshots: **{data['snapshot_count']}**\n")
+              out.write(f"- Metric coverage: **{data.get('metric_coverage_percent')}%**\n")
+              for name, eta in data['eta'].items():
+                  out.write(f"- {name}: **{eta['status']}**, ETA days: **{eta.get('eta_days')}**\n")
+              out.write('- Mode: **report-only**\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-executive-history
+          path: artifacts/instrumented-executive-history/history.json
+          retention-days: 90
