@@ -1,0 +1,65 @@
+name: Prompt Catalog Validation
+
+on:
+  pull_request:
+    paths:
+      - "docs/prompts/**"
+      - "backend/app/services/development_prompt_coordinator.py"
+      - "backend/tests/test_development_prompt_coordinator.py"
+      - "scripts/validate_prompt_catalog.py"
+      - ".github/workflows/prompt-catalog-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/prompts/**"
+      - "backend/app/services/development_prompt_coordinator.py"
+      - "backend/tests/test_development_prompt_coordinator.py"
+      - "scripts/validate_prompt_catalog.py"
+      - ".github/workflows/prompt-catalog-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prompt-catalog-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate prompt catalog
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+
+      - name: Validate machine-readable catalog
+        run: python scripts/validate_prompt_catalog.py
+
+      - name: Run coordinator tests
+        working-directory: backend
+        run: python -m pytest -q --noconftest tests/test_development_prompt_coordinator.py
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "## Prompt Catalog Validation"
+            echo "- Catálogo: \`docs/prompts/catalog.json\`"
+            echo "- Coordenador: \`backend/app/services/development_prompt_coordinator.py\`"
+            echo "- Resultado: **${{ job.status }}**"
+          } >> "$GITHUB_STEP_SUMMARY"
