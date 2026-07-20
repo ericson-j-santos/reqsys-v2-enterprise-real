@@ -40,7 +40,7 @@ jobs:
             --repo "${{ github.repository }}" \
             --branch "${{ github.ref_name }}" \
             --output-dir artifacts/runtime-validation-consolidator \
-            --publish-executive-brief ""
+            --publish-executive-brief .tmp/runtime-executive-brief.json
       - name: Build canonical consumer readiness
         run: |
           mkdir -p .tmp/state artifacts/reqsys-single-state-consumer-readiness
