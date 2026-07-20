@@ -11,12 +11,13 @@ from app.api.prompt_development_coordinator import (
     plan_prompt_development,
 )
 from app.db import Base
-from app.models.prompt_execution_record import PromptExecutionRecord  # noqa: F401
+from app.models.prompt_execution_record import PromptExecutionRecord
 from app.services.development_prompt_coordinator import load_prompt_catalog
 
 
 def _session():
     engine = create_engine("sqlite:///:memory:")
+    assert PromptExecutionRecord.__tablename__ in Base.metadata.tables
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine)()
 
