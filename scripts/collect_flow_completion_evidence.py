@@ -12,9 +12,12 @@ from typing import Any
 SUCCESS = "succeeded"
 CI_WORKFLOWS = {
     "CI — ReqSys v2 Enterprise",
+    "CI ReqSys v2 Enterprise",
+    "CI Enterprise Fast",
+    "CI Enterprise Regression",
     "Fast CI - Operational Guardrails",
-    "Governança Padrão Ouro",
     "Governance Quality Gates",
+    "Governança Padrão Ouro",
 }
 
 
