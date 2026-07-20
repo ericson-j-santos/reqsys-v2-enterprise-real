@@ -4,9 +4,11 @@ on:
   pull_request:
     paths:
       - "scripts/validate_reqsys_single_state_consumers.py"
+      - "scripts/build_reqsys_single_state_readiness_dashboard.py"
       - "scripts/publish_reqsys_single_state.py"
       - "scripts/build_unified_executive_integration_index.py"
       - "tests/test_validate_reqsys_single_state_consumers.py"
+      - "tests/test_build_reqsys_single_state_readiness_dashboard.py"
       - "tests/test_publish_reqsys_single_state.py"
       - "docs/ops-dashboard/data/runtime-executive-index.json"
       - "docs/ops-dashboard/data/merge-intelligence-index.json"
@@ -36,7 +38,11 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install --disable-pip-version-check pytest
       - name: Run focused tests
-        run: python -m pytest -q tests/test_validate_reqsys_single_state_consumers.py tests/test_publish_reqsys_single_state.py
+        run: >-
+          python -m pytest -q
+          tests/test_validate_reqsys_single_state_consumers.py
+          tests/test_build_reqsys_single_state_readiness_dashboard.py
+          tests/test_publish_reqsys_single_state.py
       - name: Build deterministic unified source
         shell: bash
         run: |
@@ -60,6 +66,11 @@ jobs:
           python scripts/validate_reqsys_single_state_consumers.py \
             --state .tmp/reqsys-single-state/reqsys-single-state.json \
             --report artifacts/reqsys-single-state-consumer-readiness/report.json
+      - name: Build executive readiness dashboard
+        run: |
+          python scripts/build_reqsys_single_state_readiness_dashboard.py \
+            --report artifacts/reqsys-single-state-consumer-readiness/report.json \
+            --output artifacts/reqsys-single-state-consumer-readiness/index.html
       - name: Add executive summary
         run: |
           python - <<'PY'
@@ -73,6 +84,7 @@ jobs:
               out.write(f"- Status: **{report['status']}**\n")
               out.write(f"- Readiness: **{report['readiness_percent']}%**\n")
               out.write(f"- Ready consumers: **{report['ready_consumers']}/{report['total_consumers']}**\n")
+              out.write("- Dashboard: **index.html**\n")
               out.write("- Mode: **report-only**\n")
               out.write("- Production blocker: **false**\n")
               out.write(f"- Next safe increment: {report['next_safe_increment']}\n")
@@ -80,5 +92,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: reqsys-single-state-consumer-readiness
-          path: artifacts/reqsys-single-state-consumer-readiness/report.json
+          path: artifacts/reqsys-single-state-consumer-readiness/
           retention-days: 90
