@@ -30,6 +30,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check pytest
       - name: Run focused tests
         run: python -m pytest -q tests/test_validate_reqsys_single_state_consumers.py tests/test_publish_reqsys_single_state.py
       - name: Publish canonical contract
