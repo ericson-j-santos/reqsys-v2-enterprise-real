@@ -5,8 +5,11 @@ on:
     paths:
       - "scripts/validate_reqsys_single_state_consumers.py"
       - "scripts/publish_reqsys_single_state.py"
+      - "scripts/build_unified_executive_integration_index.py"
       - "tests/test_validate_reqsys_single_state_consumers.py"
-      - "docs/ops-dashboard/data/reqsys-single-state.json"
+      - "tests/test_publish_reqsys_single_state.py"
+      - "docs/ops-dashboard/data/runtime-executive-index.json"
+      - "docs/ops-dashboard/data/merge-intelligence-index.json"
       - ".github/workflows/reqsys-single-state-consumer-readiness.yml"
   workflow_dispatch:
   workflow_run:
@@ -34,23 +37,38 @@ jobs:
         run: python -m pip install --disable-pip-version-check pytest
       - name: Run focused tests
         run: python -m pytest -q tests/test_validate_reqsys_single_state_consumers.py tests/test_publish_reqsys_single_state.py
+      - name: Build deterministic unified source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/reqsys-single-state
+          cp docs/ops-dashboard/data/runtime-executive-index.json .tmp/reqsys-single-state/runtime.json 2>/dev/null || echo '{}' > .tmp/reqsys-single-state/runtime.json
+          cp docs/ops-dashboard/data/merge-intelligence-index.json .tmp/reqsys-single-state/quality.json 2>/dev/null || echo '{}' > .tmp/reqsys-single-state/quality.json
+          echo '{}' > .tmp/reqsys-single-state/parallelism.json
+          python scripts/build_unified_executive_integration_index.py \
+            --parallelism .tmp/reqsys-single-state/parallelism.json \
+            --runtime .tmp/reqsys-single-state/runtime.json \
+            --quality .tmp/reqsys-single-state/quality.json \
+            --output .tmp/reqsys-single-state/unified-executive-integration-index.json
       - name: Publish canonical contract
         run: |
           python scripts/publish_reqsys_single_state.py \
-            --source docs/ops-dashboard/data/unified-executive-integration-index.json \
-            --output docs/ops-dashboard/data/reqsys-single-state.json
+            --source .tmp/reqsys-single-state/unified-executive-integration-index.json \
+            --output .tmp/reqsys-single-state/reqsys-single-state.json
       - name: Validate governed consumers
         run: |
           python scripts/validate_reqsys_single_state_consumers.py \
-            --state docs/ops-dashboard/data/reqsys-single-state.json \
+            --state .tmp/reqsys-single-state/reqsys-single-state.json \
             --report artifacts/reqsys-single-state-consumer-readiness/report.json
       - name: Add executive summary
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
+
           report = json.loads(Path("artifacts/reqsys-single-state-consumer-readiness/report.json").read_text(encoding="utf-8"))
-          with open(Path(__import__("os").environ["GITHUB_STEP_SUMMARY"]), "a", encoding="utf-8") as out:
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
               out.write("# ReqSys Single State Consumer Readiness\n\n")
               out.write(f"- Status: **{report['status']}**\n")
               out.write(f"- Readiness: **{report['readiness_percent']}%**\n")
