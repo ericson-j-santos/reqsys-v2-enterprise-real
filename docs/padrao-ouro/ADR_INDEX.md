@@ -1,6 +1,6 @@
 # ADR Index — Decision Records
 
-Data de referência: 2026-06-27
+Data de referência: 2026-07-20
 
 Catálogo de Architecture Decision Records (ADRs) do ReqSys. Cada ADR segue o formato: **problema → decisão → impacto → tradeoff → evidência**.
 
@@ -12,6 +12,7 @@ Catálogo de Architecture Decision Records (ADRs) do ReqSys. Cada ADR segue o fo
 | Entender decisão existente | Consultar tabela abaixo por domínio |
 | Evitar refactor errado | Ler ADR do domínio antes de alterar |
 | Onboarding agente/IA | Ler ADRs fundacionais (0001–0006) primeiro |
+| Coordenar geração ou revisão de código | Consultar ADRs e o catálogo em `docs/prompts/` |
 
 ## Formato padrão
 
@@ -40,7 +41,7 @@ Data: YYYY-MM-DD
 
 ---
 
-## Governança e CI
+## Governança, Prompts e CI
 
 | ADR | Título | Status | Impacto |
 | --- | --- | --- | --- |
@@ -48,9 +49,12 @@ Data: YYYY-MM-DD
 | [ADR-0024](../adr/ADR-0024-substituicao-coderabbit-pr-quality-review.md) | Substituição CodeRabbit → PR Quality Review | aceito | Migração de revisão IA |
 | [ADR-030](../adr/ADR-030-governed-dev-automerge.md) | Governed Dev Automerge | aceito | Merge controlado em dev |
 | [ADR-031](../adr/ADR-031-runtime-risk-and-promotion-pipeline.md) | Runtime Risk and Promotion Pipeline | aceito | Risco runtime + promoção |
+| [ADR-045](../adr/ADR-045-governanca-coordenacao-prompts-desenvolvimento.md) | Governança e Coordenação de Prompts de Desenvolvimento | proposto | Separa ADR de PDR e coordena geração, revisão, testes e evidências de código |
 | [ADR-PR-AUTO-RECOVERY-V2](../adr/ADR-PR-AUTO-RECOVERY-V2.md) | PR Auto Recovery V2 | aceito | Recuperação automática de PR |
 | [ADR-PR-AUTO-RECOVERY-V3](../adr/ADR-PR-AUTO-RECOVERY-V3.md) | PR Auto Recovery V3 | aceito | Recuperação controlada V3 |
 | [ADR-044](../adr/ADR-044-gitlab-edition-pipeline-paralela.md) | GitLab Edition: Pipeline Paralela Fortalecida, Não-Ativa | aceito | CI ativa continua sendo só GitHub Actions; GitLab Edition é scaffolding local com jobs reais, sem projeto GitLab provisionado |
+
+Catálogo operacional relacionado: [`docs/prompts/README.md`](../prompts/README.md).
 
 ---
 
@@ -105,6 +109,7 @@ ADR-0001 (arquitetura)
   ├── ADR-0004 (CI/CD)
   │     ├── ADR-0021/0024 (revisão IA)
   │     ├── ADR-030 (automerge)
+  │     ├── ADR-045 (coordenação de prompts de desenvolvimento)
   │     └── ADR-PR-AUTO-RECOVERY-V2/V3
   ├── ADR-0005 (observabilidade)
   │     ├── ADR-037 (trilha B)
@@ -126,9 +131,11 @@ ADR-0001 (arquitetura)
 3. Status: `proposto` → `aceito` → `substituído` (com link para sucessor).
 4. Atualizar este índice ao criar ou substituir ADR.
 5. Referenciar ADR no PR quando a decisão for implementada.
+6. Instruções operacionais reutilizáveis para geração, revisão ou correção de código devem ser registradas como PDR em `docs/prompts/`, sem duplicar decisões arquiteturais.
 
 ## Referências
 
 - Hub Tier 1: [`docs/padrao-ouro/README.md`](README.md)
+- Governança de prompts: [`docs/prompts/README.md`](../prompts/README.md)
 - Trilhas hub: [`docs/architecture/trilhas/`](../architecture/trilhas/)
 - Runbook trilhas: [`docs/runbooks/trilhas-padrao-ouro.md`](../runbooks/trilhas-padrao-ouro.md)
