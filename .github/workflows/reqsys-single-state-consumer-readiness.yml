@@ -1,0 +1,64 @@
+name: ReqSys Single State Consumer Readiness
+
+on:
+  pull_request:
+    paths:
+      - "scripts/validate_reqsys_single_state_consumers.py"
+      - "scripts/publish_reqsys_single_state.py"
+      - "tests/test_validate_reqsys_single_state_consumers.py"
+      - "docs/ops-dashboard/data/reqsys-single-state.json"
+      - ".github/workflows/reqsys-single-state-consumer-readiness.yml"
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["ReqSys Single State"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reqsys-single-state-consumer-readiness-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-consumer-readiness:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_validate_reqsys_single_state_consumers.py tests/test_publish_reqsys_single_state.py
+      - name: Publish canonical contract
+        run: |
+          python scripts/publish_reqsys_single_state.py \
+            --source docs/ops-dashboard/data/unified-executive-integration-index.json \
+            --output docs/ops-dashboard/data/reqsys-single-state.json
+      - name: Validate governed consumers
+        run: |
+          python scripts/validate_reqsys_single_state_consumers.py \
+            --state docs/ops-dashboard/data/reqsys-single-state.json \
+            --report artifacts/reqsys-single-state-consumer-readiness/report.json
+      - name: Add executive summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/reqsys-single-state-consumer-readiness/report.json").read_text(encoding="utf-8"))
+          with open(Path(__import__("os").environ["GITHUB_STEP_SUMMARY"]), "a", encoding="utf-8") as out:
+              out.write("# ReqSys Single State Consumer Readiness\n\n")
+              out.write(f"- Status: **{report['status']}**\n")
+              out.write(f"- Readiness: **{report['readiness_percent']}%**\n")
+              out.write(f"- Ready consumers: **{report['ready_consumers']}/{report['total_consumers']}**\n")
+              out.write("- Mode: **report-only**\n")
+              out.write("- Production blocker: **false**\n")
+              out.write(f"- Next safe increment: {report['next_safe_increment']}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-single-state-consumer-readiness
+          path: artifacts/reqsys-single-state-consumer-readiness/report.json
+          retention-days: 90
