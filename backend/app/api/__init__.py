@@ -6,11 +6,14 @@ import app.api.requisitos_runtime_transition  # noqa: F401
 
 # O router de governanca e anexado ao router existente de diagramas para
 # preservar o ponto unico de inclusao utilizado pelo app.main.
-from app.api import diagram_version_governance, diagramas  # noqa: E402
-
 # O coordenador ADR/PDR é anexado ao Hub Low-Code para preservar o prefixo
 # público existente sem duplicar include_router no app.main.
-from app.api import hub_lowcode, prompt_development_coordinator  # noqa: E402
+from app.api import (  # noqa: E402
+    diagram_version_governance,
+    diagramas,
+    hub_lowcode,
+    prompt_development_coordinator,
+)
 
 diagramas.router.include_router(diagram_version_governance.router)
 hub_lowcode.router.include_router(prompt_development_coordinator.router)
