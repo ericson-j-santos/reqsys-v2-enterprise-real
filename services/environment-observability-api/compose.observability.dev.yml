@@ -48,9 +48,10 @@ services:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol-contrib/config.yaml"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 2s
     read_only: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
@@ -97,7 +98,6 @@ services:
 
 networks:
   observability:
-    internal: true
 
 volumes:
   collector-queue:
