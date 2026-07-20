@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0.0",
+  "updated_at": "2026-07-20",
+  "source_adr": "ADR-045",
+  "defaults": {
+    "language": "pt-BR",
+    "dry_run": true,
+    "required_adrs": ["ADR-0001", "ADR-0002", "ADR-0004", "ADR-0005"]
+  },
+  "records": [
+    {
+      "id": "PDR-DEV-001",
+      "version": "1.0.0",
+      "status": "active",
+      "title": "Implementar incremento de código governado",
+      "domain": "development",
+      "task_types": ["incremento", "implementacao", "refatoracao"],
+      "keywords": ["implementar", "incremento", "código", "codigo", "refatorar", "feature"],
+      "path": "docs/prompts/development/PDR-DEV-001-implementar-incremento-governado.md",
+      "required_adrs": ["ADR-0001", "ADR-0002", "ADR-0004", "ADR-0005", "ADR-039", "ADR-045"],
+      "agents": ["Arquiteto Enterprise", "Agente de Implementação", "Agente QA/Governança Técnica"],
+      "required_evidence": ["arquivos alterados", "testes executados", "commit", "PR", "CI"],
+      "risk": "medium"
+    },
+    {
+      "id": "PDR-REV-001",
+      "version": "1.0.0",
+      "status": "active",
+      "title": "Revisar código e pull request",
+      "domain": "review",
+      "task_types": ["revisao", "pull_request"],
+      "keywords": ["revisar", "review", "pull request", "pr", "mergeabilidade"],
+      "path": "docs/prompts/review/PDR-REV-001-revisar-codigo-pr.md",
+      "required_adrs": ["ADR-0002", "ADR-0004", "ADR-030", "ADR-039", "ADR-045"],
+      "agents": ["Agente de Governança de PR", "Agente QA/Governança Técnica"],
+      "required_evidence": ["diff revisado", "riscos", "checks", "mergeabilidade"],
+      "risk": "medium"
+    },
+    {
+      "id": "PDR-CICD-001",
+      "version": "1.0.0",
+      "status": "active",
+      "title": "Corrigir falha de GitHub Actions",
+      "domain": "ci-cd",
+      "task_types": ["correcao_ci", "workflow"],
+      "keywords": ["ci", "workflow", "github actions", "falha", "job", "check"],
+      "path": "docs/prompts/ci-cd/PDR-CICD-001-corrigir-falha-github-actions.md",
+      "required_adrs": ["ADR-0002", "ADR-0004", "ADR-0005", "ADR-030", "ADR-039", "ADR-045"],
+      "agents": ["Agente DevOps/CI", "Agente QA/Governança Técnica"],
+      "required_evidence": ["log da falha", "causa raiz", "menor correção", "rerun", "CI verde"],
+      "risk": "high"
+    },
+    {
+      "id": "PDR-SEC-001",
+      "version": "1.0.0",
+      "status": "active",
+      "title": "Alterar código com impacto de segurança",
+      "domain": "security",
+      "task_types": ["seguranca", "autenticacao", "secrets"],
+      "keywords": ["segurança", "security", "jwt", "cors", "login", "secret", "cofre", "lgpd"],
+      "path": "docs/prompts/security/PDR-SEC-001-alteracao-seguranca.md",
+      "required_adrs": ["ADR-0001", "ADR-0002", "ADR-0003", "ADR-0004", "ADR-0005", "ADR-041", "ADR-045"],
+      "agents": ["Agente de Segurança e Governança", "Agente DevOps/CI"],
+      "required_evidence": ["ameaças", "testes negativos", "segredos mascarados", "aprovação humana", "CI"],
+      "risk": "critical"
+    }
+  ]
+}
