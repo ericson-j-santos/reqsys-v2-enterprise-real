@@ -10,7 +10,7 @@ services:
     depends_on:
       collector:
         condition: service_healthy
-    networks: [observability]
+    networks: [observability, host-access]
 
   collector-queue-init:
     image: alpine:3.22
@@ -55,7 +55,7 @@ services:
     read_only: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
-    networks: [observability]
+    networks: [observability, host-access]
 
   prometheus:
     image: prom/prometheus:v3.4.1
@@ -70,7 +70,7 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
     depends_on: [api, collector, alertmanager]
-    networks: [observability]
+    networks: [observability, host-access]
 
   alertmanager:
     image: prom/alertmanager:v0.28.1
@@ -79,7 +79,7 @@ services:
       - ./observability/dev/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     ports:
       - "127.0.0.1:9093:9093"
-    networks: [observability]
+    networks: [observability, host-access]
 
   grafana:
     image: grafana/grafana:12.0.1
@@ -94,10 +94,12 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     depends_on: [prometheus]
-    networks: [observability]
+    networks: [observability, host-access]
 
 networks:
   observability:
+    internal: true
+  host-access:
 
 volumes:
   collector-queue:
