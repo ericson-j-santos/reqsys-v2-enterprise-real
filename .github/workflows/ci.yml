@@ -93,7 +93,7 @@ jobs:
             esac
 
             case "$file" in
-              docs/contracts/runtime-operational-contract-v1.json|docs/runbooks/runtime-operational-contract-v1.md|scripts/validate_runtime_operational_contract.py|.github/workflows/runtime-operational-contract.yml|.github/workflows/ci.yml)
+              docs/contracts/runtime-operational-contract-v1.json|docs/runbooks/runtime-operational-contract-v1.md|scripts/validate_runtime_operational_contract.py|.github/workflows/runtime-operational-contract.yml|.github/workflows/ci.yml|scripts/build_instrumented_executive_readiness.py|tests/test_build_instrumented_executive_readiness.py|.github/workflows/instrumented-executive-readiness.yml|docs/contracts/instrumented-executive-readiness.md|scripts/update_instrumented_executive_history.py|tests/test_update_instrumented_executive_history.py|.github/workflows/instrumented-executive-history.yml|docs/contracts/instrumented-executive-history.md)
                 ;;
               *)
                 governed_contract=false
@@ -217,8 +217,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: ci-router
     if: needs.ci-router.outputs.backend == 'true' || needs.ci-router.outputs.full_ci == 'true'
-    # Postgres centralizado (ADR-042/ADR-043): mesmo engine usado em dev/test/prod,
-    # nao mais SQLite so no CI.
     services:
       postgres:
         image: postgres:16-alpine
@@ -373,17 +371,14 @@ jobs:
     if: always()
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
       - name: Set up Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "20"
-
       - name: Set up Python 3.12
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
-
       - name: Gerar pipeline-governanca-report
         env:
           BACKEND_LINT_RESULT: ${{ needs.backend-lint.result }}
@@ -399,10 +394,8 @@ jobs:
           mkdir -p artifacts/pipeline-governanca
           node scripts/validar-pipeline-governanca.mjs > artifacts/pipeline-governanca/pipeline-governanca-report.json
           cat artifacts/pipeline-governanca/pipeline-governanca-report.json
-
       - name: Gerar baseline operacional local
         run: python scripts/generate_operational_artifacts_baseline.py
-
       - name: Post-workflow evidence snapshot
         env:
           GITHUB_SHA: ${{ github.sha }}
@@ -411,7 +404,6 @@ jobs:
             --event "${{ github.event_name }}" \
             --sha "${{ github.sha }}" \
             --pipeline-report artifacts/pipeline-governanca/pipeline-governanca-report.json
-
       - name: Validar estadoGeral do pipeline
         run: |
           python - <<'PY'
@@ -423,7 +415,6 @@ jobs:
           if estado != "verde":
               raise SystemExit(f"pipeline-governanca bloqueado: estadoGeral={estado}")
           PY
-
       - name: Publicar artifacts de governança
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -455,7 +446,6 @@ jobs:
           echo "| Frontend Build | ${{ needs.frontend-build.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Frontend E2E | ${{ needs.frontend-e2e-responsive.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Pipeline Governança | ${{ needs.pipeline-governance.result }} |" >> "$GITHUB_STEP_SUMMARY"
-
           for result in \
             "${{ needs.ci-router.result }}" \
             "${{ needs.backend-lint.result }}" \
@@ -468,5 +458,4 @@ jobs:
               exit 1
             fi
           done
-
           echo "CI Router Result: OK. Jobs skipped/cancelled por roteamento ou concorrência não bloqueiam PR pequeno."
