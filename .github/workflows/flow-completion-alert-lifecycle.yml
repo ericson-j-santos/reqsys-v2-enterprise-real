@@ -46,7 +46,18 @@ jobs:
       - name: Validar lifecycle
         run: python -m pytest -q tests/test_build_flow_completion_alert_state.py
 
+      - name: Resumo da validação do pull request
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          {
+            echo "# Flow Completion Alert Lifecycle — validação"
+            echo "- Testes de contrato: **aprovados**"
+            echo "- Execução operacional: **não aplicável em pull_request**"
+            echo "- Motivo: artifacts e estado produtivo são processados somente por workflow_run ou workflow_dispatch"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Resolver run produtor
+        if: ${{ github.event_name != 'pull_request' }}
         id: source
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -66,6 +77,7 @@ jobs:
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
       - name: Baixar relatório atual
+        if: ${{ github.event_name != 'pull_request' }}
         env:
           SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
         run: |
@@ -78,6 +90,7 @@ jobs:
           test -f .tmp/current/report.json
 
       - name: Restaurar estado anterior
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
           set -euo pipefail
           echo '{}' > .tmp/previous/state.json
@@ -90,6 +103,7 @@ jobs:
           fi
 
       - name: Gerar histórico e alertas
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
           python scripts/build_flow_completion_alert_state.py \
             --report .tmp/current/report.json \
@@ -97,6 +111,7 @@ jobs:
             --output artifacts/flow-completion-alert-state/state.json
 
       - name: Publicar alertas novos na issue
+        if: ${{ github.event_name != 'pull_request' }}
         env:
           SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
         run: |
@@ -119,6 +134,7 @@ jobs:
           gh issue comment "$AUDIT_ISSUE" --body-file "$body_file"
 
       - name: Resumo
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
           {
             echo "# Flow Completion Alert Lifecycle"
@@ -130,6 +146,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
+        if: ${{ github.event_name != 'pull_request' }}
         with:
           name: flow-completion-alert-state
           path: artifacts/flow-completion-alert-state/state.json
