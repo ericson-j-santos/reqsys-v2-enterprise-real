@@ -1,0 +1,72 @@
+name: Flow Completion Monitor
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_flow_completion_monitor.py"
+      - "config/flow-completion/**"
+      - "tests/test_build_flow_completion_monitor.py"
+      - ".github/workflows/flow-completion-monitor.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "41 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flow-completion-monitor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tests
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Validate monitor
+        run: python -m pytest -q tests/test_build_flow_completion_monitor.py
+      - name: Build deterministic baseline input
+        run: |
+          mkdir -p .tmp/flow-completion artifacts/flow-completion-monitor
+          cat > .tmp/flow-completion/executions.json <<'JSON'
+          [
+            {
+              "execution_id": "baseline-${{ github.run_id }}",
+              "item_id": "workflow-${{ github.run_id }}",
+              "expected_commit_sha": "${{ github.sha }}",
+              "events": []
+            }
+          ]
+          JSON
+      - name: Build report
+        run: |
+          python scripts/build_flow_completion_monitor.py \
+            --definition config/flow-completion/application-delivery.json \
+            --executions .tmp/flow-completion/executions.json \
+            --output artifacts/flow-completion-monitor/report.json
+      - name: Publish summary
+        run: |
+          python - <<'PY'
+          import json, os
+          report = json.load(open("artifacts/flow-completion-monitor/report.json", encoding="utf-8"))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write("# Flow Completion Monitor\n\n")
+              out.write(f"- Fluxo: **{report['flow']}**\n")
+              out.write(f"- Última etapa: **{report['final_environment']} / {report['final_stage']}**\n")
+              out.write(f"- Abertos: **{report['summary']['open']}**\n")
+              out.write(f"- Concluídos: **{report['summary']['completed']}**\n")
+              out.write(f"- Falhos: **{report['summary']['failed']}**\n")
+              out.write(f"- Bloqueados: **{report['summary']['blocked']}**\n")
+              out.write("- Modo: **report-only**\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-flow-completion-monitor
+          path: artifacts/flow-completion-monitor/report.json
+          retention-days: 90
