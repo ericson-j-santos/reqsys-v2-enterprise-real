@@ -30,6 +30,8 @@ jobs:
     name: Validate prompt catalog
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    env:
+      PYTHONPATH: ${{ github.workspace }}/backend
 
     steps:
       - name: Checkout
@@ -50,9 +52,12 @@ jobs:
       - name: Validate machine-readable catalog
         run: python scripts/validate_prompt_catalog.py
 
+      - name: Smoke import coordinator
+        run: |
+          python -c "from app.services.development_prompt_coordinator import load_prompt_catalog; print(load_prompt_catalog()['schema_version'])"
+
       - name: Run coordinator tests
-        working-directory: backend
-        run: python -m pytest -q --noconftest tests/test_development_prompt_coordinator.py
+        run: python -m pytest -q --noconftest backend/tests/test_development_prompt_coordinator.py
 
       - name: Publish summary
         if: always()
