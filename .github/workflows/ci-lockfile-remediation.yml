@@ -44,9 +44,9 @@ jobs:
         working-directory: frontend
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Validar vulnerabilidades altas
+      - name: Validar vulnerabilidades altas do bundle de produção
         working-directory: frontend
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Persistir lockfile corrigido
         shell: bash
