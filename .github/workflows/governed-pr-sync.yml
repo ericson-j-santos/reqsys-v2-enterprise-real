@@ -1,0 +1,241 @@
+name: Governed PR Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to synchronize with its base branch
+        required: true
+        type: string
+      conflict_strategy:
+        description: Resolution strategy for explicitly allowed conflict paths
+        required: true
+        default: keep-pr
+        type: choice
+        options:
+          - keep-pr
+          - keep-base
+      allowed_conflict_paths:
+        description: Newline-separated paths that may be resolved automatically
+        required: false
+        default: .github/workflows/environment-promotion-history.yml
+        type: string
+      recapture_stg_approval:
+        description: Dispatch STG Enforcement Approval after the SHA changes
+        required: true
+        default: false
+        type: boolean
+      decision:
+        description: Human STG decision used only when recapture is enabled
+        required: false
+        default: approve
+        type: choice
+        options:
+          - approve
+          - reject
+      rationale:
+        description: Human rationale used only when recapture is enabled
+        required: false
+        type: string
+      ticket:
+        description: Governance ticket used only when recapture is enabled
+        required: false
+        type: string
+      history_run_id:
+        description: Successful Environment Promotion History run ID
+        required: false
+        type: string
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: governed-pr-sync-${{ inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  synchronize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Validate inputs and resolve PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          case "$PR_NUMBER" in
+            ''|*[!0-9]*) echo "::error::pr_number must be numeric"; exit 1 ;;
+          esac
+
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          state="$(jq -r '.state' <<<"$pr_json")"
+          draft="$(jq -r '.draft' <<<"$pr_json")"
+          head_repo="$(jq -r '.head.repo.full_name' <<<"$pr_json")"
+          base_repo="$(jq -r '.base.repo.full_name' <<<"$pr_json")"
+          head_ref="$(jq -r '.head.ref' <<<"$pr_json")"
+          base_ref="$(jq -r '.base.ref' <<<"$pr_json")"
+          old_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+
+          test "$state" = "open"
+          test "$head_repo" = "$base_repo" || {
+            echo "::error::Fork pull requests are not eligible for write synchronization";
+            exit 1;
+          }
+
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "draft=$draft" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
+          echo "old_sha=$old_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pull request branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_ref }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge base branch with guarded conflict resolution
+        id: merge
+        env:
+          BASE_REF: ${{ steps.pr.outputs.base_ref }}
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          STRATEGY: ${{ inputs.conflict_strategy }}
+          ALLOWED_PATHS: ${{ inputs.allowed_conflict_paths }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$BASE_REF" "$HEAD_REF"
+
+          if git merge --no-ff --no-edit "origin/${BASE_REF}"; then
+            echo "conflicts=none" >> "$GITHUB_OUTPUT"
+          else
+            mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+            if [ "${#conflicts[@]}" -eq 0 ]; then
+              echo "::error::Merge failed without detectable conflict paths"
+              git merge --abort || true
+              exit 1
+            fi
+
+            declare -A allowed=()
+            while IFS= read -r path; do
+              path="${path%$'\r'}"
+              [ -n "$path" ] && allowed["$path"]=1
+            done <<< "$ALLOWED_PATHS"
+
+            for path in "${conflicts[@]}"; do
+              if [ -z "${allowed[$path]+x}" ]; then
+                echo "::error::Unapproved conflict path: $path"
+                git merge --abort || true
+                exit 1
+              fi
+            done
+
+            for path in "${conflicts[@]}"; do
+              if [ "$STRATEGY" = "keep-pr" ]; then
+                git checkout --ours -- "$path"
+              else
+                git checkout --theirs -- "$path"
+              fi
+              git add -- "$path"
+            done
+
+            unresolved="$(git diff --name-only --diff-filter=U)"
+            test -z "$unresolved" || {
+              echo "::error::Unresolved conflicts remain: $unresolved"
+              git merge --abort || true
+              exit 1
+            }
+
+            git commit --no-edit
+            printf 'conflicts=%s\n' "$(IFS=,; echo "${conflicts[*]}")" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push synchronized branch
+        id: push
+        env:
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:${HEAD_REF}"
+          new_sha="$(git rev-parse HEAD)"
+          echo "new_sha=$new_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch STG approval for the new SHA
+        if: ${{ inputs.recapture_stg_approval }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          DECISION: ${{ inputs.decision }}
+          RATIONALE: ${{ inputs.rationale }}
+          TICKET: ${{ inputs.ticket }}
+          HISTORY_RUN_ID: ${{ inputs.history_run_id }}
+        run: |
+          set -euo pipefail
+          test -n "$RATIONALE" || { echo "::error::rationale is required"; exit 1; }
+          test -n "$TICKET" || { echo "::error::ticket is required"; exit 1; }
+          case "$HISTORY_RUN_ID" in
+            ''|*[!0-9]*) echo "::error::history_run_id must be numeric"; exit 1 ;;
+          esac
+
+          gh workflow run stg-enforcement-approval.yml \
+            --ref main \
+            -f decision="$DECISION" \
+            -f policy_pr_number="$PR_NUMBER" \
+            -f rationale="$RATIONALE" \
+            -f ticket="$TICKET" \
+            -f history_run_id="$HISTORY_RUN_ID"
+
+      - name: Publish PR audit comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          OLD_SHA: ${{ steps.pr.outputs.old_sha }}
+          NEW_SHA: ${{ steps.push.outputs.new_sha }}
+          BASE_REF: ${{ steps.pr.outputs.base_ref }}
+          CONFLICTS: ${{ steps.merge.outputs.conflicts }}
+          RECAPTURE: ${{ inputs.recapture_stg_approval }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          status="${{ job.status }}"
+          body=$(cat <<EOF
+          ## Governed PR Sync
+
+          - Status: **${status}**
+          - Base branch: \`${BASE_REF:-unresolved}\`
+          - Previous SHA: \`${OLD_SHA:-unresolved}\`
+          - Current SHA: \`${NEW_SHA:-not-pushed}\`
+          - Conflicts: \`${CONFLICTS:-not-evaluated}\`
+          - STG approval recapture requested: **${RECAPTURE}**
+          - Execution: ${RUN_URL}
+
+          Automatic resolution is restricted to the explicitly supplied allowlist. Unknown conflicts fail closed.
+          EOF
+          )
+          gh pr comment "$PR_NUMBER" --body "$body"
+
+      - name: Publish execution summary
+        if: always()
+        run: |
+          {
+            echo "# Governed PR Sync"
+            echo
+            echo "- PR: **#${{ steps.pr.outputs.number }}**"
+            echo "- Base: \`${{ steps.pr.outputs.base_ref }}\`"
+            echo "- Head: \`${{ steps.pr.outputs.head_ref }}\`"
+            echo "- Previous SHA: \`${{ steps.pr.outputs.old_sha }}\`"
+            echo "- Current SHA: \`${{ steps.push.outputs.new_sha }}\`"
+            echo "- Conflicts: \`${{ steps.merge.outputs.conflicts }}\`"
+            echo "- Approval recapture: **${{ inputs.recapture_stg_approval }}**"
+            echo "- Fail closed: **enabled**"
+          } >> "$GITHUB_STEP_SUMMARY"
