@@ -34,17 +34,53 @@ jobs:
         run: python -m pip install --disable-pip-version-check pytest
       - name: Run focused tests
         run: python -m pytest -q tests/test_evaluate_reqsys_next_increment.py
-      - name: Collect open PRs and workflow runs
+      - name: Collect PRs, merged delivery velocity and workflow runs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p .tmp artifacts/reqsys-next-increment-auto-evaluation
-          gh api --paginate "repos/${{ github.repository }}/pulls?state=open&per_page=100" \
-            --jq '[.[] | {number, state, draft, mergeable: (.mergeable // null), auto_merge_enabled: (.auto_merge != null), updated_at, html_url}]' \
+          gh api --paginate --slurp "repos/${{ github.repository }}/pulls?state=open&per_page=100" \
+            --jq 'add | [.[] | {number, state, draft, mergeable: (.mergeable // null), auto_merge_enabled: (.auto_merge != null), created_at, updated_at, html_url}]' \
             > .tmp/prs.json
-          gh api --paginate "repos/${{ github.repository }}/actions/runs?per_page=100" \
-            --jq '[.workflow_runs[] | {id, name, status, conclusion, event, head_branch, head_sha, created_at, updated_at, html_url}]' \
+          gh api --paginate --slurp "repos/${{ github.repository }}/pulls?state=closed&sort=updated&direction=desc&per_page=100" \
+            --jq 'add | [.[] | select(.merged_at != null) | {number, created_at, merged_at, updated_at, html_url}]' \
+            > .tmp/merged-prs.json
+          gh api --paginate --slurp "repos/${{ github.repository }}/actions/runs?per_page=100" \
+            --jq 'add.workflow_runs | [.[] | {id, name, status, conclusion, event, head_branch, head_sha, created_at, updated_at, html_url}]' \
             > .tmp/runs.json
+      - name: Collect public runtime and smoke evidence
+        env:
+          REQSYS_RUNTIME_BASE_URL: https://reqsys-api.fly.dev
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.error, urllib.request
+          base = os.environ['REQSYS_RUNTIME_BASE_URL'].rstrip('/')
+          paths = ['/health', '/api/runtime/health', '/api/runtime/readiness', '/api/runtime/liveness']
+          endpoints = []
+          for path in paths:
+              started = time.perf_counter()
+              code = None
+              error = None
+              try:
+                  with urllib.request.urlopen(base + path, timeout=15) as response:
+                      code = response.status
+                      response.read(4096)
+              except urllib.error.HTTPError as exc:
+                  code = exc.code
+                  error = str(exc)
+              except Exception as exc:
+                  error = f'{type(exc).__name__}: {exc}'
+              endpoints.append({
+                  'name': path,
+                  'url': base + path,
+                  'http_code': code,
+                  'ok': code == 200,
+                  'latency_ms': round((time.perf_counter() - started) * 1000, 2),
+                  'error': error,
+              })
+          with open('.tmp/runtime.json', 'w', encoding='utf-8') as handle:
+              json.dump({'base_url': base, 'endpoints': endpoints}, handle, indent=2)
+          PY
       - name: Download latest instrumented artifacts
         env:
           GH_TOKEN: ${{ github.token }}
@@ -62,9 +98,11 @@ jobs:
         run: |
           python scripts/evaluate_reqsys_next_increment.py \
             --prs .tmp/prs.json \
+            --merged-prs .tmp/merged-prs.json \
             --runs .tmp/runs.json \
             --readiness .tmp/readiness.json \
             --history .tmp/history.json \
+            --runtime .tmp/runtime.json \
             --output-json artifacts/reqsys-next-increment-auto-evaluation/report.json \
             --output-md artifacts/reqsys-next-increment-auto-evaluation/report.md
       - name: Publish executive summary
