@@ -39,8 +39,7 @@ jobs:
         working-directory: frontend
         run: |
           npm install --package-lock-only --ignore-scripts
-          npm ci
-          npm audit fix --package-lock-only
+          npm audit fix --package-lock-only || true
           npm ci
 
       - name: Validate security and production build
