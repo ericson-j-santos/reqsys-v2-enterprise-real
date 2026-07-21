@@ -1,0 +1,153 @@
+name: Flow Completion Alert Lifecycle
+
+on:
+  workflow_run:
+    workflows: ["Flow Completion Monitor"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Run do Flow Completion Monitor; vazio usa o mais recente"
+        required: false
+        type: string
+        default: ""
+  pull_request:
+    paths:
+      - "scripts/build_flow_completion_alert_state.py"
+      - "tests/test_build_flow_completion_alert_state.py"
+      - ".github/workflows/flow-completion-alert-lifecycle.yml"
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: flow-completion-alert-lifecycle
+  cancel-in-progress: false
+
+jobs:
+  lifecycle:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AUDIT_ISSUE: "729"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check pytest
+
+      - name: Validar lifecycle
+        run: python -m pytest -q tests/test_build_flow_completion_alert_state.py
+
+      - name: Resumo da validação do pull request
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          {
+            echo "# Flow Completion Alert Lifecycle — validação"
+            echo "- Testes de contrato: **aprovados**"
+            echo "- Execução operacional: **não aplicável em pull_request**"
+            echo "- Motivo: artifacts e estado produtivo são processados somente por workflow_run ou workflow_dispatch"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Resolver run produtor
+        if: ${{ github.event_name != 'pull_request' }}
+        id: source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          INPUT_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          run_id=""
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            run_id="$EVENT_RUN_ID"
+          elif [ -n "$INPUT_RUN_ID" ]; then
+            run_id="$INPUT_RUN_ID"
+          else
+            run_id="$(gh run list --workflow flow-completion-monitor.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          fi
+          test -n "$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Baixar relatório atual
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/current .tmp/previous artifacts/flow-completion-alert-state
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "reqsys-flow-completion-monitor" and .expired == false)) | .[0].id // empty')"
+          test -n "$artifact_id"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/current.zip
+          unzip -q .tmp/current.zip -d .tmp/current
+          test -f .tmp/current/report.json
+
+      - name: Restaurar estado anterior
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          set -euo pipefail
+          echo '{}' > .tmp/previous/state.json
+          previous_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=flow-completion-alert-state&per_page=20" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$previous_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${previous_id}/zip" > .tmp/previous.zip
+            unzip -q .tmp/previous.zip -d .tmp/previous
+            candidate="$(find .tmp/previous -name state.json -print -quit)"
+            [ -z "$candidate" ] || cp "$candidate" .tmp/previous/state.json
+          fi
+
+      - name: Gerar histórico e alertas
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          python scripts/build_flow_completion_alert_state.py \
+            --report .tmp/current/report.json \
+            --previous .tmp/previous/state.json \
+            --output artifacts/flow-completion-alert-state/state.json
+
+      - name: Publicar alertas novos na issue
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          count="$(jq '.new_notifications | length' artifacts/flow-completion-alert-state/state.json)"
+          if [ "$count" -eq 0 ]; then
+            echo "Nenhum alerta novo; notificação deduplicada."
+            exit 0
+          fi
+          body_file="$(mktemp)"
+          {
+            echo "## Flow Completion Monitor — novos alertas"
+            echo
+            echo "Run de origem: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}"
+            echo
+            jq -r '.new_notifications[] | "- **\(.status)** — `\(.item_id)` — próxima etapa: `\(.next_expected.environment // "n/a")/\(.next_expected.stage // "n/a")` — SHA `\(.expected_commit_sha // "n/a")`"' artifacts/flow-completion-alert-state/state.json
+            echo
+            echo "> Remediação automática de produção permanece desabilitada."
+          } > "$body_file"
+          gh issue comment "$AUDIT_ISSUE" --body-file "$body_file"
+
+      - name: Resumo
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          {
+            echo "# Flow Completion Alert Lifecycle"
+            echo "- Alertas ativos: **$(jq '.active_alerts | length' artifacts/flow-completion-alert-state/state.json)**"
+            echo "- Novas notificações: **$(jq '.new_notifications | length' artifacts/flow-completion-alert-state/state.json)**"
+            echo "- Histórico: **$(jq '.history | length' artifacts/flow-completion-alert-state/state.json) observações**"
+            echo "- Deduplicação: **fingerprint SHA-256**"
+            echo "- Remediação automática: **desabilitada**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ github.event_name != 'pull_request' }}
+        with:
+          name: flow-completion-alert-state
+          path: artifacts/flow-completion-alert-state/state.json
+          retention-days: 90
