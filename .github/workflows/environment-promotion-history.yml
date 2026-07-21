@@ -48,12 +48,14 @@ jobs:
           mkdir -p .tmp/decision .tmp/history artifacts/environment-promotion-history
           RUN_ID="${EVENT_RUN_ID:-${INPUT_RUN_ID:-}}"
           test -n "$RUN_ID"
-          gh run download "$RUN_ID" -n environment-promotion-readiness -D .tmp/decision
+          ARTIFACT_NAME="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts" --jq '.artifacts[] | select(.name | startswith("environment-promotion-readiness-")) | .name' | head -n 1)"
+          test -n "$ARTIFACT_NAME"
+          gh run download "$RUN_ID" -n "$ARTIFACT_NAME" -D .tmp/decision
           HISTORY_RUN="$(gh run list --workflow environment-promotion-history.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
           if [ -n "$HISTORY_RUN" ]; then
             gh run download "$HISTORY_RUN" -n environment-promotion-history -D .tmp/history || true
           fi
-          DECISION="$(find .tmp/decision -name '*.json' -print -quit)"
+          DECISION="$(find .tmp/decision -name 'report.json' -print -quit)"
           test -n "$DECISION"
           cp "$DECISION" .tmp/current-decision.json
           PREVIOUS="$(find .tmp/history -name history.json -print -quit)"
