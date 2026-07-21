@@ -1,0 +1,100 @@
+name: Environment Promotion Readiness Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [dev, stg, prod]
+  pull_request:
+    paths:
+      - "scripts/evaluate_environment_promotion_gate.py"
+      - "tests/test_evaluate_environment_promotion_gate.py"
+      - ".github/workflows/environment-promotion-readiness-gate.yml"
+      - "docs/contracts/environment-promotion-readiness-gate.md"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: environment-promotion-readiness-${{ github.event.pull_request.number || inputs.environment || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      TARGET_ENVIRONMENT: ${{ inputs.environment || 'stg' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused test dependency
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_evaluate_environment_promotion_gate.py
+      - name: Download latest governed evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/readiness .tmp/flow artifacts/environment-promotion-readiness
+          READINESS_RUN="$(gh run list --workflow instrumented-executive-readiness.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -n "$READINESS_RUN" ]; then
+            gh run download "$READINESS_RUN" -n instrumented-executive-readiness -D .tmp/readiness || true
+          fi
+          FLOW_RUN="$(gh run list --workflow flow-completion-monitor.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
+          if [ -n "$FLOW_RUN" ]; then
+            gh run download "$FLOW_RUN" -D .tmp/flow || true
+          fi
+          READINESS_FILE="$(find .tmp/readiness -name report.json -print -quit)"
+          FLOW_FILE="$(find .tmp/flow -name '*.json' -print -quit)"
+          [ -n "$READINESS_FILE" ] && cp "$READINESS_FILE" .tmp/readiness.json || echo '{}' > .tmp/readiness.json
+          [ -n "$FLOW_FILE" ] && cp "$FLOW_FILE" .tmp/flow.json || echo '{}' > .tmp/flow.json
+      - name: Evaluate promotion decision
+        id: gate
+        continue-on-error: true
+        run: |
+          python scripts/evaluate_environment_promotion_gate.py \
+            --environment "$TARGET_ENVIRONMENT" \
+            --readiness .tmp/readiness.json \
+            --flow .tmp/flow.json \
+            --output artifacts/environment-promotion-readiness/report.json
+      - name: Publish governed summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads(Path('artifacts/environment-promotion-readiness/report.json').read_text(encoding='utf-8'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('# Environment Promotion Readiness Gate\n\n')
+              out.write(f"- Environment: **{report['environment']}**\n")
+              out.write(f"- Decision: **{report['decision']}**\n")
+              out.write(f"- Blocking: **{report['blocking']}**\n")
+              out.write(f"- Readiness: **{report['evidence']['operational_readiness_percent']}**\n")
+              out.write(f"- Coverage: **{report['evidence']['metric_coverage_percent']}**\n")
+              out.write(f"- CI stability: **{report['evidence']['ci_stability_percent']}**\n")
+              out.write(f"- Reasons: **{', '.join(report['reasons']) or 'none'}**\n")
+              out.write(f"- Warnings: **{', '.join(report['warnings']) or 'none'}**\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: environment-promotion-readiness-${{ env.TARGET_ENVIRONMENT }}
+          path: artifacts/environment-promotion-readiness/report.json
+          retention-days: 90
+      - name: Enforce PROD decision
+        if: always() && env.TARGET_ENVIRONMENT == 'prod'
+        run: |
+          python - <<'PY'
+          import json
+          report = json.load(open('artifacts/environment-promotion-readiness/report.json', encoding='utf-8'))
+          if report['should_fail_workflow']:
+              raise SystemExit(f"Production promotion blocked: {report['decision']} - {report['reasons']}")
+          PY
