@@ -1,0 +1,85 @@
+name: Environment Promotion History
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment decision to persist
+        required: true
+        type: choice
+        options: [dev, stg, prod]
+      decision_run_id:
+        description: Environment Promotion Readiness Gate run ID
+        required: true
+        type: string
+  workflow_run:
+    workflows: ["Environment Promotion Readiness Gate"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: environment-promotion-history-${{ github.event.workflow_run.id || inputs.decision_run_id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  persist:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused test dependency
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_update_environment_promotion_history.py
+      - name: Download current decision and previous history
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          INPUT_RUN_ID: ${{ inputs.decision_run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/decision .tmp/history artifacts/environment-promotion-history
+          RUN_ID="${EVENT_RUN_ID:-${INPUT_RUN_ID:-}}"
+          test -n "$RUN_ID"
+          gh run download "$RUN_ID" -n environment-promotion-readiness -D .tmp/decision
+          HISTORY_RUN="$(gh run list --workflow environment-promotion-history.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -n "$HISTORY_RUN" ]; then
+            gh run download "$HISTORY_RUN" -n environment-promotion-history -D .tmp/history || true
+          fi
+          DECISION="$(find .tmp/decision -name '*.json' -print -quit)"
+          test -n "$DECISION"
+          cp "$DECISION" .tmp/current-decision.json
+          PREVIOUS="$(find .tmp/history -name history.json -print -quit)"
+          if [ -n "$PREVIOUS" ]; then cp "$PREVIOUS" .tmp/previous-history.json; else echo '{}' > .tmp/previous-history.json; fi
+      - name: Update promotion history
+        run: |
+          python scripts/update_environment_promotion_history.py \
+            --decision .tmp/current-decision.json \
+            --history .tmp/previous-history.json \
+            --output artifacts/environment-promotion-history/history.json
+      - name: Publish maturity summary
+        run: |
+          python - <<'PY'
+          import json, os
+          data = json.load(open('artifacts/environment-promotion-history/history.json', encoding='utf-8'))
+          maturity = data['stg_enforcement_maturity']
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('# Environment Promotion History\n\n')
+              out.write(f"- Stored decisions: **{data['point_count']}**\n")
+              out.write(f"- STG observed window: **{maturity['observed_window']}/{maturity['required_window']}**\n")
+              out.write(f"- STG maturity: **{maturity['status']}**\n")
+              out.write(f"- Blocking decisions: **{maturity['blocking_count']}**\n")
+              out.write('- Automatic enforcement change: **disabled**\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: environment-promotion-history
+          path: artifacts/environment-promotion-history/history.json
+          retention-days: 180
