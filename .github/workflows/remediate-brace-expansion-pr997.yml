@@ -1,11 +1,9 @@
 name: Remediate brace-expansion PR 997
 
 on:
-  push:
-    branches:
-      - agent/prompt-coordinator-api
-    paths:
-      - .github/workflows/remediate-brace-expansion-pr997.yml
+  pull_request:
+    types: [reopened]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -17,6 +15,7 @@ concurrency:
 
 jobs:
   remediate:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.number == 997
     name: Update vulnerable npm transitive dependency
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -55,9 +54,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm .github/workflows/remediate-brace-expansion-pr997.yml
           git add frontend/package-lock.json frontend/package.json
-          if git diff --cached --quiet; then
-            echo "No dependency changes were required."
-            exit 0
-          fi
           git commit -m "fix(frontend): remediate brace-expansion vulnerability"
           git push origin HEAD:agent/prompt-coordinator-api
