@@ -17,6 +17,7 @@ spec.loader.exec_module(module)
 
 
 def _base_args(tmp_path: Path) -> list[str]:
+    state_key = Fernet.generate_key().decode("ascii")
     return [
         "--phase",
         "before-restart",
@@ -26,8 +27,7 @@ def _base_args(tmp_path: Path) -> list[str]:
         "dev",
         "--admin-jwt",
         "jwt-value",
-        "--state-key",
-        Fernet.generate_key().decode("ascii"),
+        f"--state-key={state_key}",
         "--correlation-id",
         "corr-1",
         "--state-file",

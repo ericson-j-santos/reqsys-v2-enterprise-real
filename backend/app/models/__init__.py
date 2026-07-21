@@ -17,6 +17,7 @@ from app.models.orchestrator import (  # noqa: F401
 from app.models.power_automate_provisioning import (
     PowerAutomateProvisioningRegistry,  # noqa: F401
 )
+from app.models.prompt_execution_record import PromptExecutionRecord  # noqa: F401
 from app.models.requisito import (  # noqa: F401
     RecommendationIA,
     RecommendationIADecision,

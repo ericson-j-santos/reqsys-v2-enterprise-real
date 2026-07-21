@@ -4,16 +4,24 @@ on:
   pull_request:
     paths:
       - "docs/prompts/**"
+      - "backend/app/api/**"
+      - "backend/app/models/**"
       - "backend/app/services/development_prompt_coordinator.py"
+      - "backend/app/services/prompt_execution_records.py"
       - "backend/tests/test_development_prompt_coordinator.py"
+      - "backend/tests/test_prompt_development_coordinator_api.py"
       - "scripts/validate_prompt_catalog.py"
       - ".github/workflows/prompt-catalog-validation.yml"
   push:
     branches: [main]
     paths:
       - "docs/prompts/**"
+      - "backend/app/api/**"
+      - "backend/app/models/**"
       - "backend/app/services/development_prompt_coordinator.py"
+      - "backend/app/services/prompt_execution_records.py"
       - "backend/tests/test_development_prompt_coordinator.py"
+      - "backend/tests/test_prompt_development_coordinator_api.py"
       - "scripts/validate_prompt_catalog.py"
       - ".github/workflows/prompt-catalog-validation.yml"
   workflow_dispatch:
@@ -27,9 +35,11 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate prompt catalog
+    name: Validate prompt catalog, API and execution records
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
+    env:
+      PYTHONPATH: ${{ github.workspace }}/backend
 
     steps:
       - name: Checkout
@@ -40,19 +50,23 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements*.txt
+          cache-dependency-path: backend/requirements.txt
 
-      - name: Install test dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install pytest
+      - name: Install backend dependencies
+        run: python -m pip install --disable-pip-version-check -r backend/requirements.txt
 
       - name: Validate machine-readable catalog
         run: python scripts/validate_prompt_catalog.py
 
+      - name: Smoke import coordinator API
+        run: |
+          python -c "from app.api.prompt_development_coordinator import router; assert len(router.routes) == 4"
+
       - name: Run coordinator tests
-        working-directory: backend
-        run: python -m pytest -q --noconftest tests/test_development_prompt_coordinator.py
+        run: |
+          python -m pytest -q --noconftest \
+            backend/tests/test_development_prompt_coordinator.py \
+            backend/tests/test_prompt_development_coordinator_api.py
 
       - name: Publish summary
         if: always()
@@ -60,6 +74,7 @@ jobs:
           {
             echo "## Prompt Catalog Validation"
             echo "- Catálogo: \`docs/prompts/catalog.json\`"
-            echo "- Coordenador: \`backend/app/services/development_prompt_coordinator.py\`"
+            echo "- API: \`backend/app/api/prompt_development_coordinator.py\`"
+            echo "- Execution Records: \`backend/app/models/prompt_execution_record.py\`"
             echo "- Resultado: **${{ job.status }}**"
           } >> "$GITHUB_STEP_SUMMARY"
