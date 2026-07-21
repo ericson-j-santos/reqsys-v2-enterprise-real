@@ -1,0 +1,87 @@
+name: STG Enforcement Approval
+
+on:
+  workflow_dispatch:
+    inputs:
+      decision:
+        description: Human governance decision
+        required: true
+        type: choice
+        options: [approve, reject]
+      rationale:
+        description: Decision rationale
+        required: true
+        type: string
+      ticket:
+        description: Governance ticket or change record
+        required: true
+        type: string
+      history_run_id:
+        description: Successful Environment Promotion History run ID
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: stg-enforcement-approval
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: stg-governance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused test dependency
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_build_stg_enforcement_approval.py
+      - name: Download immutable maturity evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HISTORY_RUN_ID: ${{ inputs.history_run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/history artifacts/stg-enforcement-approval
+          gh run download "$HISTORY_RUN_ID" -n environment-promotion-history -D .tmp/history
+          HISTORY_FILE="$(find .tmp/history -name history.json -print -quit)"
+          test -n "$HISTORY_FILE"
+          cp "$HISTORY_FILE" .tmp/history.json
+      - name: Build approval record
+        run: |
+          python scripts/build_stg_enforcement_approval.py \
+            --history .tmp/history.json \
+            --decision "${{ inputs.decision }}" \
+            --approver "${{ github.actor }}" \
+            --rationale "${{ inputs.rationale }}" \
+            --ticket "${{ inputs.ticket }}" \
+            --source-run-id "${{ inputs.history_run_id }}" \
+            --source-sha "${{ github.sha }}" \
+            --output artifacts/stg-enforcement-approval/approval.json
+      - name: Publish decision summary
+        run: |
+          python - <<'PY'
+          import json, os
+          data = json.load(open('artifacts/stg-enforcement-approval/approval.json', encoding='utf-8'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('# STG Enforcement Approval\n\n')
+              out.write(f"- Status: **{data['status']}**\n")
+              out.write(f"- Effective approval: **{data['effective_approval']}**\n")
+              out.write(f"- Correlation ID: `{data['correlation_id']}`\n")
+              out.write(f"- Ticket: **{data['approval']['ticket']}**\n")
+              out.write(f"- Evidence maturity: **{data['evidence']['maturity_status']}**\n")
+              out.write(f"- Next action: **{data['next_action']}**\n")
+              out.write('- Automatic policy change: **disabled**\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stg-enforcement-approval
+          path: artifacts/stg-enforcement-approval/approval.json
+          retention-days: 365
