@@ -38,6 +38,7 @@ jobs:
       - name: Update lockfile safely
         working-directory: frontend
         run: |
+          npm install --package-lock-only --ignore-scripts
           npm ci
           npm audit fix --package-lock-only
           npm ci
