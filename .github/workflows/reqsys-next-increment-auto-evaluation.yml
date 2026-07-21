@@ -1,0 +1,76 @@
+name: ReqSys Next Increment Auto Evaluation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/evaluate_reqsys_next_increment.py'
+      - 'tests/test_evaluate_reqsys_next_increment.py'
+      - '.github/workflows/reqsys-next-increment-auto-evaluation.yml'
+      - 'docs/contracts/reqsys-next-increment-auto-evaluation.md'
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: reqsys-next-increment-auto-evaluation
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install focused test dependency
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_evaluate_reqsys_next_increment.py
+      - name: Collect open PRs and workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .tmp artifacts/reqsys-next-increment-auto-evaluation
+          gh api --paginate "repos/${{ github.repository }}/pulls?state=open&per_page=100" \
+            --jq '[.[] | {number, state, draft, mergeable: (.mergeable // null), auto_merge_enabled: (.auto_merge != null), updated_at, html_url}]' \
+            > .tmp/prs.json
+          gh api --paginate "repos/${{ github.repository }}/actions/runs?per_page=100" \
+            --jq '[.workflow_runs[] | {id, name, status, conclusion, event, head_branch, head_sha, created_at, updated_at, html_url}]' \
+            > .tmp/runs.json
+      - name: Download latest instrumented artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .tmp/readiness .tmp/history
+          READINESS_RUN="$(gh run list --workflow instrumented-executive-readiness.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          HISTORY_RUN="$(gh run list --workflow instrumented-executive-history.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -n "$READINESS_RUN" ]; then gh run download "$READINESS_RUN" -n instrumented-executive-readiness -D .tmp/readiness || true; fi
+          if [ -n "$HISTORY_RUN" ]; then gh run download "$HISTORY_RUN" -n instrumented-executive-history -D .tmp/history || true; fi
+          READINESS_FILE="$(find .tmp/readiness -name '*.json' -print -quit)"
+          HISTORY_FILE="$(find .tmp/history -name '*.json' -print -quit)"
+          [ -n "$READINESS_FILE" ] && cp "$READINESS_FILE" .tmp/readiness.json || echo '{}' > .tmp/readiness.json
+          [ -n "$HISTORY_FILE" ] && cp "$HISTORY_FILE" .tmp/history.json || echo '{}' > .tmp/history.json
+      - name: Evaluate next safe increment
+        run: |
+          python scripts/evaluate_reqsys_next_increment.py \
+            --prs .tmp/prs.json \
+            --runs .tmp/runs.json \
+            --readiness .tmp/readiness.json \
+            --history .tmp/history.json \
+            --output-json artifacts/reqsys-next-increment-auto-evaluation/report.json \
+            --output-md artifacts/reqsys-next-increment-auto-evaluation/report.md
+      - name: Publish executive summary
+        run: cat artifacts/reqsys-next-increment-auto-evaluation/report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-next-increment-auto-evaluation
+          path: artifacts/reqsys-next-increment-auto-evaluation/
+          retention-days: 90
