@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.1.0",
+  "contract": "reqsys-stg-blocking-change-authorization",
+  "target_environment": "stg",
+  "target_mode": "blocking",
+  "approval_resolution_mode": "latest_effective_artifact_for_pull_request_head_sha",
+  "approval_workflow": "stg-enforcement-approval.yml",
+  "approval_artifact_name": "stg-enforcement-approval",
+  "policy_file": "docs/contracts/environment-promotion-policy-v1.json",
+  "human_approval_required": true,
+  "fail_closed": true
+}
