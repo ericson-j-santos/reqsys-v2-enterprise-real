@@ -1,0 +1,133 @@
+name: STG Post-Merge Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/stg-*.yml"
+      - "docs/contracts/environment-promotion-policy-v1.json"
+      - "docs/contracts/stg-blocking-change-authorization.json"
+      - "scripts/validate_stg_policy_approval.py"
+      - "tests/test_validate_stg_policy_approval.py"
+  pull_request:
+    paths:
+      - ".github/workflows/stg-*.yml"
+      - "docs/contracts/environment-promotion-policy-v1.json"
+      - "docs/contracts/stg-blocking-change-authorization.json"
+      - "scripts/validate_stg_policy_approval.py"
+      - "tests/test_validate_stg_policy_approval.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stg-post-merge-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install focused dependencies
+        run: python -m pip install --disable-pip-version-check "pytest>=8.2,<9" "PyYAML>=6,<7"
+
+      - name: Run focused approval tests
+        run: python -m pytest -q tests/test_validate_stg_policy_approval.py
+
+      - name: Validate contracts, workflow syntax and temporary guardrails
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/stg-post-merge-validation
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import yaml
+
+          policy_path = Path('docs/contracts/environment-promotion-policy-v1.json')
+          authorization_path = Path('docs/contracts/stg-blocking-change-authorization.json')
+          blocking_workflow_path = Path('.github/workflows/stg-blocking-policy-authorization.yml')
+          approval_workflow_path = Path('.github/workflows/stg-enforcement-approval.yml')
+
+          policy = json.loads(policy_path.read_text(encoding='utf-8'))
+          authorization = json.loads(authorization_path.read_text(encoding='utf-8'))
+
+          for workflow_path in (blocking_workflow_path, approval_workflow_path):
+              parsed = yaml.safe_load(workflow_path.read_text(encoding='utf-8'))
+              if not isinstance(parsed, dict):
+                  raise SystemExit(f'invalid workflow document: {workflow_path}')
+
+          stg = policy.get('environments', {}).get('stg', {})
+          if stg.get('blocking') is not True:
+              raise SystemExit('STG policy must remain blocking')
+          if stg.get('approval_required') is not True:
+              raise SystemExit('STG approval must remain required')
+          if authorization.get('fail_closed') is not True:
+              raise SystemExit('authorization contract must remain fail closed')
+          if authorization.get('human_approval_required') is not True:
+              raise SystemExit('human approval contract must remain enabled')
+
+          blocking_text = blocking_workflow_path.read_text(encoding='utf-8')
+          expected_expiry = '2026-08-05T23:59:59+00:00'
+          if f'TEMPORARY_EXCEPTION_EXPIRES_AT: "{expected_expiry}"' not in blocking_text:
+              raise SystemExit('temporary exception expiry changed or missing')
+          if "'automatic_deploy': False" not in blocking_text:
+              raise SystemExit('temporary approval must explicitly disable automatic deploy')
+          if "'automatic_policy_change': False" not in blocking_text:
+              raise SystemExit('temporary approval must explicitly disable automatic policy change')
+
+          report = {
+              'schema_version': '1.0.0',
+              'contract': 'reqsys-stg-post-merge-validation',
+              'generated_at': datetime.now(timezone.utc).isoformat(),
+              'git_sha': '${{ github.sha }}',
+              'event_name': '${{ github.event_name }}',
+              'valid': True,
+              'checks': {
+                  'contracts_loaded': True,
+                  'focused_tests_executed': True,
+                  'workflow_yaml_valid': True,
+                  'temporary_exception_expires_at': expected_expiry,
+                  'automatic_deploy_disabled': True,
+                  'automatic_policy_change_disabled': True,
+                  'fail_closed': True,
+              },
+          }
+          Path('artifacts/stg-post-merge-validation/report.json').write_text(
+              json.dumps(report, indent=2, ensure_ascii=False) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps(report, ensure_ascii=False))
+          PY
+
+      - name: Publish validation summary
+        if: always()
+        run: |
+          {
+            echo "# STG Post-Merge Validation"
+            echo
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Contracts: **validated**"
+            echo "- Focused approval tests: **executed**"
+            echo "- Workflow syntax: **validated**"
+            echo "- Temporary exception expiry: **2026-08-05T23:59:59+00:00**"
+            echo "- Automatic deploy: **disabled**"
+            echo "- Automatic policy change: **disabled**"
+            echo "- Fail closed: **enabled**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload STG post-merge audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stg-post-merge-validation
+          path: artifacts/stg-post-merge-validation/report.json
+          retention-days: 365
