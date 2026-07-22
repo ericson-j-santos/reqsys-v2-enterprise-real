@@ -17,7 +17,7 @@ def validate_cofre_runtime_gate() -> None:
     path = ROOT / ".github/workflows/cofre-runtime-evidence-gate.yml"
     text = path.read_text(encoding="utf-8")
 
-    top_level_env = re.search(r"(?ms)^env:\n(?P<body>(?:^[ \t]+.*\n?)*)", text)
+    top_level_env = re.search(r"(?m)^env:\n(?P<body>(?:^[ \t]+.*\n?)*)", text)
     if top_level_env and "runner.temp" in top_level_env.group("body"):
         fail("Cofre Runtime Evidence Gate não pode usar runner.temp no env global")
 
