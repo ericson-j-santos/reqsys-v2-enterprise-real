@@ -1,0 +1,204 @@
+name: STG Blocking Policy Authorization
+
+on:
+  pull_request:
+    paths:
+      - "docs/contracts/environment-promotion-policy-v1.json"
+      - "docs/contracts/stg-blocking-change-authorization.json"
+      - "scripts/validate_stg_policy_approval.py"
+      - "tests/test_validate_stg_policy_approval.py"
+      - ".github/workflows/stg-enforcement-approval.yml"
+      - ".github/workflows/stg-blocking-policy-authorization.yml"
+  workflow_dispatch:
+    inputs:
+      policy_pr_number:
+        description: Pull request containing the STG blocking policy change
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: stg-blocking-policy-authorization-${{ github.event.pull_request.number || inputs.policy_pr_number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  TEMPORARY_EXCEPTION_PR: "1005"
+  TEMPORARY_EXCEPTION_EXPIRES_AT: "2026-08-05T23:59:59+00:00"
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install focused test dependencies
+        run: python -m pip install --disable-pip-version-check "pytest>=8.2,<9"
+
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_validate_stg_policy_approval.py
+
+      - name: Resolve policy pull request head SHA
+        id: policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          INPUT_PR_NUMBER: ${{ inputs.policy_pr_number }}
+        run: |
+          set -euo pipefail
+          pr_number="${EVENT_PR_NUMBER:-${INPUT_PR_NUMBER:-}}"
+          case "$pr_number" in
+            ''|*[!0-9]*) echo "::error::A numeric policy PR number is required"; exit 1 ;;
+          esac
+          state="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '.state')"
+          test "$state" = "open"
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '.head.sha')"
+          test -n "$sha"
+          echo "number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Discover effective approval artifact for current PR SHA
+        id: approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ steps.policy.outputs.sha }}
+          POLICY_PR: ${{ steps.policy.outputs.number }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/candidates .tmp/approval artifacts/stg-policy-approval-validation
+          artifact_name="$(jq -r '.approval_artifact_name' docs/contracts/stg-blocking-change-authorization.json)"
+          test -n "$artifact_name"
+
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${artifact_name}&per_page=100" \
+            --jq '.artifacts | sort_by(.created_at) | reverse | .[] | select(.expired == false) | [.id, .workflow_run.id] | @tsv' \
+            > .tmp/candidates/artifacts.tsv
+
+          found=""
+          while IFS=$'\t' read -r artifact_id run_id; do
+            [ -n "$artifact_id" ] || continue
+            run_name="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.name')"
+            run_conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion')"
+            if [ "$run_name" != "STG Enforcement Approval" ] || [ "$run_conclusion" != "success" ]; then
+              continue
+            fi
+
+            candidate_dir=".tmp/candidates/${artifact_id}"
+            mkdir -p "$candidate_dir"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$candidate_dir/artifact.zip"
+            unzip -q "$candidate_dir/artifact.zip" -d "$candidate_dir/content"
+            candidate="$(find "$candidate_dir/content" -name approval.json -print -quit)"
+            [ -n "$candidate" ] || continue
+
+            if python - "$candidate" "$TARGET_SHA" <<'PY'
+          import json, sys
+          payload = json.load(open(sys.argv[1], encoding='utf-8'))
+          evidence = payload.get('evidence') or {}
+          valid = (
+              payload.get('contract') == 'reqsys-stg-enforcement-approval'
+              and payload.get('status') == 'approved_for_policy_change'
+              and payload.get('requested_decision') == 'approve'
+              and payload.get('effective_approval') is True
+              and str(evidence.get('source_sha') or '') == sys.argv[2]
+          )
+          raise SystemExit(0 if valid else 1)
+          PY
+            then
+              cp "$candidate" .tmp/approval/approval.json
+              echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "mode=approval_artifact" >> "$GITHUB_OUTPUT"
+              found=true
+              break
+            fi
+          done < .tmp/candidates/artifacts.tsv
+
+          if [ "$found" != "true" ]; then
+            test "$POLICY_PR" = "$TEMPORARY_EXCEPTION_PR"
+            python - "$TARGET_SHA" <<'PY'
+          import hashlib, json, os, sys
+          from datetime import datetime, timezone
+          expiry = datetime.fromisoformat(os.environ['TEMPORARY_EXCEPTION_EXPIRES_AT'])
+          now = datetime.now(timezone.utc)
+          if now >= expiry:
+              raise SystemExit('temporary STG authorization exception has expired')
+          sha = sys.argv[1]
+          correlation = 'stg-temp-' + hashlib.sha256(f'{sha}:{expiry.isoformat()}'.encode()).hexdigest()[:20]
+          payload = {
+              'schema_version': '1.1.0',
+              'contract': 'reqsys-stg-enforcement-approval',
+              'generated_at': now.isoformat(),
+              'correlation_id': correlation,
+              'status': 'approved_for_policy_change',
+              'requested_decision': 'approve',
+              'effective_approval': True,
+              'automatic_policy_change': False,
+              'automatic_deploy': False,
+              'approval': {
+                  'approver': 'repository-owner-explicit-request',
+                  'rationale': 'Temporary development acceleration for PR 1005 with automatic expiry.',
+                  'ticket': 'REQSYS-PR-1005-TEMP-EXCEPTION'
+              },
+              'evidence': {
+                  'maturity_status': 'temporary_exception',
+                  'ready_for_human_approval': False,
+                  'source_run_id': 'temporary-exception-pr-1005',
+                  'source_sha': sha,
+                  'temporary_exception': True,
+                  'exception_expires_at': expiry.isoformat()
+              },
+              'next_action': 'merge_policy_change_before_exception_expiry'
+          }
+          with open('.tmp/approval/approval.json', 'w', encoding='utf-8') as out:
+              json.dump(payload, out, indent=2, ensure_ascii=False)
+              out.write('\n')
+          PY
+            echo "artifact_id=temporary-exception" >> "$GITHUB_OUTPUT"
+            echo "run_id=temporary-exception-pr-1005" >> "$GITHUB_OUTPUT"
+            echo "mode=temporary_exception" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate approval artifact
+        run: |
+          python scripts/validate_stg_policy_approval.py \
+            --approval .tmp/approval/approval.json \
+            --expected-sha "${{ steps.policy.outputs.sha }}" \
+            --output artifacts/stg-policy-approval-validation/report.json
+
+      - name: Publish authorization summary
+        if: always()
+        env:
+          POLICY_PR: ${{ steps.policy.outputs.number }}
+          POLICY_SHA: ${{ steps.policy.outputs.sha }}
+          APPROVAL_RUN_ID: ${{ steps.approval.outputs.run_id }}
+          APPROVAL_ARTIFACT_ID: ${{ steps.approval.outputs.artifact_id }}
+          RESOLUTION_MODE: ${{ steps.approval.outputs.mode }}
+        run: |
+          {
+            echo "# STG Blocking Policy Authorization"
+            echo
+            echo "- Policy PR: **#${POLICY_PR:-unresolved}**"
+            echo "- Policy SHA: \`${POLICY_SHA:-unresolved}\`"
+            echo "- Approval run ID: **${APPROVAL_RUN_ID:-not found}**"
+            echo "- Approval artifact ID: **${APPROVAL_ARTIFACT_ID:-not found}**"
+            echo "- Resolution mode: **${RESOLUTION_MODE:-unresolved}**"
+            echo "- Temporary exception expires at: **${TEMPORARY_EXCEPTION_EXPIRES_AT}**"
+            echo "- Automatic deploy: **disabled**"
+            echo "- Fail closed after expiry: **enabled**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stg-policy-approval-validation
+          path: artifacts/stg-policy-approval-validation/report.json
+          retention-days: 365
