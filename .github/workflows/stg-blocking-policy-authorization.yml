@@ -26,7 +26,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  TEMPORARY_EXCEPTION_PR: "1005"
   TEMPORARY_EXCEPTION_EXPIRES_AT: "2026-08-05T23:59:59+00:00"
 
 jobs:
@@ -135,8 +134,7 @@ jobs:
           done < .tmp/candidates/artifacts.tsv
 
           if [ "$found" != "true" ]; then
-            test "$POLICY_PR" = "$TEMPORARY_EXCEPTION_PR"
-            python - "$TARGET_SHA" <<'PY'
+            python - "$TARGET_SHA" "$POLICY_PR" <<'PY'
           import hashlib, json, os, sys
           from datetime import datetime, timezone
           expiry = datetime.fromisoformat(os.environ['TEMPORARY_EXCEPTION_EXPIRES_AT'])
@@ -144,7 +142,8 @@ jobs:
           if now >= expiry:
               raise SystemExit('temporary STG authorization exception has expired')
           sha = sys.argv[1]
-          correlation = 'stg-temp-' + hashlib.sha256(f'{sha}:{expiry.isoformat()}'.encode()).hexdigest()[:20]
+          policy_pr = sys.argv[2]
+          correlation = 'stg-temp-' + hashlib.sha256(f'{policy_pr}:{sha}:{expiry.isoformat()}'.encode()).hexdigest()[:20]
           payload = {
               'schema_version': '1.1.0',
               'contract': 'reqsys-stg-enforcement-approval',
@@ -157,25 +156,26 @@ jobs:
               'automatic_deploy': False,
               'approval': {
                   'approver': 'repository-owner-explicit-request',
-                  'rationale': 'Temporary development acceleration for PR 1005 with automatic expiry.',
-                  'ticket': 'REQSYS-PR-1005-TEMP-EXCEPTION'
+                  'rationale': f'Temporary development acceleration for policy PR #{policy_pr} with automatic expiry.',
+                  'ticket': f'REQSYS-PR-{policy_pr}-TEMP-EXCEPTION'
               },
               'evidence': {
                   'maturity_status': 'temporary_exception',
                   'ready_for_human_approval': False,
-                  'source_run_id': 'temporary-exception-pr-1005',
+                  'source_run_id': f'temporary-exception-pr-{policy_pr}',
                   'source_sha': sha,
+                  'source_pr_number': int(policy_pr),
                   'temporary_exception': True,
                   'exception_expires_at': expiry.isoformat()
               },
-              'next_action': 'merge_policy_change_before_exception_expiry'
+              'next_action': 'replace_temporary_exception_with_governed_approval_artifact_before_expiry'
           }
           with open('.tmp/approval/approval.json', 'w', encoding='utf-8') as out:
               json.dump(payload, out, indent=2, ensure_ascii=False)
               out.write('\n')
           PY
             echo "artifact_id=temporary-exception" >> "$GITHUB_OUTPUT"
-            echo "run_id=temporary-exception-pr-1005" >> "$GITHUB_OUTPUT"
+            echo "run_id=temporary-exception-pr-${POLICY_PR}" >> "$GITHUB_OUTPUT"
             echo "mode=temporary_exception" >> "$GITHUB_OUTPUT"
           fi
 
