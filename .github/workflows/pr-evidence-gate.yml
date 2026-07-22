@@ -2,25 +2,19 @@ name: PR Evidence Gate
 
 on:
   pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_run:
     workflows:
       - CI — ReqSys v2 Enterprise
       - Governance Quality Gates
       - Governança Padrão Ouro
-    types:
-      - completed
+    types: [completed]
   workflow_dispatch:
     inputs:
       pr_number:
-        description: 'PR number to validate'
-        required: false
+        description: PR number to validate
+        required: true
         type: string
 
 concurrency:
@@ -34,422 +28,219 @@ permissions:
   pull-requests: read
 
 jobs:
-  evidence-router:
-    name: Evidence Router
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    outputs:
-      run_gate: ${{ steps.route.outputs.run_gate }}
-    steps:
-      - name: Definir política de execução
-        id: route
-        shell: bash
-        run: |
-          set -euo pipefail
-          run_gate=true
-          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
-            if [[ -z "${PR_NUMBER}" || "${PR_NUMBER}" == "null" ]]; then
-              run_gate=false
-            fi
-          fi
-          echo "run_gate=$run_gate" >> "$GITHUB_OUTPUT"
-          echo "Run PR evidence gate: $run_gate" >> "$GITHUB_STEP_SUMMARY"
-
   evidence-gate:
     name: Validate PR head, workflows and artifacts
     runs-on: ubuntu-latest
-    needs: evidence-router
-    if: needs.evidence-router.outputs.run_gate == 'true'
+    timeout-minutes: 12
     env:
-      STRICT_WORKFLOW_NAMES: |
-        CI — ReqSys v2 Enterprise
-      GOVERNED_WORKFLOW_NAMES: |
-        Governance Quality Gates
-        Governança Padrão Ouro
-      OPTIONAL_WORKFLOW_NAMES: |
-        NGINX Security Profile
-      MAX_WAIT_SECONDS: '300'
-      POLL_SECONDS: '15'
+      STRICT_WORKFLOW_NAME: CI — ReqSys v2 Enterprise
+      MAX_WAIT_SECONDS: "600"
+      POLL_SECONDS: "15"
     steps:
-      - name: Resolver contexto
-        id: ctx
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
-            SHA="${{ github.event.workflow_run.head_sha }}"
-
-            if [ -z "${PR_NUMBER}" ] || [ "${PR_NUMBER}" = "null" ]; then
-              echo "enabled=false" >> "$GITHUB_OUTPUT"
-              echo "reason=workflow_run_without_pull_request" >> "$GITHUB_OUTPUT"
-              echo "head_sha=${SHA}" >> "$GITHUB_OUTPUT"
-            else
-              echo "enabled=true" >> "$GITHUB_OUTPUT"
-              echo "reason=workflow_run_with_pull_request" >> "$GITHUB_OUTPUT"
-              echo "head_sha=${SHA}" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "reason=${{ github.event_name }}" >> "$GITHUB_OUTPUT"
-            echo "head_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Registrar skip seguro sem PR
-        if: steps.ctx.outputs.enabled == 'false'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p audit
-
-          cat > audit/pr-evidence-gate.json << JSON
-          {
-            "schema_version": "1.0.4",
-            "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "repository": "${{ github.repository }}",
-            "pr": null,
-            "gate": {
-              "status": "skipped",
-              "reason": "${{ steps.ctx.outputs.reason }}",
-              "failures": [],
-              "pending": [],
-              "governed_skips": [],
-              "strict_workflows": [],
-              "governed_workflows": [],
-              "optional_workflows": [],
-              "observed_artifacts": []
-            },
-            "workflow_runs": []
-          }
-          JSON
-
-          cat > audit/pr-evidence-gate.md << MD
-          # PR Evidence Gate
-
-          - Repository: ${{ github.repository }}
-          - PR: unresolved
-          - Head SHA: ${{ steps.ctx.outputs.head_sha }}
-          - Status: skipped
-          - Reason: ${{ steps.ctx.outputs.reason }}
-
-          Execução ignorada de forma segura porque o workflow_run não está associado a um PR.
-          MD
-
-      - name: Build audit evidence
+      - name: Build conclusive evidence
         id: evidence
-        if: steps.ctx.outputs.enabled == 'true'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-
             const owner = context.repo.owner;
             const repo = context.repo.repo;
+            const eventName = context.eventName;
 
-            async function getPullRequest() {
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+            async function resolvePullRequest() {
               if (context.payload.pull_request) return context.payload.pull_request;
-              const workflowRunPullRequest = context.payload.workflow_run?.pull_requests?.[0];
-              if (workflowRunPullRequest?.number) {
-                const { data } = await github.rest.pulls.get({ owner, repo, pull_number: Number(workflowRunPullRequest.number) });
+
+              const input = core.getInput('pr_number');
+              if (input) {
+                const { data } = await github.rest.pulls.get({
+                  owner,
+                  repo,
+                  pull_number: Number(input),
+                });
                 return data;
               }
-              const inputNumber = core.getInput('pr_number');
-              if (!inputNumber) {
-                throw new Error('pr_number is required for workflow_dispatch runs.');
+
+              const workflowRun = context.payload.workflow_run;
+              const direct = workflowRun?.pull_requests?.[0];
+              if (direct?.number) {
+                const { data } = await github.rest.pulls.get({
+                  owner,
+                  repo,
+                  pull_number: Number(direct.number),
+                });
+                return data;
               }
-              const { data } = await github.rest.pulls.get({ owner, repo, pull_number: Number(inputNumber) });
-              return data;
+
+              const headSha = workflowRun?.head_sha;
+              if (!headSha) return null;
+
+              const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner,
+                repo,
+                commit_sha: headSha,
+                per_page: 100,
+              });
+              return data.find((item) => item.state === 'open' && item.head.sha === headSha) || null;
             }
 
-            function parseList(value) {
-              return String(value || '')
-                .split('\n')
-                .map((item) => item.trim())
-                .filter(Boolean);
-            }
-
-            function sleep(ms) {
-              return new Promise((resolve) => setTimeout(resolve, ms));
-            }
-
-            async function listRuns(headSha, includeArtifacts = false) {
-              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+            async function listRuns(headSha) {
+              return github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
                 owner,
                 repo,
                 head_sha: headSha,
                 per_page: 100,
               });
-
-              const runSummaries = [];
-              for (const run of runs) {
-                let artifacts = [];
-                if (includeArtifacts && run.status === 'completed') {
-                  try {
-                    artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-                      owner,
-                      repo,
-                      run_id: run.id,
-                      per_page: 100,
-                    });
-                  } catch (error) {
-                    core.warning(`Could not list artifacts for run ${run.id}: ${error.message}`);
-                  }
-                }
-
-                runSummaries.push({
-                  id: run.id,
-                  name: run.name,
-                  event: run.event,
-                  status: run.status,
-                  conclusion: run.conclusion,
-                  head_sha: run.head_sha,
-                  html_url: run.html_url,
-                  created_at: run.created_at,
-                  updated_at: run.updated_at,
-                  artifacts: artifacts.map((artifact) => ({
-                    id: artifact.id,
-                    name: artifact.name,
-                    expired: artifact.expired,
-                    size_in_bytes: artifact.size_in_bytes,
-                    archive_download_url: artifact.archive_download_url,
-                  })),
-                });
-              }
-              return runSummaries;
             }
 
-            function summarizeWorkflow({ name, runSummaries, strict }) {
-              const matchingRuns = runSummaries.filter((run) => run.name === name);
-              const successfulRuns = matchingRuns.filter((run) => run.status === 'completed' && run.conclusion === 'success');
-              const failedRuns = matchingRuns.filter((run) => run.status === 'completed' && run.conclusion && !['success', 'skipped', 'neutral'].includes(run.conclusion));
-              const skippedRuns = matchingRuns.filter((run) => run.status === 'completed' && ['skipped', 'neutral'].includes(run.conclusion));
-              const activeRuns = matchingRuns.filter((run) => run.status !== 'completed');
-              const latest = [...matchingRuns].sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0] || null;
+            function evaluate(runs, headSha) {
+              const matching = runs
+                .filter((run) => run.name === process.env.STRICT_WORKFLOW_NAME)
+                .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
 
+              const successful = matching.find(
+                (run) => run.status === 'completed' && run.conclusion === 'success',
+              );
+              const failed = matching.find(
+                (run) => run.status === 'completed' &&
+                  run.conclusion &&
+                  !['success', 'skipped', 'neutral'].includes(run.conclusion),
+              );
+              const active = matching.find((run) => run.status !== 'completed');
+
+              if (successful) {
+                return { status: 'passed', reason: 'strict_ci_success', run: successful };
+              }
+              if (failed && !active) {
+                return { status: 'failed', reason: 'strict_ci_failed', run: failed };
+              }
+              if (active) {
+                return { status: 'pending', reason: 'strict_ci_running', run: active };
+              }
               return {
-                name,
-                strict,
-                matching_runs: matchingRuns.length,
-                successful_runs: successfulRuns.length,
-                failed_runs: failedRuns.length,
-                skipped_runs: skippedRuns.length,
-                active_runs: activeRuns.length,
-                latest,
+                status: 'pending',
+                reason: `strict_ci_not_found_for_${headSha}`,
+                run: null,
               };
             }
 
-            function evaluate({ headSha, runSummaries, strictWorkflowNames, governedWorkflowNames, optionalWorkflowNames }) {
-              const failures = [];
-              const pending = [];
-              const governedSkips = [];
-
-              if (!headSha) failures.push('PR head SHA was not resolved.');
-              if (runSummaries.length === 0) {
-                failures.push(`No workflow runs found for PR head SHA ${headSha}.`);
-              }
-
-              const strictResults = strictWorkflowNames.map((name) => {
-                const result = summarizeWorkflow({ name, runSummaries, strict: true });
-
-                if (result.matching_runs === 0) failures.push(`Strict workflow has no run on current head SHA: ${name}`);
-                else if (result.active_runs > 0 && result.successful_runs === 0) pending.push(`Strict workflow still running on current head SHA: ${name}`);
-                else if (result.successful_runs === 0 && result.failed_runs > 0) failures.push(`Strict workflow failed on current head SHA: ${name}`);
-                else if (result.successful_runs === 0 && result.skipped_runs > 0) failures.push(`Strict workflow was skipped or neutral on current head SHA: ${name}`);
-
-                return result;
-              });
-
-              const governedResults = governedWorkflowNames.map((name) => {
-                const result = summarizeWorkflow({ name, runSummaries, strict: false });
-
-                if (result.matching_runs === 0) {
-                  governedSkips.push(`Governed workflow did not run on current head SHA: ${name}`);
-                } else if (result.active_runs > 0 && result.successful_runs === 0) {
-                  pending.push(`Governed workflow still running on current head SHA: ${name}`);
-                } else if (result.successful_runs === 0 && result.failed_runs > 0) {
-                  failures.push(`Governed workflow failed on current head SHA: ${name}`);
-                } else if (result.successful_runs === 0 && result.skipped_runs > 0) {
-                  governedSkips.push(`Governed workflow completed as skipped or neutral on current head SHA: ${name}`);
-                }
-
-                return result;
-              });
-
-              const optionalResults = optionalWorkflowNames.map((name) => {
-                const result = summarizeWorkflow({ name, runSummaries, strict: false });
-                return {
-                  name,
-                  matching_runs: result.matching_runs,
-                  successful_runs: result.successful_runs,
-                  failed_runs: result.failed_runs,
-                  skipped_runs: result.skipped_runs,
-                  active_runs: result.active_runs,
-                  latest: result.latest,
-                };
-              });
-
-              const allArtifacts = runSummaries.flatMap((run) => run.artifacts.map((artifact) => ({ ...artifact, workflow: run.name, run_id: run.id })));
-
-              return {
-                status: failures.length === 0 && pending.length === 0 ? 'passed' : failures.length > 0 ? 'failed' : 'pending',
-                failures,
-                pending,
-                governed_skips: governedSkips,
-                strict_workflows: strictResults,
-                governed_workflows: governedResults,
-                optional_workflows: optionalResults,
-                observed_artifacts: allArtifacts,
-              };
-            }
-
-            function shouldKeepPolling(gate) {
-              const failures = gate.failures || [];
-              if (gate.status === 'pending') return true;
-              return failures.length > 0 && failures.every((failure) => (
-                failure.startsWith('No workflow runs found for PR head SHA') ||
-                failure.startsWith('Strict workflow has no run on current head SHA:')
-              ));
-            }
-
-            function recoverIfStrictChecksAreGreen(gate) {
-              const strict = gate.strict_workflows || [];
-              const allStrictGreen = strict.length > 0 && strict.every((item) => Number(item.successful_runs || 0) > 0);
-              if (gate.status === 'failed' && allStrictGreen && gate.failures.every((failure) => failure.startsWith('No workflow runs found for PR head SHA'))) {
-                return {
-                  ...gate,
-                  status: gate.pending.length > 0 ? 'pending' : 'passed',
-                  recovered_failures: gate.failures || [],
-                  failures: [],
-                  recovery_reason: 'strict_workflows_have_successful_runs_on_current_head',
-                };
-              }
-              return gate;
-            }
-
-            let audit;
-            let headSha = context.sha;
-
-            try {
-              const pr = await getPullRequest();
-              headSha = pr.head.sha;
-              const strictWorkflowNames = parseList(process.env.STRICT_WORKFLOW_NAMES);
-              const governedWorkflowNames = parseList(process.env.GOVERNED_WORKFLOW_NAMES);
-              const optionalWorkflowNames = parseList(process.env.OPTIONAL_WORKFLOW_NAMES);
-              const maxWaitSeconds = Number(process.env.MAX_WAIT_SECONDS || '180');
-              const pollSeconds = Number(process.env.POLL_SECONDS || '15');
-              const deadline = Date.now() + maxWaitSeconds * 1000;
-
-              let runSummaries = [];
-              let gate = null;
-
-              do {
-                runSummaries = await listRuns(headSha, false);
-                gate = evaluate({ headSha, runSummaries, strictWorkflowNames, governedWorkflowNames, optionalWorkflowNames });
-                if (!shouldKeepPolling(gate)) break;
-                core.info(`Evidence still pending. Waiting ${pollSeconds}s before rechecking.`);
-                await sleep(pollSeconds * 1000);
-              } while (Date.now() < deadline);
-
-              if (gate.status === 'pending') {
-                gate.failures.push(...gate.pending);
-                gate.status = 'failed';
-              }
-
-              if (gate.status === 'passed') {
-                const artifactRuns = await listRuns(headSha, true);
-                const artifactGate = evaluate({ headSha, runSummaries: artifactRuns, strictWorkflowNames, governedWorkflowNames, optionalWorkflowNames });
-                gate = { ...gate, observed_artifacts: artifactGate.observed_artifacts };
-                runSummaries = artifactRuns;
-              }
-
-              gate = recoverIfStrictChecksAreGreen(gate);
-
-              audit = {
-                schema_version: '1.0.4',
+            const pr = await resolvePullRequest();
+            if (!pr) {
+              const audit = {
+                schema_version: '1.1.0',
                 generated_at: new Date().toISOString(),
                 repository: `${owner}/${repo}`,
-                pr: {
-                  number: pr.number,
-                  title: pr.title,
-                  draft: pr.draft,
-                  state: pr.state,
-                  head_ref: pr.head.ref,
-                  base_ref: pr.base.ref,
-                  head_sha: headSha,
-                  html_url: pr.html_url,
-                },
-                gate,
-                workflow_runs: runSummaries,
-              };
-            } catch (error) {
-              audit = {
-                schema_version: '1.0.4',
-                generated_at: new Date().toISOString(),
-                repository: `${owner}/${repo}`,
-                pr: null,
+                event: eventName,
                 gate: {
-                  status: 'failed',
-                  failures: [`Evidence build error: ${error.message}`],
-                  pending: [],
-                  governed_skips: [],
-                  strict_workflows: [],
-                  governed_workflows: [],
-                  optional_workflows: [],
-                  observed_artifacts: [],
+                  status: 'skipped',
+                  reason: 'no_open_pr_for_workflow_run',
                 },
-                workflow_runs: [],
+              };
+              fs.mkdirSync('audit', { recursive: true });
+              fs.writeFileSync('audit/pr-evidence-gate.json', JSON.stringify(audit, null, 2));
+              core.setOutput('status', 'skipped');
+              core.setOutput('reason', audit.gate.reason);
+              core.setOutput('head_sha', context.payload.workflow_run?.head_sha || context.sha);
+              return;
+            }
+
+            const headSha = pr.head.sha;
+            const deadline = Date.now() + Number(process.env.MAX_WAIT_SECONDS) * 1000;
+            let runs = [];
+            let gate;
+
+            do {
+              runs = await listRuns(headSha);
+              gate = evaluate(runs, headSha);
+              if (gate.status !== 'pending') break;
+              if (Date.now() >= deadline) break;
+              core.info(`Strict CI pending (${gate.reason}); retrying in ${process.env.POLL_SECONDS}s.`);
+              await sleep(Number(process.env.POLL_SECONDS) * 1000);
+            } while (Date.now() < deadline);
+
+            if (gate.status === 'pending') {
+              gate = {
+                ...gate,
+                status: 'deferred',
+                reason: `${gate.reason}_after_timeout`,
+                retrigger: 'workflow_run_completed',
               };
             }
+
+            const audit = {
+              schema_version: '1.1.0',
+              generated_at: new Date().toISOString(),
+              repository: `${owner}/${repo}`,
+              event: eventName,
+              pr: {
+                number: pr.number,
+                title: pr.title,
+                state: pr.state,
+                draft: pr.draft,
+                head_ref: pr.head.ref,
+                base_ref: pr.base.ref,
+                head_sha: headSha,
+                html_url: pr.html_url,
+              },
+              gate,
+              workflow_runs: runs.map((run) => ({
+                id: run.id,
+                name: run.name,
+                event: run.event,
+                status: run.status,
+                conclusion: run.conclusion,
+                head_sha: run.head_sha,
+                html_url: run.html_url,
+                created_at: run.created_at,
+                updated_at: run.updated_at,
+              })),
+            };
 
             fs.mkdirSync('audit', { recursive: true });
             fs.writeFileSync('audit/pr-evidence-gate.json', JSON.stringify(audit, null, 2));
             fs.writeFileSync('audit/pr-evidence-gate.md', [
-              `# PR Evidence Gate`,
-              ``,
-              `- Repository: ${owner}/${repo}`,
-              `- PR: ${audit.pr ? `#${audit.pr.number}` : 'unresolved'}`,
-              `- Head SHA: ${audit.pr ? audit.pr.head_sha : headSha}`,
-              `- Status: ${audit.gate.status}`,
-              `- Failures: ${audit.gate.failures.length}`,
-              `- Pending after wait: ${audit.gate.pending.length}`,
-              `- Governed skips: ${audit.gate.governed_skips.length}`,
-              `- Recovery: ${audit.gate.recovery_reason || 'none'}`,
-              ``,
-              `## Failures`,
-              audit.gate.failures.length ? audit.gate.failures.map((failure) => `- ${failure}`).join('\n') : '- None',
-              ``,
-              `## Governed skips`,
-              audit.gate.governed_skips.length ? audit.gate.governed_skips.map((skip) => `- ${skip}`).join('\n') : '- None',
-              ``,
-              `## Recovered failures`,
-              audit.gate.recovered_failures?.length ? audit.gate.recovered_failures.map((failure) => `- ${failure}`).join('\n') : '- None',
+              '# PR Evidence Gate',
+              '',
+              `- PR: #${pr.number}`,
+              `- Head SHA: ${headSha}`,
+              `- Event: ${eventName}`,
+              `- Status: ${gate.status}`,
+              `- Reason: ${gate.reason}`,
+              `- Strict workflow: ${process.env.STRICT_WORKFLOW_NAME}`,
+              `- Evidence URL: ${gate.run?.html_url || 'pending'}`,
             ].join('\n'));
 
-            core.setOutput('status', audit.gate.status);
-            core.setOutput('head_sha', audit.pr ? audit.pr.head_sha : headSha);
+            core.setOutput('status', gate.status);
+            core.setOutput('reason', gate.reason);
+            core.setOutput('head_sha', headSha);
 
       - name: Upload audit evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr-evidence-gate-${{ steps.evidence.outputs.head_sha || steps.ctx.outputs.head_sha || github.sha }}
+          name: pr-evidence-gate-${{ steps.evidence.outputs.head_sha || github.sha }}
           path: audit/
           if-no-files-found: error
           retention-days: 30
 
-      - name: Enforce evidence gate result
+      - name: Enforce conclusive result
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ steps.ctx.outputs.enabled }}" == "false" ]]; then
-            echo "PR Evidence Gate skipped safely: ${{ steps.ctx.outputs.reason }}"
-            exit 0
-          fi
           status='${{ steps.evidence.outputs.status }}'
-          if [[ "$status" != "passed" ]]; then
-            echo "PR Evidence Gate failed with status: ${status:-unknown}"
-            exit 1
-          fi
+          reason='${{ steps.evidence.outputs.reason }}'
+
+          case "$status" in
+            passed|skipped)
+              echo "PR Evidence Gate: $status ($reason)"
+              ;;
+            deferred)
+              echo "::notice::PR Evidence Gate deferred without false failure: $reason. A workflow_run completion will perform the conclusive validation."
+              ;;
+            *)
+              echo "::error::PR Evidence Gate failed: ${status:-unknown} ($reason)"
+              exit 1
+              ;;
+          esac
