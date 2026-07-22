@@ -1,0 +1,106 @@
+name: STG Temporary Exception Retirement
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/stg-blocking-policy-authorization.yml"
+      - ".github/workflows/stg-temporary-exception-retirement.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stg-temporary-exception-retirement
+  cancel-in-progress: true
+
+jobs:
+  validate-expiry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate temporary exception lifecycle
+        id: lifecycle
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/stg-temporary-exception-retirement
+          python - <<'PY'
+          import json
+          import re
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/stg-blocking-policy-authorization.yml')
+          text = workflow.read_text(encoding='utf-8')
+          match = re.search(r'TEMPORARY_EXCEPTION_EXPIRES_AT:\s*"([^"]+)"', text)
+          if not match:
+              raise SystemExit('temporary exception expiry is missing')
+
+          expires_at = datetime.fromisoformat(match.group(1))
+          now = datetime.now(timezone.utc)
+          expired = now >= expires_at
+          status = 'expired' if expired else 'active'
+          remaining_seconds = max(0, int((expires_at - now).total_seconds()))
+
+          report = {
+              'schema_version': '1.0.0',
+              'contract': 'reqsys-stg-temporary-exception-retirement',
+              'generated_at': now.isoformat(),
+              'git_sha': '${{ github.sha }}',
+              'status': status,
+              'expired': expired,
+              'expires_at': expires_at.isoformat(),
+              'remaining_seconds': remaining_seconds,
+              'automatic_deploy': False,
+              'automatic_policy_change': False,
+              'next_action': (
+                  'remove_temporary_exception_and_restore_strict_evidence_only'
+                  if expired
+                  else 'preserve_audited_temporary_exception_until_expiry'
+              ),
+          }
+          Path('artifacts/stg-temporary-exception-retirement/report.json').write_text(
+              json.dumps(report, indent=2, ensure_ascii=False) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps(report, ensure_ascii=False))
+          Path('/tmp/expired').write_text('true' if expired else 'false', encoding='utf-8')
+          PY
+          echo "expired=$(cat /tmp/expired)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish lifecycle summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('artifacts/stg-temporary-exception-retirement/report.json')
+          data = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('# STG Temporary Exception Retirement\n\n')
+              out.write(f"- Status: **{data.get('status', 'unresolved')}**\n")
+              out.write(f"- Expires at: **{data.get('expires_at', 'unresolved')}**\n")
+              out.write(f"- Remaining seconds: **{data.get('remaining_seconds', 'unresolved')}**\n")
+              out.write(f"- Next action: **{data.get('next_action', 'unresolved')}**\n")
+              out.write('- Automatic deploy: **disabled**\n')
+              out.write('- Automatic policy change: **disabled**\n')
+          PY
+
+      - name: Upload retirement evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stg-temporary-exception-retirement
+          path: artifacts/stg-temporary-exception-retirement/report.json
+          retention-days: 365
+
+      - name: Block expired exception
+        if: steps.lifecycle.outputs.expired == 'true'
+        run: |
+          echo "::error::Temporary STG exception expired. Remove the exception and restore strict evidence-only authorization."
+          exit 1
