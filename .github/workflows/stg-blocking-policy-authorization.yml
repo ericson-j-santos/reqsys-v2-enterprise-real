@@ -59,12 +59,25 @@ jobs:
           case "$pr_number" in
             ''|*[!0-9]*) echo "::error::A numeric policy PR number is required"; exit 1 ;;
           esac
-          state="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '.state')"
-          test "$state" = "open"
-          sha="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '.head.sha')"
-          test -n "$sha"
+
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}")"
+          state="$(jq -r '.state' <<<"$pr_json")"
+          merged="$(jq -r '.merged' <<<"$pr_json")"
+          sha="$(jq -r '.head.sha // empty' <<<"$pr_json")"
+
+          if [ "$state" != "open" ] && [ "$merged" != "true" ]; then
+            echo "::error::Policy PR #${pr_number} must be open or merged; state=${state}, merged=${merged}"
+            exit 1
+          fi
+          if [ -z "$sha" ]; then
+            echo "::error::Unable to resolve head SHA for policy PR #${pr_number}"
+            exit 1
+          fi
+
           echo "number=$pr_number" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "merged=$merged" >> "$GITHUB_OUTPUT"
 
       - name: Discover effective approval artifact for current PR SHA
         id: approval
@@ -178,6 +191,8 @@ jobs:
         env:
           POLICY_PR: ${{ steps.policy.outputs.number }}
           POLICY_SHA: ${{ steps.policy.outputs.sha }}
+          POLICY_STATE: ${{ steps.policy.outputs.state }}
+          POLICY_MERGED: ${{ steps.policy.outputs.merged }}
           APPROVAL_RUN_ID: ${{ steps.approval.outputs.run_id }}
           APPROVAL_ARTIFACT_ID: ${{ steps.approval.outputs.artifact_id }}
           RESOLUTION_MODE: ${{ steps.approval.outputs.mode }}
@@ -187,6 +202,8 @@ jobs:
             echo
             echo "- Policy PR: **#${POLICY_PR:-unresolved}**"
             echo "- Policy SHA: \`${POLICY_SHA:-unresolved}\`"
+            echo "- Policy state: **${POLICY_STATE:-unresolved}**"
+            echo "- Policy merged: **${POLICY_MERGED:-unresolved}**"
             echo "- Approval run ID: **${APPROVAL_RUN_ID:-not found}**"
             echo "- Approval artifact ID: **${APPROVAL_ARTIFACT_ID:-not found}**"
             echo "- Resolution mode: **${RESOLUTION_MODE:-unresolved}**"
