@@ -1,0 +1,53 @@
+name: Workflow Regression Contracts
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/cofre-runtime-evidence-gate.yml"
+      - ".github/workflows/pr-evidence-gate.yml"
+      - ".github/workflows/workflow-regression-contracts.yml"
+      - "scripts/validate_workflow_regression_contracts.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cofre-runtime-evidence-gate.yml"
+      - ".github/workflows/pr-evidence-gate.yml"
+      - ".github/workflows/workflow-regression-contracts.yml"
+      - "scripts/validate_workflow_regression_contracts.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-regression-contracts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate critical workflow contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate regression contracts
+        run: python scripts/validate_workflow_regression_contracts.py
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "## Workflow Regression Contracts"
+            echo "- Cofre: runner.temp restrito ao escopo do job"
+            echo "- Evidence Gate: timeout transitório não vira falha definitiva"
+            echo "- Falha real do CI estrito permanece bloqueante"
+            echo "- Resultado: **${{ job.status }}**"
+          } >> "$GITHUB_STEP_SUMMARY"
