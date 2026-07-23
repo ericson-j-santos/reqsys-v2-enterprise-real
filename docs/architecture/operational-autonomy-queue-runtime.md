@@ -4,7 +4,7 @@
 
 Implementar uma primeira fundação de autonomia operacional no ReqSys usando fila assíncrona, worker controlado, contrato de tarefa e pontos de observabilidade.
 
-Este incremento usa fila em memória por padrão para reduzir risco de implantação e evitar dependências externas obrigatórias. O contrato foi desenhado para permitir evolução posterior para Redis Streams, RabbitMQ, Azure Service Bus ou orquestrador como Temporal sem alterar os consumidores HTTP.
+O provider é plugável. DEV e testes podem usar memória; homologação e produção exigem Redis Streams e falham de forma explícita quando a configuração ou a conectividade não estão disponíveis. Não há fallback silencioso para memória nesses ambientes.
 
 ## Objetivo
 
@@ -24,7 +24,7 @@ Exemplos de uso futuro:
 
 | Componente | Arquivo | Responsabilidade |
 | --- | --- | --- |
-| Contrato de fila | `backend/app/core/operational_queue.py` | Modelar tarefa, status, idempotência, retry e DLQ lógica |
+| Contrato e providers | `backend/app/core/operational_queue.py` | Modelar tarefa e fornecer providers `memory` e `redis_streams` |
 | Worker | `backend/app/core/operational_worker.py` | Consumir tarefa e executar ação operacional controlada |
 | API | `backend/app/api/operational_autonomy.py` | Enfileirar, consultar status, executar worker uma vez e expor saúde |
 | Testes | `backend/tests/test_operational_queue.py` | Validar fila, idempotência, retry e DLQ |
@@ -83,11 +83,26 @@ GET /api/operational-autonomy/health
 
 - Toda tarefa possui `correlation_id`.
 - `idempotency_key` evita duplicidade lógica.
-- `max_attempts` limita retries.
-- DLQ lógica evita loop infinito.
+- retry usa backoff exponencial e `max_attempts` limita as tentativas.
+- Redis persiste payload, timestamps, resultado e motivo da última falha.
+- tentativas esgotadas são enviadas a uma Redis Stream de DLQ.
 - Payloads devem evitar PII desnecessária.
 - Integrações externas devem entrar por adaptadores específicos, não diretamente no worker base.
 
+## Configuração
+
+| Variável | DEV/testes | STG/PROD |
+| --- | --- | --- |
+| `OPERATIONAL_QUEUE_PROVIDER` | `memory` ou `redis_streams` | `redis_streams` |
+| `OPERATIONAL_QUEUE_REDIS_URL` | opcional no modo memória | obrigatória |
+| `OPERATIONAL_QUEUE_KEY_PREFIX` | `reqsys:operational` | prefixo isolado por ambiente |
+| `OPERATIONAL_QUEUE_CONSUMER_GROUP` | `reqsys-operational-workers` | grupo dos workers |
+| `OPERATIONAL_QUEUE_RETRY_BASE_SECONDS` | `1` | base do backoff exponencial |
+
+O endpoint de saúde informa `provider`, `connected`, `durable`, `queued_items`,
+`processing_items`, `dlq_items` e `oldest_message_age_seconds`.
+
 ## Próximo incremento recomendado
 
-Substituir o backend em memória por adapter persistente, preferencialmente Redis Streams para ambiente inicial ou RabbitMQ/Azure Service Bus para ambiente corporativo, mantendo a mesma interface pública da API.
+Executar o worker operacional como processo independente e adicionar recuperação de
+mensagens pendentes abandonadas por consumer inativo, com lease/claim governado e métricas.
