@@ -54,6 +54,24 @@ class Settings(BaseSettings):
     reqsys_rag_vector_store: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_VECTOR_STORE', 'in_memory') or 'in_memory')
     reqsys_rag_require_sources: bool = Field(default_factory=lambda: _bool_secret('REQSYS_RAG_REQUIRE_SOURCES', 'true'))
 
+    # Fila de autonomia operacional — memória somente em DEV/testes; Redis Streams em STG/PROD.
+    operational_queue_provider: str = Field(default_factory=lambda: get_secret('OPERATIONAL_QUEUE_PROVIDER', '') or '')
+    operational_queue_redis_url: str = Field(
+        default_factory=lambda: get_secret('OPERATIONAL_QUEUE_REDIS_URL', get_secret('REDIS_URL', '') or '') or ''
+    )
+    operational_queue_key_prefix: str = Field(
+        default_factory=lambda: get_secret('OPERATIONAL_QUEUE_KEY_PREFIX', 'reqsys:operational') or 'reqsys:operational'
+    )
+    operational_queue_consumer_group: str = Field(
+        default_factory=lambda: get_secret('OPERATIONAL_QUEUE_CONSUMER_GROUP', 'reqsys-operational-workers') or 'reqsys-operational-workers'
+    )
+    operational_queue_retry_base_seconds: float = Field(
+        default_factory=lambda: float(get_secret('OPERATIONAL_QUEUE_RETRY_BASE_SECONDS', '1') or '1')
+    )
+    operational_queue_connect_timeout_seconds: float = Field(
+        default_factory=lambda: float(get_secret('OPERATIONAL_QUEUE_CONNECT_TIMEOUT_SECONDS', '2') or '2')
+    )
+
     # Integração com Redmine Wiki Sync service
     wiki_sync_base_url: str = Field(default_factory=lambda: get_secret('WIKI_SYNC_BASE_URL', '') or '')
     wiki_sync_token: str = Field(default_factory=lambda: get_secret('WIKI_SYNC_TOKEN', '') or '')
