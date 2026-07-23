@@ -12,7 +12,7 @@ on:
         type: string
 
 permissions:
-  actions: read
+  actions: write
   contents: read
 
 concurrency:
@@ -22,11 +22,13 @@ concurrency:
 jobs:
   validate-freshness:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 8
     env:
       MAX_AGE_HOURS: ${{ inputs.max_age_hours || '24' }}
+      REMEDIATION_COOLDOWN_HOURS: "2"
     steps:
       - name: Inspect latest consolidated evidence
+        id: freshness
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -39,7 +41,9 @@ jobs:
           [ "$MAX_AGE_HOURS" -gt 0 ] || { echo "::error::max_age_hours must be greater than zero"; exit 1; }
 
           gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/stg-end-to-end-evidence.yml/runs?status=success&branch=main&per_page=1" \
-            --jq '.workflow_runs[0] // {}' > latest-run.json
+            --jq '.workflow_runs[0] // {}' > latest-success.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/stg-end-to-end-evidence.yml/runs?branch=main&per_page=10" \
+            --jq '.workflow_runs' > recent-runs.json
 
           python - <<'PY'
           import hashlib
@@ -48,62 +52,107 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
 
-          run = json.loads(Path('latest-run.json').read_text(encoding='utf-8'))
+          success = json.loads(Path('latest-success.json').read_text(encoding='utf-8'))
+          recent = json.loads(Path('recent-runs.json').read_text(encoding='utf-8'))
           max_age = int(os.environ['MAX_AGE_HOURS'])
+          cooldown = int(os.environ['REMEDIATION_COOLDOWN_HOURS'])
           now = datetime.now(timezone.utc)
-          run_id = run.get('id')
-          updated_raw = run.get('updated_at')
+
+          run_id = success.get('id')
+          updated_raw = success.get('updated_at')
           updated = datetime.fromisoformat(updated_raw.replace('Z', '+00:00')) if updated_raw else None
           age_hours = round((now - updated).total_seconds() / 3600, 2) if updated else None
           fresh = bool(run_id and updated and age_hours <= max_age)
           reason = (
-              'evidence_fresh'
-              if fresh
-              else 'evidence_run_missing'
-              if not run_id
-              else 'evidence_timestamp_missing'
-              if not updated
-              else 'evidence_stale'
+              'evidence_fresh' if fresh else
+              'evidence_run_missing' if not run_id else
+              'evidence_timestamp_missing' if not updated else
+              'evidence_stale'
           )
-          seed = f"{run_id or 'missing'}:{updated_raw or 'missing'}:{max_age}"
+
+          active = next((item for item in recent if item.get('status') in {'queued', 'in_progress', 'pending', 'waiting'}), None)
+          last_attempt = next((item for item in recent if item.get('event') == 'workflow_dispatch'), None)
+          last_attempt_created = None
+          if last_attempt and last_attempt.get('created_at'):
+              last_attempt_created = datetime.fromisoformat(last_attempt['created_at'].replace('Z', '+00:00'))
+          cooldown_elapsed = not last_attempt_created or (now - last_attempt_created).total_seconds() >= cooldown * 3600
+          remediation_allowed = not fresh and active is None and cooldown_elapsed
+
+          seed = f"{run_id or 'missing'}:{updated_raw or 'missing'}:{max_age}:{active.get('id') if active else 'none'}"
           report = {
-              'schema_version': '1.0.0',
+              'schema_version': '1.1.0',
               'contract': 'reqsys-stg-e2e-evidence-freshness',
               'generated_at': now.isoformat(),
               'correlation_id': 'stg-e2e-fresh-' + hashlib.sha256(seed.encode()).hexdigest()[:20],
-              'status': 'fresh' if fresh else 'stale',
-              'blocking': not fresh,
+              'status': 'fresh' if fresh else 'remediation_allowed' if remediation_allowed else 'stale',
+              'blocking': not fresh and not remediation_allowed,
               'reason': reason,
               'max_age_hours': max_age,
               'age_hours': age_hours,
               'evidence_run': {
                   'id': run_id,
-                  'url': run.get('html_url'),
-                  'head_sha': run.get('head_sha'),
+                  'url': success.get('html_url'),
+                  'head_sha': success.get('head_sha'),
                   'updated_at': updated_raw,
-                  'conclusion': run.get('conclusion'),
+                  'conclusion': success.get('conclusion'),
+              },
+              'remediation': {
+                  'allowed': remediation_allowed,
+                  'cooldown_hours': cooldown,
+                  'active_run_id': active.get('id') if active else None,
+                  'last_dispatch_run_id': last_attempt.get('id') if last_attempt else None,
+                  'cooldown_elapsed': cooldown_elapsed,
+                  'target_workflow': 'stg-end-to-end-evidence.yml',
+                  'target_ref': 'main',
+                  'single_attempt': True,
               },
               'guardrails': {
-                  'report_only': True,
                   'automatic_deploy': False,
                   'automatic_policy_change': False,
+                  'automatic_approval': False,
+                  'maximum_dispatches_per_cooldown': 1,
               },
-              'next_action': 'none' if fresh else 'dispatch_stg_end_to_end_evidence_on_main',
+              'next_action': (
+                  'none' if fresh else
+                  'dispatch_stg_end_to_end_evidence_on_main' if remediation_allowed else
+                  'wait_for_active_remediation' if active else
+                  'manual_investigation_after_cooldown'
+              ),
           }
           out = Path('artifacts/stg-e2e-evidence-freshness')
           out.mkdir(parents=True, exist_ok=True)
           (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as outputs:
+              outputs.write(f"fresh={'true' if fresh else 'false'}\n")
+              outputs.write(f"remediation_allowed={'true' if remediation_allowed else 'false'}\n")
+              outputs.write(f"reason={reason}\n")
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
               summary.write('# STG E2E Evidence Freshness\n\n')
               summary.write(f"- Status: **{report['status']}**\n")
               summary.write(f"- Reason: **{reason}**\n")
               summary.write(f"- Age: **{age_hours if age_hours is not None else 'unknown'}h**\n")
               summary.write(f"- Maximum age: **{max_age}h**\n")
-              summary.write(f"- Evidence run: **{run_id or 'missing'}**\n")
+              summary.write(f"- Remediation allowed: **{remediation_allowed}**\n")
+              summary.write(f"- Active remediation run: **{active.get('id') if active else 'none'}**\n")
               summary.write('- Automatic deploy: **disabled**\n')
-          if not fresh:
-              raise SystemExit(f'STG end-to-end evidence is not fresh: {reason}')
           PY
+
+      - name: Dispatch one governed remediation attempt
+        id: remediate
+        if: steps.freshness.outputs.remediation_allowed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run stg-end-to-end-evidence.yml --ref main
+          echo "requested=true" >> "$GITHUB_OUTPUT"
+          echo "Remediation dispatch requested for stg-end-to-end-evidence.yml on main." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce unresolved stale evidence
+        if: steps.freshness.outputs.fresh != 'true' && steps.remediate.outputs.requested != 'true'
+        run: |
+          echo "::error::STG E2E evidence remains stale and no remediation was dispatched: ${{ steps.freshness.outputs.reason }}"
+          exit 1
 
       - uses: actions/upload-artifact@v4
         if: always()
