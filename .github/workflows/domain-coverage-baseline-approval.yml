@@ -35,7 +35,6 @@ jobs:
           fi
 
           RUN_GATE="$(gh api \
-            --repo "${{ github.repository }}" \
             --paginate \
             "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
             --jq '[.[].filename | select(
@@ -87,7 +86,6 @@ jobs:
         run: |
           set -euo pipefail
           APPROVALS="$(gh api \
-            --repo "${{ github.repository }}" \
             "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews" \
             --jq '[.[] | select(.state == "APPROVED")] | length')"
           echo "Aprovações encontradas: ${APPROVALS}"
