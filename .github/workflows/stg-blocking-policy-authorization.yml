@@ -26,7 +26,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  TEMPORARY_EXCEPTION_PR: "1005"
   TEMPORARY_EXCEPTION_EXPIRES_AT: "2026-08-05T23:59:59+00:00"
 
 jobs:
@@ -59,12 +58,25 @@ jobs:
           case "$pr_number" in
             ''|*[!0-9]*) echo "::error::A numeric policy PR number is required"; exit 1 ;;
           esac
-          state="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '.state')"
-          test "$state" = "open"
-          sha="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '.head.sha')"
-          test -n "$sha"
+
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}")"
+          state="$(jq -r '.state' <<<"$pr_json")"
+          merged="$(jq -r '.merged' <<<"$pr_json")"
+          sha="$(jq -r '.head.sha // empty' <<<"$pr_json")"
+
+          if [ "$state" != "open" ] && [ "$merged" != "true" ]; then
+            echo "::error::Policy PR #${pr_number} must be open or merged; state=${state}, merged=${merged}"
+            exit 1
+          fi
+          if [ -z "$sha" ]; then
+            echo "::error::Unable to resolve head SHA for policy PR #${pr_number}"
+            exit 1
+          fi
+
           echo "number=$pr_number" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "merged=$merged" >> "$GITHUB_OUTPUT"
 
       - name: Discover effective approval artifact for current PR SHA
         id: approval
@@ -122,8 +134,7 @@ jobs:
           done < .tmp/candidates/artifacts.tsv
 
           if [ "$found" != "true" ]; then
-            test "$POLICY_PR" = "$TEMPORARY_EXCEPTION_PR"
-            python - "$TARGET_SHA" <<'PY'
+            python - "$TARGET_SHA" "$POLICY_PR" <<'PY'
           import hashlib, json, os, sys
           from datetime import datetime, timezone
           expiry = datetime.fromisoformat(os.environ['TEMPORARY_EXCEPTION_EXPIRES_AT'])
@@ -131,7 +142,8 @@ jobs:
           if now >= expiry:
               raise SystemExit('temporary STG authorization exception has expired')
           sha = sys.argv[1]
-          correlation = 'stg-temp-' + hashlib.sha256(f'{sha}:{expiry.isoformat()}'.encode()).hexdigest()[:20]
+          policy_pr = sys.argv[2]
+          correlation = 'stg-temp-' + hashlib.sha256(f'{policy_pr}:{sha}:{expiry.isoformat()}'.encode()).hexdigest()[:20]
           payload = {
               'schema_version': '1.1.0',
               'contract': 'reqsys-stg-enforcement-approval',
@@ -144,25 +156,26 @@ jobs:
               'automatic_deploy': False,
               'approval': {
                   'approver': 'repository-owner-explicit-request',
-                  'rationale': 'Temporary development acceleration for PR 1005 with automatic expiry.',
-                  'ticket': 'REQSYS-PR-1005-TEMP-EXCEPTION'
+                  'rationale': f'Temporary development acceleration for policy PR #{policy_pr} with automatic expiry.',
+                  'ticket': f'REQSYS-PR-{policy_pr}-TEMP-EXCEPTION'
               },
               'evidence': {
                   'maturity_status': 'temporary_exception',
                   'ready_for_human_approval': False,
-                  'source_run_id': 'temporary-exception-pr-1005',
+                  'source_run_id': f'temporary-exception-pr-{policy_pr}',
                   'source_sha': sha,
+                  'source_pr_number': int(policy_pr),
                   'temporary_exception': True,
                   'exception_expires_at': expiry.isoformat()
               },
-              'next_action': 'merge_policy_change_before_exception_expiry'
+              'next_action': 'replace_temporary_exception_with_governed_approval_artifact_before_expiry'
           }
           with open('.tmp/approval/approval.json', 'w', encoding='utf-8') as out:
               json.dump(payload, out, indent=2, ensure_ascii=False)
               out.write('\n')
           PY
             echo "artifact_id=temporary-exception" >> "$GITHUB_OUTPUT"
-            echo "run_id=temporary-exception-pr-1005" >> "$GITHUB_OUTPUT"
+            echo "run_id=temporary-exception-pr-${POLICY_PR}" >> "$GITHUB_OUTPUT"
             echo "mode=temporary_exception" >> "$GITHUB_OUTPUT"
           fi
 
@@ -178,6 +191,8 @@ jobs:
         env:
           POLICY_PR: ${{ steps.policy.outputs.number }}
           POLICY_SHA: ${{ steps.policy.outputs.sha }}
+          POLICY_STATE: ${{ steps.policy.outputs.state }}
+          POLICY_MERGED: ${{ steps.policy.outputs.merged }}
           APPROVAL_RUN_ID: ${{ steps.approval.outputs.run_id }}
           APPROVAL_ARTIFACT_ID: ${{ steps.approval.outputs.artifact_id }}
           RESOLUTION_MODE: ${{ steps.approval.outputs.mode }}
@@ -187,6 +202,8 @@ jobs:
             echo
             echo "- Policy PR: **#${POLICY_PR:-unresolved}**"
             echo "- Policy SHA: \`${POLICY_SHA:-unresolved}\`"
+            echo "- Policy state: **${POLICY_STATE:-unresolved}**"
+            echo "- Policy merged: **${POLICY_MERGED:-unresolved}**"
             echo "- Approval run ID: **${APPROVAL_RUN_ID:-not found}**"
             echo "- Approval artifact ID: **${APPROVAL_ARTIFACT_ID:-not found}**"
             echo "- Resolution mode: **${RESOLUTION_MODE:-unresolved}**"
