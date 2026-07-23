@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 
 from app.core.operational_queue import (
@@ -52,6 +54,12 @@ async def test_idempotency_key_returns_existing_task():
     snapshot = await queue.snapshot()
     assert snapshot['total_tasks'] == 1
     assert snapshot['queued_items'] == 1
+    assert snapshot['provider'] == 'memory'
+    assert snapshot['connected'] is True
+    assert snapshot['durable'] is False
+    assert snapshot['processing_items'] == 0
+    assert snapshot['dlq_items'] == 0
+    assert snapshot['oldest_message_age_seconds'] is not None
 
 
 @pytest.mark.asyncio
@@ -74,3 +82,26 @@ async def test_fail_retries_and_then_dead_letter():
     stored = await queue.get(second.task_id)
     assert stored.status == OperationalTaskStatus.DEAD_LETTER
     assert stored.last_error == 'erro 2'
+
+
+@pytest.mark.asyncio
+async def test_retry_uses_exponential_backoff():
+    queue = OperationalQueue(retry_base_seconds=2)
+    task = OperationalTask(
+        task_type=OperationalTaskType.GENERIC,
+        payload={'force_error': True},
+        correlation_id='corr-backoff',
+        max_attempts=3,
+    )
+
+    await queue.enqueue(task)
+    first = await queue.dequeue()
+    await queue.fail(first.task_id, 'erro 1')
+    stored = await queue.get(first.task_id)
+    assert (stored.next_attempt_at - stored.updated_at).total_seconds() == 2
+
+    stored.next_attempt_at = datetime.now(UTC)
+    second = await queue.dequeue()
+    await queue.fail(second.task_id, 'erro 2')
+    stored = await queue.get(second.task_id)
+    assert (stored.next_attempt_at - stored.updated_at).total_seconds() == 4

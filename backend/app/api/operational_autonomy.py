@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.core.envelope import ok
 from app.core.operational_queue import (
+    OperationalQueueUnavailableError,
     OperationalTask,
     OperationalTaskType,
     operational_queue,
@@ -36,7 +37,10 @@ async def enqueue_operational_task(body: EnqueueOperationalTaskRequest, request:
         idempotency_key=body.idempotency_key,
         max_attempts=body.max_attempts,
     )
-    queued = await operational_queue.enqueue(task)
+    try:
+        queued = await operational_queue.enqueue(task)
+    except OperationalQueueUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     return ok(
         {
             'schema_version': '1.0.0',
@@ -48,7 +52,10 @@ async def enqueue_operational_task(body: EnqueueOperationalTaskRequest, request:
 
 @router.post('/worker/run-once')
 async def run_operational_worker_once():
-    processed = await operational_worker.run_once()
+    try:
+        processed = await operational_worker.run_once()
+    except OperationalQueueUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     return ok(
         {
             'schema_version': '1.0.0',
@@ -60,7 +67,10 @@ async def run_operational_worker_once():
 
 @router.get('/tasks/{task_id}')
 async def get_operational_task(task_id: str):
-    task = await operational_queue.get(task_id)
+    try:
+        task = await operational_queue.get(task_id)
+    except OperationalQueueUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Tarefa operacional não encontrada')
     return ok({'schema_version': '1.0.0', 'task': task.to_dict()})
@@ -73,7 +83,7 @@ async def operational_autonomy_health():
         {
             **snapshot,
             'worker_running': operational_worker.running,
-            'runtime_mode': 'in_memory_first_increment',
-            'upgrade_path': ['redis_streams', 'rabbitmq', 'azure_service_bus', 'temporal_orchestrator'],
+            'runtime_mode': snapshot['provider'],
+            'upgrade_path': ['rabbitmq', 'azure_service_bus', 'temporal_orchestrator'],
         }
     )
