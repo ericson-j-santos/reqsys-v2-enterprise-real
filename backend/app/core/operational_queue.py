@@ -94,17 +94,23 @@ class OperationalQueueProvider(Protocol):
     provider_name: str
     durable: bool
 
-    async def enqueue(self, task: OperationalTask) -> OperationalTask: ...
+    async def enqueue(self, task: OperationalTask) -> OperationalTask:
+        raise NotImplementedError
 
-    async def dequeue(self) -> Optional[OperationalTask]: ...
+    async def dequeue(self) -> Optional[OperationalTask]:
+        raise NotImplementedError
 
-    async def complete(self, task_id: str, result: dict[str, Any]) -> None: ...
+    async def complete(self, task_id: str, result: dict[str, Any]) -> None:
+        raise NotImplementedError
 
-    async def fail(self, task_id: str, error: Exception | str) -> None: ...
+    async def fail(self, task_id: str, error: Exception | str) -> None:
+        raise NotImplementedError
 
-    async def get(self, task_id: str) -> Optional[OperationalTask]: ...
+    async def get(self, task_id: str) -> Optional[OperationalTask]:
+        raise NotImplementedError
 
-    async def snapshot(self) -> dict[str, Any]: ...
+    async def snapshot(self) -> dict[str, Any]:
+        raise NotImplementedError
 
 
 def _retry_delay_seconds(base_seconds: float, attempts: int) -> float:
