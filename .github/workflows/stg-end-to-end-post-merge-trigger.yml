@@ -1,0 +1,63 @@
+name: STG End-to-End Post-Merge Trigger
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/stg-end-to-end-evidence.yml"
+      - ".github/workflows/environment-promotion-readiness-gate.yml"
+      - ".github/workflows/environment-promotion-history.yml"
+      - ".github/workflows/stg-enforcement-approval.yml"
+      - ".github/workflows/stg-blocking-policy-authorization.yml"
+      - "scripts/evaluate_environment_promotion_gate.py"
+      - "scripts/update_environment_promotion_history.py"
+      - "scripts/build_stg_enforcement_approval.py"
+      - "scripts/validate_stg_policy_approval.py"
+      - "docs/contracts/environment-promotion-policy-v1.json"
+      - "docs/contracts/stg-blocking-change-authorization.json"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: stg-e2e-post-merge-trigger-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Validate target workflow exists on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/stg-end-to-end-evidence.yml?ref=main" \
+            --jq '.sha' > /dev/null
+
+      - name: Dispatch STG end-to-end evidence on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/stg-end-to-end-evidence.yml/dispatches" \
+            -f ref=main
+
+      - name: Publish trigger summary
+        run: |
+          {
+            echo "# STG End-to-End Post-Merge Trigger"
+            echo
+            echo "- Source event: **${GITHUB_EVENT_NAME}**"
+            echo "- Source SHA: \`${GITHUB_SHA}\`"
+            echo "- Target workflow: **STG End-to-End Evidence**"
+            echo "- Target ref: **main**"
+            echo "- Automatic deploy: **disabled**"
+            echo "- Automatic policy change: **disabled**"
+          } >> "$GITHUB_STEP_SUMMARY"
