@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.core.envelope import ok
@@ -13,6 +14,7 @@ from app.core.operational_queue import (
     operational_queue,
 )
 from app.core.operational_queue_observability import OperationalQueueObserver
+from app.core.operational_queue_readiness import OperationalQueueReadinessPolicy
 from app.core.operational_worker import operational_worker
 
 router = APIRouter(prefix='/api/operational-autonomy', tags=['operational-autonomy'])
@@ -79,11 +81,7 @@ async def get_operational_task(task_id: str):
 
 @router.get('/queue/consumers')
 async def operational_queue_consumers():
-    """Expõe evidência detalhada do consumer group Redis Streams.
-
-    O endpoint é report-only e retorna 503 quando o provider durável não está
-    disponível ou quando a aplicação está configurada com fila em memória.
-    """
+    """Expõe evidência detalhada do consumer group Redis Streams."""
 
     try:
         snapshot = await OperationalQueueObserver().snapshot()
@@ -92,21 +90,48 @@ async def operational_queue_consumers():
     return ok(snapshot)
 
 
+@router.get('/queue/readiness')
+async def operational_queue_readiness():
+    """Avalia SLOs da fila e retorna 503 somente quando ela não está pronta."""
+
+    try:
+        snapshot = await OperationalQueueObserver().snapshot()
+        readiness = OperationalQueueReadinessPolicy.from_environment().evaluate(snapshot)
+    except (OperationalQueueUnavailableError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    payload = ok(readiness)
+    if readiness['ready']:
+        return payload
+    return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload)
+
+
 @router.get('/health')
 async def operational_autonomy_health():
     snapshot = await operational_queue.snapshot()
     consumer_observability: dict[str, Any] | None = None
+    queue_readiness: dict[str, Any] | None = None
 
     if snapshot.get('provider') == 'redis_streams' and snapshot.get('connected') is True:
         try:
             consumer_observability = await OperationalQueueObserver().snapshot()
-        except OperationalQueueUnavailableError as exc:
+            queue_readiness = OperationalQueueReadinessPolicy.from_environment().evaluate(
+                consumer_observability
+            )
+        except (OperationalQueueUnavailableError, ValueError) as exc:
             consumer_observability = {
                 'schema_version': '1.0.0',
                 'component': 'operational_queue_consumers',
                 'status': 'critical',
                 'reasons': ['observability_unavailable'],
                 'error': str(exc),
+            }
+            queue_readiness = {
+                'schema_version': '1.0.0',
+                'component': 'operational_queue_readiness',
+                'ready': False,
+                'status': 'not_ready',
+                'reasons': ['observability_unavailable'],
             }
 
     return ok(
@@ -115,6 +140,7 @@ async def operational_autonomy_health():
             'worker_running': operational_worker.running,
             'runtime_mode': snapshot['provider'],
             'consumer_observability': consumer_observability,
+            'queue_readiness': queue_readiness,
             'upgrade_path': ['rabbitmq', 'azure_service_bus', 'temporal_orchestrator'],
         }
     )
