@@ -12,6 +12,7 @@ from app.core.operational_queue import (
     OperationalTaskType,
     operational_queue,
 )
+from app.core.operational_queue_observability import OperationalQueueObserver
 from app.core.operational_worker import operational_worker
 
 router = APIRouter(prefix='/api/operational-autonomy', tags=['operational-autonomy'])
@@ -76,14 +77,44 @@ async def get_operational_task(task_id: str):
     return ok({'schema_version': '1.0.0', 'task': task.to_dict()})
 
 
+@router.get('/queue/consumers')
+async def operational_queue_consumers():
+    """Expõe evidência detalhada do consumer group Redis Streams.
+
+    O endpoint é report-only e retorna 503 quando o provider durável não está
+    disponível ou quando a aplicação está configurada com fila em memória.
+    """
+
+    try:
+        snapshot = await OperationalQueueObserver().snapshot()
+    except OperationalQueueUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    return ok(snapshot)
+
+
 @router.get('/health')
 async def operational_autonomy_health():
     snapshot = await operational_queue.snapshot()
+    consumer_observability: dict[str, Any] | None = None
+
+    if snapshot.get('provider') == 'redis_streams' and snapshot.get('connected') is True:
+        try:
+            consumer_observability = await OperationalQueueObserver().snapshot()
+        except OperationalQueueUnavailableError as exc:
+            consumer_observability = {
+                'schema_version': '1.0.0',
+                'component': 'operational_queue_consumers',
+                'status': 'critical',
+                'reasons': ['observability_unavailable'],
+                'error': str(exc),
+            }
+
     return ok(
         {
             **snapshot,
             'worker_running': operational_worker.running,
             'runtime_mode': snapshot['provider'],
+            'consumer_observability': consumer_observability,
             'upgrade_path': ['rabbitmq', 'azure_service_bus', 'temporal_orchestrator'],
         }
     )
