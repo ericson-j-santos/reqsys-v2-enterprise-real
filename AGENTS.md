@@ -31,6 +31,14 @@ Guia operacional canônico para agentes, automações e assistentes que atuam ne
 | `tools/` | Ferramentas standalone: codex-local-online, product_intelligence, schema_governance. |
 | `tests/` | Testes de integração/governança para scripts e workflows (não confundir com `backend/tests/`). |
 | `docs-site/` | Site MkDocs publicado em GitHub Pages. |
+| `runtime/` | Runtime executável de jobs assíncronos (fila Redis Streams, worker httpx). Endpoints `/api/jobs`, `/api/runtime/health`. |
+| `services/` | Serviços independentes reutilizáveis. `services/environment-observability-api/` expõe health checks e identificação de ambiente via HTTP. |
+| `gitlab/` | Espelho GitLab: CI, docs, scripts e tests sincronizados via `scripts/trigger_gitlab_pipeline.py`. |
+| `ia-ml-lab/` | Laboratório experimental de IA/ML (docs e CHANGELOG). |
+| `specs/` | Schemas JSON de especificação de runtime (ex.: `agile-runtime.schema.json`). |
+| `examples/` | Saídas de agentes e exemplos de runtime, product-intelligence e schema-governance. |
+| `diagram_generator_portable/` | Pacote Python standalone do gerador de diagramas (sem dependência de backend). |
+| `ops-dashboard/` | Dados e artefatos do dashboard operacional e notificações Teams. |
 | `config/` | Arquivos de configuração auxiliares. |
 
 ## Comandos essenciais
@@ -314,6 +322,51 @@ bash scripts/rollback_environment_observability_api.sh staging reqsys-api-stg in
 # Rollback permitido somente staging/production; exige digest imutável e FLY_API_TOKEN.
 ```
 
+### Runtime de jobs assíncronos (`runtime/`)
+
+Serviço FastAPI independente para fila durável (Redis Streams) e worker httpx desacoplado.
+
+```bash
+cd runtime
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload                              # worker desativado por padrão (previsibilidade DEV)
+ENABLE_ASYNC_WORKER=true uvicorn app.main:app --reload     # ativa worker local
+pytest -q                                                  # testes do runtime
+```
+
+### Environment Observability API (`services/environment-observability-api/`)
+
+Serviço reutilizável de health checks e identificação de ambiente (HTTP, sem acoplamento ao domínio).
+
+```bash
+cd services/environment-observability-api
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+pytest -q
+```
+
+### Governança de promoção DEV→STG→PROD
+
+Gates determinísticos (report-only, exceto onde indicado) para promoção governada de ambientes:
+
+```bash
+python scripts/evaluate_environment_promotion_gate.py --environment stg --readiness <readiness.json> --flow <flow.json> --output <out.json>  # gate de prontidão por ambiente (exit 1 se bloqueante)
+python scripts/update_environment_promotion_history.py --decision <decision.json> --history <history.json> --output <out.json>  # persiste histórico/maturidade do gate
+python scripts/validate_stg_policy_approval.py --approval <approval.json> --expected-sha <sha> --output <out.json>  # valida artifact de aprovação STG (exit 0/1)
+python scripts/build_stg_enforcement_approval.py           # constrói artifact de enforcement/approval STG
+```
+
+### Estado Único ReqSys e avaliação de incremento
+
+```bash
+python scripts/validate_reqsys_single_state_consumers.py   # valida consumidores do Estado Único (offline, report-only)
+python scripts/evaluate_reqsys_next_increment.py --prs <prs.json> --merged-prs <merged.json> --runs <runs.json> --readiness <readiness.json> --history <history.json> --runtime <runtime.json> --output-json <out.json> --output-md <out.md>  # avalia próximo incremento seguro (report-only)
+python scripts/validate_workflow_regression_contracts.py   # contratos mínimos contra regressão em workflows críticos
+python scripts/validate_prompt_catalog.py                  # valida catálogo de prompts (docs/prompts/catalog.json)
+```
+
 ## CI obrigatório
 
 Antes de merge em `main`, validar o workflow `CI — ReqSys v2 Enterprise` com os jobs:
@@ -379,6 +432,30 @@ Não considerar um PR pronto para merge quando o E2E responsivo estiver ausente,
 | `Stale PR Governance Watch` | Agendado, `workflow_dispatch` | Monitoramento de PRs estagnados |
 | `Branch Protection Audit` | PR, `workflow_dispatch`, agendado | Auditoria de proteção de branches |
 | `Self-Hosted Runner Governance Guard` | PR/push, `workflow_dispatch` | Governança de self-hosted runners |
+| `Cofre Runtime Evidence Gate` | `workflow_dispatch`, `workflow_call` | Gate de evidência runtime do cofre (write/read/audit, DEV/STG) |
+| `Cofre Production Promotion Precondition` | `workflow_dispatch`, `workflow_call` | Pré-condição de promoção PROD via gate STG do cofre |
+| `Environment Promotion Readiness Gate` | PR (paths), `workflow_dispatch` | Gate de prontidão de promoção por ambiente (dev/stg/prod) |
+| `Environment Promotion History` | `workflow_run`, `workflow_dispatch` | Persiste histórico e maturidade do gate de promoção |
+| `STG Blocking Policy Authorization` | PR (paths), `workflow_dispatch` | Autoriza mudança de política de blocking STG |
+| `STG Enforcement Approval` | `workflow_run`, `workflow_dispatch` | Aprovação break-glass governada do enforcement STG |
+| `STG Post-Merge Validation` | Push main, PR (paths) | Validação pós-merge auditável dos gates STG |
+| `STG E2E Evidence Freshness Watch` | Agendado, `workflow_dispatch` | Monitora frescor da evidência e2e STG (remediação controlada) |
+| `STG End-to-End Evidence` | `workflow_run`, `workflow_dispatch` | Consolida evidência e2e pós-merge STG |
+| `STG End-to-End Post-Merge Trigger` | Push main, `workflow_dispatch` | Dispara evidência e2e após merge em STG |
+| `STG Temporary Exception Retirement` | Agendado, push main, `workflow_dispatch` | Aposenta automaticamente exceção temporária STG |
+| `Governed PR Sync` | `workflow_dispatch` | Sincronização governada de PR com a branch base |
+| `ReqSys Next Increment Auto-Evaluation` | Agendado, push main, `workflow_dispatch` | Avalia automaticamente o próximo incremento seguro |
+| `ReqSys Single State` | Agendado, `workflow_run`, `workflow_dispatch` | Publica fonte determinística do Estado Único ReqSys |
+| `ReqSys Single State Consumer Readiness` | PR (paths), `workflow_run`, `workflow_dispatch` | Valida consumidores do Estado Único ReqSys |
+| `Unified Executive Integration Index` | Agendado, `workflow_dispatch` | Índice unificado de integração executiva |
+| `Instrumented Executive Readiness` | PR (paths), `workflow_run`, `workflow_dispatch` | Prontidão executiva instrumentada do Estado Único |
+| `Instrumented Executive History` | `workflow_run`, `workflow_dispatch` | Persiste histórico da prontidão executiva instrumentada |
+| `Flow Completion Monitor` | PR (paths), `workflow_run`, `workflow_dispatch` | Monitora conclusão de fluxos por ambiente |
+| `Flow Completion Alert Lifecycle` | `workflow_run`, `workflow_dispatch`, PR (paths) | Ciclo de alertas de conclusão de fluxo |
+| `Prompt Catalog Validation` | PR/push (paths: docs/prompts, backend) | Valida catálogo de prompts PDR/coordenador |
+| `Workflow Regression Contracts` | PR/push (paths: workflows), `workflow_dispatch` | Contratos mínimos contra regressão em workflows críticos |
+| `Runtime Async Jobs` | PR (paths: runtime), `workflow_dispatch` | CI do runtime de jobs assíncronos (Redis Streams) |
+| `Fast Environment Promotion Request` | `workflow_dispatch` | Solicitação acelerada de promoção dev/stg/prod |
 
 ## Gates de produção
 
