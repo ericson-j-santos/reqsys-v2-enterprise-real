@@ -52,10 +52,23 @@ class OperationalWorkerRuntime:
         )
         self._stop_event = asyncio.Event()
 
+    @staticmethod
+    def _component_running(component: object) -> bool:
+        """Lê o estado sem acoplar o runtime a uma implementação concreta.
+
+        Adaptadores e doubles de teste podem expor ``running`` ou ``started``.
+        Em caso de contrato incompleto, o estado permanece fail-closed.
+        """
+
+        running = getattr(component, 'running', None)
+        if running is not None:
+            return bool(running)
+        return bool(getattr(component, 'started', False))
+
     def _heartbeat_state(self) -> dict[str, bool]:
         return {
-            'consumer_running': self.worker.running,
-            'recovery_running': self.recovery_worker.running,
+            'consumer_running': self._component_running(self.worker),
+            'recovery_running': self._component_running(self.recovery_worker),
         }
 
     def request_stop(self) -> None:
