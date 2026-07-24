@@ -12,7 +12,16 @@ services:
       - OPERATIONAL_QUEUE_CLAIM_BATCH_SIZE=${OPERATIONAL_QUEUE_CLAIM_BATCH_SIZE:-10}
       - OPERATIONAL_QUEUE_RECOVERY_POLL_SECONDS=${OPERATIONAL_QUEUE_RECOVERY_POLL_SECONDS:-5}
       - OPERATIONAL_WORKER_SHUTDOWN_TIMEOUT_SECONDS=${OPERATIONAL_WORKER_SHUTDOWN_TIMEOUT_SECONDS:-15}
+      - OPERATIONAL_WORKER_HEARTBEAT_PATH=/tmp/reqsys-operational-worker-heartbeat.json
+      - OPERATIONAL_WORKER_HEARTBEAT_INTERVAL_SECONDS=${OPERATIONAL_WORKER_HEARTBEAT_INTERVAL_SECONDS:-10}
+      - OPERATIONAL_WORKER_HEARTBEAT_STALE_AFTER_SECONDS=${OPERATIONAL_WORKER_HEARTBEAT_STALE_AFTER_SECONDS:-30}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.core.operational_worker_healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     depends_on:
       db:
         condition: service_healthy
