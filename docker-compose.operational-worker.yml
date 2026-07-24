@@ -1,0 +1,25 @@
+services:
+  operational-worker:
+    build: ./backend
+    command: python -m app.core.operational_worker_runtime
+    restart: unless-stopped
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-reqsys_app}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatorio}@db:5432/${POSTGRES_DB:-reqsys}
+      - OPERATIONAL_QUEUE_PROVIDER=redis_streams
+      - OPERATIONAL_QUEUE_REDIS_URL=${OPERATIONAL_QUEUE_REDIS_URL:?OPERATIONAL_QUEUE_REDIS_URL obrigatorio}
+      - OPERATIONAL_QUEUE_CLAIM_MIN_IDLE_MS=${OPERATIONAL_QUEUE_CLAIM_MIN_IDLE_MS:-60000}
+      - OPERATIONAL_QUEUE_CLAIM_BATCH_SIZE=${OPERATIONAL_QUEUE_CLAIM_BATCH_SIZE:-10}
+      - OPERATIONAL_QUEUE_RECOVERY_POLL_SECONDS=${OPERATIONAL_QUEUE_RECOVERY_POLL_SECONDS:-5}
+      - OPERATIONAL_WORKER_SHUTDOWN_TIMEOUT_SECONDS=${OPERATIONAL_WORKER_SHUTDOWN_TIMEOUT_SECONDS:-15}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - reqsys-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
