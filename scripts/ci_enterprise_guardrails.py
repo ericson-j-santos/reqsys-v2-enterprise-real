@@ -17,54 +17,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EXCLUDED_DIRS = {
-    ".git",
-    "node_modules",
-    ".venv",
-    "venv",
-    "dist",
-    "build",
-    ".pytest_cache",
-    ".mypy_cache",
-    ".ruff_cache",
-    "coverage",
-    "htmlcov",
+    ".git", "node_modules", ".venv", "venv", "dist", "build",
+    ".pytest_cache", ".mypy_cache", ".ruff_cache", "coverage", "htmlcov",
 }
 TEXT_EXTENSIONS = {
-    ".py",
-    ".js",
-    ".jsx",
-    ".ts",
-    ".tsx",
-    ".vue",
-    ".json",
-    ".yml",
-    ".yaml",
-    ".md",
-    ".toml",
-    ".ini",
-    ".cfg",
-    ".env",
-    ".example",
-    ".txt",
-    ".html",
-    ".css",
+    ".py", ".js", ".jsx", ".ts", ".tsx", ".vue", ".json", ".yml",
+    ".yaml", ".md", ".toml", ".ini", ".cfg", ".env", ".example",
+    ".txt", ".html", ".css",
 }
 TEST_OR_EXAMPLE_MARKERS = {
-    "test",
-    "tests",
-    "__tests__",
-    "spec",
-    "specs",
-    "fixture",
-    "fixtures",
-    "mock",
-    "mocks",
-    "example",
-    "examples",
-    "sample",
-    "samples",
-    "demo",
-    "demos",
+    "test", "tests", "__tests__", "spec", "specs", "fixture", "fixtures",
+    "mock", "mocks", "example", "examples", "sample", "samples", "demo", "demos",
 }
 DOCUMENTATION_EXTENSIONS = {".md", ".txt"}
 DOCUMENTATION_DIRS = {"docs", "doc", "documentation", "adr"}
@@ -72,17 +35,8 @@ PRODUCTION_CONFIG_DIRS = {"config", "configs", "deploy", "deployment", "infra", 
 RUNTIME_CODE_MARKERS = {"app", "backend", "server", "api", "services", "core"}
 FRONTEND_UI_MARKERS = {"frontend", "frontend-angular", "frontend-vuetify", "ui", "web"}
 VALIDATION_OR_UI_MESSAGE_PATTERNS = (
-    "errors.",
-    "error.",
-    "errMsg",
-    "erro.set",
-    "mat-error",
-    "required",
-    "obrigatório",
-    "obrigatoria",
-    "obrigatória",
-    "inválid",
-    "invalid",
+    "errors.", "error.", "errMsg", "erro.set", "mat-error", "required",
+    "obrigatório", "obrigatoria", "obrigatória", "inválid", "invalid",
     "credenciais inválidas",
 )
 
@@ -104,10 +58,7 @@ def iter_files() -> Iterable[Path]:
         if any(part in EXCLUDED_DIRS for part in path.parts):
             continue
         if path.suffix.lower() in TEXT_EXTENSIONS or path.name in {
-            "Dockerfile",
-            "requirements.txt",
-            "package-lock.json",
-            "pnpm-lock.yaml",
+            "Dockerfile", "requirements.txt", "package-lock.json", "pnpm-lock.yaml",
         }:
             yield path
 
@@ -140,8 +91,7 @@ def is_test_or_example(path: Path) -> bool:
         or name.endswith(("_test.py", "_spec.py"))
         or "/fixtures/" in rel
         or "/mocks/" in rel
-        or rel.endswith(".example")
-        or rel.endswith(".env.example")
+        or rel.endswith((".example", ".env.example"))
     )
 
 
@@ -159,11 +109,7 @@ def is_runtime_or_production_config(path: Path) -> bool:
     if is_test_or_example(path) or is_documentation(path):
         return False
     return bool(parts & RUNTIME_CODE_MARKERS) or bool(parts & PRODUCTION_CONFIG_DIRS) or path.name in {
-        "Dockerfile",
-        "docker-compose.yml",
-        "docker-compose.yaml",
-        "fly.toml",
-        "nginx.conf",
+        "Dockerfile", "docker-compose.yml", "docker-compose.yaml", "fly.toml", "nginx.conf",
     }
 
 
@@ -173,31 +119,23 @@ def is_validation_or_ui_message(line: str) -> bool:
 
 
 def add(
-    finds: list[Finding],
-    severity: str,
-    rule: str,
-    path: Path,
-    line: int,
-    message: str,
-    recommendation: str,
+    finds: list[Finding], severity: str, rule: str, path: Path, line: int,
+    message: str, recommendation: str,
 ) -> None:
-    finds.append(
-        Finding(
-            severity=severity,
-            rule=rule,
-            path=relative_path(path),
-            line=line,
-            message=message,
-            recommendation=recommendation,
-        )
-    )
+    finds.append(Finding(
+        severity=severity,
+        rule=rule,
+        path=relative_path(path),
+        line=line,
+        message=message,
+        recommendation=recommendation,
+    ))
 
 
 def check_workflow_determinism(finds: list[Finding]) -> None:
     workflow_dir = ROOT / ".github" / "workflows"
     if not workflow_dir.exists():
         return
-
     for path in workflow_dir.glob("*.yml"):
         content = read_text(path)
         for index, line in enumerate(content.splitlines(), start=1):
@@ -231,15 +169,12 @@ def check_security_gates(finds: list[Finding]) -> None:
         ("SECURITY_JWT_DISABLED", re.compile(r"(?i)(verify_signature|validate_issuer|validate_audience)\s*[:=]\s*(false|0)"), "Issuer, audience e assinatura JWT devem ser validados em runtime/config produtivo."),
         ("SECURITY_SECRET_LITERAL", re.compile(r"(?i)(client_secret|password|senha|token|api_key)\s*[:=]\s*['\"][^'\"]{8,}['\"]"), "Usar secret manager/variáveis protegidas e exemplos mascarados."),
     ]
-
     for path in iter_files():
         if path.name == "ci_enterprise_guardrails.py":
             continue
-
         severity = classify_security_severity(path)
         if severity is None:
             continue
-
         content = read_text(path)
         for index, line in enumerate(content.splitlines(), start=1):
             stripped = line.strip()
@@ -278,12 +213,8 @@ def write_reports(findings: list[Finding]) -> None:
         "findings": [asdict(f) for f in findings],
     }
     (report_dir / "ci-enterprise-guardrails.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
     lines = [
-        "# CI Enterprise Guardrails",
-        "",
-        f"Status: **{payload['status']}**",
-        "",
+        "# CI Enterprise Guardrails", "", f"Status: **{payload['status']}**", "",
         "| Severidade | Regra | Arquivo | Linha | Mensagem | Recomendação |",
         "|---|---|---|---:|---|---|",
     ]
@@ -293,7 +224,6 @@ def write_reports(findings: list[Finding]) -> None:
         lines.append("| info | `OK` | — | — | Nenhum desvio bloqueante encontrado. | Manter monitoramento contínuo. |")
     markdown = "\n".join(lines) + "\n"
     (report_dir / "ci-enterprise-guardrails.md").write_text(markdown, encoding="utf-8")
-
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
         with open(summary_path, "a", encoding="utf-8") as summary:
@@ -306,12 +236,10 @@ def main() -> int:
     check_lockfiles(findings)
     check_security_gates(findings)
     write_reports(findings)
-
     errors = [f for f in findings if f.severity == "error"]
     if errors:
         print(f"CI Enterprise Guardrails falhou com {len(errors)} erro(s). Consulte ci-reports/ci-enterprise-guardrails.md")
         return 1
-
     print("CI Enterprise Guardrails aprovado.")
     return 0
 
