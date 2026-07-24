@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Guardrails determinísticos de CI para maturidade enterprise contínua.
 
 Objetivo:
@@ -12,9 +11,9 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 EXCLUDED_DIRS = {
@@ -138,8 +137,7 @@ def is_test_or_example(path: Path) -> bool:
         or ".test." in name
         or ".spec." in name
         or name.startswith("test_")
-        or name.endswith("_test.py")
-        or name.endswith("_spec.py")
+        or name.endswith(("_test.py", "_spec.py"))
         or "/fixtures/" in rel
         or "/mocks/" in rel
         or rel.endswith(".example")
