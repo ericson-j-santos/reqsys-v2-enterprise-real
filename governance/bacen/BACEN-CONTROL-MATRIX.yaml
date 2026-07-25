@@ -1,0 +1,72 @@
+schema_version: 1.0.0
+framework:
+  name: BACEN minimum cybersecurity controls
+  references:
+    - CMN 4.893/2021
+    - BCB 85/2021
+mode: advisory
+controls:
+  - id: BACEN-01
+    domain: governance
+    title: Política de segurança cibernética
+    criticality: critical
+    owner: SECURITY
+    evidence: governance/bacen/CYBERSECURITY-POLICY.md
+    status: partial
+    review_cycle_days: 365
+  - id: BACEN-02
+    domain: identity
+    title: Autenticação forte e acesso privilegiado
+    criticality: critical
+    owner: SECURITY
+    evidence: governance/bacen/ACCESS-CONTROL-POLICY.md
+    status: partial
+    review_cycle_days: 90
+  - id: BACEN-03
+    domain: incidents
+    title: Plano de resposta a incidentes
+    criticality: critical
+    owner: RUNTIME_OPERATOR
+    evidence: governance/bacen/INCIDENT-RESPONSE-PLAN.md
+    status: partial
+    review_cycle_days: 180
+  - id: BACEN-04
+    domain: continuity
+    title: Backup, restauração e continuidade
+    criticality: critical
+    owner: RUNTIME_OPERATOR
+    evidence: governance/bacen/BACKUP-RESTORE-POLICY.md
+    status: gap
+    review_cycle_days: 180
+  - id: BACEN-05
+    domain: third_party
+    title: Gestão de nuvem e terceiros
+    criticality: high
+    owner: AI_GOVERNOR
+    evidence: governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml
+    status: gap
+    review_cycle_days: 180
+  - id: BACEN-06
+    domain: secure_development
+    title: Desenvolvimento seguro e gestão de vulnerabilidades
+    criticality: high
+    owner: SECURITY
+    evidence: .github/workflows/security-baseline-gate.yml
+    status: implemented
+    review_cycle_days: 90
+  - id: BACEN-07
+    domain: audit
+    title: Auditoria, rastreabilidade e retenção de evidências
+    criticality: high
+    owner: SECURITY
+    evidence: artifacts
+    status: partial
+    review_cycle_days: 90
+  - id: BACEN-08
+    domain: executive_governance
+    title: Responsável executivo e relatório anual
+    criticality: critical
+    owner: GOVERNANCE
+    evidence: governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md
+    status: gap
+    review_cycle_days: 365
