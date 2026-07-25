@@ -1,0 +1,89 @@
+name: BACEN Minimum Controls Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/**"
+      - "scripts/validate_bacen_controls.py"
+      - ".github/workflows/bacen-minimum-controls-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/**"
+      - "scripts/validate_bacen_controls.py"
+      - ".github/workflows/bacen-minimum-controls-gate.yml"
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: "Bloquear quando houver lacunas críticas"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-minimum-controls-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN Controls Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile validator
+        run: python -m py_compile scripts/validate_bacen_controls.py
+
+      - name: Validate controls matrix
+        shell: bash
+        env:
+          STRICT: ${{ inputs.strict || 'false' }}
+        run: |
+          args=(--output artifacts/bacen/bacen-controls-report.json)
+          if [ "$STRICT" = "true" ]; then
+            args+=(--strict)
+          fi
+          python scripts/validate_bacen_controls.py "${args[@]}"
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-minimum-controls-evidence
+          path: artifacts/bacen/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Append summary
+        if: always()
+        run: |
+          echo "## BACEN Minimum Controls" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f artifacts/bacen/bacen-controls-report.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-controls-report.json").read_text())
+          summary = report.get("summary", {})
+          print(f"- Resultado: `{report.get('result')}`")
+          print(f"- Controles: **{summary.get('total_controls', 0)}**")
+          print(f"- Implementados: **{summary.get('implemented', 0)}**")
+          print(f"- Parciais: **{summary.get('partial', 0)}**")
+          print(f"- Lacunas: **{summary.get('gaps', 0)}**")
+          print(f"- Lacunas críticas: `{', '.join(summary.get('critical_gaps', [])) or 'nenhuma'}`")
+          PY
+          else
+            echo "- Evidência não gerada." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
