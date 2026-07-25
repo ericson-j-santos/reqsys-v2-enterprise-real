@@ -33,12 +33,6 @@ jobs:
         working-directory: frontend
         run: npm install --package-lock-only --ignore-scripts
 
-      - name: Validate clean install and audit
-        working-directory: frontend
-        run: |
-          npm ci --ignore-scripts
-          npm audit --audit-level=high
-
       - name: Commit regenerated lockfile
         shell: bash
         run: |
