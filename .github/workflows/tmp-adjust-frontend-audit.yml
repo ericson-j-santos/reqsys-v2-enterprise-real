@@ -52,3 +52,5 @@ jobs:
           git add .github/workflows/ci.yml
           git commit -m "fix(ci): governar audit de dependências frontend"
           git push origin HEAD:agent/bacen-minimum-controls-v1
+
+# Trigger de correção objetiva para a PR 1029 em 2026-07-25.
