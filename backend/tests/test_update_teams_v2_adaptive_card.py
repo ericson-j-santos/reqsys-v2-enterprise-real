@@ -5,8 +5,8 @@ import pytest
 
 from scripts.update_teams_v2_adaptive_card import (
     ACTION_NAME,
+    adaptive_card_body,
     apply_card_change,
-    build_message_envelope,
     diff_summary,
 )
 
@@ -82,10 +82,10 @@ def test_apply_card_change_troca_apenas_message_body():
     new_body = after_action['inputs']['parameters']['body/messageBody']
     assert new_body != before_action['inputs']['parameters']['body/messageBody']
 
-    envelope = json.loads(new_body)
-    assert envelope['type'] == 'message'
-    assert envelope['attachments'][0]['contentType'] == 'application/vnd.microsoft.card.adaptive'
-    assert envelope['attachments'][0]['content']['type'] == 'AdaptiveCard'
+    card = json.loads(new_body)
+    assert card['type'] == 'AdaptiveCard'
+    assert 'attachments' not in card
+    assert card == adaptive_card_body()
 
 
 def test_apply_card_change_preserva_grafo_de_dependencias():
@@ -114,9 +114,8 @@ def test_apply_card_change_rejeita_operacao_inesperada():
         apply_card_change(clientdata)
 
 
-def test_build_message_envelope_referencia_acoes_reais_do_flow():
-    envelope = build_message_envelope()
-    card_json = json.dumps(envelope)
+def test_adaptive_card_body_referencia_acoes_reais_do_flow():
+    card_json = json.dumps(adaptive_card_body())
 
     assert "body('Analisar_JSON')?['title']" in card_json
     assert "outputs('Compose_StampDate')" in card_json
@@ -132,4 +131,4 @@ def test_diff_summary_reporta_antes_e_depois():
     assert summary['action'] == ACTION_NAME
     assert summary['operationId'] == 'PostCardToConversation'
     assert summary['before_message_body'] == "@outputs('Compose_Message')"
-    assert json.loads(summary['after_message_body'])['type'] == 'message'
+    assert json.loads(summary['after_message_body'])['type'] == 'AdaptiveCard'

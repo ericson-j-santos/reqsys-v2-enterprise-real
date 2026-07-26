@@ -149,18 +149,6 @@ def adaptive_card_body(*, minimum_version: str = '1.2') -> dict[str, Any]:
     }
 
 
-def build_message_envelope() -> dict[str, Any]:
-    return {
-        'type': 'message',
-        'attachments': [
-            {
-                'contentType': 'application/vnd.microsoft.card.adaptive',
-                'content': adaptive_card_body(),
-            }
-        ],
-    }
-
-
 def _navigate_actions(definition: dict[str, Any], path: tuple[str, ...]) -> dict[str, Any]:
     node = definition
     for step in path:
@@ -180,8 +168,13 @@ def apply_card_change(clientdata: dict[str, Any]) -> dict[str, Any]:
     if action['inputs']['host']['operationId'] != 'PostCardToConversation':
         raise ValueError('Ação alvo não usa mais PostCardToConversation; abortando para não editar a coisa errada.')
 
-    envelope = build_message_envelope()
-    action['inputs']['parameters']['body/messageBody'] = json.dumps(envelope, ensure_ascii=False)
+    # body/messageBody recebe o AdaptiveCard puro, SEM o envelope
+    # {type:"message", attachments:[...]} documentado pela Microsoft para a
+    # variante "canal" da operação — confirmado ao vivo em 2026-07-26 via
+    # teste real contra a URL de trigger: um card estático colado direto
+    # nesse campo (sem envelope) resultou em HTTP 200 sem erro na ação.
+    card = adaptive_card_body()
+    action['inputs']['parameters']['body/messageBody'] = json.dumps(card, ensure_ascii=False)
 
     return updated
 
