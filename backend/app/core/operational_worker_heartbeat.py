@@ -5,15 +5,22 @@ import json
 import os
 import tempfile
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 
+HEARTBEAT_FILENAME = 'reqsys-operational-worker-heartbeat.json'
+
+
+def _default_heartbeat_path() -> Path:
+    return Path(tempfile.gettempdir()) / HEARTBEAT_FILENAME
+
+
 @dataclass(frozen=True, slots=True)
 class OperationalWorkerHeartbeatSettings:
-    path: Path = Path('/tmp/reqsys-operational-worker-heartbeat.json')
+    path: Path = field(default_factory=_default_heartbeat_path)
     interval_seconds: float = 10.0
     stale_after_seconds: float = 30.0
 
@@ -22,7 +29,7 @@ class OperationalWorkerHeartbeatSettings:
         path = Path(
             os.getenv(
                 'OPERATIONAL_WORKER_HEARTBEAT_PATH',
-                '/tmp/reqsys-operational-worker-heartbeat.json',
+                str(_default_heartbeat_path()),
             ).strip()
         )
         interval = _positive_float('OPERATIONAL_WORKER_HEARTBEAT_INTERVAL_SECONDS', 10.0)
