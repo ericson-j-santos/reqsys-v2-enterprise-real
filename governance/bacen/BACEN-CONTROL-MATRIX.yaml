@@ -1,4 +1,4 @@
-schema_version: 1.1.0
+schema_version: 1.2.0
 framework:
   name: BACEN minimum cybersecurity controls
   references:
@@ -35,13 +35,15 @@ controls:
     title: Backup, restauração e continuidade
     criticality: critical
     owner: RUNTIME_OPERATOR
-    evidence: artifacts/bacen/bacen-04-backup-restore-evidence.json
+    evidence: artifacts/bacen/bacen-04-stg-restore-evidence.json
     policy: governance/bacen/BACKUP-RESTORE-POLICY.md
-    status: partial
-    evidence_stage: contract_validation
+    workflow: .github/workflows/bacen-stg-restore-test.yml
+    status: implemented
+    evidence_stage: isolated_stg_restore_test
     production_restore_claimed: false
-    next_stage: isolated_stg_restore_test
-    review_cycle_days: 180
+    production_touched: false
+    next_stage: scheduled_quarterly_restore_and_trend
+    review_cycle_days: 90
   - id: BACEN-05
     domain: third_party
     title: Gestão de nuvem e terceiros
