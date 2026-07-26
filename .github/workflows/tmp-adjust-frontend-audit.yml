@@ -1,4 +1,4 @@
-name: Temporary Adjust Frontend Audit
+name: Temporary Repair Frontend Dependencies
 
 on:
   push:
@@ -11,9 +11,9 @@ permissions:
   contents: write
 
 jobs:
-  adjust-audit:
+  repair-dependencies:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Checkout branch
         uses: actions/checkout@v4
@@ -21,36 +21,36 @@ jobs:
           ref: agent/bacen-minimum-controls-v1
           fetch-depth: 0
 
-      - name: Apply governed audit policy
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20.20.2"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Repair vulnerable dependencies
+        working-directory: frontend
         shell: bash
         run: |
-          python - <<'PY'
-          from pathlib import Path
+          set -euo pipefail
+          npm ci
+          npm audit fix --package-lock-only
+          npm ci
+          npm audit --audit-level=high
+          npm run build
 
-          path = Path('.github/workflows/ci.yml')
-          content = path.read_text(encoding='utf-8')
-          old = '''      - name: Security audit — npm audit
-        run: npm audit --audit-level=high
-'''
-          new = '''      - name: Security audit — production dependencies
-        run: npm audit --omit=dev --audit-level=high
-      - name: Full dependency audit evidence
-        continue-on-error: true
-        run: npm audit --audit-level=high
-'''
-          if old not in content:
-              raise SystemExit('Bloco esperado de npm audit não localizado')
-          path.write_text(content.replace(old, new, 1), encoding='utf-8')
-          PY
-
-      - name: Commit CI correction
+      - name: Commit deterministic dependency repair
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/ci.yml
-          git commit -m "fix(ci): governar audit de dependências frontend"
+          if git diff --quiet -- frontend/package.json frontend/package-lock.json; then
+            echo "Nenhuma alteração de dependência foi produzida."
+            exit 1
+          fi
+          git add frontend/package.json frontend/package-lock.json
+          git commit -m "fix(frontend): atualizar dependências vulneráveis do audit"
           git push origin HEAD:agent/bacen-minimum-controls-v1
 
-# Trigger de correção objetiva para a PR 1029 em 2026-07-25.
+# Trigger de reparo definitivo para a PR 1029 em 2026-07-25.
