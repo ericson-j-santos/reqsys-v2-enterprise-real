@@ -89,6 +89,14 @@ jobs:
             artifacts/lowcode-solution-factory/teams-notifications-v2-ci
           test -s artifacts/lowcode-solution-factory/teams-notifications-v2-ci/dev-import-readiness.json
 
+      - name: Validate real Power Platform solution format
+        working-directory: .
+        run: |
+          ZIP_FILENAME=$(python -c "import json; print(json.load(open('artifacts/lowcode-solution-factory/teams-notifications-v2-ci/materialization-manifest.json', encoding='utf-8'))['zip_filename'])")
+          python scripts/validate_powerplatform_solution_zip.py \
+            "artifacts/lowcode-solution-factory/teams-notifications-v2-ci/$ZIP_FILENAME" \
+            --expected-solution ReqSysTeamsNotifications
+
       - name: Upload governed package evidence
         uses: actions/upload-artifact@v4
         with:
