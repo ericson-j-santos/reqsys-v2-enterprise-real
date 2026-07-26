@@ -50,7 +50,10 @@ controls:
     criticality: high
     owner: AI_GOVERNOR
     evidence: governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml
-    status: gap
+    workflow: .github/workflows/bacen-third-party-register-gate.yml
+    status: partial
+    evidence_stage: register_with_automated_drift_detection
+    next_stage: formal_vendor_risk_assessment_and_dpa_signoff
     review_cycle_days: 180
   - id: BACEN-06
     domain: secure_development
@@ -65,8 +68,11 @@ controls:
     title: Auditoria, rastreabilidade e retenção de evidências
     criticality: high
     owner: SECURITY
-    evidence: artifacts
-    status: partial
+    evidence: artifacts/bacen/bacen-07-audit-evidence-index.json
+    policy: governance/bacen/AUDIT-EVIDENCE-RETENTION-POLICY.md
+    workflow: .github/workflows/bacen-audit-evidence-index.yml
+    status: implemented
+    evidence_stage: automated_evidence_index_with_integrity_hash
     review_cycle_days: 90
   - id: BACEN-08
     domain: executive_governance

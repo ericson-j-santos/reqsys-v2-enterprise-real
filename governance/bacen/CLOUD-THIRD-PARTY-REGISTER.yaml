@@ -1,0 +1,171 @@
+schema_version: 1.0.0
+control_id: BACEN-05
+title: Registro de nuvem e terceiros
+mode: advisory
+notes: >
+  Registro extraído do estado real de integração do ReqSys (variáveis declaradas em
+  .env.example e dependências de runtime). Este registro não constitui, por si só,
+  avaliação formal de risco de fornecedor nem assinatura de DPA/contrato — os campos
+  `risk_review_status` e `dpa_status` refletem o estado real (pendente de revisão
+  humana) e não devem ser lidos como certificação de conformidade.
+generated_from:
+  - .env.example
+  - backend/requirements.txt
+providers:
+  - id: BACEN-05-T01
+    provider: Microsoft Entra ID (Azure AD)
+    category: identity
+    purpose: Login federado de usuários (SSO corporativo)
+    config_source:
+      - AZURE_TENANT_ID
+      - AZURE_CLIENT_ID
+      - AZURE_CLIENT_SECRET
+    data_classification: identity_claims
+    criticality: critical
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
+
+  - id: BACEN-05-T02
+    provider: Azure Bot Service / Bot Framework
+    category: messaging
+    purpose: Canal "bot" do Teams Messaging Gateway
+    config_source:
+      - TEAMS_BOT_APP_TENANT_ID
+      - TEAMS_BOT_APP_ID
+      - TEAMS_BOT_SECRET
+    data_classification: operational_messages
+    criticality: high
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
+
+  - id: BACEN-05-T03
+    provider: Microsoft Power Automate
+    category: messaging
+    purpose: Canal "flow_bot" (webhook) do Teams Messaging Gateway, alternativa sem Azure Bot Service
+    config_source:
+      - TEAMS_FLOW_BOT_WEBHOOK_URL
+    data_classification: operational_messages
+    criticality: high
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
+
+  - id: BACEN-05-T04
+    provider: Microsoft Graph API
+    category: messaging
+    purpose: Envio de mensagens Teams via fluxo delegado (chat/canal)
+    config_source:
+      - AZURE_TENANT_ID
+      - AZURE_CLIENT_ID
+    data_classification: operational_messages
+    criticality: high
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
+
+  - id: BACEN-05-T05
+    provider: Microsoft Dataverse
+    category: database
+    purpose: Fila de integração Planner/Redmine e persistência de dispatch de e-mail/Teams
+    config_source:
+      - AZURE_TENANT_ID
+      - AZURE_CLIENT_ID
+    data_classification: operational_records
+    criticality: high
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
+
+  - id: BACEN-05-T06
+    provider: GitHub (github.com)
+    category: vcs_ci
+    purpose: Hospedagem de código-fonte, Actions (CI/CD) e import de issues para Redmine
+    config_source:
+      - GITHUB_TOKEN
+      - ENABLE_GITHUB_REDMINE_IMPORT
+    data_classification: source_code_and_pipeline_metadata
+    criticality: critical
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
+
+  - id: BACEN-05-T07
+    provider: Figma
+    category: design
+    purpose: Sincronização de design tokens/componentes e webhooks de mudança
+    config_source:
+      - FIGMA_ACCESS_TOKEN
+      - FIGMA_WEBHOOK_SECRET
+      - FIGMA_DEFAULT_FILE_KEY
+      - FIGMA_GITHUB_DEFAULT_REPO
+    data_classification: design_metadata
+    criticality: medium
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
+
+  - id: BACEN-05-T08
+    provider: Redmine (instância própria ou hospedada)
+    category: issue_tracker
+    purpose: Sincronização de requisitos/tarefas (fila redmine_sync)
+    config_source:
+      - REDMINE_BASE_URL
+      - REDMINE_API_KEY
+      - REDMINE_PROJECT_ID
+    data_classification: operational_records
+    criticality: medium
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
+
+  - id: BACEN-05-T09
+    provider: SQL Server Reporting Services (SSRS)
+    category: reporting
+    purpose: Consumo de relatórios operacionais/analíticos
+    config_source:
+      - SSRS_BASE_URL
+      - SSRS_REQUIRE_HTTPS
+      - SSRS_REPORTS_PATH
+      - SSRS_REPORT_NAMES
+    data_classification: analytical_reports
+    criticality: medium
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
+
+  - id: BACEN-05-T10
+    provider: Google Gemini API
+    category: ai_provider
+    purpose: Geração/assistência de IA governada (ADR-008)
+    config_source:
+      - GEMINI_API_KEY
+    data_classification: prompt_and_completion_content
+    criticality: high
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
+
+  - id: BACEN-05-T11
+    provider: Groq API
+    category: ai_provider
+    purpose: Geração/assistência de IA governada (ADR-008)
+    config_source:
+      - GROQ_API_KEY
+    data_classification: prompt_and_completion_content
+    criticality: high
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
+
+  - id: BACEN-05-T12
+    provider: PostgreSQL gerenciado (ou self-hosted, conforme ambiente)
+    category: database
+    purpose: Banco de dados primário da aplicação
+    config_source:
+      - DATABASE_URL
+    data_classification: application_records
+    criticality: critical
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
+
+  - id: BACEN-05-T13
+    provider: Redis gerenciado (ou self-hosted, conforme ambiente)
+    category: queue
+    purpose: Fila de autonomia operacional em STG/PROD (redis_streams)
+    config_source:
+      - OPERATIONAL_QUEUE_REDIS_URL
+    data_classification: operational_records
+    criticality: high
+    risk_review_status: pending_formal_review
+    dpa_status: pending_verification
