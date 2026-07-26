@@ -29,13 +29,19 @@ def run(command: list[str], *, database: str | None = None, capture: bool = Fals
     env = os.environ.copy()
     if database:
         env["PGDATABASE"] = database
-    result = subprocess.run(
-        command,
-        check=True,
-        env=env,
-        text=True,
-        capture_output=capture,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            check=True,
+            env=env,
+            text=True,
+            capture_output=capture,
+        )
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or "").strip()
+        stdout = (exc.stdout or "").strip()
+        detail = stderr or stdout or "sem saída adicional"
+        raise RuntimeError(f"comando falhou ({command[0]}): {detail}") from exc
     return result.stdout.strip() if capture else ""
 
 
@@ -75,6 +81,7 @@ def execute(output: Path, asset_id: str) -> dict[str, object]:
     validate_database_name(source_db)
     validate_database_name(target_db)
 
+    output.parent.mkdir(parents=True, exist_ok=True)
     backup_file = output.parent / f"{source_db}.dump"
     correlation_id = str(uuid.uuid4())
     started_at = utc_now()
@@ -97,6 +104,8 @@ def execute(output: Path, asset_id: str) -> dict[str, object]:
         source_snapshot = build_integrity_snapshot(source_db)
 
         run(["pg_dump", "--format=custom", "--file", str(backup_file), source_db])
+        if not backup_file.is_file() or backup_file.stat().st_size == 0:
+            raise RuntimeError("pg_dump não produziu um arquivo de backup válido")
         backup_created_at = utc_now()
         backup_sha256 = hashlib.sha256(backup_file.read_bytes()).hexdigest()
 
@@ -114,7 +123,7 @@ def execute(output: Path, asset_id: str) -> dict[str, object]:
         result = "passed" if integrity_match and rpo_minutes <= 1440 and rto_seconds <= 14400 else "failed"
 
         evidence: dict[str, object] = {
-            "schema_version": "2.0.0",
+            "schema_version": "2.0.1",
             "control_id": "BACEN-04",
             "evidence_class": "isolated_stg_restore_test",
             "environment": environment,
@@ -144,7 +153,6 @@ def execute(output: Path, asset_id: str) -> dict[str, object]:
             "started_at": started_at.isoformat(),
             "generated_at": utc_now().isoformat(),
         }
-        output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(evidence, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         if result != "passed":
             raise RuntimeError("teste de restauração não atingiu os critérios BACEN-04")
