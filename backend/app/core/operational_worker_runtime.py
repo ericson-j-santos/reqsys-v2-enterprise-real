@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from app.core.operational_queue import OperationalQueueUnavailableError
 from app.core.operational_recovery_worker import OperationalRecoveryWorker
 from app.core.operational_worker import OperationalWorker
+from app.core.operational_worker_heartbeat import OperationalWorkerHeartbeat
 
 logger = logging.getLogger('reqsys.operational_worker_runtime')
 
@@ -34,18 +35,41 @@ class OperationalWorkerRuntimeSettings:
 
 
 class OperationalWorkerRuntime:
-    """Executa consumo normal e recuperação de mensagens no mesmo processo dedicado."""
+    """Executa consumo, recuperação e heartbeat no mesmo processo dedicado."""
 
     def __init__(
         self,
         worker: OperationalWorker | None = None,
         recovery_worker: OperationalRecoveryWorker | None = None,
+        heartbeat: OperationalWorkerHeartbeat | None = None,
         settings: OperationalWorkerRuntimeSettings | None = None,
     ) -> None:
         self.worker = worker or OperationalWorker()
         self.recovery_worker = recovery_worker or OperationalRecoveryWorker()
         self.settings = settings or OperationalWorkerRuntimeSettings.from_environment()
+        self.heartbeat = heartbeat or OperationalWorkerHeartbeat(
+            state_provider=self._heartbeat_state
+        )
         self._stop_event = asyncio.Event()
+
+    @staticmethod
+    def _component_running(component: object) -> bool:
+        """Lê o estado sem acoplar o runtime a uma implementação concreta.
+
+        Adaptadores e doubles de teste podem expor ``running`` ou ``started``.
+        Em caso de contrato incompleto, o estado permanece fail-closed.
+        """
+
+        running = getattr(component, 'running', None)
+        if running is not None:
+            return bool(running)
+        return bool(getattr(component, 'started', False))
+
+    def _heartbeat_state(self) -> dict[str, bool]:
+        return {
+            'consumer_running': self._component_running(self.worker),
+            'recovery_running': self._component_running(self.recovery_worker),
+        }
 
     def request_stop(self) -> None:
         self._stop_event.set()
@@ -54,6 +78,7 @@ class OperationalWorkerRuntime:
         self.recovery_worker._validate_provider()
         self.worker.start()
         self.recovery_worker.start()
+        self.heartbeat.start()
         logger.info('operational_worker_runtime_started')
 
         try:
@@ -67,6 +92,7 @@ class OperationalWorkerRuntime:
 
     async def _stop_components(self) -> None:
         await asyncio.gather(
+            self.heartbeat.stop(),
             self.worker.stop(),
             self.recovery_worker.stop(),
         )
