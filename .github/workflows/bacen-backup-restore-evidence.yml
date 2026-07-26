@@ -1,0 +1,84 @@
+name: BACEN Backup Restore Evidence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/BACKUP-RESTORE-POLICY.md"
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+      - "scripts/generate_bacen_backup_restore_evidence.py"
+      - ".github/workflows/bacen-backup-restore-evidence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/BACKUP-RESTORE-POLICY.md"
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+      - "scripts/generate_bacen_backup_restore_evidence.py"
+      - ".github/workflows/bacen-backup-restore-evidence.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-backup-restore-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-contract:
+    name: Validate BACEN-04 Evidence Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile generator
+        run: python -m py_compile scripts/generate_bacen_backup_restore_evidence.py
+
+      - name: Generate non-production evidence
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          python scripts/generate_bacen_backup_restore_evidence.py \
+            --environment ci \
+            --asset-id reqsys-bacen-contract-fixture \
+            --output artifacts/bacen/bacen-04-backup-restore-evidence.json
+
+      - name: Validate evidence semantics
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-04-backup-restore-evidence.json")
+          report = json.loads(path.read_text(encoding="utf-8"))
+          assert report["control_id"] == "BACEN-04"
+          assert report["result"] == "passed"
+          assert report["production_restore_claimed"] is False
+          assert report["environment"] == "ci"
+          assert len(report["integrity_sha256"]) == 64
+          print("BACEN-04 evidence contract: valid")
+          PY
+
+      - name: Publish evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-04-backup-restore-evidence
+          path: artifacts/bacen/bacen-04-backup-restore-evidence.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Summary
+        run: |
+          echo "## BACEN-04 — Backup e restauração" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Contrato de evidência: **válido**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ambiente: \`ci\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Declara restauração produtiva: **não**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Próximo estágio: teste real isolado em STG" >> "$GITHUB_STEP_SUMMARY"
