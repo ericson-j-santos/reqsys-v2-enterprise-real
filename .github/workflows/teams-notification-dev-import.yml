@@ -39,17 +39,17 @@ jobs:
     name: Capture, import, publish and activate DEV
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: powerplatform-development
+    environment: reqsys-power-platform-dev
     env:
       SOLUTION_NAME: ReqSysTeamsNotifications
       FLOW_NAME: robo_envia_teamsv2
       ARTIFACT_NAME: ${{ inputs.artifact_name }}
       SOURCE_MODE: ${{ inputs.source_mode }}
       SOURCE_RUN_ID_INPUT: ${{ inputs.source_run_id }}
-      POWERPLATFORM_DEV_ENVIRONMENT_URL: ${{ secrets.POWERPLATFORM_DEV_ENVIRONMENT_URL }}
-      POWERPLATFORM_APP_ID: ${{ secrets.POWERPLATFORM_APP_ID }}
-      POWERPLATFORM_CLIENT_SECRET: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
-      POWERPLATFORM_TENANT_ID: ${{ secrets.POWERPLATFORM_TENANT_ID }}
+      POWERPLATFORM_DEV_ENVIRONMENT_URL: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
+      POWERPLATFORM_APP_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      POWERPLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+      POWERPLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
     steps:
       - name: Validate confirmation and required configuration
         env:
@@ -83,10 +83,10 @@ jobs:
         if: ${{ inputs.source_mode == 'export_dev' }}
         uses: microsoft/powerplatform-actions/export-solution@v1
         with:
-          environment-url: ${{ secrets.POWERPLATFORM_DEV_ENVIRONMENT_URL }}
-          app-id: ${{ secrets.POWERPLATFORM_APP_ID }}
-          client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
-          tenant-id: ${{ secrets.POWERPLATFORM_TENANT_ID }}
+          environment-url: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
+          app-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          client-secret: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           solution-name: ReqSysTeamsNotifications
           solution-output-file: artifacts/official/ReqSysTeamsNotifications.zip
           managed: false
@@ -144,10 +144,10 @@ jobs:
       - name: Import and publish solution into Power Platform DEV
         uses: microsoft/powerplatform-actions/import-solution@v1
         with:
-          environment-url: ${{ secrets.POWERPLATFORM_DEV_ENVIRONMENT_URL }}
-          app-id: ${{ secrets.POWERPLATFORM_APP_ID }}
-          client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
-          tenant-id: ${{ secrets.POWERPLATFORM_TENANT_ID }}
+          environment-url: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
+          app-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          client-secret: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           solution-file: ${{ steps.package.outputs.solution_file }}
           force-overwrite: false
           publish-changes: true
