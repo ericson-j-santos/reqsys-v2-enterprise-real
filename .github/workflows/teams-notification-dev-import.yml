@@ -79,6 +79,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Power Platform CLI
+        uses: microsoft/powerplatform-actions/actions-install@v1
+
       - name: Capture official package by exporting DEV solution
         if: ${{ inputs.source_mode == 'export_dev' }}
         uses: microsoft/powerplatform-actions/export-solution@v1
