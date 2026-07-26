@@ -1,4 +1,4 @@
-schema_version: 1.0.0
+schema_version: 1.1.0
 framework:
   name: BACEN minimum cybersecurity controls
   references:
@@ -35,8 +35,12 @@ controls:
     title: Backup, restauração e continuidade
     criticality: critical
     owner: RUNTIME_OPERATOR
-    evidence: governance/bacen/BACKUP-RESTORE-POLICY.md
-    status: gap
+    evidence: artifacts/bacen/bacen-04-backup-restore-evidence.json
+    policy: governance/bacen/BACKUP-RESTORE-POLICY.md
+    status: partial
+    evidence_stage: contract_validation
+    production_restore_claimed: false
+    next_stage: isolated_stg_restore_test
     review_cycle_days: 180
   - id: BACEN-05
     domain: third_party
