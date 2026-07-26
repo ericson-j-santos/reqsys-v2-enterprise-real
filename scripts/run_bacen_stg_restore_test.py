@@ -19,6 +19,12 @@ from pathlib import Path
 
 ALLOWED_ENVIRONMENT = "stg-isolated"
 DB_PREFIX = "reqsys_bacen_stg_"
+FIXTURE_SETUP_SQL = (
+    "CREATE TABLE bacen_restore_fixture (id integer PRIMARY KEY, payload text NOT NULL);"
+    "INSERT INTO bacen_restore_fixture "
+    "SELECT n, md5('reqsys-bacen-' || n::text) "
+    "FROM generate_series(1, 1000) AS n;"
+)
 
 
 def utc_now() -> datetime:
@@ -89,16 +95,7 @@ def execute(output: Path, asset_id: str) -> dict[str, object]:
     try:
         run(["createdb", source_db])
         run(
-            [
-                "psql",
-                "-v",
-                "ON_ERROR_STOP=1",
-                "-c",
-                "CREATE TABLE bacen_restore_fixture (id integer PRIMARY KEY, payload text NOT NULL);"
-                "INSERT INTO bacen_restore_fixture "
-                "SELECT n, md5('reqsys-bacen-' || n::text) "
-                "FROM generate_series(1, 1000) AS n;",
-            ],
+            ["psql", "-v", "ON_ERROR_STOP=1", "-c", FIXTURE_SETUP_SQL],
             database=source_db,
         )
         source_snapshot = build_integrity_snapshot(source_db)
