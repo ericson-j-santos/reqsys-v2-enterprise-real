@@ -1,0 +1,81 @@
+name: Teams v2 Adaptive Card Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Gravar de verdade no Dataverse (sem isso, roda em dry-run e só mostra o diff)'
+        required: true
+        default: false
+        type: boolean
+      confirmation:
+        description: 'Digite UPDATE-REQSYS-TEAMSV2-CARD (obrigatório quando apply=true)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-v2-adaptive-card-update
+  cancel-in-progress: false
+
+jobs:
+  update-card:
+    name: Update robo_envia_teamsv2 card body
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: reqsys-power-platform-dev
+    env:
+      POWERPLATFORM_DEV_ENVIRONMENT_URL: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
+      POWERPLATFORM_APP_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      POWERPLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+      POWERPLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+    steps:
+      - name: Validate required configuration
+        run: |
+          for name in \
+            POWERPLATFORM_DEV_ENVIRONMENT_URL \
+            POWERPLATFORM_APP_ID \
+            POWERPLATFORM_CLIENT_SECRET \
+            POWERPLATFORM_TENANT_ID; do
+            test -n "${!name}" || {
+              echo "Secret obrigatório ausente: $name" >&2
+              exit 1
+            }
+          done
+          if [ "${{ inputs.apply }}" = 'true' ] && [ "${{ inputs.confirmation }}" != 'UPDATE-REQSYS-TEAMSV2-CARD' ]; then
+            echo 'Confirmação inválida; apply bloqueado.' >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run update (dry-run by default)
+        id: update
+        run: |
+          ARGS=(--environment-url "$POWERPLATFORM_DEV_ENVIRONMENT_URL" \
+                --tenant-id "$POWERPLATFORM_TENANT_ID" \
+                --client-id "$POWERPLATFORM_APP_ID" \
+                --client-secret "$POWERPLATFORM_CLIENT_SECRET" \
+                --output artifacts/teams-v2-card-update/result.json)
+          if [ "${{ inputs.apply }}" = 'true' ]; then
+            ARGS+=(--apply --confirm "${{ inputs.confirmation }}")
+          fi
+          python scripts/update_teams_v2_adaptive_card.py "${ARGS[@]}"
+
+      - name: Upload result and backup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-v2-card-update-${{ github.run_id }}
+          path: artifacts/teams-v2-card-update/
+          if-no-files-found: error
+          retention-days: 90
