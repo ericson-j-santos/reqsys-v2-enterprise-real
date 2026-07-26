@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
-
 HEARTBEAT_FILENAME = 'reqsys-operational-worker-heartbeat.json'
 
 
