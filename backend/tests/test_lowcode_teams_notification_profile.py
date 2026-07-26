@@ -35,7 +35,7 @@ def test_endpoint_factory_delega_para_perfil_teams_notification_v2():
     solution = gerar_lowcode_solution(_request())
 
     assert solution['profile'] == 'teams_notification_v2'
-    assert solution['solution']['unique_name'] == 'ReqSysTeamsNotifications'
+    assert solution['solution']['unique_name'] == 'robo_envia_teamsv2'
     assert solution['flow']['name'] == 'robo_envia_teamsv2'
     assert solution['flow']['version'] == '2.0.0.0'
     assert solution['factory_version'] == '0.2.0'

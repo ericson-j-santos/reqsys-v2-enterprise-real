@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 45
     environment: reqsys-power-platform-dev
     env:
-      SOLUTION_NAME: ReqSysTeamsNotifications
+      SOLUTION_NAME: robo_envia_teamsv2
       FLOW_NAME: robo_envia_teamsv2
       ARTIFACT_NAME: ${{ inputs.artifact_name }}
       SOURCE_MODE: ${{ inputs.source_mode }}
@@ -90,8 +90,8 @@ jobs:
           app-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
           client-secret: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
           tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
-          solution-name: ReqSysTeamsNotifications
-          solution-output-file: artifacts/official/ReqSysTeamsNotifications.zip
+          solution-name: robo_envia_teamsv2
+          solution-output-file: artifacts/official/robo_envia_teamsv2.zip
           managed: false
           overwrite: true
 

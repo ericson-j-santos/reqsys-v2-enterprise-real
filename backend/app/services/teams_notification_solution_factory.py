@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
 
-SOLUTION_NAME = 'ReqSysTeamsNotifications'
+SOLUTION_NAME = 'robo_envia_teamsv2'
 FLOW_NAME = 'robo_envia_teamsv2'
 FLOW_VERSION = '2.0.0.0'
 PACKAGE_FILENAME = 'reqsys-teams-notifications-v2.zip'
