@@ -78,9 +78,6 @@ def execute(output: Path, asset_id: str) -> dict[str, object]:
     backup_file = output.parent / f"{source_db}.dump"
     correlation_id = str(uuid.uuid4())
     started_at = utc_now()
-    backup_created_at: datetime | None = None
-    restore_started_at: datetime | None = None
-    restore_completed_at: datetime | None = None
 
     try:
         run(["createdb", source_db])
@@ -92,7 +89,7 @@ def execute(output: Path, asset_id: str) -> dict[str, object]:
                 "-c",
                 "CREATE TABLE bacen_restore_fixture (id integer PRIMARY KEY, payload text NOT NULL);"
                 "INSERT INTO bacen_restore_fixture "
-                "SELECT n, encode(digest('reqsys-bacen-' || n::text, 'sha256'), 'hex') "
+                "SELECT n, md5('reqsys-bacen-' || n::text) "
                 "FROM generate_series(1, 1000) AS n;",
             ],
             database=source_db,
