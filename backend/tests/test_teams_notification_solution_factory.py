@@ -69,6 +69,7 @@ def test_package_zip_contem_artefatos_governados_e_hash_valido():
             f'{SOLUTION_NAME}/manifest.json',
             f'{SOLUTION_NAME}/powerautomate/flow-definition.json',
             f'{SOLUTION_NAME}/powerautomate/http-trigger-schema.json',
+            f'{SOLUTION_NAME}/powerautomate/adaptive-card-template.json',
             f'{SOLUTION_NAME}/powerplatform/connection-references.json',
             f'{SOLUTION_NAME}/powerplatform/environment-variables.json',
             f'{SOLUTION_NAME}/alm/migration-and-rollback.json',
@@ -79,6 +80,13 @@ def test_package_zip_contem_artefatos_governados_e_hash_valido():
         flow = json.loads(archive.read(f'{SOLUTION_NAME}/powerautomate/flow-definition.json'))
         assert flow['success_response']['body']['flowVersion'] == FLOW_VERSION
         assert flow['error_response']['body']['errorCode'] == 'TEAMS_POST_FAILED'
+
+        card = json.loads(archive.read(f'{SOLUTION_NAME}/powerautomate/adaptive-card-template.json'))
+        assert card['type'] == 'AdaptiveCard'
+        assert card['version'] == '1.5'
+        card_json = json.dumps(card)
+        assert "triggerBody()?['title']" in card_json
+        assert "triggerBody()?['correlationId']" in card_json
 
     assert len(package['sha256']) == 64
     assert len(result['contract_tests']) == 9

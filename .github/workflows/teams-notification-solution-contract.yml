@@ -14,6 +14,7 @@ on:
       - 'scripts/validate_teams_notification_dev_import.py'
       - 'scripts/validate_powerplatform_solution_zip.py'
       - 'scripts/activate_powerautomate_flow.py'
+      - 'artifacts/lowcode-solution-factory/teams-notifications-v2-official/robo_envia_teamsv2_1_0_0_1.zip'
       - '.github/workflows/teams-notification-solution-contract.yml'
       - '.github/workflows/teams-notification-dev-import.yml'
   workflow_dispatch:
@@ -88,6 +89,13 @@ jobs:
           python scripts/validate_teams_notification_dev_import.py \
             artifacts/lowcode-solution-factory/teams-notifications-v2-ci
           test -s artifacts/lowcode-solution-factory/teams-notifications-v2-ci/dev-import-readiness.json
+
+      - name: Validate real Power Platform solution format
+        working-directory: .
+        run: |
+          python scripts/validate_powerplatform_solution_zip.py \
+            artifacts/lowcode-solution-factory/teams-notifications-v2-official/robo_envia_teamsv2_1_0_0_1.zip \
+            --expected-solution robo_envia_teamsv2
 
       - name: Upload governed package evidence
         uses: actions/upload-artifact@v4

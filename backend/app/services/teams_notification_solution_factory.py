@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
 
-SOLUTION_NAME = 'ReqSysTeamsNotifications'
+SOLUTION_NAME = 'robo_envia_teamsv2'
 FLOW_NAME = 'robo_envia_teamsv2'
 FLOW_VERSION = '2.0.0.0'
 PACKAGE_FILENAME = 'reqsys-teams-notifications-v2.zip'
@@ -183,6 +183,85 @@ def _flow_definition() -> dict[str, Any]:
     }
 
 
+def _adaptive_card_template() -> dict[str, Any]:
+    return {
+        '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',
+        'type': 'AdaptiveCard',
+        'version': '1.5',
+        'msteams': {'width': 'Full'},
+        'body': [
+            {
+                'type': 'Container',
+                'style': 'emphasis',
+                'bleed': True,
+                'items': [
+                    {
+                        'type': 'ColumnSet',
+                        'columns': [
+                            {
+                                'type': 'Column',
+                                'width': 'stretch',
+                                'items': [
+                                    {
+                                        'type': 'TextBlock',
+                                        'text': "@{triggerBody()?['title']}",
+                                        'weight': 'Bolder',
+                                        'size': 'Large',
+                                        'wrap': True,
+                                    },
+                                    {
+                                        'type': 'TextBlock',
+                                        'text': "@{triggerBody()?['content']}",
+                                        'spacing': 'Small',
+                                        'isSubtle': True,
+                                        'wrap': True,
+                                        'maxLines': 3,
+                                    },
+                                ],
+                            },
+                            {
+                                'type': 'Column',
+                                'width': 'auto',
+                                'verticalContentAlignment': 'Center',
+                                'items': [
+                                    {
+                                        'type': 'TextBlock',
+                                        'text': '✓',
+                                        'weight': 'Bolder',
+                                        'size': 'ExtraLarge',
+                                        'color': 'Good',
+                                        'horizontalAlignment': 'Right',
+                                    }
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            },
+            {
+                'type': 'FactSet',
+                'spacing': 'Medium',
+                'facts': [
+                    {'title': 'Assinatura', 'value': "@{triggerBody()?['signature']}"},
+                    {
+                        'title': 'Data',
+                        'value': "@{formatDateTime(triggerBody()?['stampDate'], 'dd/MM/yyyy HH:mm')}",
+                    },
+                    {'title': 'Correlation ID', 'value': "@{triggerBody()?['correlationId']}"},
+                ],
+            },
+            {
+                'type': 'TextBlock',
+                'text': 'Entrega automatizada pelo ReqSys',
+                'spacing': 'Medium',
+                'isSubtle': True,
+                'size': 'Small',
+                'wrap': True,
+            },
+        ],
+    }
+
+
 def _migration_plan() -> dict[str, Any]:
     return {
         'source_flow': 'robo_envia_teamsv1',
@@ -209,6 +288,7 @@ def _files(blueprint: dict[str, Any]) -> list[dict[str, str]]:
         'manifest.json': blueprint,
         'powerautomate/flow-definition.json': blueprint['flow'],
         'powerautomate/http-trigger-schema.json': blueprint['trigger_schema'],
+        'powerautomate/adaptive-card-template.json': blueprint['adaptive_card_template'],
         'powerplatform/connection-references.json': blueprint['connection_references'],
         'powerplatform/environment-variables.json': blueprint['environment_variables'],
         'alm/migration-and-rollback.json': blueprint['migration'],
@@ -246,6 +326,7 @@ def gerar_teams_notification_solution(*, target_environment: str = 'dev', dry_ru
         },
         'flow': _flow_definition(),
         'trigger_schema': _trigger_schema(),
+        'adaptive_card_template': _adaptive_card_template(),
         'connection_references': _flow_definition()['connection_references'],
         'environment_variables': _environment_variables(),
         'migration': _migration_plan(),
