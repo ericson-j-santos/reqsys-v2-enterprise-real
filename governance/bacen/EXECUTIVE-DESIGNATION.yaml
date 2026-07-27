@@ -1,0 +1,19 @@
+schema_version: 1.0.0
+control_id: BACEN-08
+title: Designação do responsável executivo pelo programa de segurança cibernética
+mode: advisory
+notes: >
+  Este arquivo é a fonte de verdade estrutural para o responsável executivo exigido
+  pelo controle BACEN-08. Nenhum nome é preenchido por automação/IA — a designação
+  é um ato organizacional que exige decisão humana formal (ex.: ata de diretoria,
+  portaria interna ou documento equivalente). Enquanto `status` for
+  `pending_formal_designation`, o relatório anual não pode declarar o controle
+  como plenamente atendido.
+designation:
+  status: pending_formal_designation
+  executive_name: null
+  executive_role: null
+  designated_at: null
+  designation_document_reference: null
+  designated_by: null
+review_cycle_days: 365
