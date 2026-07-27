@@ -8,6 +8,7 @@ on:
       - "scripts/validate_bacen_controls.py"
       - "scripts/generate_bacen_backup_restore_evidence.py"
       - "scripts/validate_bacen_third_party_register.py"
+      - "scripts/run_bacen_incident_exercise.py"
       - "scripts/consolidate_bacen_audit_evidence.py"
       - ".github/workflows/bacen-audit-evidence-index.yml"
   push:
@@ -17,6 +18,7 @@ on:
       - "scripts/validate_bacen_controls.py"
       - "scripts/generate_bacen_backup_restore_evidence.py"
       - "scripts/validate_bacen_third_party_register.py"
+      - "scripts/run_bacen_incident_exercise.py"
       - "scripts/consolidate_bacen_audit_evidence.py"
       - ".github/workflows/bacen-audit-evidence-index.yml"
   workflow_dispatch: {}
@@ -47,6 +49,7 @@ jobs:
           python -m py_compile scripts/validate_bacen_controls.py
           python -m py_compile scripts/generate_bacen_backup_restore_evidence.py
           python -m py_compile scripts/validate_bacen_third_party_register.py
+          python -m py_compile scripts/run_bacen_incident_exercise.py
           python -m py_compile scripts/consolidate_bacen_audit_evidence.py
 
       # Regenera, nesta mesma execução, a evidência não-produtiva de cada controle
@@ -55,7 +58,7 @@ jobs:
       # workflow "BACEN STG Isolated Restore Test", protegido pelo environment stg.
       - name: Regenerate reproducible control evidence
         env:
-          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
           python scripts/validate_bacen_controls.py
@@ -63,6 +66,9 @@ jobs:
             --environment ci \
             --asset-id reqsys-bacen-contract-fixture
           python scripts/validate_bacen_third_party_register.py
+          python scripts/run_bacen_incident_exercise.py \
+            --scenario governance/bacen/INCIDENT-EXERCISE-SCENARIO.json \
+            --output artifacts/bacen/bacen-03-incident-exercise-evidence.json
 
       - name: Consolidate audit evidence index
         run: python scripts/consolidate_bacen_audit_evidence.py
