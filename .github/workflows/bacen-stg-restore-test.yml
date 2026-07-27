@@ -1,0 +1,127 @@
+name: BACEN STG Isolated Restore Test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/run_bacen_stg_restore_test.py"
+      - ".github/workflows/bacen-stg-restore-test.yml"
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/run_bacen_stg_restore_test.py"
+      - ".github/workflows/bacen-stg-restore-test.yml"
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-stg-restore-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-stg-restore:
+    name: Real PostgreSQL Restore in Isolated STG
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: stg
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: reqsys_restore
+          POSTGRES_PASSWORD: bacen-stg-isolated-password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reqsys_restore -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: reqsys_restore
+      PGPASSWORD: bacen-stg-isolated-password
+      PGDATABASE: postgres
+      BACEN_RESTORE_ENVIRONMENT: stg-isolated
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-client
+
+      - name: Compile restore runner
+        run: python -m py_compile scripts/run_bacen_stg_restore_test.py
+
+      - name: Execute real isolated backup and restore
+        env:
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          python scripts/run_bacen_stg_restore_test.py \
+            --asset-id reqsys-postgresql-stg-isolated \
+            --output artifacts/bacen/bacen-04-stg-restore-evidence.json
+
+      - name: Validate evidence contract and thresholds
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("artifacts/bacen/bacen-04-stg-restore-evidence.json").read_text())
+          assert report["control_id"] == "BACEN-04"
+          assert report["evidence_class"] == "isolated_stg_restore_test"
+          assert report["environment"] == "stg-isolated"
+          assert report["production_touched"] is False
+          assert report["production_restore_claimed"] is False
+          assert report["integrity_match"] is True
+          assert report["rpo_minutes"] <= report["rpo_target_minutes"]
+          assert report["rto_seconds"] <= report["rto_target_seconds"]
+          assert report["result"] == "passed"
+          assert len(report["backup_sha256"]) == 64
+          print("BACEN-04 isolated STG restore evidence: valid")
+          PY
+
+      - name: Publish BACEN-04 operational evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-04-stg-restore-evidence
+          path: artifacts/bacen/bacen-04-stg-restore-evidence.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Append executive summary
+        if: always()
+        run: |
+          echo "## BACEN-04 — Teste real de restauração STG isolado" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f artifacts/bacen/bacen-04-stg-restore-evidence.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-04-stg-restore-evidence.json").read_text())
+          print(f"- Resultado: **{report['result']}**")
+          print(f"- Integridade: **{report['integrity_match']}**")
+          print(f"- RPO medido: **{report['rpo_minutes']} min**")
+          print(f"- RTO medido: **{report['rto_seconds']} s**")
+          print(f"- Produção acessada: **{report['production_touched']}**")
+          print(f"- Correlation ID: `{report['correlation_id']}`")
+          PY
+          else
+            echo "- Evidência não gerada." >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -1,0 +1,99 @@
+name: BACEN Audit Evidence Index
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/**"
+      - "scripts/validate_bacen_controls.py"
+      - "scripts/generate_bacen_backup_restore_evidence.py"
+      - "scripts/validate_bacen_third_party_register.py"
+      - "scripts/consolidate_bacen_audit_evidence.py"
+      - ".github/workflows/bacen-audit-evidence-index.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/**"
+      - "scripts/validate_bacen_controls.py"
+      - "scripts/generate_bacen_backup_restore_evidence.py"
+      - "scripts/validate_bacen_third_party_register.py"
+      - "scripts/consolidate_bacen_audit_evidence.py"
+      - ".github/workflows/bacen-audit-evidence-index.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-audit-evidence-index-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  consolidate:
+    name: BACEN-07 Audit Evidence Index
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile scripts
+        run: |
+          python -m py_compile scripts/validate_bacen_controls.py
+          python -m py_compile scripts/generate_bacen_backup_restore_evidence.py
+          python -m py_compile scripts/validate_bacen_third_party_register.py
+          python -m py_compile scripts/consolidate_bacen_audit_evidence.py
+
+      # Regenera, nesta mesma execução, a evidência não-produtiva de cada controle
+      # técnico que este job consegue reproduzir sem acesso a ambiente STG/PROD.
+      # A evidência real de STG (BACEN-04) é gerada e retida separadamente pelo
+      # workflow "BACEN STG Isolated Restore Test", protegido pelo environment stg.
+      - name: Regenerate reproducible control evidence
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          python scripts/validate_bacen_controls.py
+          python scripts/generate_bacen_backup_restore_evidence.py \
+            --environment ci \
+            --asset-id reqsys-bacen-contract-fixture
+          python scripts/validate_bacen_third_party_register.py
+
+      - name: Consolidate audit evidence index
+        run: python scripts/consolidate_bacen_audit_evidence.py
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-audit-evidence-index
+          path: artifacts/bacen/
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Append summary
+        if: always()
+        run: |
+          echo "## BACEN-07 — Índice de evidências de auditoria" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f artifacts/bacen/bacen-07-audit-evidence-index.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-07-audit-evidence-index.json").read_text())
+          summary = report.get("summary", {})
+          print(f"- Resultado: `{report.get('result')}`")
+          print(f"- Evidências indexadas: **{summary.get('total_evidence_files', 0)}**")
+          print(f"- Controles cobertos: `{', '.join(summary.get('controls_covered', [])) or 'nenhum'}`")
+          print(f"- Controles sem evidência: `{', '.join(summary.get('controls_uncovered', [])) or 'nenhum'}`")
+          for error in report.get("errors", []):
+              print(f"  - ⚠️ {error}")
+          PY
+          else
+            echo "- Índice não gerado." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

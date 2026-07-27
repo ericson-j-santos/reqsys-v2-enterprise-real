@@ -1,4 +1,4 @@
-schema_version: 1.1.0
+schema_version: 1.2.0
 framework:
   name: BACEN minimum cybersecurity controls
   references:
@@ -35,20 +35,25 @@ controls:
     title: Backup, restauração e continuidade
     criticality: critical
     owner: RUNTIME_OPERATOR
-    evidence: artifacts/bacen/bacen-04-backup-restore-evidence.json
+    evidence: artifacts/bacen/bacen-04-stg-restore-evidence.json
     policy: governance/bacen/BACKUP-RESTORE-POLICY.md
-    status: partial
-    evidence_stage: contract_validation
+    workflow: .github/workflows/bacen-stg-restore-test.yml
+    status: implemented
+    evidence_stage: isolated_stg_restore_test
     production_restore_claimed: false
-    next_stage: isolated_stg_restore_test
-    review_cycle_days: 180
+    production_touched: false
+    next_stage: scheduled_quarterly_restore_and_trend
+    review_cycle_days: 90
   - id: BACEN-05
     domain: third_party
     title: Gestão de nuvem e terceiros
     criticality: high
     owner: AI_GOVERNOR
     evidence: governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml
-    status: gap
+    workflow: .github/workflows/bacen-third-party-register-gate.yml
+    status: partial
+    evidence_stage: register_with_automated_drift_detection
+    next_stage: formal_vendor_risk_assessment_and_dpa_signoff
     review_cycle_days: 180
   - id: BACEN-06
     domain: secure_development
@@ -63,8 +68,11 @@ controls:
     title: Auditoria, rastreabilidade e retenção de evidências
     criticality: high
     owner: SECURITY
-    evidence: artifacts
-    status: partial
+    evidence: artifacts/bacen/bacen-07-audit-evidence-index.json
+    policy: governance/bacen/AUDIT-EVIDENCE-RETENTION-POLICY.md
+    workflow: .github/workflows/bacen-audit-evidence-index.yml
+    status: implemented
+    evidence_stage: automated_evidence_index_with_integrity_hash
     review_cycle_days: 90
   - id: BACEN-08
     domain: executive_governance
@@ -72,5 +80,10 @@ controls:
     criticality: critical
     owner: GOVERNANCE
     evidence: governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md
-    status: gap
+    designation_record: governance/bacen/EXECUTIVE-DESIGNATION.yaml
+    workflow: .github/workflows/bacen-annual-report-gate.yml
+    status: partial
+    evidence_stage: draft_template_with_real_control_snapshot
+    executive_designation_status: pending_formal_designation
+    next_stage: formal_executive_designation_and_report_signoff
     review_cycle_days: 365

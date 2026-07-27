@@ -1,0 +1,92 @@
+name: BACEN Annual Report Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md"
+      - "governance/bacen/EXECUTIVE-DESIGNATION.yaml"
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+      - "scripts/generate_bacen_annual_report.py"
+      - "scripts/validate_bacen_annual_report.py"
+      - ".github/workflows/bacen-annual-report-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md"
+      - "governance/bacen/EXECUTIVE-DESIGNATION.yaml"
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+      - "scripts/generate_bacen_annual_report.py"
+      - "scripts/validate_bacen_annual_report.py"
+      - ".github/workflows/bacen-annual-report-gate.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-annual-report-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN-08 Annual Report Structure Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile scripts
+        run: |
+          python -m py_compile scripts/generate_bacen_annual_report.py
+          python -m py_compile scripts/validate_bacen_annual_report.py
+
+      - name: Fail if the report is stale relative to the control matrix
+        run: |
+          cp governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md /tmp/report-before.md
+          python scripts/generate_bacen_annual_report.py
+          if ! diff -q /tmp/report-before.md governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md > /dev/null; then
+            echo "::error::ANNUAL-CYBERSECURITY-REPORT.md está desatualizado em relação à matriz/designação atuais. Rode 'python scripts/generate_bacen_annual_report.py' e faça commit do resultado." >&2
+            exit 1
+          fi
+
+      - name: Validate report structure
+        run: python scripts/validate_bacen_annual_report.py
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-annual-report-evidence
+          path: artifacts/bacen/bacen-08-annual-report-check.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Append summary
+        if: always()
+        run: |
+          echo "## BACEN-08 — Relatório anual (estrutura)" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f artifacts/bacen/bacen-08-annual-report-check.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-08-annual-report-check.json").read_text())
+          summary = report.get("summary", {})
+          print(f"- Resultado: `{report.get('result')}`")
+          print(f"- Designação executiva: `{summary.get('executive_designation_status')}`")
+          print(f"- Seções narrativas pendentes: **{summary.get('narrative_sections_pending', 0)}**")
+          for warning in report.get("warnings", []):
+              print(f"  - ⚠️ {warning}")
+          for error in report.get("errors", []):
+              print(f"  - ❌ {error}")
+          PY
+          else
+            echo "- Evidência não gerada." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
