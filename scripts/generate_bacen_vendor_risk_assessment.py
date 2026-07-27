@@ -12,14 +12,13 @@ import yaml
 
 REQUIRED_FIELDS = {
     "id",
-    "name",
-    "service",
+    "provider",
+    "category",
+    "purpose",
     "data_classification",
     "criticality",
-    "contract_status",
+    "risk_review_status",
     "dpa_status",
-    "security_review_status",
-    "exit_strategy_status",
 }
 
 WEIGHTS = {
@@ -28,6 +27,8 @@ WEIGHTS = {
     "medium": 10,
     "low": 0,
 }
+
+APPROVED_STATUSES = {"approved", "signed", "complete", "validated"}
 
 
 def load_register(path: Path) -> dict[str, Any]:
@@ -45,21 +46,29 @@ def assess_vendor(vendor: dict[str, Any]) -> dict[str, Any]:
     if missing:
         score += 40
         findings.append(f"missing_fields:{','.join(missing)}")
-    for field in ("contract_status", "dpa_status", "security_review_status", "exit_strategy_status"):
-        if str(vendor.get(field, "")).lower() not in {"approved", "signed", "complete", "validated"}:
-            score += 15
-            findings.append(f"{field}:{vendor.get(field, 'missing')}")
+
+    risk_review_status = str(vendor.get("risk_review_status", "missing")).lower()
+    dpa_status = str(vendor.get("dpa_status", "missing")).lower()
+
+    if risk_review_status not in APPROVED_STATUSES:
+        score += 15
+        findings.append(f"risk_review_status:{risk_review_status}")
+    if dpa_status not in APPROVED_STATUSES:
+        score += 15
+        findings.append(f"dpa_status:{dpa_status}")
 
     score = min(score, 100)
     risk = "critical" if score >= 80 else "high" if score >= 60 else "medium" if score >= 30 else "low"
     return {
         "vendor_id": vendor.get("id"),
-        "vendor_name": vendor.get("name"),
+        "vendor_name": vendor.get("provider"),
+        "service": vendor.get("purpose"),
+        "category": vendor.get("category"),
         "risk_score": score,
         "risk_level": risk,
         "findings": findings,
         "technical_assessment_complete": not missing,
-        "legal_signoff_complete": str(vendor.get("dpa_status", "")).lower() in {"signed", "approved"},
+        "legal_signoff_complete": dpa_status in {"signed", "approved"},
     }
 
 
@@ -70,27 +79,32 @@ def main() -> int:
     args = parser.parse_args()
 
     register = load_register(args.register)
-    vendors = register.get("vendors") or register.get("third_parties") or []
+    vendors = register.get("providers") or register.get("vendors") or register.get("third_parties") or []
     if not isinstance(vendors, list) or not vendors:
-        raise ValueError("registro deve conter vendors/third_parties não vazio")
+        raise ValueError("registro deve conter providers/vendors/third_parties não vazio")
 
-    assessments = [assess_vendor(vendor) for vendor in vendors if isinstance(vendor, dict)]
+    invalid_entries = [index for index, vendor in enumerate(vendors) if not isinstance(vendor, dict)]
+    if invalid_entries:
+        raise ValueError(f"entradas inválidas no registro: {invalid_entries}")
+
+    assessments = [assess_vendor(vendor) for vendor in vendors]
     source_bytes = args.register.read_bytes()
     pending_legal = [item["vendor_id"] for item in assessments if not item["legal_signoff_complete"]]
     high_risk = [item["vendor_id"] for item in assessments if item["risk_level"] in {"high", "critical"}]
+    technical_complete = all(item["technical_assessment_complete"] for item in assessments)
 
     evidence = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.0.1",
         "control_id": "BACEN-05",
         "generated_at": datetime.now(UTC).isoformat(),
         "source": str(args.register),
         "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
         "vendor_count": len(assessments),
-        "technical_assessment_complete": all(item["technical_assessment_complete"] for item in assessments),
+        "technical_assessment_complete": technical_complete,
         "formal_legal_signoff_complete": not pending_legal,
         "pending_legal_signoff_vendor_ids": pending_legal,
         "high_or_critical_risk_vendor_ids": high_risk,
-        "status": "passed" if assessments else "failed",
+        "status": "passed" if assessments and technical_complete else "failed",
         "control_maturity": "partial_pending_legal_signoff" if pending_legal else "implemented",
         "production_touched": False,
         "assessments": assessments,
