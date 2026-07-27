@@ -53,19 +53,35 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$TARGET_ENVIRONMENT"
-          test -n "$TARGET_URL"
           case "$TARGET_ENVIRONMENT" in
-            dev|development|stg|staging|prod|production) ;;
+            dev|development)
+              resolved_url="${TARGET_URL:-https://reqsys-app-dev.fly.dev}"
+              ;;
+            stg|staging)
+              resolved_url="${TARGET_URL:-https://reqsys-app-stg.fly.dev}"
+              ;;
+            prod|production)
+              resolved_url="${TARGET_URL:-https://reqsys-app.fly.dev}"
+              ;;
             *) echo "Ambiente não governado: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
           esac
+          test -n "$resolved_url"
+          echo "TARGET_URL=$resolved_url" >> "$GITHUB_ENV"
+          echo "Destino governado resolvido: $resolved_url"
 
       - name: Smoke synchronized public trend
         run: |
-          set -euo pipefail
+          set +e
           python scripts/smoke_executive_final_sync_history_public_smoke_trend.py \
             --base-url "$TARGET_URL" \
             --environment "$TARGET_ENVIRONMENT" \
             --output "artifacts/executive-final-sync-history-public-smoke-trend/${TARGET_ENVIRONMENT}.json"
+          smoke_rc=$?
+          set -e
+          if [ "$smoke_rc" -ne 0 ]; then
+            echo "::warning::Smoke público report-only detectou divergência em ${TARGET_ENVIRONMENT}; evidência será publicada para revisão humana."
+          fi
+          echo "SMOKE_RESULT_CODE=$smoke_rc" >> "$GITHUB_ENV"
 
       - name: Publish evidence
         if: always()
@@ -84,6 +100,7 @@ jobs:
             echo ""
             echo "- Ambiente: ${TARGET_ENVIRONMENT}"
             echo "- URL: ${TARGET_URL}"
+            echo "- Resultado técnico: ${SMOKE_RESULT_CODE:-não executado}"
             echo "- Sincronização: Estado Único + contrato + Ops Dashboard"
             echo "- Modo: report-only"
             echo "- Bloqueio automático: proibido"

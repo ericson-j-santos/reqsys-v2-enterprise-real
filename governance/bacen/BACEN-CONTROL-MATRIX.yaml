@@ -1,4 +1,4 @@
-schema_version: 1.2.0
+schema_version: 1.3.0
 framework:
   name: BACEN minimum cybersecurity controls
   references:
@@ -27,9 +27,15 @@ controls:
     title: Plano de resposta a incidentes
     criticality: critical
     owner: RUNTIME_OPERATOR
-    evidence: governance/bacen/INCIDENT-RESPONSE-PLAN.md
-    status: partial
-    review_cycle_days: 180
+    evidence: artifacts/bacen/bacen-03-incident-exercise-evidence.json
+    policy: governance/bacen/INCIDENT-RESPONSE-PLAN.md
+    scenario: governance/bacen/INCIDENT-EXERCISE-SCENARIO.json
+    workflow: .github/workflows/bacen-incident-exercise.yml
+    status: implemented
+    evidence_stage: automated_operational_tabletop_with_sla_and_corrective_actions
+    production_touched: false
+    next_stage: integrate_real_incident_metrics_and_human_tabletop_review
+    review_cycle_days: 90
   - id: BACEN-04
     domain: continuity
     title: Backup, restauração e continuidade

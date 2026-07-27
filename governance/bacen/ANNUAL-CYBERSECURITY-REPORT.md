@@ -38,22 +38,24 @@ marcadores abaixo — a próxima execução do gerador sobrescreve este bloco.
 |---|---|---|---|
 | BACEN-01 | governance | critical | partial |
 | BACEN-02 | identity | critical | partial |
-| BACEN-03 | incidents | critical | partial |
+| BACEN-03 | incidents | critical | implemented |
 | BACEN-04 | continuity | critical | implemented |
 | BACEN-05 | third_party | high | partial |
 | BACEN-06 | secure_development | high | implemented |
 | BACEN-07 | audit | high | implemented |
 | BACEN-08 | executive_governance | critical | partial |
 
-Total: **8** · Implementados: **3** · Parciais: **5** · Lacunas: **0** · Cobertura ponderada: **37.5%**
+Total: **8** · Implementados: **4** · Parciais: **4** · Lacunas: **0** · Cobertura ponderada: **50.0%**
 <!-- BACEN-08:CONTROLS-SUMMARY:END -->
 
 ## Incidentes de segurança do período
 
-*(seção narrativa — a integração automatizada de dados de incidentes ainda não
-existe; ver BACEN-03, hoje `partial`. Até que essa integração exista, esta seção
-deve ser preenchida manualmente a partir dos registros de
-`governance/bacen/INCIDENT-RESPONSE-PLAN.md` e do processo operacional real.)*
+*(seção narrativa — o BACEN-03 possui evidência operacional automatizada de
+exercício de resposta a incidentes, mas a integração de métricas de incidentes
+reais ainda não existe. Esta seção deve ser preenchida manualmente a partir do
+artifact `artifacts/bacen/bacen-03-incident-exercise-evidence.json`, dos registros
+do processo operacional real e do plano em
+`governance/bacen/INCIDENT-RESPONSE-PLAN.md`.)*
 
 ## Avaliação de terceiros e nuvem
 
