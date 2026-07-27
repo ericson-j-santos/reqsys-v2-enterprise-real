@@ -5,8 +5,10 @@ import pytest
 
 from scripts.update_teams_v2_adaptive_card import (
     ACTION_NAME,
+    _json_to_concat_expression,
+    adaptive_card_body,
     apply_card_change,
-    build_message_envelope,
+    build_message_body_expression,
     diff_summary,
 )
 
@@ -26,7 +28,24 @@ REAL_CLIENTDATA = {
                 'Scope_TRY': {
                     'type': 'Scope',
                     'actions': {
-                        'Analisar_JSON': {'type': 'ParseJson'},
+                        'Analisar_JSON': {
+                            'type': 'ParseJson',
+                            'inputs': {
+                                'content': "@triggerBody()",
+                                'schema': {
+                                    'type': 'object',
+                                    'properties': {
+                                        'to': {'type': 'string'},
+                                        'title': {'type': 'string'},
+                                        'content': {'type': 'string'},
+                                        'signature': {'type': 'string'},
+                                        'stampDate': {'type': 'string'},
+                                        'correlationId': {'type': 'string'},
+                                    },
+                                    'required': ['to', 'title', 'content', 'signature'],
+                                },
+                            },
+                        },
                         'Compose_CorrelationId_Final': {'type': 'Compose'},
                         'Condição_': {
                             'type': 'If',
@@ -71,6 +90,10 @@ def _action(clientdata):
     return clientdata['properties']['definition']['actions']['Scope_TRY']['actions']['Condição_']['actions'][ACTION_NAME]
 
 
+def _analisar_json(clientdata):
+    return clientdata['properties']['definition']['actions']['Scope_TRY']['actions']['Analisar_JSON']
+
+
 def test_apply_card_change_troca_apenas_message_body():
     before = copy.deepcopy(REAL_CLIENTDATA)
     after = apply_card_change(before)
@@ -81,11 +104,29 @@ def test_apply_card_change_troca_apenas_message_body():
     assert before_action['inputs']['parameters']['body/messageBody'] == "@outputs('Compose_Message')"
     new_body = after_action['inputs']['parameters']['body/messageBody']
     assert new_body != before_action['inputs']['parameters']['body/messageBody']
+    assert new_body == build_message_body_expression()
+    assert new_body.startswith("@{if(empty(body('Analisar_JSON')?['adaptiveCard']), ")
+    assert new_body.endswith("body('Analisar_JSON')?['adaptiveCard'])}")
 
-    envelope = json.loads(new_body)
-    assert envelope['type'] == 'message'
-    assert envelope['attachments'][0]['contentType'] == 'application/vnd.microsoft.card.adaptive'
-    assert envelope['attachments'][0]['content']['type'] == 'AdaptiveCard'
+
+def test_apply_card_change_declara_adaptive_card_no_schema():
+    after = apply_card_change(REAL_CLIENTDATA)
+    schema = _analisar_json(after)['inputs']['schema']
+
+    assert schema['properties']['adaptiveCard'] == {'type': 'object'}
+    # campos existentes/obrigatórios não devem ser tocados
+    assert schema['required'] == ['to', 'title', 'content', 'signature']
+    assert schema['properties']['title'] == {'type': 'string'}
+
+
+def test_json_to_concat_expression_reconstroi_json_com_placeholders_resolvidos():
+    card = {'type': 'AdaptiveCard', 'title': "@{body('Analisar_JSON')?['title']}", 'fixed': 1}
+    expr = _json_to_concat_expression(card)
+
+    assert expr.startswith('concat(')
+    assert "body('Analisar_JSON')?['title']" in expr
+    # o placeholder não deve sobrar entre aspas simples (senão vira texto literal, não expressão)
+    assert "'@{body" not in expr
 
 
 def test_apply_card_change_preserva_grafo_de_dependencias():
@@ -114,9 +155,8 @@ def test_apply_card_change_rejeita_operacao_inesperada():
         apply_card_change(clientdata)
 
 
-def test_build_message_envelope_referencia_acoes_reais_do_flow():
-    envelope = build_message_envelope()
-    card_json = json.dumps(envelope)
+def test_adaptive_card_body_referencia_acoes_reais_do_flow():
+    card_json = json.dumps(adaptive_card_body())
 
     assert "body('Analisar_JSON')?['title']" in card_json
     assert "outputs('Compose_StampDate')" in card_json
@@ -132,4 +172,4 @@ def test_diff_summary_reporta_antes_e_depois():
     assert summary['action'] == ACTION_NAME
     assert summary['operationId'] == 'PostCardToConversation'
     assert summary['before_message_body'] == "@outputs('Compose_Message')"
-    assert json.loads(summary['after_message_body'])['type'] == 'message'
+    assert summary['after_message_body'] == build_message_body_expression()

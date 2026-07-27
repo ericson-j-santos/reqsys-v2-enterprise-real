@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -14,7 +15,8 @@ from typing import Any
 
 ACTION_PATH = ('Scope_TRY', 'Condição_')
 ACTION_NAME = 'Postar_cartão_em_um_chat_ou_canal'
-COMPOSE_CARD_ACTION_NAME = 'Compose_AdaptiveCard'
+PARSE_JSON_ACTION_NAME = 'Analisar_JSON'
+_PLACEHOLDER_RE = re.compile(r'"@\{([^}]*)\}"')
 
 
 def _request_json(url: str, *, method: str = 'GET', headers: dict[str, str] | None = None, data: dict[str, Any] | None = None) -> dict:
@@ -149,18 +151,6 @@ def adaptive_card_body(*, minimum_version: str = '1.2') -> dict[str, Any]:
     }
 
 
-def build_message_envelope() -> dict[str, Any]:
-    return {
-        'type': 'message',
-        'attachments': [
-            {
-                'contentType': 'application/vnd.microsoft.card.adaptive',
-                'content': adaptive_card_body(),
-            }
-        ],
-    }
-
-
 def _navigate_actions(definition: dict[str, Any], path: tuple[str, ...]) -> dict[str, Any]:
     node = definition
     for step in path:
@@ -168,10 +158,53 @@ def _navigate_actions(definition: dict[str, Any], path: tuple[str, ...]) -> dict
     return node
 
 
+def _wdl_string_literal(text: str) -> str:
+    """Escapa um literal para uso dentro de uma expressão WDL (aspas simples dobradas)."""
+    return "'" + text.replace("'", "''") + "'"
+
+
+def _json_to_concat_expression(value: dict[str, Any]) -> str:
+    """Converte um dict cujas folhas dinâmicas são strings '@{expressao}' numa
+    expressão WDL concat(...) que remonta o mesmo JSON em tempo de execução,
+    com os placeholders resolvidos — permite usar o resultado como texto
+    dentro de outra expressão (ex.: um dos ramos de um if())."""
+    text = json.dumps(value, ensure_ascii=False)
+    parts: list[str] = []
+    last_end = 0
+    for match in _PLACEHOLDER_RE.finditer(text):
+        literal = text[last_end:match.start()]
+        if literal:
+            parts.append(_wdl_string_literal(literal))
+        parts.append(match.group(1))
+        last_end = match.end()
+    tail = text[last_end:]
+    if tail:
+        parts.append(_wdl_string_literal(tail))
+    if not parts:
+        parts.append(_wdl_string_literal(text))
+    return f"concat({', '.join(parts)})"
+
+
+def build_message_body_expression() -> str:
+    """body/messageBody final: repassa o AdaptiveCard já pronto que o
+    chamador mandar em adaptiveCard (ex.: teams-commit-notification.yml, que
+    já monta título/FactSet/botões reais) e só usa o card genérico
+    (title/content/signature/stampDate/correlationId) como fallback quando
+    adaptiveCard não vier no payload."""
+    fallback_expr = _json_to_concat_expression(adaptive_card_body())
+    return (
+        "@{if(empty(body('Analisar_JSON')?['adaptiveCard']), "
+        f"{fallback_expr}, body('Analisar_JSON')?['adaptiveCard'])}}"
+    )
+
+
 def apply_card_change(clientdata: dict[str, Any]) -> dict[str, Any]:
-    """Retorna uma cópia de clientdata com a ação de post trocada para enviar
-    o Adaptive Card customizado, mantendo runAfter/operationMetadataId
-    intactos para não corromper o grafo de dependências do flow."""
+    """Retorna uma cópia de clientdata com a ação de post trocada para
+    repassar um Adaptive Card pronto (campo adaptiveCard do payload) ou usar
+    o card genérico como fallback, mantendo runAfter/operationMetadataId
+    intactos para não corromper o grafo de dependências do flow. Também
+    declara adaptiveCard (opcional) no schema do Analisar_JSON para que o
+    campo fique disponível em body('Analisar_JSON')."""
     updated = copy.deepcopy(clientdata)
     definition = updated['properties']['definition']
     scope = _navigate_actions(definition, ACTION_PATH)
@@ -180,8 +213,16 @@ def apply_card_change(clientdata: dict[str, Any]) -> dict[str, Any]:
     if action['inputs']['host']['operationId'] != 'PostCardToConversation':
         raise ValueError('Ação alvo não usa mais PostCardToConversation; abortando para não editar a coisa errada.')
 
-    envelope = build_message_envelope()
-    action['inputs']['parameters']['body/messageBody'] = json.dumps(envelope, ensure_ascii=False)
+    # body/messageBody recebe o AdaptiveCard puro, SEM o envelope
+    # {type:"message", attachments:[...]} documentado pela Microsoft para a
+    # variante "canal" da operação — confirmado ao vivo em 2026-07-26 via
+    # teste real contra a URL de trigger: um card estático colado direto
+    # nesse campo (sem envelope) resultou em HTTP 200 sem erro na ação.
+    action['inputs']['parameters']['body/messageBody'] = build_message_body_expression()
+
+    parse_json = _navigate_actions(definition, ('Scope_TRY',))['actions'][PARSE_JSON_ACTION_NAME]
+    properties = parse_json['inputs']['schema']['properties']
+    properties.setdefault('adaptiveCard', {'type': 'object'})
 
     return updated
 
