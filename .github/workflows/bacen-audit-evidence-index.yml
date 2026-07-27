@@ -4,7 +4,9 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - ".env.example"
       - "governance/bacen/**"
+      - "scripts/generate_bacen_access_control_baseline.py"
       - "scripts/validate_bacen_controls.py"
       - "scripts/generate_bacen_backup_restore_evidence.py"
       - "scripts/validate_bacen_third_party_register.py"
@@ -14,7 +16,9 @@ on:
   push:
     branches: [main]
     paths:
+      - ".env.example"
       - "governance/bacen/**"
+      - "scripts/generate_bacen_access_control_baseline.py"
       - "scripts/validate_bacen_controls.py"
       - "scripts/generate_bacen_backup_restore_evidence.py"
       - "scripts/validate_bacen_third_party_register.py"
@@ -46,6 +50,7 @@ jobs:
 
       - name: Compile scripts
         run: |
+          python -m py_compile scripts/generate_bacen_access_control_baseline.py
           python -m py_compile scripts/validate_bacen_controls.py
           python -m py_compile scripts/generate_bacen_backup_restore_evidence.py
           python -m py_compile scripts/validate_bacen_third_party_register.py
@@ -61,6 +66,9 @@ jobs:
           GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
+          python scripts/generate_bacen_access_control_baseline.py \
+            --env-file .env.example \
+            --output artifacts/bacen/bacen-02-access-control-baseline.json
           python scripts/validate_bacen_controls.py
           python scripts/generate_bacen_backup_restore_evidence.py \
             --environment ci \
