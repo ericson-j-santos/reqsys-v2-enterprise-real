@@ -17,6 +17,8 @@ ACTION_PATH = ('Scope_TRY', 'Condição_')
 ACTION_NAME = 'Postar_cartão_em_um_chat_ou_canal'
 PARSE_JSON_ACTION_NAME = 'Analisar_JSON'
 _PLACEHOLDER_RE = re.compile(r'"@\{([^}]*)\}"')
+_BACKSLASH = chr(92)
+_DOUBLE_QUOTE = chr(34)
 
 
 def _request_json(url: str, *, method: str = 'GET', headers: dict[str, str] | None = None, data: dict[str, Any] | None = None) -> dict:
@@ -163,20 +165,46 @@ def _wdl_string_literal(text: str) -> str:
     return "'" + text.replace("'", "''") + "'"
 
 
+def _wdl_escape_json_string(expr: str) -> str:
+    """Envolve uma expressão WDL (que resolve para uma string vinda do
+    trigger, ex. title/content de um commit) numa cadeia de replace() que
+    escapa barra invertida, aspas duplas e quebra de linha, para que o
+    resultado possa ser embutido com segurança DENTRO de um literal de string
+    JSON já com aspas ao redor (ver _json_to_concat_expression). A ordem
+    importa: barra invertida primeiro, senão escapa a barra que acabamos de
+    inserir nos passos seguintes."""
+    escaped = expr
+    escaped = f"replace({escaped}, {_wdl_string_literal(_BACKSLASH)}, {_wdl_string_literal(_BACKSLASH * 2)})"
+    escaped = f"replace({escaped}, {_wdl_string_literal(_DOUBLE_QUOTE)}, {_wdl_string_literal(_BACKSLASH + _DOUBLE_QUOTE)})"
+    escaped = f"replace({escaped}, decodeUriComponent('%0D'), {_wdl_string_literal('')})"
+    escaped = f"replace({escaped}, decodeUriComponent('%0A'), {_wdl_string_literal(_BACKSLASH + 'n')})"
+    return escaped
+
+
 def _json_to_concat_expression(value: dict[str, Any]) -> str:
     """Converte um dict cujas folhas dinâmicas são strings '@{expressao}' numa
     expressão WDL concat(...) que remonta o mesmo JSON em tempo de execução,
-    com os placeholders resolvidos — permite usar o resultado como texto
-    dentro de outra expressão (ex.: um dos ramos de um if())."""
+    com os placeholders resolvidos E devidamente escapados para uso dentro de
+    uma string JSON — permite usar o resultado como texto dentro de outra
+    expressão (ex.: um dos ramos de um if()).
+
+    Bug corrigido aqui: a versão anterior descartava as aspas ao redor do
+    placeholder e emendava o valor bruto (sem aspas, sem escaping) no meio do
+    texto JSON — produzindo JSON inválido sempre que title/content continha
+    travessão, aspas ou quebra de linha (exatamente o payload real que
+    teams-commit-notification.yml envia). Confirmado reproduzindo localmente
+    com json.loads(). Agora as aspas de abertura/fechamento do placeholder
+    ficam como texto literal, e o valor dinâmico entre elas passa por
+    _wdl_escape_json_string antes de ser concatenado."""
     text = json.dumps(value, ensure_ascii=False)
     parts: list[str] = []
     last_end = 0
     for match in _PLACEHOLDER_RE.finditer(text):
-        literal = text[last_end:match.start()]
-        if literal:
-            parts.append(_wdl_string_literal(literal))
-        parts.append(match.group(1))
-        last_end = match.end()
+        literal_before = text[last_end:match.start() + 1]  # inclui a aspa de abertura
+        if literal_before:
+            parts.append(_wdl_string_literal(literal_before))
+        parts.append(_wdl_escape_json_string(match.group(1)))
+        last_end = match.end() - 1  # deixa a aspa de fechamento para o próximo trecho literal
     tail = text[last_end:]
     if tail:
         parts.append(_wdl_string_literal(tail))
