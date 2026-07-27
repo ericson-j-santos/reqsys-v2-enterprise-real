@@ -17,14 +17,20 @@ class ExecutivePromotionAdvisorPublicSmokeWorkflowTests(unittest.TestCase):
         )
 
     def test_only_governed_runtime_environments_are_accepted(self) -> None:
+        self.assertIn("dev|development)", self.workflow)
+        self.assertIn("stg|staging)", self.workflow)
+        self.assertIn("prod|production)", self.workflow)
         self.assertIn(
-            "dev|development|stg|staging|prod|production) ;;",
+            '*) echo "Ambiente não governado: $TARGET_ENVIRONMENT" >&2; exit 1 ;;',
             self.workflow,
         )
-        self.assertNotIn(
-            "dev|development|stg|staging|prod|production|github-pages) ;;",
-            self.workflow,
-        )
+        self.assertNotIn("github-pages)", self.workflow)
+
+    def test_governed_environment_fallback_urls_are_defined(self) -> None:
+        self.assertIn("https://reqsys-app-dev.fly.dev", self.workflow)
+        self.assertIn("https://reqsys-app-stg.fly.dev", self.workflow)
+        self.assertIn("https://reqsys-app.fly.dev", self.workflow)
+        self.assertIn('echo "TARGET_URL=$resolved_url" >> "$GITHUB_ENV"', self.workflow)
 
     def test_manual_dispatch_does_not_offer_github_pages(self) -> None:
         self.assertIn("options: [dev, stg, prod]", self.workflow)
