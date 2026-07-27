@@ -1,4 +1,4 @@
-schema_version: 1.4.0
+schema_version: 1.5.0
 framework:
   name: BACEN minimum cybersecurity controls
   references:
@@ -19,8 +19,13 @@ controls:
     title: Autenticação forte e acesso privilegiado
     criticality: critical
     owner: SECURITY
-    evidence: governance/bacen/ACCESS-CONTROL-POLICY.md
+    evidence: artifacts/bacen/bacen-02-access-control-baseline.json
+    policy: governance/bacen/ACCESS-CONTROL-POLICY.md
+    workflow: .github/workflows/bacen-access-control-baseline.yml
     status: partial
+    evidence_stage: automated_configuration_baseline_pending_mfa_and_access_review_evidence
+    production_touched: false
+    next_stage: integrate_identity_provider_mfa_and_quarterly_access_review_evidence
     review_cycle_days: 90
   - id: BACEN-03
     domain: incidents
