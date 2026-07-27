@@ -1,0 +1,151 @@
+name: Executive Public Smoke Confirmation
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente alvo"
+        required: true
+        type: choice
+        options: [dev, stg, prod]
+      base_url:
+        description: "URL pública base"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: executive-public-smoke-confirmation-${{ github.event.deployment.environment || inputs.environment }}
+  cancel-in-progress: true
+
+jobs:
+  confirm-and-analyze:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'deployment_status' &&
+        github.event.deployment_status.state == 'success' &&
+        github.event.deployment.environment != 'github-pages'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      TARGET_ENVIRONMENT: ${{ github.event.deployment.environment || inputs.environment }}
+      TARGET_URL: ${{ github.event.deployment_status.environment_url || inputs.base_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve governed target
+        run: |
+          set -euo pipefail
+          case "$TARGET_ENVIRONMENT" in
+            dev|development) resolved_url="${TARGET_URL:-https://reqsys-app-dev.fly.dev}" ;;
+            stg|staging) resolved_url="${TARGET_URL:-https://reqsys-app-stg.fly.dev}" ;;
+            prod|production) resolved_url="${TARGET_URL:-https://reqsys-app.fly.dev}" ;;
+            *) echo "Ambiente não governado: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
+          esac
+          echo "TARGET_URL=$resolved_url" >> "$GITHUB_ENV"
+
+      - name: Execute both public smokes
+        run: |
+          set +e
+          python scripts/smoke_executive_final_sync_history_public_smoke_trend.py \
+            --base-url "$TARGET_URL" \
+            --environment "$TARGET_ENVIRONMENT" \
+            --output "artifacts/executive-public-smoke-confirmation/final-sync.json"
+          final_sync_rc=$?
+
+          python scripts/smoke_executive_promotion_advisor_public_url.py \
+            --base-url "$TARGET_URL" \
+            --environment "$TARGET_ENVIRONMENT" \
+            --attempts 3 \
+            --retry-delay 5 \
+            --output "artifacts/executive-public-smoke-confirmation/promotion-advisor.json"
+          advisor_rc=$?
+          set -e
+
+          echo "FINAL_SYNC_RC=$final_sync_rc" >> "$GITHUB_ENV"
+          echo "ADVISOR_RC=$advisor_rc" >> "$GITHUB_ENV"
+
+      - name: Consolidate confirmation and analysis
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+
+          root = Path("artifacts/executive-public-smoke-confirmation")
+          final_sync = json.loads((root / "final-sync.json").read_text(encoding="utf-8"))
+          advisor = json.loads((root / "promotion-advisor.json").read_text(encoding="utf-8"))
+
+          results = {
+              "final_sync": final_sync,
+              "promotion_advisor": advisor,
+          }
+          failed = [name for name, payload in results.items() if payload.get("status") != "passed"]
+          classification = "confirmed" if not failed else "attention_required"
+
+          consolidated = {
+              "schema_version": "1.0.0",
+              "generated_at": datetime.now(UTC).isoformat(),
+              "environment": os.environ["TARGET_ENVIRONMENT"],
+              "base_url": os.environ["TARGET_URL"],
+              "classification": classification,
+              "automatic_blocking": False,
+              "human_review_required": bool(failed),
+              "failed_checks": failed,
+              "technical_return_codes": {
+                  "final_sync": int(os.environ.get("FINAL_SYNC_RC", "1")),
+                  "promotion_advisor": int(os.environ.get("ADVISOR_RC", "1")),
+              },
+              "results": results,
+          }
+          (root / "consolidated-analysis.json").write_text(
+              json.dumps(consolidated, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(consolidated, ensure_ascii=False))
+          PY
+
+      - name: Publish consolidated evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-public-smoke-confirmation-${{ env.TARGET_ENVIRONMENT }}
+          path: artifacts/executive-public-smoke-confirmation
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish executive summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/executive-public-smoke-confirmation/consolidated-analysis.json")
+          print("# Executive Public Smoke Confirmation")
+          if not path.exists():
+              print("\n- Resultado: **falha estrutural — análise não gerada**")
+              raise SystemExit(1)
+
+          data = json.loads(path.read_text(encoding="utf-8"))
+          print(f"\n- Ambiente: `{data['environment']}`")
+          print(f"- URL: `{data['base_url']}`")
+          print(f"- Classificação: **{data['classification']}**")
+          print(f"- Revisão humana necessária: **{data['human_review_required']}**")
+          print(f"- Checks com divergência: `{', '.join(data['failed_checks']) or 'nenhum'}`")
+          print("- Modo: **report-only**")
+          print("- Bloqueio automático: **false**")
+          PY
