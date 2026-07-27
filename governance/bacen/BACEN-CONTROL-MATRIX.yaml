@@ -80,5 +80,10 @@ controls:
     criticality: critical
     owner: GOVERNANCE
     evidence: governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md
-    status: gap
+    designation_record: governance/bacen/EXECUTIVE-DESIGNATION.yaml
+    workflow: .github/workflows/bacen-annual-report-gate.yml
+    status: partial
+    evidence_stage: draft_template_with_real_control_snapshot
+    executive_designation_status: pending_formal_designation
+    next_stage: formal_executive_designation_and_report_signoff
     review_cycle_days: 365
