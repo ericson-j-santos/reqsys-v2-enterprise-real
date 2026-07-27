@@ -97,6 +97,58 @@ class TeamsGraphGatewayAutocontidoTest(unittest.TestCase):
         with self.assertRaises(module.GatewayError):
             module.TeamsGateway(config_sem_arroba).send_webhook("mensagem", "ReqSys", dry_run=True)
 
+    def test_webhook_payload_declara_event_type_padrao_de_commit(self):
+        result = module.TeamsGateway(self.config).send_webhook("commit abc123", "ReqSys", dry_run=True)
+        self.assertEqual(result.response["payload"]["eventType"], "commit-notification")
+
+    def test_webhook_permite_event_type_explicito(self):
+        result = module.TeamsGateway(self.config).send_webhook(
+            "mensagem", "ReqSys", dry_run=True, event_type="canario-semanal"
+        )
+        self.assertEqual(result.response["payload"]["eventType"], "canario-semanal")
+
+    def test_webhook_rejeita_event_type_vazio(self):
+        with self.assertRaises(module.GatewayError) as context:
+            module.TeamsGateway(self.config).send_webhook("mensagem", "ReqSys", dry_run=True, event_type="  ")
+        self.assertIn("event_type", str(context.exception))
+
+    def test_contrato_aceita_resposta_do_flow_real_sem_echo(self):
+        """O robo_envia_teamsv2 hoje responde {ok, to, titleLength, ...},
+        sem ecoar correlationId/eventType — o contrato deve tolerar isso."""
+        module.TeamsGateway._validar_contrato_resposta(
+            {"ok": True, "to": "pessoa@example.invalid", "titleLength": 10},
+            correlation_id="abc-123",
+            event_type="commit-notification",
+        )
+
+    def test_contrato_rejeita_correlation_id_divergente(self):
+        with self.assertRaises(module.GatewayError) as context:
+            module.TeamsGateway._validar_contrato_resposta(
+                {"correlationId": "outro-id"},
+                correlation_id="abc-123",
+                event_type="commit-notification",
+            )
+        self.assertIn("correlationId", str(context.exception))
+
+    def test_contrato_rejeita_event_type_divergente(self):
+        with self.assertRaises(module.GatewayError) as context:
+            module.TeamsGateway._validar_contrato_resposta(
+                {"eventType": "requirement"},
+                correlation_id="abc-123",
+                event_type="commit-notification",
+            )
+        self.assertIn("eventType", str(context.exception))
+
+    def test_webhook_real_com_resposta_divergente_falha_end_to_end(self):
+        class HttpFalsoComRespostaErrada:
+            def request(self, method, url, *, headers=None, payload=None, form=None):
+                return 200, {"correlationId": "id-de-outro-fluxo", "type": "requirement"}
+
+        gateway = module.TeamsGateway(self.config, http=HttpFalsoComRespostaErrada())
+        with self.assertRaises(module.GatewayError) as context:
+            gateway.send_webhook("commit abc123", "ReqSys")
+        self.assertIn("Contrato violado", str(context.exception))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

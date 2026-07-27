@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-07-27
+
+### Corrigido (Teams Gateway · contrato de resposta)
+
+- `tools/geradores/teams_graph_gateway_autocontido.py`: `send_webhook` agora envia `eventType` (padrão `"commit-notification"`) no payload e valida a resposta HTTP do fluxo de destino (`_validar_contrato_resposta`) — rejeita (`GatewayError`) quando a resposta ecoa explicitamente um `correlationId` ou `eventType`/`type` diferentes dos enviados, evitando que um roteamento incorreto no Power Automate (ex.: cartão estático de outro fluxo) seja reportado como sucesso pelo CI. Tolerante quando o fluxo não ecoa esses campos.
+- Diagnóstico investigado nesta correção: o cartão estático "Requisito #482" já havia sido corrigido no fluxo `robo_envia_teamsv2` em sessões anteriores (2026-07-26); um dry-run ao vivo confirmou que o corpo do cartão já está dinâmico. Esta mudança adiciona a proteção de contrato pedida como camada adicional, não uma reaplicação da correção do cartão em si.
+- `docs/servicos/teams-commit-notification.md`: documenta o novo campo `eventType` e o contrato de resposta.
+
 ## [Unreleased] - 2026-07-14
 
 ### Adicionado (Teams Gateway · notificações automáticas)
