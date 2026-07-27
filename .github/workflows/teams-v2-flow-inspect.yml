@@ -1,0 +1,39 @@
+name: Teams v2 Flow Inspect (read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-v2-flow-inspect
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    name: Inspect robo_envia_teamsv2 definition (no writes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: reqsys-power-platform-dev
+    env:
+      POWERPLATFORM_DEV_ENVIRONMENT_URL: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
+      POWERPLATFORM_APP_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      POWERPLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+      POWERPLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run inspection (read-only)
+        run: |
+          python scripts/inspect_teams_v2_flow_condition.py \
+            --environment-url "$POWERPLATFORM_DEV_ENVIRONMENT_URL" \
+            --tenant-id "$POWERPLATFORM_TENANT_ID" \
+            --client-id "$POWERPLATFORM_APP_ID" \
+            --client-secret "$POWERPLATFORM_CLIENT_SECRET"
