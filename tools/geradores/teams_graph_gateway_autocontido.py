@@ -153,10 +153,13 @@ class TeamsGateway:
         title: str,
         dry_run: bool = False,
         adaptive_card: Mapping[str, Any] | None = None,
+        event_type: str = "commit-notification",
     ) -> GatewayResult:
         self._validate_message(message)
         if adaptive_card is not None:
             self._validate_adaptive_card(adaptive_card)
+        if not event_type.strip():
+            raise GatewayError("event_type obrigatório")
         if not self.config.webhook_url:
             raise GatewayError("TEAMS_WEBHOOK_URL não configurado")
         if not self.config.webhook_recipient or "@" not in self.config.webhook_recipient:
@@ -173,6 +176,7 @@ class TeamsGateway:
             "signature": "ReqSys",
             "stampDate": datetime.now(timezone.utc).isoformat(),
             "correlationId": correlation_id,
+            "eventType": event_type,
         }
         if adaptive_card is not None:
             payload["renderMode"] = "adaptive-card"
@@ -186,7 +190,29 @@ class TeamsGateway:
             headers={"X-Correlation-ID": correlation_id},
             payload=payload,
         )
+        self._validar_contrato_resposta(response, correlation_id, event_type)
         return GatewayResult(200 <= status < 300, "webhook", correlation_id, status_code=status, response=response)
+
+    @staticmethod
+    def _validar_contrato_resposta(
+        response: Mapping[str, Any], correlation_id: str, event_type: str
+    ) -> None:
+        """Rejeita respostas que confirmem explicitamente um correlationId ou
+        eventType diferentes dos enviados — sinal de que o fluxo de destino
+        processou/roteou a chamada como um evento diferente (ex.: um cartão
+        estático de outro fluxo, como o de aprovação de requisitos)."""
+        resposta_correlation_id = response.get("correlationId")
+        if isinstance(resposta_correlation_id, str) and resposta_correlation_id != correlation_id:
+            raise GatewayError(
+                f"Contrato violado: resposta confirmou correlationId={resposta_correlation_id!r}, "
+                f"esperado {correlation_id!r}"
+            )
+        resposta_event_type = response.get("eventType") or response.get("type")
+        if isinstance(resposta_event_type, str) and resposta_event_type != event_type:
+            raise GatewayError(
+                f"Contrato violado: resposta confirmou eventType={resposta_event_type!r}, "
+                f"esperado {event_type!r}"
+            )
 
     def _app_token(self) -> str:
         if not self.config.graph_configured:
@@ -288,6 +314,22 @@ def self_test() -> dict[str, Any]:
     result = TeamsGateway(config).send_webhook("teste", "ReqSys", dry_run=True, adaptive_card=card)
     assert result.success and result.route == "webhook"
     assert result.response and result.response["payload"]["renderMode"] == "adaptive-card"
+    assert result.response["payload"]["eventType"] == "commit-notification"
+    try:
+        TeamsGateway._validar_contrato_resposta(
+            {"correlationId": "outro-id"}, correlation_id="123", event_type="commit-notification"
+        )
+        raise AssertionError("correlationId divergente deveria falhar")
+    except GatewayError:
+        pass
+    try:
+        TeamsGateway._validar_contrato_resposta(
+            {"eventType": "requirement"}, correlation_id="123", event_type="commit-notification"
+        )
+        raise AssertionError("eventType divergente deveria falhar")
+    except GatewayError:
+        pass
+    TeamsGateway._validar_contrato_resposta({}, correlation_id="123", event_type="commit-notification")
     try:
         TeamsGateway(config).send_webhook("teste", "ReqSys", dry_run=True, adaptive_card={"type": "MessageCard"})
         raise AssertionError("card inválido deveria falhar")
@@ -305,7 +347,7 @@ def self_test() -> dict[str, Any]:
         raise AssertionError("token vazio deveria falhar")
     except GatewayError:
         pass
-    return {"passed": 7, "status": "ok"}
+    return {"passed": 10, "status": "ok"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -317,6 +359,7 @@ def parser() -> argparse.ArgumentParser:
     webhook.add_argument("--message", required=True)
     webhook.add_argument("--title", default="ReqSys Teams Gateway")
     webhook.add_argument("--adaptive-card-file")
+    webhook.add_argument("--event-type", default="commit-notification")
     webhook.add_argument("--dry-run", action="store_true")
     channel = sub.add_parser("send-channel")
     channel.add_argument("--team-id", required=True)
@@ -341,7 +384,9 @@ def main() -> int:
             result = self_test()
         elif args.command == "send-webhook":
             card = load_adaptive_card(args.adaptive_card_file)
-            result = gateway.send_webhook(args.message, args.title, args.dry_run, adaptive_card=card).as_dict()
+            result = gateway.send_webhook(
+                args.message, args.title, args.dry_run, adaptive_card=card, event_type=args.event_type
+            ).as_dict()
         elif args.command == "send-channel":
             result = gateway.send_channel(args.team_id, args.channel_id, args.message, args.dry_run).as_dict()
         else:
