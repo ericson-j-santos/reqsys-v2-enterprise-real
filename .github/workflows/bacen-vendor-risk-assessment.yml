@@ -73,7 +73,7 @@ jobs:
           name: bacen-05-vendor-risk-assessment
           path: artifacts/bacen/bacen-05-vendor-risk-assessment.json
           if-no-files-found: error
-          retention-days: 365
+          retention-days: 90
 
       - name: Executive summary
         if: always()
