@@ -73,14 +73,20 @@ jobs:
 
       - name: Smoke public Promotion Advisor
         run: |
-          set -euo pipefail
+          set +e
           python scripts/smoke_executive_promotion_advisor_public_url.py \
             --base-url "$TARGET_URL" \
             --environment "$TARGET_ENVIRONMENT" \
             --output "artifacts/executive-promotion-advisor-public-smoke/${TARGET_ENVIRONMENT}.json"
+          smoke_rc=$?
+          set -e
+          if [ "$smoke_rc" -ne 0 ]; then
+            echo "::warning::Promotion Advisor report-only detectou divergência em ${TARGET_ENVIRONMENT}; evidência será publicada para revisão humana."
+          fi
+          echo "SMOKE_RESULT_CODE=$smoke_rc" >> "$GITHUB_ENV"
 
       - name: Publish public smoke evidence
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: executive-promotion-advisor-public-smoke-${{ env.TARGET_ENVIRONMENT }}
@@ -96,6 +102,7 @@ jobs:
             echo ""
             echo "- Ambiente: ${TARGET_ENVIRONMENT}"
             echo "- URL: ${TARGET_URL}"
+            echo "- Resultado técnico: ${SMOKE_RESULT_CODE:-não executado}"
             echo "- Contrato esperado: report-only"
             echo "- Bloqueio automático: proibido"
             echo "- Aprovação humana: obrigatória"
