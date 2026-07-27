@@ -55,11 +55,21 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$TARGET_ENVIRONMENT"
-          test -n "$TARGET_URL"
           case "$TARGET_ENVIRONMENT" in
-            dev|development|stg|staging|prod|production) ;;
+            dev|development)
+              resolved_url="${TARGET_URL:-https://reqsys-app-dev.fly.dev}"
+              ;;
+            stg|staging)
+              resolved_url="${TARGET_URL:-https://reqsys-app-stg.fly.dev}"
+              ;;
+            prod|production)
+              resolved_url="${TARGET_URL:-https://reqsys-app.fly.dev}"
+              ;;
             *) echo "Ambiente não governado: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
           esac
+          test -n "$resolved_url"
+          echo "TARGET_URL=$resolved_url" >> "$GITHUB_ENV"
+          echo "Destino público resolvido: $resolved_url"
 
       - name: Smoke public Promotion Advisor
         run: |
@@ -70,7 +80,7 @@ jobs:
             --output "artifacts/executive-promotion-advisor-public-smoke/${TARGET_ENVIRONMENT}.json"
 
       - name: Publish public smoke evidence
-        if: always()
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: executive-promotion-advisor-public-smoke-${{ env.TARGET_ENVIRONMENT }}
