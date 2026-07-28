@@ -6,6 +6,7 @@ on:
     paths:
       - ".env.example"
       - "governance/bacen/**"
+      - "scripts/generate_bacen_policy_attestation.py"
       - "scripts/generate_bacen_access_control_baseline.py"
       - "scripts/validate_bacen_controls.py"
       - "scripts/generate_bacen_backup_restore_evidence.py"
@@ -18,6 +19,7 @@ on:
     paths:
       - ".env.example"
       - "governance/bacen/**"
+      - "scripts/generate_bacen_policy_attestation.py"
       - "scripts/generate_bacen_access_control_baseline.py"
       - "scripts/validate_bacen_controls.py"
       - "scripts/generate_bacen_backup_restore_evidence.py"
@@ -48,8 +50,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML
+
       - name: Compile scripts
         run: |
+          python -m py_compile scripts/generate_bacen_policy_attestation.py
           python -m py_compile scripts/generate_bacen_access_control_baseline.py
           python -m py_compile scripts/validate_bacen_controls.py
           python -m py_compile scripts/generate_bacen_backup_restore_evidence.py
@@ -66,6 +72,10 @@ jobs:
           GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
+          python scripts/generate_bacen_policy_attestation.py \
+            --policy governance/bacen/CYBERSECURITY-POLICY.md \
+            --metadata governance/bacen/CYBERSECURITY-POLICY-METADATA.yaml \
+            --output artifacts/bacen/bacen-01-policy-governance-attestation.json
           python scripts/generate_bacen_access_control_baseline.py \
             --env-file .env.example \
             --output artifacts/bacen/bacen-02-access-control-baseline.json
