@@ -1,0 +1,25 @@
+schema_version: 1.0.0
+control_id: BACEN-01
+policy_path: governance/bacen/CYBERSECURITY-POLICY.md
+policy_version: 1.0.0
+technical_owner: SECURITY
+operational_owner: RUNTIME_OPERATOR
+approval_status: pending_formal_institutional_approval
+approval_authority: pending_formal_designation
+approval_record: null
+effective_from: '2026-07-28'
+last_technical_review_at: '2026-07-28'
+next_technical_review_due_at: '2027-07-28'
+review_cycle_days: 365
+review_triggers:
+  - relevant_security_incident
+  - regulatory_change
+  - material_architecture_change
+required_sections:
+  - Objetivo
+  - Escopo
+  - Diretrizes mínimas
+  - Governança
+  - Evidências
+production_touched: false
+next_stage: formal_institutional_approval_and_signed_attestation
