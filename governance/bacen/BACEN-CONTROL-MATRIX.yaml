@@ -1,4 +1,4 @@
-schema_version: 1.6.0
+schema_version: 1.7.0
 framework:
   name: BACEN minimum cybersecurity controls
   references:
@@ -99,11 +99,14 @@ controls:
     title: Responsável executivo e relatório anual
     criticality: critical
     owner: GOVERNANCE
-    evidence: governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md
+    evidence: artifacts/bacen/bacen-08-executive-readiness.json
+    report: governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md
     designation_record: governance/bacen/EXECUTIVE-DESIGNATION.yaml
-    workflow: .github/workflows/bacen-annual-report-gate.yml
+    workflow: .github/workflows/bacen-executive-readiness.yml
     status: partial
-    evidence_stage: draft_template_with_real_control_snapshot
+    evidence_stage: automated_executive_readiness_pending_formal_designation_and_report_signoff
     executive_designation_status: pending_formal_designation
-    next_stage: formal_executive_designation_and_report_signoff
+    report_signoff_status: pending_formal_signoff
+    production_touched: false
+    next_stage: formal_executive_designation_and_signed_annual_report
     review_cycle_days: 365

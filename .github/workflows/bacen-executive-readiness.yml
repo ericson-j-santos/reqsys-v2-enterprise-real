@@ -1,0 +1,107 @@
+name: BACEN Executive Readiness Attestation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md"
+      - "governance/bacen/EXECUTIVE-DESIGNATION.yaml"
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+      - "scripts/generate_bacen_executive_readiness.py"
+      - ".github/workflows/bacen-executive-readiness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md"
+      - "governance/bacen/EXECUTIVE-DESIGNATION.yaml"
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+      - "scripts/generate_bacen_executive_readiness.py"
+      - ".github/workflows/bacen-executive-readiness.yml"
+  schedule:
+    - cron: "41 9 28 7 *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-executive-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  attest-readiness:
+    name: BACEN-08 Executive Readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependency
+        run: python -m pip install --disable-pip-version-check PyYAML
+
+      - name: Validate implementation
+        run: python -m py_compile scripts/generate_bacen_executive_readiness.py
+
+      - name: Generate readiness evidence
+        run: |
+          python scripts/generate_bacen_executive_readiness.py \
+            --report governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md \
+            --designation governance/bacen/EXECUTIVE-DESIGNATION.yaml \
+            --output artifacts/bacen/bacen-08-executive-readiness.json
+
+      - name: Validate evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-08-executive-readiness.json")
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          assert evidence["control_id"] == "BACEN-08"
+          assert evidence["technical_readiness_passed"] is True
+          assert evidence["report_structurally_complete"] is True
+          assert evidence["missing_report_sections"] == []
+          assert evidence["control_status"] in {"partial", "implemented"}
+          assert len(evidence["report_sha256"]) == 64
+          assert len(evidence["designation_sha256"]) == 64
+          assert evidence["production_touched"] is False
+          print("BACEN-08 executive readiness evidence: valid")
+          PY
+
+      - name: Publish readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-08-executive-readiness
+          path: artifacts/bacen/bacen-08-executive-readiness.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Publish executive summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-08-executive-readiness.json")
+          print("## BACEN-08 — Prontidão executiva")
+          if not path.exists():
+              print("\n- Evidência não gerada.")
+              raise SystemExit(1)
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          print(f"\n- Prontidão técnica: **{evidence['technical_readiness_passed']}**")
+          print(f"- Designação formal presente: **{evidence['formal_designation_present']}**")
+          print(f"- Sign-off formal do relatório: **{evidence['formal_report_signoff_present']}**")
+          print(f"- Ação humana necessária: **{evidence['human_action_required']}**")
+          print(f"- Status do controle: **{evidence['control_status']}**")
+          print(f"- Findings: `{', '.join(evidence['findings']) or 'nenhum'}`")
+          print("- Modo: **advisory**")
+          print("- Produção acessada: **false**")
+          PY
