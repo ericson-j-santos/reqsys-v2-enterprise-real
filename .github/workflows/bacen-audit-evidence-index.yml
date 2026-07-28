@@ -8,6 +8,7 @@ on:
       - "governance/bacen/**"
       - "scripts/generate_bacen_policy_attestation.py"
       - "scripts/generate_bacen_access_control_baseline.py"
+      - "scripts/generate_bacen_access_review_readiness.py"
       - "scripts/generate_bacen_executive_readiness.py"
       - "scripts/validate_bacen_controls.py"
       - "scripts/generate_bacen_backup_restore_evidence.py"
@@ -22,6 +23,7 @@ on:
       - "governance/bacen/**"
       - "scripts/generate_bacen_policy_attestation.py"
       - "scripts/generate_bacen_access_control_baseline.py"
+      - "scripts/generate_bacen_access_review_readiness.py"
       - "scripts/generate_bacen_executive_readiness.py"
       - "scripts/validate_bacen_controls.py"
       - "scripts/generate_bacen_backup_restore_evidence.py"
@@ -59,6 +61,7 @@ jobs:
         run: |
           python -m py_compile scripts/generate_bacen_policy_attestation.py
           python -m py_compile scripts/generate_bacen_access_control_baseline.py
+          python -m py_compile scripts/generate_bacen_access_review_readiness.py
           python -m py_compile scripts/generate_bacen_executive_readiness.py
           python -m py_compile scripts/validate_bacen_controls.py
           python -m py_compile scripts/generate_bacen_backup_restore_evidence.py
@@ -66,10 +69,6 @@ jobs:
           python -m py_compile scripts/run_bacen_incident_exercise.py
           python -m py_compile scripts/consolidate_bacen_audit_evidence.py
 
-      # Regenera, nesta mesma execução, a evidência não-produtiva de cada controle
-      # técnico que este job consegue reproduzir sem acesso a ambiente STG/PROD.
-      # A evidência real de STG (BACEN-04) é gerada e retida separadamente pelo
-      # workflow "BACEN STG Isolated Restore Test", protegido pelo environment stg.
       - name: Regenerate reproducible control evidence
         env:
           GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -82,6 +81,9 @@ jobs:
           python scripts/generate_bacen_access_control_baseline.py \
             --env-file .env.example \
             --output artifacts/bacen/bacen-02-access-control-baseline.json
+          python scripts/generate_bacen_access_review_readiness.py \
+            --register governance/bacen/ACCESS-REVIEW-REGISTER.yaml \
+            --output artifacts/bacen/bacen-02-access-review-readiness.json
           python scripts/generate_bacen_executive_readiness.py \
             --report governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md \
             --designation governance/bacen/EXECUTIVE-DESIGNATION.yaml \
@@ -105,7 +107,7 @@ jobs:
           name: bacen-audit-evidence-index
           path: artifacts/bacen/
           if-no-files-found: error
-          retention-days: 365
+          retention-days: 90
 
       - name: Append summary
         if: always()
