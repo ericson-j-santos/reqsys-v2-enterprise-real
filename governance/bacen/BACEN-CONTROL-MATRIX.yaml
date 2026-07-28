@@ -1,4 +1,4 @@
-schema_version: 1.5.0
+schema_version: 1.6.0
 framework:
   name: BACEN minimum cybersecurity controls
   references:
@@ -11,8 +11,15 @@ controls:
     title: Política de segurança cibernética
     criticality: critical
     owner: SECURITY
-    evidence: governance/bacen/CYBERSECURITY-POLICY.md
+    evidence: artifacts/bacen/bacen-01-policy-governance-attestation.json
+    policy: governance/bacen/CYBERSECURITY-POLICY.md
+    metadata: governance/bacen/CYBERSECURITY-POLICY-METADATA.yaml
+    workflow: .github/workflows/bacen-policy-governance-attestation.yml
     status: partial
+    evidence_stage: automated_policy_integrity_and_review_attestation_pending_formal_approval
+    approval_status: pending_formal_institutional_approval
+    production_touched: false
+    next_stage: formal_institutional_approval_and_signed_attestation
     review_cycle_days: 365
   - id: BACEN-02
     domain: identity
