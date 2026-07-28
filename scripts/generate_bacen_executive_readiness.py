@@ -10,14 +10,17 @@ from typing import Any
 
 import yaml
 
-REQUIRED_REPORT_SECTIONS = (
-    "Resumo executivo",
-    "Situação dos controles mínimos",
-    "Incidentes de segurança do período",
-    "Avaliação de terceiros e nuvem",
-    "Plano de ação para o próximo ciclo",
-    "Responsável executivo",
-)
+REQUIRED_REPORT_SECTIONS = {
+    "Resumo executivo": ("Resumo executivo",),
+    "Controles mínimos": (
+        "Situação dos controles mínimos",
+        "Panorama dos controles mínimos BACEN",
+    ),
+    "Incidentes de segurança do período": ("Incidentes de segurança do período",),
+    "Avaliação de terceiros e nuvem": ("Avaliação de terceiros e nuvem",),
+    "Plano de ação para o próximo ciclo": ("Plano de ação para o próximo ciclo",),
+    "Responsável executivo": ("Responsável executivo",),
+}
 REQUIRED_DESIGNATION_FIELDS = (
     "executive_name",
     "executive_role",
@@ -34,6 +37,14 @@ def load_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
+def missing_required_sections(report_text: str) -> list[str]:
+    missing: list[str] = []
+    for section_name, accepted_headings in REQUIRED_REPORT_SECTIONS.items():
+        if not any(f"## {heading}" in report_text for heading in accepted_headings):
+            missing.append(section_name)
+    return missing
+
+
 def build_evidence(report_path: Path, designation_path: Path) -> dict[str, Any]:
     report_text = report_path.read_text(encoding="utf-8")
     designation_document = load_yaml(designation_path)
@@ -41,9 +52,7 @@ def build_evidence(report_path: Path, designation_path: Path) -> dict[str, Any]:
     if not isinstance(designation, dict):
         raise ValueError("Bloco designation inválido")
 
-    missing_report_sections = [
-        section for section in REQUIRED_REPORT_SECTIONS if f"## {section}" not in report_text
-    ]
+    missing_report_sections = missing_required_sections(report_text)
     designation_status = str(designation.get("status", "unknown"))
     missing_designation_fields = [
         field for field in REQUIRED_DESIGNATION_FIELDS if not designation.get(field)
@@ -70,7 +79,7 @@ def build_evidence(report_path: Path, designation_path: Path) -> dict[str, Any]:
         findings.append("annual_report_formal_signoff_pending")
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.0.1",
         "control_id": "BACEN-08",
         "generated_at": datetime.now(UTC).isoformat(),
         "report_path": str(report_path),
@@ -79,6 +88,7 @@ def build_evidence(report_path: Path, designation_path: Path) -> dict[str, Any]:
         "designation_sha256": hashlib.sha256(designation_path.read_bytes()).hexdigest(),
         "report_structurally_complete": report_structurally_complete,
         "missing_report_sections": missing_report_sections,
+        "accepted_report_section_headings": REQUIRED_REPORT_SECTIONS,
         "designation_status": designation_status,
         "formal_designation_present": formal_designation_present,
         "missing_designation_fields": missing_designation_fields,
