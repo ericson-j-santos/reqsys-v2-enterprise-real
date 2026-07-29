@@ -112,6 +112,19 @@ def build_evidence(register_path: Path) -> dict[str, Any]:
     }
 
 
+def build_log_summary(evidence: dict[str, Any]) -> dict[str, Any]:
+    """Retorna somente campos operacionais permitidos para logs do CI."""
+    return {
+        "control_id": evidence["control_id"],
+        "control_status": evidence["control_status"],
+        "structural_checks_passed": evidence["structural_checks_passed"],
+        "formal_review_completed": evidence["formal_review_completed"],
+        "mfa_evidenced": evidence["mfa_evidenced"],
+        "review_overdue": evidence["review_overdue"],
+        "findings_count": len(evidence["findings"]),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Gera evidência BACEN-02 de revisão de acessos")
     parser.add_argument("--register", type=Path, required=True)
@@ -124,7 +137,7 @@ def main() -> int:
         json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(json.dumps(evidence, ensure_ascii=False))
+    print(json.dumps(build_log_summary(evidence), ensure_ascii=False))
     return 0 if evidence["structural_checks_passed"] else 1
 
 
