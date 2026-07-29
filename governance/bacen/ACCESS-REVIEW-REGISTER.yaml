@@ -1,0 +1,44 @@
+schema_version: 1.0.0
+control_id: BACEN-02
+mode: advisory
+review_cycle_days: 90
+review_owner: SECURITY
+approval_owner: GOVERNANCE
+scope:
+  environments:
+    - DEV
+    - STG
+    - PROD
+  privileged_roles:
+    - SECURITY
+    - RUNTIME_OPERATOR
+    - GOVERNANCE
+    - PLATFORM_ADMIN
+  review_dimensions:
+    - least_privilege
+    - segregation_of_duties
+    - dormant_access
+    - privileged_access
+    - production_access
+    - service_accounts
+review:
+  status: pending_first_formal_review
+  period_start: null
+  period_end: null
+  reviewed_at: null
+  reviewer: null
+  approval_reference: null
+  identities_reviewed: 0
+  access_removed: 0
+  access_adjusted: 0
+  exceptions_open: 0
+mfa:
+  source: external_identity_provider
+  evidence_status: pending_idp_integration
+  evidence_reference: null
+production_touched: false
+next_stage: integrate_identity_provider_mfa_and_complete_first_formal_quarterly_review
+notes: >
+  Este registro estrutura o processo trimestral, mas não declara revisão humana,
+  MFA ou aprovação concluídas. Campos formais devem ser preenchidos somente a partir
+  de evidência real do provedor de identidade e do processo organizacional.
