@@ -1,0 +1,105 @@
+schema_version: 1.0.0
+control_id: BACEN-05
+mode: advisory
+review_cycle_days: 30
+requirements:
+  required_fields:
+    - data_processing_terms
+    - data_location
+    - subprocessors
+    - portability
+    - termination_and_deletion
+    - legal_signoff
+  implemented_status: formally_approved
+vendors:
+  - id: BACEN-05-T01
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
+  - id: BACEN-05-T02
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
+  - id: BACEN-05-T03
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
+  - id: BACEN-05-T04
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
+  - id: BACEN-05-T05
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
+  - id: BACEN-05-T06
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
+  - id: BACEN-05-T07
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
+  - id: BACEN-05-T08
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
+  - id: BACEN-05-T09
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
+  - id: BACEN-05-T10
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
+  - id: BACEN-05-T11
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
+  - id: BACEN-05-T12
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
+  - id: BACEN-05-T13
+    data_processing_terms: pending_verification
+    data_location: pending_verification
+    subprocessors: pending_verification
+    portability: pending_verification
+    termination_and_deletion: pending_verification
+    legal_signoff: pending
