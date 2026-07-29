@@ -1,0 +1,42 @@
+name: BACEN Annual Report Signoff Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md"
+      - "scripts/generate_bacen_annual_report_signoff_readiness.py"
+      - ".github/workflows/bacen-annual-report-signoff-readiness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md"
+      - "scripts/generate_bacen_annual_report_signoff_readiness.py"
+  schedule:
+    - cron: "31 8 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m py_compile scripts/generate_bacen_annual_report_signoff_readiness.py
+      - run: >-
+          python scripts/generate_bacen_annual_report_signoff_readiness.py
+          --report governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md
+          --output artifacts/bacen/bacen-08-annual-report-signoff-readiness.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-08-annual-report-signoff-readiness
+          path: artifacts/bacen/bacen-08-annual-report-signoff-readiness.json
+          if-no-files-found: error
+          retention-days: 365
