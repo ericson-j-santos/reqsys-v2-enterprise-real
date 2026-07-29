@@ -1,0 +1,61 @@
+name: BACEN DPA Evidence Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml"
+      - "scripts/validate_bacen_dpa_evidence_contract.py"
+      - ".github/workflows/bacen-dpa-evidence-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml"
+      - "scripts/validate_bacen_dpa_evidence_contract.py"
+      - ".github/workflows/bacen-dpa-evidence-contract.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-dpa-evidence-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN-05 DPA Evidence Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check PyYAML
+      - name: Compile validator
+        run: python -m py_compile scripts/validate_bacen_dpa_evidence_contract.py
+      - name: Validate contract
+        run: |
+          python scripts/validate_bacen_dpa_evidence_contract.py \
+            --contract governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml \
+            --output artifacts/bacen/bacen-05-dpa-evidence-contract.json
+      - name: Validate artifact
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-05-dpa-evidence-contract.json").read_text())
+          assert report["control_id"] == "BACEN-05"
+          assert report["result"] == "valid"
+          assert len(report["source_sha256"]) == 64
+          assert report["production_touched"] is False
+          PY
+      - name: Publish artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-05-dpa-evidence-contract
+          path: artifacts/bacen/bacen-05-dpa-evidence-contract.json
+          if-no-files-found: error
+          retention-days: 365

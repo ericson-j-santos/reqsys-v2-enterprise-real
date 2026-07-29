@@ -1,0 +1,30 @@
+schema_version: 1.0.0
+control_id: BACEN-05
+mode: advisory
+privacy:
+  store_document_content: false
+  allowed_reference_schemes:
+    - https
+    - sharepoint
+    - vault
+required_fields:
+  - vendor_id
+  - evidence_status
+  - document_reference
+  - document_sha256
+  - effective_at
+  - expires_at
+  - jurisdiction
+  - legal_approval_status
+  - legal_approval_reference
+allowed_statuses:
+  evidence_status:
+    - pending
+    - validated
+    - expired
+    - rejected
+  legal_approval_status:
+    - pending
+    - approved
+    - rejected
+records: []
