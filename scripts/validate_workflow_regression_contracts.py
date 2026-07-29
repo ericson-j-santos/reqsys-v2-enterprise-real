@@ -31,17 +31,37 @@ def validate_cofre_runtime_gate() -> None:
         fail("STATE_FILE deve permanecer no escopo do job runtime-evidence")
 
 
+def has_completed_workflow_run_trigger(text: str) -> bool:
+    workflow_run = re.search(
+        r"(?ms)^  workflow_run:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|^concurrency:|\Z)",
+        text,
+    )
+    if not workflow_run:
+        return False
+
+    body = workflow_run.group("body")
+    return bool(
+        re.search(r"(?m)^    types:\s*\[\s*completed\s*\]\s*$", body)
+        or re.search(r"(?m)^    types:\s*\n(?:^      - .*\n)*^      - completed\s*$", body)
+    )
+
+
 def validate_pr_evidence_gate() -> None:
     path = ROOT / ".github/workflows/pr-evidence-gate.yml"
     text = path.read_text(encoding="utf-8")
 
-    if "types: [completed]" not in text:
+    if not has_completed_workflow_run_trigger(text):
         fail("PR Evidence Gate deve revalidar após workflow_run completed")
     if "deferred" not in text:
         fail("PR Evidence Gate deve representar timeout transitório como deferred")
     if re.search(r"gate\.failures\.push\(\.\.\.gate\.pending\).*gate\.status\s*=\s*['\"]failed['\"]", text, re.S):
         fail("PR Evidence Gate não pode converter pending em failure por timeout")
-    if "strict_ci_failed" not in text:
+
+    strict_failure_is_blocking = (
+        "strict_ci_failed" in text
+        or "Strict workflow failed on current head SHA:" in text
+    )
+    if not strict_failure_is_blocking:
         fail("Falha real do CI estrito deve continuar bloqueante")
 
 
