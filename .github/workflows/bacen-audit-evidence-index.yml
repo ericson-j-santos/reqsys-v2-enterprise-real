@@ -11,6 +11,7 @@ on:
       - "scripts/generate_bacen_access_review_readiness.py"
       - "scripts/generate_bacen_executive_readiness.py"
       - "scripts/generate_bacen_vendor_dpa_readiness.py"
+      - "scripts/validate_bacen_dpa_evidence_contract.py"
       - "scripts/validate_bacen_controls.py"
       - "scripts/generate_bacen_backup_restore_evidence.py"
       - "scripts/validate_bacen_third_party_register.py"
@@ -27,6 +28,7 @@ on:
       - "scripts/generate_bacen_access_review_readiness.py"
       - "scripts/generate_bacen_executive_readiness.py"
       - "scripts/generate_bacen_vendor_dpa_readiness.py"
+      - "scripts/validate_bacen_dpa_evidence_contract.py"
       - "scripts/validate_bacen_controls.py"
       - "scripts/generate_bacen_backup_restore_evidence.py"
       - "scripts/validate_bacen_third_party_register.py"
@@ -66,6 +68,7 @@ jobs:
           python -m py_compile scripts/generate_bacen_access_review_readiness.py
           python -m py_compile scripts/generate_bacen_executive_readiness.py
           python -m py_compile scripts/generate_bacen_vendor_dpa_readiness.py
+          python -m py_compile scripts/validate_bacen_dpa_evidence_contract.py
           python -m py_compile scripts/validate_bacen_controls.py
           python -m py_compile scripts/generate_bacen_backup_restore_evidence.py
           python -m py_compile scripts/validate_bacen_third_party_register.py
@@ -95,6 +98,9 @@ jobs:
             --register governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml \
             --manifest governance/bacen/VENDOR-DPA-READINESS.yaml \
             --output artifacts/bacen/bacen-05-vendor-dpa-readiness.json
+          python scripts/validate_bacen_dpa_evidence_contract.py \
+            --contract governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml \
+            --output artifacts/bacen/bacen-05-dpa-evidence-contract.json
           python scripts/validate_bacen_controls.py
           python scripts/generate_bacen_backup_restore_evidence.py \
             --environment ci \
