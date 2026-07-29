@@ -1,4 +1,4 @@
-schema_version: 1.11.0
+schema_version: 1.12.0
 framework:
   name: BACEN minimum cybersecurity controls
   references:
@@ -74,20 +74,22 @@ controls:
     title: Gestão de nuvem e terceiros
     criticality: high
     owner: AI_GOVERNOR
-    evidence: artifacts/bacen/bacen-05-vendor-dpa-readiness.json
+    evidence: artifacts/bacen/bacen-05-consolidated-readiness.json
+    dpa_readiness_evidence: artifacts/bacen/bacen-05-vendor-dpa-readiness.json
     dpa_evidence_contract: governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml
     dpa_evidence_contract_artifact: artifacts/bacen/bacen-05-dpa-evidence-contract.json
     risk_assessment_evidence: artifacts/bacen/bacen-05-vendor-risk-assessment.json
     register: governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml
     dpa_manifest: governance/bacen/VENDOR-DPA-READINESS.yaml
-    workflow: .github/workflows/bacen-vendor-dpa-readiness.yml
+    workflow: .github/workflows/bacen-05-consolidated-readiness.yml
+    dpa_readiness_workflow: .github/workflows/bacen-vendor-dpa-readiness.yml
     dpa_evidence_workflow: .github/workflows/bacen-dpa-evidence-contract.yml
     status: partial
-    evidence_stage: automated_vendor_dpa_readiness_and_normalized_evidence_contract_pending_real_documents
+    evidence_stage: consolidated_vendor_risk_dpa_readiness_and_evidence_contract_pending_real_documents
     dpa_status: pending_verified_documents
     legal_signoff_status: pending_formal_signoff
     production_touched: false
-    next_stage: ingest_validated_dpa_references_and_formal_legal_signoff
+    next_stage: ingest_validated_dpa_references_and_complete_formal_legal_signoff
     review_cycle_days: 30
   - id: BACEN-06
     domain: secure_development
