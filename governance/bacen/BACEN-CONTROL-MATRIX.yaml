@@ -1,4 +1,4 @@
-schema_version: 1.9.0
+schema_version: 1.10.0
 framework:
   name: BACEN minimum cybersecurity controls
   references:
@@ -74,13 +74,17 @@ controls:
     title: Gestão de nuvem e terceiros
     criticality: high
     owner: AI_GOVERNOR
-    evidence: artifacts/bacen/bacen-05-vendor-risk-assessment.json
+    evidence: artifacts/bacen/bacen-05-vendor-dpa-readiness.json
+    risk_assessment_evidence: artifacts/bacen/bacen-05-vendor-risk-assessment.json
     register: governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml
-    workflow: .github/workflows/bacen-vendor-risk-assessment.yml
+    dpa_manifest: governance/bacen/VENDOR-DPA-READINESS.yaml
+    workflow: .github/workflows/bacen-vendor-dpa-readiness.yml
     status: partial
-    evidence_stage: formal_automated_vendor_risk_assessment_pending_legal_signoff
+    evidence_stage: automated_vendor_dpa_readiness_pending_verified_documents_and_legal_signoff
+    dpa_status: pending_verified_documents
+    legal_signoff_status: pending_formal_signoff
     production_touched: false
-    next_stage: dpa_and_formal_vendor_signoff
+    next_stage: attach_verified_dpa_evidence_and_formal_legal_signoff
     review_cycle_days: 30
   - id: BACEN-06
     domain: secure_development
