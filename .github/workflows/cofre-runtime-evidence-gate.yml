@@ -40,7 +40,6 @@ concurrency:
 
 env:
   ARTIFACT_DIR: artifacts/cofre-runtime-evidence
-  STATE_FILE: ${{ runner.temp }}/cofre-runtime-state.bin
   CORRELATION_ID: cofre-runtime-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
@@ -88,6 +87,8 @@ jobs:
     timeout-minutes: 20
     environment:
       name: ${{ needs.validate-inputs.outputs.github_environment }}
+    env:
+      STATE_FILE: ${{ runner.temp }}/cofre-runtime-state.bin
     steps:
       - name: Checkout
         uses: actions/checkout@v4
