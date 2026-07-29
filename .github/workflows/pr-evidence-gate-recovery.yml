@@ -1,0 +1,108 @@
+name: PR Evidence Gate Recovery
+
+on:
+  workflow_run:
+    workflows:
+      - CI — ReqSys v2 Enterprise
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      head_sha:
+        description: 'PR head SHA whose failed evidence gate must be recovered'
+        required: true
+        type: string
+
+concurrency:
+  group: pr-evidence-gate-recovery-${{ github.event.workflow_run.head_sha || inputs.head_sha }}
+  cancel-in-progress: true
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  recover-evidence-gate:
+    name: Recover failed PR Evidence Gate
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha || inputs.head_sha }}
+    steps:
+      - name: Reexecutar somente o gate falho mais recente
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const headSha = String(process.env.HEAD_SHA || '').trim();
+
+            if (!headSha) {
+              core.setFailed('HEAD_SHA não foi resolvido.');
+              return;
+            }
+
+            const runs = await github.paginate(
+              github.rest.actions.listWorkflowRunsForRepo,
+              {
+                owner,
+                repo,
+                head_sha: headSha,
+                event: 'pull_request',
+                per_page: 100,
+              },
+            );
+
+            const evidenceRuns = runs
+              .filter((run) => run.name === 'PR Evidence Gate')
+              .sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at)));
+
+            const successfulRun = evidenceRuns.find(
+              (run) => run.status === 'completed' && run.conclusion === 'success',
+            );
+            if (successfulRun) {
+              core.info(`PR Evidence Gate já está verde: ${successfulRun.html_url}`);
+              await core.summary
+                .addHeading('PR Evidence Gate Recovery')
+                .addRaw(`Nenhuma ação necessária. Gate verde para ${headSha}.`)
+                .write();
+              return;
+            }
+
+            const activeRun = evidenceRuns.find((run) => run.status !== 'completed');
+            if (activeRun) {
+              core.info(`PR Evidence Gate já está em execução: ${activeRun.html_url}`);
+              await core.summary
+                .addHeading('PR Evidence Gate Recovery')
+                .addRaw(`Nenhuma nova execução criada. Gate ativo para ${headSha}.`)
+                .write();
+              return;
+            }
+
+            const failedRun = evidenceRuns.find(
+              (run) => run.status === 'completed' && run.conclusion === 'failure',
+            );
+            if (!failedRun) {
+              core.info(`Nenhum PR Evidence Gate falho encontrado para ${headSha}.`);
+              await core.summary
+                .addHeading('PR Evidence Gate Recovery')
+                .addRaw(`Nenhum gate falho encontrado para ${headSha}.`)
+                .write();
+              return;
+            }
+
+            await github.rest.actions.reRunWorkflowFailedJobs({
+              owner,
+              repo,
+              run_id: failedRun.id,
+            });
+
+            core.notice(`Reexecução solicitada para ${failedRun.html_url}`);
+            await core.summary
+              .addHeading('PR Evidence Gate Recovery')
+              .addRaw(`Reexecução dos jobs falhos solicitada para ${failedRun.html_url}.`)
+              .write();
