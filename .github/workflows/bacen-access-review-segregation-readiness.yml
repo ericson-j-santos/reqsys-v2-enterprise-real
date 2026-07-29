@@ -1,0 +1,98 @@
+name: BACEN Access Review Segregation Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/ACCESS-REVIEW-REGISTER.yaml"
+      - "scripts/generate_bacen_access_review_segregation_readiness.py"
+      - ".github/workflows/bacen-access-review-segregation-readiness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/ACCESS-REVIEW-REGISTER.yaml"
+      - "scripts/generate_bacen_access_review_segregation_readiness.py"
+      - ".github/workflows/bacen-access-review-segregation-readiness.yml"
+  schedule:
+    - cron: "29 8 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-access-review-segregation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN-02 Access Review Segregation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML
+
+      - name: Validate implementation
+        run: python -m py_compile scripts/generate_bacen_access_review_segregation_readiness.py
+
+      - name: Generate readiness evidence
+        run: |
+          python scripts/generate_bacen_access_review_segregation_readiness.py \
+            --register governance/bacen/ACCESS-REVIEW-REGISTER.yaml \
+            --output artifacts/bacen/bacen-02-access-review-segregation-readiness.json
+
+      - name: Validate evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-02-access-review-segregation-readiness.json")
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          assert evidence["control_id"] == "BACEN-02"
+          assert evidence["structural_checks_passed"] is True
+          assert evidence["role_segregation_ready"] is True
+          assert evidence["identity_segregation_evidenced"] is False
+          assert evidence["readiness_status"] == "pending"
+          assert evidence["production_touched"] is False
+          assert len(evidence["register_sha256"]) == 64
+          print("BACEN-02 access review segregation evidence: valid")
+          PY
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-02-access-review-segregation-readiness
+          path: artifacts/bacen/bacen-02-access-review-segregation-readiness.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Publish summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-02-access-review-segregation-readiness.json")
+          print("## BACEN-02 — Segregação da revisão de acessos")
+          if not path.exists():
+              print("\n- Evidência não gerada.")
+              raise SystemExit(1)
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          print(f"\n- Segregação de papéis: **{evidence['role_segregation_ready']}**")
+          print(f"- Segregação de identidades evidenciada: **{evidence['identity_segregation_evidenced']}**")
+          print(f"- Integridade estrutural: **{evidence['structural_checks_passed']}**")
+          print(f"- Achados: **{len(evidence['findings'])}**")
+          print("- Produção acessada: **false**")
+          PY
