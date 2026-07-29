@@ -1,0 +1,58 @@
+name: BACEN Third-Party Config Source Integrity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".env.example"
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/validate_bacen_third_party_config_sources.py"
+      - "tests/test_validate_bacen_third_party_config_sources.py"
+      - ".github/workflows/bacen-third-party-config-source-integrity.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".env.example"
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/validate_bacen_third_party_config_sources.py"
+      - "tests/test_validate_bacen_third_party_config_sources.py"
+      - ".github/workflows/bacen-third-party-config-source-integrity.yml"
+  schedule:
+    - cron: "29 5 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-third-party-config-source-integrity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check PyYAML pytest
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/validate_bacen_third_party_config_sources.py
+          python -m py_compile tests/test_validate_bacen_third_party_config_sources.py
+          python -m pytest tests/test_validate_bacen_third_party_config_sources.py -q
+      - name: Validate real register
+        run: |
+          python scripts/validate_bacen_third_party_config_sources.py \
+            --register governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml \
+            --env-file .env.example \
+            --output artifacts/bacen/bacen-05-config-source-integrity.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-05-config-source-integrity
+          path: artifacts/bacen/bacen-05-config-source-integrity.json
+          if-no-files-found: error
+          retention-days: 365
