@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "control_id": "BACEN-02",
+  "provider": "external_identity_provider",
+  "environment": "STG",
+  "evidence_status": "pending_integration",
+  "collected_at": null,
+  "period_start": null,
+  "period_end": null,
+  "mfa_enforced": null,
+  "privileged_identities_total": 0,
+  "privileged_identities_with_mfa": 0,
+  "evidence_reference": null,
+  "source_system": null,
+  "production_touched": false,
+  "notes": "Contrato estrutural. Não declara MFA evidenciado sem dados reais do provedor de identidade."
+}
