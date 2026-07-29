@@ -85,18 +85,6 @@ def validate(document: dict[str, Any], source_path: Path) -> dict[str, Any]:
     }
 
 
-def build_log_summary(result: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "control_id": result["control_id"],
-        "environment": result["environment"],
-        "evidence_status": result["evidence_status"],
-        "normalized_mfa_status": result["normalized_mfa_status"],
-        "mfa_evidenced": result["mfa_evidenced"],
-        "structural_checks_passed": result["structural_checks_passed"],
-        "findings_count": len(result["findings"]),
-    }
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Valida evidência MFA externa do BACEN-02")
     parser.add_argument("--input", type=Path, required=True)
@@ -109,7 +97,7 @@ def main() -> int:
         json.dumps(result, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(json.dumps(build_log_summary(result), ensure_ascii=False))
+    print("BACEN-02 IdP MFA evidence validation completed")
     return 0 if result["structural_checks_passed"] else 1
 
 
