@@ -1,0 +1,108 @@
+name: BACEN-02 Consolidated Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/ACCESS-REVIEW-REGISTER.yaml"
+      - "governance/bacen/IDP-MFA-EVIDENCE-CONTRACT.json"
+      - "scripts/generate_bacen_access_review_readiness.py"
+      - "scripts/validate_bacen_idp_mfa_evidence.py"
+      - "scripts/consolidate_bacen_02_access_mfa_readiness.py"
+      - ".github/workflows/bacen-02-consolidated-readiness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/ACCESS-REVIEW-REGISTER.yaml"
+      - "governance/bacen/IDP-MFA-EVIDENCE-CONTRACT.json"
+      - "scripts/generate_bacen_access_review_readiness.py"
+      - "scripts/validate_bacen_idp_mfa_evidence.py"
+      - "scripts/consolidate_bacen_02_access_mfa_readiness.py"
+      - ".github/workflows/bacen-02-consolidated-readiness.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-02-consolidated-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  consolidate:
+    name: Consolidate BACEN-02 access and MFA readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependency
+        run: python -m pip install --disable-pip-version-check PyYAML
+
+      - name: Compile validators
+        run: |
+          python -m py_compile scripts/generate_bacen_access_review_readiness.py
+          python -m py_compile scripts/validate_bacen_idp_mfa_evidence.py
+          python -m py_compile scripts/consolidate_bacen_02_access_mfa_readiness.py
+
+      - name: Generate access review readiness
+        run: |
+          python scripts/generate_bacen_access_review_readiness.py \
+            --register governance/bacen/ACCESS-REVIEW-REGISTER.yaml \
+            --output artifacts/bacen/bacen-02-access-review-readiness.json
+
+      - name: Validate MFA evidence contract
+        run: |
+          python scripts/validate_bacen_idp_mfa_evidence.py \
+            --input governance/bacen/IDP-MFA-EVIDENCE-CONTRACT.json \
+            --output artifacts/bacen/bacen-02-idp-mfa-evidence.json
+
+      - name: Consolidate BACEN-02 readiness
+        run: |
+          python scripts/consolidate_bacen_02_access_mfa_readiness.py \
+            --access-review artifacts/bacen/bacen-02-access-review-readiness.json \
+            --mfa-evidence artifacts/bacen/bacen-02-idp-mfa-evidence.json \
+            --output artifacts/bacen/bacen-02-consolidated-readiness.json
+
+      - name: Validate consolidated contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          evidence = json.loads(
+              Path("artifacts/bacen/bacen-02-consolidated-readiness.json").read_text(encoding="utf-8")
+          )
+          assert evidence["control_id"] == "BACEN-02"
+          assert evidence["structural_checks_passed"] is True
+          assert evidence["control_status"] in {"partial", "implemented"}
+          assert evidence["production_touched"] is False
+          assert evidence["automatic_blocking"] is False
+          assert len(evidence["sources"]["access_review"]["sha256"]) == 64
+          assert len(evidence["sources"]["mfa_evidence"]["sha256"]) == 64
+          print("BACEN-02 consolidated contract valid")
+          PY
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-02-consolidated-readiness
+          path: artifacts/bacen/bacen-02-consolidated-readiness.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish summary
+        if: always()
+        run: |
+          echo "## BACEN-02 — Prontidão consolidada" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Evidência consolidada publicada como artifact." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Produção acessada: **false**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dados externos não são emitidos no log." >> "$GITHUB_STEP_SUMMARY"
