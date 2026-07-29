@@ -10,6 +10,7 @@ on:
       - "scripts/generate_bacen_access_control_baseline.py"
       - "scripts/generate_bacen_access_review_readiness.py"
       - "scripts/generate_bacen_executive_readiness.py"
+      - "scripts/generate_bacen_vendor_dpa_readiness.py"
       - "scripts/validate_bacen_controls.py"
       - "scripts/generate_bacen_backup_restore_evidence.py"
       - "scripts/validate_bacen_third_party_register.py"
@@ -25,6 +26,7 @@ on:
       - "scripts/generate_bacen_access_control_baseline.py"
       - "scripts/generate_bacen_access_review_readiness.py"
       - "scripts/generate_bacen_executive_readiness.py"
+      - "scripts/generate_bacen_vendor_dpa_readiness.py"
       - "scripts/validate_bacen_controls.py"
       - "scripts/generate_bacen_backup_restore_evidence.py"
       - "scripts/validate_bacen_third_party_register.py"
@@ -63,6 +65,7 @@ jobs:
           python -m py_compile scripts/generate_bacen_access_control_baseline.py
           python -m py_compile scripts/generate_bacen_access_review_readiness.py
           python -m py_compile scripts/generate_bacen_executive_readiness.py
+          python -m py_compile scripts/generate_bacen_vendor_dpa_readiness.py
           python -m py_compile scripts/validate_bacen_controls.py
           python -m py_compile scripts/generate_bacen_backup_restore_evidence.py
           python -m py_compile scripts/validate_bacen_third_party_register.py
@@ -88,6 +91,10 @@ jobs:
             --report governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md \
             --designation governance/bacen/EXECUTIVE-DESIGNATION.yaml \
             --output artifacts/bacen/bacen-08-executive-readiness.json
+          python scripts/generate_bacen_vendor_dpa_readiness.py \
+            --register governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml \
+            --manifest governance/bacen/VENDOR-DPA-READINESS.yaml \
+            --output artifacts/bacen/bacen-05-vendor-dpa-readiness.json
           python scripts/validate_bacen_controls.py
           python scripts/generate_bacen_backup_restore_evidence.py \
             --environment ci \
