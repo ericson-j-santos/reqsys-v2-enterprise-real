@@ -1,0 +1,17 @@
+schema_version: 1.0.0
+control_id: BACEN-02
+mode: advisory
+primary_evidence: artifacts/bacen/bacen-02-consolidated-readiness.json
+source_evidence:
+  access_review: artifacts/bacen/bacen-02-access-review-readiness.json
+  mfa: artifacts/bacen/bacen-02-idp-mfa-evidence.json
+  baseline: artifacts/bacen/bacen-02-access-control-baseline.json
+workflow: .github/workflows/bacen-02-consolidated-readiness.yml
+status: partial
+status_rule: implemented_only_when_formal_review_and_validated_mfa_are_both_evidenced
+production_touched: false
+automatic_blocking_scope:
+  - structural_contract_failure
+  - invalid_control_id
+  - inconsistent_source_status
+next_stage: complete_formal_quarterly_review_and_ingest_validated_idp_mfa_evidence
