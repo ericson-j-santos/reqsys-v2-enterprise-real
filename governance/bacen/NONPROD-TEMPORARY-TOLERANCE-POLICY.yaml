@@ -1,9 +1,14 @@
-schema_version: 1.0.0
+schema_version: 1.1.0
 mode: temporary_nonprod_tolerance
 purpose: >
   Permitir continuidade temporária de PR, DEV e STG quando controles BACEN estiverem
   parciais exclusivamente por ações humanas ou evidências reais pendentes, preservando
   o estado regulatório original e bloqueando promoção para produção.
+activation:
+  valid_from: 2026-07-30
+  valid_until: 2026-08-29
+  review_owner_role: GOVERNANCE
+  renewal_requires_explicit_policy_change: true
 allowed_scopes:
   - pull_request
   - dev
