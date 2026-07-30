@@ -1,0 +1,157 @@
+name: BACEN Production Hard Gate
+
+on:
+  workflow_call:
+    inputs:
+      enforce:
+        description: Fail the caller while production is not formally allowed
+        required: false
+        type: boolean
+        default: true
+  workflow_dispatch:
+    inputs:
+      enforce:
+        description: Fail while production is not formally allowed
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-production-hard-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: BACEN production authorization
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    outputs:
+      production_allowed: ${{ steps.contract.outputs.production_allowed }}
+      decision: ${{ steps.contract.outputs.decision }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install focused dependency
+        run: python -m pip install --disable-pip-version-check PyYAML
+
+      - name: Validate gate implementation
+        run: python -m py_compile scripts/generate_bacen_nonprod_tolerance_decision.py
+
+      - name: Generate production decision
+        id: decision
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts/bacen-production-hard-gate
+          python scripts/generate_bacen_nonprod_tolerance_decision.py \
+            --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
+            --policy governance/bacen/NONPROD-TEMPORARY-TOLERANCE-POLICY.yaml \
+            --scope prod \
+            --output artifacts/bacen-production-hard-gate/decision.json
+
+      - name: Validate evidence contract
+        id: contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("artifacts/bacen-production-hard-gate/decision.json")
+          if not path.exists():
+              raise SystemExit("BACEN production decision artifact was not generated")
+
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          required = {
+              "scope": "prod",
+              "mode": "temporary_nonprod_tolerance",
+              "preserved_control_status": True,
+              "production_touched": False,
+          }
+          for field, expected in required.items():
+              if evidence.get(field) != expected:
+                  raise SystemExit(
+                      f"Invalid BACEN production contract: {field}={evidence.get(field)!r}"
+                  )
+
+          allowed = (
+              evidence.get("decision") == "allow"
+              and evidence.get("automatic_blocking") is False
+              and evidence.get("production_deployment_allowed") is True
+              and not evidence.get("blocking_controls")
+              and not evidence.get("structural_findings")
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"production_allowed={str(allowed).lower()}\n")
+              output.write(f"decision={evidence.get('decision', 'unknown')}\n")
+          print(json.dumps({
+              "production_allowed": allowed,
+              "decision": evidence.get("decision"),
+              "blocking_controls": evidence.get("blocking_controls") or [],
+          }, ensure_ascii=False))
+          PY
+
+      - name: Publish gate summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          print("## BACEN Production Hard Gate")
+          path = Path("artifacts/bacen-production-hard-gate/decision.json")
+          if not path.exists():
+              print("\n- Decision artifact: **missing**")
+              raise SystemExit(0)
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          print(f"\n- Decision: **{evidence.get('decision')}**")
+          print(f"- Production allowed: **{str(evidence.get('production_deployment_allowed') is True).lower()}**")
+          print(f"- Blocking controls: **{len(evidence.get('blocking_controls') or [])}**")
+          print(f"- Structural findings: **{len(evidence.get('structural_findings') or [])}**")
+          print("- Status regulatório preservado: **true**")
+          print("- Produção acessada: **false**")
+          PY
+
+      - name: Publish production decision
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-production-hard-gate-${{ github.run_id }}
+          path: artifacts/bacen-production-hard-gate/decision.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Enforce production authorization
+        if: always() && inputs.enforce
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          evidence = json.loads(
+              Path("artifacts/bacen-production-hard-gate/decision.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          allowed = (
+              evidence.get("decision") == "allow"
+              and evidence.get("automatic_blocking") is False
+              and evidence.get("production_deployment_allowed") is True
+              and not evidence.get("blocking_controls")
+              and not evidence.get("structural_findings")
+          )
+          if not allowed:
+              raise SystemExit(
+                  "Production blocked by BACEN controls: "
+                  + ",".join(evidence.get("blocking_controls") or [])
+              )
+          PY
