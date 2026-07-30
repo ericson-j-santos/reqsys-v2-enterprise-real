@@ -10,7 +10,10 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
-from scripts.notificar_teams import DEFAULT_BASE_URL, enviar_mensagem
+try:
+    from scripts.notificar_teams import DEFAULT_BASE_URL, enviar_mensagem
+except ModuleNotFoundError:  # Direct execution: python scripts/notify_hitl_approval_teams.py
+    from notificar_teams import DEFAULT_BASE_URL, enviar_mensagem
 
 
 def _github_url(value: str, field: str) -> str:
