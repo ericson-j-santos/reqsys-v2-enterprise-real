@@ -1,3 +1,4 @@
+# REQSYS_PRODUCTION_GOVERNANCE_GATE
 name: Deploy Production Sync
 
 on:
@@ -37,6 +38,10 @@ jobs:
   gate:
     name: Gate publicação produção
     runs-on: ubuntu-latest
+    timeout-minutes: 8
+    outputs:
+      production_allowed: ${{ steps.authorization.outputs.production_allowed }}
+      decision: ${{ steps.authorization.outputs.decision }}
     steps:
       - name: Exigir confirmação textual em produção
         if: github.event_name == 'workflow_dispatch'
@@ -46,11 +51,84 @@ jobs:
             exit 1
           fi
 
+      - name: Checkout sem secrets
+        uses: actions/checkout@v4
+
+      - name: Preparar Python sem ambiente produtivo
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependência focada
+        run: python -m pip install --disable-pip-version-check PyYAML
+
+      - name: Gerar decisão BACEN de produção
+        id: bacen
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts/bacen-production-hard-gate
+          python scripts/generate_bacen_nonprod_tolerance_decision.py \
+            --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
+            --policy governance/bacen/NONPROD-TEMPORARY-TOLERANCE-POLICY.yaml \
+            --scope prod \
+            --output artifacts/bacen-production-hard-gate/deploy-production-sync-decision.json
+
+      - name: Resolver autorização de produção
+        id: authorization
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("artifacts/bacen-production-hard-gate/deploy-production-sync-decision.json")
+          evidence = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+          allowed = (
+              evidence.get("scope") == "prod"
+              and evidence.get("decision") == "allow"
+              and evidence.get("automatic_blocking") is False
+              and evidence.get("production_deployment_allowed") is True
+              and not evidence.get("blocking_controls")
+              and not evidence.get("structural_findings")
+              and evidence.get("production_touched") is False
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"production_allowed={str(allowed).lower()}\n")
+              output.write(f"decision={evidence.get('decision', 'missing')}\n")
+          print(json.dumps({
+              "production_allowed": allowed,
+              "decision": evidence.get("decision", "missing"),
+              "blocking_controls": evidence.get("blocking_controls") or [],
+          }, ensure_ascii=False))
+          PY
+
+      - name: Publicar decisão BACEN
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-production-hard-gate-deploy-sync
+          path: artifacts/bacen-production-hard-gate/deploy-production-sync-decision.json
+          if-no-files-found: warn
+          retention-days: 365
+
+      - name: Falhar solicitação manual não autorizada
+        if: >-
+          always() &&
+          github.event_name == 'workflow_dispatch' &&
+          steps.authorization.outputs.production_allowed != 'true'
+        run: |
+          echo "Produção bloqueada pelo gate BACEN: ${{ steps.authorization.outputs.decision }}" >&2
+          exit 1
+
   pre-sync-check:
     name: Diagnóstico pré-sync (read-only)
     runs-on: ubuntu-latest
     needs: gate
-    if: always() && needs.gate.result == 'success'
+    if: >-
+      always() &&
+      needs.gate.result == 'success' &&
+      needs.gate.outputs.production_allowed == 'true'
     outputs:
       prod_synced: ${{ steps.check.outputs.prod_synced }}
     steps:
@@ -88,6 +166,7 @@ jobs:
     if: >-
       always() &&
       needs.gate.result == 'success' &&
+      needs.gate.outputs.production_allowed == 'true' &&
       needs.pre-sync-check.result == 'success' &&
       (
         github.event_name == 'workflow_dispatch' ||
@@ -114,6 +193,7 @@ jobs:
     if: >-
       always() &&
       needs.gate.result == 'success' &&
+      needs.gate.outputs.production_allowed == 'true' &&
       needs.pre-sync-check.result == 'success' &&
       needs.validate-runtime.result == 'success' &&
       (
@@ -167,6 +247,7 @@ jobs:
     if: >-
       always() &&
       needs.gate.result == 'success' &&
+      needs.gate.outputs.production_allowed == 'true' &&
       needs.pre-sync-check.result == 'success' &&
       needs.validate-runtime.result == 'success' &&
       needs.configure-prod-secrets.result == 'success' &&
@@ -215,6 +296,7 @@ jobs:
     if: >-
       always() &&
       needs.gate.result == 'success' &&
+      needs.gate.outputs.production_allowed == 'true' &&
       needs.pre-sync-check.result == 'success' &&
       needs.validate-runtime.result == 'success' &&
       (
@@ -297,7 +379,7 @@ jobs:
   summary:
     name: Resumo publicação
     runs-on: ubuntu-latest
-    needs: [pre-sync-check, validate-runtime, configure-prod-secrets, deploy-backend, deploy-frontend, post-sync-check]
+    needs: [gate, pre-sync-check, validate-runtime, configure-prod-secrets, deploy-backend, deploy-frontend, post-sync-check]
     if: always()
     steps:
       - name: Resumo
@@ -306,8 +388,10 @@ jobs:
             echo "## Deploy Production Sync"
             echo "- Correlation ID: \`$CORRELATION_ID\`"
             echo "- SHA alvo: \`${{ github.sha }}\`"
+            echo "- Produção autorizada: \`${{ needs.gate.outputs.production_allowed || 'false' }}\`"
             echo "| Job | Resultado |"
             echo "|---|---|"
+            echo "| Gate BACEN | ${{ needs.gate.result || 'skipped' }} (${{ needs.gate.outputs.decision || 'missing' }}) |"
             echo "| Pré-sync | ${{ needs.pre-sync-check.result || 'skipped' }} (prod_synced=${{ needs.pre-sync-check.outputs.prod_synced || 'n/a' }}) |"
             echo "| Validate runtime | ${{ needs.validate-runtime.result || 'skipped' }} |"
             echo "| Configure secrets | ${{ needs.configure-prod-secrets.result || 'skipped' }} |"
@@ -317,11 +401,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/checkout@v4
+        if: needs.gate.outputs.production_allowed == 'true'
       - uses: actions/setup-python@v5
+        if: needs.gate.outputs.production_allowed == 'true'
         with:
           python-version: "3.12"
 
       - name: Notificar Teams (ambiente produção)
+        if: needs.gate.outputs.production_allowed == 'true'
         continue-on-error: true
         env:
           TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
@@ -349,7 +436,7 @@ jobs:
             --output notify-teams-deploy-producao.json
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && needs.gate.outputs.production_allowed == 'true'
         with:
           name: notify-teams-deploy-producao
           path: notify-teams-deploy-producao.json
