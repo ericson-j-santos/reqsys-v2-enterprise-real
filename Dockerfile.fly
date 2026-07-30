@@ -20,6 +20,7 @@ COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY backend/app /app/app
+COPY governance/notifications/teams-recipient-policies.json /app/governance/notifications/teams-recipient-policies.json
 COPY config/external-sources-registry.json /config/external-sources-registry.json
 COPY scripts/fly_boot.sh /app/fly_boot.sh
 
