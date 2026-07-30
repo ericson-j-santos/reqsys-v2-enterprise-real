@@ -113,6 +113,54 @@ jobs:
       - name: Consolidate audit evidence index
         run: python scripts/consolidate_bacen_audit_evidence.py
 
+      - name: Validate BACEN-01 audit index contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          evidence_path = Path("artifacts/bacen/bacen-01-policy-governance-attestation.json")
+          index_path = Path("artifacts/bacen/bacen-07-audit-evidence-index.json")
+
+          evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+          index_report = json.loads(index_path.read_text(encoding="utf-8"))
+          summary = index_report.get("summary", {})
+          entries = index_report.get("entries", [])
+
+          def require(condition: bool, message: str) -> None:
+              if not condition:
+                  raise SystemExit(message)
+
+          require(evidence.get("control_id") == "BACEN-01", "BACEN-01: control_id inválido")
+          require(
+              evidence.get("control_status") == "partial",
+              "BACEN-01: control_status deve permanecer partial sem aprovação institucional",
+          )
+          require(
+              evidence.get("formal_approval_present") is False,
+              "BACEN-01: formal_approval_present deve permanecer false sem aprovação institucional",
+          )
+          require(
+              any(
+                  entry.get("control_id") == "BACEN-01"
+                  and entry.get("path")
+                  == "artifacts/bacen/bacen-01-policy-governance-attestation.json"
+                  for entry in entries
+              ),
+              "BACEN-01: atestação não foi indexada no BACEN-07",
+          )
+          require(
+              "BACEN-01" in summary.get("controls_covered", []),
+              "BACEN-01: controle não consta como coberto no índice",
+          )
+          require(
+              "BACEN-01" not in summary.get("controls_uncovered", []),
+              "BACEN-01: controle consta indevidamente como não coberto",
+          )
+          require(index_report.get("result") == "valid", "BACEN-07: índice consolidado inválido")
+          print("BACEN-01 audit index contract: valid")
+          PY
+
       - name: Publish evidence
         if: always()
         uses: actions/upload-artifact@v4
