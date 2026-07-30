@@ -6,11 +6,19 @@ on:
     paths:
       - ".github/workflows/reqsys-hitl-approval.yml"
       - "scripts/build_hitl_approval_decision.py"
+      - "scripts/notificar_teams.py"
       - "scripts/notify_hitl_approval_teams.py"
       - "scripts/notify_hitl_approval_email.py"
       - "tests/test_build_hitl_approval_decision.py"
       - "tests/test_notify_hitl_approval_teams.py"
       - "tests/test_notify_hitl_approval_email.py"
+      - "backend/app/api/teams_gateway.py"
+      - "backend/app/models/__init__.py"
+      - "backend/app/models/teams_notification_recipient.py"
+      - "backend/app/schemas/teams_recipient_policy.py"
+      - "backend/app/services/teams_recipient_policy.py"
+      - "backend/tests/test_teams_recipient_policy.py"
+      - "backend/alembic/versions/9b6c4d1e7a2f_teams_notification_recipients.py"
       - "docs/contracts/reqsys-hitl-approval.md"
   workflow_dispatch:
     inputs:
@@ -74,29 +82,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
+      HITL_RECIPIENT_POLICY: hitl-approvers
+      HITL_DELIVERY_MODE: all
       TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Record Teams destination configuration
-        id: teams-config
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/hitl
-          if [[ -n "${TEAMS_GATEWAY_DESTINO_ID:-}" ]]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-            printf '%s\n' '{"channel":"teams","configured":true,"status":"ready"}' \
-              > artifacts/hitl/teams-configuration.json
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::TEAMS_GATEWAY_DESTINO_ID nao configurado; notificacao Teams ignorada e pacote de e-mail preservado"
-            printf '%s\n' '{"channel":"teams","configured":false,"status":"skipped","reason":"TEAMS_GATEWAY_DESTINO_ID_not_configured"}' \
-              > artifacts/hitl/teams-configuration.json
-          fi
-      - name: Send approval request to Teams
-        if: steps.teams-config.outputs.configured == 'true'
+      - name: Send approval request through dynamic Teams policy
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -109,9 +103,10 @@ jobs:
             --summary "Revisar a infraestrutura de aprovacao humana autenticada, notificacao Teams/e-mail e trilha SHA-256." \
             --request-url "$PR_URL" \
             --evidence-url "${PR_URL}/files" \
-            --destination-type chat \
-            --output artifacts/hitl/teams-pr-notification.json \
-            --strict
+            --recipient-policy "$HITL_RECIPIENT_POLICY" \
+            --delivery-mode "$HITL_DELIVERY_MODE" \
+            --destination-type auto \
+            --output artifacts/hitl/teams-pr-notification.json
       - name: Build approval e-mail package
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -201,8 +196,10 @@ jobs:
             --label hitl-approval-request)"
           echo "issue_url=$issue_url" >> "$GITHUB_OUTPUT"
           echo "issue_number=${issue_url##*/}" >> "$GITHUB_OUTPUT"
-      - name: Notify Teams
+      - name: Notify Teams through dynamic recipient policy
         env:
+          HITL_RECIPIENT_POLICY: hitl-approvers
+          HITL_DELIVERY_MODE: all
           TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
           REQUEST_TITLE: ${{ inputs.request_title }}
           CONTROL_ID: ${{ inputs.control_id }}
@@ -217,9 +214,10 @@ jobs:
             --summary "$REQUEST_SUMMARY" \
             --request-url "$REQUEST_URL" \
             --evidence-url "$EVIDENCE_URL" \
-            --destination-type chat \
-            --output artifacts/hitl/teams-notification.json \
-            --strict
+            --recipient-policy "$HITL_RECIPIENT_POLICY" \
+            --delivery-mode "$HITL_DELIVERY_MODE" \
+            --destination-type auto \
+            --output artifacts/hitl/teams-notification.json
       - name: Notify e-mail when SMTP is configured
         env:
           HITL_EMAIL_FROM: ${{ secrets.HITL_EMAIL_FROM }}
@@ -261,13 +259,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
+      HITL_RECIPIENT_POLICY: hitl-approvers
+      HITL_DELIVERY_MODE: all
       TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Resend Teams notification
+      - name: Resend Teams notification through dynamic recipient policy
         env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
@@ -280,9 +280,10 @@ jobs:
             --summary "Solicitacao HITL aberta ou reaberta; consulte a issue para escopo, riscos e evidencias." \
             --request-url "$ISSUE_URL" \
             --evidence-url "$ISSUE_URL" \
-            --destination-type chat \
-            --output artifacts/hitl/teams-notification.json \
-            --strict
+            --recipient-policy "$HITL_RECIPIENT_POLICY" \
+            --delivery-mode "$HITL_DELIVERY_MODE" \
+            --destination-type auto \
+            --output artifacts/hitl/teams-notification.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
