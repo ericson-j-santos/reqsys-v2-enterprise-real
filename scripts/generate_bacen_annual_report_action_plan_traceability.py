@@ -112,7 +112,6 @@ def build_report(report_path: Path, matrix_path: Path) -> dict[str, Any]:
     if section is None:
         findings.append("action_plan_section_missing")
         block = None
-        unbalanced_markers = False
     else:
         block, unbalanced_markers = extract_marker_block(section)
         if unbalanced_markers:
