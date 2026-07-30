@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """Envia notificacoes ao Teams via o Teams Messaging Gateway do ReqSys.
 
-Usado pela automacao de CI para avisar sobre mudancas no repositorio (push/commit
-em main) e sobre o resultado de deploys/sincronizacao de ambientes. Nao decide o
-canal aqui: delega ao gateway (POST /v1/teams-gateway/messages, modo=auto por
-padrao) a escolha de rota e o fallback, que ja tem retry/circuit breaker no lado
-do servidor (ADR-010). Falha de entrega nao derruba o build por padrao — use
---strict para propagar o erro quando isso for desejado.
+Destinos individuais podem ser informados diretamente para compatibilidade.
+Para operacao normal, use recipient_policy: o gateway resolve destinatarios
+ativos no banco, sem exigir alteracao de secrets quando a equipe mudar.
 """
 
 from __future__ import annotations
@@ -18,6 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 DEFAULT_BASE_URL = "https://reqsys-api.fly.dev"
@@ -35,6 +33,8 @@ def enviar_mensagem(
     permitir_fallback: bool,
     dry_run: bool,
     timeout: float,
+    recipient_policy: str | None = None,
+    delivery_mode: str = "all",
 ) -> dict[str, Any]:
     payload = {
         "destino_tipo": destino_tipo,
@@ -46,12 +46,19 @@ def enviar_mensagem(
         "dry_run": dry_run,
         "metadata": {"titulo": titulo, "assinatura": "ReqSys"},
     }
+    policy = (recipient_policy or "").strip()
+    if policy:
+        payload["delivery_mode"] = delivery_mode
+        endpoint = f"/v1/teams-gateway/recipient-policies/{quote(policy, safe='')}/messages"
+    else:
+        endpoint = "/v1/teams-gateway/messages"
+
     body = json.dumps(payload).encode("utf-8")
     request = Request(
-        f"{base_url.rstrip('/')}/v1/teams-gateway/messages",
+        f"{base_url.rstrip('/')}{endpoint}",
         data=body,
         method="POST",
-        headers={"Content-Type": "application/json", "User-Agent": "reqsys-notificar-teams/1.0"},
+        headers={"Content-Type": "application/json", "User-Agent": "reqsys-notificar-teams/1.1"},
     )
     try:
         with urlopen(request, timeout=timeout) as response:
@@ -88,6 +95,12 @@ def main() -> int:
         choices=["auto", "chat", "chat_1a1", "canal", "webhook"],
     )
     parser.add_argument("--destino-id", default=os.environ.get("TEAMS_GATEWAY_DESTINO_ID"))
+    parser.add_argument("--recipient-policy", default=os.environ.get("TEAMS_RECIPIENT_POLICY"))
+    parser.add_argument(
+        "--delivery-mode",
+        default=os.environ.get("TEAMS_DELIVERY_MODE", "all"),
+        choices=["all", "first_success", "channel"],
+    )
     parser.add_argument("--base-url", default=os.environ.get("TEAMS_GATEWAY_BASE_URL", DEFAULT_BASE_URL))
     parser.add_argument("--autor", default="reqsys-ci")
     parser.add_argument("--timeout", type=float, default=45.0)
@@ -97,13 +110,13 @@ def main() -> int:
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Retorna codigo de saida != 0 quando a mensagem nao for entregue (por padrao, so avisa)",
+        help="Retorna codigo de saida != 0 quando nenhuma mensagem e entregue",
     )
     args = parser.parse_args()
 
-    if not args.destino_id and args.modo in ("flow_bot", "graph_delegado"):
+    if not args.destino_id and not args.recipient_policy and args.modo in ("flow_bot", "graph_delegado"):
         print(
-            "::warning::destino_id ausente (env TEAMS_GATEWAY_DESTINO_ID ou --destino-id) — modo pode falhar.",
+            "::warning::destino_id e recipient_policy ausentes; o gateway pode nao encontrar rota para chat.",
             file=sys.stderr,
         )
 
@@ -118,6 +131,8 @@ def main() -> int:
         permitir_fallback=not args.no_fallback,
         dry_run=args.dry_run,
         timeout=args.timeout,
+        recipient_policy=args.recipient_policy,
+        delivery_mode=args.delivery_mode,
     )
 
     if args.output:
@@ -126,7 +141,10 @@ def main() -> int:
 
     entregue = bool(resultado.get("entregue")) or bool(resultado.get("dry_run"))
     if not entregue:
-        print(f"::warning::Notificacao Teams nao entregue: {resultado.get('erro') or resultado.get('motivo')}", file=sys.stderr)
+        print(
+            f"::warning::Notificacao Teams nao entregue: {resultado.get('erro') or resultado.get('motivo')}",
+            file=sys.stderr,
+        )
     if args.strict and not entregue:
         return 1
     return 0
