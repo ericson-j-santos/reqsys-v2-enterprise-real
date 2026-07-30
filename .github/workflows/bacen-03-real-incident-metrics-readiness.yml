@@ -1,0 +1,66 @@
+name: BACEN-03 Real Incident Metrics Readiness
+
+on:
+  pull_request:
+    paths:
+      - "scripts/generate_bacen_incident_metrics_readiness.py"
+      - "tests/test_generate_bacen_incident_metrics_readiness.py"
+      - "governance/bacen/BACEN-03-INCIDENT-METRICS.json"
+      - ".github/workflows/bacen-03-real-incident-metrics-readiness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/generate_bacen_incident_metrics_readiness.py"
+      - "tests/test_generate_bacen_incident_metrics_readiness.py"
+      - "governance/bacen/BACEN-03-INCIDENT-METRICS.json"
+      - ".github/workflows/bacen-03-real-incident-metrics-readiness.yml"
+  schedule:
+    - cron: "23 9 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-03-real-incident-metrics-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_generate_bacen_incident_metrics_readiness.py
+      - name: Generate advisory readiness
+        run: >-
+          python scripts/generate_bacen_incident_metrics_readiness.py
+          --output artifacts/bacen/bacen-03-incident-metrics-readiness.json
+      - name: Publish summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path = Path("artifacts/bacen/bacen-03-incident-metrics-readiness.json")
+          if path.is_file():
+              data = json.loads(path.read_text(encoding="utf-8"))
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+                  summary.write("### BACEN-03 — Métricas reais de incidentes\n")
+                  summary.write(f"- Estado: **{data.get('state')}**\n")
+                  summary.write(f"- Métricas presentes: **{data.get('metrics_present')}**\n")
+                  summary.write(f"- Resultado: **{data.get('result')}**\n")
+                  summary.write(f"- Produção alterada: **{data.get('production_touched')}**\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bacen-03-real-incident-metrics-readiness-${{ github.run_id }}
+          path: artifacts/bacen/bacen-03-incident-metrics-readiness.json
+          if-no-files-found: warn
+          retention-days: 365
