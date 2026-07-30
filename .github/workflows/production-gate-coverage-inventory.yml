@@ -1,0 +1,194 @@
+name: Production Gate Coverage Inventory
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "53 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/inventory_production_gate_coverage.py"
+      - "tests/test_inventory_production_gate_coverage.py"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/inventory_production_gate_coverage.py"
+      - "tests/test_inventory_production_gate_coverage.py"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: production-gate-coverage-inventory
+  cancel-in-progress: true
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install focused test dependency
+        run: python -m pip install --disable-pip-version-check pytest
+
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_inventory_production_gate_coverage.py
+
+      - name: Build production gate inventory
+        run: |
+          mkdir -p .tmp artifacts/production-gate-coverage
+          python scripts/inventory_production_gate_coverage.py \
+            --workflow-dir .github/workflows \
+            --output artifacts/production-gate-coverage/report.json \
+            --issue-body artifacts/production-gate-coverage/issue-body.md
+
+      - name: Collect managed issue
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${{ github.repository }}/issues?state=all&per_page=100" \
+            > .tmp/issue-pages.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          pages = json.loads(Path(".tmp/issue-pages.json").read_text(encoding="utf-8"))
+          managed = []
+          marker = "<!-- reqsys-production-gate-coverage -->"
+          for page in pages:
+              if not isinstance(page, list):
+                  continue
+              for issue in page:
+                  if not isinstance(issue, dict) or issue.get("pull_request") is not None:
+                      continue
+                  if marker not in str(issue.get("body") or ""):
+                      continue
+                  managed.append(
+                      {
+                          "number": issue.get("number"),
+                          "title": issue.get("title"),
+                          "body": issue.get("body"),
+                          "state": issue.get("state"),
+                          "labels": issue.get("labels") or [],
+                      }
+                  )
+          existing = max(managed, key=lambda item: int(item.get("number") or 0), default={})
+          Path("artifacts/production-gate-coverage/existing-issue.json").write_text(
+              json.dumps(existing, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Synchronize P0 delivery blocker issue
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          repo = os.environ["REPOSITORY"]
+          root = Path("artifacts/production-gate-coverage")
+          report = json.loads((root / "report.json").read_text(encoding="utf-8"))
+          existing = json.loads((root / "existing-issue.json").read_text(encoding="utf-8"))
+          body = (root / "issue-body.md").read_text(encoding="utf-8")
+
+          def api(method, endpoint, payload):
+              subprocess.run(
+                  ["gh", "api", "--method", method, endpoint, "--input", "-"],
+                  input=json.dumps(payload, ensure_ascii=False),
+                  text=True,
+                  check=True,
+              )
+
+          subprocess.run(
+              [
+                  "gh",
+                  "api",
+                  "--method",
+                  "POST",
+                  f"repos/{repo}/labels",
+                  "-f",
+                  "name=delivery-blocker",
+                  "-f",
+                  "color=b60205",
+                  "-f",
+                  "description=Bloqueador objetivo da entrega",
+              ],
+              check=False,
+              stdout=subprocess.DEVNULL,
+              stderr=subprocess.DEVNULL,
+          )
+
+          number = existing.get("number")
+          if report["delivery_blocker"]:
+              payload = {
+                  "title": "[Delivery][P0] Caminhos de mutação em produção sem gate governado",
+                  "body": body,
+                  "labels": ["delivery-blocker", "bacen", "priority-p0"],
+                  "state": "open",
+              }
+              if number:
+                  api("PATCH", f"repos/{repo}/issues/{number}", payload)
+              else:
+                  api("POST", f"repos/{repo}/issues", payload)
+          elif number and str(existing.get("state") or "").lower() == "open":
+              api(
+                  "POST",
+                  f"repos/{repo}/issues/{number}/comments",
+                  {"body": "Todos os caminhos de mutação em produção possuem gate governado. Fechamento automático."},
+              )
+              api(
+                  "PATCH",
+                  f"repos/{repo}/issues/{number}",
+                  {"state": "closed", "state_reason": "completed"},
+              )
+          PY
+
+      - name: Publish summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          path = Path("artifacts/production-gate-coverage/report.json")
+          print("## Production Gate Coverage Inventory")
+          if not path.exists():
+              print("\n- Inventário não gerado; consulte a primeira etapa com falha.")
+              raise SystemExit(0)
+          report = json.loads(path.read_text(encoding="utf-8"))
+          summary = report["summary"]
+          print(f"\n- Relacionados a PROD: **{summary['production_related_workflows']}**")
+          print(f"- Mutação confirmada: **{summary['confirmed_mutation_workflows']}**")
+          print(f"- Mutação ambígua: **{summary['ambiguous_mutation_workflows']}**")
+          print(f"- Somente observação: **{summary['observation_only_workflows']}**")
+          print(f"- Gate obrigatório: **{summary['gate_required_workflows']}**")
+          print(f"- Protegidos: **{summary['protected_workflows']}**")
+          print(f"- Não protegidos: **{summary['unprotected_workflows']}**")
+          print(f"- Bloqueador de entrega: **{str(report['delivery_blocker']).lower()}**")
+          print(f"- Enforcement pronto: **{str(report['automatic_enforcement_ready']).lower()}**")
+          print("- Produção acessada: **false**")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-gate-coverage
+          path: artifacts/production-gate-coverage/
+          if-no-files-found: warn
+          retention-days: 365
