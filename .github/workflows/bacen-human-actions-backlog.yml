@@ -1,0 +1,107 @@
+name: BACEN Human Actions Backlog
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+      - "scripts/generate_bacen_human_actions_backlog.py"
+      - ".github/workflows/bacen-human-actions-backlog.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+      - "scripts/generate_bacen_human_actions_backlog.py"
+      - ".github/workflows/bacen-human-actions-backlog.yml"
+  schedule:
+    - cron: "37 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-human-actions-backlog-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN pending human actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML
+
+      - name: Validate implementation
+        run: python -m py_compile scripts/generate_bacen_human_actions_backlog.py
+
+      - name: Generate backlog evidence
+        run: |
+          python scripts/generate_bacen_human_actions_backlog.py \
+            --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
+            --output artifacts/bacen/bacen-human-actions-backlog.json
+
+      - name: Validate evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          evidence = json.loads(
+              Path("artifacts/bacen/bacen-human-actions-backlog.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          summary = evidence["summary"]
+          assert evidence["mode"] == "advisory"
+          assert summary["pending_controls"] == len(evidence["items"])
+          assert summary["pending_controls"] > 0
+          assert summary["without_personal_assignee"] == summary["pending_controls"]
+          assert summary["without_due_date"] == summary["pending_controls"]
+          assert evidence["automatic_blocking"] is False
+          assert evidence["human_action_required"] is True
+          assert evidence["production_touched"] is False
+          assert len(evidence["matrix_sha256"]) == 64
+          print("BACEN human actions backlog: valid")
+          PY
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-human-actions-backlog
+          path: artifacts/bacen/bacen-human-actions-backlog.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Publish summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-human-actions-backlog.json")
+          print("## BACEN — Backlog de ações humanas")
+          if not path.exists():
+              print("\n- Evidência não gerada.")
+              raise SystemExit(1)
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          summary = evidence["summary"]
+          print(f"\n- Controles pendentes: **{summary['pending_controls']}**")
+          print(f"- Prioridade P0: **{summary['p0']}**")
+          print(f"- Prioridade P1: **{summary['p1']}**")
+          print(f"- Pessoas reais ainda não atribuídas: **{summary['without_personal_assignee']}**")
+          print(f"- Prazos reais ainda não definidos: **{summary['without_due_date']}**")
+          print("- Aprovações fabricadas: **false**")
+          print("- Produção acessada: **false**")
+          PY
