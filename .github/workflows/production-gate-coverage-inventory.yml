@@ -138,7 +138,7 @@ jobs:
           number = existing.get("number")
           if report["delivery_blocker"]:
               payload = {
-                  "title": "[Delivery][P0] Caminhos de produção sem gate governado",
+                  "title": "[Delivery][P0] Caminhos de mutação em produção sem gate governado",
                   "body": body,
                   "labels": ["delivery-blocker", "bacen", "priority-p0"],
                   "state": "open",
@@ -151,7 +151,7 @@ jobs:
               api(
                   "POST",
                   f"repos/{repo}/issues/{number}/comments",
-                  {"body": "Todos os caminhos de produção possuem gate governado. Fechamento automático."},
+                  {"body": "Todos os caminhos de mutação em produção possuem gate governado. Fechamento automático."},
               )
               api(
                   "PATCH",
@@ -173,7 +173,11 @@ jobs:
               raise SystemExit(0)
           report = json.loads(path.read_text(encoding="utf-8"))
           summary = report["summary"]
-          print(f"\n- Capazes de tocar PROD: **{summary['production_capable_workflows']}**")
+          print(f"\n- Relacionados a PROD: **{summary['production_related_workflows']}**")
+          print(f"- Mutação confirmada: **{summary['confirmed_mutation_workflows']}**")
+          print(f"- Mutação ambígua: **{summary['ambiguous_mutation_workflows']}**")
+          print(f"- Somente observação: **{summary['observation_only_workflows']}**")
+          print(f"- Gate obrigatório: **{summary['gate_required_workflows']}**")
           print(f"- Protegidos: **{summary['protected_workflows']}**")
           print(f"- Não protegidos: **{summary['unprotected_workflows']}**")
           print(f"- Bloqueador de entrega: **{str(report['delivery_blocker']).lower()}**")
