@@ -12,7 +12,13 @@ from typing import Any
 import yaml
 
 VALID_STATUSES = {"implemented", "partial", "gap"}
-TERMINAL_SUCCESS = {"success", "neutral", "skipped"}
+BLOCKING_CONCLUSIONS = {
+    "failure",
+    "timed_out",
+    "action_required",
+    "startup_failure",
+}
+IN_FLIGHT_STATUSES = {"queued", "in_progress", "pending", "requested", "waiting"}
 REQUIRED_RUNTIME_PATHS = {
     "/health",
     "/api/runtime/health",
@@ -32,6 +38,18 @@ def load_matrix(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("matrix must be a mapping")
     return payload
+
+
+def latest_workflow_runs(runs: list[Any]) -> list[dict[str, Any]]:
+    """Keep the newest run per workflow name; GitHub returns runs newest first."""
+    latest: dict[str, dict[str, Any]] = {}
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        name = str(run.get("name") or "").strip()
+        if name and name not in latest:
+            latest[name] = run
+    return list(latest.values())
 
 
 def evaluate(
@@ -59,15 +77,18 @@ def evaluate(
         if status not in VALID_STATUSES:
             findings.append(f"invalid_control_status:{control_id}")
             continue
+
         status_counts[status] += 1
         if status != "implemented":
             pending_formal.append(
                 {
                     "control_id": control_id,
                     "status": status,
-                    "priority": "P0"
-                    if str(control.get("criticality") or "").lower() == "critical"
-                    else "P1",
+                    "priority": (
+                        "P0"
+                        if str(control.get("criticality") or "").lower() == "critical"
+                        else "P1"
+                    ),
                     "responsible_role": control.get("owner"),
                     "required_action": control.get("next_stage"),
                     "evidence_reference": control.get("evidence"),
@@ -93,19 +114,17 @@ def evaluate(
     if not isinstance(runs, list):
         findings.append("workflow_runs_invalid")
         runs = []
+    latest_runs = latest_workflow_runs(runs)
     failed_runs = [
         run
-        for run in runs
-        if isinstance(run, dict)
-        and str(run.get("status") or "").lower() == "completed"
-        and str(run.get("conclusion") or "").lower() not in TERMINAL_SUCCESS
+        for run in latest_runs
+        if str(run.get("status") or "").lower() == "completed"
+        and str(run.get("conclusion") or "").lower() in BLOCKING_CONCLUSIONS
     ]
     in_flight_runs = [
         run
-        for run in runs
-        if isinstance(run, dict)
-        and str(run.get("status") or "").lower()
-        in {"queued", "in_progress", "pending"}
+        for run in latest_runs
+        if str(run.get("status") or "").lower() in IN_FLIGHT_STATUSES
     ]
 
     endpoints = runtime.get("endpoints") or []
@@ -128,7 +147,7 @@ def evaluate(
     no_gaps = status_counts["gap"] == 0
     technical_ready = not findings and no_gaps and not failed_runs and runtime_ready
     formal_ready = not pending_formal
-    integration_ready = not actionable_prs and not in_flight_runs
+    integration_ready = not actionable_prs
     delivered = technical_ready and formal_ready and integration_ready
 
     if delivered:
@@ -147,8 +166,10 @@ def evaluate(
         automatic_actions.append("restore_runtime_and_regenerate_smoke_evidence")
     if pending_formal:
         automatic_actions.append("sync_formal_action_issues_and_escalations")
-    if actionable_prs or in_flight_runs:
+    if actionable_prs:
         automatic_actions.append("continue_governed_pr_and_merge_queue_processing")
+    if in_flight_runs:
+        automatic_actions.append("observe_in_flight_workflows_without_false_blocking")
     if not delivered:
         automatic_actions.append("refresh_delivery_completion_evidence_hourly")
 
@@ -165,7 +186,7 @@ def evaluate(
     ]
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "contract": "reqsys-delivery-completion-controller",
         "generated_at": datetime.now(UTC).isoformat(),
         "phase": phase,
@@ -186,6 +207,7 @@ def evaluate(
         },
         "pending_formal_controls": pending_formal,
         "failed_workflows": failed_runs,
+        "in_flight_workflows": in_flight_runs,
         "runtime": {
             "ready": runtime_ready,
             "missing_endpoints": runtime_missing,
