@@ -52,7 +52,11 @@ def evaluate(
     tolerance_present = bool(tolerance)
     tolerance_scope = str(tolerance.get("scope") or "").lower()
     tolerance_decision = str(tolerance.get("decision") or "unknown").lower()
-    tolerance_active = tolerance.get("policy_active") is True
+    policy_active_value = tolerance.get("policy_active")
+    legacy_tolerance_contract = tolerance_present and policy_active_value is None
+    tolerance_active = policy_active_value is True or (
+        legacy_tolerance_contract and tolerance_decision == "allow"
+    )
     tolerated_controls = sorted(str(item) for item in (tolerance.get("tolerated_controls") or []))
     blocking_controls = sorted(str(item) for item in (tolerance.get("blocking_controls") or []))
     production_allowed = tolerance.get("production_deployment_allowed") is True
@@ -81,6 +85,8 @@ def evaluate(
         reasons.append("critical_flows_pending")
     if flow_evidence_present and flow_status in {"blocked", "failed", "red", "vermelho"}:
         reasons.append("flow_completion_blocked")
+    if legacy_tolerance_contract:
+        warnings.append("bacen_tolerance_legacy_contract_pending_fixed_expiry")
 
     expected_scope = environment
     if environment in {"dev", "stg"}:
@@ -139,6 +145,7 @@ def evaluate(
             "bacen_tolerance_scope": tolerance_scope or None,
             "bacen_tolerance_decision": tolerance_decision,
             "bacen_tolerance_active": tolerance_active,
+            "bacen_tolerance_legacy_contract": legacy_tolerance_contract,
             "bacen_tolerated_controls": tolerated_controls,
             "bacen_blocking_controls": blocking_controls,
             "bacen_production_allowed": production_allowed,
