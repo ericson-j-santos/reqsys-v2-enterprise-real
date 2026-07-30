@@ -1,0 +1,29 @@
+schema_version: 1.0.0
+mode: temporary_nonprod_tolerance
+purpose: >
+  Permitir continuidade temporária de PR, DEV e STG quando controles BACEN estiverem
+  parciais exclusivamente por ações humanas ou evidências reais pendentes, preservando
+  o estado regulatório original e bloqueando promoção para produção.
+allowed_scopes:
+  - pull_request
+  - dev
+  - stg
+blocked_scopes:
+  - prod
+allowed_control_statuses:
+  - implemented
+  - partial
+always_block_statuses:
+  - gap
+maximum_review_window_days: 30
+requirements:
+  production_touched_must_be_false: true
+  preserve_control_status: true
+  preserve_human_action_required: true
+  prohibit_fabricated_approvals: true
+  prohibit_fabricated_evidence: true
+exit_criteria:
+  - complete_real_human_approvals
+  - ingest_validated_real_evidence
+  - remove_temporary_tolerance
+production_touched: false
