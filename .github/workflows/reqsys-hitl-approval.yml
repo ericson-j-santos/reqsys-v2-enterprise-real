@@ -2,7 +2,7 @@ name: ReqSys HITL Approval Orchestrator
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, synchronize, ready_for_review]
     paths:
       - ".github/workflows/reqsys-hitl-approval.yml"
       - "scripts/build_hitl_approval_decision.py"
