@@ -58,11 +58,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .tmp artifacts/reqsys-delivery-completion
-          gh api --paginate --slurp "repos/${{ github.repository }}/pulls?state=open&per_page=100" \
-            --jq '{open_prs: (add | [.[] | {number, state, draft, created_at, updated_at, html_url}])}' \
+          gh api "repos/${{ github.repository }}/pulls?state=open&per_page=100" \
+            --jq '{open_prs: [.[] | {number, state, draft, created_at, updated_at, html_url}]}' \
             > .tmp/prs.json
-          gh api --paginate --slurp "repos/${{ github.repository }}/actions/runs?per_page=100" \
-            --jq '{workflow_runs: (add.workflow_runs | [.[] | select(.head_branch == "main") | {id, name, status, conclusion, created_at, updated_at, html_url}][0:40])}' \
+          gh api "repos/${{ github.repository }}/actions/runs?per_page=100" \
+            --jq '{workflow_runs: (.workflow_runs | [.[] | select(.head_branch == "main") | {id, name, status, conclusion, created_at, updated_at, html_url}][0:40])}' \
             > .tmp/runs.json
           python - <<'PY'
           import json
@@ -141,12 +141,19 @@ jobs:
 
       - name: Publish executive summary
         if: always()
-        run: cat artifacts/reqsys-delivery-completion/report.md >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          if [ -f artifacts/reqsys-delivery-completion/report.md ]; then
+            cat artifacts/reqsys-delivery-completion/report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## ReqSys Delivery Completion Controller" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Evidência não gerada; consulte a primeira etapa com falha." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: reqsys-delivery-completion
           path: artifacts/reqsys-delivery-completion/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 365
