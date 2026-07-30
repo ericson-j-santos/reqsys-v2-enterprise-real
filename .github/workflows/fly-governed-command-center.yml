@@ -1,3 +1,4 @@
+# REQSYS_PRODUCTION_GOVERNANCE_GATE
 name: Fly.io Governed Command Center
 
 on:
@@ -49,9 +50,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  production-gate:
+    name: BACEN authorization for mutable production command
+    if: >-
+      inputs.environment == 'production' &&
+      (
+        inputs.command == 'deploy' ||
+        inputs.command == 'restart' ||
+        inputs.command == 'scale-count'
+      )
+    uses: ./.github/workflows/bacen-production-hard-gate.yml
+    with:
+      enforce: true
+
   governed-command:
     name: Executar comando Fly.io governado
     runs-on: ubuntu-latest
+    needs: production-gate
+    if: >-
+      always() &&
+      (
+        needs.production-gate.result == 'success' ||
+        needs.production-gate.result == 'skipped'
+      )
     timeout-minutes: 20
 
     env:
@@ -216,7 +237,7 @@ jobs:
 
           cat > "${REPORT_DIR}/summary.md" <<EOF
           # Fly.io Governed Command Center — Evidência Operacional
-          
+
           | Campo | Valor |
           |---|---|
           | Correlation ID | ${CORRELATION_ID_SAFE} |
@@ -224,6 +245,7 @@ jobs:
           | Ambiente | ${TARGET_ENVIRONMENT} |
           | Comando | ${COMMAND} |
           | Comando mutável | ${MUTABLE_COMMAND_SAFE} |
+          | Gate BACEN | ${{ needs.production-gate.result }} |
           | Scale count | ${SCALE_COUNT} |
           | Status do job | ${STATUS} |
           | Repository | ${GITHUB_REPOSITORY} |
@@ -232,13 +254,14 @@ jobs:
           | Actor | ${GITHUB_ACTOR} |
           | SHA | ${GITHUB_SHA} |
           | Gerado em UTC | ${GENERATED_AT_UTC} |
-          
+
           ## Guardrails aplicados
-          
+
           - Execução somente por \`workflow_dispatch\`.
           - Comandos limitados por \`choice\` e por validação bash.
           - Nome do app validado antes da execução.
           - Produção exige confirmação textual para comandos mutáveis.
+          - Produção exige gate BACEN para deploy, restart e scale-count.
           - Comandos somente leitura não exigem confirmação de produção.
           - Não há shell livre informado pelo operador.
           - Evidência publicada como artifact mesmo em falha.
