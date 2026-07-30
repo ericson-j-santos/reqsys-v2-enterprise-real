@@ -7,6 +7,7 @@ on:
       - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
       - "governance/bacen/NONPROD-TEMPORARY-TOLERANCE-POLICY.yaml"
       - "scripts/generate_bacen_nonprod_tolerance_decision.py"
+      - "tests/test_generate_bacen_nonprod_tolerance_decision.py"
       - ".github/workflows/bacen-nonprod-tolerance-guard.yml"
   push:
     branches: [main]
@@ -14,6 +15,7 @@ on:
       - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
       - "governance/bacen/NONPROD-TEMPORARY-TOLERANCE-POLICY.yaml"
       - "scripts/generate_bacen_nonprod_tolerance_decision.py"
+      - "tests/test_generate_bacen_nonprod_tolerance_decision.py"
       - ".github/workflows/bacen-nonprod-tolerance-guard.yml"
   schedule:
     - cron: "23 8 * * *"
@@ -52,10 +54,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: python -m pip install --disable-pip-version-check PyYAML
+        run: python -m pip install --disable-pip-version-check PyYAML pytest
 
       - name: Validate implementation
         run: python -m py_compile scripts/generate_bacen_nonprod_tolerance_decision.py
+
+      - name: Run focused expiry tests
+        run: python -m pytest -q tests/test_generate_bacen_nonprod_tolerance_decision.py
 
       - name: Resolve evaluated scope
         id: scope
@@ -92,6 +97,10 @@ jobs:
           assert evidence["mode"] == "temporary_nonprod_tolerance"
           assert evidence["decision"] == "allow"
           assert evidence["automatic_blocking"] is False
+          assert evidence["policy_active"] is True
+          assert evidence["valid_until"] == "2026-08-29"
+          assert evidence["review_deadline"] == evidence["valid_until"]
+          assert evidence["renewal_requires_explicit_policy_change"] is True
           assert evidence["preserved_control_status"] is True
           assert evidence["temporary_tolerance_applied"] == bool(
               evidence["tolerated_controls"]
@@ -127,9 +136,12 @@ jobs:
           evidence = json.loads(path.read_text(encoding="utf-8"))
           print(f"\n- Escopo: **{evidence['scope']}**")
           print(f"- Decisão: **{evidence['decision']}**")
+          print(f"- Política ativa: **{evidence['policy_active']}**")
           print(f"- Controles tolerados: **{len(evidence['tolerated_controls'])}**")
           print(f"- Produção liberada: **{evidence['production_deployment_allowed']}**")
-          print(f"- Revisão até: **{evidence['review_deadline']}**")
+          print(f"- Validade fixa até: **{evidence['valid_until']}**")
+          print(f"- Responsável pela revisão: **{evidence['review_owner_role']}**")
+          print("- Renovação automática: **false**")
           print("- Status regulatório preservado: **true**")
           print("- Produção acessada: **false**")
           PY
