@@ -80,14 +80,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Validate Teams destination configuration
+      - name: Record Teams destination configuration
+        id: teams-config
         run: |
           set -euo pipefail
-          test -n "${TEAMS_GATEWAY_DESTINO_ID:-}" || {
-            echo "::error::TEAMS_GATEWAY_DESTINO_ID nao configurado"
-            exit 1
-          }
+          mkdir -p artifacts/hitl
+          if [[ -n "${TEAMS_GATEWAY_DESTINO_ID:-}" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            printf '%s\n' '{"channel":"teams","configured":true,"status":"ready"}' \
+              > artifacts/hitl/teams-configuration.json
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::TEAMS_GATEWAY_DESTINO_ID nao configurado; notificacao Teams ignorada e pacote de e-mail preservado"
+            printf '%s\n' '{"channel":"teams","configured":false,"status":"skipped","reason":"TEAMS_GATEWAY_DESTINO_ID_not_configured"}' \
+              > artifacts/hitl/teams-configuration.json
+          fi
       - name: Send approval request to Teams
+        if: steps.teams-config.outputs.configured == 'true'
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
