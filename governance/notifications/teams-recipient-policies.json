@@ -14,6 +14,20 @@
           "notes": "Destinatario inicial governado da politica HITL"
         }
       ]
+    },
+    {
+      "name": "reqsys-operations",
+      "delivery_mode": "all",
+      "recipients": [
+        {
+          "name": "Ericson Jose dos Santos",
+          "destination_id": "ericsonjosedossantos@tieri659.onmicrosoft.com",
+          "destination_type": "chat",
+          "priority": 10,
+          "active": true,
+          "notes": "Destinatario inicial dos alertas operacionais e logs sanitizados do ReqSys"
+        }
+      ]
     }
   ]
 }
