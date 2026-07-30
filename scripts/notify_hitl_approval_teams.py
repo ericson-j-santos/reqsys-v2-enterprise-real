@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Send a ReqSys HITL approval request through the existing Teams Gateway."""
+"""Send a ReqSys HITL approval request through a dynamic Teams recipient policy."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 try:
     from scripts.notificar_teams import DEFAULT_BASE_URL, enviar_mensagem
-except ModuleNotFoundError:  # Direct execution: python scripts/notify_hitl_approval_teams.py
+except ModuleNotFoundError:
     from notificar_teams import DEFAULT_BASE_URL, enviar_mensagem
 
 
@@ -68,6 +68,8 @@ def send_request(
     evidence_url: str | None,
     base_url: str,
     destination_id: str | None,
+    recipient_policy: str,
+    delivery_mode: str,
     mode: str,
     destination_type: str,
     dry_run: bool,
@@ -92,13 +94,18 @@ def send_request(
         permitir_fallback=True,
         dry_run=dry_run,
         timeout=timeout,
+        recipient_policy=recipient_policy,
+        delivery_mode=delivery_mode,
     )
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "contract": "reqsys-hitl-teams-notification",
         "control_id": control_id,
         "request_url": request_url,
         "request_sha256": request_sha256,
+        "recipient_policy": recipient_policy,
+        "delivery_mode": delivery_mode,
+        "explicit_destination_fallback_configured": bool(destination_id),
         "notification": result,
         "production_touched": False,
     }
@@ -114,13 +121,22 @@ def main() -> int:
     parser.add_argument("--base-url", default=os.environ.get("TEAMS_GATEWAY_BASE_URL", DEFAULT_BASE_URL))
     parser.add_argument("--destination-id", default=os.environ.get("TEAMS_GATEWAY_DESTINO_ID"))
     parser.add_argument(
+        "--recipient-policy",
+        default=os.environ.get("HITL_RECIPIENT_POLICY", "hitl-approvers"),
+    )
+    parser.add_argument(
+        "--delivery-mode",
+        default=os.environ.get("HITL_DELIVERY_MODE", "all"),
+        choices=["all", "first_success", "channel"],
+    )
+    parser.add_argument(
         "--mode",
         default="auto",
         choices=["auto", "graph_delegado", "webhook", "graph_app_only", "bot", "flow_bot"],
     )
     parser.add_argument(
         "--destination-type",
-        default="chat",
+        default="auto",
         choices=["auto", "chat", "chat_1a1", "canal", "webhook"],
     )
     parser.add_argument("--timeout", type=float, default=45.0)
@@ -137,6 +153,8 @@ def main() -> int:
         evidence_url=args.evidence_url,
         base_url=args.base_url,
         destination_id=args.destination_id,
+        recipient_policy=args.recipient_policy,
+        delivery_mode=args.delivery_mode,
         mode=args.mode,
         destination_type=args.destination_type,
         dry_run=args.dry_run,
@@ -148,6 +166,11 @@ def main() -> int:
 
     notification = payload["notification"]
     delivered = bool(notification.get("entregue")) or bool(notification.get("dry_run"))
+    if not delivered:
+        print(
+            "::warning::Solicitacao HITL registrada, mas nenhuma notificacao Teams foi entregue.",
+            flush=True,
+        )
     if args.strict and not delivered:
         return 1
     return 0

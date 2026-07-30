@@ -20,14 +20,50 @@ A execução cria uma issue com o marcador `<!-- reqsys-hitl-approval -->` e o l
 
 ### Teams
 
-O workflow usa `scripts/notify_hitl_approval_teams.py` e o Teams Messaging Gateway existente.
+O workflow usa `scripts/notify_hitl_approval_teams.py`, o Teams Messaging Gateway existente e a política lógica `hitl-approvers`.
 
-Configuração:
+#### Separação entre credenciais e destinatários
 
-- secret `TEAMS_GATEWAY_DESTINO_ID` para o e-mail/UPN do destinatário;
-- `TEAMS_GATEWAY_BASE_URL` opcional para substituir o runtime padrão.
+- Secrets armazenam somente credenciais técnicas.
+- Pessoas, grupos, canais e prioridades ficam na tabela `teams_notification_recipients`.
+- `TEAMS_GATEWAY_DESTINO_ID` é aceito somente como fallback de transição quando a política ainda não possui destinatários ativos.
+- Alterar a composição dos aprovadores não exige mudança em secret, workflow, branch ou deploy.
 
-O UPN não é gravado no código nem nos artifacts. A mensagem contém links clicáveis para abrir a solicitação e instruções para aprovar, rejeitar ou solicitar ajuste.
+#### Cadastro administrativo
+
+Endpoints protegidos por administração:
+
+```text
+GET    /v1/teams-gateway/recipient-policies/recipients
+POST   /v1/teams-gateway/recipient-policies/recipients
+PATCH  /v1/teams-gateway/recipient-policies/recipients/{id}
+DELETE /v1/teams-gateway/recipient-policies/recipients/{id}
+```
+
+Exemplo de cadastro:
+
+```json
+{
+  "politica": "hitl-approvers",
+  "nome": "Aprovador de Governança",
+  "destino_id": "aprovador@empresa.com",
+  "destino_tipo": "chat",
+  "prioridade": 10,
+  "ativo": true
+}
+```
+
+#### Modos de entrega
+
+| Modo | Comportamento |
+|---|---|
+| `all` | envia para todos os destinatários ativos |
+| `first_success` | tenta por prioridade até a primeira entrega |
+| `channel` | envia uma vez para o primeiro canal/webhook ativo |
+
+O workflow HITL usa `all`. A evidência agrega quantidade configurada, tentada, entregue e falha, sem expor o UPN dos destinatários no artifact agregado.
+
+A falha de notificação produz warning e evidência, mas não derruba o CI. A solicitação continua disponível no GitHub e no pacote de e-mail.
 
 ### E-mail
 
@@ -63,7 +99,7 @@ Regras:
 
 ## Saída
 
-Artifact `reqsys-hitl-decision-<issue>` retido por 90 dias, limite atualmente aplicado pelo repositório, contendo:
+Artifact `reqsys-hitl-decision-<issue>` retido por 90 dias, contendo:
 
 - ator e permissão;
 - decisão e justificativa;
@@ -84,4 +120,4 @@ Artifact `reqsys-hitl-decision-<issue>` retido por 90 dias, limite atualmente ap
 | `reject` | fecha com `hitl-rejected` | mantém entrega bloqueada |
 | `adjust` | mantém aberta com `hitl-adjustment-requested` | aguarda nova evidência |
 
-A aprovação não altera diretamente a matriz BACEN, não executa deploy e não libera PROD. Mudanças de política ou status continuam exigindo PR específica vinculada ao artifact da decisão.
+A aprovação não altera diretamente a matriz BACEN, não executa deploy e não libera PROD.
