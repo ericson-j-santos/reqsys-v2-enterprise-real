@@ -1,0 +1,402 @@
+name: ReqSys HITL Approval Orchestrator
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - ".github/workflows/reqsys-hitl-approval.yml"
+      - "scripts/build_hitl_approval_decision.py"
+      - "scripts/notify_hitl_approval_teams.py"
+      - "scripts/notify_hitl_approval_email.py"
+      - "tests/test_build_hitl_approval_decision.py"
+      - "tests/test_notify_hitl_approval_teams.py"
+      - "tests/test_notify_hitl_approval_email.py"
+      - "docs/contracts/reqsys-hitl-approval.md"
+  workflow_dispatch:
+    inputs:
+      request_title:
+        description: "Titulo da solicitacao"
+        required: true
+        type: string
+      control_id:
+        description: "Controle ou escopo auditavel"
+        required: true
+        type: string
+      summary:
+        description: "Resumo objetivo da decisao requerida"
+        required: true
+        type: string
+      evidence_url:
+        description: "URL GitHub do pacote de evidencias"
+        required: true
+        type: string
+      expires_at:
+        description: "Prazo ISO-8601 opcional"
+        required: false
+        type: string
+  issues:
+    types: [labeled, reopened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: reqsys-hitl-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  contract-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused test dependency
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Run HITL contract tests
+        run: >-
+          python -m pytest -q
+          tests/test_build_hitl_approval_decision.py
+          tests/test_notify_hitl_approval_teams.py
+          tests/test_notify_hitl_approval_email.py
+
+  notify-pr-review:
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    needs: contract-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Record Teams destination configuration
+        id: teams-config
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/hitl
+          if [[ -n "${TEAMS_GATEWAY_DESTINO_ID:-}" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            printf '%s\n' '{"channel":"teams","configured":true,"status":"ready"}' \
+              > artifacts/hitl/teams-configuration.json
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::TEAMS_GATEWAY_DESTINO_ID nao configurado; notificacao Teams ignorada e pacote de e-mail preservado"
+            printf '%s\n' '{"channel":"teams","configured":false,"status":"skipped","reason":"TEAMS_GATEWAY_DESTINO_ID_not_configured"}' \
+              > artifacts/hitl/teams-configuration.json
+          fi
+      - name: Send approval request to Teams
+        if: steps.teams-config.outputs.configured == 'true'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/hitl
+          python scripts/notify_hitl_approval_teams.py \
+            --request-title "Aprovar fluxo HITL ReqSys - PR #${PR_NUMBER}" \
+            --control-id "REQSYS-HITL-001" \
+            --summary "Revisar a infraestrutura de aprovacao humana autenticada, notificacao Teams/e-mail e trilha SHA-256." \
+            --request-url "$PR_URL" \
+            --evidence-url "${PR_URL}/files" \
+            --destination-type chat \
+            --output artifacts/hitl/teams-pr-notification.json \
+            --strict
+      - name: Build approval e-mail package
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          python scripts/notify_hitl_approval_email.py \
+            --request-title "Aprovar fluxo HITL ReqSys - PR #${PR_NUMBER}" \
+            --control-id "REQSYS-HITL-001" \
+            --summary "Revisar a infraestrutura de aprovacao humana autenticada, notificacao Teams/e-mail e trilha SHA-256." \
+            --request-url "$PR_URL" \
+            --evidence-url "${PR_URL}/files" \
+            --sender reqsys@example.invalid \
+            --recipient owner@example.invalid \
+            --dry-run \
+            --eml-output artifacts/hitl/approval-request.eml \
+            --report-output artifacts/hitl/email-pr-notification.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reqsys-hitl-pr-approval
+          path: artifacts/hitl/
+          if-no-files-found: warn
+          retention-days: 90
+
+  create-request:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    outputs:
+      issue_number: ${{ steps.issue.outputs.issue_number }}
+      issue_url: ${{ steps.issue.outputs.issue_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Create labels and approval issue
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_TITLE: ${{ inputs.request_title }}
+          CONTROL_ID: ${{ inputs.control_id }}
+          REQUEST_SUMMARY: ${{ inputs.summary }}
+          EVIDENCE_URL: ${{ inputs.evidence_url }}
+          EXPIRES_AT: ${{ inputs.expires_at }}
+        run: |
+          set -euo pipefail
+          for item in \
+            "hitl-approval-request|0e8a16|Solicitacao humana autenticada pendente" \
+            "hitl-approved|15803d|Decisao humana aprovada" \
+            "hitl-rejected|b91c1c|Decisao humana rejeitada" \
+            "hitl-adjustment-requested|b45309|Ajustes solicitados pelo aprovador"
+          do
+            IFS='|' read -r name color description <<< "$item"
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
+              -f name="$name" -f color="$color" -f description="$description" \
+              >/dev/null 2>&1 || true
+          done
+          expires="${EXPIRES_AT:-nao informado}"
+          cat > .tmp-hitl-body.md <<EOF
+          <!-- reqsys-hitl-approval -->
+          # Solicitacao de aprovacao humana
+
+          - Controle/Escopo: \`${CONTROL_ID}\`
+          - SHA de origem: \`${GITHUB_SHA}\`
+          - Evidencias: ${EVIDENCE_URL}
+          - Prazo: \`${expires}\`
+
+          ## Resumo
+
+          ${REQUEST_SUMMARY}
+
+          ## Como decidir
+
+          - \`/approve <justificativa>\`
+          - \`/reject <justificativa>\`
+          - \`/adjust <justificativa>\`
+
+          A decisao exige ator humano autenticado com permissao write, maintain ou admin.
+
+          \`production_touched=false\`
+          EOF
+          issue_url="$(gh issue create \
+            --title "[HITL][${CONTROL_ID}] ${REQUEST_TITLE}" \
+            --body-file .tmp-hitl-body.md \
+            --label hitl-approval-request)"
+          echo "issue_url=$issue_url" >> "$GITHUB_OUTPUT"
+          echo "issue_number=${issue_url##*/}" >> "$GITHUB_OUTPUT"
+      - name: Notify Teams
+        env:
+          TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
+          REQUEST_TITLE: ${{ inputs.request_title }}
+          CONTROL_ID: ${{ inputs.control_id }}
+          REQUEST_SUMMARY: ${{ inputs.summary }}
+          REQUEST_URL: ${{ steps.issue.outputs.issue_url }}
+          EVIDENCE_URL: ${{ inputs.evidence_url }}
+        run: |
+          mkdir -p artifacts/hitl
+          python scripts/notify_hitl_approval_teams.py \
+            --request-title "$REQUEST_TITLE" \
+            --control-id "$CONTROL_ID" \
+            --summary "$REQUEST_SUMMARY" \
+            --request-url "$REQUEST_URL" \
+            --evidence-url "$EVIDENCE_URL" \
+            --destination-type chat \
+            --output artifacts/hitl/teams-notification.json \
+            --strict
+      - name: Notify e-mail when SMTP is configured
+        env:
+          HITL_EMAIL_FROM: ${{ secrets.HITL_EMAIL_FROM }}
+          HITL_EMAIL_TO: ${{ secrets.HITL_EMAIL_TO }}
+          HITL_SMTP_HOST: ${{ secrets.HITL_SMTP_HOST }}
+          HITL_SMTP_PORT: ${{ secrets.HITL_SMTP_PORT }}
+          HITL_SMTP_USERNAME: ${{ secrets.HITL_SMTP_USERNAME }}
+          HITL_SMTP_PASSWORD: ${{ secrets.HITL_SMTP_PASSWORD }}
+          HITL_SMTP_MODE: ${{ secrets.HITL_SMTP_MODE }}
+          REQUEST_TITLE: ${{ inputs.request_title }}
+          CONTROL_ID: ${{ inputs.control_id }}
+          REQUEST_SUMMARY: ${{ inputs.summary }}
+          REQUEST_URL: ${{ steps.issue.outputs.issue_url }}
+          EVIDENCE_URL: ${{ inputs.evidence_url }}
+        run: |
+          python scripts/notify_hitl_approval_email.py \
+            --request-title "$REQUEST_TITLE" \
+            --control-id "$CONTROL_ID" \
+            --summary "$REQUEST_SUMMARY" \
+            --request-url "$REQUEST_URL" \
+            --evidence-url "$EVIDENCE_URL" \
+            --sender "${HITL_EMAIL_FROM:-reqsys@example.invalid}" \
+            --recipient "${HITL_EMAIL_TO:-owner@example.invalid}" \
+            --eml-output artifacts/hitl/approval-request.eml \
+            --report-output artifacts/hitl/email-notification.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reqsys-hitl-request-${{ steps.issue.outputs.issue_number }}
+          path: artifacts/hitl/
+          if-no-files-found: warn
+          retention-days: 90
+
+  notify-labeled-request:
+    if: >-
+      github.event_name == 'issues' &&
+      contains(github.event.issue.labels.*.name, 'hitl-approval-request') &&
+      (github.event.action == 'reopened' || github.event.label.name == 'hitl-approval-request')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resend Teams notification
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          mkdir -p artifacts/hitl
+          python scripts/notify_hitl_approval_teams.py \
+            --request-title "$ISSUE_TITLE" \
+            --control-id "ISSUE-${ISSUE_NUMBER}" \
+            --summary "Solicitacao HITL aberta ou reaberta; consulte a issue para escopo, riscos e evidencias." \
+            --request-url "$ISSUE_URL" \
+            --evidence-url "$ISSUE_URL" \
+            --destination-type chat \
+            --output artifacts/hitl/teams-notification.json \
+            --strict
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reqsys-hitl-notification-${{ github.event.issue.number }}
+          path: artifacts/hitl/
+          retention-days: 90
+
+  record-decision:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request == null &&
+      contains(github.event.issue.labels.*.name, 'hitl-approval-request') &&
+      (
+        startsWith(github.event.comment.body, '/approve') ||
+        startsWith(github.event.comment.body, '/reject') ||
+        startsWith(github.event.comment.body, '/adjust')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolve authenticated actor permission
+        id: permission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.event.comment.user.login }}
+        run: |
+          set -euo pipefail
+          permission="$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${ACTOR}/permission" --jq '.user.permission')"
+          echo "permission=$permission" >> "$GITHUB_OUTPUT"
+      - name: Materialize immutable event content
+        run: |
+          mkdir -p .tmp artifacts/hitl-decision
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+          Path(".tmp/issue-body.md").write_text(event["issue"].get("body") or "", encoding="utf-8")
+          Path(".tmp/comment-body.md").write_text(event["comment"].get("body") or "", encoding="utf-8")
+          PY
+      - name: Build decision record
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          COMMENT_URL: ${{ github.event.comment.html_url }}
+          DECISION_ACTOR: ${{ github.event.comment.user.login }}
+          DECISION_PERMISSION: ${{ steps.permission.outputs.permission }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          python scripts/build_hitl_approval_decision.py \
+            --issue-number "$ISSUE_NUMBER" \
+            --issue-url "$ISSUE_URL" \
+            --issue-title "$ISSUE_TITLE" \
+            --issue-body-file .tmp/issue-body.md \
+            --comment-id "$COMMENT_ID" \
+            --comment-url "$COMMENT_URL" \
+            --comment-body-file .tmp/comment-body.md \
+            --actor "$DECISION_ACTOR" \
+            --permission "$DECISION_PERMISSION" \
+            --source-sha "$SOURCE_SHA" \
+            --output artifacts/hitl-decision/decision.json
+      - name: Apply audited issue state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          decision="$(jq -r .effective_decision artifacts/hitl-decision/decision.json)"
+          status="$(jq -r .status artifacts/hitl-decision/decision.json)"
+          correlation="$(jq -r .correlation_id artifacts/hitl-decision/decision.json)"
+          digest="$(jq -r .evidence.decision_sha256 artifacts/hitl-decision/decision.json)"
+          actor="$(jq -r .approval.actor artifacts/hitl-decision/decision.json)"
+          case "$decision" in
+            approve)
+              gh issue edit "$ISSUE_NUMBER" --add-label hitl-approved --remove-label hitl-approval-request --state closed
+              ;;
+            reject)
+              gh issue edit "$ISSUE_NUMBER" --add-label hitl-rejected --remove-label hitl-approval-request --state closed
+              ;;
+            adjust)
+              gh issue edit "$ISSUE_NUMBER" --add-label hitl-adjustment-requested
+              ;;
+          esac
+          gh issue comment "$ISSUE_NUMBER" --body "$(cat <<EOF
+          Decisao HITL registrada.
+
+          - Status: **${status}**
+          - Ator autenticado: **${actor}**
+          - Correlation ID: \`${correlation}\`
+          - SHA-256: \`${digest}\`
+          - Artifact: \`reqsys-hitl-decision-${ISSUE_NUMBER}\`
+          - Produção acessada: **false**
+          EOF
+          )"
+      - name: Rerun safe delivery gates after approval
+        if: startsWith(github.event.comment.body, '/approve')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run reqsys-delivery-completion-controller.yml \
+            --ref main -f execute_safe_actions=true || true
+          gh workflow run production-gate-coverage-inventory.yml --ref main || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reqsys-hitl-decision-${{ github.event.issue.number }}
+          path: artifacts/hitl-decision/
+          if-no-files-found: error
+          retention-days: 90
