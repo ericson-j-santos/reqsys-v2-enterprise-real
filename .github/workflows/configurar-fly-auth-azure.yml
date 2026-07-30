@@ -1,3 +1,4 @@
+# REQSYS_PRODUCTION_GOVERNANCE_GATE
 name: Configurar Fly Auth Azure
 
 on:
@@ -65,6 +66,26 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Gate BACEN antes de configurar produção
+        if: inputs.app_env == 'production'
+        run: |
+          python -m pip install --disable-pip-version-check PyYAML
+          mkdir -p artifacts/bacen-production-hard-gate
+          python scripts/generate_bacen_nonprod_tolerance_decision.py \
+            --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
+            --policy governance/bacen/NONPROD-TEMPORARY-TOLERANCE-POLICY.yaml \
+            --scope prod \
+            --output artifacts/bacen-production-hard-gate/manual-auth-decision.json
+
+      - name: Publicar decisão BACEN manual
+        if: always() && inputs.app_env == 'production'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-production-hard-gate-auth-manual
+          path: artifacts/bacen-production-hard-gate/manual-auth-decision.json
+          if-no-files-found: error
+          retention-days: 365
+
       - name: Instalar flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
@@ -99,6 +120,7 @@ jobs:
         with:
           name: fly-auth-azure-report-manual
           path: fly-auth-azure-report.json
+          if-no-files-found: warn
 
   configurar-auth-azure-todos-ambientes:
     name: Configurar Azure AD — ${{ matrix.environment }}
@@ -131,6 +153,26 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Gate BACEN antes da célula production
+        if: matrix.environment == 'production'
+        run: |
+          python -m pip install --disable-pip-version-check PyYAML
+          mkdir -p artifacts/bacen-production-hard-gate
+          python scripts/generate_bacen_nonprod_tolerance_decision.py \
+            --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
+            --policy governance/bacen/NONPROD-TEMPORARY-TOLERANCE-POLICY.yaml \
+            --scope prod \
+            --output artifacts/bacen-production-hard-gate/matrix-auth-production-decision.json
+
+      - name: Publicar decisão BACEN da célula production
+        if: always() && matrix.environment == 'production'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-production-hard-gate-auth-production
+          path: artifacts/bacen-production-hard-gate/matrix-auth-production-decision.json
+          if-no-files-found: error
+          retention-days: 365
+
       - name: Instalar flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
@@ -160,5 +202,6 @@ jobs:
         with:
           name: fly-auth-azure-report-${{ matrix.environment }}
           path: fly-auth-azure-report-${{ matrix.environment }}.json
+          if-no-files-found: warn
 
 # operational-trigger: 2026-06-21-auth-windows-all-envs
