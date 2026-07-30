@@ -9,7 +9,6 @@ from app.schemas.teams_gateway import (
     TeamsGatewayMessageRequest,
 )
 
-
 TeamsRecipientDeliveryMode = Literal['all', 'first_success', 'channel']
 
 
