@@ -4,7 +4,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.teams_gateway import TeamsGatewayDestinoTipo, TeamsGatewayMessageRequest
+from app.schemas.teams_gateway import (
+    TeamsGatewayDestinoTipo,
+    TeamsGatewayMessageRequest,
+)
 
 
 TeamsRecipientDeliveryMode = Literal['all', 'first_success', 'channel']
