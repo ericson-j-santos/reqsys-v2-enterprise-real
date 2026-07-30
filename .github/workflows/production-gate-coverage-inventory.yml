@@ -44,7 +44,7 @@ jobs:
 
       - name: Build production gate inventory
         run: |
-          mkdir -p artifacts/production-gate-coverage
+          mkdir -p .tmp artifacts/production-gate-coverage
           python scripts/inventory_production_gate_coverage.py \
             --workflow-dir .github/workflows \
             --output artifacts/production-gate-coverage/report.json \
@@ -55,9 +55,40 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api --paginate --slurp "repos/${{ github.repository }}/issues?state=all&per_page=100" \
-            --jq 'add | [.[] | select(.pull_request == null and ((.body // "") | contains("<!-- reqsys-production-gate-coverage -->")))] | sort_by(.number) | last // {}' \
-            > artifacts/production-gate-coverage/existing-issue.json
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${{ github.repository }}/issues?state=all&per_page=100" \
+            > .tmp/issue-pages.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          pages = json.loads(Path(".tmp/issue-pages.json").read_text(encoding="utf-8"))
+          managed = []
+          marker = "<!-- reqsys-production-gate-coverage -->"
+          for page in pages:
+              if not isinstance(page, list):
+                  continue
+              for issue in page:
+                  if not isinstance(issue, dict) or issue.get("pull_request") is not None:
+                      continue
+                  if marker not in str(issue.get("body") or ""):
+                      continue
+                  managed.append(
+                      {
+                          "number": issue.get("number"),
+                          "title": issue.get("title"),
+                          "body": issue.get("body"),
+                          "state": issue.get("state"),
+                          "labels": issue.get("labels") or [],
+                      }
+                  )
+          existing = max(managed, key=lambda item: int(item.get("number") or 0), default={})
+          Path("artifacts/production-gate-coverage/existing-issue.json").write_text(
+              json.dumps(existing, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
 
       - name: Synchronize P0 delivery blocker issue
         if: github.event_name != 'pull_request'
@@ -135,13 +166,13 @@ jobs:
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
           from pathlib import Path
-          report = json.loads(
-              Path("artifacts/production-gate-coverage/report.json").read_text(
-                  encoding="utf-8"
-              )
-          )
-          summary = report["summary"]
+          path = Path("artifacts/production-gate-coverage/report.json")
           print("## Production Gate Coverage Inventory")
+          if not path.exists():
+              print("\n- Inventário não gerado; consulte a primeira etapa com falha.")
+              raise SystemExit(0)
+          report = json.loads(path.read_text(encoding="utf-8"))
+          summary = report["summary"]
           print(f"\n- Capazes de tocar PROD: **{summary['production_capable_workflows']}**")
           print(f"- Protegidos: **{summary['protected_workflows']}**")
           print(f"- Não protegidos: **{summary['unprotected_workflows']}**")
@@ -155,5 +186,5 @@ jobs:
         with:
           name: production-gate-coverage
           path: artifacts/production-gate-coverage/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 365
