@@ -1,0 +1,107 @@
+name: Notify Teams - ReqSys Logs
+
+on:
+  workflow_run:
+    workflows:
+      - CI — ReqSys v2 Enterprise
+      - Main Post-Merge Validation
+      - Fly Runtime P0
+      - Runtime Health Validator
+      - Repository Health Watchdog
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente, branch ou contexto afetado
+        required: true
+        default: dev
+        type: choice
+        options: [dev, stg, prod, main, pull-request]
+      severity:
+        description: Severidade operacional
+        required: true
+        default: error
+        type: choice
+        options: [warning, error, critical]
+      summary:
+        description: Resumo objetivo do evento
+        required: true
+        type: string
+      details:
+        description: Detalhes adicionais; segredos e e-mails serão removidos
+        required: false
+        type: string
+      run_url:
+        description: URL de evidência
+        required: false
+        type: string
+      strict:
+        description: Falhar se a entrega no Teams não for confirmada
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: notify-teams-reqsys-logs-${{ github.event.workflow_run.id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    name: Enviar resumo seguro ao Teams
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TEAMS_RECIPIENT_POLICY: reqsys-operations
+      TEAMS_DELIVERY_MODE: all
+      TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
+      TEAMS_GATEWAY_BASE_URL: ${{ vars.TEAMS_GATEWAY_BASE_URL || 'https://reqsys-api.fly.dev' }}
+      GITHUB_TOKEN: ${{ github.token }}
+      REQSYS_LOG_OUTPUT: reqsys-log-teams-evidence.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Notificar falha de workflow
+        if: github.event_name == 'workflow_run'
+        env:
+          REQSYS_LOG_FROM_WORKFLOW_RUN: "true"
+          REQSYS_LOG_SOURCE: github-actions
+          REQSYS_LOG_ENVIRONMENT: ${{ github.event.workflow_run.head_branch || 'unknown' }}
+          REQSYS_LOG_SEVERITY: ${{ github.event.workflow_run.conclusion == 'failure' && 'error' || 'warning' }}
+          REQSYS_LOG_STATUS: ${{ github.event.workflow_run.conclusion }}
+          REQSYS_LOG_SUMMARY: Falha operacional detectada automaticamente em workflow do ReqSys
+          REQSYS_LOG_WORKFLOW: ${{ github.event.workflow_run.name }}
+          REQSYS_LOG_RUN_ID: ${{ github.event.workflow_run.id }}
+          REQSYS_LOG_RUN_URL: ${{ github.event.workflow_run.html_url }}
+          REQSYS_LOG_CORRELATION_ID: reqsys-workflow-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+        run: python scripts/notify_reqsys_logs_teams.py
+
+      - name: Notificar evento manual
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          REQSYS_LOG_SOURCE: manual
+          REQSYS_LOG_ENVIRONMENT: ${{ inputs.environment }}
+          REQSYS_LOG_SEVERITY: ${{ inputs.severity }}
+          REQSYS_LOG_STATUS: reported
+          REQSYS_LOG_SUMMARY: ${{ inputs.summary }}
+          REQSYS_LOG_DETAILS: ${{ inputs.details }}
+          REQSYS_LOG_RUN_URL: ${{ inputs.run_url }}
+          REQSYS_LOG_STRICT: ${{ inputs.strict }}
+          REQSYS_LOG_CORRELATION_ID: reqsys-manual-${{ github.run_id }}-${{ github.run_attempt }}
+        run: python scripts/notify_reqsys_logs_teams.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reqsys-log-teams-evidence-${{ github.run_id }}
+          path: reqsys-log-teams-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
