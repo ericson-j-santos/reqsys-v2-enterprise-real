@@ -1,0 +1,152 @@
+name: ReqSys Delivery Completion Controller
+
+on:
+  workflow_dispatch:
+    inputs:
+      execute_safe_actions:
+        description: Dispatch safe report-only validators
+        required: true
+        type: boolean
+        default: true
+  schedule:
+    - cron: "47 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+      - "scripts/evaluate_reqsys_delivery_completion.py"
+      - "tests/test_evaluate_reqsys_delivery_completion.py"
+      - ".github/workflows/reqsys-delivery-completion-controller.yml"
+      - "docs/contracts/reqsys-delivery-completion-controller.md"
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/evaluate_reqsys_delivery_completion.py"
+      - "tests/test_evaluate_reqsys_delivery_completion.py"
+      - ".github/workflows/reqsys-delivery-completion-controller.yml"
+      - "docs/contracts/reqsys-delivery-completion-controller.md"
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: reqsys-delivery-completion-controller
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install focused dependencies
+        run: python -m pip install --disable-pip-version-check pytest PyYAML
+
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_evaluate_reqsys_delivery_completion.py
+
+      - name: Collect operational state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp artifacts/reqsys-delivery-completion
+          gh api --paginate --slurp "repos/${{ github.repository }}/pulls?state=open&per_page=100" \
+            --jq '{open_prs: (add | [.[] | {number, state, draft, created_at, updated_at, html_url}])}' \
+            > .tmp/prs.json
+          gh api --paginate --slurp "repos/${{ github.repository }}/actions/runs?per_page=100" \
+            --jq '{workflow_runs: (add.workflow_runs | [.[] | select(.head_branch == "main") | {id, name, status, conclusion, created_at, updated_at, html_url}][0:40])}' \
+            > .tmp/runs.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          prs = json.loads(Path(".tmp/prs.json").read_text(encoding="utf-8"))
+          runs = json.loads(Path(".tmp/runs.json").read_text(encoding="utf-8"))
+          Path(".tmp/operational.json").write_text(
+              json.dumps({**prs, **runs}, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Collect public runtime evidence
+        env:
+          REQSYS_RUNTIME_BASE_URL: https://reqsys-api.fly.dev
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.error, urllib.request
+          from pathlib import Path
+          base = os.environ["REQSYS_RUNTIME_BASE_URL"].rstrip("/")
+          paths = ["/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness"]
+          endpoints = []
+          for path in paths:
+              started = time.perf_counter()
+              code = None
+              error = None
+              try:
+                  with urllib.request.urlopen(base + path, timeout=15) as response:
+                      code = response.status
+                      response.read(4096)
+              except urllib.error.HTTPError as exc:
+                  code = exc.code
+                  error = str(exc)
+              except Exception as exc:
+                  error = f"{type(exc).__name__}: {exc}"
+              endpoints.append({
+                  "name": path,
+                  "url": base + path,
+                  "http_code": code,
+                  "ok": code == 200,
+                  "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+                  "error": error,
+              })
+          Path(".tmp/runtime.json").write_text(
+              json.dumps({"base_url": base, "endpoints": endpoints}, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Evaluate delivery completion
+        run: |
+          python scripts/evaluate_reqsys_delivery_completion.py \
+            --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
+            --operational .tmp/operational.json \
+            --runtime .tmp/runtime.json \
+            --output-json artifacts/reqsys-delivery-completion/report.json \
+            --output-md artifacts/reqsys-delivery-completion/report.md
+
+      - name: Dispatch safe validators
+        if: >-
+          github.event_name != 'pull_request' &&
+          (github.event_name != 'workflow_dispatch' || inputs.execute_safe_actions)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for workflow in \
+            reqsys-next-increment-auto-evaluation.yml \
+            bacen-human-actions-backlog.yml \
+            bacen-nonprod-tolerance-guard.yml
+          do
+            if gh workflow view "$workflow" >/dev/null 2>&1; then
+              gh workflow run "$workflow" --ref main || true
+            fi
+          done
+
+      - name: Publish executive summary
+        if: always()
+        run: cat artifacts/reqsys-delivery-completion/report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reqsys-delivery-completion
+          path: artifacts/reqsys-delivery-completion/
+          if-no-files-found: error
+          retention-days: 365
