@@ -1,0 +1,64 @@
+name: Teams Recipient Policy Runtime Readiness
+
+on:
+  pull_request:
+    paths:
+      - "scripts/validate_teams_recipient_policy_runtime.py"
+      - "tests/test_validate_teams_recipient_policy_runtime.py"
+      - ".github/workflows/teams-recipient-policy-runtime-readiness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/validate_teams_recipient_policy_runtime.py"
+      - "tests/test_validate_teams_recipient_policy_runtime.py"
+      - ".github/workflows/teams-recipient-policy-runtime-readiness.yml"
+  schedule:
+    - cron: "17 10 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-recipient-policy-runtime-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_validate_teams_recipient_policy_runtime.py
+      - name: Evaluate public runtime routes
+        run: >-
+          python scripts/validate_teams_recipient_policy_runtime.py
+          --output artifacts/teams/recipient-policy-runtime-readiness.json
+      - name: Publish summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path = Path("artifacts/teams/recipient-policy-runtime-readiness.json")
+          if path.is_file():
+              data = json.loads(path.read_text(encoding="utf-8"))
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+                  summary.write("### Teams Recipient Policy Runtime Readiness\n")
+                  summary.write(f"- Estado: **{data.get('migration_state')}**\n")
+                  summary.write(f"- Endpoint dinâmico: **{data.get('dynamic_available')}**\n")
+                  summary.write(f"- Endpoint legado: **{data.get('legacy_available')}**\n")
+                  summary.write(f"- Produção alterada: **{data.get('production_touched')}**\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: teams-recipient-policy-runtime-readiness-${{ github.run_id }}
+          path: artifacts/teams/recipient-policy-runtime-readiness.json
+          if-no-files-found: warn
+          retention-days: 365
