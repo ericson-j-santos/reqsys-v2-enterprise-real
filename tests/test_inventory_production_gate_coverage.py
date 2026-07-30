@@ -49,7 +49,7 @@ def test_inventory_classifies_prod_probe_as_observation_only(tmp_path):
     assert inventory["delivery_blocker"] is False
 
 
-def test_inventory_marks_deploy_without_explicit_prod_target_as_ambiguous(tmp_path):
+def test_inventory_marks_deploy_without_explicit_target_as_ambiguous(tmp_path):
     workflows = tmp_path / ".github" / "workflows"
     write(workflows, "deploy.yml", "jobs:\n  deploy:\n    steps:\n      - run: flyctl deploy\n")
     inventory = build_inventory(workflows)
@@ -57,7 +57,33 @@ def test_inventory_marks_deploy_without_explicit_prod_target_as_ambiguous(tmp_pa
     assert inventory["summary"]["unprotected_workflows"] == 1
 
 
-def test_inventory_ignores_non_production_workflow(tmp_path):
+def test_inventory_excludes_explicit_staging_deploy_from_prod_gate(tmp_path):
+    workflows = tmp_path / ".github" / "workflows"
+    write(
+        workflows,
+        "staging.yml",
+        "jobs:\n  deploy:\n    environment: staging\n    steps:\n      - run: flyctl deploy --config fly.staging.toml --app reqsys-api-stg\n",
+    )
+    inventory = build_inventory(workflows)
+    assert inventory["summary"]["nonproduction_mutation_workflows"] == 1
+    assert inventory["summary"]["gate_required_workflows"] == 0
+    assert inventory["summary"]["unprotected_workflows"] == 0
+    assert inventory["delivery_blocker"] is False
+
+
+def test_prod_app_pattern_does_not_match_staging_suffix(tmp_path):
+    workflows = tmp_path / ".github" / "workflows"
+    write(
+        workflows,
+        "staging.yml",
+        "jobs:\n  deploy:\n    steps:\n      - run: flyctl deploy --app reqsys-app-stg\n",
+    )
+    inventory = build_inventory(workflows)
+    assert inventory["summary"]["confirmed_mutation_workflows"] == 0
+    assert inventory["summary"]["nonproduction_mutation_workflows"] == 1
+
+
+def test_inventory_ignores_non_mutating_non_production_workflow(tmp_path):
     workflows = tmp_path / ".github" / "workflows"
     write(workflows, "lint.yml", "jobs:\n  lint:\n    steps:\n      - run: ruff check .\n")
     inventory = build_inventory(workflows)
