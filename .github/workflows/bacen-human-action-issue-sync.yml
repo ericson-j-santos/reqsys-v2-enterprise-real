@@ -61,9 +61,36 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api --paginate --slurp "repos/${{ github.repository }}/issues?state=all&per_page=100" \
-            --jq 'add | [.[] | select(.pull_request == null) | {number, title, body, state, labels}]' \
-            > .tmp/issues.json
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${{ github.repository }}/issues?state=all&per_page=100" \
+            > .tmp/issue-pages.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          pages = json.loads(Path(".tmp/issue-pages.json").read_text(encoding="utf-8"))
+          issues = []
+          for page in pages:
+              if not isinstance(page, list):
+                  continue
+              for issue in page:
+                  if not isinstance(issue, dict) or issue.get("pull_request") is not None:
+                      continue
+                  issues.append(
+                      {
+                          "number": issue.get("number"),
+                          "title": issue.get("title"),
+                          "body": issue.get("body"),
+                          "state": issue.get("state"),
+                          "labels": issue.get("labels") or [],
+                      }
+                  )
+          Path(".tmp/issues.json").write_text(
+              json.dumps(issues, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
 
       - name: Build idempotent synchronization plan
         run: |
@@ -170,13 +197,13 @@ jobs:
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
           from pathlib import Path
-          plan = json.loads(
-              Path("artifacts/bacen-human-action-issue-sync/plan.json").read_text(
-                  encoding="utf-8"
-              )
-          )
-          summary = plan["summary"]
+          path = Path("artifacts/bacen-human-action-issue-sync/plan.json")
           print("## BACEN — sincronização de ações formais")
+          if not path.exists():
+              print("\n- Plano não gerado; consulte a primeira etapa com falha.")
+              raise SystemExit(0)
+          plan = json.loads(path.read_text(encoding="utf-8"))
+          summary = plan["summary"]
           print(f"\n- Controles pendentes: **{plan['pending_controls']}**")
           print(f"- Issues a criar: **{summary['create']}**")
           print(f"- Issues a atualizar/reabrir: **{summary['update']}**")
@@ -190,5 +217,5 @@ jobs:
         with:
           name: bacen-human-action-issue-sync
           path: artifacts/bacen-human-action-issue-sync/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 365
