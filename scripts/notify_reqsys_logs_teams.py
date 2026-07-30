@@ -57,6 +57,32 @@ def redact_text(value: str) -> str:
     return sanitized
 
 
+def sanitize_for_evidence(value: Any) -> Any:
+    """Remove dados sensíveis de estruturas retornadas por provedores externos."""
+    if isinstance(value, dict):
+        sanitized: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized_key = str(key).strip().lower()
+            if normalized_key in {
+                "destino_id",
+                "destination_id",
+                "recipient",
+                "recipients",
+                "to",
+            }:
+                sanitized[str(key)] = "[REDACTED]"
+            else:
+                sanitized[str(key)] = sanitize_for_evidence(item)
+        return sanitized
+    if isinstance(value, list):
+        return [sanitize_for_evidence(item) for item in value]
+    if isinstance(value, tuple):
+        return [sanitize_for_evidence(item) for item in value]
+    if isinstance(value, str):
+        return redact_text(value)
+    return value
+
+
 def normalize_details(
     values: list[str] | tuple[str, ...],
     *,
@@ -180,7 +206,7 @@ def _write_evidence(
             "summary": redact_text(event.summary),
         },
         "message_sha256": hashlib.sha256(message.encode("utf-8")).hexdigest(),
-        "delivery": delivery,
+        "delivery": sanitize_for_evidence(delivery),
     }
     Path(path).write_text(
         json.dumps(document, ensure_ascii=False, indent=2) + "\n",
@@ -302,9 +328,10 @@ def main() -> int:
         delivery_mode=args.delivery_mode,
     )
     _write_evidence(args.output, event=event, message=message, delivery=delivery)
+    safe_delivery = sanitize_for_evidence(delivery)
     print(
         json.dumps(
-            {"correlation_id": event.correlation_id, "delivery": delivery},
+            {"correlation_id": event.correlation_id, "delivery": safe_delivery},
             ensure_ascii=False,
             indent=2,
         )
