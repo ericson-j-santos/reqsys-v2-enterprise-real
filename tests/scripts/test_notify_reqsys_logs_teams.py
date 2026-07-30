@@ -57,3 +57,15 @@ def test_build_message_contains_governed_evidence() -> None:
     assert "Correlation ID: reqsys-log-1" in message
     assert "Job: tests — failure" in message
     assert "logs brutos permanecem" in message
+
+
+def test_sanitize_for_evidence_masks_destination_and_nested_secret() -> None:
+    payload = {
+        "entregue": True,
+        "destination_id": "user@example.com",
+        "provider_response": {"token": "token=abc123", "status": "ok"},
+    }
+    sanitized = module.sanitize_for_evidence(payload)
+    assert sanitized["destination_id"] == "[REDACTED]"
+    assert "abc123" not in str(sanitized)
+    assert sanitized["provider_response"]["status"] == "ok"
