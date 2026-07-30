@@ -82,15 +82,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
+      HITL_ENVIRONMENT: Governança (não produtivo)
       HITL_RECIPIENT_POLICY: hitl-approvers
       HITL_DELIVERY_MODE: all
       TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
+      TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Send approval request through dynamic Teams policy
+      - name: Send approval request as Adaptive Card
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -196,11 +199,14 @@ jobs:
             --label hitl-approval-request)"
           echo "issue_url=$issue_url" >> "$GITHUB_OUTPUT"
           echo "issue_number=${issue_url##*/}" >> "$GITHUB_OUTPUT"
-      - name: Notify Teams through dynamic recipient policy
+      - name: Notify Teams as Adaptive Card
         env:
+          HITL_ENVIRONMENT: Governança (não produtivo)
           HITL_RECIPIENT_POLICY: hitl-approvers
           HITL_DELIVERY_MODE: all
           TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
           REQUEST_TITLE: ${{ inputs.request_title }}
           CONTROL_ID: ${{ inputs.control_id }}
           REQUEST_SUMMARY: ${{ inputs.summary }}
@@ -259,15 +265,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
+      HITL_ENVIRONMENT: Governança (não produtivo)
       HITL_RECIPIENT_POLICY: hitl-approvers
       HITL_DELIVERY_MODE: all
       TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
+      TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Resend Teams notification through dynamic recipient policy
+      - name: Resend Teams notification as Adaptive Card
         env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
@@ -315,7 +324,7 @@ jobs:
           ACTOR: ${{ github.event.comment.user.login }}
         run: |
           set -euo pipefail
-          permission="$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${ACTOR}/permission" --jq '.user.permission')"
+          permission="$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${ACTOR}/permission" --jq .permission)"
           echo "permission=$permission" >> "$GITHUB_OUTPUT"
       - name: Materialize immutable event content
         run: |
