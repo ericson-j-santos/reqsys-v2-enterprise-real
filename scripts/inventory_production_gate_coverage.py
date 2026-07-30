@@ -11,9 +11,19 @@ from typing import Any
 
 PROD_ENVIRONMENT = re.compile(r"environment:\s*production", re.IGNORECASE)
 PROD_TARGET_PATTERNS = (
-    re.compile(r"--environment\s+prod", re.IGNORECASE),
-    re.compile(r"--app\s+reqsys-(?:api|app)\b", re.IGNORECASE),
-    re.compile(r"reqsys-(?:api|app)\.fly\.dev", re.IGNORECASE),
+    re.compile(r"--environment\s+prod(?:uction)?(?=\s|$)", re.IGNORECASE),
+    re.compile(r"--app\s+reqsys-(?:api|app)(?=\s|$|[\"'])", re.IGNORECASE),
+    re.compile(r"https://reqsys-(?:api|app)\.fly\.dev", re.IGNORECASE),
+)
+NONPROD_TARGET_PATTERNS = (
+    re.compile(r"environment:\s*(?:staging|development|dev)\b", re.IGNORECASE),
+    re.compile(r"--environment\s+(?:stg|staging|dev|development)(?=\s|$)", re.IGNORECASE),
+    re.compile(
+        r"--app\s+reqsys-(?:api|app)-(?:stg|dev)(?=\s|$|[\"'])",
+        re.IGNORECASE,
+    ),
+    re.compile(r"https://reqsys-(?:api|app)-(?:stg|dev)\.fly\.dev", re.IGNORECASE),
+    re.compile(r"fly\.(?:staging|development|dev)\.toml", re.IGNORECASE),
 )
 MUTATION_PATTERNS = (
     re.compile(r"flyctl\s+deploy", re.IGNORECASE),
@@ -40,26 +50,40 @@ def inspect_workflow(path: Path, root: Path) -> dict[str, Any] | None:
     if path.name == EXCLUDED_SELF:
         return None
 
-    environment_access = PROD_ENVIRONMENT.search(text) is not None
-    target_signals = matching_patterns(PROD_TARGET_PATTERNS, text)
+    production_environment_access = PROD_ENVIRONMENT.search(text) is not None
+    production_target_signals = matching_patterns(PROD_TARGET_PATTERNS, text)
+    nonproduction_target_signals = matching_patterns(NONPROD_TARGET_PATTERNS, text)
     mutation_signals = matching_patterns(MUTATION_PATTERNS, text)
-    if not environment_access and not target_signals and not mutation_signals:
+
+    if (
+        not production_environment_access
+        and not production_target_signals
+        and not mutation_signals
+    ):
         return None
 
-    if environment_access or (target_signals and mutation_signals):
+    if production_environment_access or (
+        production_target_signals and mutation_signals
+    ):
         classification = "confirmed_production_mutation"
+    elif mutation_signals and nonproduction_target_signals:
+        classification = "nonproduction_mutation_only"
     elif mutation_signals:
         classification = "ambiguous_mutation_requires_review"
     else:
         classification = "production_observation_only"
 
     protection_markers = sorted(marker for marker in PROTECTION_MARKERS if marker in text)
-    gate_required = classification != "production_observation_only"
+    gate_required = classification in {
+        "confirmed_production_mutation",
+        "ambiguous_mutation_requires_review",
+    }
     return {
         "path": relative,
         "classification": classification,
-        "production_environment_access": environment_access,
-        "target_signals": target_signals,
+        "production_environment_access": production_environment_access,
+        "production_target_signals": production_target_signals,
+        "nonproduction_target_signals": nonproduction_target_signals,
         "mutation_signals": mutation_signals,
         "protection_markers": protection_markers,
         "gate_required": gate_required,
@@ -76,7 +100,16 @@ def build_inventory(workflow_dir: Path) -> dict[str, Any]:
                 workflows.append(inspected)
 
     mutation_candidates = [item for item in workflows if item["gate_required"]]
-    observations = [item for item in workflows if not item["gate_required"]]
+    observations = [
+        item
+        for item in workflows
+        if item["classification"] == "production_observation_only"
+    ]
+    nonproduction_mutations = [
+        item
+        for item in workflows
+        if item["classification"] == "nonproduction_mutation_only"
+    ]
     protected = [item for item in mutation_candidates if item["protected"]]
     unprotected = [item for item in mutation_candidates if not item["protected"]]
     confirmed = [
@@ -91,14 +124,15 @@ def build_inventory(workflow_dir: Path) -> dict[str, Any]:
     ]
 
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "contract": "reqsys-production-gate-coverage-inventory",
         "generated_at": datetime.now(UTC).isoformat(),
         "mode": "advisory_until_all_mutation_paths_are_migrated",
         "summary": {
-            "production_related_workflows": len(workflows),
+            "production_related_workflows": len(workflows) - len(nonproduction_mutations),
             "confirmed_mutation_workflows": len(confirmed),
             "ambiguous_mutation_workflows": len(ambiguous),
+            "nonproduction_mutation_workflows": len(nonproduction_mutations),
             "observation_only_workflows": len(observations),
             "gate_required_workflows": len(mutation_candidates),
             "protected_workflows": len(protected),
@@ -107,6 +141,7 @@ def build_inventory(workflow_dir: Path) -> dict[str, Any]:
         "workflows": workflows,
         "mutation_candidates": mutation_candidates,
         "observation_only_workflows": observations,
+        "nonproduction_mutation_workflows": nonproduction_mutations,
         "unprotected_workflows": unprotected,
         "delivery_blocker": bool(unprotected),
         "automatic_enforcement_ready": not unprotected,
@@ -129,31 +164,32 @@ def render_issue_body(inventory: dict[str, Any]) -> str:
         "",
         f"- Mutação confirmada: **{summary['confirmed_mutation_workflows']}**",
         f"- Mutação ambígua para revisão: **{summary['ambiguous_mutation_workflows']}**",
+        f"- Mutação explicitamente não produtiva: **{summary['nonproduction_mutation_workflows']}**",
         f"- Somente observação: **{summary['observation_only_workflows']}**",
         f"- Gate obrigatório: **{summary['gate_required_workflows']}**",
         f"- Protegidos: **{summary['protected_workflows']}**",
         f"- Não protegidos: **{summary['unprotected_workflows']}**",
         "",
-        "## Pendências de mutação",
+        "## Pendências de mutação em produção",
         "",
     ]
     for item in inventory["unprotected_workflows"]:
         lines.append(f"- `{item['path']}` — `{item['classification']}`")
-    lines.extend(
-        [
-            "",
-            "## Fluxos somente leitura",
-            "",
-        ]
-    )
+
+    lines.extend(["", "## Mutações não produtivas excluídas", ""])
+    for item in inventory["nonproduction_mutation_workflows"]:
+        lines.append(f"- `{item['path']}`")
+
+    lines.extend(["", "## Fluxos somente leitura", ""])
     for item in inventory["observation_only_workflows"]:
         lines.append(f"- `{item['path']}`")
+
     lines.extend(
         [
             "",
             "## Critério de encerramento",
             "",
-            "Todos os caminhos de mutação confirmada ou ambígua devem consumir o gate BACEN/Environment Promotion antes de acessar secrets, environment `production` ou executar mudanças no Fly.io.",
+            "Todos os caminhos de mutação confirmada ou ambígua em produção devem consumir o gate BACEN/Environment Promotion antes de acessar secrets, environment `production` ou executar mudanças no Fly.io.",
             "",
             "`production_touched=false`",
             "",
