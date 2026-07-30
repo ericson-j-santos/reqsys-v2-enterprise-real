@@ -1,0 +1,221 @@
+name: BACEN Human Action Issue Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply_changes:
+        description: Apply idempotent issue operations
+        required: true
+        type: boolean
+        default: true
+  schedule:
+    - cron: "23 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+      - "scripts/generate_bacen_human_actions_backlog.py"
+      - "scripts/plan_bacen_human_action_issue_sync.py"
+      - "tests/test_plan_bacen_human_action_issue_sync.py"
+      - ".github/workflows/bacen-human-action-issue-sync.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/plan_bacen_human_action_issue_sync.py"
+      - "tests/test_plan_bacen_human_action_issue_sync.py"
+      - ".github/workflows/bacen-human-action-issue-sync.yml"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: bacen-human-action-issue-sync
+  cancel-in-progress: true
+
+jobs:
+  synchronize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install focused dependencies
+        run: python -m pip install --disable-pip-version-check pytest PyYAML
+
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_plan_bacen_human_action_issue_sync.py
+
+      - name: Generate formal action backlog
+        run: |
+          mkdir -p .tmp artifacts/bacen-human-action-issue-sync
+          python scripts/generate_bacen_human_actions_backlog.py \
+            --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
+            --output .tmp/backlog.json
+
+      - name: Collect existing managed issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${{ github.repository }}/issues?state=all&per_page=100" \
+            > .tmp/issue-pages.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          pages = json.loads(Path(".tmp/issue-pages.json").read_text(encoding="utf-8"))
+          issues = []
+          for page in pages:
+              if not isinstance(page, list):
+                  continue
+              for issue in page:
+                  if not isinstance(issue, dict) or issue.get("pull_request") is not None:
+                      continue
+                  issues.append(
+                      {
+                          "number": issue.get("number"),
+                          "title": issue.get("title"),
+                          "body": issue.get("body"),
+                          "state": issue.get("state"),
+                          "labels": issue.get("labels") or [],
+                      }
+                  )
+          Path(".tmp/issues.json").write_text(
+              json.dumps(issues, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Build idempotent synchronization plan
+        run: |
+          python scripts/plan_bacen_human_action_issue_sync.py \
+            --backlog .tmp/backlog.json \
+            --issues .tmp/issues.json \
+            --output artifacts/bacen-human-action-issue-sync/plan.json
+
+      - name: Ensure managed labels exist
+        if: >-
+          github.event_name != 'pull_request' &&
+          (github.event_name != 'workflow_dispatch' || inputs.apply_changes)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          while IFS='|' read -r name color description; do
+            gh api --method POST "repos/${{ github.repository }}/labels" \
+              -f name="$name" -f color="$color" -f description="$description" \
+              >/dev/null 2>&1 || true
+          done <<'LABELS'
+          bacen|1d76db|Controle mínimo BACEN
+          formal-action|d93f0b|Ação que exige autoridade formal real
+          priority-p0|b60205|Prioridade crítica
+          priority-p1|d93f0b|Prioridade alta
+          priority-p2|fbca04|Prioridade média
+          priority-p3|0e8a16|Prioridade baixa
+          owner-security|5319e7|Papel responsável SECURITY
+          owner-governance|5319e7|Papel responsável GOVERNANCE
+          owner-ai-governor|5319e7|Papel responsável AI_GOVERNOR
+          owner-runtime-operator|5319e7|Papel responsável RUNTIME_OPERATOR
+          LABELS
+
+      - name: Apply synchronization plan
+        if: >-
+          github.event_name != 'pull_request' &&
+          (github.event_name != 'workflow_dispatch' || inputs.apply_changes)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          repo = os.environ["REPOSITORY"]
+          plan = json.loads(
+              Path("artifacts/bacen-human-action-issue-sync/plan.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          def api(method, endpoint, payload):
+              subprocess.run(
+                  ["gh", "api", "--method", method, endpoint, "--input", "-"],
+                  input=json.dumps(payload, ensure_ascii=False),
+                  text=True,
+                  check=True,
+              )
+
+          for operation in plan["operations"]:
+              action = operation["action"]
+              if action == "create":
+                  api(
+                      "POST",
+                      f"repos/{repo}/issues",
+                      {
+                          "title": operation["title"],
+                          "body": operation["body"],
+                          "labels": operation["labels"],
+                      },
+                  )
+              elif action == "update":
+                  api(
+                      "PATCH",
+                      f"repos/{repo}/issues/{operation['number']}",
+                      {
+                          "title": operation["title"],
+                          "body": operation["body"],
+                          "labels": operation["labels"],
+                          "state": "open",
+                      },
+                  )
+              elif action == "close":
+                  api(
+                      "POST",
+                      f"repos/{repo}/issues/{operation['number']}/comments",
+                      {"body": operation["comment"]},
+                  )
+                  api(
+                      "PATCH",
+                      f"repos/{repo}/issues/{operation['number']}",
+                      {"state": "closed", "state_reason": "completed"},
+                  )
+              else:
+                  raise SystemExit(f"Unsupported operation: {action}")
+          PY
+
+      - name: Publish summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          path = Path("artifacts/bacen-human-action-issue-sync/plan.json")
+          print("## BACEN — sincronização de ações formais")
+          if not path.exists():
+              print("\n- Plano não gerado; consulte a primeira etapa com falha.")
+              raise SystemExit(0)
+          plan = json.loads(path.read_text(encoding="utf-8"))
+          summary = plan["summary"]
+          print(f"\n- Controles pendentes: **{plan['pending_controls']}**")
+          print(f"- Issues a criar: **{summary['create']}**")
+          print(f"- Issues a atualizar/reabrir: **{summary['update']}**")
+          print(f"- Issues a fechar: **{summary['close']}**")
+          print("- Aprovações fabricadas: **false**")
+          print("- Produção acessada: **false**")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bacen-human-action-issue-sync
+          path: artifacts/bacen-human-action-issue-sync/
+          if-no-files-found: warn
+          retention-days: 365
