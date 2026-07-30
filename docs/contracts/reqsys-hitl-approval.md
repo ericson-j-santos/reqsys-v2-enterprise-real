@@ -27,6 +27,8 @@ O workflow usa `scripts/notify_hitl_approval_teams.py`, o Teams Messaging Gatewa
 - Secrets armazenam somente credenciais técnicas.
 - Pessoas, grupos, canais e prioridades ficam na tabela `teams_notification_recipients`.
 - `TEAMS_GATEWAY_DESTINO_ID` é aceito somente como fallback de transição quando a política ainda não possui destinatários ativos.
+- Enquanto o runtime ainda não expuser o endpoint de políticas e responder HTTP 404, o cliente tenta uma única vez o endpoint legado, somente quando `TEAMS_GATEWAY_DESTINO_ID` estiver configurado.
+- O fallback de compatibilidade não é usado para erros de rede, autenticação, validação ou falhas diferentes de HTTP 404.
 - Alterar a composição dos aprovadores não exige mudança em secret, workflow, branch ou deploy.
 
 #### Cadastro administrativo
