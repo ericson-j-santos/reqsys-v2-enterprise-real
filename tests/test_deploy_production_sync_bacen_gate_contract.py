@@ -8,6 +8,12 @@ def workflow_text() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
 
+def job_block(text: str, job_name: str, next_job_name: str) -> str:
+    start = text.index(f"\n  {job_name}:\n")
+    end = text.index(f"\n  {next_job_name}:\n", start + 1)
+    return text[start:end]
+
+
 def test_bacen_gate_precedes_every_production_capability():
     text = workflow_text()
     gate = text.index("Gerar decisão BACEN de produção")
@@ -33,14 +39,12 @@ def test_automatic_push_skips_production_without_false_red():
 
 def test_all_mutating_jobs_depend_on_gate_authorization():
     text = workflow_text()
-    for job_name in (
-        "configure-prod-secrets:",
-        "deploy-backend:",
-        "deploy-frontend:",
-    ):
-        start = text.index(job_name)
-        next_job = text.find("\n  ", start + len(job_name))
-        block = text[start:] if next_job == -1 else text[start:next_job]
+    blocks = (
+        job_block(text, "configure-prod-secrets", "deploy-backend"),
+        job_block(text, "deploy-backend", "deploy-frontend"),
+        job_block(text, "deploy-frontend", "post-sync-check"),
+    )
+    for block in blocks:
         assert "needs.gate.outputs.production_allowed == 'true'" in block
 
 
