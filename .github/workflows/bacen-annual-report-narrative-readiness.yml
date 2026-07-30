@@ -1,0 +1,97 @@
+name: BACEN Annual Report Narrative Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md"
+      - "scripts/generate_bacen_annual_report_narrative_readiness.py"
+      - ".github/workflows/bacen-annual-report-narrative-readiness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md"
+      - "scripts/generate_bacen_annual_report_narrative_readiness.py"
+      - ".github/workflows/bacen-annual-report-narrative-readiness.yml"
+  schedule:
+    - cron: "17 9 3 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-annual-report-narrative-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN-08 Narrative Readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate implementation
+        run: python -m py_compile scripts/generate_bacen_annual_report_narrative_readiness.py
+
+      - name: Generate readiness evidence
+        run: |
+          python scripts/generate_bacen_annual_report_narrative_readiness.py \
+            --report governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md \
+            --output artifacts/bacen/bacen-08-annual-report-narrative-readiness.json
+
+      - name: Validate evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-08-annual-report-narrative-readiness.json")
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          summary = evidence["summary"]
+          assert evidence["control_id"] == "BACEN-08"
+          assert summary["target_sections"] == 4
+          assert summary["ready_sections"] + summary["pending_sections"] == 4
+          assert evidence["automatic_blocking"] is False
+          assert evidence["control_status"] in {"partial", "implemented"}
+          assert len(evidence["report_sha256"]) == 64
+          assert evidence["production_touched"] is False
+          print("BACEN-08 narrative readiness evidence: valid")
+          PY
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-08-annual-report-narrative-readiness
+          path: artifacts/bacen/bacen-08-annual-report-narrative-readiness.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Publish summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-08-annual-report-narrative-readiness.json")
+          print("## BACEN-08 — Prontidão narrativa")
+          if not path.exists():
+              print("\n- Evidência não gerada.")
+              raise SystemExit(1)
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          summary = evidence["summary"]
+          print(f"\n- Seções alvo: **{summary['target_sections']}**")
+          print(f"- Seções prontas: **{summary['ready_sections']}**")
+          print(f"- Seções pendentes: **{summary['pending_sections']}**")
+          print(f"- Bloqueio estrutural: **{evidence['automatic_blocking']}**")
+          print("- Produção acessada: **false**")
+          PY
