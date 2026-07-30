@@ -21,44 +21,19 @@ from urllib.request import Request, urlopen
 DEFAULT_BASE_URL = "https://reqsys-api.fly.dev"
 
 
-def enviar_mensagem(
+def _postar_json(
     *,
     base_url: str,
-    texto: str,
-    titulo: str,
-    modo: str,
-    destino_tipo: str,
-    destino_id: str | None,
-    autor: str,
-    permitir_fallback: bool,
-    dry_run: bool,
+    endpoint: str,
+    payload: dict[str, Any],
     timeout: float,
-    recipient_policy: str | None = None,
-    delivery_mode: str = "all",
 ) -> dict[str, Any]:
-    payload = {
-        "destino_tipo": destino_tipo,
-        "modo": modo,
-        "destino_id": destino_id,
-        "texto": texto,
-        "autor": autor,
-        "permitir_fallback": permitir_fallback,
-        "dry_run": dry_run,
-        "metadata": {"titulo": titulo, "assinatura": "ReqSys"},
-    }
-    policy = (recipient_policy or "").strip()
-    if policy:
-        payload["delivery_mode"] = delivery_mode
-        endpoint = f"/v1/teams-gateway/recipient-policies/{quote(policy, safe='')}/messages"
-    else:
-        endpoint = "/v1/teams-gateway/messages"
-
     body = json.dumps(payload).encode("utf-8")
     request = Request(
         f"{base_url.rstrip('/')}{endpoint}",
         data=body,
         method="POST",
-        headers={"Content-Type": "application/json", "User-Agent": "reqsys-notificar-teams/1.1"},
+        headers={"Content-Type": "application/json", "User-Agent": "reqsys-notificar-teams/1.2"},
     )
     try:
         with urlopen(request, timeout=timeout) as response:
@@ -78,6 +53,72 @@ def enviar_mensagem(
     if not isinstance(data, dict):
         return {"entregue": False, "erro": "payload_invalido", "detail": parsed}
     return data
+
+
+def enviar_mensagem(
+    *,
+    base_url: str,
+    texto: str,
+    titulo: str,
+    modo: str,
+    destino_tipo: str,
+    destino_id: str | None,
+    autor: str,
+    permitir_fallback: bool,
+    dry_run: bool,
+    timeout: float,
+    recipient_policy: str | None = None,
+    delivery_mode: str = "all",
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "destino_tipo": destino_tipo,
+        "modo": modo,
+        "destino_id": destino_id,
+        "texto": texto,
+        "autor": autor,
+        "permitir_fallback": permitir_fallback,
+        "dry_run": dry_run,
+        "metadata": {"titulo": titulo, "assinatura": "ReqSys"},
+    }
+    policy = (recipient_policy or "").strip()
+    if not policy:
+        return _postar_json(
+            base_url=base_url,
+            endpoint="/v1/teams-gateway/messages",
+            payload=payload,
+            timeout=timeout,
+        )
+
+    policy_payload = {**payload, "delivery_mode": delivery_mode}
+    policy_endpoint = f"/v1/teams-gateway/recipient-policies/{quote(policy, safe='')}/messages"
+    resultado = _postar_json(
+        base_url=base_url,
+        endpoint=policy_endpoint,
+        payload=policy_payload,
+        timeout=timeout,
+    )
+
+    if resultado.get("erro") != "http_404" or not destino_id:
+        return resultado
+
+    fallback = _postar_json(
+        base_url=base_url,
+        endpoint="/v1/teams-gateway/messages",
+        payload=payload,
+        timeout=timeout,
+    )
+    provider_response = dict(fallback.get("provider_response") or {})
+    provider_response.update(
+        {
+            "recipient_policy": policy,
+            "delivery_mode": delivery_mode,
+            "resolution": "legacy_endpoint_fallback",
+            "policy_endpoint_error": "http_404",
+        }
+    )
+    fallback["provider_response"] = provider_response
+    fallback["fallback_usado"] = True
+    return fallback
 
 
 def main() -> int:

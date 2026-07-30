@@ -1,7 +1,8 @@
 import json
+from io import BytesIO
 from pathlib import Path
 import sys
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -48,6 +49,97 @@ def test_enviar_mensagem_retorna_data_em_sucesso(monkeypatch):
 
     assert resultado["entregue"] is True
     assert resultado["canal_usado"] == "flow_bot"
+
+
+def test_policy_404_usa_destino_explicito_no_endpoint_legado(monkeypatch):
+    chamadas = []
+
+    def fake_urlopen(request, timeout):
+        chamadas.append(request.full_url)
+        body = json.loads(request.data.decode("utf-8"))
+        if request.full_url.endswith("/recipient-policies/hitl-approvers/messages"):
+            assert body["delivery_mode"] == "all"
+            raise HTTPError(
+                request.full_url,
+                404,
+                "Not Found",
+                {},
+                BytesIO(b'{"detail":"Not Found"}'),
+            )
+        assert request.full_url.endswith("/v1/teams-gateway/messages")
+        assert "delivery_mode" not in body
+        assert body["destino_id"] == "user@example.com"
+        return _FakeResponse(
+            {
+                "success": True,
+                "data": {
+                    "entregue": True,
+                    "canal_usado": "flow_bot",
+                    "provider_response": {"message_id": "msg-1"},
+                },
+            }
+        )
+
+    monkeypatch.setattr("scripts.notificar_teams.urlopen", fake_urlopen)
+
+    resultado = enviar_mensagem(
+        base_url="https://reqsys-api.fly.dev",
+        texto="ola",
+        titulo="Titulo",
+        modo="auto",
+        destino_tipo="auto",
+        destino_id="user@example.com",
+        autor="reqsys-hitl",
+        permitir_fallback=True,
+        dry_run=False,
+        timeout=10.0,
+        recipient_policy="hitl-approvers",
+        delivery_mode="all",
+    )
+
+    assert chamadas == [
+        "https://reqsys-api.fly.dev/v1/teams-gateway/recipient-policies/hitl-approvers/messages",
+        "https://reqsys-api.fly.dev/v1/teams-gateway/messages",
+    ]
+    assert resultado["entregue"] is True
+    assert resultado["fallback_usado"] is True
+    assert resultado["provider_response"]["resolution"] == "legacy_endpoint_fallback"
+    assert resultado["provider_response"]["policy_endpoint_error"] == "http_404"
+
+
+def test_policy_404_sem_destino_preserva_erro(monkeypatch):
+    chamadas = []
+
+    def fake_urlopen(request, timeout):
+        chamadas.append(request.full_url)
+        raise HTTPError(
+            request.full_url,
+            404,
+            "Not Found",
+            {},
+            BytesIO(b'{"detail":"Not Found"}'),
+        )
+
+    monkeypatch.setattr("scripts.notificar_teams.urlopen", fake_urlopen)
+
+    resultado = enviar_mensagem(
+        base_url="https://reqsys-api.fly.dev",
+        texto="ola",
+        titulo="Titulo",
+        modo="auto",
+        destino_tipo="auto",
+        destino_id=None,
+        autor="reqsys-hitl",
+        permitir_fallback=True,
+        dry_run=False,
+        timeout=10.0,
+        recipient_policy="hitl-approvers",
+        delivery_mode="all",
+    )
+
+    assert len(chamadas) == 1
+    assert resultado["entregue"] is False
+    assert resultado["erro"] == "http_404"
 
 
 def test_enviar_mensagem_trata_erro_de_rede(monkeypatch):
