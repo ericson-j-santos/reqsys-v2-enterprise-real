@@ -22,12 +22,12 @@ A execução cria uma issue com o marcador `<!-- reqsys-hitl-approval -->` e o l
 
 O workflow usa `scripts/notify_hitl_approval_teams.py` e o Teams Messaging Gateway existente.
 
-Configuração opcional:
+Configuração:
 
-- `TEAMS_GATEWAY_DESTINO_ID`;
-- `TEAMS_GATEWAY_BASE_URL`.
+- secret `TEAMS_GATEWAY_DESTINO_ID` para o e-mail/UPN do destinatário;
+- `TEAMS_GATEWAY_BASE_URL` opcional para substituir o runtime padrão.
 
-A mensagem contém links clicáveis para abrir a solicitação e instruções para aprovar, rejeitar ou solicitar ajuste.
+O UPN não é gravado no código nem nos artifacts. A mensagem contém links clicáveis para abrir a solicitação e instruções para aprovar, rejeitar ou solicitar ajuste.
 
 ### E-mail
 
@@ -63,7 +63,7 @@ Regras:
 
 ## Saída
 
-Artifact `reqsys-hitl-decision-<issue>` retido por 365 dias contendo:
+Artifact `reqsys-hitl-decision-<issue>` retido por 90 dias, limite atualmente aplicado pelo repositório, contendo:
 
 - ator e permissão;
 - decisão e justificativa;
