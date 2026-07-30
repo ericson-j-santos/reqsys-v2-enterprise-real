@@ -85,3 +85,35 @@ def test_delivered_requires_all_dimensions_green():
     assert report["delivered"] is True
     assert report["production_release_allowed"] is True
     assert report["production_touched"] is False
+
+
+def test_cancelled_workflow_is_observed_without_false_technical_block():
+    report = evaluate(
+        matrix(["implemented"]),
+        {
+            "open_prs": [],
+            "workflow_runs": [
+                {"name": "consolidator", "status": "completed", "conclusion": "cancelled"}
+            ],
+        },
+        runtime(),
+    )
+    assert report["technical_ready"] is True
+    assert report["failed_workflows"] == []
+    assert report["delivered"] is True
+
+
+def test_latest_workflow_result_supersedes_older_failure():
+    report = evaluate(
+        matrix(["implemented"]),
+        {
+            "open_prs": [],
+            "workflow_runs": [
+                {"name": "required", "status": "completed", "conclusion": "success"},
+                {"name": "required", "status": "completed", "conclusion": "failure"},
+            ],
+        },
+        runtime(),
+    )
+    assert report["technical_ready"] is True
+    assert report["failed_workflows"] == []
