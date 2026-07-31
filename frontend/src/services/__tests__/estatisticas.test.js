@@ -86,13 +86,32 @@ describe('estatisticas', () => {
     expect(resumo.atencao).toBeGreaterThanOrEqual(1)
   })
 
-  it('valida artifact runtime apenas com origem ambiente run sha e timestamp verificaveis', () => {
+  it('valida artifact runtime apenas com origem ambiente run sha timestamp e atestacao verificaveis', () => {
     expect(validarArtifactRuntime(artifactRuntimeValido)).toMatchObject({ valido: true, ambiente: 'stg' })
 
     const invalido = validarArtifactRuntime({ ...artifactRuntimeValido, evidence_source: 'synthetic', source_head_sha: 'curto' })
     expect(invalido.valido).toBe(false)
     expect(invalido.motivos).toContain('Origem do artifact não é runtime.')
     expect(invalido.motivos).toContain('SHA runtime completo e verificável ausente.')
+
+    const semAtestacao = { ...artifactRuntimeValido }
+    delete semAtestacao.attestation_verified
+    const resultadoSemAtestacao = validarArtifactRuntime(semAtestacao)
+    expect(resultadoSemAtestacao.valido).toBe(false)
+    expect(resultadoSemAtestacao.motivos).toContain('Atestação runtime positiva e verificável ausente.')
+  })
+
+  it('aceita contrato runtime com verification_status positivo e generated_at', () => {
+    const artifact = {
+      evidence_source: 'runtime',
+      environment: 'prod',
+      run_id: '30500000001',
+      merge_sha: 'b'.repeat(40),
+      generated_at: '2026-07-31T12:06:00Z',
+      verification_status: 'verified'
+    }
+
+    expect(validarArtifactRuntime(artifact)).toMatchObject({ valido: true, ambiente: 'prod' })
   })
 
   it('preserva retorno somente dentro da área de estatísticas', () => {
