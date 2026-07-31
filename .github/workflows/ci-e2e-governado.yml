@@ -93,10 +93,13 @@ jobs:
           done
           cat /tmp/reqsys-vite.log || true
           exit 1
-      - name: Executar E2E responsivo
+      - name: Executar E2E responsivo e drill-down estatístico
         env:
           E2E_BASE_URL: http://127.0.0.1:5173
-        run: npx playwright test tests/e2e/responsividade.spec.js
+        run: >-
+          npx playwright test
+          tests/e2e/responsividade.spec.js
+          tests/e2e/estatistica-detalhe.spec.js
       - name: Publicar evidências E2E
         if: always()
         uses: actions/upload-artifact@v4
