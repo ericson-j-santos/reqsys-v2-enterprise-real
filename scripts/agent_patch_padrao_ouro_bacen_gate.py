@@ -1,9 +1,25 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import re
 
 DELIVERY = Path(".github/workflows/padrao-ouro-delivery-automation.yml")
 REUSABLE = Path(".github/workflows/bacen-production-hard-gate.yml")
 MARKER = "# REQSYS_PRODUCTION_GOVERNANCE_GATE\n"
+
+
+def replace_in_job(text: str, job_name: str, old: str, new: str) -> str:
+    start_marker = f"\n  {job_name}:\n"
+    start = text.find(start_marker)
+    if start < 0:
+        raise SystemExit(f"job {job_name} not found")
+    following = re.search(r"\n  [A-Za-z0-9_-]+:\n", text[start + len(start_marker):])
+    end = len(text) if following is None else start + len(start_marker) + following.start()
+    section = text[start:end]
+    if section.count(old) != 1:
+        raise SystemExit(f"{job_name} dependency contract changed")
+    section = section.replace(old, new, 1)
+    return text[:start] + section + text[end:]
+
 
 # Expose the reusable workflow decision without changing the gate implementation.
 reusable = REUSABLE.read_text(encoding="utf-8")
@@ -65,9 +81,7 @@ new_configure = """    needs: [validate-runtime, production-gate]
       needs.production-gate.result == 'success' &&
       needs.production-gate.outputs.production_allowed == 'true' &&
 """
-if text.count(old_configure) != 1:
-    raise SystemExit("configure-prod-secrets dependency contract changed")
-text = text.replace(old_configure, new_configure, 1)
+text = replace_in_job(text, "configure-prod-secrets", old_configure, new_configure)
 
 old_backend = """    needs: [validate-runtime, configure-prod-secrets]
     if: >-
@@ -81,9 +95,7 @@ new_backend = """    needs: [validate-runtime, production-gate, configure-prod-s
       needs.production-gate.outputs.production_allowed == 'true' &&
       needs.configure-prod-secrets.result == 'success' &&
 """
-if text.count(old_backend) != 1:
-    raise SystemExit("backend deploy dependency contract changed")
-text = text.replace(old_backend, new_backend, 1)
+text = replace_in_job(text, "deploy-fly-prod", old_backend, new_backend)
 
 old_frontend = """    needs: validate-runtime
     if: >-
@@ -95,9 +107,7 @@ new_frontend = """    needs: [validate-runtime, production-gate]
       needs.production-gate.result == 'success' &&
       needs.production-gate.outputs.production_allowed == 'true' &&
 """
-if text.count(old_frontend) != 1:
-    raise SystemExit("frontend deploy dependency contract changed")
-text = text.replace(old_frontend, new_frontend, 1)
+text = replace_in_job(text, "deploy-fly-frontend-prod", old_frontend, new_frontend)
 
 old_summary_needs = """    needs: [auto-open-pr, validate-runtime, configure-prod-secrets, deploy-fly-prod, deploy-fly-frontend-prod, public-runtime-smoke]
 """
