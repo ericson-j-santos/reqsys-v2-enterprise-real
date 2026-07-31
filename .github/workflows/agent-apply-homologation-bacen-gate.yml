@@ -1,0 +1,55 @@
+name: Agent Apply Homologation BACEN Gate
+
+on:
+  push:
+    branches:
+      - agent/homologation-bacen-prod-gate-v1
+    paths:
+      - scripts/agent_patch_homologation_bacen_gate.py
+      - .github/workflows/agent-apply-homologation-bacen-gate.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: agent-apply-homologation-bacen-gate
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/homologation-bacen-prod-gate-v1
+          fetch-depth: 0
+
+      - name: Apply strict patch
+        run: python scripts/agent_patch_homologation_bacen_gate.py
+
+      - name: Remove temporary applicator
+        run: |
+          rm scripts/agent_patch_homologation_bacen_gate.py
+          rm .github/workflows/agent-apply-homologation-bacen-gate.yml
+
+      - name: Verify isolated scope
+        run: |
+          set -euo pipefail
+          changed="$(git status --short | awk '{print $2}' | sort)"
+          expected="$(printf '%s\n' \
+            .github/workflows/agent-apply-homologation-bacen-gate.yml \
+            .github/workflows/fly-environment-homologation-gate.yml \
+            scripts/agent_patch_homologation_bacen_gate.py | sort)"
+          test "$changed" = "$expected"
+
+      - name: Commit protected workflow
+        run: |
+          git config user.name "reqsys-governed-agent"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/workflows/fly-environment-homologation-gate.yml \
+            .github/workflows/agent-apply-homologation-bacen-gate.yml \
+            scripts/agent_patch_homologation_bacen_gate.py
+          git commit -m "feat(compliance): gate BACEN na homologação Fly"
+          git push origin HEAD:agent/homologation-bacen-prod-gate-v1
