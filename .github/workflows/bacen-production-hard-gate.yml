@@ -8,6 +8,13 @@ on:
         required: false
         type: boolean
         default: true
+    outputs:
+      production_allowed:
+        description: Whether the BACEN evidence authorizes production
+        value: ${{ jobs.gate.outputs.production_allowed }}
+      decision:
+        description: BACEN production decision
+        value: ${{ jobs.gate.outputs.decision }}
   workflow_dispatch:
     inputs:
       enforce:
