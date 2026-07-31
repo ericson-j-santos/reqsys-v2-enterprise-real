@@ -45,7 +45,8 @@ jobs:
               raise SystemExit(f'missing delivery contract markers: {missing}')
           if delivery.index('\n  production-gate:\n') > delivery.index('\n  configure-prod-secrets:\n'):
               raise SystemExit('production gate must precede production secrets job')
-          for item in ['production_allowed:', 'decision:', 'value: ${{ jobs.gate.outputs.production_allowed }}']:
+          reusable_output = 'value: $' + '{{ jobs.gate.outputs.production_allowed }}'
+          for item in ['production_allowed:', 'decision:', reusable_output]:
               if item not in reusable:
                   raise SystemExit(f'missing reusable output: {item}')
           PY
