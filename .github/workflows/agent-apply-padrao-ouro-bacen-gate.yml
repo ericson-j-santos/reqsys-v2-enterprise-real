@@ -1,18 +1,12 @@
 name: Agent Apply Padrão Ouro BACEN Gate
 
 on:
-  push:
-    branches:
-      - agent/padrao-ouro-bacen-prod-gate-v1
-    paths:
-      - scripts/agent_patch_padrao_ouro_bacen_gate.py
-      - .github/workflows/agent-apply-padrao-ouro-bacen-gate.yml
   pull_request:
-    types: [opened]
+    types: [opened, reopened]
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: agent-apply-padrao-ouro-bacen-gate
@@ -20,9 +14,7 @@ concurrency:
 
 jobs:
   apply:
-    if: >-
-      github.actor != 'github-actions[bot]' &&
-      (github.event_name == 'push' || github.head_ref == 'agent/padrao-ouro-bacen-prod-gate-v1')
+    if: github.head_ref == 'agent/padrao-ouro-bacen-prod-gate-v1'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -30,6 +22,17 @@ jobs:
         with:
           ref: agent/padrao-ouro-bacen-prod-gate-v1
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify governed workflow token
+        env:
+          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_PAT_ACTIONS:-}" ]; then
+            echo "::error::GH_PAT_ACTIONS is required with repo and workflow scopes."
+            exit 1
+          fi
 
       - name: Apply strict patch
         run: python scripts/agent_patch_padrao_ouro_bacen_gate.py
@@ -51,7 +54,10 @@ jobs:
           test "$changed" = "$expected"
 
       - name: Commit protected workflows
+        env:
+          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
         run: |
+          set -euo pipefail
           git config user.name "reqsys-governed-agent"
           git config user.email "actions@users.noreply.github.com"
           git add .github/workflows/bacen-production-hard-gate.yml \
@@ -59,4 +65,5 @@ jobs:
             .github/workflows/agent-apply-padrao-ouro-bacen-gate.yml \
             scripts/agent_patch_padrao_ouro_bacen_gate.py
           git commit -m "feat(compliance): gate BACEN no Padrão Ouro Delivery"
+          git remote set-url origin "https://x-access-token:${GH_PAT_ACTIONS}@github.com/${GITHUB_REPOSITORY}.git"
           git push origin HEAD:agent/padrao-ouro-bacen-prod-gate-v1
