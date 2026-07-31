@@ -1,33 +1,17 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "policies": [
     {
       "name": "hitl-approvers",
       "delivery_mode": "all",
-      "recipients": [
-        {
-          "name": "Ericson Jose dos Santos",
-          "destination_id": "ericsonjosedossantos@tieri659.onmicrosoft.com",
-          "destination_type": "chat",
-          "priority": 10,
-          "active": true,
-          "notes": "Destinatario inicial governado da politica HITL"
-        }
-      ]
+      "recipient_source": "runtime_db",
+      "recipients": []
     },
     {
       "name": "reqsys-operations",
       "delivery_mode": "all",
-      "recipients": [
-        {
-          "name": "Ericson Jose dos Santos",
-          "destination_id": "ericsonjosedossantos@tieri659.onmicrosoft.com",
-          "destination_type": "chat",
-          "priority": 10,
-          "active": true,
-          "notes": "Destinatario inicial dos alertas operacionais e logs sanitizados do ReqSys"
-        }
-      ]
+      "recipient_source": "runtime_db",
+      "recipients": []
     }
   ]
 }

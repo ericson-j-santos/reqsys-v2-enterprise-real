@@ -53,7 +53,7 @@ def probe_policy(
         headers={
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "reqsys-teams-policy-readiness/1.0",
+            "User-Agent": "reqsys-teams-policy-readiness/1.1",
         },
     )
 
@@ -84,16 +84,18 @@ def probe_policy(
     )
     data = response_payload.get("data") if isinstance(response_payload, dict) else None
     dry_run_confirmed = bool(isinstance(data, dict) and data.get("dry_run") is True)
+    policy_ready = endpoint_available and dry_run_confirmed
 
     return {
         "policy": normalized_policy,
         "endpoint_available": endpoint_available,
         "dry_run_confirmed": dry_run_confirmed,
+        "policy_ready": policy_ready,
         "status_code": status_code,
         "error": error,
         "detail": detail,
-        "legacy_fallback_required": not endpoint_available,
-        "fallback_retirement_candidate": endpoint_available and dry_run_confirmed,
+        "legacy_fallback_required": not policy_ready,
+        "fallback_retirement_candidate": policy_ready,
         "production_touched": False,
     }
 
@@ -117,16 +119,20 @@ def build_report(
         for policy in unique_policies
     ]
     available = sum(1 for item in results if item["endpoint_available"])
-    all_ready = available == len(results)
+    confirmed = sum(1 for item in results if item["dry_run_confirmed"])
+    ready = sum(1 for item in results if item["policy_ready"])
+    all_ready = ready == len(results)
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "contract": "teams-recipient-policy-runtime-readiness",
         "generated_at": (generated_at or datetime.now(UTC)).isoformat(),
         "base_url": base_url.rstrip("/"),
         "summary": {
             "policies_checked": len(results),
             "endpoint_available": available,
-            "legacy_fallback_required": len(results) - available,
+            "dry_run_confirmed": confirmed,
+            "ready_policies": ready,
+            "legacy_fallback_required": len(results) - ready,
             "all_policies_ready": all_ready,
         },
         "policies": results,
@@ -161,7 +167,7 @@ def main() -> int:
     print(
         "Teams recipient-policy readiness: "
         f"decision={report['decision']} "
-        f"available={report['summary']['endpoint_available']}/"
+        f"ready={report['summary']['ready_policies']}/"
         f"{report['summary']['policies_checked']}"
     )
     if args.strict and not report["summary"]["all_policies_ready"]:
