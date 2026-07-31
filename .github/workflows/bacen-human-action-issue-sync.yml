@@ -16,13 +16,17 @@ on:
       - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
       - "scripts/generate_bacen_human_actions_backlog.py"
       - "scripts/plan_bacen_human_action_issue_sync.py"
+      - "scripts/notify_bacen_human_actions.py"
       - "tests/test_plan_bacen_human_action_issue_sync.py"
+      - "tests/test_notify_bacen_human_actions.py"
       - ".github/workflows/bacen-human-action-issue-sync.yml"
   pull_request:
     branches: [main]
     paths:
       - "scripts/plan_bacen_human_action_issue_sync.py"
+      - "scripts/notify_bacen_human_actions.py"
       - "tests/test_plan_bacen_human_action_issue_sync.py"
+      - "tests/test_notify_bacen_human_actions.py"
       - ".github/workflows/bacen-human-action-issue-sync.yml"
 
 permissions:
@@ -48,7 +52,10 @@ jobs:
         run: python -m pip install --disable-pip-version-check pytest PyYAML
 
       - name: Run focused tests
-        run: python -m pytest -q tests/test_plan_bacen_human_action_issue_sync.py
+        run: >-
+          python -m pytest -q
+          tests/test_plan_bacen_human_action_issue_sync.py
+          tests/test_notify_bacen_human_actions.py
 
       - name: Generate formal action backlog
         run: |
@@ -191,6 +198,34 @@ jobs:
                   raise SystemExit(f"Unsupported operation: {action}")
           PY
 
+      - name: Notify changed formal actions through Teams and optional e-mail
+        if: >-
+          github.event_name != 'pull_request' &&
+          (github.event_name != 'workflow_dispatch' || inputs.apply_changes)
+        env:
+          TEAMS_GATEWAY_BASE_URL: ${{ vars.TEAMS_GATEWAY_BASE_URL || 'https://reqsys-api.fly.dev' }}
+          HITL_RECIPIENT_POLICY: hitl-approvers
+          HITL_DELIVERY_MODE: all
+          HITL_EMAIL_FROM: ${{ secrets.HITL_EMAIL_FROM }}
+          HITL_EMAIL_TO: ${{ secrets.HITL_EMAIL_TO }}
+          HITL_SMTP_HOST: ${{ secrets.HITL_SMTP_HOST }}
+          HITL_SMTP_PORT: ${{ secrets.HITL_SMTP_PORT }}
+          HITL_SMTP_USERNAME: ${{ secrets.HITL_SMTP_USERNAME }}
+          HITL_SMTP_PASSWORD: ${{ secrets.HITL_SMTP_PASSWORD }}
+          HITL_SMTP_MODE: ${{ secrets.HITL_SMTP_MODE }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          issues_url="https://github.com/${REPOSITORY}/issues?q=is%3Aissue%20is%3Aopen%20label%3Aformal-action"
+          python scripts/notify_bacen_human_actions.py \
+            --plan artifacts/bacen-human-action-issue-sync/plan.json \
+            --repository "$REPOSITORY" \
+            --run-url "$RUN_URL" \
+            --issues-url "$issues_url" \
+            --eml-output artifacts/bacen-human-action-issue-sync/notification.eml \
+            --output artifacts/bacen-human-action-issue-sync/notification.json
+
       - name: Publish summary
         if: always()
         run: |
@@ -210,6 +245,20 @@ jobs:
           print(f"- Issues a fechar: **{summary['close']}**")
           print("- Aprovações fabricadas: **false**")
           print("- Produção acessada: **false**")
+          notification = Path(
+              "artifacts/bacen-human-action-issue-sync/notification.json"
+          )
+          if notification.exists():
+              report = json.loads(notification.read_text(encoding="utf-8"))
+              print(f"- Notificação requerida: **{report['should_notify']}**")
+              print(
+                  "- Teams entregue: "
+                  f"**{report['delivery']['teams'].get('delivered', False)}**"
+              )
+              print(
+                  "- E-mail enviado: "
+                  f"**{report['delivery']['email'].get('sent', False)}**"
+              )
           PY
 
       - uses: actions/upload-artifact@v4
