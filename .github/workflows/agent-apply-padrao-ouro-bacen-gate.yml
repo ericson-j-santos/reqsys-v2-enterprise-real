@@ -1,4 +1,4 @@
-name: Agent Apply Padrão Ouro BACEN Gate
+name: Agent Build Padrão Ouro BACEN Gate Artifact
 
 on:
   pull_request:
@@ -9,11 +9,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: agent-apply-padrao-ouro-bacen-gate
+  group: agent-build-padrao-ouro-bacen-gate-artifact
   cancel-in-progress: false
 
 jobs:
-  apply:
+  build:
     if: github.head_ref == 'agent/padrao-ouro-bacen-prod-gate-v1'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -24,46 +24,38 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify governed workflow token
-        env:
-          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
-        run: |
-          set -euo pipefail
-          if [ -z "${GH_PAT_ACTIONS:-}" ]; then
-            echo "::error::GH_PAT_ACTIONS is required with repo and workflow scopes."
-            exit 1
-          fi
-
-      - name: Apply strict patch
+      - name: Apply strict patch locally
         run: python scripts/agent_patch_padrao_ouro_bacen_gate.py
 
-      - name: Remove temporary applicator
+      - name: Validate generated contracts
         run: |
-          rm scripts/agent_patch_padrao_ouro_bacen_gate.py
-          rm .github/workflows/agent-apply-padrao-ouro-bacen-gate.yml
+          python - <<'PY'
+          from pathlib import Path
+          delivery = Path('.github/workflows/padrao-ouro-delivery-automation.yml').read_text()
+          reusable = Path('.github/workflows/bacen-production-hard-gate.yml').read_text()
+          required_delivery = [
+              '# REQSYS_PRODUCTION_GOVERNANCE_GATE',
+              '  production-gate:',
+              'uses: ./.github/workflows/bacen-production-hard-gate.yml',
+              "needs.production-gate.outputs.production_allowed == 'true'",
+              '| BACEN production gate |',
+          ]
+          missing = [item for item in required_delivery if item not in delivery]
+          if missing:
+              raise SystemExit(f'missing delivery contract markers: {missing}')
+          if delivery.index('  production-gate:') > delivery.index('  configure-prod-secrets:'):
+              raise SystemExit('production gate must precede production secrets')
+          for item in ['production_allowed:', 'decision:', 'value: ${{ jobs.gate.outputs.production_allowed }}']:
+              if item not in reusable:
+                  raise SystemExit(f'missing reusable output: {item}')
+          PY
 
-      - name: Verify isolated scope
-        run: |
-          set -euo pipefail
-          changed="$(git status --short | awk '{print $2}' | sort)"
-          expected="$(printf '%s\n' \
-            .github/workflows/agent-apply-padrao-ouro-bacen-gate.yml \
-            .github/workflows/bacen-production-hard-gate.yml \
-            .github/workflows/padrao-ouro-delivery-automation.yml \
-            scripts/agent_patch_padrao_ouro_bacen_gate.py | sort)"
-          test "$changed" = "$expected"
-
-      - name: Commit protected workflows
-        env:
-          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
-        run: |
-          set -euo pipefail
-          git config user.name "reqsys-governed-agent"
-          git config user.email "actions@users.noreply.github.com"
-          git add .github/workflows/bacen-production-hard-gate.yml \
-            .github/workflows/padrao-ouro-delivery-automation.yml \
-            .github/workflows/agent-apply-padrao-ouro-bacen-gate.yml \
-            scripts/agent_patch_padrao_ouro_bacen_gate.py
-          git commit -m "feat(compliance): gate BACEN no Padrão Ouro Delivery"
-          git remote set-url origin "https://x-access-token:${GH_PAT_ACTIONS}@github.com/${GITHUB_REPOSITORY}.git"
-          git push origin HEAD:agent/padrao-ouro-bacen-prod-gate-v1
+      - name: Publish generated workflows
+        uses: actions/upload-artifact@v4
+        with:
+          name: padrao-ouro-bacen-gate-generated
+          path: |
+            .github/workflows/padrao-ouro-delivery-automation.yml
+            .github/workflows/bacen-production-hard-gate.yml
+          if-no-files-found: error
+          retention-days: 7
