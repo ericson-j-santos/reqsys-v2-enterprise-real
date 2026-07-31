@@ -1,0 +1,141 @@
+name: HITL Decision Consistency Guard
+
+on:
+  schedule:
+    - cron: "41 * * * *"
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: "Fail when conflicting terminal decisions are found"
+        required: false
+        default: false
+        type: boolean
+  issues:
+    types: [closed, reopened]
+  issue_comment:
+    types: [created]
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/audit_hitl_decision_consistency.py"
+      - "tests/test_audit_hitl_decision_consistency.py"
+      - ".github/workflows/hitl-decision-consistency-guard.yml"
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: hitl-decision-consistency-${{ github.event.issue.number || github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  contract-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check pytest
+      - run: python -m pytest -q tests/test_audit_hitl_decision_consistency.py
+
+  audit:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Collect HITL issues and decision comments
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp artifacts/hitl-decision-consistency
+          gh issue list \
+            --state all \
+            --search 'HITL in:title' \
+            --limit 100 \
+            --json number,title,url \
+            > .tmp/issues-base.json
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          base = json.loads(Path(".tmp/issues-base.json").read_text(encoding="utf-8"))
+          output = []
+          for issue in base:
+              number = int(issue["number"])
+              raw = subprocess.check_output(
+                  [
+                      "gh",
+                      "api",
+                      f"repos/{os.environ['GITHUB_REPOSITORY']}/issues/{number}/comments?per_page=100",
+                      "--paginate",
+                      "--slurp",
+                  ],
+                  text=True,
+              )
+              pages = json.loads(raw)
+              comments = [comment for page in pages for comment in page]
+              issue["comments"] = [
+                  {
+                      "body": comment.get("body") or "",
+                      "url": comment.get("html_url") or "",
+                      "createdAt": comment.get("created_at") or "",
+                      "author": {"login": (comment.get("user") or {}).get("login") or ""},
+                  }
+                  for comment in comments
+              ]
+              output.append(issue)
+          Path(".tmp/issues.json").write_text(
+              json.dumps(output, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Audit decision consistency
+        env:
+          STRICT_INPUT: ${{ inputs.strict || 'false' }}
+        run: |
+          strict_args=()
+          if [[ "$STRICT_INPUT" == "true" ]]; then
+            strict_args+=(--strict)
+          fi
+          python scripts/audit_hitl_decision_consistency.py \
+            --issues .tmp/issues.json \
+            --output artifacts/hitl-decision-consistency/report.json \
+            "${strict_args[@]}"
+      - name: Publish summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/hitl-decision-consistency/report.json")
+          if not path.exists():
+              print("## HITL Decision Consistency Guard\n- Report unavailable")
+              raise SystemExit(0)
+          report = json.loads(path.read_text())
+          summary = report["summary"]
+          print("## HITL Decision Consistency Guard")
+          print(f"- Issues checked: **{summary['issues_checked']}**")
+          print(f"- Conflicts: **{summary['conflicts']}**")
+          print(f"- Decision: **{report['decision']}**")
+          print("- Automatic override allowed: **false**")
+          print("- Production touched: **false**")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hitl-decision-consistency
+          path: artifacts/hitl-decision-consistency/report.json
+          if-no-files-found: warn
+          retention-days: 90
