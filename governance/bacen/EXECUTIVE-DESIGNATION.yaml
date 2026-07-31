@@ -1,4 +1,4 @@
-schema_version: 1.0.0
+schema_version: 1.1.0
 control_id: BACEN-08
 title: Designação do responsável executivo pelo programa de segurança cibernética
 mode: advisory
@@ -16,4 +16,23 @@ designation:
   designated_at: null
   designation_document_reference: null
   designated_by: null
+decision_evidence:
+  issue_url: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1119
+  comment_url: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1119#issuecomment-5141616243
+  comment_sha256: d45d901949da5b527c514268e24cf5a7d04fb3e29d5c5f8df18602c69688a60f
+  decision: approved
+  authenticated_actor: ericson-j-santos
+  recorded_at: '2026-07-31'
+  asserted_fields_present:
+    - executive_name
+    - executive_role
+    - designated_at
+    - designation_document_reference
+    - report_signoff_reference
+  designation_document_reference: REF-2026-015
+  report_signoff_reference: REF-2026-021
+  evidence_source: authenticated_github_issue_comment
+  personal_or_sensitive_content_replicated: false
+  verification_status: pending_designated_by_and_formal_report_signoff_metadata
+  automatic_status_promotion_allowed: false
 review_cycle_days: 365
