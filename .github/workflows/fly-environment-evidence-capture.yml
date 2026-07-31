@@ -1,0 +1,222 @@
+name: Fly Environment Evidence Capture
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Canonical environment to capture
+        required: true
+        type: string
+      expected_sha:
+        description: Exact main SHA expected in the runtime
+        required: true
+        type: string
+      phase:
+        description: Evidence phase
+        required: false
+        type: string
+        default: read_only
+      strict:
+        description: Fail when the environment is not promotion-ready
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      ready:
+        description: Whether every promotion evidence check passed
+        value: ${{ jobs.capture.outputs.ready }}
+      decision:
+        description: Promotion evidence decision
+        value: ${{ jobs.capture.outputs.decision }}
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente canônico
+        required: true
+        type: choice
+        options: [dev, hml, prod]
+      expected_sha:
+        description: SHA exato esperado no runtime
+        required: true
+        type: string
+      phase:
+        description: Fase da evidência
+        required: true
+        type: choice
+        options: [read_only, pre_deploy, post_deploy]
+        default: read_only
+      strict:
+        description: Falhar quando o ambiente não estiver pronto
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fly-environment-evidence-${{ inputs.environment }}-${{ inputs.expected_sha }}
+  cancel-in-progress: true
+
+env:
+  ARTIFACT_DIR: artifacts/fly-environment-evidence/${{ inputs.environment }}
+  TARGET_SHA: ${{ inputs.expected_sha }}
+
+jobs:
+  capture:
+    name: Capture ${{ inputs.environment }} evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: ${{ inputs.environment == 'dev' && 'dev' || inputs.environment == 'hml' && 'staging' || 'production' }}
+    outputs:
+      ready: ${{ steps.decision.outputs.ready }}
+      decision: ${{ steps.decision.outputs.decision }}
+    steps:
+      - name: Checkout exact SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
+
+      - name: Validate exact SHA ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Resolve environment configuration
+        id: env
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+
+          manifest = json.load(open("infra/fly-environments.json", encoding="utf-8"))
+          cfg = manifest["environments"][os.environ["TARGET_ENVIRONMENT"]]
+          print(f"api_url={cfg['api_url']}")
+          print(f"frontend_url={cfg['frontend_url']}")
+          print(f"api_app={cfg['api_app']}")
+          print(f"frontend_app={cfg['frontend_app']}")
+          PY
+
+      - name: Capture sanitized Fly state
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          python scripts/capture_fly_environment_state.py \
+            --environment "${{ inputs.environment }}" \
+            --expected-sha "$TARGET_SHA" \
+            --phase "${{ inputs.phase }}" \
+            --output "$ARTIFACT_DIR/fly-state.json"
+
+      - name: Capture public runtime, publication and login evidence
+        id: public
+        shell: bash
+        run: |
+          set +e
+          python scripts/validate_public_runtime.py \
+            --base-url "${{ steps.env.outputs.api_url }}" \
+            --environment "${{ inputs.environment }}" \
+            --include-optional-evidence \
+            --timeout 25 \
+            --output "$ARTIFACT_DIR/runtime.json" \
+            --readiness-output "$ARTIFACT_DIR/readiness.json"
+          runtime_rc=$?
+
+          python scripts/validate_publication_sync.py \
+            --environment "${{ inputs.environment }}" \
+            --expected-sha "$TARGET_SHA" \
+            --timeout 25 \
+            --output "$ARTIFACT_DIR/publication.json"
+          publication_rc=$?
+
+          python scripts/validar_login_multi_ambiente.py \
+            --environment "${{ inputs.environment }}" \
+            --timeout 25 \
+            --output "$ARTIFACT_DIR/login.json"
+          login_rc=$?
+
+          export runtime_rc publication_rc login_rc
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              "runtime": int(os.environ["runtime_rc"]),
+              "publication": int(os.environ["publication_rc"]),
+              "login": int(os.environ["login_rc"]),
+          }
+          Path(os.environ["ARTIFACT_DIR"]).joinpath("collector-exit-codes.json").write_text(
+              json.dumps(payload, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          exit 0
+
+      - name: Evaluate promotion evidence
+        id: evaluate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          strict_arg=()
+          if [ "${{ inputs.strict }}" = "true" ]; then
+            strict_arg=(--strict)
+          fi
+          python scripts/evaluate_environment_promotion_capture.py \
+            --environment "${{ inputs.environment }}" \
+            --expected-sha "$TARGET_SHA" \
+            --fly-state "$ARTIFACT_DIR/fly-state.json" \
+            --runtime "$ARTIFACT_DIR/runtime.json" \
+            --publication "$ARTIFACT_DIR/publication.json" \
+            --login "$ARTIFACT_DIR/login.json" \
+            --output "$ARTIFACT_DIR/decision.json" \
+            "${strict_arg[@]}"
+
+      - name: Export decision
+        id: decision
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f "$ARTIFACT_DIR/decision.json" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "decision=evidence_missing" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "ready=$(jq -r '.ready // false' "$ARTIFACT_DIR/decision.json")" >> "$GITHUB_OUTPUT"
+          echo "decision=$(jq -r '.decision // "evidence_missing"' "$ARTIFACT_DIR/decision.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish summary
+        if: always()
+        run: |
+          if [ -f "$ARTIFACT_DIR/summary.md" ]; then
+            cat "$ARTIFACT_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload environment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly-environment-evidence-${{ inputs.environment }}-${{ inputs.phase }}
+          path: ${{ env.ARTIFACT_DIR }}/
+          if-no-files-found: error
+          retention-days: 90
