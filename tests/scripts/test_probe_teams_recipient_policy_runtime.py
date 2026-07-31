@@ -40,8 +40,25 @@ def test_probe_confirma_endpoint_e_dry_run() -> None:
 
     assert result["endpoint_available"] is True
     assert result["dry_run_confirmed"] is True
+    assert result["policy_ready"] is True
     assert result["legacy_fallback_required"] is False
     assert result["fallback_retirement_candidate"] is True
+
+
+def test_probe_http_200_sem_confirmacao_nao_declara_prontidao() -> None:
+    def opener(request, timeout):
+        return _Response({"success": True, "data": {"entregue": False}})
+
+    result = probe_policy(
+        base_url="https://reqsys-api.fly.dev",
+        policy="hitl-approvers",
+        opener=opener,
+    )
+
+    assert result["endpoint_available"] is True
+    assert result["dry_run_confirmed"] is False
+    assert result["policy_ready"] is False
+    assert result["legacy_fallback_required"] is True
 
 
 def test_probe_404_mantem_fallback_legado() -> None:
@@ -92,6 +109,8 @@ def test_report_exige_todas_as_politicas_prontas() -> None:
     assert report["summary"] == {
         "policies_checked": 2,
         "endpoint_available": 1,
+        "dry_run_confirmed": 1,
+        "ready_policies": 1,
         "legacy_fallback_required": 1,
         "all_policies_ready": False,
     }
