@@ -1,0 +1,99 @@
+name: HITL Request Staleness Readiness
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      reminder_after_hours:
+        description: "Operational reminder threshold; not an institutional deadline"
+        required: false
+        default: "24"
+        type: string
+      escalation_after_hours:
+        description: "Operational escalation threshold; not an institutional deadline"
+        required: false
+        default: "72"
+        type: string
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/assess_hitl_request_staleness.py"
+      - "tests/test_assess_hitl_request_staleness.py"
+      - ".github/workflows/hitl-request-staleness-readiness.yml"
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: hitl-request-staleness-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check pytest
+      - run: python -m pytest -q tests/test_assess_hitl_request_staleness.py
+
+  assess:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Collect open HITL requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp artifacts/hitl-staleness
+          gh issue list \
+            --state open \
+            --label hitl-approval-request \
+            --limit 100 \
+            --json number,title,url,createdAt,updatedAt,labels \
+            > .tmp/hitl-issues.json
+      - name: Assess operational staleness
+        env:
+          REMINDER_AFTER_HOURS: ${{ inputs.reminder_after_hours || '24' }}
+          ESCALATION_AFTER_HOURS: ${{ inputs.escalation_after_hours || '72' }}
+        run: |
+          python scripts/assess_hitl_request_staleness.py \
+            --issues .tmp/hitl-issues.json \
+            --reminder-after-hours "$REMINDER_AFTER_HOURS" \
+            --escalation-after-hours "$ESCALATION_AFTER_HOURS" \
+            --output artifacts/hitl-staleness/report.json
+      - name: Publish summary
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("artifacts/hitl-staleness/report.json").read_text())
+          summary = report["summary"]
+          print("## HITL Request Staleness Readiness")
+          print(f"- Open requests: **{summary['open_requests']}**")
+          print(f"- Reminder due: **{summary['reminder_due']}**")
+          print(f"- Escalation due: **{summary['escalation_due']}**")
+          print(f"- Decision: **{report['decision']}**")
+          print("- Institutional deadline created: **false**")
+          print("- Automatic approval allowed: **false**")
+          print("- Production touched: **false**")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hitl-request-staleness-readiness
+          path: artifacts/hitl-staleness/report.json
+          if-no-files-found: error
+          retention-days: 90
