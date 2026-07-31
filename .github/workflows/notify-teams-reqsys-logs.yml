@@ -51,7 +51,7 @@ concurrency:
 
 jobs:
   notify:
-    name: Enviar resumo seguro ao Teams
+    name: Enviar Adaptive Card seguro ao Teams
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -60,6 +60,8 @@ jobs:
       TEAMS_DELIVERY_MODE: all
       TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
       TEAMS_GATEWAY_BASE_URL: ${{ vars.TEAMS_GATEWAY_BASE_URL || 'https://reqsys-api.fly.dev' }}
+      TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
       GITHUB_TOKEN: ${{ github.token }}
       REQSYS_LOG_OUTPUT: reqsys-log-teams-evidence.json
     steps:
@@ -69,7 +71,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Notificar falha de workflow
+      - name: Notificar falha de workflow com Adaptive Card
         if: github.event_name == 'workflow_run'
         env:
           REQSYS_LOG_FROM_WORKFLOW_RUN: "true"
@@ -84,7 +86,7 @@ jobs:
           REQSYS_LOG_CORRELATION_ID: reqsys-workflow-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
         run: python scripts/notify_reqsys_logs_teams.py
 
-      - name: Notificar evento manual
+      - name: Notificar evento manual com Adaptive Card
         if: github.event_name == 'workflow_dispatch'
         env:
           REQSYS_LOG_SOURCE: manual
