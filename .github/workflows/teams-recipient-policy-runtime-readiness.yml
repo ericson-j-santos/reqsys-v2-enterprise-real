@@ -1,0 +1,75 @@
+name: Teams Recipient Policy Runtime Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/probe_teams_recipient_policy_runtime.py"
+      - "tests/scripts/test_probe_teams_recipient_policy_runtime.py"
+      - ".github/workflows/teams-recipient-policy-runtime-readiness.yml"
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: Falhar quando alguma política ainda exigir fallback legado
+        required: true
+        default: false
+        type: boolean
+  schedule:
+    - cron: "17 10 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-recipient-policy-runtime-readiness-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused dependency
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Compile probe
+        run: python -m py_compile scripts/probe_teams_recipient_policy_runtime.py
+      - name: Run focused tests
+        run: python -m pytest -q tests/scripts/test_probe_teams_recipient_policy_runtime.py
+
+  probe-runtime:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      TEAMS_GATEWAY_BASE_URL: ${{ vars.TEAMS_GATEWAY_BASE_URL || 'https://reqsys-api.fly.dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probe recipient-policy endpoints with dry-run payloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          strict_flag=""
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.strict }}" == "true" ]]; then
+            strict_flag="--strict"
+          fi
+          python scripts/probe_teams_recipient_policy_runtime.py \
+            --base-url "$TEAMS_GATEWAY_BASE_URL" \
+            --policy hitl-approvers \
+            --policy reqsys-operations \
+            --output artifacts/teams/recipient-policy-runtime-readiness.json \
+            $strict_flag
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: teams-recipient-policy-runtime-readiness
+          path: artifacts/teams/recipient-policy-runtime-readiness.json
+          if-no-files-found: error
+          retention-days: 365
