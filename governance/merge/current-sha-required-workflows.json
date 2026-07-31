@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "required_workflows": [
+    "CI — ReqSys v2 Enterprise",
+    "CI Enterprise Fast",
+    "PR Evidence Gate",
+    "Security Specialized Scanners",
+    "PR Quality Review",
+    "ReqSys Required Fast Gate",
+    "Test Quality Gate — Padrão Ouro"
+  ],
+  "allowed_conclusions": [
+    "success",
+    "neutral",
+    "skipped"
+  ],
+  "poll_seconds": 10,
+  "max_attempts": 60,
+  "absence_is_success": false,
+  "production_touched": false
+}
