@@ -1,4 +1,4 @@
-schema_version: 1.12.0
+schema_version: 1.13.0
 framework:
   name: BACEN minimum cybersecurity controls
   references:
@@ -15,11 +15,13 @@ controls:
     policy: governance/bacen/CYBERSECURITY-POLICY.md
     metadata: governance/bacen/CYBERSECURITY-POLICY-METADATA.yaml
     workflow: .github/workflows/bacen-policy-governance-attestation.yml
+    decision_evidence: governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml
+    decision_status: approval_comment_recorded_pending_canonical_authority
     status: partial
-    evidence_stage: automated_policy_integrity_and_review_attestation_pending_formal_approval
+    evidence_stage: authenticated_approval_comment_received_pending_canonical_authority_and_signed_attestation
     approval_status: pending_formal_institutional_approval
     production_touched: false
-    next_stage: formal_institutional_approval_and_signed_attestation
+    next_stage: canonicalize_approval_authority_and_signed_attestation
     review_cycle_days: 365
   - id: BACEN-02
     domain: identity
@@ -119,10 +121,12 @@ controls:
     report: governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md
     designation_record: governance/bacen/EXECUTIVE-DESIGNATION.yaml
     workflow: .github/workflows/bacen-executive-readiness.yml
+    decision_evidence: governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml
+    decision_status: approval_comment_recorded_pending_complete_canonical_records
     status: partial
-    evidence_stage: automated_executive_readiness_pending_formal_designation_and_report_signoff
+    evidence_stage: authenticated_approval_comment_received_pending_complete_designation_and_report_signoff_metadata
     executive_designation_status: pending_formal_designation
     report_signoff_status: pending_formal_signoff
     production_touched: false
-    next_stage: formal_executive_designation_and_signed_annual_report
+    next_stage: canonicalize_designated_by_and_formal_report_signoff_metadata
     review_cycle_days: 365
