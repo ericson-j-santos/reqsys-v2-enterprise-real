@@ -32,6 +32,11 @@ Guia operacional canônico para agentes, automações e assistentes que atuam ne
 | `tests/` | Testes de integração/governança para scripts e workflows (não confundir com `backend/tests/`). |
 | `docs-site/` | Site MkDocs publicado em GitHub Pages. |
 | `config/` | Arquivos de configuração auxiliares. |
+| `governance/` | Políticas e registros de compliance BACEN (`governance/bacen/`) e notificações (`governance/notifications/`). |
+| `services/` | Serviços independentes reutilizáveis (ex.: `environment-observability-api`). |
+| `runtime/` | Runtime separado de jobs assíncronos (FastAPI próprio com venv e testes). |
+| `ops-dashboard/` | Dashboards operacionais estáticos (ex.: `teams-notification/`). |
+| `ia-ml-lab/` | Laboratório experimental de IA/ML (docs e notebooks). |
 
 ## Comandos essenciais
 
@@ -86,6 +91,16 @@ E2E estável:
 ```bash
 cd frontend
 npm run test:e2e:stable    # node scripts/run-e2e-safe.js --reporter=line
+```
+
+Design system / Figma tokens:
+
+```bash
+cd frontend
+npm run validate:design-tokens            # valida tokens de design (validate-design-tokens.mjs)
+npm run export:figma-tokens               # exporta Tokens Studio para artifacts/figma-tokens
+npm run check:figma-token-drift           # exporta e bloqueia drift via git diff --exit-code
+npm run quality:design-system             # tokens + drift + build (gate completo do design system)
 ```
 
 ### Docker e publicação local
@@ -314,6 +329,49 @@ bash scripts/rollback_environment_observability_api.sh staging reqsys-api-stg in
 # Rollback permitido somente staging/production; exige digest imutável e FLY_API_TOKEN.
 ```
 
+### Compliance BACEN
+
+Políticas e registros versionados em `governance/bacen/` (matriz de controles, registro de terceiros, contratos de evidência DPA/MFA, plano de resposta a incidentes, designação executiva). Gate reutilizável de produção: workflow **BACEN Production Hard Gate** (`workflow_call`), integrado aos comandos Fly mutáveis e deploys de produção — bloqueia produção enquanto o compliance formal não for atendido.
+
+```bash
+python scripts/validate_bacen_controls.py                 # valida matriz mínima de controles (default: governance/bacen/BACEN-CONTROL-MATRIX.yaml; --strict bloqueia lacunas críticas)
+python scripts/validate_bacen_third_party_register.py     # drift do registro de terceiros vs .env.example (BACEN-05)
+python scripts/validate_bacen_dpa_evidence_contract.py --contract governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml --output artifacts/bacen/dpa-contract-report.json
+python scripts/validate_bacen_idp_mfa_evidence.py --input <evidence.json> --output artifacts/bacen/idp-mfa-report.json
+python scripts/validate_bacen_annual_report.py            # relatório anual BACEN-08 (default: governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md)
+```
+
+### Runtime assíncrono e serviços independentes
+
+Runtime de jobs assíncronos (`runtime/`, FastAPI separado com venv próprio):
+
+```bash
+cd runtime
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload                              # worker desativado por padrão em DEV
+ENABLE_ASYNC_WORKER=true uvicorn app.main:app --reload     # ativa worker local
+python -m pytest -q                                        # testes do runtime (pytest.ini: asyncio_mode=auto)
+```
+
+Environment Observability API (`services/environment-observability-api`, serviço segregado por ambiente `dev/stg/prod`):
+
+```bash
+cd services/environment-observability-api
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+pytest -q
+bash scripts/smoke_environment_observability_api.sh <base_url> <env>   # smoke read-only do serviço
+```
+
+Power Platform / Power Automate:
+
+```bash
+python scripts/validate_powerplatform_solution_zip.py <solution.zip> --expected-solution ReqSysTeamsNotifications  # valida pacote de solution
+python scripts/activate_powerautomate_flow.py --environment-url <url> --tenant-id <id> --client-id <id> --client-secret <secret>  # ativa flow (credenciais via args/secrets)
+```
+
 ## CI obrigatório
 
 Antes de merge em `main`, validar o workflow `CI — ReqSys v2 Enterprise` com os jobs:
@@ -379,6 +437,10 @@ Não considerar um PR pronto para merge quando o E2E responsivo estiver ausente,
 | `Stale PR Governance Watch` | Agendado, `workflow_dispatch` | Monitoramento de PRs estagnados |
 | `Branch Protection Audit` | PR, `workflow_dispatch`, agendado | Auditoria de proteção de branches |
 | `Self-Hosted Runner Governance Guard` | PR/push, `workflow_dispatch` | Governança de self-hosted runners |
+| `BACEN Minimum Controls Gate` | PR/push (paths: `governance/bacen/**`), `workflow_dispatch` | Valida matriz mínima de controles BACEN (`--strict` bloqueia lacunas críticas) |
+| `BACEN Production Hard Gate` | `workflow_call`, `workflow_dispatch` | Gate reutilizável que bloqueia produção sem compliance BACEN formal |
+| `Figma Design System Gate` | PR/push (paths: `frontend/src/theme`, figma-tokens), `merge_group` | Valida tokens de design e bloqueia drift (`npm run quality:design-system`) |
+| `Power Automate Flow Provisioning P0` | `workflow_dispatch` | Provisiona/ativa flow Power Automate por ambiente |
 
 ## Gates de produção
 
