@@ -1,0 +1,95 @@
+name: Generate Current SHA Stability Patch
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/evaluate_current_sha_workflow_stability.py"
+      - "scripts/patch_governed_merge_queue_sha_stability.py"
+      - "governance/merge/current-sha-required-workflows.json"
+      - "tests/test_evaluate_current_sha_workflow_stability.py"
+      - "tests/test_patch_governed_merge_queue_sha_stability.py"
+      - "tests/test_governed_merge_queue_current_sha_stability_contract.py"
+      - ".github/workflows/generate-current-sha-stability-patch.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: generate-current-sha-stability-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  generate-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check pytest PyYAML
+
+      - name: Run evaluator and patcher tests
+        run: |
+          python -m pytest -q \
+            tests/test_evaluate_current_sha_workflow_stability.py \
+            tests/test_patch_governed_merge_queue_sha_stability.py
+
+      - name: Generate final governed merge queue workflow
+        run: |
+          mkdir -p generated/.github/workflows
+          python scripts/patch_governed_merge_queue_sha_stability.py \
+            --workflow .github/workflows/governed-merge-queue.yml \
+            --output generated/.github/workflows/governed-merge-queue.yml
+
+      - name: Validate generated YAML and final contract
+        env:
+          GOVERNED_MERGE_QUEUE_WORKFLOW_PATH: generated/.github/workflows/governed-merge-queue.yml
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          path = Path("generated/.github/workflows/governed-merge-queue.yml")
+          payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+          assert isinstance(payload, dict)
+          assert "jobs" in payload
+          PY
+          python -m pytest -q tests/test_governed_merge_queue_current_sha_stability_contract.py
+
+      - name: Assemble immutable final bundle
+        run: |
+          mkdir -p final-bundle/scripts final-bundle/governance/merge final-bundle/tests final-bundle/.github/workflows
+          cp generated/.github/workflows/governed-merge-queue.yml final-bundle/.github/workflows/
+          cp scripts/evaluate_current_sha_workflow_stability.py final-bundle/scripts/
+          cp governance/merge/current-sha-required-workflows.json final-bundle/governance/merge/
+          cp tests/test_evaluate_current_sha_workflow_stability.py final-bundle/tests/
+          cp tests/test_governed_merge_queue_current_sha_stability_contract.py final-bundle/tests/
+          find final-bundle -type f -print0 | sort -z | xargs -0 sha256sum > final-bundle/SHA256SUMS
+
+      - name: Publish summary
+        run: |
+          {
+            echo "## Current SHA Stability Patch"
+            echo ""
+            echo "- Patcher tests: **green**"
+            echo "- Evaluator tests: **green**"
+            echo "- Generated workflow YAML: **valid**"
+            echo "- Final contract: **green**"
+            echo "- Direct publication: **false**"
+            echo "- Branch protection reduced: **false**"
+            echo "- Production touched: **false**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: current-sha-stability-final-bundle
+          path: final-bundle/
+          if-no-files-found: error
+          retention-days: 90
