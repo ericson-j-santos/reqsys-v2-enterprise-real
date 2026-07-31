@@ -17,13 +17,19 @@ DEFAULT_ENVIRONMENTS = {
     "STG": "https://reqsys-app-stg.fly.dev",
     "PROD": "https://reqsys-app.fly.dev",
 }
-REQUIRED_PATHS = ("/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness")
+REQUIRED_PATHS = (
+    "/health",
+    "/api/runtime/health",
+    "/api/runtime/readiness",
+    "/api/runtime/liveness",
+    "/estatisticas/total-requisitos",
+)
 
 
 def probe(url: str, timeout: float = 12.0) -> dict[str, Any]:
     started = time.monotonic()
     try:
-        request = urllib.request.Request(url, headers={"User-Agent": "ReqSys-UX-Smoke/1.0"})
+        request = urllib.request.Request(url, headers={"User-Agent": "ReqSys-UX-Smoke/1.1"})
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read(4096).decode("utf-8", errors="replace")
             status = int(response.status)
@@ -49,20 +55,27 @@ def collect(environments: dict[str, str], timeout: float = 12.0) -> dict[str, An
             "checks": checks,
             "pass_rate": round(100 * sum(1 for c in checks if c["ok"]) / len(checks), 2),
             "fingerprint": fingerprint,
+            "indicator_drilldown_available": next(
+                (check["ok"] for check in checks if check["url"].endswith("/estatisticas/total-requisitos")),
+                False,
+            ),
         }
     complete = all(v["pass_rate"] == 100 for v in results.values())
     drift = len(set(fingerprints.values())) > 1
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "status": "PUBLIC_UX_ENV_SYNC_OK" if complete and not drift else "PUBLIC_UX_ENV_SYNC_REVIEW",
         "environments": results,
         "environment_coverage": sorted(results),
+        "required_paths": list(REQUIRED_PATHS),
+        "indicator_drilldown_path": "/estatisticas/total-requisitos",
         "complete": complete,
         "drift_detected": drift,
         "mode": "report-only",
         "production_blocker": False,
         "human_approval_required": True,
+        "automatic_score_promotion": False,
     }
 
 
