@@ -10,8 +10,10 @@ from pathlib import Path
 import re
 from typing import Any
 
+_ALLOWED_SCHEMA_VERSIONS = {"1.0.0", "1.1.0"}
 _ALLOWED_DELIVERY_MODES = {"all", "first_success", "channel"}
 _ALLOWED_DESTINATION_TYPES = {"auto", "chat", "chat_1a1", "canal", "webhook"}
+_ALLOWED_RECIPIENT_SOURCES = {"inline", "runtime_db"}
 _ENV_PATTERN = re.compile(
     r"(?mi)^\s*(?:HITL_RECIPIENT_POLICY|TEAMS_RECIPIENT_POLICY)\s*:\s*[\"']?([a-z0-9][a-z0-9_-]*)"
 )
@@ -48,12 +50,13 @@ def audit(config_path: Path, workflows_dir: Path) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
     policies = document.get("policies")
-    if document.get("schema_version") != "1.0.0":
+    if document.get("schema_version") not in _ALLOWED_SCHEMA_VERSIONS:
         errors.append("unsupported_schema_version")
     if not isinstance(policies, list):
         raise ValueError("policies must be a list")
 
     configured: dict[str, dict[str, Any]] = {}
+    inline_destination_count = 0
     for raw_policy in policies:
         if not isinstance(raw_policy, dict):
             errors.append("invalid_policy_object")
@@ -70,10 +73,18 @@ def audit(config_path: Path, workflows_dir: Path) -> dict[str, Any]:
         if delivery_mode not in _ALLOWED_DELIVERY_MODES:
             errors.append(f"invalid_delivery_mode:{name}")
 
+        recipient_source = str(raw_policy.get("recipient_source") or "inline").strip().lower()
+        if recipient_source not in _ALLOWED_RECIPIENT_SOURCES:
+            errors.append(f"invalid_recipient_source:{name}")
+            recipient_source = "inline"
+
         recipients = raw_policy.get("recipients")
         if not isinstance(recipients, list):
             errors.append(f"recipients_not_list:{name}")
             recipients = []
+
+        if recipient_source == "runtime_db" and recipients:
+            errors.append(f"runtime_managed_policy_has_inline_recipients:{name}")
 
         active_count = 0
         hashes: list[str] = []
@@ -95,13 +106,15 @@ def audit(config_path: Path, workflows_dir: Path) -> dict[str, Any]:
                 continue
             seen.add(key)
             hashes.append(_destination_hash(name, destination_type, destination_id))
+            inline_destination_count += 1
             if bool(recipient.get("active", True)):
                 active_count += 1
 
-        if active_count == 0:
+        if recipient_source == "inline" and active_count == 0:
             errors.append(f"policy_without_active_recipients:{name}")
         configured[name] = {
             "delivery_mode": delivery_mode,
+            "recipient_source": recipient_source,
             "recipient_count": len(recipients),
             "active_recipient_count": active_count,
             "destination_hashes": sorted(hashes),
@@ -116,12 +129,16 @@ def audit(config_path: Path, workflows_dir: Path) -> dict[str, Any]:
             warnings.append(f"configured_policy_not_referenced:{name}")
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "contract": "teams-recipient-policy-drift-audit",
         "result": "pass" if not errors else "fail",
         "summary": {
             "configured_policies": len(configured),
             "referenced_policies": len(references),
+            "runtime_managed_policies": sum(
+                1 for item in configured.values() if item["recipient_source"] == "runtime_db"
+            ),
+            "inline_destination_count": inline_destination_count,
             "errors": len(errors),
             "warnings": len(warnings),
         },
@@ -129,7 +146,7 @@ def audit(config_path: Path, workflows_dir: Path) -> dict[str, Any]:
         "references": references,
         "errors": errors,
         "warnings": warnings,
-        "sensitive_destinations_exposed": False,
+        "sensitive_destinations_exposed": inline_destination_count > 0,
         "production_touched": False,
     }
 

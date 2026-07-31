@@ -15,7 +15,9 @@ from app.models.teams_notification_recipient import TeamsNotificationRecipient
 
 logger = logging.getLogger('reqsys.teams_recipient_bootstrap')
 
+_ALLOWED_SCHEMA_VERSIONS = {'1.0.0', '1.1.0'}
 _ALLOWED_DESTINATION_TYPES = {'auto', 'chat', 'chat_1a1', 'canal', 'webhook'}
+_ALLOWED_RECIPIENT_SOURCES = {'inline', 'runtime_db'}
 
 
 def load_recipient_config(path: str | Path) -> dict[str, Any]:
@@ -23,7 +25,7 @@ def load_recipient_config(path: str | Path) -> dict[str, Any]:
     document = json.loads(config_path.read_text(encoding='utf-8'))
     if not isinstance(document, dict):
         raise ValueError('A configuracao de destinatarios deve ser um objeto JSON.')
-    if document.get('schema_version') != '1.0.0':
+    if document.get('schema_version') not in _ALLOWED_SCHEMA_VERSIONS:
         raise ValueError('schema_version de destinatarios nao suportada.')
     if not isinstance(document.get('policies'), list):
         raise ValueError('policies deve ser uma lista.')
@@ -40,9 +42,20 @@ def normalize_recipients(document: dict[str, Any]) -> list[dict[str, Any]]:
         policy_name = str(policy.get('name') or '').strip().lower()
         if not policy_name:
             raise ValueError('Politica sem name.')
+
+        recipient_source = str(policy.get('recipient_source') or 'inline').strip().lower()
+        if recipient_source not in _ALLOWED_RECIPIENT_SOURCES:
+            raise ValueError(f'recipient_source invalido na politica {policy_name}.')
+
         recipients = policy.get('recipients')
         if not isinstance(recipients, list):
             raise ValueError(f'recipients deve ser uma lista na politica {policy_name}.')
+        if recipient_source == 'runtime_db':
+            if recipients:
+                raise ValueError(
+                    f'Politica {policy_name} gerenciada em runtime nao pode versionar destinatarios.'
+                )
+            continue
 
         for index, recipient in enumerate(recipients, start=1):
             if not isinstance(recipient, dict):
