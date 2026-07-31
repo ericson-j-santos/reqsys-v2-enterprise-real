@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -15,16 +14,6 @@ def load_report(path: Path) -> dict[str, Any]:
     if not isinstance(document, dict):
         raise ValueError(f"invalid report object: {path}")
     return document
-
-
-def _report_sha256(report: dict[str, Any]) -> str:
-    canonical = json.dumps(
-        report,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return hashlib.sha256(canonical).hexdigest()
 
 
 def consolidate(
@@ -38,10 +27,19 @@ def consolidate(
     dpa_ingestion = dpa_report.get("ingestion") or {}
     dpa_summary = dpa_report.get("summary") or {}
 
+    mfa_integrity_validated = bool(
+        isinstance(mfa_ingestion, dict)
+        and mfa_ingestion.get("expected_sha256_match") is True
+    )
+    dpa_integrity_validated = bool(
+        isinstance(dpa_ingestion, dict)
+        and dpa_ingestion.get("expected_sha256_match") is True
+    )
     mfa_ready = bool(
         isinstance(mfa_ingestion, dict)
         and mfa_ingestion.get("accepted") is True
         and mfa_ingestion.get("raw_evidence_persisted") is False
+        and mfa_integrity_validated
         and mfa_report.get("structural_checks_passed") is True
         and mfa_report.get("mfa_evidenced") is True
     )
@@ -49,6 +47,7 @@ def consolidate(
         isinstance(dpa_ingestion, dict)
         and dpa_ingestion.get("accepted") is True
         and dpa_ingestion.get("raw_evidence_persisted") is False
+        and dpa_integrity_validated
         and dpa_report.get("result") == "valid"
         and int(dpa_summary.get("validated_records") or 0) >= 1
     )
@@ -57,13 +56,15 @@ def consolidate(
         "BACEN-02": {
             "evidence_ready": mfa_ready,
             "source_reference": mfa_source_ref,
-            "normalized_report_sha256": _report_sha256(mfa_report),
+            "source_integrity_validated_upstream": mfa_integrity_validated,
+            "integrity_validation_mode": "upstream_governed_ingestion",
             "human_review_required": True,
         },
         "BACEN-05": {
             "evidence_ready": dpa_ready,
             "source_reference": dpa_source_ref,
-            "normalized_report_sha256": _report_sha256(dpa_report),
+            "source_integrity_validated_upstream": dpa_integrity_validated,
+            "integrity_validation_mode": "upstream_governed_ingestion",
             "validated_records": int(dpa_summary.get("validated_records") or 0),
             "human_review_required": True,
         },
