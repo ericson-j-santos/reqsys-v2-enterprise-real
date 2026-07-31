@@ -1,0 +1,209 @@
+# REQSYS_PRODUCTION_GOVERNANCE_GATE
+name: Fly Environment Promotion Stage
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Canonical environment to deploy
+        required: true
+        type: string
+      expected_sha:
+        description: Exact current main SHA to promote
+        required: true
+        type: string
+    outputs:
+      ready:
+        description: Whether the deployed environment passed strict evidence validation
+        value: ${{ jobs.verify.outputs.ready }}
+      decision:
+        description: Strict post-deploy validation decision
+        value: ${{ jobs.verify.outputs.decision }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fly-environment-promotion-stage-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  TARGET_SHA: ${{ inputs.expected_sha }}
+  PRE_DEPLOY_ARTIFACT_DIR: artifacts/fly-environment-pre-deploy/${{ inputs.environment }}
+
+jobs:
+  production-gate:
+    name: BACEN authorization for automatic production promotion
+    if: inputs.environment == 'prod'
+    uses: ./.github/workflows/bacen-production-hard-gate.yml
+    with:
+      enforce: true
+
+  deploy:
+    name: Deploy exact SHA to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: production-gate
+    if: >-
+      always() &&
+      (needs.production-gate.result == 'success' || needs.production-gate.result == 'skipped')
+    environment:
+      name: ${{ inputs.environment == 'dev' && 'dev' || inputs.environment == 'hml' && 'staging' || 'production' }}
+    steps:
+      - name: Checkout exact SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
+
+      - name: Block stale promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test "$(git rev-parse origin/main)" = "$TARGET_SHA"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Resolve canonical deployment configuration
+        id: env
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$PRE_DEPLOY_ARTIFACT_DIR"
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+
+          manifest = json.load(open("infra/fly-environments.json", encoding="utf-8"))
+          cfg = manifest["environments"][os.environ["TARGET_ENVIRONMENT"]]
+          print(f"api_url={cfg['api_url']}")
+          print(f"frontend_url={cfg['frontend_url']}")
+          print(f"api_app={cfg['api_app']}")
+          print(f"frontend_app={cfg['frontend_app']}")
+          print(f"backend_config={cfg.get('backend_fly_config') or cfg['fly_config']}")
+          print(f"frontend_config={cfg['frontend_fly_config']}")
+          PY
+
+      - name: Capture pre-deploy Fly state
+        continue-on-error: true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          python scripts/capture_fly_environment_state.py \
+            --environment "${{ inputs.environment }}" \
+            --expected-sha "$TARGET_SHA" \
+            --phase pre_deploy \
+            --output "$PRE_DEPLOY_ARTIFACT_DIR/fly-state.json"
+
+      - name: Configure development demo login
+        if: inputs.environment == 'dev'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          flyctl secrets set ALLOW_DEMO_LOGIN=true --app "${{ steps.env.outputs.api_app }}"
+
+      - name: Configure staging Azure metadata when supplied
+        if: inputs.environment == 'hml'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
+          VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
+          AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${AZURE_TENANT_ID_SECRET:-}" ] || [ -z "${AZURE_CLIENT_ID_SECRET:-}" ]; then
+            echo "Azure metadata not supplied by GitHub environment; existing Fly secrets will be validated post-deploy."
+            exit 0
+          fi
+          python scripts/configurar_fly_auth_azure.py \
+            --fly-app "${{ steps.env.outputs.api_app }}" \
+            --app-env staging \
+            --app-public-url "${{ steps.env.outputs.frontend_url }}" \
+            --api-public-url "${{ steps.env.outputs.api_url }}" \
+            --azure-tenant-id "$AZURE_TENANT_ID_SECRET" \
+            --azure-client-id "$AZURE_CLIENT_ID_SECRET" \
+            --cofre-tenant-key AZURE_TENANT_ID \
+            --cofre-client-key AZURE_CLIENT_ID
+
+      - name: Deploy API exact SHA
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_APP: ${{ steps.env.outputs.api_app }}
+          FLY_CONFIG: ${{ steps.env.outputs.backend_config }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="${FLY_CONFIG#backend/}"
+          deploy_log="$(mktemp)"
+          for attempt in 1 2 3; do
+            echo "::group::API deploy attempt ${attempt}/3"
+            set +e
+            (
+              cd backend
+              flyctl deploy --remote-only \
+                --config "$config" \
+                --app "$FLY_APP" \
+                --build-arg "GITHUB_SHA=$TARGET_SHA"
+            ) 2>&1 | tee "$deploy_log"
+            status="${PIPESTATUS[0]}"
+            set -e
+            echo "::endgroup::"
+            if [ "$status" -eq 0 ]; then
+              break
+            fi
+            if ! grep -Eiq "timeout reached waiting for health checks|request canceled|failed to get VM" "$deploy_log"; then
+              exit "$status"
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit "$status"
+            fi
+            sleep 60
+          done
+
+      - name: Deploy frontend exact source
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_APP: ${{ steps.env.outputs.frontend_app }}
+          FLY_CONFIG: ${{ steps.env.outputs.frontend_config }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="${FLY_CONFIG#frontend/}"
+          cd frontend
+          flyctl deploy --remote-only --config "$config" --app "$FLY_APP"
+
+      - name: Wait for runtime stabilization
+        run: sleep 15
+
+      - name: Upload pre-deploy evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly-environment-pre-deploy-${{ inputs.environment }}
+          path: ${{ env.PRE_DEPLOY_ARTIFACT_DIR }}/
+          if-no-files-found: warn
+          retention-days: 90
+
+  verify:
+    name: Verify ${{ inputs.environment }} after deploy
+    needs: deploy
+    if: needs.deploy.result == 'success'
+    uses: ./.github/workflows/fly-environment-evidence-capture.yml
+    with:
+      environment: ${{ inputs.environment }}
+      expected_sha: ${{ inputs.expected_sha }}
+      phase: post_deploy
+      strict: true
+    secrets: inherit
