@@ -13,7 +13,7 @@ on:
       - ".github/workflows/generate-current-sha-stability-patch.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: generate-current-sha-stability-${{ github.event.pull_request.number }}
@@ -22,10 +22,11 @@ concurrency:
 jobs:
   generate-and-validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - uses: actions/setup-python@v5
@@ -73,6 +74,55 @@ jobs:
           cp tests/test_governed_merge_queue_current_sha_stability_contract.py final-bundle/tests/
           find final-bundle -type f -print0 | sort -z | xargs -0 sha256sum > final-bundle/SHA256SUMS
 
+      - name: Publish validated final branch
+        env:
+          FINAL_BRANCH: agent/current-sha-stability-gate-final-v1
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/current-sha-stability-final
+          cp -a final-bundle /tmp/current-sha-stability-final
+
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          git checkout --detach origin/main
+
+          mkdir -p .github/workflows governance/merge scripts tests
+          cp /tmp/current-sha-stability-final/.github/workflows/governed-merge-queue.yml .github/workflows/
+          cp /tmp/current-sha-stability-final/governance/merge/current-sha-required-workflows.json governance/merge/
+          cp /tmp/current-sha-stability-final/scripts/evaluate_current_sha_workflow_stability.py scripts/
+          cp /tmp/current-sha-stability-final/tests/test_evaluate_current_sha_workflow_stability.py tests/
+          cp /tmp/current-sha-stability-final/tests/test_governed_merge_queue_current_sha_stability_contract.py tests/
+
+          python -m pytest -q \
+            tests/test_evaluate_current_sha_workflow_stability.py \
+            tests/test_governed_merge_queue_current_sha_stability_contract.py
+
+          git add \
+            .github/workflows/governed-merge-queue.yml \
+            governance/merge/current-sha-required-workflows.json \
+            scripts/evaluate_current_sha_workflow_stability.py \
+            tests/test_evaluate_current_sha_workflow_stability.py \
+            tests/test_governed_merge_queue_current_sha_stability_contract.py
+
+          python - <<'PY'
+          import subprocess
+          expected = {
+              '.github/workflows/governed-merge-queue.yml',
+              'governance/merge/current-sha-required-workflows.json',
+              'scripts/evaluate_current_sha_workflow_stability.py',
+              'tests/test_evaluate_current_sha_workflow_stability.py',
+              'tests/test_governed_merge_queue_current_sha_stability_contract.py',
+          }
+          actual = set(subprocess.check_output(['git', 'diff', '--cached', '--name-only'], text=True).splitlines())
+          if actual != expected:
+              raise SystemExit(f'Unexpected final diff: {sorted(actual)}')
+          PY
+
+          git config user.name "reqsys-current-sha-stability"
+          git config user.email "actions@github.com"
+          git commit -m "fix(ci): bloquear merge até estabilização do SHA atual"
+          git push origin "HEAD:refs/heads/${FINAL_BRANCH}"
+
       - name: Publish summary
         run: |
           {
@@ -83,7 +133,8 @@ jobs:
             echo "- Generated workflow YAML: **valid**"
             echo "- Final contract: **green**"
             echo "- Hidden workflow included: **true**"
-            echo "- Direct publication: **false**"
+            echo "- Final branch: **agent/current-sha-stability-gate-final-v1**"
+            echo "- Force push: **false**"
             echo "- Branch protection reduced: **false**"
             echo "- Production touched: **false**"
           } >> "$GITHUB_STEP_SUMMARY"
