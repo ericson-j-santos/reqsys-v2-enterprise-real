@@ -35,7 +35,7 @@ jobs:
           reusable = Path('.github/workflows/bacen-production-hard-gate.yml').read_text()
           required_delivery = [
               '# REQSYS_PRODUCTION_GOVERNANCE_GATE',
-              '  production-gate:',
+              '\n  production-gate:\n',
               'uses: ./.github/workflows/bacen-production-hard-gate.yml',
               "needs.production-gate.outputs.production_allowed == 'true'",
               '| BACEN production gate |',
@@ -43,8 +43,8 @@ jobs:
           missing = [item for item in required_delivery if item not in delivery]
           if missing:
               raise SystemExit(f'missing delivery contract markers: {missing}')
-          if delivery.index('  production-gate:') > delivery.index('  configure-prod-secrets:'):
-              raise SystemExit('production gate must precede production secrets')
+          if delivery.index('\n  production-gate:\n') > delivery.index('\n  configure-prod-secrets:\n'):
+              raise SystemExit('production gate must precede production secrets job')
           for item in ['production_allowed:', 'decision:', 'value: ${{ jobs.gate.outputs.production_allowed }}']:
               if item not in reusable:
                   raise SystemExit(f'missing reusable output: {item}')
