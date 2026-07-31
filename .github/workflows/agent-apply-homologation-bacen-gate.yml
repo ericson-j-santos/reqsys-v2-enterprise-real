@@ -34,7 +34,7 @@ jobs:
           text = Path('.github/workflows/fly-environment-homologation-gate.yml').read_text()
           required = [
               '# REQSYS_PRODUCTION_GOVERNANCE_GATE',
-              '  production-gate:',
+              '\n  production-gate:\n',
               "inputs.environment == 'prod' && inputs.deploy == true",
               'uses: ./.github/workflows/bacen-production-hard-gate.yml',
               '      - production-gate',
@@ -43,8 +43,8 @@ jobs:
           missing = [item for item in required if item not in text]
           if missing:
               raise SystemExit(f'missing contract markers: {missing}')
-          if text.index('  production-gate:') > text.index('  deploy:'):
-              raise SystemExit('production gate must precede deploy')
+          if text.index('\n  production-gate:\n') > text.index('\n  deploy:\n'):
+              raise SystemExit('production gate must precede deploy job')
           PY
 
       - name: Publish generated workflow
