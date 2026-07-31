@@ -1,4 +1,4 @@
-schema_version: 1.0.0
+schema_version: 1.1.0
 control_id: BACEN-01
 policy_path: governance/bacen/CYBERSECURITY-POLICY.md
 policy_version: 1.0.0
@@ -7,6 +7,21 @@ operational_owner: RUNTIME_OPERATOR
 approval_status: pending_formal_institutional_approval
 approval_authority: pending_formal_designation
 approval_record: null
+decision_evidence:
+  issue_url: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1118
+  comment_url: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1118#issuecomment-5141594075
+  comment_sha256: 95a733dc11d523500a09ea94c3f091b7d11ebfd76ea2d6d8b6b3acc4d2477b18
+  decision: approved
+  authenticated_actor: ericson-j-santos
+  recorded_at: '2026-07-31'
+  authority_assertion: responsible_authorized
+  decision_record_type: internal_minutes
+  decision_record_reference: REF-2026-001
+  decision_record_date: '2026-07-31'
+  evidence_source: authenticated_github_issue_comment
+  personal_or_sensitive_content_replicated: false
+  verification_status: pending_formal_authority_and_signed_attestation
+  automatic_status_promotion_allowed: false
 effective_from: '2026-07-28'
 last_technical_review_at: '2026-07-28'
 next_technical_review_due_at: '2027-07-28'
@@ -22,4 +37,4 @@ required_sections:
   - Governança
   - Evidências
 production_touched: false
-next_stage: formal_institutional_approval_and_signed_attestation
+next_stage: canonicalize_approval_authority_and_signed_attestation
