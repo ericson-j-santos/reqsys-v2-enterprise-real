@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from scripts.audit_hitl_decision_consistency import audit_issues
 
 
@@ -40,3 +42,13 @@ def test_ignores_bot_commands() -> None:
 def test_detects_duplicate_terminal_decision() -> None:
     report = audit_issues([issue([comment("approve", 1), comment("approve", 2)])])
     assert report["items"][0]["state"] == "duplicate_terminal_decision"
+
+
+def test_workflow_collects_hitl_issues_without_mutually_exclusive_labels() -> None:
+    workflow = Path(".github/workflows/hitl-decision-consistency-guard.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "--search 'HITL in:title'" in workflow
+    assert "--label hitl-approval-request,hitl-approved" not in workflow
+    assert '"--paginate",' in workflow
+    assert '"--slurp",' in workflow
