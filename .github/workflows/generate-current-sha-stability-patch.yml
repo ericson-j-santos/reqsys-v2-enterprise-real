@@ -82,6 +82,7 @@ jobs:
             echo "- Evaluator tests: **green**"
             echo "- Generated workflow YAML: **valid**"
             echo "- Final contract: **green**"
+            echo "- Hidden workflow included: **true**"
             echo "- Direct publication: **false**"
             echo "- Branch protection reduced: **false**"
             echo "- Production touched: **false**"
@@ -91,5 +92,6 @@ jobs:
         with:
           name: current-sha-stability-final-bundle
           path: final-bundle/
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 90
