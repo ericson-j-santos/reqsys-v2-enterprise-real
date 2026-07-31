@@ -57,9 +57,10 @@
           role="button"
           tabindex="0"
           :data-testid="`estatisticas-indicador-${indicador.id}`"
-          @click="aplicarFiltroCard({ estado: indicador.estadoAtual })"
-          @keyup.enter="aplicarFiltroCard({ estado: indicador.estadoAtual })"
-          @keyup.space.prevent="aplicarFiltroCard({ estado: indicador.estadoAtual })"
+          :aria-label="`Abrir detalhe operacional de ${indicador.nome}`"
+          @click="abrirDetalhe(indicador)"
+          @keyup.enter="abrirDetalhe(indicador)"
+          @keyup.space.prevent="abrirDetalhe(indicador)"
         >
           <v-card-title class="indicator-title">
             <span>{{ indicador.nome }}</span>
@@ -78,7 +79,7 @@
               <div><dt>Confiabilidade</dt><dd>{{ indicador.fonte.confiabilidade }}</dd></div>
               <div class="full"><dt>Fórmula</dt><dd>{{ indicador.formula }}</dd></div>
             </dl>
-            <v-expansion-panels variant="accordion" class="mt-3">
+            <v-expansion-panels variant="accordion" class="mt-3" @click.stop @keyup.stop>
               <v-expansion-panel title="Analítico e guard rails">
                 <v-expansion-panel-text>
                   <h3>Evidências</h3>
@@ -92,6 +93,16 @@
                 </v-expansion-panel-text>
               </v-expansion-panel>
             </v-expansion-panels>
+            <v-btn
+              block
+              color="primary"
+              variant="tonal"
+              class="mt-3"
+              :data-testid="`estatisticas-abrir-${indicador.id}`"
+              @click.stop="abrirDetalhe(indicador)"
+            >
+              Abrir detalhe completo
+            </v-btn>
           </v-card-text>
         </v-card>
       </v-col>
@@ -100,24 +111,37 @@
     <v-card class="panel mt-4" elevation="0">
       <v-card-title>Analítico consolidado</v-card-title>
       <v-card-text>
-        <v-table density="compact">
-          <thead>
-            <tr>
-              <th>Indicador</th><th>Categoria</th><th>Valor</th><th>Estado atual</th><th>Estado alvo</th><th>Fonte</th><th>Validação</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="indicador in indicadoresFiltrados" :key="`linha-${indicador.id}`">
-              <td>{{ indicador.nome }}</td>
-              <td>{{ indicador.categoria }}</td>
-              <td>{{ indicador.valorAtual }}{{ indicador.unidade || '' }}</td>
-              <td>{{ indicador.estadoAtual }}</td>
-              <td>{{ indicador.estadoAlvo }}</td>
-              <td>{{ indicador.fonte.tipo }} · {{ indicador.fonte.nome }}</td>
-              <td>{{ validar(indicador).length ? 'pendente' : 'válido' }}</td>
-            </tr>
-          </tbody>
-        </v-table>
+        <div class="table-scroll">
+          <v-table density="compact">
+            <thead>
+              <tr>
+                <th>Indicador</th><th>Categoria</th><th>Valor</th><th>Estado atual</th><th>Estado alvo</th><th>Fonte</th><th>Validação</th><th>Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="indicador in indicadoresFiltrados"
+                :key="`linha-${indicador.id}`"
+                class="indicator-row"
+                tabindex="0"
+                role="button"
+                :aria-label="`Abrir detalhe operacional de ${indicador.nome}`"
+                @click="abrirDetalhe(indicador)"
+                @keyup.enter="abrirDetalhe(indicador)"
+                @keyup.space.prevent="abrirDetalhe(indicador)"
+              >
+                <td>{{ indicador.nome }}</td>
+                <td>{{ indicador.categoria }}</td>
+                <td>{{ indicador.valorAtual }}{{ indicador.unidade || '' }}</td>
+                <td>{{ indicador.estadoAtual }}</td>
+                <td>{{ indicador.estadoAlvo }}</td>
+                <td>{{ indicador.fonte.tipo }} · {{ indicador.fonte.nome }}</td>
+                <td>{{ validar(indicador).length ? 'pendente' : 'válido' }}</td>
+                <td><v-chip size="small" color="primary" variant="tonal">detalhar</v-chip></td>
+              </tr>
+            </tbody>
+          </v-table>
+        </div>
       </v-card-text>
     </v-card>
   </section>
@@ -134,6 +158,7 @@ import { calcularResumoEstatisticas, carregarEstatisticas, validarIndicador } fr
 const route = useRoute()
 const router = useRouter()
 const indicadores = ref([])
+const correlationId = ref(null)
 const modoOffline = ref(false)
 const mensagemOffline = ref('')
 const filtroCategoria = ref(route.query.categoria || null)
@@ -172,6 +197,13 @@ function aplicarFiltroCard(filtro = {}) {
   sincronizarUrl()
 }
 
+function abrirDetalhe(indicador) {
+  if (!indicador?.id) return
+  const query = { returnTo: route.fullPath.startsWith('/estatisticas') ? route.fullPath : '/estatisticas' }
+  if (correlationId.value) query.correlation_id = correlationId.value
+  router.push({ name: 'estatistica-detalhe', params: { indicadorId: indicador.id }, query })
+}
+
 function sincronizarUrl() {
   const query = {}
   if (filtroCategoria.value) query.categoria = filtroCategoria.value
@@ -199,6 +231,7 @@ onMounted(async () => {
   const resultado = await carregarEstatisticas()
   modoOffline.value = Boolean(resultado.modoOffline)
   mensagemOffline.value = resultado.mensagem || ''
+  correlationId.value = resultado.correlationId || null
   indicadores.value = resultado.indicadores || []
 })
 </script>
@@ -210,13 +243,14 @@ onMounted(async () => {
 h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; }
 .muted { color: var(--text-muted, #6b7280); }
 .panel, .indicator-card { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 16px; }
-.indicator-card--clickable { cursor: pointer; transition: transform 0.16s ease, box-shadow 0.16s ease; }
+.indicator-card--clickable, .indicator-row { cursor: pointer; transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease; }
 .indicator-card--clickable:hover, .indicator-card--clickable:focus-visible {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
   outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
   outline-offset: 2px;
 }
+.indicator-row:hover, .indicator-row:focus-visible { background: rgba(148, 163, 184, 0.1); outline: 2px solid var(--accent); outline-offset: -2px; }
 .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .indicator-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .indicator-value { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
@@ -224,6 +258,7 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; }
 .metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .metadata div { border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: 10px; }
 .metadata .full { grid-column: 1 / -1; }
+.table-scroll { width: 100%; overflow-x: auto; }
 dt { font-weight: 700; font-size: 12px; color: var(--text-muted, #6b7280); }
 dd { margin: 4px 0 0; word-break: break-word; }
 ul { padding-left: 18px; }
