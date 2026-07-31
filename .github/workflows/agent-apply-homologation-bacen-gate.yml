@@ -1,4 +1,4 @@
-name: Agent Apply Homologation BACEN Gate
+name: Agent Build Homologation BACEN Gate Artifact
 
 on:
   pull_request:
@@ -9,11 +9,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: agent-apply-homologation-bacen-gate
+  group: agent-build-homologation-bacen-gate-artifact
   cancel-in-progress: false
 
 jobs:
-  apply:
+  build:
     if: github.head_ref == 'agent/homologation-bacen-prod-gate-v1'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -24,44 +24,33 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify governed workflow token
-        env:
-          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
-        run: |
-          set -euo pipefail
-          if [ -z "${GH_PAT_ACTIONS:-}" ]; then
-            echo "::error::GH_PAT_ACTIONS is required with repo and workflow scopes."
-            exit 1
-          fi
-
-      - name: Apply strict patch
+      - name: Apply strict patch locally
         run: python scripts/agent_patch_homologation_bacen_gate.py
 
-      - name: Remove temporary applicator
+      - name: Validate generated contract
         run: |
-          rm scripts/agent_patch_homologation_bacen_gate.py
-          rm .github/workflows/agent-apply-homologation-bacen-gate.yml
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/fly-environment-homologation-gate.yml').read_text()
+          required = [
+              '# REQSYS_PRODUCTION_GOVERNANCE_GATE',
+              '  production-gate:',
+              "inputs.environment == 'prod' && inputs.deploy == true",
+              'uses: ./.github/workflows/bacen-production-hard-gate.yml',
+              '      - production-gate',
+              "needs.production-gate.result == 'success' || needs.production-gate.result == 'skipped'",
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit(f'missing contract markers: {missing}')
+          if text.index('  production-gate:') > text.index('  deploy:'):
+              raise SystemExit('production gate must precede deploy')
+          PY
 
-      - name: Verify isolated scope
-        run: |
-          set -euo pipefail
-          changed="$(git status --short | awk '{print $2}' | sort)"
-          expected="$(printf '%s\n' \
-            .github/workflows/agent-apply-homologation-bacen-gate.yml \
-            .github/workflows/fly-environment-homologation-gate.yml \
-            scripts/agent_patch_homologation_bacen_gate.py | sort)"
-          test "$changed" = "$expected"
-
-      - name: Commit protected workflow
-        env:
-          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
-        run: |
-          set -euo pipefail
-          git config user.name "reqsys-governed-agent"
-          git config user.email "actions@users.noreply.github.com"
-          git add .github/workflows/fly-environment-homologation-gate.yml \
-            .github/workflows/agent-apply-homologation-bacen-gate.yml \
-            scripts/agent_patch_homologation_bacen_gate.py
-          git commit -m "feat(compliance): gate BACEN na homologação Fly"
-          git remote set-url origin "https://x-access-token:${GH_PAT_ACTIONS}@github.com/${GITHUB_REPOSITORY}.git"
-          git push origin HEAD:agent/homologation-bacen-prod-gate-v1
+      - name: Publish generated workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: homologation-bacen-gate-generated
+          path: .github/workflows/fly-environment-homologation-gate.yml
+          if-no-files-found: error
+          retention-days: 7
