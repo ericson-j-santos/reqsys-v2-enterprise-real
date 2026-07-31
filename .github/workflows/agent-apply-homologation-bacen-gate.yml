@@ -7,6 +7,9 @@ on:
     paths:
       - scripts/agent_patch_homologation_bacen_gate.py
       - .github/workflows/agent-apply-homologation-bacen-gate.yml
+  pull_request:
+    types: [opened]
+    branches: [main]
 
 permissions:
   contents: write
@@ -17,7 +20,9 @@ concurrency:
 
 jobs:
   apply:
-    if: github.actor != 'github-actions[bot]'
+    if: >-
+      github.actor != 'github-actions[bot]' &&
+      (github.event_name == 'push' || github.head_ref == 'agent/homologation-bacen-prod-gate-v1')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
