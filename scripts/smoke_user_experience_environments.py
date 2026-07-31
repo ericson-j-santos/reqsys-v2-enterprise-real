@@ -56,7 +56,11 @@ def collect(environments: dict[str, str], timeout: float = 12.0) -> dict[str, An
             "pass_rate": round(100 * sum(1 for c in checks if c["ok"]) / len(checks), 2),
             "fingerprint": fingerprint,
             "indicator_drilldown_available": next(
-                (check["ok"] for check in checks if check["url"].endswith("/estatisticas/total-requisitos")),
+                (
+                    check["ok"]
+                    for path, check in zip(REQUIRED_PATHS, checks, strict=True)
+                    if path == "/estatisticas/total-requisitos"
+                ),
                 False,
             ),
         }
