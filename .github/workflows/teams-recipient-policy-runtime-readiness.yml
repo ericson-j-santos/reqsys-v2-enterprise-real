@@ -6,6 +6,7 @@ on:
     paths:
       - "scripts/probe_teams_recipient_policy_runtime.py"
       - "tests/scripts/test_probe_teams_recipient_policy_runtime.py"
+      - "tests/test_teams_recipient_policy_issue_reconciliation_contract.py"
       - ".github/workflows/teams-recipient-policy-runtime-readiness.yml"
   workflow_dispatch:
     inputs:
@@ -19,6 +20,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: teams-recipient-policy-runtime-readiness-${{ github.ref }}
@@ -39,7 +41,10 @@ jobs:
       - name: Compile probe
         run: python -m py_compile scripts/probe_teams_recipient_policy_runtime.py
       - name: Run focused tests
-        run: python -m pytest -q tests/scripts/test_probe_teams_recipient_policy_runtime.py
+        run: >-
+          python -m pytest -q
+          tests/scripts/test_probe_teams_recipient_policy_runtime.py
+          tests/test_teams_recipient_policy_issue_reconciliation_contract.py
 
   probe-runtime:
     if: github.event_name != 'pull_request'
@@ -66,6 +71,45 @@ jobs:
             --policy reqsys-operations \
             --output artifacts/teams/recipient-policy-runtime-readiness.json \
             $strict_flag
+
+      - name: Close legacy destination blocker when runtime policies are ready
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(
+              Path("artifacts/teams/recipient-policy-runtime-readiness.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          print(str(bool(report["summary"]["all_policies_ready"])).lower())
+          PY
+          )"
+          if [[ "$ready" != "true" ]]; then
+            echo "::notice::Políticas ainda não confirmaram resolução em dry-run; issue #1112 permanece aberta."
+            exit 0
+          fi
+
+          state="$(gh api "repos/${REPOSITORY}/issues/1112" --jq .state 2>/dev/null || echo missing)"
+          if [[ "$state" != "open" ]]; then
+            echo "::notice::Issue #1112 já está fechada ou indisponível; nenhuma alteração necessária."
+            exit 0
+          fi
+
+          gh api --method POST "repos/${REPOSITORY}/issues/1112/comments" --input - <<JSON
+          {
+            "body": "O bloqueio legado foi superado pela política dinâmica de destinatários. O endpoint confirmou resolução em dry-run para \`hitl-approvers\` e \`reqsys-operations\`, sem depender de um destino individual versionado. Evidência: ${RUN_URL}\n\n\`production_touched=false\`"
+          }
+          JSON
+          gh api --method PATCH "repos/${REPOSITORY}/issues/1112" \
+            -f state=closed -f state_reason=completed >/dev/null
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
