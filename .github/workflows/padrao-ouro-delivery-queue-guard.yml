@@ -1,0 +1,95 @@
+name: Padrão Ouro Delivery Queue Guard
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: padrao-ouro-delivery-queue-guard
+  cancel-in-progress: true
+
+jobs:
+  reconcile-queue:
+    name: Reconciliar fila de entrega
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cancelar execuções obsoletas ou duplicadas
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflowId = "padrao-ouro-delivery-automation.yml";
+            const staleMinutes = 10;
+            const now = Date.now();
+            const cancellableStatuses = new Set([
+              "queued",
+              "waiting",
+              "pending",
+              "requested",
+            ]);
+
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: workflowId,
+              per_page: 100,
+            });
+
+            const runs = [...data.workflow_runs].sort(
+              (left, right) => new Date(right.created_at) - new Date(left.created_at),
+            );
+            const cancelled = [];
+            const preserved = [];
+
+            for (const run of runs) {
+              if (!cancellableStatuses.has(run.status)) {
+                continue;
+              }
+
+              const ageMinutes = (now - new Date(run.created_at).getTime()) / 60000;
+              const newerSameStream = runs.some((candidate) =>
+                candidate.id !== run.id &&
+                candidate.event === run.event &&
+                candidate.head_branch === run.head_branch &&
+                new Date(candidate.created_at) > new Date(run.created_at) &&
+                ["queued", "waiting", "pending", "requested", "in_progress"].includes(candidate.status)
+              );
+
+              const legacyDuplicate = run.event === "pull_request" && ageMinutes >= staleMinutes;
+              const superseded = newerSameStream && ageMinutes >= staleMinutes;
+
+              if (!legacyDuplicate && !superseded) {
+                preserved.push({ id: run.id, event: run.event, status: run.status });
+                continue;
+              }
+
+              await github.rest.actions.cancelWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: run.id,
+              });
+
+              cancelled.push({
+                id: run.id,
+                event: run.event,
+                status: run.status,
+                reason: legacyDuplicate ? "legacy_pull_request_duplicate" : "superseded",
+                url: run.html_url,
+              });
+            }
+
+            await core.summary
+              .addHeading("Padrão Ouro Delivery Queue Guard")
+              .addRaw(`Cancelados: ${cancelled.length}\n`)
+              .addRaw(`Preservados: ${preserved.length}\n`)
+              .addCodeBlock(JSON.stringify({ cancelled, preserved }, null, 2), "json")
+              .write();
+
+            if (cancelled.length === 0) {
+              core.notice("Nenhuma execução obsoleta ou duplicada encontrada.");
+            }
