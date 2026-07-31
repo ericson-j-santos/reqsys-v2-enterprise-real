@@ -15,6 +15,8 @@ on:
       - "scripts/executive_runtime_evidence_summary.py"
       - "scripts/main_operational_state_snapshot.py"
       - "tests/test_main_operational_state_snapshot.py"
+      - "scripts/evaluate_single_state_consolidators.py"
+      - "tests/test_evaluate_single_state_consolidators.py"
       - "docs/contracts/post-merge-main-runtime-validator.md"
   workflow_dispatch:
     inputs:
@@ -60,7 +62,12 @@ jobs:
           set -euo pipefail
           python -m py_compile scripts/post_merge_main_runtime_validator.py
           python -m py_compile scripts/main_operational_state_snapshot.py
-          python -m pytest tests/test_post_merge_main_runtime_validator.py tests/test_main_operational_state_snapshot.py -q
+          python -m py_compile scripts/evaluate_single_state_consolidators.py
+          python -m pytest \
+            tests/test_post_merge_main_runtime_validator.py \
+            tests/test_main_operational_state_snapshot.py \
+            tests/test_evaluate_single_state_consolidators.py \
+            -q
 
       - name: Run governed runtime smoke
         env:
@@ -99,6 +106,12 @@ jobs:
             --github-run-id "${GITHUB_RUN_ID}" \
             --output artifacts/main-operational-state-snapshot/main-operational-state-snapshot.json
 
+      - name: Validate single-state consolidators
+        run: |
+          set -euo pipefail
+          python scripts/evaluate_single_state_consolidators.py \
+            --output artifacts/single-state-consolidators-integrity/single-state-consolidators-integrity.json
+
       - name: Summary
         if: always()
         run: |
@@ -106,7 +119,8 @@ jobs:
           for summary in \
             artifacts/executive-runtime-evidence-summary/summary.md \
             artifacts/post-merge-main-runtime-validator/summary.md \
-            artifacts/main-operational-state-snapshot/summary.md
+            artifacts/main-operational-state-snapshot/summary.md \
+            artifacts/single-state-consolidators-integrity/summary.md
           do
             if [[ -f "${summary}" ]]; then
               cat "${summary}" >> "$GITHUB_STEP_SUMMARY"
@@ -124,5 +138,6 @@ jobs:
             artifacts/executive-runtime-evidence-summary/
             artifacts/post-merge-main-runtime-validator/
             artifacts/main-operational-state-snapshot/
+            artifacts/single-state-consolidators-integrity/
           if-no-files-found: error
           retention-days: 30
