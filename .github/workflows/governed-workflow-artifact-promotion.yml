@@ -80,6 +80,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install focused test dependency
+        run: python -m pip install --disable-pip-version-check pytest
+
       - name: Download homologation generated artifact
         uses: actions/download-artifact@v4
         with:
