@@ -26,9 +26,6 @@ on:
       - "scripts/runtime_public_validator.py"
       - "config/external-sources-registry.json"
       - "docs/ops-dashboard/**"
-  pull_request:
-    types: [closed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       action:
@@ -48,7 +45,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: padrao-ouro-delivery-${{ github.ref }}
+  group: padrao-ouro-delivery-${{ github.event_name }}-${{ github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -125,7 +122,6 @@ jobs:
           name: padrao-ouro-runtime-validation
           path: artifacts/runtime/runtime-public-validation.json
           if-no-files-found: warn
-
 
   production-gate:
     name: BACEN authorization for production delivery
