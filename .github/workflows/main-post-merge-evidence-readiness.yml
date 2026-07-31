@@ -1,0 +1,63 @@
+name: Main Post-Merge Evidence Readiness
+on:
+  pull_request:
+    branches: [main]
+    paths: ["scripts/evaluate_main_post_merge_evidence.py", "tests/test_evaluate_main_post_merge_evidence.py", ".github/workflows/main-post-merge-evidence-readiness.yml"]
+  schedule:
+    - cron: "15 * * * *"
+  workflow_dispatch:
+    inputs:
+      strict: {description: "Fail when evidence is not ready", required: false, default: false, type: boolean}
+      target_workflow: {description: "Exact workflow name", required: false, default: "Padrão Ouro Delivery Automation", type: string}
+permissions: {contents: read, actions: read}
+concurrency:
+  group: main-post-merge-evidence-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  cancel-in-progress: true
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --disable-pip-version-check pytest
+      - run: python -m pytest -q tests/test_evaluate_main_post_merge_evidence.py
+  evidence:
+    if: github.event_name != 'pull_request'
+    needs: contract-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: ${{ inputs.target_workflow || 'Padrão Ouro Delivery Automation' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect runs for main
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp artifacts/main-post-merge-evidence
+          gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha' > .tmp/main-sha.txt
+          : > .tmp/runs.ndjson
+          for page in 1 2 3 4 5; do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?branch=main&per_page=100&page=${page}" > ".tmp/page-${page}.json"
+            jq -c '.workflow_runs[]' ".tmp/page-${page}.json" >> .tmp/runs.ndjson
+            [[ "$(jq '.workflow_runs | length' ".tmp/page-${page}.json")" -lt 100 ]] && break
+          done
+          jq -s '{workflow_runs: .}' .tmp/runs.ndjson > .tmp/runs.json
+      - name: Evaluate post-merge evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          strict_arg=(); [[ "${{ inputs.strict || false }}" == "true" ]] && strict_arg=(--strict)
+          python scripts/evaluate_main_post_merge_evidence.py --runs .tmp/runs.json --main-sha "$(cat .tmp/main-sha.txt)" --required-workflow "$TARGET_WORKFLOW" --output artifacts/main-post-merge-evidence/report.json "${strict_arg[@]}"
+      - name: Publish summary
+        if: always()
+        run: |
+          echo "## Main Post-Merge Evidence" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Decision: \`$(jq -r '.decision // "inconclusive"' artifacts/main-post-merge-evidence/report.json)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Production touched: \`false\`" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: main-post-merge-evidence, path: artifacts/main-post-merge-evidence/report.json, if-no-files-found: error, retention-days: 30}
