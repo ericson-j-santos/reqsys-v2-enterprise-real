@@ -1,3 +1,4 @@
+# REQSYS_PRODUCTION_GOVERNANCE_GATE
 name: Padrão Ouro Delivery Automation
 
 on:
@@ -125,12 +126,26 @@ jobs:
           path: artifacts/runtime/runtime-public-validation.json
           if-no-files-found: warn
 
+
+  production-gate:
+    name: BACEN authorization for production delivery
+    if: >-
+      (github.event_name == 'push' && github.ref_name == 'main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto'))
+    uses: ./.github/workflows/bacen-production-hard-gate.yml
+    with:
+      enforce: ${{ github.event_name == 'workflow_dispatch' }}
+
   configure-prod-secrets:
     name: Configurar secrets auth produção
     runs-on: ubuntu-latest
-    needs: validate-runtime
+    needs: [validate-runtime, production-gate]
     if: >-
       needs.validate-runtime.result == 'success' &&
+      needs.production-gate.result == 'success' &&
+      needs.production-gate.outputs.production_allowed == 'true' &&
       ((github.event_name == 'push' && github.ref_name == 'main') ||
        (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
        (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
@@ -221,9 +236,11 @@ jobs:
   deploy-fly-prod:
     name: Deploy Fly.io produção (runtime)
     runs-on: ubuntu-latest
-    needs: [validate-runtime, configure-prod-secrets]
+    needs: [validate-runtime, production-gate, configure-prod-secrets]
     if: >-
       needs.validate-runtime.result == 'success' &&
+      needs.production-gate.result == 'success' &&
+      needs.production-gate.outputs.production_allowed == 'true' &&
       needs.configure-prod-secrets.result == 'success' &&
       needs.configure-prod-secrets.outputs.configured == 'true' &&
       ((github.event_name == 'push' && github.ref_name == 'main') ||
@@ -284,9 +301,11 @@ jobs:
   deploy-fly-frontend-prod:
     name: Deploy Fly.io produção (frontend)
     runs-on: ubuntu-latest
-    needs: validate-runtime
+    needs: [validate-runtime, production-gate]
     if: >-
       needs.validate-runtime.result == 'success' &&
+      needs.production-gate.result == 'success' &&
+      needs.production-gate.outputs.production_allowed == 'true' &&
       ((github.event_name == 'push' && github.ref_name == 'main') ||
        (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
        (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
@@ -392,7 +411,7 @@ jobs:
   delivery-summary:
     name: Delivery summary
     runs-on: ubuntu-latest
-    needs: [auto-open-pr, validate-runtime, configure-prod-secrets, deploy-fly-prod, deploy-fly-frontend-prod, public-runtime-smoke]
+    needs: [auto-open-pr, validate-runtime, production-gate, configure-prod-secrets, deploy-fly-prod, deploy-fly-frontend-prod, public-runtime-smoke]
     if: always()
     steps:
       - name: Resumo consolidado
@@ -404,6 +423,7 @@ jobs:
             echo "|---|---|"
             echo "| Auto-open PR | ${{ needs.auto-open-pr.result || 'skipped' }} |"
             echo "| Validate runtime | ${{ needs.validate-runtime.result || 'skipped' }} |"
+            echo "| BACEN production gate | ${{ needs.production-gate.result || 'skipped' }} / allowed=${{ needs.production-gate.outputs.production_allowed || 'false' }} |"
             echo "| Configure secrets | ${{ needs.configure-prod-secrets.result || 'skipped' }} |"
             echo "| Deploy Fly prod | ${{ needs.deploy-fly-prod.result || 'skipped' }} |"
             echo "| Deploy Fly frontend | ${{ needs.deploy-fly-frontend-prod.result || 'skipped' }} |"
