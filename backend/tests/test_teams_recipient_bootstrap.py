@@ -35,6 +35,20 @@ def _document(*, name='Aprovador inicial', priority=10):
     }
 
 
+def _runtime_document():
+    return {
+        'schema_version': '1.1.0',
+        'policies': [
+            {
+                'name': 'hitl-approvers',
+                'delivery_mode': 'all',
+                'recipient_source': 'runtime_db',
+                'recipients': [],
+            }
+        ],
+    }
+
+
 def test_load_and_normalize_recipient_config(tmp_path):
     path = tmp_path / 'recipients.json'
     path.write_text(json.dumps(_document()), encoding='utf-8')
@@ -52,6 +66,29 @@ def test_load_and_normalize_recipient_config(tmp_path):
             'observacao': 'bootstrap de teste',
         }
     ]
+
+
+def test_runtime_managed_policy_does_not_seed_or_delete_recipients(tmp_path):
+    path = tmp_path / 'recipients.json'
+    path.write_text(json.dumps(_runtime_document()), encoding='utf-8')
+
+    recipients = normalize_recipients(load_recipient_config(path))
+
+    assert recipients == []
+
+
+def test_runtime_managed_policy_rejects_inline_identity():
+    document = _runtime_document()
+    document['policies'][0]['recipients'].append(
+        {
+            'name': 'Nao versionar',
+            'destination_id': 'person@example.com',
+            'destination_type': 'chat',
+        }
+    )
+
+    with pytest.raises(ValueError, match='nao pode versionar destinatarios'):
+        normalize_recipients(document)
 
 
 def test_reconcile_is_idempotent_and_updates_existing_record():
