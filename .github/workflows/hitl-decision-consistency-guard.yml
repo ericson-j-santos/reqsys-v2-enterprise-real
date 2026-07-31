@@ -59,7 +59,7 @@ jobs:
           mkdir -p .tmp artifacts/hitl-decision-consistency
           gh issue list \
             --state all \
-            --label hitl-approval-request,hitl-approved,hitl-rejected,hitl-adjustment-requested \
+            --search 'HITL in:title' \
             --limit 100 \
             --json number,title,url \
             > .tmp/issues-base.json
@@ -77,12 +77,14 @@ jobs:
                   [
                       "gh",
                       "api",
-                      f"repos/{os.environ['GITHUB_REPOSITORY']}/issues/{number}/comments",
+                      f"repos/{os.environ['GITHUB_REPOSITORY']}/issues/{number}/comments?per_page=100",
                       "--paginate",
+                      "--slurp",
                   ],
                   text=True,
               )
-              comments = json.loads(raw)
+              pages = json.loads(raw)
+              comments = [comment for page in pages for comment in page]
               issue["comments"] = [
                   {
                       "body": comment.get("body") or "",
