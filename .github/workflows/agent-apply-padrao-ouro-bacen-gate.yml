@@ -1,0 +1,57 @@
+name: Agent Apply Padrão Ouro BACEN Gate
+
+on:
+  push:
+    branches:
+      - agent/padrao-ouro-bacen-prod-gate-v1
+    paths:
+      - scripts/agent_patch_padrao_ouro_bacen_gate.py
+      - .github/workflows/agent-apply-padrao-ouro-bacen-gate.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: agent-apply-padrao-ouro-bacen-gate
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/padrao-ouro-bacen-prod-gate-v1
+          fetch-depth: 0
+
+      - name: Apply strict patch
+        run: python scripts/agent_patch_padrao_ouro_bacen_gate.py
+
+      - name: Remove temporary applicator
+        run: |
+          rm scripts/agent_patch_padrao_ouro_bacen_gate.py
+          rm .github/workflows/agent-apply-padrao-ouro-bacen-gate.yml
+
+      - name: Verify isolated scope
+        run: |
+          set -euo pipefail
+          changed="$(git status --short | awk '{print $2}' | sort)"
+          expected="$(printf '%s\n' \
+            .github/workflows/agent-apply-padrao-ouro-bacen-gate.yml \
+            .github/workflows/bacen-production-hard-gate.yml \
+            .github/workflows/padrao-ouro-delivery-automation.yml \
+            scripts/agent_patch_padrao_ouro_bacen_gate.py | sort)"
+          test "$changed" = "$expected"
+
+      - name: Commit protected workflows
+        run: |
+          git config user.name "reqsys-governed-agent"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/workflows/bacen-production-hard-gate.yml \
+            .github/workflows/padrao-ouro-delivery-automation.yml \
+            .github/workflows/agent-apply-padrao-ouro-bacen-gate.yml \
+            scripts/agent_patch_padrao_ouro_bacen_gate.py
+          git commit -m "feat(compliance): gate BACEN no Padrão Ouro Delivery"
+          git push origin HEAD:agent/padrao-ouro-bacen-prod-gate-v1
