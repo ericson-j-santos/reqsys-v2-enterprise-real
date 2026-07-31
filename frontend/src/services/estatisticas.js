@@ -148,7 +148,10 @@ export function validarArtifactRuntime(artifact) {
   const ambiente = String(artifact?.environment || artifact?.ambiente || '').toLowerCase()
   const runId = artifact?.source_run_id || artifact?.run_id
   const headSha = artifact?.source_head_sha || artifact?.head_sha || artifact?.merge_sha
-  const observadoEm = artifact?.observed_at || artifact?.observado_em
+  const observadoEm = artifact?.observed_at || artifact?.observado_em || artifact?.generated_at
+  const atestacaoVerificada = artifact?.verified === true
+    || artifact?.attestation_verified === true
+    || artifact?.verification_status === 'verified'
 
   if (!artifact || typeof artifact !== 'object') motivos.push('Artifact runtime ausente.')
   if (origem !== 'runtime') motivos.push('Origem do artifact não é runtime.')
@@ -156,7 +159,7 @@ export function validarArtifactRuntime(artifact) {
   if (!String(runId || '').trim()) motivos.push('Run ID verificável ausente.')
   if (!/^[a-f0-9]{40}$/i.test(String(headSha || ''))) motivos.push('SHA runtime completo e verificável ausente.')
   if (!observadoEm || Number.isNaN(new Date(observadoEm).getTime())) motivos.push('Timestamp runtime válido ausente.')
-  if (artifact?.verified === false || artifact?.attestation_verified === false) motivos.push('Atestação runtime não verificada.')
+  if (!atestacaoVerificada) motivos.push('Atestação runtime positiva e verificável ausente.')
 
   return {
     valido: motivos.length === 0,
