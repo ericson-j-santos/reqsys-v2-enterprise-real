@@ -73,7 +73,9 @@ def prompt(label: str, *, secret: bool = False, default: str | None = None) -> s
 
 
 def validate_bucket(name: str) -> str:
-    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?", name):
+    if not 3 <= len(name) <= 63 or not re.fullmatch(
+        r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", name
+    ):
         raise BootstrapError(
             "Bucket inválido: use 3–63 caracteres, somente letras minúsculas, "
             "números e hífens, sem hífen no início/fim."
