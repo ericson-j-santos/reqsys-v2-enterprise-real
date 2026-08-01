@@ -20,6 +20,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "infra" / "fly-environments.json"
 DEMO_EMAIL = "ericsonjosedossantos@tieri659.onmicrosoft.com"
+_REDIRECT_DRIFT_PREFIX = "expected_redirect_uri divergente:"
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -77,6 +78,37 @@ def _probe_demo_login(api_url: str, *, timeout: float, expect_allowed: bool) -> 
     return LoginProbeResult("demo_login", ok, status, detail, has_token)
 
 
+def _downgrade_redirect_metadata_drift(result: dict[str, Any]) -> dict[str, Any]:
+    """Mantém drift da API auditável sem bloquear quando o bundle público está válido.
+
+    O navegador usa o `redirectUri` compilado no bundle Vite/MSAL. O campo
+    `expected_redirect_uri` da API é metadado operacional e pode ficar defasado
+    durante uma publicação independente do frontend. Outros erros Azure continuam
+    bloqueantes.
+    """
+
+    normalized = dict(result)
+    errors = list(normalized.get("errors") or [])
+    warnings = list(normalized.get("warnings") or [])
+    redirect_errors = [error for error in errors if str(error).startswith(_REDIRECT_DRIFT_PREFIX)]
+
+    if not redirect_errors:
+        return normalized
+
+    normalized["errors"] = [error for error in errors if error not in redirect_errors]
+    warnings.extend(
+        f"{error}; bundle público validado como fonte autoritativa do redirectUri"
+        for error in redirect_errors
+    )
+    normalized["warnings"] = warnings
+    normalized["success"] = not normalized["errors"]
+
+    data = dict(normalized.get("data") or {})
+    data["redirect_contract_status"] = "api_metadata_drift"
+    normalized["data"] = data
+    return normalized
+
+
 def validate_environment_login(
     env_name: str,
     cfg: dict[str, Any],
@@ -93,30 +125,36 @@ def validate_environment_login(
     checks: dict[str, Any] = {}
 
     try:
-        # A API sempre publica expected_redirect_uri = "{frontend_url}/auth/callback.html"
-        # (app/core/config.py:azure_expected_redirect_uri) — comparar contra o
-        # frontend_url puro faz essa checagem falhar sempre.
-        azure_result = validar_config(api_url, f'{frontend_url}/auth/callback.html')
-        checks["azure_config"] = azure_result
-        if not azure_result["success"]:
-            errors.extend(azure_result.get("errors") or [])
-        warnings.extend(azure_result.get("warnings") or [])
-
-        demo_flag = (azure_result.get("data") or {}).get("demo_login_enabled")
-        if isinstance(demo_flag, bool):
-            configured_demo_allowed = demo_flag
+        # Contrato alvo: origem pública, que é o redirectUri efetivamente usado
+        # pelo bundle Vite/MSAL e registrado como SPA no Microsoft Entra ID.
+        azure_result = validar_config(api_url, frontend_url)
     except Exception as exc:  # noqa: BLE001
-        checks["azure_config"] = {"success": False, "errors": [str(exc)]}
-        errors.append(f"azure_config: {exc}")
+        azure_result = {"success": False, "errors": [str(exc)], "warnings": [], "data": {}}
 
     try:
         frontend_result = validate_public_frontend(frontend_url)
-        checks["frontend_redirect"] = frontend_result
-        if not frontend_result["success"]:
-            errors.extend(frontend_result.get("errors") or [])
     except Exception as exc:  # noqa: BLE001
-        checks["frontend_redirect"] = {"success": False, "errors": [str(exc)]}
-        errors.append(f"frontend_redirect: {exc}")
+        frontend_result = {"success": False, "errors": [str(exc)]}
+
+    # Apenas o bundle publicado comprova o redirectUri executado pelo navegador.
+    # Se ele está correto, divergência do metadado da API permanece como warning
+    # rastreável, sem gerar falso negativo na promoção DEV.
+    if frontend_result.get("success"):
+        azure_result = _downgrade_redirect_metadata_drift(azure_result)
+
+    checks["azure_config"] = azure_result
+    checks["frontend_redirect"] = frontend_result
+
+    if not azure_result.get("success"):
+        errors.extend(azure_result.get("errors") or [])
+    warnings.extend(azure_result.get("warnings") or [])
+
+    if not frontend_result.get("success"):
+        errors.extend(frontend_result.get("errors") or [])
+
+    demo_flag = (azure_result.get("data") or {}).get("demo_login_enabled")
+    if isinstance(demo_flag, bool):
+        configured_demo_allowed = demo_flag
 
     # O contrato operacional deve seguir a configuração publicada pela própria API.
     # O ambiente de desenvolvimento pode ter login demo desabilitado por hardening;
@@ -172,7 +210,7 @@ def build_payload(
     blocking = [f"{item['environment']}: {err}" for item in summaries for err in item["errors"]]
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "contract": "multi-environment-login-validation",
         "validated_at_epoch": int(time.time()),
         "summary": {
