@@ -1,6 +1,12 @@
 name: Teams v2 Adaptive Card Update
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/update_teams_v2_adaptive_card.py"
+      - "backend/app/services/teams_notification_solution_factory.py"
+      - ".github/workflows/teams-v2-adaptive-card-update.yml"
   workflow_dispatch:
     inputs:
       apply:
@@ -32,9 +38,13 @@ jobs:
       POWERPLATFORM_APP_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
       POWERPLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
       POWERPLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+      APPLY_CHANGE: ${{ github.event_name == 'push' || inputs.apply == true }}
+      APPLY_CONFIRMATION: ${{ github.event_name == 'push' && 'UPDATE-REQSYS-TEAMSV2-CARD' || inputs.confirmation }}
     steps:
       - name: Validate required configuration
+        shell: bash
         run: |
+          set -euo pipefail
           for name in \
             POWERPLATFORM_DEV_ENVIRONMENT_URL \
             POWERPLATFORM_APP_ID \
@@ -45,7 +55,7 @@ jobs:
               exit 1
             }
           done
-          if [ "${{ inputs.apply }}" = 'true' ] && [ "${{ inputs.confirmation }}" != 'UPDATE-REQSYS-TEAMSV2-CARD' ]; then
+          if [[ "$APPLY_CHANGE" == 'true' && "$APPLY_CONFIRMATION" != 'UPDATE-REQSYS-TEAMSV2-CARD' ]]; then
             echo 'Confirmação inválida; apply bloqueado.' >&2
             exit 1
           fi
@@ -58,18 +68,38 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run update (dry-run by default)
+      - name: Run governed update
         id: update
+        shell: bash
         run: |
+          set -euo pipefail
           ARGS=(--environment-url "$POWERPLATFORM_DEV_ENVIRONMENT_URL" \
                 --tenant-id "$POWERPLATFORM_TENANT_ID" \
                 --client-id "$POWERPLATFORM_APP_ID" \
                 --client-secret "$POWERPLATFORM_CLIENT_SECRET" \
                 --output artifacts/teams-v2-card-update/result.json)
-          if [ "${{ inputs.apply }}" = 'true' ]; then
-            ARGS+=(--apply --confirm "${{ inputs.confirmation }}")
+          if [[ "$APPLY_CHANGE" == 'true' ]]; then
+            ARGS+=(--apply --confirm "$APPLY_CONFIRMATION")
           fi
           python scripts/update_teams_v2_adaptive_card.py "${ARGS[@]}"
+
+      - name: Publish execution summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### Teams v2 Adaptive Card Update'
+            echo "- Evento: ${{ github.event_name }}"
+            echo "- Aplicação real: $APPLY_CHANGE"
+            echo '- Ambiente: reqsys-power-platform-dev'
+            echo '- Layout: largura total, campos empilhados e quebra de linha mobile'
+            echo '- Regra: um único post por evento; fallback somente após falha do cartão'
+            if [[ -f artifacts/teams-v2-card-update/result.json ]]; then
+              echo '- Evidência: artifact teams-v2-card-update'
+            else
+              echo '- Evidência: resultado não gerado; consultar logs da execução'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload result and backup
         if: always()
