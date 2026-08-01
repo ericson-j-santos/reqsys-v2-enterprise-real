@@ -11,9 +11,9 @@ from typing import Any
 
 SOLUTION_NAME = 'robo_envia_teamsv2'
 FLOW_NAME = 'robo_envia_teamsv2'
-FLOW_VERSION = '2.0.0.0'
+FLOW_VERSION = '2.1.0.0'
 PACKAGE_FILENAME = 'reqsys-teams-notifications-v2.zip'
-SCHEMA_VERSION = '1.0.0'
+SCHEMA_VERSION = '1.1.0'
 
 
 def _utc_now() -> str:
@@ -32,7 +32,10 @@ def _trigger_schema() -> dict[str, Any]:
             'signature': {'type': 'string', 'maxLength': 120},
             'stampDate': {'type': 'string', 'format': 'date-time'},
             'correlationId': {'type': 'string', 'format': 'uuid'},
+            'eventType': {'type': 'string', 'minLength': 1, 'maxLength': 120},
+            'deduplicationKey': {'type': 'string', 'minLength': 1, 'maxLength': 240},
             'renderMode': {'type': 'string', 'enum': ['adaptive-card', 'markdown']},
+            'suppressFallbackMessage': {'type': 'boolean'},
             'adaptiveCard': {'type': 'object'},
             'adaptiveCardJson': {'type': 'string'},
         },
@@ -109,32 +112,59 @@ def _flow_definition() -> dict[str, Any]:
         'environment_variables': [item['schema_name'] for item in _environment_variables()],
         'variables': [
             {'name': 'correlationId', 'type': 'string', 'source': "triggerBody()?['correlationId']"},
+            {
+                'name': 'deduplicationKey',
+                'type': 'string',
+                'source': "coalesce(triggerBody()?['deduplicationKey'], triggerBody()?['correlationId'])",
+            },
             {'name': 'renderMode', 'type': 'string', 'default': 'markdown'},
             {'name': 'teamsNotified', 'type': 'boolean', 'default': False},
         ],
         'rendering_rules': [
             {
                 'priority': 1,
-                'condition': "and(equals(triggerBody()?['renderMode'], 'adaptive-card'), not(empty(triggerBody()?['adaptiveCard'])))",
+                'condition': (
+                    "and(equals(variables('teamsNotified'), false), "
+                    "equals(triggerBody()?['renderMode'], 'adaptive-card'), "
+                    "not(empty(triggerBody()?['adaptiveCard'])))"
+                ),
                 'action': 'Post adaptive card in a chat or channel',
                 'payload_expression': "triggerBody()?['adaptiveCard']",
                 'result_mode': 'adaptive-card',
+                'on_success': ["setVariable('teamsNotified', true)"],
             },
             {
                 'priority': 2,
-                'condition': "and(equals(triggerBody()?['renderMode'], 'adaptive-card'), empty(triggerBody()?['adaptiveCard']), not(empty(triggerBody()?['adaptiveCardJson'])))",
+                'condition': (
+                    "and(equals(variables('teamsNotified'), false), "
+                    "equals(triggerBody()?['renderMode'], 'adaptive-card'), "
+                    "empty(triggerBody()?['adaptiveCard']), "
+                    "not(empty(triggerBody()?['adaptiveCardJson'])))"
+                ),
                 'action': 'Post adaptive card in a chat or channel',
                 'payload_expression': "json(triggerBody()?['adaptiveCardJson'])",
                 'result_mode': 'adaptive-card-json',
+                'on_success': ["setVariable('teamsNotified', true)"],
             },
             {
                 'priority': 3,
-                'condition': "equals(parameters('reqsys_TeamsFallbackEnabled'), true)",
+                'condition': (
+                    "and(equals(parameters('reqsys_TeamsFallbackEnabled'), true), "
+                    "equals(variables('teamsNotified'), false), "
+                    "not(equals(triggerBody()?['suppressFallbackMessage'], true)), "
+                    "not(empty(triggerBody()?['content'])))"
+                ),
                 'action': 'Post message in a chat or channel',
                 'payload_expression': "triggerBody()?['content']",
                 'result_mode': 'markdown-fallback',
+                'on_success': ["setVariable('teamsNotified', true)"],
             },
         ],
+        'delivery_invariant': {
+            'rule': 'exactly_one_post_per_request',
+            'guard': "equals(variables('teamsNotified'), false)",
+            'deduplication_key': "variables('deduplicationKey')",
+        },
         'scopes': {
             'main': {
                 'retry_policy': {'type': 'exponential', 'count': 3, 'interval': 'PT10S'},
@@ -143,6 +173,7 @@ def _flow_definition() -> dict[str, Any]:
             },
             'fallback': {
                 'run_after': ['main:Failed', 'main:TimedOut'],
+                'condition': "equals(variables('teamsNotified'), false)",
                 'actions': ['Publish sanitized fallback', 'Return degraded success'],
             },
             'error': {
@@ -157,6 +188,7 @@ def _flow_definition() -> dict[str, Any]:
                 'renderMode': '@variables(renderMode)',
                 'teams_notificado': '@variables(teamsNotified)',
                 'correlationId': '@variables(correlationId)',
+                'deduplicationKey': '@variables(deduplicationKey)',
                 'flowVersion': FLOW_VERSION,
             },
         },
@@ -171,15 +203,46 @@ def _flow_definition() -> dict[str, Any]:
             },
         },
         'idempotency': {
-            'key': 'correlationId',
+            'key': "coalesce(triggerBody()?['deduplicationKey'], triggerBody()?['correlationId'])",
             'strategy': 'reject_or_return_previous_result',
             'persistence': 'environment_specific_store',
             'required_before_production': True,
         },
         'logging': {
-            'include': ['correlationId', 'renderMode', 'teams_notificado', 'flowVersion', 'duration_ms'],
+            'include': [
+                'correlationId',
+                'deduplicationKey',
+                'renderMode',
+                'teams_notificado',
+                'flowVersion',
+                'duration_ms',
+            ],
             'exclude': ['adaptiveCardJson', 'content', 'tokens', 'webhooks', 'connection_secrets'],
         },
+    }
+
+
+def _field_block(label: str, expression: str, *, separator: bool = False) -> dict[str, Any]:
+    return {
+        'type': 'Container',
+        'spacing': 'Small',
+        'separator': separator,
+        'items': [
+            {
+                'type': 'TextBlock',
+                'text': label,
+                'weight': 'Bolder',
+                'size': 'Small',
+                'isSubtle': True,
+                'wrap': True,
+            },
+            {
+                'type': 'TextBlock',
+                'text': expression,
+                'spacing': 'None',
+                'wrap': True,
+            },
+        ],
     }
 
 
@@ -189,6 +252,7 @@ def _adaptive_card_template() -> dict[str, Any]:
         'type': 'AdaptiveCard',
         'version': '1.5',
         'msteams': {'width': 'Full'},
+        'fallbackText': "@{triggerBody()?['title']}",
         'body': [
             {
                 'type': 'Container',
@@ -196,60 +260,28 @@ def _adaptive_card_template() -> dict[str, Any]:
                 'bleed': True,
                 'items': [
                     {
-                        'type': 'ColumnSet',
-                        'columns': [
-                            {
-                                'type': 'Column',
-                                'width': 'stretch',
-                                'items': [
-                                    {
-                                        'type': 'TextBlock',
-                                        'text': "@{triggerBody()?['title']}",
-                                        'weight': 'Bolder',
-                                        'size': 'Large',
-                                        'wrap': True,
-                                    },
-                                    {
-                                        'type': 'TextBlock',
-                                        'text': "@{triggerBody()?['content']}",
-                                        'spacing': 'Small',
-                                        'isSubtle': True,
-                                        'wrap': True,
-                                        'maxLines': 3,
-                                    },
-                                ],
-                            },
-                            {
-                                'type': 'Column',
-                                'width': 'auto',
-                                'verticalContentAlignment': 'Center',
-                                'items': [
-                                    {
-                                        'type': 'TextBlock',
-                                        'text': '✓',
-                                        'weight': 'Bolder',
-                                        'size': 'ExtraLarge',
-                                        'color': 'Good',
-                                        'horizontalAlignment': 'Right',
-                                    }
-                                ],
-                            },
-                        ],
-                    }
-                ],
-            },
-            {
-                'type': 'FactSet',
-                'spacing': 'Medium',
-                'facts': [
-                    {'title': 'Assinatura', 'value': "@{triggerBody()?['signature']}"},
-                    {
-                        'title': 'Data',
-                        'value': "@{formatDateTime(triggerBody()?['stampDate'], 'dd/MM/yyyy HH:mm')}",
+                        'type': 'TextBlock',
+                        'text': "@{triggerBody()?['title']}",
+                        'weight': 'Bolder',
+                        'size': 'Large',
+                        'wrap': True,
                     },
-                    {'title': 'Correlation ID', 'value': "@{triggerBody()?['correlationId']}"},
+                    {
+                        'type': 'TextBlock',
+                        'text': "@{triggerBody()?['content']}",
+                        'spacing': 'Small',
+                        'isSubtle': True,
+                        'wrap': True,
+                        'maxLines': 5,
+                    },
                 ],
             },
+            _field_block('Assinatura', "@{triggerBody()?['signature']}", separator=True),
+            _field_block(
+                'Data',
+                "@{formatDateTime(triggerBody()?['stampDate'], 'dd/MM/yyyy HH:mm')}",
+            ),
+            _field_block('Correlation ID', "@{triggerBody()?['correlationId']}"),
             {
                 'type': 'TextBlock',
                 'text': 'Entrega automatizada pelo ReqSys',
@@ -270,7 +302,7 @@ def _migration_plan() -> dict[str, Any]:
             'Importar a solution em DEV com o flow inicialmente desligado.',
             'Configurar connection reference e environment variables.',
             'Executar testes de contrato e teste real em Teams desktop e mobile.',
-            'Executar v1 e v2 em paralelo durante janela controlada.',
+            'Executar v1 e v2 em paralelo durante janela controlada sem publicar o mesmo evento nos dois flows.',
             'Alterar o webhook do gateway ReqSys para v2.',
             'Validar erros, consumo, duplicidades e correlationId.',
             'Desativar v1 somente apos estabilidade e rollback testado.',
@@ -334,11 +366,12 @@ def gerar_teams_notification_solution(*, target_environment: str = 'dev', dry_ru
             {'id': 'adaptive-card-object', 'expected_mode': 'adaptive-card'},
             {'id': 'adaptive-card-json', 'expected_mode': 'adaptive-card-json'},
             {'id': 'legacy-markdown-fallback', 'expected_mode': 'markdown-fallback'},
+            {'id': 'adaptive-success-suppresses-markdown', 'expected': 'exactly_one_post'},
             {'id': 'invalid-json-fallback', 'expected_mode': 'markdown-fallback'},
             {'id': 'teams-temporary-failure', 'expected': 'retry_then_success_or_fallback'},
             {'id': 'teams-definitive-failure', 'expected_status': 502},
             {'id': 'duplicate-correlation-id', 'expected': 'no_duplicate_post'},
-            {'id': 'mobile-long-content', 'expected': 'wrapped_and_actions_visible'},
+            {'id': 'mobile-long-content', 'expected': 'stacked_wrapped_and_actions_visible'},
             {'id': 'log-sanitization', 'expected': 'no_secret_or_payload_body'},
         ],
         'governance': {
@@ -347,6 +380,7 @@ def gerar_teams_notification_solution(*, target_environment: str = 'dev', dry_ru
             'secrets_embedded': False,
             'activate_after_import': False,
             'minimum_adaptive_card_version': '1.5',
+            'delivery_invariant': 'exactly_one_post_per_request',
         },
     }
     files = _files(blueprint)
