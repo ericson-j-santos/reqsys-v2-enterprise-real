@@ -1,0 +1,277 @@
+name: ReqSys Backup Rollout Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/reqsys-backup-rollout-readiness.yml"
+      - "scripts/evaluate_backup_rollout_readiness.py"
+      - "tests/test_evaluate_backup_rollout_readiness.py"
+  workflow_run:
+    workflows: ["ReqSys Free Tier Backup"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Run ID do ReqSys Free Tier Backup
+        required: true
+        type: string
+      strict:
+        description: Falhar quando DEV não autorizar candidato STG
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: reqsys-backup-rollout-readiness-${{ github.event.workflow_run.id || inputs.source_run_id || github.run_id }}
+  cancel-in-progress: false
+
+env:
+  DASHBOARD_ISSUE: "1162"
+
+jobs:
+  contract-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/evaluate_backup_rollout_readiness.py
+          python -m pytest -q tests/test_evaluate_backup_rollout_readiness.py
+
+  evaluate-dev:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.conclusion == 'success'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      stg_allowed: ${{ steps.result.outputs.stg_allowed }}
+      decision: ${{ steps.result.outputs.decision }}
+      source_run_id: ${{ steps.source.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve source run
+        id: source
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == workflow_run ]]; then
+            echo "run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_id=${{ inputs.source_run_id }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download DEV evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: reqsys-backup-evidence-dev
+          path: downloaded/dev
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.source.outputs.run_id }}
+
+      - name: Resolve evidence and artifact digest
+        id: artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          evidence=$(find downloaded/dev -type f -name evidence.json -print -quit 2>/dev/null || true)
+          echo "evidence=$evidence" >> "$GITHUB_OUTPUT"
+          digest=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts" \
+            --jq '.artifacts[] | select(.name=="reqsys-backup-evidence-dev") | .digest' \
+            | head -n1 || true)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Evaluate immutable DEV evidence
+        id: result
+        shell: bash
+        env:
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+          EVIDENCE: ${{ steps.artifact.outputs.evidence }}
+          DIGEST: ${{ steps.artifact.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/backup
+          args=()
+          [[ -n "$EVIDENCE" ]] && args+=(--evidence "$EVIDENCE")
+          python scripts/evaluate_backup_rollout_readiness.py \
+            "${args[@]}" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-artifact-digest "$DIGEST" \
+            --output artifacts/backup/rollout-readiness.json
+          decision=$(jq -r .decision artifacts/backup/rollout-readiness.json)
+          stg_allowed=$(jq -r .stg_allowed artifacts/backup/rollout-readiness.json)
+          echo "decision=$decision" >> "$GITHUB_OUTPUT"
+          echo "stg_allowed=$stg_allowed" >> "$GITHUB_OUTPUT"
+          echo "## BACEN-04 — Rollout readiness" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Decision: **$decision**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- STG allowed: **$stg_allowed**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- PROD allowed: **false**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Production touched: **false**" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update rollout status on central dashboard
+        uses: actions/github-script@v7
+        env:
+          REPORT: artifacts/backup/rollout-readiness.json
+        with:
+          script: |
+            const fs = require("fs");
+            const report = JSON.parse(fs.readFileSync(process.env.REPORT, "utf8"));
+            const marker = "<!-- reqsys-backup-rollout-readiness -->";
+            const failed = report.checks.filter(item => !item.passed).map(item => item.name);
+            const body = `${marker}
+            ## Rollout DEV → STG BACEN-04
+
+            - Decisão: **${report.decision}**
+            - STG elegível: **${report.stg_allowed}**
+            - PROD elegível: **false**
+            - Checks pendentes: \`${failed.join(", ") || "nenhum"}\`
+            - Run de origem: \`${report.source_run_id}\`
+            - Artifact digest: \`${report.source_artifact_digest || "ausente"}\`
+            - Produção acessada: **false**
+            `;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.DASHBOARD_ISSUE),
+              per_page: 100
+            });
+            const current = comments.find(comment => comment.body?.includes(marker));
+            if (current) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: current.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: Number(process.env.DASHBOARD_ISSUE),
+                body
+              });
+            }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-backup-rollout-readiness
+          path: artifacts/backup/rollout-readiness.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Enforce strict manual mode
+        if: github.event_name == 'workflow_dispatch' && inputs.strict && steps.result.outputs.stg_allowed != 'true'
+        run: |
+          echo "::error::DEV evidence does not authorize an STG rollout candidate."
+          exit 1
+
+  propose-stg:
+    needs: evaluate-dev
+    if: needs.evaluate-dev.outputs.stg_allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ needs.evaluate-dev.outputs.source_run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Prepare isolated STG enablement proposal
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="automation/enable-stg-backup-${SOURCE_RUN_ID}"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            echo "branch=$branch" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git checkout -b "$branch"
+          SOURCE_RUN_ID="$SOURCE_RUN_ID" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("governance/backup/reqsys-backup-assets.json")
+          document = json.loads(path.read_text(encoding="utf-8"))
+          assets = {item["environment"]: item for item in document["assets"]}
+          if assets["prod"]["enabled"] is not False:
+              raise SystemExit("PROD must remain disabled")
+          stg = assets["stg"]
+          if stg["enabled"] is True:
+              raise SystemExit(0)
+          stg["enabled"] = True
+          stg["rollout_state"] = "candidate_after_valid_dev_restore_evidence"
+          stg["rollout_evidence"] = {
+              "source_run_id": os.environ["SOURCE_RUN_ID"],
+              "decision": "stg_rollout_candidate",
+              "production_allowed": False,
+          }
+          path.write_text(
+              json.dumps(document, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          if git diff --quiet; then
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            echo "branch=$branch" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add governance/backup/reqsys-backup-assets.json
+          git commit -m "feat(backup): propose STG rollout after DEV evidence"
+          git push origin "$branch"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Open governed STG rollout PR
+        if: steps.prepare.outputs.created == 'true'
+        env:
+          BRANCH: ${{ steps.prepare.outputs.branch }}
+        run: |
+          cat > /tmp/pr-body.md <<EOF
+          ## Evidência de origem
+
+          - Workflow: ReqSys Free Tier Backup
+          - Run ID: ${SOURCE_RUN_ID}
+          - Decisão: \`stg_rollout_candidate\`
+          - PROD habilitado: \`false\`
+          - Produção acessada: \`false\`
+
+          Esta PR altera somente o ativo STG no inventário. O merge continua sujeito aos gates governados e não habilita PROD.
+          EOF
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "feat(backup): habilitar STG após evidência DEV válida" \
+            --body-file /tmp/pr-body.md
