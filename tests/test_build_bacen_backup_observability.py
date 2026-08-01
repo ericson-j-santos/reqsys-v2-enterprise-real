@@ -26,8 +26,8 @@ class BackupObservabilityTests(unittest.TestCase):
             "rpo_target_minutes": 1440,
             "rto_seconds": 0.159,
             "rto_target_seconds": 14400,
-            "source_snapshot": {"row_count": 1000},
-            "target_snapshot": {"row_count": 1000},
+            "source_integrity": {"row_count": 1000},
+            "restored_integrity": {"row_count": 1000},
             "backup_sha256": "a" * 64,
             "correlation_id": "corr-1",
         }
@@ -64,7 +64,10 @@ class BackupObservabilityTests(unittest.TestCase):
             root = Path(tmp)
             outputs = Outputs(root / "x.json", root / "x.md", root / "x.html", root / "card.json")
             write_outputs(outputs, dashboard)
-            self.assertEqual(json.loads(outputs.json_path.read_text())["health"], "healthy")
+            payload = json.loads(outputs.json_path.read_text())
+            self.assertEqual(payload["health"], "healthy")
+            self.assertEqual(payload["metrics"]["source_row_count"], 1000)
+            self.assertEqual(payload["metrics"]["target_row_count"], 1000)
             self.assertIn("Dashboard BACEN-04", build_markdown(dashboard))
             self.assertEqual(build_card(dashboard)["version"], "1.2")
             for path in outputs.__dict__.values():
