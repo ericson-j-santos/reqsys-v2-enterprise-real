@@ -9,7 +9,7 @@ Garantir recuperação verificável dos dados, configurações e artefatos crít
 - bancos de dados e filas persistentes;
 - configurações versionadas e infraestrutura como código;
 - artifacts de governança e evidências regulatórias;
-- ambientes STG e PROD;
+- ambientes DEV, STG e PROD;
 - integrações críticas e segredos gerenciados pelo provedor.
 
 ## Requisitos mínimos
@@ -90,3 +90,27 @@ A evidência JSON deve conter:
 - `SECURITY`: validar criptografia, acesso e retenção;
 - `GOVERNANCE`: revisar exceções, indicadores e evidências;
 - proprietário do ativo: aprovar RPO/RTO e criticidade.
+
+## Cobertura real gratuita por ambiente
+
+- O inventário canônico é `governance/backup/reqsys-backup-assets.json` e deve conter DEV, STG e PROD.
+- O runtime Fly.io atual utiliza SQLite persistido em `/data/reqsys.db`; a cópia consistente usa a API `sqlite3.Connection.backup()` executada na Machine do ativo.
+- A transferência para o runner ocorre por Fly SSH/SFTP e o arquivo é validado antes do upload.
+- O armazenamento externo padrão é Cloudflare R2 privado, acessado pela API compatível com S3.
+- O `restic` aplica criptografia no cliente, deduplicação, retenção e verificação do repositório.
+- Nenhum dump ou banco restaurado pode ser gravado no Git, em issue, no Teams ou em artifact de longa duração.
+- A cobertura inicia por DEV; STG e PROD exigem evidências progressivas e mudança explícita do inventário por PR.
+
+## Guard rail de gratuidade
+
+- alerta operacional em 8 GiB de dados únicos reportados pelo `restic`;
+- bloqueio em 9 GiB para manter margem abaixo da franquia externa de 10 GB-mês;
+- qualquer projeção acima da franquia exige redução de retenção, arquivamento aprovado ou decisão formal de custo;
+- a gratuidade é condicionada às franquias vigentes dos provedores e deve ser revalidada trimestralmente.
+
+## Dashboard de cobertura real
+
+- O ponto central de acompanhamento é a issue `#1162`.
+- O dashboard deve separar configuração, execução, integridade, RPO/RTO, quota e estado de rollout por ambiente.
+- Ausência de credenciais externas mantém o estado amarelo e não pode ser apresentada como backup operacional.
+- Falha após a ativação de um ativo deve deixar o workflow vermelho e enviar acompanhamento ao Teams quando configurado.
