@@ -80,3 +80,23 @@ def test_missing_protected_route_fails():
     )
     assert payload['ok'] is False
     assert payload['status'] == 'failed'
+
+
+def test_invalid_governed_token_is_blocking(monkeypatch):
+    monkeypatch.setenv('REQSYS_TEAMS_SMOKE_BEARER_TOKEN', 'invalid-token')
+
+    def fake(url, *, method='GET', payload=None, token=None, timeout=25):
+        if url.endswith('/health'):
+            return result(200, {'status': 'healthy'})
+        if url.endswith('/v1/auth/config'):
+            return result(200, {'success': True, 'data': {'demo_login_enabled': False}})
+        if '/notificacoes/' in url:
+            return result(401, {})
+        raise AssertionError(url)
+
+    payload = module.validate_environment(
+        'prod', {'api_url': 'https://example.test'}, timeout=1,
+        require_authenticated=False, send_canary=False, request_fn=fake,
+    )
+    assert payload['ok'] is False
+    assert payload['status'] == 'failed'
