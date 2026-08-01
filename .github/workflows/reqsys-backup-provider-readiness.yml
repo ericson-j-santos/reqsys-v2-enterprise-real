@@ -1,0 +1,208 @@
+name: ReqSys Backup Provider Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/reqsys-backup-provider-readiness.yml"
+      - "scripts/evaluate_backup_provider_readiness.py"
+      - "tests/test_evaluate_backup_provider_readiness.py"
+  schedule:
+    - cron: "47 6 * * *"
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: Falhar quando os provedores não estiverem prontos
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: reqsys-backup-provider-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DASHBOARD_ISSUE: "1162"
+  REQUIRED_SECRETS: FLY_API_TOKEN,R2_ACCOUNT_ID,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET,RESTIC_PASSWORD
+
+jobs:
+  contract-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/evaluate_backup_provider_readiness.py
+          python -m pytest -q tests/test_evaluate_backup_provider_readiness.py
+
+  provider-readiness:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      FLY_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      R2_ACCOUNT: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_KEY: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET }}
+      RESTIC_SECRET: ${{ secrets.RESTIC_PASSWORD }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Detect configured secret names
+        id: config
+        shell: bash
+        run: |
+          set -euo pipefail
+          present=()
+          [[ -n "${FLY_TOKEN:-}" ]] && present+=(FLY_API_TOKEN)
+          [[ -n "${R2_ACCOUNT:-}" ]] && present+=(R2_ACCOUNT_ID)
+          [[ -n "${R2_KEY:-}" ]] && present+=(R2_ACCESS_KEY_ID)
+          [[ -n "${R2_SECRET:-}" ]] && present+=(R2_SECRET_ACCESS_KEY)
+          [[ -n "${R2_BUCKET_NAME:-}" ]] && present+=(R2_BUCKET)
+          [[ -n "${RESTIC_SECRET:-}" ]] && present+=(RESTIC_PASSWORD)
+          csv=$(IFS=,; echo "${present[*]}")
+          configured=false
+          [[ "$csv" == "$REQUIRED_SECRETS" ]] && configured=true
+          echo "present=$csv" >> "$GITHUB_OUTPUT"
+          echo "configured=$configured" >> "$GITHUB_OUTPUT"
+
+      - name: Install probe tools
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q restic
+          python -m pip install --disable-pip-version-check awscli
+          curl -fsSL https://fly.io/install.sh | sh -s 0.4.49
+          echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
+
+      - name: Probe Fly credentials
+        id: fly
+        shell: bash
+        run: |
+          result=skipped
+          if [[ "${{ steps.config.outputs.configured }}" == true ]]; then
+            if FLY_API_TOKEN="$FLY_TOKEN" fly auth whoami >/dev/null 2>&1; then result=pass; else result=fail; fi
+          fi
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+
+      - name: Probe private R2 bucket
+        id: r2
+        shell: bash
+        run: |
+          result=skipped
+          if [[ "${{ steps.config.outputs.configured }}" == true ]]; then
+            if AWS_ACCESS_KEY_ID="$R2_KEY" AWS_SECRET_ACCESS_KEY="$R2_SECRET" AWS_DEFAULT_REGION=auto \
+               aws s3api head-bucket --endpoint-url "https://${R2_ACCOUNT}.r2.cloudflarestorage.com" \
+               --bucket "$R2_BUCKET_NAME" >/dev/null 2>&1; then result=pass; else result=fail; fi
+          fi
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+
+      - name: Probe Restic repository
+        id: restic
+        shell: bash
+        run: |
+          result=skipped
+          if [[ "${{ steps.config.outputs.configured }}" == true ]]; then
+            if AWS_ACCESS_KEY_ID="$R2_KEY" AWS_SECRET_ACCESS_KEY="$R2_SECRET" AWS_DEFAULT_REGION=auto \
+               RESTIC_PASSWORD="$RESTIC_SECRET" \
+               RESTIC_REPOSITORY="s3:https://${R2_ACCOUNT}.r2.cloudflarestorage.com/${R2_BUCKET_NAME}/reqsys-backups" \
+               restic snapshots --json >/dev/null 2>&1; then result=pass; else result=fail; fi
+          fi
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+
+      - name: Build sanitized readiness artifact
+        id: result
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/backup
+          python scripts/evaluate_backup_provider_readiness.py \
+            --required "$REQUIRED_SECRETS" \
+            --present "${{ steps.config.outputs.present }}" \
+            --fly-probe "${{ steps.fly.outputs.result }}" \
+            --r2-probe "${{ steps.r2.outputs.result }}" \
+            --restic-probe "${{ steps.restic.outputs.result }}" \
+            --run-url "$RUN_URL" \
+            --output artifacts/backup/provider-readiness.json
+          decision=$(jq -r .decision artifacts/backup/provider-readiness.json)
+          echo "decision=$decision" >> "$GITHUB_OUTPUT"
+          echo "## BACEN-04 — Provider readiness" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Decision: **$decision**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Secret values persisted: **false**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Production touched: **false**" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update central dashboard comment idempotently
+        uses: actions/github-script@v7
+        env:
+          REPORT: artifacts/backup/provider-readiness.json
+        with:
+          script: |
+            const fs = require("fs");
+            const report = JSON.parse(fs.readFileSync(process.env.REPORT, "utf8"));
+            const marker = "<!-- reqsys-backup-provider-readiness -->";
+            const rows = Object.entries(report.probes)
+              .map(([name, value]) => `| ${name} | \`${value}\` |`)
+              .join("\n");
+            const body = `${marker}
+            ## Provider readiness BACEN-04
+
+            - Decisão: **${report.decision}**
+            - Secrets ausentes: \`${report.missing_secret_names.join(", ") || "nenhum"}\`
+            - Valores de secrets persistidos: **false**
+            - Produção acessada: **false**
+
+            | Probe | Resultado |
+            |---|---|
+            ${rows}
+
+            [Abrir execução](${report.run_url})
+            `;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.DASHBOARD_ISSUE),
+              per_page: 100
+            });
+            const current = comments.find(comment => comment.body?.includes(marker));
+            if (current) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: current.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: Number(process.env.DASHBOARD_ISSUE),
+                body
+              });
+            }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-backup-provider-readiness
+          path: artifacts/backup/provider-readiness.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Enforce strict manual mode
+        if: github.event_name == 'workflow_dispatch' && inputs.strict && steps.result.outputs.decision != 'ready'
+        run: |
+          echo "::error::Backup providers are not ready: ${{ steps.result.outputs.decision }}"
+          exit 1
