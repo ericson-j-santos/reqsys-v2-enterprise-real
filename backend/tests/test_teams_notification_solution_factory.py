@@ -25,6 +25,7 @@ def test_gera_solution_teams_v2_com_contrato_adaptive_card():
     assert result['flow']['name'] == FLOW_NAME
     assert result['flow']['state'] == 'off_after_import'
     assert result['governance']['minimum_adaptive_card_version'] == '1.5'
+    assert result['governance']['delivery_invariant'] == 'exactly_one_post_per_request'
     assert result['governance']['secrets_embedded'] is False
 
     schema = result['trigger_schema']
@@ -32,11 +33,19 @@ def test_gera_solution_teams_v2_com_contrato_adaptive_card():
     assert {'title', 'content', 'correlationId'} <= set(schema['required'])
     assert 'adaptiveCard' in schema['properties']
     assert 'adaptiveCardJson' in schema['properties']
+    assert 'eventType' in schema['properties']
+    assert 'deduplicationKey' in schema['properties']
+    assert 'suppressFallbackMessage' in schema['properties']
 
     rules = result['flow']['rendering_rules']
     assert rules[0]['payload_expression'] == "triggerBody()?['adaptiveCard']"
     assert rules[1]['payload_expression'] == "json(triggerBody()?['adaptiveCardJson'])"
     assert rules[2]['result_mode'] == 'markdown-fallback'
+    assert all("setVariable('teamsNotified', true)" in rule['on_success'] for rule in rules)
+    assert "equals(variables('teamsNotified'), false)" in rules[2]['condition']
+    assert "suppressFallbackMessage" in rules[2]['condition']
+    assert result['flow']['delivery_invariant']['rule'] == 'exactly_one_post_per_request'
+    assert result['flow']['scopes']['fallback']['condition'] == "equals(variables('teamsNotified'), false)"
 
 
 def test_solution_exige_connection_reference_e_environment_variables_sem_segredos():
@@ -79,24 +88,31 @@ def test_package_zip_contem_artefatos_governados_e_hash_valido():
 
         flow = json.loads(archive.read(f'{SOLUTION_NAME}/powerautomate/flow-definition.json'))
         assert flow['success_response']['body']['flowVersion'] == FLOW_VERSION
+        assert flow['success_response']['body']['deduplicationKey'] == '@variables(deduplicationKey)'
         assert flow['error_response']['body']['errorCode'] == 'TEAMS_POST_FAILED'
+        assert flow['delivery_invariant']['rule'] == 'exactly_one_post_per_request'
 
         card = json.loads(archive.read(f'{SOLUTION_NAME}/powerautomate/adaptive-card-template.json'))
         assert card['type'] == 'AdaptiveCard'
         assert card['version'] == '1.5'
+        assert card['msteams']['width'] == 'Full'
         card_json = json.dumps(card)
         assert "triggerBody()?['title']" in card_json
         assert "triggerBody()?['correlationId']" in card_json
+        assert 'FactSet' not in card_json
+        assert 'Assinatura' in card_json
+        assert 'Correlation ID' in card_json
 
     assert len(package['sha256']) == 64
-    assert len(result['contract_tests']) == 9
+    assert len(result['contract_tests']) == 10
 
 
-def test_migracao_preserva_v1_e_define_rollback():
+def test_migracao_preserva_v1_e_define_rollback_sem_duplicar_evento():
     result = gerar_teams_notification_solution(target_environment='dev')
     migration = result['migration']
 
     assert migration['source_flow'] == 'robo_envia_teamsv1'
     assert migration['target_flow'] == FLOW_NAME
     assert any('paralelo' in step for step in migration['steps'])
+    assert any('sem publicar o mesmo evento' in step for step in migration['steps'])
     assert any('robo_envia_teamsv1' in step for step in migration['rollback'])
