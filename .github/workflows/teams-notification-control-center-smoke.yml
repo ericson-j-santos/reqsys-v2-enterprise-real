@@ -1,0 +1,170 @@
+name: Teams Notification Control Center Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente alvo
+        required: true
+        default: all
+        type: choice
+        options: [all, dev, hml, prod]
+      require_authenticated:
+        description: Bloquear quando o smoke autenticado não puder ser executado
+        required: true
+        default: false
+        type: boolean
+      send_canary:
+        description: Enviar mensagem canário real ao Teams
+        required: true
+        default: false
+        type: boolean
+  schedule:
+    - cron: "17 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - backend/app/api/notificacoes.py
+      - backend/app/models/teams_notification_queue.py
+      - backend/app/schemas/teams_notifications.py
+      - backend/app/services/teams_notifications.py
+      - frontend-vuetify/src/services/notificacoes.js
+      - scripts/validar_teams_notification_control_center_runtime.py
+      - .github/workflows/teams-notification-control-center-smoke.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-notification-control-center-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Smoke ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - environment: dev
+            token_secret: REQSYS_TEAMS_SMOKE_BEARER_TOKEN_DEV
+          - environment: hml
+            token_secret: REQSYS_TEAMS_SMOKE_BEARER_TOKEN_HML
+          - environment: prod
+            token_secret: REQSYS_TEAMS_SMOKE_BEARER_TOKEN_PROD
+    steps:
+      - uses: actions/checkout@v4
+        if: >-
+          github.event_name != 'workflow_dispatch' ||
+          inputs.environment == 'all' ||
+          inputs.environment == matrix.environment
+
+      - uses: actions/setup-python@v5
+        if: >-
+          github.event_name != 'workflow_dispatch' ||
+          inputs.environment == 'all' ||
+          inputs.environment == matrix.environment
+        with:
+          python-version: "3.12"
+
+      - name: Validar runtime e contrato protegido
+        if: >-
+          github.event_name != 'workflow_dispatch' ||
+          inputs.environment == 'all' ||
+          inputs.environment == matrix.environment
+        shell: bash
+        env:
+          ENVIRONMENT: ${{ matrix.environment }}
+          REQSYS_TEAMS_SMOKE_BEARER_TOKEN: ${{ secrets[matrix.token_secret] }}
+          REQUIRE_AUTHENTICATED: ${{ github.event_name == 'workflow_dispatch' && inputs.require_authenticated || false }}
+          SEND_CANARY: ${{ github.event_name == 'workflow_dispatch' && inputs.send_canary || false }}
+        run: |
+          set -euo pipefail
+          args=(
+            --environment "$ENVIRONMENT"
+            --timeout 25
+            --output "teams-control-center-smoke-${ENVIRONMENT}.json"
+          )
+          if [ "$REQUIRE_AUTHENTICATED" = "true" ]; then
+            args+=(--require-authenticated)
+          fi
+          if [ "$SEND_CANARY" = "true" ]; then
+            args+=(--send-canary --require-authenticated)
+          fi
+
+          python scripts/validar_teams_notification_control_center_runtime.py "${args[@]}"
+
+      - uses: actions/upload-artifact@v4
+        if: >-
+          always() && (
+            github.event_name != 'workflow_dispatch' ||
+            inputs.environment == 'all' ||
+            inputs.environment == matrix.environment
+          )
+        with:
+          name: teams-control-center-smoke-${{ matrix.environment }}
+          path: teams-control-center-smoke-${{ matrix.environment }}.json
+          if-no-files-found: error
+          retention-days: 30
+
+  summary:
+    name: Consolidar evidência do Control Center
+    runs-on: ubuntu-latest
+    needs: smoke
+    if: always()
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: teams-control-center-smoke-*
+          merge-multiple: true
+
+      - name: Consolidar resultado
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          files = sorted(Path('.').glob('teams-control-center-smoke-*.json'))
+          if not files:
+              raise SystemExit('Nenhuma evidência de smoke foi produzida.')
+
+          environments = [json.loads(path.read_text(encoding='utf-8')) for path in files]
+          failed = [item['environment'] for item in environments if not item.get('ok')]
+          degraded = [item['environment'] for item in environments if item.get('status') == 'degraded']
+          summary = {
+              'schema_version': '1.0.0',
+              'contract': 'teams-notification-control-center-smoke-summary',
+              'overall_status': 'failed' if failed else ('degraded' if degraded else 'healthy'),
+              'failed_environments': failed,
+              'degraded_environments': degraded,
+              'environments': environments,
+          }
+          Path('teams-control-center-smoke-summary.json').write_text(
+              json.dumps(summary, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8',
+          )
+
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as output:
+              output.write('## Teams Notification Control Center Smoke\n')
+              output.write(f"- Estado: **{summary['overall_status']}**\n")
+              for item in environments:
+                  output.write(
+                      f"- {item['environment']}: **{item['status']}** · "
+                      f"auth={item['auth_source']} · SHA `{item['evidence_sha256'][:16]}…`\n"
+                  )
+
+          if failed:
+              raise SystemExit(f'Ambientes com falha: {failed}')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: teams-control-center-smoke-summary
+          path: teams-control-center-smoke-summary.json
+          if-no-files-found: error
+          retention-days: 90
