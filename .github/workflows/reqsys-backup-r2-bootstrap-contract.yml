@@ -1,0 +1,33 @@
+name: ReqSys Backup R2 Bootstrap Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/bootstrap_reqsys_r2_backup.py"
+      - "tests/test_bootstrap_reqsys_r2_backup.py"
+      - "docs/operations/backup-r2-bootstrap.md"
+      - ".github/workflows/reqsys-backup-r2-bootstrap-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile bootstrap
+        run: python -m py_compile scripts/bootstrap_reqsys_r2_backup.py
+      - name: Run focused tests
+        run: python -m unittest -v tests/test_bootstrap_reqsys_r2_backup.py
+      - name: Verify no secret file contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -R "\.env" scripts/bootstrap_reqsys_r2_backup.py
+          ! grep -R "write_text\|open(" scripts/bootstrap_reqsys_r2_backup.py
