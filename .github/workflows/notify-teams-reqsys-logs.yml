@@ -8,6 +8,7 @@ on:
       - Fly Runtime P0
       - Runtime Health Validator
       - Repository Health Watchdog
+      - Teams Notification Control Center Smoke
     types: [completed]
   workflow_dispatch:
     inputs:
