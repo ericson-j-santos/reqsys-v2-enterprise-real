@@ -21,7 +21,13 @@ _BACKSLASH = chr(92)
 _DOUBLE_QUOTE = chr(34)
 
 
-def _request_json(url: str, *, method: str = 'GET', headers: dict[str, str] | None = None, data: dict[str, Any] | None = None) -> dict:
+def _request_json(
+    url: str,
+    *,
+    method: str = 'GET',
+    headers: dict[str, str] | None = None,
+    data: dict[str, Any] | None = None,
+) -> dict:
     body = None
     request_headers = {'Accept': 'application/json', **(headers or {})}
     if data is not None:
@@ -35,12 +41,14 @@ def _request_json(url: str, *, method: str = 'GET', headers: dict[str, str] | No
 
 def acquire_token(*, tenant_id: str, client_id: str, client_secret: str, environment_url: str) -> str:
     token_url = f'https://login.microsoftonline.com/{urllib.parse.quote(tenant_id)}/oauth2/v2.0/token'
-    payload = urllib.parse.urlencode({
-        'grant_type': 'client_credentials',
-        'client_id': client_id,
-        'client_secret': client_secret,
-        'scope': f"{environment_url.rstrip('/')}/.default",
-    }).encode('utf-8')
+    payload = urllib.parse.urlencode(
+        {
+            'grant_type': 'client_credentials',
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'scope': f"{environment_url.rstrip('/')}/.default",
+        }
+    ).encode('utf-8')
     request = urllib.request.Request(
         token_url,
         data=payload,
@@ -60,11 +68,13 @@ def _escape_odata(value: str) -> str:
 
 
 def find_workflow(*, environment_url: str, token: str, flow_name: str) -> dict[str, Any]:
-    query = urllib.parse.urlencode({
-        '$select': 'workflowid,name,clientdata',
-        '$filter': f"name eq '{_escape_odata(flow_name)}' and category eq 5",
-        '$top': '2',
-    })
+    query = urllib.parse.urlencode(
+        {
+            '$select': 'workflowid,name,clientdata',
+            '$filter': f"name eq '{_escape_odata(flow_name)}' and category eq 5",
+            '$top': '2',
+        }
+    )
     url = f"{environment_url.rstrip('/')}/api/data/v9.2/workflows?{query}"
     result = _request_json(url, headers={'Authorization': f'Bearer {token}'})
     rows = result.get('value', [])
@@ -73,16 +83,44 @@ def find_workflow(*, environment_url: str, token: str, flow_name: str) -> dict[s
     return rows[0]
 
 
+def _responsive_field(label: str, expression: str, *, separator: bool = False) -> dict[str, Any]:
+    """Renderiza rótulo e valor empilhados para não comprimir o conteúdo no Teams mobile."""
+    return {
+        'type': 'Container',
+        'spacing': 'Small',
+        'separator': separator,
+        'items': [
+            {
+                'type': 'TextBlock',
+                'text': label,
+                'weight': 'Bolder',
+                'size': 'Small',
+                'isSubtle': True,
+                'wrap': True,
+            },
+            {
+                'type': 'TextBlock',
+                'text': expression,
+                'spacing': 'None',
+                'wrap': True,
+            },
+        ],
+    }
+
+
 def adaptive_card_body(*, minimum_version: str = '1.2') -> dict[str, Any]:
-    """Card real enviado pelo robo_envia_teamsv2, expresso com as referências
-    de ação que já existem no flow (Analisar_JSON/Compose_StampDate/
-    Compose_CorrelationId_Final) em vez do trigger genérico — este flow já
-    faz o parsing antes de chegar na ação de post."""
+    """Card genérico do robo_envia_teamsv2 com largura total e campos empilhados.
+
+    O flow repassa o ``adaptiveCard`` produzido pelo chamador quando presente.
+    Este template é o fallback visual para integrações legadas que enviam somente
+    title/content/signature/stampDate/correlationId.
+    """
     return {
         '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',
         'type': 'AdaptiveCard',
         'version': minimum_version,
         'msteams': {'width': 'Full'},
+        'fallbackText': "@{body('Analisar_JSON')?['title']}",
         'body': [
             {
                 'type': 'Container',
@@ -90,57 +128,29 @@ def adaptive_card_body(*, minimum_version: str = '1.2') -> dict[str, Any]:
                 'bleed': True,
                 'items': [
                     {
-                        'type': 'ColumnSet',
-                        'columns': [
-                            {
-                                'type': 'Column',
-                                'width': 'stretch',
-                                'items': [
-                                    {
-                                        'type': 'TextBlock',
-                                        'text': "@{body('Analisar_JSON')?['title']}",
-                                        'weight': 'Bolder',
-                                        'size': 'Large',
-                                        'wrap': True,
-                                    },
-                                    {
-                                        'type': 'TextBlock',
-                                        'text': "@{body('Analisar_JSON')?['content']}",
-                                        'spacing': 'Small',
-                                        'isSubtle': True,
-                                        'wrap': True,
-                                        'maxLines': 3,
-                                    },
-                                ],
-                            },
-                            {
-                                'type': 'Column',
-                                'width': 'auto',
-                                'verticalContentAlignment': 'Center',
-                                'items': [
-                                    {
-                                        'type': 'TextBlock',
-                                        'text': '✓',
-                                        'weight': 'Bolder',
-                                        'size': 'ExtraLarge',
-                                        'color': 'Good',
-                                        'horizontalAlignment': 'Right',
-                                    }
-                                ],
-                            },
-                        ],
-                    }
+                        'type': 'TextBlock',
+                        'text': "@{body('Analisar_JSON')?['title']}",
+                        'weight': 'Bolder',
+                        'size': 'Large',
+                        'wrap': True,
+                    },
+                    {
+                        'type': 'TextBlock',
+                        'text': "@{body('Analisar_JSON')?['content']}",
+                        'spacing': 'Small',
+                        'isSubtle': True,
+                        'wrap': True,
+                        'maxLines': 6,
+                    },
                 ],
             },
-            {
-                'type': 'FactSet',
-                'spacing': 'Medium',
-                'facts': [
-                    {'title': 'Assinatura', 'value': "@{body('Analisar_JSON')?['signature']}"},
-                    {'title': 'Data', 'value': "@{outputs('Compose_StampDate')}"},
-                    {'title': 'Correlation ID', 'value': "@{outputs('Compose_CorrelationId_Final')}"},
-                ],
-            },
+            _responsive_field(
+                'Assinatura',
+                "@{body('Analisar_JSON')?['signature']}",
+                separator=True,
+            ),
+            _responsive_field('Data', "@{outputs('Compose_StampDate')}"),
+            _responsive_field('Correlation ID', "@{outputs('Compose_CorrelationId_Final')}"),
             {
                 'type': 'TextBlock',
                 'text': 'Entrega automatizada pelo ReqSys',
@@ -166,45 +176,35 @@ def _wdl_string_literal(text: str) -> str:
 
 
 def _wdl_escape_json_string(expr: str) -> str:
-    """Envolve uma expressão WDL (que resolve para uma string vinda do
-    trigger, ex. title/content de um commit) numa cadeia de replace() que
-    escapa barra invertida, aspas duplas e quebra de linha, para que o
-    resultado possa ser embutido com segurança DENTRO de um literal de string
-    JSON já com aspas ao redor (ver _json_to_concat_expression). A ordem
-    importa: barra invertida primeiro, senão escapa a barra que acabamos de
-    inserir nos passos seguintes."""
+    """Escapa valor dinâmico para inserção segura em uma string JSON WDL."""
     escaped = expr
-    escaped = f"replace({escaped}, {_wdl_string_literal(_BACKSLASH)}, {_wdl_string_literal(_BACKSLASH * 2)})"
-    escaped = f"replace({escaped}, {_wdl_string_literal(_DOUBLE_QUOTE)}, {_wdl_string_literal(_BACKSLASH + _DOUBLE_QUOTE)})"
+    escaped = (
+        f"replace({escaped}, {_wdl_string_literal(_BACKSLASH)}, "
+        f"{_wdl_string_literal(_BACKSLASH * 2)})"
+    )
+    escaped = (
+        f"replace({escaped}, {_wdl_string_literal(_DOUBLE_QUOTE)}, "
+        f"{_wdl_string_literal(_BACKSLASH + _DOUBLE_QUOTE)})"
+    )
     escaped = f"replace({escaped}, decodeUriComponent('%0D'), {_wdl_string_literal('')})"
-    escaped = f"replace({escaped}, decodeUriComponent('%0A'), {_wdl_string_literal(_BACKSLASH + 'n')})"
+    escaped = (
+        f"replace({escaped}, decodeUriComponent('%0A'), "
+        f"{_wdl_string_literal(_BACKSLASH + 'n')})"
+    )
     return escaped
 
 
 def _json_to_concat_expression(value: dict[str, Any]) -> str:
-    """Converte um dict cujas folhas dinâmicas são strings '@{expressao}' numa
-    expressão WDL concat(...) que remonta o mesmo JSON em tempo de execução,
-    com os placeholders resolvidos E devidamente escapados para uso dentro de
-    uma string JSON — permite usar o resultado como texto dentro de outra
-    expressão (ex.: um dos ramos de um if()).
-
-    Bug corrigido aqui: a versão anterior descartava as aspas ao redor do
-    placeholder e emendava o valor bruto (sem aspas, sem escaping) no meio do
-    texto JSON — produzindo JSON inválido sempre que title/content continha
-    travessão, aspas ou quebra de linha (exatamente o payload real que
-    teams-commit-notification.yml envia). Confirmado reproduzindo localmente
-    com json.loads(). Agora as aspas de abertura/fechamento do placeholder
-    ficam como texto literal, e o valor dinâmico entre elas passa por
-    _wdl_escape_json_string antes de ser concatenado."""
+    """Converte um dict com folhas ``@{expressao}`` em concat() WDL seguro."""
     text = json.dumps(value, ensure_ascii=False)
     parts: list[str] = []
     last_end = 0
     for match in _PLACEHOLDER_RE.finditer(text):
-        literal_before = text[last_end:match.start() + 1]  # inclui a aspa de abertura
+        literal_before = text[last_end : match.start() + 1]
         if literal_before:
             parts.append(_wdl_string_literal(literal_before))
         parts.append(_wdl_escape_json_string(match.group(1)))
-        last_end = match.end() - 1  # deixa a aspa de fechamento para o próximo trecho literal
+        last_end = match.end() - 1
     tail = text[last_end:]
     if tail:
         parts.append(_wdl_string_literal(tail))
@@ -214,11 +214,7 @@ def _json_to_concat_expression(value: dict[str, Any]) -> str:
 
 
 def build_message_body_expression() -> str:
-    """body/messageBody final: repassa o AdaptiveCard já pronto que o
-    chamador mandar em adaptiveCard (ex.: teams-commit-notification.yml, que
-    já monta título/FactSet/botões reais) e só usa o card genérico
-    (title/content/signature/stampDate/correlationId) como fallback quando
-    adaptiveCard não vier no payload."""
+    """Usa o cartão do chamador; aplica o template responsivo apenas como fallback."""
     fallback_expr = _json_to_concat_expression(adaptive_card_body())
     return (
         "@{if(empty(body('Analisar_JSON')?['adaptiveCard']), "
@@ -227,46 +223,54 @@ def build_message_body_expression() -> str:
 
 
 def apply_card_change(clientdata: dict[str, Any]) -> dict[str, Any]:
-    """Retorna uma cópia de clientdata com a ação de post trocada para
-    repassar um Adaptive Card pronto (campo adaptiveCard do payload) ou usar
-    o card genérico como fallback, mantendo runAfter/operationMetadataId
-    intactos para não corromper o grafo de dependências do flow. Também
-    declara adaptiveCard (opcional) no schema do Analisar_JSON para que o
-    campo fique disponível em body('Analisar_JSON')."""
+    """Atualiza o post do flow sem alterar dependências ou metadados da ação."""
     updated = copy.deepcopy(clientdata)
     definition = updated['properties']['definition']
     scope = _navigate_actions(definition, ACTION_PATH)
     action = scope['actions'][ACTION_NAME]
 
     if action['inputs']['host']['operationId'] != 'PostCardToConversation':
-        raise ValueError('Ação alvo não usa mais PostCardToConversation; abortando para não editar a coisa errada.')
+        raise ValueError(
+            'Ação alvo não usa mais PostCardToConversation; abortando para não editar a coisa errada.'
+        )
 
-    # body/messageBody recebe o AdaptiveCard puro, SEM o envelope
-    # {type:"message", attachments:[...]} documentado pela Microsoft para a
-    # variante "canal" da operação — confirmado ao vivo em 2026-07-26 via
-    # teste real contra a URL de trigger: um card estático colado direto
-    # nesse campo (sem envelope) resultou em HTTP 200 sem erro na ação.
     action['inputs']['parameters']['body/messageBody'] = build_message_body_expression()
 
     parse_json = _navigate_actions(definition, ('Scope_TRY',))['actions'][PARSE_JSON_ACTION_NAME]
     properties = parse_json['inputs']['schema']['properties']
     properties.setdefault('adaptiveCard', {'type': 'object'})
+    properties.setdefault('adaptiveCardJson', {'type': 'string'})
+    properties.setdefault('renderMode', {'type': 'string'})
+    properties.setdefault('eventType', {'type': 'string'})
+    properties.setdefault('deduplicationKey', {'type': 'string'})
+    properties.setdefault('suppressFallbackMessage', {'type': 'boolean'})
 
     return updated
 
 
 def diff_summary(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
-    before_action = _navigate_actions(before['properties']['definition'], ACTION_PATH)['actions'][ACTION_NAME]
-    after_action = _navigate_actions(after['properties']['definition'], ACTION_PATH)['actions'][ACTION_NAME]
+    before_action = _navigate_actions(before['properties']['definition'], ACTION_PATH)['actions'][
+        ACTION_NAME
+    ]
+    after_action = _navigate_actions(after['properties']['definition'], ACTION_PATH)['actions'][
+        ACTION_NAME
+    ]
     return {
         'action': ACTION_NAME,
         'operationId': after_action['inputs']['host']['operationId'],
         'before_message_body': before_action['inputs']['parameters']['body/messageBody'],
         'after_message_body': after_action['inputs']['parameters']['body/messageBody'],
+        'layout': 'full-width-stacked-mobile',
     }
 
 
-def update_workflow_clientdata(*, environment_url: str, token: str, workflow_id: str, clientdata: dict[str, Any]) -> None:
+def update_workflow_clientdata(
+    *,
+    environment_url: str,
+    token: str,
+    workflow_id: str,
+    clientdata: dict[str, Any],
+) -> None:
     url = f"{environment_url.rstrip('/')}/api/data/v9.2/workflows({workflow_id})"
     _request_json(
         url,
@@ -277,20 +281,36 @@ def update_workflow_clientdata(*, environment_url: str, token: str, workflow_id:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description='Troca o post de cartão do robo_envia_teamsv2 para um Adaptive Card customizado.')
+    parser = argparse.ArgumentParser(
+        description='Atualiza o robo_envia_teamsv2 para Adaptive Card responsivo.'
+    )
     parser.add_argument('--environment-url', required=True)
     parser.add_argument('--tenant-id', required=True)
     parser.add_argument('--client-id', required=True)
     parser.add_argument('--client-secret', required=True)
     parser.add_argument('--flow-name', default='robo_envia_teamsv2')
-    parser.add_argument('--apply', action='store_true', help='Sem esta flag, roda em modo dry-run (só mostra o diff, não grava nada).')
-    parser.add_argument('--confirm', default='', help='Deve ser exatamente UPDATE-REQSYS-TEAMSV2-CARD quando --apply é usado.')
+    parser.add_argument(
+        '--apply',
+        action='store_true',
+        help='Sem esta flag, roda em dry-run e somente mostra o diff.',
+    )
+    parser.add_argument(
+        '--confirm',
+        default='',
+        help='Deve ser exatamente UPDATE-REQSYS-TEAMSV2-CARD quando --apply é usado.',
+    )
     parser.add_argument('--backup-dir', default='artifacts/teams-v2-card-update')
     parser.add_argument('--output')
     args = parser.parse_args()
 
     if args.apply and args.confirm != 'UPDATE-REQSYS-TEAMSV2-CARD':
-        print(json.dumps({'status': 'blocked', 'error': 'Confirmação ausente ou incorreta para --apply.'}, ensure_ascii=False), file=sys.stderr)
+        print(
+            json.dumps(
+                {'status': 'blocked', 'error': 'Confirmação ausente ou incorreta para --apply.'},
+                ensure_ascii=False,
+            ),
+            file=sys.stderr,
+        )
         return 2
 
     try:
@@ -300,7 +320,11 @@ def main() -> int:
             client_secret=args.client_secret,
             environment_url=args.environment_url,
         )
-        workflow = find_workflow(environment_url=args.environment_url, token=token, flow_name=args.flow_name)
+        workflow = find_workflow(
+            environment_url=args.environment_url,
+            token=token,
+            flow_name=args.flow_name,
+        )
         before = json.loads(workflow['clientdata'])
         after = apply_card_change(before)
         summary = diff_summary(before, after)
@@ -309,7 +333,10 @@ def main() -> int:
         backup_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
         backup_path = backup_dir / f"{args.flow_name}-clientdata-before-{timestamp}.json"
-        backup_path.write_text(json.dumps(before, ensure_ascii=False, indent=2), encoding='utf-8')
+        backup_path.write_text(
+            json.dumps(before, ensure_ascii=False, indent=2),
+            encoding='utf-8',
+        )
 
         result: dict[str, Any] = {
             'status': 'planned',
@@ -331,11 +358,17 @@ def main() -> int:
         if args.output:
             path = Path(args.output)
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+            path.write_text(
+                json.dumps(result, ensure_ascii=False, indent=2),
+                encoding='utf-8',
+            )
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except (OSError, ValueError, KeyError, urllib.error.URLError, json.JSONDecodeError) as exc:
-        print(json.dumps({'status': 'blocked', 'error': str(exc)}, ensure_ascii=False), file=sys.stderr)
+        print(
+            json.dumps({'status': 'blocked', 'error': str(exc)}, ensure_ascii=False),
+            file=sys.stderr,
+        )
         return 1
 
 

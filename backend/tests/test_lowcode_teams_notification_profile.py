@@ -37,20 +37,29 @@ def test_endpoint_factory_delega_para_perfil_teams_notification_v2():
     assert solution['profile'] == 'teams_notification_v2'
     assert solution['solution']['unique_name'] == 'robo_envia_teamsv2'
     assert solution['flow']['name'] == 'robo_envia_teamsv2'
-    assert solution['flow']['version'] == '2.0.0.0'
+    assert solution['flow']['version'] == '2.1.0.0'
     assert solution['factory_version'] == '0.2.0'
     assert solution['solution']['target_environment'] == 'dev'
 
 
-def test_perfil_teams_v2_preserva_contrato_adaptive_card_e_fallback():
+def test_perfil_teams_v2_preserva_contrato_adaptive_card_e_fallback_exclusivo():
     solution = gerar_lowcode_solution(_request())
     properties = solution['trigger_schema']['properties']
     rules = solution['flow']['rendering_rules']
 
-    assert {'adaptiveCard', 'adaptiveCardJson', 'content', 'correlationId'} <= set(properties)
+    assert {
+        'adaptiveCard',
+        'adaptiveCardJson',
+        'content',
+        'correlationId',
+        'deduplicationKey',
+        'suppressFallbackMessage',
+    } <= set(properties)
     assert rules[0]['result_mode'] == 'adaptive-card'
     assert rules[1]['result_mode'] == 'adaptive-card-json'
     assert rules[2]['result_mode'] == 'markdown-fallback'
+    assert "equals(variables('teamsNotified'), false)" in rules[2]['condition']
+    assert solution['flow']['delivery_invariant']['rule'] == 'exactly_one_post_per_request'
     assert solution['flow']['connection_references'][0]['connector'] == 'shared_teams'
 
 
