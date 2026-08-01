@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0.0",
+  "dashboard_issue_number": 1162,
+  "storage": {
+    "provider": "cloudflare-r2",
+    "repository_prefix": "reqsys-backups",
+    "free_tier_warn_bytes": 8589934592,
+    "free_tier_hard_bytes": 9663676416
+  },
+  "defaults": {
+    "database_engine": "sqlite",
+    "database_path": "/data/reqsys.db",
+    "backup_schedule": "daily",
+    "restore_test_schedule": "weekly",
+    "retention": {
+      "keep_daily": 7,
+      "keep_weekly": 4,
+      "keep_monthly": 3,
+      "keep_yearly": 1
+    }
+  },
+  "assets": [
+    {
+      "id": "reqsys-dev-sqlite",
+      "environment": "dev",
+      "github_environment": "development",
+      "fly_app": "reqsys-api-dev",
+      "criticality": "medium",
+      "enabled": true,
+      "rpo_target_minutes": 1440,
+      "rto_target_seconds": 28800,
+      "rollout_state": "active_when_secrets_configured"
+    },
+    {
+      "id": "reqsys-stg-sqlite",
+      "environment": "stg",
+      "github_environment": "staging",
+      "fly_app": "reqsys-api-stg",
+      "criticality": "high",
+      "enabled": false,
+      "rpo_target_minutes": 720,
+      "rto_target_seconds": 14400,
+      "rollout_state": "enable_after_dev_restore_evidence"
+    },
+    {
+      "id": "reqsys-prod-sqlite",
+      "environment": "prod",
+      "github_environment": "production",
+      "fly_app": "reqsys-api",
+      "criticality": "critical",
+      "enabled": false,
+      "rpo_target_minutes": 360,
+      "rto_target_seconds": 14400,
+      "rollout_state": "enable_after_stg_restore_evidence_and_approval"
+    }
+  ]
+}

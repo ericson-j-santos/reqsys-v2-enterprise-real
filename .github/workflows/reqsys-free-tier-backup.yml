@@ -1,0 +1,196 @@
+name: ReqSys Free Tier Backup
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/reqsys-free-tier-backup.yml"
+      - "governance/backup/reqsys-backup-assets.json"
+      - "governance/bacen/BACKUP-RESTORE-POLICY.md"
+      - "scripts/remote_sqlite_backup.py"
+      - "scripts/reqsys_free_tier_backup.py"
+      - "scripts/run_reqsys_free_tier_backup.sh"
+      - "tests/test_reqsys_free_tier_backup.py"
+      - "docs/operations/backup-free-tier-runbook.md"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/reqsys-free-tier-backup.yml"
+      - "governance/backup/reqsys-backup-assets.json"
+      - "governance/bacen/BACKUP-RESTORE-POLICY.md"
+      - "scripts/remote_sqlite_backup.py"
+      - "scripts/reqsys_free_tier_backup.py"
+      - "scripts/run_reqsys_free_tier_backup.sh"
+      - "tests/test_reqsys_free_tier_backup.py"
+      - "docs/operations/backup-free-tier-runbook.md"
+  schedule:
+    - cron: "17 7 * * *" # 04:17 America/Sao_Paulo
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente alvo
+        required: true
+        type: choice
+        default: dev
+        options: [dev, stg, prod, all]
+      include_disabled:
+        description: Permitir ativo ainda não habilitado
+        required: true
+        type: boolean
+        default: false
+      approve_prod:
+        description: Para PROD informe APROVO-PROD
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: reqsys-free-tier-backup-${{ github.event.inputs.environment || 'scheduled' }}
+  cancel-in-progress: false
+
+env:
+  INVENTORY: governance/backup/reqsys-backup-assets.json
+  DASHBOARD_ISSUE: "1162"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      configured: ${{ steps.plan.outputs.configured }}
+      missing: ${{ steps.plan.outputs.missing }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/remote_sqlite_backup.py scripts/reqsys_free_tier_backup.py tests/test_reqsys_free_tier_backup.py
+          bash -n scripts/run_reqsys_free_tier_backup.sh
+          python scripts/reqsys_free_tier_backup.py validate --inventory "$INVENTORY"
+          python -m unittest -v tests/test_reqsys_free_tier_backup.py
+      - name: Build governed plan
+        id: plan
+        env:
+          TARGET: ${{ github.event.inputs.environment || 'all' }}
+          INCLUDE_DISABLED: ${{ github.event.inputs.include_disabled || 'false' }}
+          APPROVE_PROD: ${{ github.event.inputs.approve_prod || '' }}
+          FLY_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          R2_ACCOUNT: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_KEY: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET }}
+          RESTIC_SECRET: ${{ secrets.RESTIC_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          extra=(); [[ "$INCLUDE_DISABLED" == true ]] && extra+=(--include-disabled)
+          if [[ "$INCLUDE_DISABLED" == true && ( "$TARGET" == prod || "$TARGET" == all ) && "$APPROVE_PROD" != APROVO-PROD ]]; then
+            echo "PROD exige approve_prod=APROVO-PROD" >&2; exit 1
+          fi
+          matrix=$(python scripts/reqsys_free_tier_backup.py matrix --inventory "$INVENTORY" --target "$TARGET" "${extra[@]}")
+          missing=(); [[ -n "$FLY_TOKEN" ]] || missing+=(FLY_API_TOKEN); [[ -n "$R2_ACCOUNT" ]] || missing+=(R2_ACCOUNT_ID); [[ -n "$R2_KEY" ]] || missing+=(R2_ACCESS_KEY_ID); [[ -n "$R2_SECRET" ]] || missing+=(R2_SECRET_ACCESS_KEY); [[ -n "$R2_BUCKET_NAME" ]] || missing+=(R2_BUCKET); [[ -n "$RESTIC_SECRET" ]] || missing+=(RESTIC_PASSWORD)
+          configured=true; (( ${#missing[@]} )) && configured=false
+          csv=$(IFS=,; echo "${missing[*]}")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"; echo "configured=$configured" >> "$GITHUB_OUTPUT"; echo "missing=$csv" >> "$GITHUB_OUTPUT"
+
+  backup:
+    needs: validate
+    if: github.event_name != 'pull_request' && needs.validate.outputs.configured == 'true' && needs.validate.outputs.matrix != '{"include":[]}'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ matrix.github_environment }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJson(needs.validate.outputs.matrix) }}
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
+      RESTIC_REPOSITORY: s3:https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com/${{ secrets.R2_BUCKET }}/reqsys-backups
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      CORRELATION_ID: backup-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.environment }}
+      ASSET_JSON: ${{ toJson(matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Fly CLI and restic
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q restic
+          curl -fsSL https://fly.io/install.sh | sh -s 0.4.49
+          echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
+      - name: Backup, encrypt, restore and validate
+        run: scripts/run_reqsys_free_tier_backup.sh
+      - name: Publish non-sensitive evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-backup-evidence-${{ matrix.environment }}
+          path: artifacts/backup/${{ matrix.id }}/evidence.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  report:
+    needs: [validate, backup]
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: reqsys-backup-evidence-*
+          path: downloaded
+      - name: Build dashboard
+        env:
+          CONFIGURED: ${{ needs.validate.outputs.configured }}
+          MISSING: ${{ needs.validate.outputs.missing }}
+          EXECUTION_RESULT: ${{ needs.backup.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          flag=(); [[ "$CONFIGURED" == true ]] && flag+=(--configured)
+          mkdir -p artifacts/dashboard
+          python scripts/reqsys_free_tier_backup.py dashboard --inventory "$INVENTORY" --evidence-dir downloaded "${flag[@]}" --missing "$MISSING" --run-url "$RUN_URL" --execution-result "$EXECUTION_RESULT" --json artifacts/dashboard/dashboard.json --markdown artifacts/dashboard/dashboard.md --card artifacts/dashboard/teams-card.json
+          cat artifacts/dashboard/dashboard.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Update dashboard issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('fs'); const body=fs.readFileSync('artifacts/dashboard/dashboard.md','utf8');
+            await github.rest.issues.update({owner:context.repo.owner,repo:context.repo.repo,issue_number:Number(process.env.DASHBOARD_ISSUE),body});
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:Number(process.env.DASHBOARD_ISSUE),body:`Execução [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) registrada em ${new Date().toISOString()}.`});
+      - name: Check Teams configuration
+        id: teams
+        env:
+          URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
+        run: '[[ -n "$URL" && "$RECIPIENT" == *"@"* ]] && echo configured=true >> "$GITHUB_OUTPUT" || echo configured=false >> "$GITHUB_OUTPUT"'
+      - name: Send Teams follow-up
+        if: steps.teams.outputs.configured == 'true'
+        continue-on-error: true
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
+        run: |
+          python tools/geradores/teams_graph_gateway_autocontido.py self-test
+          python tools/geradores/teams_graph_gateway_autocontido.py send-webhook --title "ReqSys — cobertura real de backup" --message "Dashboard BACEN-04 atualizado." --adaptive-card-file artifacts/dashboard/teams-card.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-backup-real-coverage-dashboard
+          path: artifacts/dashboard/
+          retention-days: 90
