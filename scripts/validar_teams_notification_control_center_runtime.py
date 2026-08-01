@@ -167,6 +167,7 @@ def validate_environment(
         checks.append(_check(f"protected:{clean_path}", result, expected=(401, 403)))
 
     token, auth_source, auth_evidence = _resolve_token(api_url, timeout=timeout, request_fn=request_fn)
+    checks.append(auth_evidence["config"])
     authenticated_checks: list[dict[str, Any]] = []
 
     if token:
@@ -237,11 +238,13 @@ def validate_environment(
             )
 
     public_ok = all(item["ok"] for item in checks)
+    auth_attempted = bool(token)
     auth_ok = bool(authenticated_checks) and all(item["ok"] for item in authenticated_checks)
     canary_ok = not send_canary or canary.get("ok") is True
-    ok = public_ok and (auth_ok or not require_authenticated) and canary_ok
+    auth_requirement_ok = auth_ok if auth_attempted else not require_authenticated
+    ok = public_ok and auth_requirement_ok and canary_ok
 
-    if not public_ok or not canary_ok or (require_authenticated and not auth_ok):
+    if not public_ok or not canary_ok or (auth_attempted and not auth_ok) or (require_authenticated and not auth_ok):
         status = "failed"
     elif auth_ok:
         status = "healthy"
