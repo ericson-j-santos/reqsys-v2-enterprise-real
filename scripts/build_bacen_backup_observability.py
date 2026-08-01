@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Gera painel, resumo e Adaptive Card para o controle BACEN-04.
-
-O script é deliberadamente independente de serviços externos. Ele normaliza a
-evidência produzida pelo teste de restauração, classifica a saúde operacional e
-gera saídas reutilizáveis pelo GitHub Actions, Teams e dashboards.
-"""
+"""Gera dashboard e Adaptive Card para a evidência BACEN-04."""
 
 from __future__ import annotations
 
@@ -51,7 +46,18 @@ def _number(value: Any) -> float | None:
         return None
 
 
-def evaluate(evidence: dict[str, Any] | None, workflow_status: str) -> tuple[str, list[str]]:
+def _row_count(data: dict[str, Any], *keys: str) -> int | None:
+    for key in keys:
+        snapshot = data.get(key)
+        if isinstance(snapshot, dict) and isinstance(snapshot.get("row_count"), int):
+            return int(snapshot["row_count"])
+    return None
+
+
+def evaluate(
+    evidence: dict[str, Any] | None,
+    workflow_status: str,
+) -> tuple[str, list[str]]:
     reasons: list[str] = []
     if workflow_status != "success":
         reasons.append(f"workflow_status={workflow_status}")
@@ -119,12 +125,16 @@ def build_dashboard(
             "rpo_target_minutes": data.get("rpo_target_minutes"),
             "rto_seconds": data.get("rto_seconds"),
             "rto_target_seconds": data.get("rto_target_seconds"),
-            "source_row_count": (data.get("source_snapshot") or {}).get("row_count")
-            if isinstance(data.get("source_snapshot"), dict)
-            else None,
-            "target_row_count": (data.get("target_snapshot") or {}).get("row_count")
-            if isinstance(data.get("target_snapshot"), dict)
-            else None,
+            "source_row_count": _row_count(
+                data,
+                "source_integrity",
+                "source_snapshot",
+            ),
+            "target_row_count": _row_count(
+                data,
+                "restored_integrity",
+                "target_snapshot",
+            ),
             "backup_sha256": data.get("backup_sha256"),
             "correlation_id": data.get("correlation_id"),
             "production_touched": data.get("production_touched"),
@@ -142,87 +152,153 @@ def _display(value: Any, suffix: str = "") -> str:
 
 def build_markdown(dashboard: dict[str, Any]) -> str:
     metrics = dashboard["metrics"]
-    health = dashboard["health"]
-    symbol = "🟢" if health == "healthy" else "🔴"
+    symbol = "🟢" if dashboard["health"] == "healthy" else "🔴"
+    rpo = (
+        f"{_display(metrics['rpo_minutes'], ' min')} / "
+        f"{_display(metrics['rpo_target_minutes'], ' min')}"
+    )
+    rto = (
+        f"{_display(metrics['rto_seconds'], ' s')} / "
+        f"{_display(metrics['rto_target_seconds'], ' s')}"
+    )
+    rows = [
+        ("Saúde", f"**{dashboard['health']}**"),
+        ("Workflow", f"`{dashboard['workflow_status']}`"),
+        ("Resultado", f"`{metrics['result']}`"),
+        ("Integridade", f"`{_display(metrics['integrity_match'])}`"),
+        ("RPO medido / alvo", f"`{rpo}`"),
+        ("RTO medido / alvo", f"`{rto}`"),
+        (
+            "Registros origem / destino",
+            f"`{_display(metrics['source_row_count'])} / "
+            f"{_display(metrics['target_row_count'])}`",
+        ),
+        ("Produção acessada", f"`{_display(metrics['production_touched'])}`"),
+        ("Próxima execução", f"`{dashboard['next_scheduled_at']}`"),
+        ("Commit", f"`{dashboard['commit_sha'][:12]}`"),
+        ("Correlation ID", f"`{_display(metrics['correlation_id'])}`"),
+    ]
+    table = ["| Indicador | Valor |", "|---|---|"]
+    table.extend(f"| {label} | {value} |" for label, value in rows)
     reasons = "<br>".join(str(item) for item in dashboard["reasons"])
-    return "\n".join(
-        [
-            f"# {symbol} Dashboard BACEN-04 — Backup e Restauração",
-            "",
-            f"> Atualizado automaticamente em `{dashboard['generated_at']}`.",
-            "",
-            "| Indicador | Valor |",
-            "|---|---|",
-            f"| Saúde | **{health}** |",
-            f"| Workflow | `{dashboard['workflow_status']}` |",
-            f"| Resultado | `{metrics['result']}` |",
-            f"| Integridade | `{_display(metrics['integrity_match'])}` |",
-            f"| RPO medido / alvo | `{_display(metrics['rpo_minutes'], ' min')}` / `{_display(metrics['rpo_target_minutes'], ' min')}` |",
-            f"| RTO medido / alvo | `{_display(metrics['rto_seconds'], ' s')}` / `{_display(metrics['rto_target_seconds'], ' s')}` |",
-            f"| Registros origem / destino | `{_display(metrics['source_row_count'])}` / `{_display(metrics['target_row_count'])}` |",
-            f"| Produção acessada | `{_display(metrics['production_touched'])}` |",
-            f"| Próxima execução programada | `{dashboard['next_scheduled_at']}` |",
-            f"| Commit | `{dashboard['commit_sha'][:12]}` |",
-            f"| Correlation ID | `{_display(metrics['correlation_id'])}` |",
-            "",
-            f"**Diagnóstico:** {reasons}",
-            "",
-            f"[Abrir execução]({dashboard['run_url']})",
-            "",
-            "## Critérios de conformidade",
-            "",
-            "- restauração real em PostgreSQL isolado;",
-            "- integridade origem/destino obrigatória;",
-            "- RPO e RTO abaixo dos limites;",
-            "- produção não acessada;",
-            "- artifact JSON/HTML retido;",
-            "- notificação no Teams com correlation ID.",
-        ]
-    ) + "\n"
+    sections = [
+        f"# {symbol} Dashboard BACEN-04 — Backup e Restauração",
+        "",
+        f"> Atualizado automaticamente em `{dashboard['generated_at']}`.",
+        "",
+        *table,
+        "",
+        f"**Diagnóstico:** {reasons}",
+        "",
+        f"[Abrir execução]({dashboard['run_url']})",
+        "",
+        "## Critérios de conformidade",
+        "",
+        "- restauração real em PostgreSQL isolado;",
+        "- integridade origem/destino obrigatória;",
+        "- RPO e RTO abaixo dos limites;",
+        "- produção não acessada;",
+        "- artifact JSON/HTML retido;",
+        "- notificação no Teams com correlation ID.",
+    ]
+    return "\n".join(sections) + "\n"
 
 
 def build_html(dashboard: dict[str, Any]) -> str:
     metrics = dashboard["metrics"]
-    health = dashboard["health"]
     reasons = ", ".join(str(item) for item in dashboard["reasons"])
     rows = [
-        ("Saúde", health),
+        ("Saúde", dashboard["health"]),
         ("Workflow", dashboard["workflow_status"]),
         ("Resultado", metrics["result"]),
         ("Integridade", _display(metrics["integrity_match"])),
-        ("RPO", f"{_display(metrics['rpo_minutes'])} / {_display(metrics['rpo_target_minutes'])} min"),
-        ("RTO", f"{_display(metrics['rto_seconds'])} / {_display(metrics['rto_target_seconds'])} s"),
-        ("Registros origem/destino", f"{_display(metrics['source_row_count'])} / {_display(metrics['target_row_count'])}"),
+        (
+            "RPO",
+            f"{_display(metrics['rpo_minutes'])} / "
+            f"{_display(metrics['rpo_target_minutes'])} min",
+        ),
+        (
+            "RTO",
+            f"{_display(metrics['rto_seconds'])} / "
+            f"{_display(metrics['rto_target_seconds'])} s",
+        ),
+        (
+            "Registros origem/destino",
+            f"{_display(metrics['source_row_count'])} / "
+            f"{_display(metrics['target_row_count'])}",
+        ),
         ("Produção acessada", _display(metrics["production_touched"])),
         ("Próxima execução", dashboard["next_scheduled_at"]),
         ("Correlation ID", _display(metrics["correlation_id"])),
     ]
     table = "".join(
-        f"<tr><th>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"
+        f"<tr><th>{html.escape(str(label))}</th>"
+        f"<td>{html.escape(str(value))}</td></tr>"
         for label, value in rows
     )
-    accent = "#1a7f37" if health == "healthy" else "#cf222e"
+    accent = "#1a7f37" if dashboard["health"] == "healthy" else "#cf222e"
+    run_url = html.escape(dashboard["run_url"], quote=True)
+    generated_at = html.escape(dashboard["generated_at"])
+    commit = html.escape(dashboard["commit_sha"][:12])
+    health = html.escape(dashboard["health"].upper())
+    diagnosis = html.escape(reasons)
     return f"""<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Dashboard BACEN-04</title><style>
-body{{font-family:system-ui,-apple-system,sans-serif;margin:0;background:#f6f8fa;color:#1f2328}}
-main{{max-width:920px;margin:32px auto;padding:0 16px}}.card{{background:white;border:1px solid #d0d7de;border-radius:12px;padding:24px;box-shadow:0 1px 3px #0001}}
-h1{{margin-top:0}}.status{{display:inline-block;padding:6px 12px;border-radius:999px;color:white;background:{accent};font-weight:700}}
-table{{width:100%;border-collapse:collapse;margin-top:20px}}th,td{{padding:12px;border-bottom:1px solid #d8dee4;text-align:left}}th{{width:38%}}
-a{{color:#0969da}}small{{color:#57606a}}
-</style></head><body><main><section class="card"><h1>Backup e Restauração — BACEN-04</h1>
-<p><span class="status">{html.escape(health.upper())}</span></p><table>{table}</table>
-<p><strong>Diagnóstico:</strong> {html.escape(reasons)}</p>
-<p><a href="{html.escape(dashboard['run_url'], quote=True)}">Abrir execução no GitHub Actions</a></p>
-<small>Atualizado em {html.escape(dashboard['generated_at'])} · commit {html.escape(dashboard['commit_sha'][:12])}</small>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard BACEN-04</title>
+<style>
+body{{font-family:system-ui,sans-serif;margin:0;background:#f6f8fa;color:#1f2328}}
+main{{max-width:920px;margin:32px auto;padding:0 16px}}
+.card{{background:white;border:1px solid #d0d7de;border-radius:12px;padding:24px}}
+.status{{display:inline-block;padding:6px 12px;border-radius:999px;color:white}}
+.status{{background:{accent};font-weight:700}}
+table{{width:100%;border-collapse:collapse;margin-top:20px}}
+th,td{{padding:12px;border-bottom:1px solid #d8dee4;text-align:left}}
+th{{width:38%}}a{{color:#0969da}}small{{color:#57606a}}
+</style>
+</head>
+<body><main><section class="card">
+<h1>Backup e Restauração — BACEN-04</h1>
+<p><span class="status">{health}</span></p>
+<table>{table}</table>
+<p><strong>Diagnóstico:</strong> {diagnosis}</p>
+<p><a href="{run_url}">Abrir execução no GitHub Actions</a></p>
+<small>Atualizado em {generated_at} · commit {commit}</small>
 </section></main></body></html>"""
 
 
 def build_card(dashboard: dict[str, Any]) -> dict[str, Any]:
     metrics = dashboard["metrics"]
     healthy = dashboard["health"] == "healthy"
-    title = "ReqSys — backup e restauração saudáveis" if healthy else "ReqSys — falha em backup/restauração"
-    color = "Good" if healthy else "Attention"
+    title = (
+        "ReqSys — backup e restauração saudáveis"
+        if healthy
+        else "ReqSys — falha em backup/restauração"
+    )
+    rpo = (
+        f"{_display(metrics['rpo_minutes'])} / "
+        f"{_display(metrics['rpo_target_minutes'])} min"
+    )
+    rto = (
+        f"{_display(metrics['rto_seconds'])} / "
+        f"{_display(metrics['rto_target_seconds'])} s"
+    )
+    facts = [
+        {"title": "Controle", "value": CONTROL_ID},
+        {"title": "Saúde", "value": dashboard["health"]},
+        {"title": "Resultado", "value": str(metrics["result"])},
+        {"title": "Integridade", "value": _display(metrics["integrity_match"])},
+        {"title": "RPO", "value": rpo},
+        {"title": "RTO", "value": rto},
+        {
+            "title": "Produção acessada",
+            "value": _display(metrics["production_touched"]),
+        },
+        {"title": "Próxima execução", "value": dashboard["next_scheduled_at"]},
+        {"title": "Correlation ID", "value": _display(metrics["correlation_id"])},
+    ]
     return {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
         "type": "AdaptiveCard",
@@ -234,23 +310,10 @@ def build_card(dashboard: dict[str, Any]) -> dict[str, Any]:
                 "text": title,
                 "weight": "Bolder",
                 "size": "Large",
-                "color": color,
+                "color": "Good" if healthy else "Attention",
                 "wrap": True,
             },
-            {
-                "type": "FactSet",
-                "facts": [
-                    {"title": "Controle", "value": CONTROL_ID},
-                    {"title": "Saúde", "value": dashboard["health"]},
-                    {"title": "Resultado", "value": str(metrics["result"])},
-                    {"title": "Integridade", "value": _display(metrics["integrity_match"])},
-                    {"title": "RPO", "value": f"{_display(metrics['rpo_minutes'])} / {_display(metrics['rpo_target_minutes'])} min"},
-                    {"title": "RTO", "value": f"{_display(metrics['rto_seconds'])} / {_display(metrics['rto_target_seconds'])} s"},
-                    {"title": "Produção acessada", "value": _display(metrics["production_touched"])},
-                    {"title": "Próxima execução", "value": dashboard["next_scheduled_at"]},
-                    {"title": "Correlation ID", "value": _display(metrics["correlation_id"])},
-                ],
-            },
+            {"type": "FactSet", "facts": facts},
             {
                 "type": "TextBlock",
                 "text": "; ".join(str(item) for item in dashboard["reasons"]),
@@ -259,24 +322,44 @@ def build_card(dashboard: dict[str, Any]) -> dict[str, Any]:
             },
         ],
         "actions": [
-            {"type": "Action.OpenUrl", "title": "Abrir execução", "url": dashboard["run_url"]}
+            {
+                "type": "Action.OpenUrl",
+                "title": "Abrir execução",
+                "url": dashboard["run_url"],
+            }
         ],
     }
 
 
 def write_outputs(outputs: Outputs, dashboard: dict[str, Any]) -> None:
-    for path in (outputs.json_path, outputs.markdown_path, outputs.html_path, outputs.card_path):
+    paths = (
+        outputs.json_path,
+        outputs.markdown_path,
+        outputs.html_path,
+        outputs.card_path,
+    )
+    for path in paths:
         path.parent.mkdir(parents=True, exist_ok=True)
-    outputs.json_path.write_text(json.dumps(dashboard, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    outputs.json_path.write_text(
+        json.dumps(dashboard, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     outputs.markdown_path.write_text(build_markdown(dashboard), encoding="utf-8")
     outputs.html_path.write_text(build_html(dashboard), encoding="utf-8")
-    outputs.card_path.write_text(json.dumps(build_card(dashboard), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    outputs.card_path.write_text(
+        json.dumps(build_card(dashboard), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--evidence", type=Path, required=True)
-    parser.add_argument("--workflow-status", choices=["success", "failure", "cancelled", "skipped", "unknown"], required=True)
+    parser.add_argument(
+        "--workflow-status",
+        choices=["success", "failure", "cancelled", "skipped", "unknown"],
+        required=True,
+    )
     parser.add_argument("--repository", required=True)
     parser.add_argument("--sha", required=True)
     parser.add_argument("--run-url", required=True)
@@ -303,10 +386,20 @@ def main() -> int:
         next_scheduled_at=args.next_scheduled_at,
     )
     write_outputs(
-        Outputs(args.json_output, args.markdown_output, args.html_output, args.card_output),
+        Outputs(
+            args.json_output,
+            args.markdown_output,
+            args.html_output,
+            args.card_output,
+        ),
         dashboard,
     )
-    print(json.dumps({"health": dashboard["health"], "outputs": True}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {"health": dashboard["health"], "outputs": True},
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 
