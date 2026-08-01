@@ -53,18 +53,26 @@ jobs:
             token_secret: REQSYS_TEAMS_SMOKE_BEARER_TOKEN_HML
           - environment: prod
             token_secret: REQSYS_TEAMS_SMOKE_BEARER_TOKEN_PROD
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      inputs.environment == 'all' ||
-      inputs.environment == matrix.environment
     steps:
       - uses: actions/checkout@v4
+        if: >-
+          github.event_name != 'workflow_dispatch' ||
+          inputs.environment == 'all' ||
+          inputs.environment == matrix.environment
 
       - uses: actions/setup-python@v5
+        if: >-
+          github.event_name != 'workflow_dispatch' ||
+          inputs.environment == 'all' ||
+          inputs.environment == matrix.environment
         with:
           python-version: "3.12"
 
       - name: Validar runtime e contrato protegido
+        if: >-
+          github.event_name != 'workflow_dispatch' ||
+          inputs.environment == 'all' ||
+          inputs.environment == matrix.environment
         shell: bash
         env:
           ENVIRONMENT: ${{ matrix.environment }}
@@ -88,7 +96,12 @@ jobs:
           python scripts/validar_teams_notification_control_center_runtime.py "${args[@]}"
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: >-
+          always() && (
+            github.event_name != 'workflow_dispatch' ||
+            inputs.environment == 'all' ||
+            inputs.environment == matrix.environment
+          )
         with:
           name: teams-control-center-smoke-${{ matrix.environment }}
           path: teams-control-center-smoke-${{ matrix.environment }}.json
