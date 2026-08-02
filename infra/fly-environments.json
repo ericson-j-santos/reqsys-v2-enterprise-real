@@ -40,7 +40,7 @@
       "app_env": "staging",
       "volume": "reqsys_data_stg",
       "approval_required": true,
-      "min_machines_running": 1,
+      "min_machines_running": 0,
       "smoke_endpoints": [
         "/health",
         "/api/runtime/health",
@@ -61,7 +61,7 @@
       "app_env": "production",
       "volume": "reqsys_data",
       "approval_required": true,
-      "min_machines_running": 1,
+      "min_machines_running": 0,
       "smoke_endpoints": [
         "/health",
         "/api/runtime/health",
