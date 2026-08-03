@@ -72,6 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       fly_app: ${{ steps.resolve.outputs.fly_app }}
+      fly_workdir: ${{ steps.resolve.outputs.fly_workdir }}
       fly_config: ${{ steps.resolve.outputs.fly_config }}
       base_url: ${{ steps.resolve.outputs.base_url }}
       github_environment: ${{ steps.resolve.outputs.github_environment }}
@@ -99,18 +100,21 @@ jobs:
           case "$TARGET_ENV" in
             dev)
               fly_app="reqsys-api-dev"
-              fly_config="backend/fly.dev.toml"
+              fly_workdir="backend"
+              fly_config="fly.dev.toml"
               base_url="https://reqsys-api-dev.fly.dev"
               github_environment="development"
               ;;
             stg)
               fly_app="reqsys-api-stg"
-              fly_config="backend/fly.staging.toml"
+              fly_workdir="backend"
+              fly_config="fly.staging.toml"
               base_url="https://reqsys-api-stg.fly.dev"
               github_environment="staging"
               ;;
             prod)
               fly_app="reqsys-api"
+              fly_workdir="."
               fly_config="fly.toml"
               base_url="https://reqsys-api.fly.dev"
               github_environment="production"
@@ -150,13 +154,14 @@ jobs:
 
           {
             echo "fly_app=$fly_app"
+            echo "fly_workdir=$fly_workdir"
             echo "fly_config=$fly_config"
             echo "base_url=$base_url"
             echo "github_environment=$github_environment"
             echo "expected_sha=$expected_sha"
           } >> "$GITHUB_OUTPUT"
 
-          export fly_app fly_config base_url github_environment expected_sha
+          export fly_app fly_workdir fly_config base_url github_environment expected_sha
 
           python - <<'PY'
           import json
@@ -245,6 +250,7 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_APP: ${{ needs.preflight.outputs.fly_app }}
+          FLY_WORKDIR: ${{ needs.preflight.outputs.fly_workdir }}
           FLY_CONFIG: ${{ needs.preflight.outputs.fly_config }}
         run: |
           set -euo pipefail
@@ -256,10 +262,13 @@ jobs:
           for attempt in $(seq 1 "$max_attempts"); do
             echo "::group::Deploy ${FLY_APP} attempt ${attempt}/${max_attempts}"
             set +e
-            flyctl deploy --remote-only \
-              --config "$FLY_CONFIG" \
-              --app "$FLY_APP" \
-              --build-arg "GITHUB_SHA=${GITHUB_SHA}" 2>&1 | tee "$deploy_log"
+            (
+              cd "$FLY_WORKDIR" && \
+              flyctl deploy --remote-only \
+                --config "$FLY_CONFIG" \
+                --app "$FLY_APP" \
+                --build-arg "GITHUB_SHA=${GITHUB_SHA}"
+            ) 2>&1 | tee "$deploy_log"
             status="${PIPESTATUS[0]}"
             set -e
             echo "::endgroup::"
