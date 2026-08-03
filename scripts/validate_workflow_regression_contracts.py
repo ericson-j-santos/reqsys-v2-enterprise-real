@@ -27,8 +27,13 @@ def validate_cofre_runtime_gate() -> None:
     )
     if not runtime_job:
         fail("Job runtime-evidence não encontrado")
-    if "STATE_FILE: ${{ runner.temp }}/cofre-runtime-state.bin" not in runtime_job.group("body"):
+    if "STATE_FILE:" not in runtime_job.group("body"):
         fail("STATE_FILE deve permanecer no escopo do job runtime-evidence")
+    if "runner." in runtime_job.group("body"):
+        fail(
+            "Cofre Runtime Evidence Gate não pode usar contexto runner no env "
+            "do job (não suportado pelo GitHub Actions em jobs.<id>.env)"
+        )
 
 
 def has_completed_workflow_run_trigger(text: str) -> bool:
