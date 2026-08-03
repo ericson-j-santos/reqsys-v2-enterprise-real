@@ -1,0 +1,5 @@
+# Scripts executados dentro de containers Linux (via shebang) quebram se
+# tiverem final de linha CRLF. Forca LF independente do OS de quem commita,
+# para evitar recorrencia do incidente de 2026-08-02 (fly_boot.sh crashando
+# em producao apos merge de sessao Windows sem normalizacao).
+*.sh text eol=lf
