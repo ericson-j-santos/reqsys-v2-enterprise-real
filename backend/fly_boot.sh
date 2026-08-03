@@ -6,6 +6,7 @@ set -eu
 DATA_DIR="${REQSYS_DATA_DIR:-/data}"
 PORT="${PORT:-8000}"
 BOOT_FALLBACK="${REQSYS_BOOT_FALLBACK:-false}"
+TEAMS_RECIPIENT_CONFIG_PATH="${TEAMS_RECIPIENT_CONFIG_PATH:-/app/governance/notifications/teams-recipient-policies.json}"
 if [ -n "${REQSYS_BOOT_MAX_ATTEMPTS:-}" ]; then
   MAX_ATTEMPTS="${REQSYS_BOOT_MAX_ATTEMPTS}"
 elif [ "$BOOT_FALLBACK" = "true" ]; then
@@ -43,6 +44,14 @@ else
     log "boot_aborted reason=volume_not_ready"
     exit 1
   fi
+fi
+
+if [ -f "$TEAMS_RECIPIENT_CONFIG_PATH" ]; then
+  log "teams_recipient_bootstrap_start"
+  python -m app.services.teams_recipient_bootstrap --config "$TEAMS_RECIPIENT_CONFIG_PATH"
+  log "teams_recipient_bootstrap_ok"
+else
+  log "teams_recipient_bootstrap_skipped reason=config_not_found"
 fi
 
 log "starting_uvicorn port=${PORT}"
