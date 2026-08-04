@@ -19,4 +19,4 @@ deploy_staging_fly:
       fi
     - export FLYCTL_INSTALL="/root/.fly"
     - export PATH="$FLYCTL_INSTALL/bin:$PATH"
-    - flyctl deploy --remote-only -c backend/fly.toml
+    - cd backend && flyctl deploy --remote-only -c fly.staging.toml --app reqsys-api-stg
