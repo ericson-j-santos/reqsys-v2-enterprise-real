@@ -145,7 +145,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          existing=$(gh issue list --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
+          existing=$(gh issue list --repo "${{ github.repository }}" --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
           body=$(cat <<EOF
           ## Dashboard GitHub → Teams indisponível
 
@@ -160,9 +160,9 @@ jobs:
           EOF
           )
           if [[ -n "$existing" ]]; then
-            gh issue comment "$existing" --body "$body"
+            gh issue comment "$existing" --repo "${{ github.repository }}" --body "$body"
           else
-            gh issue create --title "${INCIDENT_TITLE}" --body "$body" --label incident
+            gh issue create --repo "${{ github.repository }}" --title "${INCIDENT_TITLE}" --body "$body" --label incident
           fi
 
       - name: Fechar incidente após recuperação
@@ -171,10 +171,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          existing=$(gh issue list --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
+          existing=$(gh issue list --repo "${{ github.repository }}" --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
           if [[ -n "$existing" ]]; then
-            gh issue comment "$existing" --body "Dashboard recuperado. HTTP ${{ steps.health.outputs.http_status }}, latência ${{ steps.health.outputs.latency_ms }} ms. Evidência: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            gh issue close "$existing" --reason completed
+            gh issue comment "$existing" --repo "${{ github.repository }}" --body "Dashboard recuperado. HTTP ${{ steps.health.outputs.http_status }}, latência ${{ steps.health.outputs.latency_ms }} ms. Evidência: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            gh issue close "$existing" --repo "${{ github.repository }}" --reason completed
           fi
 
       - name: Aplicar gate de disponibilidade
