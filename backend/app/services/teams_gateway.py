@@ -30,6 +30,7 @@ from app.services.hub_lowcode import (
     obter_planner_webhook_config,
     salvar_log_integracao,
 )
+from app.services.teams_status_cards import construir_adaptive_card_status_requisito
 
 logger = logging.getLogger('reqsys.teams_gateway')
 
@@ -215,23 +216,52 @@ def status_gateway(db: Session | None = None) -> dict[str, Any]:
     }
 
 
+def _adaptive_card_de_metadata(metadata: dict[str, Any], texto_fallback: str) -> dict[str, Any] | None:
+    """Monta um card de status de requisito quando o chamador declarou
+    metadata['evento_status'] (um de EVENTOS_STATUS_REQUISITO); caso
+    contrario retorna None para o chamador usar o card generico de
+    fallback. Um evento_status invalido e logado e tratado como ausente,
+    em vez de derrubar o envio da mensagem."""
+    evento = metadata.get('evento_status')
+    if not evento:
+        return None
+    try:
+        return construir_adaptive_card_status_requisito(
+            evento=evento,
+            titulo=metadata.get('titulo') or metadata.get('title') or 'ReqSys',
+            descricao=metadata.get('descricao') or texto_fallback,
+            status_label=metadata.get('status_label', ''),
+            propriedades=metadata.get('propriedades'),
+            view_url=metadata.get('view_url') or metadata.get('viewUrl') or '',
+            acao_titulo=metadata.get('acao_titulo', 'Abrir no ReqSys'),
+        )
+    except ValueError as exc:
+        logger.warning('teams_gateway_evento_status_invalido error=%s', exc)
+        return None
+
+
 def _payload_webhook(texto: str, content_type: str, metadata: dict[str, Any]) -> dict[str, Any]:
     subtitle = metadata.get('titulo') or metadata.get('title') or 'ReqSys Teams Gateway'
     content = texto if content_type == 'text' else texto.replace('<br>', '\n')
+
+    card = _adaptive_card_de_metadata(metadata, content)
+    if card is None:
+        card = {
+            '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',
+            'type': 'AdaptiveCard',
+            'version': '1.2',
+            'body': [
+                {'type': 'TextBlock', 'size': 'Medium', 'weight': 'Bolder', 'text': subtitle},
+                {'type': 'TextBlock', 'text': content, 'wrap': True},
+            ],
+        }
+
     return {
         'type': 'message',
         'attachments': [
             {
                 'contentType': 'application/vnd.microsoft.card.adaptive',
-                'content': {
-                    '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',
-                    'type': 'AdaptiveCard',
-                    'version': '1.2',
-                    'body': [
-                        {'type': 'TextBlock', 'size': 'Medium', 'weight': 'Bolder', 'text': subtitle},
-                        {'type': 'TextBlock', 'text': content, 'wrap': True},
-                    ],
-                },
+                'content': card,
             }
         ],
     }
@@ -798,14 +828,24 @@ def _payload_flow_bot(destinatario: str, texto: str, metadata: dict[str, Any], c
     """Payload no schema real validado ao vivo contra um flow de producao existente
     no tenant (`robo_envia_teams`, 2026-07-09) — nao e um schema inventado. Campos
     obrigatorios no flow original: to, title, content, signature.
+
+    `adaptiveCard` e opcional e so entra quando metadata['evento_status'] pede um
+    card de status de requisito (ver _adaptive_card_de_metadata) — o flow
+    robo_envia_teamsv2 le body('Analisar_JSON')?['adaptiveCard'] e usa esse card
+    no lugar do card generico quando o campo vier preenchido (confirmado ao vivo
+    em scripts/update_teams_v2_adaptive_card.py::build_message_body_expression).
     """
-    return {
+    payload: dict[str, Any] = {
         'to': destinatario,
         'title': metadata.get('titulo') or metadata.get('title') or 'ReqSys',
         'content': texto,
         'signature': metadata.get('assinatura') or metadata.get('signature') or 'ReqSys',
         'correlationId': correlation_id,
     }
+    card = _adaptive_card_de_metadata(metadata, texto)
+    if card is not None:
+        payload['adaptiveCard'] = card
+    return payload
 
 
 async def _enviar_flow_bot_webhook(
