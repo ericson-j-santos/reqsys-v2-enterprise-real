@@ -67,7 +67,10 @@ jobs:
 
           def workflow_runs(filename: str, newest_first: bool = True) -> list[dict]:
               completed = subprocess.run(
-                  ["gh", "api", "--paginate", f"repos/{repository}/actions/workflows/{filename}/runs?per_page=100"],
+                  [
+                      "gh", "api", "--paginate", "-q", ".workflow_runs[]",
+                      f"repos/{repository}/actions/workflows/{filename}/runs?per_page=100",
+                  ],
                   text=True,
                   capture_output=True,
                   check=False,
@@ -78,11 +81,10 @@ jobs:
               for document in completed.stdout.splitlines():
                   if not document.strip():
                       continue
-                  payload = json.loads(document)
-                  for run in payload.get("workflow_runs", []):
-                      created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
-                      if created >= cutoff and run.get("status") == "completed":
-                          runs.append(run)
+                  run = json.loads(document)
+                  created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+                  if created >= cutoff and run.get("status") == "completed":
+                      runs.append(run)
               runs.sort(key=lambda item: item["created_at"], reverse=newest_first)
               return runs
 
