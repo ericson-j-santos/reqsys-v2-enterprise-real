@@ -2,7 +2,7 @@ name: Operational Analytics Engine
 
 on:
   schedule:
-    - cron: "41 * * * *"
+    - cron: "41 */4 * * *"
   workflow_dispatch:
     inputs:
       branch:

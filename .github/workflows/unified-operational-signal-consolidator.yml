@@ -2,11 +2,11 @@ name: Unified Operational Signal Consolidator
 
 # Fecha o loop mesh → alert → event bus → consolidador.
 # Push main: Main Operational Validation Fast (síncrono, segundos).
-# Schedule horário como fallback de evidência.
+# Schedule a cada 4h como fallback de evidência.
 
 on:
   schedule:
-    - cron: "37 * * * *"
+    - cron: "37 */4 * * *"
   workflow_dispatch:
 
 permissions:
