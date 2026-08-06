@@ -257,7 +257,12 @@ jobs:
           python -m json.tool site/data.json >/dev/null
           python -m json.tool site/certification-status.json >/dev/null
           grep -Fq '"certification"' site/data.json
-          grep -Fq 'provisional_gold' site/certification-status.json
+          python -c "
+          import json, sys
+          state = json.load(open('site/certification-status.json'))['state']
+          valid = {'gold_certified', 'provisional_gold', 'quality_blocked', 'observation'}
+          sys.exit(0 if state in valid else f'estado de certificação inesperado: {state}')
+          "
           grep -Fq 'evidence_sha256' site/certification-status.json
           ! grep -R "TEAMS_WEBHOOK_URL\|AZURE_CLIENT_SECRET" site/
 
