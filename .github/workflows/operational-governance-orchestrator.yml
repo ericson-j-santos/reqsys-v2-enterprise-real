@@ -2,7 +2,7 @@ name: Operational Governance Orchestrator
 
 on:
   schedule:
-    - cron: "7 * * * *"
+    - cron: "7 */4 * * *"
   workflow_dispatch:
     inputs:
       branch:
