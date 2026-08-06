@@ -3,8 +3,8 @@ stages:
   - governance
   - test
   - security
-  - evidence
   - deploy
+  - evidence
 
 workflow:
   rules:
