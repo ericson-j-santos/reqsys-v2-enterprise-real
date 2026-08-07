@@ -96,6 +96,31 @@ cd frontend
 npm run test:e2e:stable    # node scripts/run-e2e-safe.js --reporter=line
 ```
 
+Design system e Figma tokens:
+
+```bash
+cd frontend
+npm run validate:design-tokens              # validate-design-tokens.mjs
+npm run export:figma-tokens                 # export-figma-tokens.mjs
+npm run check:figma-token-drift             # export + git diff --exit-code -- artifacts/figma-tokens
+npm run quality:design-system               # tokens + drift + build (gate completo)
+```
+
+### Backend .NET/C#
+
+```bash
+cd backend-dotnet
+dotnet restore ReqSys.DotNet.sln
+dotnet test ReqSys.DotNet.sln
+dotnet run --project src/ReqSys.Api/ReqSys.Api.csproj
+```
+
+Docker dedicado .NET (`docker-compose.dotnet.yml`, API na `:8080`):
+
+```bash
+docker compose -f docker-compose.dotnet.yml up --build
+```
+
 ### Docker e publicação local
 
 ```bash
@@ -264,6 +289,16 @@ python scripts/backup_database.py --dry-run              # mostra o plano sem es
 python scripts/migrate_sqlite_to_postgres.py --sqlite-url sqlite:///./reqsys.db --postgres-url "$DATABASE_URL" --dry-run  # conta linhas por tabela (não escreve)
 python scripts/cutover_fly_postgres.py --app reqsys-api-dev --fly-config infra/dev/fly.toml --postgres-url "$DATABASE_URL" --dry-run  # cutover Fly SQLite→Postgres (exige --yes fora de dry-run)
 python scripts/purge_auditoria_eventos.py                # purge de auditoria por retenção (AUDITORIA_RETENTION_DAYS=180)
+```
+
+### Backup free-tier (Restic + Cloudflare R2)
+
+Backup governado de SQLite em Fly Machines via Restic + R2 (controle BACEN-04). Runbook: `docs/operations/backup-free-tier-runbook.md`. Assets: `governance/backup/reqsys-backup-assets.json`.
+
+```bash
+python scripts/evaluate_backup_provider_readiness.py    # valida prontidão de provedores R2/Restic (read-only, sem expor valores)
+python scripts/evaluate_backup_rollout_readiness.py --source-run-id <id> --source-artifact-digest <sha256>  # decide rollout DEV→STG por evidência
+python scripts/bootstrap_reqsys_r2_backup.py            # bootstrap seguro: grava secrets R2 via gh, dispara backup DEV e captura runs
 ```
 
 ### Cobertura por domínio (ratchet)
@@ -456,6 +491,10 @@ Não considerar um PR pronto para merge quando o E2E responsivo estiver ausente,
 | `Workflow Regression Contracts` | PR/push (paths: workflows), `workflow_dispatch` | Contratos mínimos contra regressão em workflows críticos |
 | `Runtime Async Jobs` | PR (paths: runtime), `workflow_dispatch` | CI do runtime de jobs assíncronos (Redis Streams) |
 | `Fast Environment Promotion Request` | `workflow_dispatch` | Solicitação acelerada de promoção dev/stg/prod |
+| `Figma Design System Gate` | PR/push (paths: frontend/theme) | Gate de design tokens e drift Figma |
+| `ReqSys Free Tier Backup` | PR/push main | Backup SQLite via Restic+R2 em Fly Machine |
+| `ReqSys Backup Provider Readiness` | PR, agendado, `workflow_dispatch` | Prontidão de provedores R2/Restic |
+| `ReqSys Backup Rollout Readiness` | PR, `workflow_run`, `workflow_dispatch` | Decisão de rollout DEV→STG por evidência (BACEN-04) |
 
 ## Gates de produção
 
