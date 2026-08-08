@@ -1,0 +1,15 @@
+schema_version: 1.0.0
+control_id: BACEN-05
+evidence_status: canonical_reference
+artifact_path: artifacts/bacen/bacen-05-consolidated-readiness.json
+artifact_name: bacen-05-consolidated-readiness
+workflow_path: .github/workflows/bacen-05-consolidated-readiness.yml
+source_register: governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml
+source_dpa_manifest: governance/bacen/VENDOR-DPA-READINESS.yaml
+source_dpa_contract: governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml
+control_status: partial
+dpa_status: pending_verified_documents
+legal_signoff_status: pending_formal_signoff
+production_touched: false
+contains_sensitive_content: false
+purpose: resolver_evidencia_canonica_sem_simular_dpa_validado_ou_aprovacao_juridica
