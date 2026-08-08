@@ -1,0 +1,15 @@
+schema_version: 1.0.0
+control_id: BACEN-08
+evidence_status: canonical_reference
+artifact_path: artifacts/bacen/bacen-08-executive-readiness.json
+artifact_name: bacen-08-executive-readiness
+workflow_path: .github/workflows/bacen-executive-readiness.yml
+source_report: governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md
+source_designation: governance/bacen/EXECUTIVE-DESIGNATION.yaml
+source_decision_evidence: governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml
+control_status: partial
+executive_designation_status: pending_formal_designation
+report_signoff_status: pending_formal_signoff
+production_touched: false
+contains_sensitive_content: false
+purpose: resolver_evidencia_canonica_sem_simular_designacao_executiva_ou_assinatura_formal
