@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-NotificationOrigin = Literal['commit', 'ci', 'logs', 'hitl', 'manual', 'gateway', 'sistema']
+NotificationOrigin = Literal['commit', 'ci', 'logs', 'hitl', 'manual', 'gateway', 'sistema', 'requisitos']
 NotificationDestinationType = Literal['auto', 'chat', 'chat_1a1', 'canal', 'webhook']
 NotificationMode = Literal['auto', 'graph_delegado', 'webhook', 'graph_app_only', 'bot', 'flow_bot']
 NotificationContentType = Literal['text', 'html']
