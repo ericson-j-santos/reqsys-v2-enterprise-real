@@ -1,0 +1,142 @@
+name: Deploy ReqSys Pages Composite
+
+on:
+  workflow_run:
+    workflows:
+      - Teams Notification Dashboard
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: reqsys-pages-composite
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Publicar dashboard Teams e showcase sem colisão
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      PUBLIC_ROOT: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real
+    steps:
+      - name: Checkout da main publicada
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Montar site composto
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf site
+          mkdir -p site/showcase
+
+          cp ops-dashboard/teams-notification/index.html site/index.html
+          cp -a docs/public-showcase/reqsys-linkedin/. site/showcase/
+          : > site/.nojekyll
+
+          fetch_fresh_json() {
+            local name="$1"
+            local target="site/$name"
+            local tmp="${target}.tmp"
+
+            for attempt in $(seq 1 12); do
+              if curl --fail --silent --show-error \
+                --retry 2 --retry-delay 2 \
+                "${PUBLIC_ROOT}/${name}?run=${GITHUB_RUN_ID}&attempt=${attempt}" \
+                -o "$tmp" \
+                && python -m json.tool "$tmp" >/dev/null; then
+                mv "$tmp" "$target"
+                return 0
+              fi
+              rm -f "$tmp"
+              sleep 5
+            done
+
+            echo "Falha ao capturar ${name} válido após propagação do dashboard Teams." >&2
+            return 1
+          }
+
+          fetch_fresh_json data.json
+          fetch_fresh_json certification-status.json
+
+      - name: Validar contrato público consolidado
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s site/index.html
+          test -s site/data.json
+          test -s site/certification-status.json
+          test -s site/showcase/index.html
+          test -s site/showcase/assets/styles.css
+
+          grep -Fq 'Teams' site/index.html
+          grep -Fq 'SLO' site/index.html
+
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+
+          payload = json.load(open('site/data.json', encoding='utf-8'))
+          required = {
+              'schema_version',
+              'service',
+              'generated_at',
+              'state',
+              'success_rate_percent',
+              'total_runs',
+              'recent_runs',
+          }
+          missing = sorted(required.difference(payload))
+          if missing:
+              raise SystemExit('campos ausentes em data.json: ' + ', '.join(missing))
+
+          generated_at = datetime.fromisoformat(str(payload['generated_at']).replace('Z', '+00:00'))
+          age_hours = (datetime.now(timezone.utc) - generated_at).total_seconds() / 3600
+          if age_hours < 0 or age_hours > 2:
+              raise SystemExit(f'data.json não corresponde à publicação recém-gerada: {age_hours:.2f}h')
+          PY
+
+          if grep -RniE \
+            '(api[_-]?key|client[_-]?secret|password\s*[:=]|bearer\s+[a-z0-9._-]{20,}|connection\s+string|cpf|cnpj)' \
+            site/showcase/index.html site/showcase/assets; then
+            echo 'Sensitive-looking term found in public showcase. Review required.'
+            exit 1
+          fi
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Empacotar site composto
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Publicar site composto
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Resumo operacional
+        shell: bash
+        run: |
+          {
+            echo '### ReqSys Pages Composite'
+            echo '- `/`: dashboard SLO GitHub → Teams'
+            echo '- `/data.json`: contrato dinâmico do dashboard Teams'
+            echo '- `/certification-status.json`: evidência de certificação'
+            echo '- `/showcase/`: showcase público ReqSys'
+            echo '- Publicação concorrente do showcase: removida'
+          } >> "$GITHUB_STEP_SUMMARY"

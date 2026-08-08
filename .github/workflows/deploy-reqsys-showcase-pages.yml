@@ -1,4 +1,4 @@
-name: Deploy ReqSys Public Showcase
+name: Validate ReqSys Public Showcase
 
 on:
   workflow_dispatch:
@@ -12,23 +12,20 @@ on:
       - 'docs/index.html'
       - 'docs/assets/**'
       - '.github/workflows/deploy-reqsys-showcase-pages.yml'
+      - '.github/workflows/deploy-reqsys-pages-composite.yml'
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  actions: write
 
 concurrency:
-  group: reqsys-public-showcase-pages
+  group: reqsys-public-showcase-validation
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: Deploy static showcase
+  validate:
+    name: Validate static showcase
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,14 +48,14 @@ jobs:
             exit 1
           fi
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/public-showcase/reqsys-linkedin
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Solicitar publicação canônica do Pages
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run teams-notification-dashboard.yml \
+            --repo "${{ github.repository }}" \
+            --ref main
+          echo 'Showcase validado; publicação delegada ao pipeline canônico do dashboard Teams.'
