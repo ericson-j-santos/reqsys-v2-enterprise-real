@@ -53,13 +53,12 @@ jobs:
           python - <<'PY'
           import json
           import os
-          import time
           from pathlib import Path
           from urllib.error import HTTPError, URLError
           from urllib.request import Request, urlopen
 
           base_url = os.environ['BASE_URL'].rstrip('/')
-          expected = os.environ.get('EXPECTED_SHA_OVERRIDE') or os.popen('git rev-parse HEAD').read().strip()
+          expected = os.popen('git rev-parse HEAD').read().strip()
           result = {
               'expected_sha': expected,
               'observed_sha': None,
@@ -72,7 +71,7 @@ jobs:
                   f'{base_url}/api/runtime/build-info',
                   headers={
                       'Accept': 'application/json',
-                      'User-Agent': 'reqsys-coleta-requisitos-teams-e2e/1.0',
+                      'User-Agent': 'reqsys-coleta-requisitos-teams-e2e/1.1',
                       'X-Correlation-ID': os.environ['CORRELATION_ID'],
                   },
               )
@@ -87,8 +86,10 @@ jobs:
           except (HTTPError, URLError, TimeoutError, OSError, ValueError) as exc:
               result['error'] = f'{type(exc).__name__}: {exc}'
 
-          path = Path(os.environ['ARTIFACT_DIR']) / 'runtime-preflight.json'
-          path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          Path(os.environ['ARTIFACT_DIR'], 'runtime-preflight.json').write_text(
+              json.dumps(result, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8',
+          )
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
               fh.write(f"deploy_needed={'true' if result['deploy_needed'] else 'false'}\n")
           print(json.dumps(result, ensure_ascii=False))
@@ -139,7 +140,7 @@ jobs:
                       f'{base_url}/api/runtime/build-info',
                       headers={
                           'Accept': 'application/json',
-                          'User-Agent': 'reqsys-coleta-requisitos-teams-e2e/1.0',
+                          'User-Agent': 'reqsys-coleta-requisitos-teams-e2e/1.1',
                           'X-Correlation-ID': os.environ['CORRELATION_ID'],
                       },
                   )
@@ -171,6 +172,7 @@ jobs:
           import copy
           import json
           import os
+          import re
           import sys
           import time
           from pathlib import Path
@@ -182,32 +184,105 @@ jobs:
           run_id = os.environ['GITHUB_RUN_ID']
           attempt = os.environ['GITHUB_RUN_ATTEMPT']
           chave = f'e2e-dev-{run_id}-{attempt}'
+          artifact_dir = Path(os.environ['ARTIFACT_DIR'])
 
-          def http_json(method, path, payload=None, expected=(200,)):
+          evidencia = {
+              'schema_version': '1.1.0',
+              'contract': 'reqsys-coleta-requisitos-teams-e2e-dev',
+              'ok': False,
+              'environment': 'development',
+              'base_url': base_url,
+              'expected_sha': os.environ['EXPECTED_SHA'],
+              'correlation_id': correlation_id,
+              'chave_idempotencia': chave,
+              'requests': [],
+              'refinamento': None,
+              'geracao': None,
+              'dashboard': None,
+              'gateway': None,
+              'blocking_issues': [],
+          }
+
+          def preview_seguro(texto):
+              texto = texto[:500].replace('\r', ' ').replace('\n', ' ')
+              texto = re.sub(r'(?i)(authorization|token|secret|webhook)(["\s:=]+)[^,}\s]+', r'\1\2***', texto)
+              return texto
+
+          def request_http(method, path, payload=None, expected=(200,), exigir_json=True):
               body = None
               headers = {
                   'Accept': 'application/json',
-                  'User-Agent': 'reqsys-coleta-requisitos-teams-e2e/1.0',
+                  'User-Agent': 'reqsys-coleta-requisitos-teams-e2e/1.1',
                   'X-Correlation-ID': correlation_id,
               }
               if payload is not None:
                   body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
                   headers['Content-Type'] = 'application/json; charset=utf-8'
+
               req = Request(f'{base_url}{path}', data=body, method=method, headers=headers)
               started = time.time()
+              content_type = None
               try:
                   with urlopen(req, timeout=30) as response:
                       raw = response.read(512_000)
                       status = response.status
+                      content_type = response.headers.get('Content-Type')
               except HTTPError as exc:
                   raw = exc.read(512_000)
                   status = exc.code
+                  content_type = exc.headers.get('Content-Type') if exc.headers else None
               except (URLError, TimeoutError, OSError) as exc:
-                  raise RuntimeError(f'{method} {path}: {type(exc).__name__}: {exc}') from exc
-              parsed = json.loads(raw.decode('utf-8')) if raw else {}
+                  meta = {
+                      'method': method,
+                      'path': path,
+                      'transport_error': f'{type(exc).__name__}: {exc}',
+                  }
+                  evidencia['requests'].append(meta)
+                  raise RuntimeError(f'{method} {path}: {meta["transport_error"]}') from exc
+
+              duration_ms = int((time.time() - started) * 1000)
+              decoded = raw.decode('utf-8', errors='replace') if raw else ''
+              parsed = None
+              json_error = None
+              if decoded.strip():
+                  try:
+                      parsed = json.loads(decoded)
+                  except json.JSONDecodeError as exc:
+                      json_error = f'{type(exc).__name__}: {exc}'
+              elif exigir_json:
+                  json_error = 'resposta vazia'
+
+              meta = {
+                  'method': method,
+                  'path': path,
+                  'http_status': status,
+                  'content_type': content_type,
+                  'bytes': len(raw),
+                  'duration_ms': duration_ms,
+                  'json_valido': parsed is not None,
+                  'json_error': json_error,
+              }
+              if parsed is None and decoded:
+                  meta['body_preview'] = preview_seguro(decoded)
+              evidencia['requests'].append(meta)
+              print(json.dumps(meta, ensure_ascii=False))
+
               if status not in expected:
-                  raise RuntimeError(f'{method} {path}: HTTP {status}: {json.dumps(parsed, ensure_ascii=False)[:1500]}')
-              return parsed, status, int((time.time() - started) * 1000)
+                  raise RuntimeError(
+                      f'{method} {path}: HTTP {status}; content-type={content_type}; corpo={preview_seguro(decoded)}'
+                  )
+              if exigir_json and parsed is None:
+                  raise RuntimeError(
+                      f'{method} {path}: resposta nao JSON; content-type={content_type}; bytes={len(raw)}; corpo={preview_seguro(decoded)}'
+                  )
+              return parsed, meta
+
+          def gravar_evidencia():
+              artifact_dir.mkdir(parents=True, exist_ok=True)
+              Path(artifact_dir, 'evidence.json').write_text(
+                  json.dumps(evidencia, ensure_ascii=False, indent=2) + '\n',
+                  encoding='utf-8',
+              )
 
           base_payload = {
               'versao_contrato': '1.0.0',
@@ -236,150 +311,145 @@ jobs:
               'observacoes': '[TESTE E2E DEV] Evidencia operacional automatizada; nao representa demanda funcional real.'
           }
 
-          evidencia = {
-              'schema_version': '1.0.0',
-              'contract': 'reqsys-coleta-requisitos-teams-e2e-dev',
-              'ok': False,
-              'environment': 'development',
-              'base_url': base_url,
-              'expected_sha': os.environ['EXPECTED_SHA'],
-              'correlation_id': correlation_id,
-              'chave_idempotencia': chave,
-              'refinamento': None,
-              'geracao': None,
-              'dashboard': None,
-              'gateway': None,
-              'blocking_issues': [],
-          }
+          try:
+              # Diagnostico auxiliar: uma falha aqui deve ser registrada, mas nao impede testar
+              # o caminho canonico da coleta, que e a fonte da evidencia de entrega.
+              try:
+                  gateway_payload, gateway_meta = request_http(
+                      'GET', '/v1/teams-gateway/status', exigir_json=False
+                  )
+                  gateway = gateway_payload.get('data', gateway_payload) if isinstance(gateway_payload, dict) else {}
+                  evidencia['gateway'] = {
+                      'http_status': gateway_meta['http_status'],
+                      'json_valido': gateway_meta['json_valido'],
+                      'schema_version': gateway.get('schema_version') if isinstance(gateway, dict) else None,
+                      'rotas': gateway.get('rotas') if isinstance(gateway, dict) else None,
+                  }
+              except RuntimeError as exc:
+                  evidencia['gateway'] = {'diagnostico': str(exc)}
 
-          gateway_payload, _, _ = http_json('GET', '/v1/teams-gateway/status')
-          gateway = gateway_payload.get('data', gateway_payload)
-          evidencia['gateway'] = {
-              'schema_version': gateway.get('schema_version') if isinstance(gateway, dict) else None,
-              'rotas': gateway.get('rotas') if isinstance(gateway, dict) else None,
-          }
-
-          resposta_ref, status_ref, duracao_ref = http_json(
-              'POST', '/api/requisitos/coleta/previsualizar', base_payload
-          )
-          dados_ref = resposta_ref.get('data', {})
-          avaliacao_ref = dados_ref.get('avaliacao') or {}
-          teams_ref = dados_ref.get('acompanhamento_teams') or {}
-          evidencia['refinamento'] = {
-              'http_status': status_ref,
-              'duration_ms': duracao_ref,
-              'pontuacao': avaliacao_ref.get('pontuacao'),
-              'classificacao': avaliacao_ref.get('classificacao'),
-              'pronto_para_gerar': avaliacao_ref.get('pronto_para_gerar'),
-              'id_evento': teams_ref.get('id_evento'),
-              'status_evento': teams_ref.get('status_evento'),
-              'status_http': teams_ref.get('status_http'),
-              'canal_usado': teams_ref.get('canal_usado'),
-              'correlation_id': teams_ref.get('correlation_id'),
-              'deduplicado': teams_ref.get('deduplicado'),
-          }
-
-          payload_geracao = copy.deepcopy(base_payload)
-          payload_geracao.update({
-              'processo_atual': 'Hoje a verificacao e manual e nao possui evidencia automatizada ponta a ponta.',
-              'regras_negocio': [
-                  'A evidencia deve usar a mesma fila central de notificacoes do ReqSys.'
-              ],
-              'criterios_aceite': [
-                  'O requisito deve ser gerado somente apos atingir a pontuacao minima governada.',
-                  'O evento de requisito gerado deve ser entregue no Teams e refletido no Dashboard.'
-              ],
-              'dados_necessarios': ['correlation_id e status de entrega da notificacao'],
-              'referencia_externa': f'GHA-{run_id}-{attempt}',
-          })
-
-          resposta_ger, status_ger, duracao_ger = http_json(
-              'POST', '/api/requisitos/coleta/gerar', payload_geracao
-          )
-          dados_ger = resposta_ger.get('data', {})
-          avaliacao_ger = dados_ger.get('avaliacao') or {}
-          teams_ger = dados_ger.get('acompanhamento_teams') or {}
-          requisito = dados_ger.get('requisito') or {}
-          evidencia['geracao'] = {
-              'http_status': status_ger,
-              'duration_ms': duracao_ger,
-              'pontuacao': avaliacao_ger.get('pontuacao'),
-              'classificacao': avaliacao_ger.get('classificacao'),
-              'pronto_para_gerar': avaliacao_ger.get('pronto_para_gerar'),
-              'requisito_codigo': requisito.get('codigo'),
-              'reutilizado': dados_ger.get('reutilizado', False),
-              'id_evento': teams_ger.get('id_evento'),
-              'status_evento': teams_ger.get('status_evento'),
-              'status_http': teams_ger.get('status_http'),
-              'canal_usado': teams_ger.get('canal_usado'),
-              'correlation_id': teams_ger.get('correlation_id'),
-              'deduplicado': teams_ger.get('deduplicado'),
-          }
-
-          dashboard_payload, _, _ = http_json(
-              'GET', '/v1/dashboard/coleta-requisitos?janela_dias=1'
-          )
-          dashboard = dashboard_payload.get('data', {})
-          teams_dash = dashboard.get('acompanhamento_teams') or {}
-          evidencia['dashboard'] = {
-              'schema_version': dashboard.get('schema_version'),
-              'coletas_total': dashboard.get('coletas_total'),
-              'requisitos_gerados': dashboard.get('requisitos_gerados'),
-              'acompanhamento_teams': teams_dash,
-          }
-
-          blockers = []
-          if avaliacao_ref.get('pronto_para_gerar') is not False:
-              blockers.append('A primeira coleta nao permaneceu em refinamento.')
-          if teams_ref.get('status_evento') != 'ENVIADO':
-              blockers.append(
-                  f"Evento de refinamento nao foi ENVIADO: {teams_ref.get('status_evento') or 'ausente'}"
+              resposta_ref, meta_ref = request_http(
+                  'POST', '/api/requisitos/coleta/previsualizar', base_payload
               )
-          if teams_ref.get('correlation_id') != correlation_id:
-              blockers.append('correlation_id do refinamento diverge do teste.')
-          if avaliacao_ger.get('pronto_para_gerar') is not True:
-              blockers.append('A coleta refinada nao atingiu o gate de geracao.')
-          if not requisito.get('codigo'):
-              blockers.append('A geracao nao retornou codigo do requisito.')
-          if teams_ger.get('status_evento') != 'ENVIADO':
-              blockers.append(
-                  f"Evento de requisito gerado nao foi ENVIADO: {teams_ger.get('status_evento') or 'ausente'}"
+              dados_ref = resposta_ref.get('data', {})
+              avaliacao_ref = dados_ref.get('avaliacao') or {}
+              teams_ref = dados_ref.get('acompanhamento_teams') or {}
+              evidencia['refinamento'] = {
+                  'http_status': meta_ref['http_status'],
+                  'duration_ms': meta_ref['duration_ms'],
+                  'pontuacao': avaliacao_ref.get('pontuacao'),
+                  'classificacao': avaliacao_ref.get('classificacao'),
+                  'pronto_para_gerar': avaliacao_ref.get('pronto_para_gerar'),
+                  'id_evento': teams_ref.get('id_evento'),
+                  'status_evento': teams_ref.get('status_evento'),
+                  'status_http': teams_ref.get('status_http'),
+                  'canal_usado': teams_ref.get('canal_usado'),
+                  'correlation_id': teams_ref.get('correlation_id'),
+                  'deduplicado': teams_ref.get('deduplicado'),
+              }
+
+              payload_geracao = copy.deepcopy(base_payload)
+              payload_geracao.update({
+                  'processo_atual': 'Hoje a verificacao e manual e nao possui evidencia automatizada ponta a ponta.',
+                  'regras_negocio': [
+                      'A evidencia deve usar a mesma fila central de notificacoes do ReqSys.'
+                  ],
+                  'criterios_aceite': [
+                      'O requisito deve ser gerado somente apos atingir a pontuacao minima governada.',
+                      'O evento de requisito gerado deve ser entregue no Teams e refletido no Dashboard.'
+                  ],
+                  'dados_necessarios': ['correlation_id e status de entrega da notificacao'],
+                  'referencia_externa': f'GHA-{run_id}-{attempt}',
+              })
+
+              resposta_ger, meta_ger = request_http(
+                  'POST', '/api/requisitos/coleta/gerar', payload_geracao
               )
-          if teams_ger.get('correlation_id') != correlation_id:
-              blockers.append('correlation_id da geracao diverge do teste.')
-          if teams_ref.get('id_evento') == teams_ger.get('id_evento'):
-              blockers.append('Eventos de refinamento e geracao nao ficaram independentes.')
-          if teams_dash.get('fonte') != 'teams_notification_queue':
-              blockers.append('Dashboard nao esta usando teams_notification_queue como fonte.')
-          if int(teams_dash.get('enviadas') or 0) < 2:
-              blockers.append('Dashboard nao evidencia ao menos duas notificacoes enviadas na janela.')
-          if not teams_dash.get('ultima_entrega_em'):
-              blockers.append('Dashboard nao evidencia ultima entrega Teams.')
+              dados_ger = resposta_ger.get('data', {})
+              avaliacao_ger = dados_ger.get('avaliacao') or {}
+              teams_ger = dados_ger.get('acompanhamento_teams') or {}
+              requisito = dados_ger.get('requisito') or {}
+              evidencia['geracao'] = {
+                  'http_status': meta_ger['http_status'],
+                  'duration_ms': meta_ger['duration_ms'],
+                  'pontuacao': avaliacao_ger.get('pontuacao'),
+                  'classificacao': avaliacao_ger.get('classificacao'),
+                  'pronto_para_gerar': avaliacao_ger.get('pronto_para_gerar'),
+                  'requisito_codigo': requisito.get('codigo'),
+                  'reutilizado': dados_ger.get('reutilizado', False),
+                  'id_evento': teams_ger.get('id_evento'),
+                  'status_evento': teams_ger.get('status_evento'),
+                  'status_http': teams_ger.get('status_http'),
+                  'canal_usado': teams_ger.get('canal_usado'),
+                  'correlation_id': teams_ger.get('correlation_id'),
+                  'deduplicado': teams_ger.get('deduplicado'),
+              }
 
-          evidencia['blocking_issues'] = blockers
-          evidencia['ok'] = not blockers
-          evidence_path = Path(os.environ['ARTIFACT_DIR']) / 'evidence.json'
-          evidence_path.write_text(
-              json.dumps(evidencia, ensure_ascii=False, indent=2) + '\n',
-              encoding='utf-8',
-          )
+              dashboard_payload, _ = request_http(
+                  'GET', '/v1/dashboard/coleta-requisitos?janela_dias=1'
+              )
+              dashboard = dashboard_payload.get('data', {})
+              teams_dash = dashboard.get('acompanhamento_teams') or {}
+              evidencia['dashboard'] = {
+                  'schema_version': dashboard.get('schema_version'),
+                  'coletas_total': dashboard.get('coletas_total'),
+                  'requisitos_gerados': dashboard.get('requisitos_gerados'),
+                  'acompanhamento_teams': teams_dash,
+              }
 
-          print('### Evidencia E2E - Coleta Requisitos Teams DEV')
-          print(json.dumps(evidencia, ensure_ascii=False, indent=2))
+              blockers = []
+              if avaliacao_ref.get('pronto_para_gerar') is not False:
+                  blockers.append('A primeira coleta nao permaneceu em refinamento.')
+              if teams_ref.get('status_evento') != 'ENVIADO':
+                  blockers.append(
+                      f"Evento de refinamento nao foi ENVIADO: {teams_ref.get('status_evento') or 'ausente'}"
+                  )
+              if teams_ref.get('correlation_id') != correlation_id:
+                  blockers.append('correlation_id do refinamento diverge do teste.')
+              if avaliacao_ger.get('pronto_para_gerar') is not True:
+                  blockers.append('A coleta refinada nao atingiu o gate de geracao.')
+              if not requisito.get('codigo'):
+                  blockers.append('A geracao nao retornou codigo do requisito.')
+              if teams_ger.get('status_evento') != 'ENVIADO':
+                  blockers.append(
+                      f"Evento de requisito gerado nao foi ENVIADO: {teams_ger.get('status_evento') or 'ausente'}"
+                  )
+              if teams_ger.get('correlation_id') != correlation_id:
+                  blockers.append('correlation_id da geracao diverge do teste.')
+              if teams_ref.get('id_evento') == teams_ger.get('id_evento'):
+                  blockers.append('Eventos de refinamento e geracao nao ficaram independentes.')
+              if teams_dash.get('fonte') != 'teams_notification_queue':
+                  blockers.append('Dashboard nao esta usando teams_notification_queue como fonte.')
+              if int(teams_dash.get('enviadas') or 0) < 2:
+                  blockers.append('Dashboard nao evidencia ao menos duas notificacoes enviadas na janela.')
+              if not teams_dash.get('ultima_entrega_em'):
+                  blockers.append('Dashboard nao evidencia ultima entrega Teams.')
+
+              evidencia['blocking_issues'] = blockers
+              evidencia['ok'] = not blockers
+          except Exception as exc:
+              evidencia['blocking_issues'].append(
+                  f'Falha de transporte/contrato durante a evidencia: {type(exc).__name__}: {exc}'
+              )
+              evidencia['ok'] = False
+          finally:
+              gravar_evidencia()
+
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
               summary.write('## Evidencia E2E - Coleta Requisitos Teams DEV\n\n')
               summary.write(f"- Correlation ID: `{correlation_id}`\n")
-              summary.write(f"- Refinamento: `{teams_ref.get('status_evento')}` / evento `{teams_ref.get('id_evento')}`\n")
-              summary.write(f"- Geracao: `{teams_ger.get('status_evento')}` / evento `{teams_ger.get('id_evento')}`\n")
-              summary.write(f"- Requisito: `{requisito.get('codigo') or 'n/a'}`\n")
-              summary.write(f"- Dashboard fonte: `{teams_dash.get('fonte') or 'n/a'}`\n")
-              summary.write(f"- Resultado: `{'APROVADO' if not blockers else 'BLOQUEADO'}`\n")
-              if blockers:
+              summary.write(f"- Refinamento: `{(evidencia.get('refinamento') or {}).get('status_evento') or 'n/a'}`\n")
+              summary.write(f"- Geracao: `{(evidencia.get('geracao') or {}).get('status_evento') or 'n/a'}`\n")
+              summary.write(f"- Requisito: `{(evidencia.get('geracao') or {}).get('requisito_codigo') or 'n/a'}`\n")
+              summary.write(f"- Dashboard fonte: `{((evidencia.get('dashboard') or {}).get('acompanhamento_teams') or {}).get('fonte') or 'n/a'}`\n")
+              summary.write(f"- Resultado: `{'APROVADO' if evidencia['ok'] else 'BLOQUEADO'}`\n")
+              if evidencia['blocking_issues']:
                   summary.write('\n### Bloqueios\n')
-                  for blocker in blockers:
+                  for blocker in evidencia['blocking_issues']:
                       summary.write(f'- {blocker}\n')
 
-          if blockers:
+          print(json.dumps(evidencia, ensure_ascii=False, indent=2))
+          if not evidencia['ok']:
               sys.exit(1)
           PY
 
