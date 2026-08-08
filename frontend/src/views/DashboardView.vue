@@ -37,11 +37,11 @@
       <div>
         <h2 id="titulo-jornada-real">Jornada principal do requisito</h2>
         <p class="panel-lead">
-          Entrada → Refinamento com IA → Critérios de aceite → Aprovação → Rastreabilidade → Publicação.
+          Entrada estruturada → Refinamento → Critérios de aceite → Aprovação → Rastreabilidade → Publicação.
         </p>
       </div>
-      <v-btn color="primary" variant="tonal" prepend-icon="mdi-plus-circle-outline" data-testid="dashboard-novo-requisito" @click="irPara({ path: '/requisitos', query: { acao: 'novo' } })">
-        Novo requisito
+      <v-btn color="primary" variant="tonal" prepend-icon="mdi-plus-circle-outline" data-testid="dashboard-novo-requisito" @click="irPara({ path: '/requisitos/coleta' })">
+        Nova demanda
       </v-btn>
     </section>
 
@@ -58,6 +58,61 @@
         @drilldown="irPara(card.rota)"
       />
     </div>
+
+    <section class="figma-panel coleta-panel" data-testid="dashboard-coleta-requisitos" aria-labelledby="titulo-coleta-requisitos">
+      <div class="coleta-header">
+        <div>
+          <p class="figma-eyebrow">Entrada governada · últimos {{ coletaMetricas.janela_dias || 30 }} dias</p>
+          <h2 id="titulo-coleta-requisitos">Qualidade da coleta de requisitos</h2>
+          <p class="panel-lead">
+            Mede a qualidade antes da criação do requisito, sem estimar dados anteriores à implantação da telemetria.
+          </p>
+        </div>
+        <v-btn variant="outlined" prepend-icon="mdi-file-document-plus-outline" @click="irPara({ path: '/requisitos/coleta' })">
+          Abrir nova demanda
+        </v-btn>
+      </div>
+
+      <v-alert v-if="coletaSemDados" type="info" variant="tonal" data-testid="coleta-sem-dados">
+        Ainda não há avaliações de coleta registradas nesta janela. Percentuais e tempo de refinamento permanecem sem valor até existirem evidências.
+      </v-alert>
+
+      <template v-else>
+        <div class="coleta-metrics-grid">
+          <div v-for="indicador in coletaIndicadores" :key="indicador.id" class="coleta-metric" :data-testid="`coleta-kpi-${indicador.id}`">
+            <span class="muted">{{ indicador.label }}</span>
+            <strong>{{ indicador.value }}</strong>
+            <small>{{ indicador.hint }}</small>
+          </div>
+        </div>
+
+        <div class="coleta-detail-grid">
+          <div class="coleta-detail-card">
+            <strong>Origem das coletas</strong>
+            <div v-if="origensColeta.length" class="coleta-lista">
+              <div v-for="item in origensColeta" :key="item.origem" class="coleta-lista-item">
+                <span>{{ rotuloOrigem(item.origem) }}</span>
+                <strong>{{ item.quantidade }}</strong>
+              </div>
+            </div>
+            <span v-else class="muted">Sem origem registrada na janela.</span>
+          </div>
+
+          <div class="coleta-detail-card">
+            <strong>Pendências atuais mais frequentes</strong>
+            <div v-if="pendenciasColeta.length" class="coleta-lista">
+              <div v-for="item in pendenciasColeta" :key="item.codigo" class="coleta-lista-item">
+                <span>{{ item.rotulo }}</span>
+                <strong>{{ item.quantidade }}</strong>
+              </div>
+            </div>
+            <span v-else class="muted">Nenhuma pendência de coleta em aberto na janela.</span>
+          </div>
+        </div>
+      </template>
+
+      <small class="muted coleta-nota">{{ coletaMetricas.nota_dados || 'Os indicadores são derivados da auditoria da coleta governada.' }}</small>
+    </section>
 
     <div class="lower-panels">
       <section class="figma-panel pipeline-panel">
@@ -129,6 +184,7 @@ async function carregarTudo() {
   try {
     await Promise.all([
       store.carregarMetricas(),
+      store.carregarMetricasColeta(30),
       store.carregarDashboardInfo(),
       store.carregarQualidadeIA(),
     ])
@@ -152,6 +208,34 @@ function semaforoContagem(valor, limiarAtencao = 0) {
 
 function semaforoProntidao(valor, limiarBloqueio = 0) {
   return Number(valor) > limiarBloqueio ? 'vermelho' : 'verde'
+}
+
+function percentual(valor) {
+  if (valor === null || valor === undefined) return '—'
+  return `${Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
+}
+
+function pontuacao(valor) {
+  if (valor === null || valor === undefined) return '—'
+  return Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+}
+
+function tempoRefinamento(valor) {
+  if (valor === null || valor === undefined) return '—'
+  const minutos = Number(valor)
+  if (minutos < 60) return `${Math.round(minutos)} min`
+  return `${(minutos / 60).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h`
+}
+
+function rotuloOrigem(origem) {
+  return ({
+    reqsys: 'ReqSys',
+    microsoft_forms: 'Microsoft Forms',
+    power_apps: 'Power Apps',
+    teams: 'Teams',
+    power_automate: 'Power Automate',
+    outro: 'Outro',
+  })[origem] || origem || 'Desconhecida'
 }
 
 const cards = computed(() => {
@@ -220,6 +304,49 @@ const cards = computed(() => {
   ]
 })
 
+const coletaMetricas = computed(() => store.metricasColeta || {})
+const coletaSemDados = computed(() => coletaMetricas.value.sem_dados !== false)
+const origensColeta = computed(() => coletaMetricas.value.origens || [])
+const pendenciasColeta = computed(() => coletaMetricas.value.principais_pendencias || [])
+const coletaIndicadores = computed(() => [
+  {
+    id: 'total',
+    label: 'Coletas',
+    value: coletaMetricas.value.coletas_total ?? 0,
+    hint: 'Necessidades únicas avaliadas na janela',
+  },
+  {
+    id: 'primeira-submissao',
+    label: 'Aprovadas na 1ª submissão',
+    value: percentual(coletaMetricas.value.taxa_aprovacao_primeira_submissao_percentual),
+    hint: 'Coletas que atingiram o gate mínimo já na primeira avaliação',
+  },
+  {
+    id: 'pontuacao-media',
+    label: 'Pontuação média atual',
+    value: pontuacao(coletaMetricas.value.pontuacao_media_atual),
+    hint: 'Última avaliação conhecida de cada coleta',
+  },
+  {
+    id: 'refinamento',
+    label: 'Em refinamento',
+    value: coletaMetricas.value.em_refinamento ?? 0,
+    hint: 'Coletas ainda abaixo do gate e sem requisito gerado',
+  },
+  {
+    id: 'tempo-refinamento',
+    label: 'Tempo médio de refinamento',
+    value: tempoRefinamento(coletaMetricas.value.tempo_medio_refinamento_minutos),
+    hint: 'Do primeiro bloqueio até a geração, somente quando houve refinamento',
+  },
+  {
+    id: 'gerados',
+    label: 'Requisitos gerados',
+    value: coletaMetricas.value.requisitos_gerados ?? 0,
+    hint: 'Gerações idempotentes originadas da coleta governada',
+  },
+])
+
 const resumoSemaforo = computed(() => {
   return cards.value.reduce((acc, card) => {
     const chave = card.semaforo || 'desconhecido'
@@ -235,8 +362,8 @@ const pipelineSteps = [
   {
     id: 'entrada',
     titulo: 'Registrar ou revisar entrada',
-    descricao: 'Capturar demanda, objetivo, área, urgência e impacto esperado.',
-    rota: { path: '/requisitos', query: { acao: 'novo' } },
+    descricao: 'Capturar problema, objetivo, regras, critérios de aceite e dependências antes de gerar o requisito.',
+    rota: { path: '/requisitos/coleta' },
   },
   {
     id: 'refinamento',
@@ -262,8 +389,8 @@ const painelDireito = computed(() => [
   {
     id: 'novo-requisito',
     title: 'Cadastrar nova demanda',
-    subtitle: 'Comece pela necessidade de negócio e impacto esperado',
-    rota: { path: '/requisitos', query: { acao: 'novo' } },
+    subtitle: 'Comece pela necessidade de negócio e passe pelo gate de qualidade da coleta',
+    rota: { path: '/requisitos/coleta' },
     testId: 'destino-novo-requisito',
   },
   {
@@ -328,15 +455,20 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
   font-size: 14px;
 }
 
-.jornada-card {
+.jornada-card,
+.coleta-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.jornada-card {
   margin-top: 18px;
 }
 
-.jornada-card h2 {
+.jornada-card h2,
+.coleta-panel h2 {
   margin: 0 0 4px;
   font-size: 20px;
   font-weight: 800;
@@ -347,6 +479,64 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   margin-top: 18px;
+}
+
+.coleta-panel {
+  margin-top: 18px;
+}
+
+.coleta-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.coleta-metric,
+.coleta-detail-card {
+  border: 1px solid rgba(128, 128, 128, 0.24);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.coleta-metric {
+  display: grid;
+  gap: 4px;
+}
+
+.coleta-metric strong {
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.coleta-metric small,
+.coleta-nota {
+  color: var(--muted);
+}
+
+.coleta-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.coleta-lista {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.coleta-lista-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.coleta-nota {
+  display: block;
+  margin-top: 12px;
 }
 
 .lower-panels {
@@ -425,18 +615,21 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
 }
 
 @media (max-width: 1100px) {
-  .metrics-grid {
+  .metrics-grid,
+  .coleta-metrics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .lower-panels {
+  .lower-panels,
+  .coleta-detail-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 700px) {
   .dashboard-header,
-  .jornada-card {
+  .jornada-card,
+  .coleta-header {
     flex-direction: column;
     align-items: stretch;
   }
@@ -445,7 +638,8 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
     width: 100%;
   }
 
-  .metrics-grid {
+  .metrics-grid,
+  .coleta-metrics-grid {
     grid-template-columns: 1fr;
   }
 

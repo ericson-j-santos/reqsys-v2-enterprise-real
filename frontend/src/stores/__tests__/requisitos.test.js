@@ -48,6 +48,23 @@ describe('stores/requisitos', () => {
     expect(store.metricas).toEqual({ total: 10, aprovados: 3 })
   })
 
+  it('carregarMetricasColeta() preserva janela e contrato analítico', async () => {
+    const metricas = {
+      coletas_total: 8,
+      taxa_aprovacao_primeira_submissao_percentual: 62.5,
+      em_refinamento: 2,
+    }
+    api.get.mockResolvedValueOnce({ data: { data: metricas } })
+    const store = useRequisitosStore()
+
+    await store.carregarMetricasColeta(14)
+
+    expect(api.get).toHaveBeenCalledWith('/v1/dashboard/coleta-requisitos', {
+      params: { janela_dias: 14 },
+    })
+    expect(store.metricasColeta).toEqual(metricas)
+  })
+
   it('carregarQualidadeIA() popula o resumo de qualidade', async () => {
     api.get.mockResolvedValueOnce({ data: { data: { score: 58 } } })
     const store = useRequisitosStore()

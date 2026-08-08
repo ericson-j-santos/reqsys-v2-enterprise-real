@@ -24,6 +24,7 @@ from app.db import get_db
 from app.models.auditoria import AuditoriaEvento
 from app.repositories.requisito_repository import RequisitoRepository
 from app.services.auditoria import registrar_evento
+from app.services.coleta_requisitos_observabilidade import registrar_avaliacao_coleta
 
 logger = logging.getLogger('reqsys.requisitos.levantamento')
 
@@ -327,10 +328,24 @@ def obter_formulario(x_correlation_id: str | None = Header(default=None)):
 @router.post('/previsualizar')
 def previsualizar_requisito(
     payload: LevantamentoRequisito,
+    db: Session = Depends(get_db),
     x_correlation_id: str | None = Header(default=None),
 ):
     avaliacao = _avaliar_levantamento(payload)
     requisito = _montar_requisito(payload)
+    hash_idempotencia = _hash_idempotencia(payload.chave_idempotencia)
+    payload_hash = _hash_payload(payload)
+    correlation_id = x_correlation_id or f'coleta-{hash_idempotencia[:24]}'
+
+    registrar_avaliacao_coleta(
+        db,
+        payload=payload,
+        avaliacao=avaliacao,
+        hash_idempotencia=hash_idempotencia,
+        payload_hash=payload_hash,
+        correlation_id=correlation_id,
+    )
+
     return ok(
         {
             'versao_contrato': VERSAO_CONTRATO,
@@ -338,7 +353,7 @@ def previsualizar_requisito(
             'requisito_proposto': requisito,
             'persistido': False,
         },
-        x_correlation_id,
+        correlation_id,
         meta={'contract': 'reqsys-coleta-requisito-v1'},
     )
 
@@ -350,6 +365,20 @@ def gerar_requisito(
     x_correlation_id: str | None = Header(default=None),
 ):
     avaliacao = _avaliar_levantamento(payload)
+    hash_idempotencia = _hash_idempotencia(payload.chave_idempotencia)
+    payload_hash = _hash_payload(payload)
+    correlation_id = x_correlation_id or f'coleta-{hash_idempotencia[:24]}'
+
+    registrar_avaliacao_coleta(
+        db,
+        payload=payload,
+        avaliacao=avaliacao,
+        hash_idempotencia=hash_idempotencia,
+        payload_hash=payload_hash,
+        correlation_id=correlation_id,
+        somente_se_payload_novo=True,
+    )
+
     if not avaliacao.pronto_para_gerar:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -363,10 +392,7 @@ def gerar_requisito(
             },
         )
 
-    hash_idempotencia = _hash_idempotencia(payload.chave_idempotencia)
     existente = _buscar_requisito_idempotente(db, hash_idempotencia)
-    correlation_id = x_correlation_id or f'coleta-{hash_idempotencia[:24]}'
-
     if existente:
         logger.info(
             'coleta_requisito_reutilizada codigo=%s origem=%s correlation_id=%s',
@@ -395,13 +421,14 @@ def gerar_requisito(
     )
 
     evidencia = {
+        'schema_version': '1.0.0',
         'versao_contrato': VERSAO_CONTRATO,
         'origem': payload.origem,
         'tipo_demanda': payload.tipo_demanda,
         'pontuacao': avaliacao.pontuacao,
         'classificacao': avaliacao.classificacao,
         'chave_idempotencia_hash': hash_idempotencia,
-        'payload_hash': _hash_payload(payload),
+        'payload_hash': payload_hash,
     }
     registrar_evento(
         db,

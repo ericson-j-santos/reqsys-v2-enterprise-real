@@ -5,6 +5,7 @@ export const useRequisitosStore = defineStore('requisitos', {
   state: () => ({
     itens: [],
     metricas: {},
+    metricasColeta: {},
     dashboardInfo: {},
     qualidadeIAResumo: {},
     carregando: false,
@@ -31,6 +32,17 @@ export const useRequisitosStore = defineStore('requisitos', {
         this.erro = e.message
       } finally {
         this.carregando = false
+      }
+    },
+    async carregarMetricasColeta(janelaDias = 30) {
+      this.erro = null
+      try {
+        this.metricasColeta = (
+          await api.get('/v1/dashboard/coleta-requisitos', { params: { janela_dias: janelaDias } })
+        ).data.data
+      } catch (e) {
+        this.erro = e.message
+        throw e
       }
     },
     async carregarDashboardInfo() {
