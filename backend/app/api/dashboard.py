@@ -7,7 +7,9 @@ from app.core.envelope import ok
 from app.db import get_db
 from app.models.requisito import Requisito
 from app.services.ai_quality import calcular_resumo_qualidade_ia
-from app.services.coleta_requisitos_observabilidade import calcular_metricas_coleta_requisitos
+from app.services.coleta_requisitos_observabilidade import (
+    calcular_metricas_coleta_requisitos,
+)
 from app.services.recomendacoes_ia import calcular_dashboard_ia
 from app.services.requisitos_metricas import calcular_metricas_requisitos
 
