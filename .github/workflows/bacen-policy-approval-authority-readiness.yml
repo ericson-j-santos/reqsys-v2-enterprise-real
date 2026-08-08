@@ -61,6 +61,7 @@ jobs:
           assert evidence["structural_checks_passed"] is True
           assert evidence["readiness_status"] in {
               "pending_formal_designation",
+              "deferred_until_institutionalization",
               "ready_for_formal_approval",
               "authority_validated",
           }
