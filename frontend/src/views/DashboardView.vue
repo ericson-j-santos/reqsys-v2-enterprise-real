@@ -65,7 +65,7 @@
           <p class="figma-eyebrow">Entrada governada · últimos {{ coletaMetricas.janela_dias || 30 }} dias</p>
           <h2 id="titulo-coleta-requisitos">Qualidade da coleta de requisitos</h2>
           <p class="panel-lead">
-            Mede a qualidade antes da criação do requisito, sem estimar dados anteriores à implantação da telemetria.
+            Mede a qualidade antes da criação do requisito e acompanha a entrega das mensagens no Teams usando a fila central já governada.
           </p>
         </div>
         <v-btn variant="outlined" prepend-icon="mdi-file-document-plus-outline" @click="irPara({ path: '/requisitos/coleta' })">
@@ -107,6 +107,42 @@
               </div>
             </div>
             <span v-else class="muted">Nenhuma pendência de coleta em aberto na janela.</span>
+          </div>
+
+          <div class="coleta-detail-card" data-testid="coleta-teams-acompanhamento">
+            <strong>Acompanhamento no Teams</strong>
+            <div v-if="teamsColeta.notificacoes_total" class="coleta-lista">
+              <div class="coleta-lista-item">
+                <span>Enviadas</span>
+                <strong>{{ teamsColeta.enviadas ?? 0 }}</strong>
+              </div>
+              <div class="coleta-lista-item">
+                <span>Pendentes/processando</span>
+                <strong>{{ (teamsColeta.pendentes ?? 0) + (teamsColeta.processando ?? 0) }}</strong>
+              </div>
+              <div class="coleta-lista-item">
+                <span>Falhas</span>
+                <strong>{{ teamsColeta.falhas ?? 0 }}</strong>
+              </div>
+              <div class="coleta-lista-item">
+                <span>Taxa de sucesso</span>
+                <strong>{{ percentual(teamsColeta.taxa_sucesso_percentual) }}</strong>
+              </div>
+              <div class="coleta-lista-item">
+                <span>Latência média</span>
+                <strong>{{ latencia(teamsColeta.latencia_media_ms) }}</strong>
+              </div>
+            </div>
+            <span v-else class="muted">Nenhuma mensagem de acompanhamento registrada na janela.</span>
+            <v-btn
+              class="coleta-teams-link"
+              size="small"
+              variant="text"
+              prepend-icon="mdi-microsoft-teams"
+              @click="irPara({ path: '/notificacoes' })"
+            >
+              Abrir Control Center
+            </v-btn>
           </div>
         </div>
       </template>
@@ -227,6 +263,11 @@ function tempoRefinamento(valor) {
   return `${(minutos / 60).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h`
 }
 
+function latencia(valor) {
+  if (valor === null || valor === undefined) return '—'
+  return `${Math.round(Number(valor))} ms`
+}
+
 function rotuloOrigem(origem) {
   return ({
     reqsys: 'ReqSys',
@@ -308,6 +349,7 @@ const coletaMetricas = computed(() => store.metricasColeta || {})
 const coletaSemDados = computed(() => coletaMetricas.value.sem_dados !== false)
 const origensColeta = computed(() => coletaMetricas.value.origens || [])
 const pendenciasColeta = computed(() => coletaMetricas.value.principais_pendencias || [])
+const teamsColeta = computed(() => coletaMetricas.value.acompanhamento_teams || {})
 const coletaIndicadores = computed(() => [
   {
     id: 'total',
@@ -516,7 +558,7 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
 
 .coleta-detail-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-top: 12px;
 }
@@ -532,6 +574,10 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
   justify-content: space-between;
   gap: 12px;
   align-items: center;
+}
+
+.coleta-teams-link {
+  margin-top: 8px;
 }
 
 .coleta-nota {
