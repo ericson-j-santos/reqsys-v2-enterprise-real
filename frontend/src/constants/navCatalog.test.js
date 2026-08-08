@@ -52,15 +52,20 @@ describe('navCatalog subgrupos', () => {
   it('resolve subgrupo pela rota', () => {
     expect(subgrupoIdPorRota('/pipeline')).toBe('pipeline')
     expect(subgrupoIdPorRota('/requisitos')).toBe('entrada')
+    expect(subgrupoIdPorRota('/requisitos/coleta')).toBe('entrada')
     expect(subgrupoIdPorRota('/rastreabilidade')).toBe('publicacao')
   })
 
   it('lista itens filtrados do subgrupo', () => {
-    const itens = itensDoSubgrupo('requisitos', 'pipeline')
-    expect(itens.map((i) => i.to)).toEqual(['/pipeline', '/agile-runtime'])
+    const entrada = itensDoSubgrupo('requisitos', 'entrada')
+    expect(entrada.map((i) => i.to)).toEqual(['/requisitos/coleta', '/requisitos'])
+
+    const pipeline = itensDoSubgrupo('requisitos', 'pipeline')
+    expect(pipeline.map((i) => i.to)).toEqual(['/pipeline', '/agile-runtime'])
   })
 
   it('mantém tema requisitos para rotas do subgrupo', () => {
     expect(temaIdPorRota('/agile-runtime')).toBe('requisitos')
+    expect(temaIdPorRota('/requisitos/coleta')).toBe('requisitos')
   })
 })

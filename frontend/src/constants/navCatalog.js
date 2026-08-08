@@ -33,7 +33,7 @@ export const NAV_TEMAS = [
         id: 'entrada',
         title: 'Entrada',
         topic: 'Captura, triagem e cadastro',
-        paths: ['/requisitos'],
+        paths: ['/requisitos/coleta', '/requisitos'],
       },
       {
         id: 'pipeline',
@@ -49,6 +49,7 @@ export const NAV_TEMAS = [
       },
     ],
     items: [
+      { to: '/requisitos/coleta', icon: 'mdi-file-document-plus-outline', title: 'Nova demanda', tip: 'Levantar a necessidade com qualidade mínima antes de gerar o requisito.', subgroupId: 'entrada' },
       { to: '/requisitos', icon: 'mdi-file-document-edit', title: 'Requisitos', tip: 'Cadastro, listagem e acompanhamento dos requisitos.', subgroupId: 'entrada' },
       { to: '/qualidade-ia', icon: 'mdi-brain', title: 'Qualidade IA', tip: 'Score de completude, clareza e testabilidade dos requisitos.' },
       { to: '/recomendacoes-ia', icon: 'mdi-robot-outline', title: 'Recomendações IA', tip: 'Sugestões governadas para melhorar requisitos e histórias.' },

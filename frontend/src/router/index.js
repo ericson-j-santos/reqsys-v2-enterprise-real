@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import RequisitosView from '../views/RequisitosView.vue'
+import ColetaRequisitoView from '../views/ColetaRequisitoView.vue'
 import RastreabilidadeView from '../views/RastreabilidadeView.vue'
 import AuditoriaView from '../views/AuditoriaView.vue'
 import PipelineView from '../views/PipelineView.vue'
@@ -38,6 +39,7 @@ export const routes = [
   { path: '/analytics', component: AnalyticsHubView, meta: { recurso: 'dashboard:read' } },
   { path: '/ajuda', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
   { path: '/requisitos', component: RequisitosView, meta: { recurso: 'requisitos:write' } },
+  { path: '/requisitos/coleta', component: ColetaRequisitoView, meta: { recurso: 'requisitos:write' } },
   { path: '/rastreabilidade', component: RastreabilidadeView, meta: { recurso: 'rastreabilidade:read' } },
   { path: '/auditoria', component: AuditoriaView, meta: { recurso: 'auditoria:read' } },
   { path: '/pipeline', component: PipelineView, meta: { recurso: 'requisitos:write' } },
