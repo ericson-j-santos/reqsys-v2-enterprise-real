@@ -91,7 +91,7 @@ PREVISUALIZAÇÃO + PONTUAÇÃO
         +---- < 80 ----> REFINAMENTO / PENDÊNCIAS
         |
         v >= 80
-GERAÇÃO IDPOTENTE
+GERAÇÃO IDEMPOTENTE
         |
         v
 REQUISITO = RECEBIDO
