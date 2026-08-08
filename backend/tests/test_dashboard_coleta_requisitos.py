@@ -14,7 +14,7 @@ def test_dashboard_coleta_requisitos_retorna_contrato_auditavel():
     corpo = resposta.json()
     assert corpo['success'] is True
     dados = corpo['data']
-    assert dados['schema_version'] == '1.0.0'
+    assert dados['schema_version'] == '1.1.0'
     assert dados['janela_dias'] == 30
     assert isinstance(dados['coletas_total'], int)
     assert isinstance(dados['avaliacoes_total'], int)
@@ -23,6 +23,13 @@ def test_dashboard_coleta_requisitos_retorna_contrato_auditavel():
     assert isinstance(dados['origens'], list)
     assert isinstance(dados['principais_pendencias'], list)
     assert 'nota_dados' in dados
+
+    teams = dados['acompanhamento_teams']
+    assert teams['fonte'] == 'teams_notification_queue'
+    assert isinstance(teams['notificacoes_total'], int)
+    assert isinstance(teams['pendentes'], int)
+    assert isinstance(teams['enviadas'], int)
+    assert isinstance(teams['falhas'], int)
 
 
 def test_dashboard_coleta_requisitos_rejeita_janela_fora_do_contrato():
