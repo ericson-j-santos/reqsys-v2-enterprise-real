@@ -12,9 +12,11 @@ import yaml
 PENDING_AUTHORITIES = {"", "pending", "pending_formal_designation", "not_designated", "none", "null"}
 ALLOWED_APPROVAL_STATUSES = {
     "pending_formal_institutional_approval",
+    "deferred_until_institutionalization",
     "ready_for_formal_approval",
     "approved",
 }
+INSTITUTIONAL_STAGES = {"PRODUCTION", "INSTITUTIONAL"}
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -41,6 +43,10 @@ def build_readiness(metadata_path: Path) -> dict[str, Any]:
     if approval_status not in ALLOWED_APPROVAL_STATUSES:
         structural_findings.append("invalid_approval_status")
 
+    lifecycle_stage = normalized(metadata.get("lifecycle_stage")).upper()
+    institutional_stage = lifecycle_stage in INSTITUTIONAL_STAGES
+    deferred_approval = approval_status == "deferred_until_institutionalization"
+
     technical_owner = normalized(metadata.get("technical_owner"))
     operational_owner = normalized(metadata.get("operational_owner"))
     if not technical_owner:
@@ -65,19 +71,45 @@ def build_readiness(metadata_path: Path) -> dict[str, Any]:
     if approval_status == "approved" and not authority_designated:
         structural_findings.append("approved_without_designated_authority")
 
+    if deferred_approval:
+        deferred = metadata.get("deferred_institutional_approval")
+        if institutional_stage:
+            structural_findings.append("institutional_approval_deferred_in_production_stage")
+        if lifecycle_stage == "":
+            structural_findings.append("lifecycle_stage_missing_for_deferred_approval")
+        if metadata.get("compliance_status") != "technically_implemented":
+            structural_findings.append("invalid_compliance_status_for_deferred_approval")
+        if metadata.get("institutional_approval_required") is not False:
+            structural_findings.append("institutional_approval_must_be_deferred_in_nonproduction")
+        if not isinstance(deferred, dict) or deferred.get("enabled") is not True:
+            structural_findings.append("deferred_institutional_approval_contract_missing")
+        else:
+            gate = deferred.get("production_gate")
+            if not isinstance(gate, dict) or gate.get("block_production_when_missing") is not True:
+                structural_findings.append("deferred_approval_production_gate_missing")
+        advisory_findings.append("institutional_approval_deferred_until_promotion")
+
     structural_checks_passed = not structural_findings
-    if approval_status == "approved" and authority_designated and structural_checks_passed:
+    if deferred_approval and structural_checks_passed:
+        readiness_status = "deferred_until_institutionalization"
+    elif approval_status == "approved" and authority_designated and structural_checks_passed:
         readiness_status = "authority_validated"
     elif authority_designated and structural_checks_passed:
         readiness_status = "ready_for_formal_approval"
     else:
         readiness_status = "pending_formal_designation"
 
+    if readiness_status == "deferred_until_institutionalization":
+        next_stage = "continue_technical_evidence_until_production_gate"
+    else:
+        next_stage = "designate_independent_approval_authority_and_record_formal_decision"
+
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "control_id": "BACEN-01",
         "generated_at": datetime.now(UTC).isoformat(),
         "metadata_path": str(metadata_path),
+        "lifecycle_stage": lifecycle_stage,
         "approval_status": approval_status,
         "approval_authority": approval_authority,
         "authority_designated": authority_designated,
@@ -88,9 +120,13 @@ def build_readiness(metadata_path: Path) -> dict[str, Any]:
         "readiness_status": readiness_status,
         "structural_findings": structural_findings,
         "advisory_findings": advisory_findings,
-        "control_status": "implemented" if approval_status == "approved" and readiness_status == "authority_validated" else "partial",
+        "control_status": (
+            "implemented"
+            if approval_status == "approved" and readiness_status == "authority_validated"
+            else "partial"
+        ),
         "production_touched": False,
-        "next_stage": "designate_independent_approval_authority_and_record_formal_decision",
+        "next_stage": next_stage,
     }
 
 
