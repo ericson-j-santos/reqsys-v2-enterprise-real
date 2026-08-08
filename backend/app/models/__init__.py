@@ -8,6 +8,7 @@ from app.models.auditoria import AuditoriaEvento  # noqa: F401
 from app.models.bot_conversa_referencia import BotConversaReferencia  # noqa: F401
 from app.models.cdi_rate import CdiRate  # noqa: F401
 from app.models.configuracao_lowcode import ConfiguracaoLowCode  # noqa: F401
+from app.models.gestao_ti import RequisitoServico, ServicoTI  # noqa: F401
 from app.models.integracao_log import IntegracaoLog  # noqa: F401
 from app.models.orchestrator import (  # noqa: F401
     AdrCoordinationEvent,
