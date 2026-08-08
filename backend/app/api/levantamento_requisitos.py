@@ -25,6 +25,11 @@ from app.models.auditoria import AuditoriaEvento
 from app.repositories.requisito_repository import RequisitoRepository
 from app.services.auditoria import registrar_evento
 from app.services.coleta_requisitos_observabilidade import registrar_avaliacao_coleta
+from app.services.coleta_requisitos_teams import (
+    TIPO_EVENTO_GERADO,
+    TIPO_EVENTO_REFINAMENTO,
+    notificar_acompanhamento_coleta,
+)
 
 logger = logging.getLogger('reqsys.requisitos.levantamento')
 
@@ -121,12 +126,16 @@ def _avaliar_levantamento(payload: LevantamentoRequisito) -> AvaliacaoLevantamen
     if payload.processo_atual and payload.processo_atual.strip():
         pontuacao += 5
     else:
-        pendencias.append('Descrever o processo atual ou declarar explicitamente que não existe processo anterior.')
+        pendencias.append(
+            'Descrever o processo atual ou declarar explicitamente que não existe processo anterior.'
+        )
 
     if regras:
         pontuacao += 10
     else:
-        pendencias.append('Confirmar as regras de negócio aplicáveis ou declarar que não há regras específicas.')
+        pendencias.append(
+            'Confirmar as regras de negócio aplicáveis ou declarar que não há regras específicas.'
+        )
 
     if len(criterios) >= 2:
         pontuacao += 15
@@ -139,15 +148,21 @@ def _avaliar_levantamento(payload: LevantamentoRequisito) -> AvaliacaoLevantamen
     if dados or integracoes or restricoes:
         pontuacao += 5
     else:
-        alertas.append('Nenhum dado, integração ou restrição foi informado; confirmar se o escopo realmente não possui dependências.')
+        alertas.append(
+            'Nenhum dado, integração ou restrição foi informado; confirmar se o escopo realmente não possui dependências.'
+        )
 
     if payload.referencia_externa and payload.referencia_externa.strip():
         pontuacao += 5
     elif payload.impacto_regulatorio:
-        pendencias.append('Demanda regulatória deve informar norma, política, chamado ou outra referência externa rastreável.')
+        pendencias.append(
+            'Demanda regulatória deve informar norma, política, chamado ou outra referência externa rastreável.'
+        )
 
     if any(len(criterio) < 15 for criterio in criterios):
-        alertas.append('Há critério de aceite muito curto; prefira uma condição objetiva e testável.')
+        alertas.append(
+            'Há critério de aceite muito curto; prefira uma condição objetiva e testável.'
+        )
 
     pontuacao = max(0, min(100, pontuacao))
     pronto = pontuacao >= PONTUACAO_MINIMA_GERACAO and not (
@@ -197,11 +212,31 @@ def _montar_requisito(payload: LevantamentoRequisito) -> dict[str, str | bool]:
         historia,
         '## Processo atual',
         payload.processo_atual.strip() if payload.processo_atual else 'Não informado.',
-        _lista_markdown('Regras de negócio', payload.regras_negocio, 'Nenhuma regra específica informada.'),
-        _lista_markdown('Critérios de aceite', payload.criterios_aceite, 'Nenhum critério informado.'),
-        _lista_markdown('Dados necessários', payload.dados_necessarios, 'Nenhum dado adicional informado.'),
-        _lista_markdown('Integrações', payload.integracoes, 'Nenhuma integração informada.'),
-        _lista_markdown('Restrições', payload.restricoes, 'Nenhuma restrição informada.'),
+        _lista_markdown(
+            'Regras de negócio',
+            payload.regras_negocio,
+            'Nenhuma regra específica informada.',
+        ),
+        _lista_markdown(
+            'Critérios de aceite',
+            payload.criterios_aceite,
+            'Nenhum critério informado.',
+        ),
+        _lista_markdown(
+            'Dados necessários',
+            payload.dados_necessarios,
+            'Nenhum dado adicional informado.',
+        ),
+        _lista_markdown(
+            'Integrações',
+            payload.integracoes,
+            'Nenhuma integração informada.',
+        ),
+        _lista_markdown(
+            'Restrições',
+            payload.restricoes,
+            'Nenhuma restrição informada.',
+        ),
         '## Rastreabilidade',
         f'- Origem: {payload.origem}',
         f'- Tipo de demanda: {payload.tipo_demanda}',
@@ -227,7 +262,12 @@ def _hash_idempotencia(chave: str) -> str:
 
 
 def _hash_payload(payload: LevantamentoRequisito) -> str:
-    canonico = json.dumps(payload.model_dump(mode='json'), ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    canonico = json.dumps(
+        payload.model_dump(mode='json'),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(',', ':'),
+    )
     return hashlib.sha256(canonico.encode('utf-8')).hexdigest()
 
 
@@ -268,7 +308,10 @@ def _contrato_formulario() -> dict:
     return {
         'versao_contrato': VERSAO_CONTRATO,
         'titulo': 'Levantamento estruturado para geração de requisitos',
-        'objetivo': 'Capturar contexto suficiente para o ReqSys gerar um requisito rastreável, verificável e refinável.',
+        'objetivo': (
+            'Capturar contexto suficiente para o ReqSys gerar um requisito rastreável, '
+            'verificável e refinável.'
+        ),
         'instrucoes': [
             'Descreva o problema e o resultado esperado; evite sugerir solução antes de explicar a necessidade.',
             'Informe critérios de aceite que outra pessoa consiga testar objetivamente.',
@@ -285,12 +328,25 @@ def _contrato_formulario() -> dict:
             {
                 'id': 'identificacao',
                 'titulo': 'Identificação e contexto',
-                'campos': ['solicitante', 'area', 'sistema', 'tipo_demanda', 'origem', 'referencia_externa'],
+                'campos': [
+                    'solicitante',
+                    'area',
+                    'sistema',
+                    'tipo_demanda',
+                    'origem',
+                    'referencia_externa',
+                ],
             },
             {
                 'id': 'necessidade',
                 'titulo': 'Problema e resultado esperado',
-                'campos': ['problema', 'objetivo', 'usuario_afetado', 'processo_atual', 'cenario_desejado'],
+                'campos': [
+                    'problema',
+                    'objetivo',
+                    'usuario_afetado',
+                    'processo_atual',
+                    'cenario_desejado',
+                ],
             },
             {
                 'id': 'regras',
@@ -300,7 +356,14 @@ def _contrato_formulario() -> dict:
             {
                 'id': 'dependencias',
                 'titulo': 'Dados, integrações e restrições',
-                'campos': ['dados_necessarios', 'integracoes', 'restricoes', 'urgencia', 'data_limite', 'observacoes'],
+                'campos': [
+                    'dados_necessarios',
+                    'integracoes',
+                    'restricoes',
+                    'urgencia',
+                    'data_limite',
+                    'observacoes',
+                ],
             },
         ],
         'opcoes': {
@@ -326,7 +389,7 @@ def obter_formulario(x_correlation_id: str | None = Header(default=None)):
 
 
 @router.post('/previsualizar')
-def previsualizar_requisito(
+async def previsualizar_requisito(
     payload: LevantamentoRequisito,
     db: Session = Depends(get_db),
     x_correlation_id: str | None = Header(default=None),
@@ -346,12 +409,25 @@ def previsualizar_requisito(
         correlation_id=correlation_id,
     )
 
+    acompanhamento_teams = None
+    if not avaliacao.pronto_para_gerar:
+        acompanhamento_teams = await notificar_acompanhamento_coleta(
+            db,
+            tipo_evento=TIPO_EVENTO_REFINAMENTO,
+            payload=payload,
+            avaliacao=avaliacao,
+            hash_idempotencia=hash_idempotencia,
+            payload_hash=payload_hash,
+            correlation_id=correlation_id,
+        )
+
     return ok(
         {
             'versao_contrato': VERSAO_CONTRATO,
             'avaliacao': avaliacao.model_dump(),
             'requisito_proposto': requisito,
             'persistido': False,
+            'acompanhamento_teams': acompanhamento_teams,
         },
         correlation_id,
         meta={'contract': 'reqsys-coleta-requisito-v1'},
@@ -359,7 +435,7 @@ def previsualizar_requisito(
 
 
 @router.post('/gerar', status_code=status.HTTP_200_OK)
-def gerar_requisito(
+async def gerar_requisito(
     payload: LevantamentoRequisito,
     db: Session = Depends(get_db),
     x_correlation_id: str | None = Header(default=None),
@@ -380,20 +456,42 @@ def gerar_requisito(
     )
 
     if not avaliacao.pronto_para_gerar:
+        acompanhamento_teams = await notificar_acompanhamento_coleta(
+            db,
+            tipo_evento=TIPO_EVENTO_REFINAMENTO,
+            payload=payload,
+            avaliacao=avaliacao,
+            hash_idempotencia=hash_idempotencia,
+            payload_hash=payload_hash,
+            correlation_id=correlation_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 'code': 'LEVANTAMENTO_REQUER_REFINAMENTO',
-                'message': 'A coleta ainda não atingiu o nível mínimo para gerar um requisito governado.',
+                'message': (
+                    'A coleta ainda não atingiu o nível mínimo para gerar um requisito governado.'
+                ),
                 'pontuacao': avaliacao.pontuacao,
                 'pontuacao_minima': PONTUACAO_MINIMA_GERACAO,
                 'pendencias': avaliacao.pendencias,
                 'alertas': avaliacao.alertas,
+                'acompanhamento_teams': acompanhamento_teams,
             },
         )
 
     existente = _buscar_requisito_idempotente(db, hash_idempotencia)
     if existente:
+        acompanhamento_teams = await notificar_acompanhamento_coleta(
+            db,
+            tipo_evento=TIPO_EVENTO_GERADO,
+            payload=payload,
+            avaliacao=avaliacao,
+            hash_idempotencia=hash_idempotencia,
+            payload_hash=payload_hash,
+            correlation_id=correlation_id,
+            requisito=existente,
+        )
         logger.info(
             'coleta_requisito_reutilizada codigo=%s origem=%s correlation_id=%s',
             existente.codigo,
@@ -407,6 +505,7 @@ def gerar_requisito(
                 'requisito': _serializar_requisito(existente),
                 'persistido': True,
                 'reutilizado': True,
+                'acompanhamento_teams': acompanhamento_teams,
             },
             correlation_id,
             meta={'contract': 'reqsys-coleta-requisito-v1'},
@@ -440,6 +539,17 @@ def gerar_requisito(
         json.dumps(evidencia, ensure_ascii=False, separators=(',', ':')),
     )
 
+    acompanhamento_teams = await notificar_acompanhamento_coleta(
+        db,
+        tipo_evento=TIPO_EVENTO_GERADO,
+        payload=payload,
+        avaliacao=avaliacao,
+        hash_idempotencia=hash_idempotencia,
+        payload_hash=payload_hash,
+        correlation_id=correlation_id,
+        requisito=requisito,
+    )
+
     logger.info(
         'coleta_requisito_gerada codigo=%s score=%s origem=%s correlation_id=%s',
         requisito.codigo,
@@ -454,6 +564,7 @@ def gerar_requisito(
             'requisito': _serializar_requisito(requisito),
             'persistido': True,
             'reutilizado': False,
+            'acompanhamento_teams': acompanhamento_teams,
         },
         correlation_id,
         meta={'contract': 'reqsys-coleta-requisito-v1'},

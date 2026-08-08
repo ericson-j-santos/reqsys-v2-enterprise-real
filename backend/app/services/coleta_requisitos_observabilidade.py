@@ -15,11 +15,12 @@ from statistics import mean
 from sqlalchemy.orm import Session
 
 from app.models.auditoria import AuditoriaEvento
+from app.models.teams_notification_queue import TeamsNotificationQueueItem
 from app.services.auditoria import registrar_evento
 
 ACAO_COLETA_AVALIADA = 'COLETA_REQUISITO_AVALIADA'
 ACAO_REQUISITO_GERADO = 'REQUISITO_GERADO_POR_COLETA'
-VERSAO_CONTRATO_OBSERVABILIDADE = '1.0.0'
+VERSAO_CONTRATO_OBSERVABILIDADE = '1.1.0'
 
 ROTULOS_PENDENCIA = {
     'PROCESSO_ATUAL_NAO_INFORMADO': 'Processo atual não informado',
@@ -135,6 +136,49 @@ def _arredondar_percentual(numerador: int, denominador: int) -> float | None:
     return round((numerador / denominador) * 100, 2)
 
 
+def _metricas_acompanhamento_teams(db: Session, *, limite: datetime) -> dict:
+    itens = (
+        db.query(TeamsNotificationQueueItem)
+        .filter(TeamsNotificationQueueItem.origem == 'requisitos')
+        .order_by(TeamsNotificationQueueItem.criado_em.asc())
+        .all()
+    )
+    itens = [
+        item
+        for item in itens
+        if (instante := _utc(item.criado_em)) is not None and instante >= limite
+    ]
+
+    estados = Counter(item.status_evento for item in itens)
+    enviados = estados.get('ENVIADO', 0)
+    falhas = estados.get('FALHA', 0)
+    conclusivas = enviados + falhas
+    latencias = [
+        float(item.latencia_ms)
+        for item in itens
+        if item.status_evento == 'ENVIADO' and isinstance(item.latencia_ms, int)
+    ]
+    entregas = [
+        _utc(item.enviado_em)
+        for item in itens
+        if item.status_evento == 'ENVIADO' and _utc(item.enviado_em) is not None
+    ]
+
+    return {
+        'fonte': 'teams_notification_queue',
+        'notificacoes_total': len(itens),
+        'pendentes': estados.get('PENDENTE', 0),
+        'processando': estados.get('PROCESSANDO', 0),
+        'enviadas': enviados,
+        'falhas': falhas,
+        'canceladas': estados.get('CANCELADO', 0),
+        'taxa_sucesso_percentual': _arredondar_percentual(enviados, conclusivas),
+        'latencia_media_ms': round(mean(latencias), 2) if latencias else None,
+        'ultima_entrega_em': max(entregas).isoformat() if entregas else None,
+        'deduplicacao': 'coleta + tipo_evento por hash SHA-256',
+    }
+
+
 def calcular_metricas_coleta_requisitos(db: Session, *, janela_dias: int = 30) -> dict:
     """Consolida métricas auditáveis da entrada governada.
 
@@ -183,8 +227,14 @@ def calcular_metricas_coleta_requisitos(db: Session, *, janela_dias: int = 30) -
     tempos_refinamento = []
 
     for grupo in grupos.values():
-        avaliacoes = sorted(grupo['avaliacoes'], key=lambda item: (item['instante'], item['evento_id']))
-        geracoes = sorted(grupo['geracoes'], key=lambda item: (item['instante'], item['evento_id']))
+        avaliacoes = sorted(
+            grupo['avaliacoes'],
+            key=lambda item: (item['instante'], item['evento_id']),
+        )
+        geracoes = sorted(
+            grupo['geracoes'],
+            key=lambda item: (item['instante'], item['evento_id']),
+        )
 
         primeira = avaliacoes[0] if avaliacoes else None
         ultima = avaliacoes[-1] if avaliacoes else None
@@ -266,6 +316,7 @@ def calcular_metricas_coleta_requisitos(db: Session, *, janela_dias: int = 30) -
             for classificacao, quantidade in classificacoes.most_common()
         ],
         'principais_pendencias': principais_pendencias,
+        'acompanhamento_teams': _metricas_acompanhamento_teams(db, limite=limite),
         'nota_dados': (
             'Métricas calculadas somente a partir dos eventos de telemetria da coleta governada; '
             'não há retroestimativa para coletas anteriores à implantação.'
