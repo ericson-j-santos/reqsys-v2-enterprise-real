@@ -41,9 +41,68 @@ def parse_controls(text: str) -> list[dict[str, str]]:
     return controls
 
 
+def canonical_manifest_path(root: Path, evidence: str) -> Path | None:
+    evidence_path = Path(evidence)
+    if evidence_path.parts[:2] != ("artifacts", "bacen"):
+        return None
+    return root / "governance" / "bacen" / "evidence" / f"{evidence_path.stem}.manifest.yaml"
+
+
+def parse_simple_yaml(text: str) -> dict[str, str]:
+    """Lê apenas pares escalares de primeiro nível do manifesto canônico."""
+    result: dict[str, str] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or line.startswith("-") or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        if raw_line.startswith((" ", "\t")):
+            continue
+        result[key.strip()] = value.strip().strip('"\'')
+    return result
+
+
+def resolve_evidence(root: Path, control_id: str, evidence: str) -> tuple[dict[str, str], list[str]]:
+    evidence_file = root / evidence
+    if evidence_file.exists():
+        return {
+            "control_id": control_id,
+            "declared_evidence": evidence,
+            "resolution": "materialized_artifact",
+            "resolved_path": evidence,
+        }, []
+
+    manifest = canonical_manifest_path(root, evidence)
+    if manifest is None or not manifest.exists():
+        return {
+            "control_id": control_id,
+            "declared_evidence": evidence,
+            "resolution": "not_materialized",
+            "resolved_path": "",
+        }, [f"{control_id}: evidência ainda não materializada: {evidence}"]
+
+    manifest_data = parse_simple_yaml(manifest.read_text(encoding="utf-8"))
+    findings: list[str] = []
+    if manifest_data.get("control_id") != control_id:
+        findings.append(f"{control_id}: manifesto canônico possui control_id divergente")
+    if manifest_data.get("artifact_path") != evidence:
+        findings.append(f"{control_id}: manifesto canônico não referencia o artifact declarado")
+    if manifest_data.get("evidence_status") not in {"canonical_reference", "materialized"}:
+        findings.append(f"{control_id}: manifesto canônico possui evidence_status inválido")
+
+    resolution = "canonical_manifest" if not findings else "invalid_canonical_manifest"
+    return {
+        "control_id": control_id,
+        "declared_evidence": evidence,
+        "resolution": resolution,
+        "resolved_path": str(manifest.relative_to(root)),
+    }, findings
+
+
 def validate(root: Path, matrix_path: Path) -> dict[str, object]:
     errors: list[str] = []
     warnings: list[str] = []
+    evidence_resolution: list[dict[str, str]] = []
     controls = parse_controls(matrix_path.read_text(encoding="utf-8"))
     ids: set[str] = set()
 
@@ -63,8 +122,13 @@ def validate(root: Path, matrix_path: Path) -> dict[str, object]:
         if control.get("criticality") not in VALID_CRITICALITY:
             errors.append(f"{control_id}: criticidade inválida: {control.get('criticality')}")
         evidence = control.get("evidence")
-        if evidence and not (root / evidence).exists():
-            warnings.append(f"{control_id}: evidência ainda não materializada: {evidence}")
+        if evidence:
+            resolution, findings = resolve_evidence(root, control_id, evidence)
+            evidence_resolution.append(resolution)
+            if resolution["resolution"] == "invalid_canonical_manifest":
+                errors.extend(findings)
+            else:
+                warnings.extend(findings)
 
     critical_gaps = [
         c["id"] for c in controls
@@ -75,7 +139,7 @@ def validate(root: Path, matrix_path: Path) -> dict[str, object]:
     ) if controls else 0.0
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "mode": "advisory",
         "summary": {
@@ -85,7 +149,14 @@ def validate(root: Path, matrix_path: Path) -> dict[str, object]:
             "gaps": sum(c.get("status") == "gap" for c in controls),
             "critical_gaps": critical_gaps,
             "implemented_coverage_percent": coverage,
+            "canonical_evidence_resolved": sum(
+                item["resolution"] == "canonical_manifest" for item in evidence_resolution
+            ),
+            "evidence_not_materialized": sum(
+                item["resolution"] == "not_materialized" for item in evidence_resolution
+            ),
         },
+        "evidence_resolution": evidence_resolution,
         "errors": errors,
         "warnings": warnings,
         "result": "invalid" if errors else "valid_with_gaps" if critical_gaps else "valid",
