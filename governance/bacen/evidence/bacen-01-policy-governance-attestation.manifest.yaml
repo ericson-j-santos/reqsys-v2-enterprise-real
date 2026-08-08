@@ -1,0 +1,14 @@
+schema_version: 1.0.0
+control_id: BACEN-01
+evidence_status: canonical_reference
+artifact_path: artifacts/bacen/bacen-01-policy-governance-attestation.json
+artifact_name: bacen-01-policy-governance-attestation
+workflow_path: .github/workflows/bacen-policy-governance-attestation.yml
+source_metadata: governance/bacen/CYBERSECURITY-POLICY-METADATA.yaml
+decision_evidence: governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml
+lifecycle_stage: DEVELOPMENT
+compliance_status: technically_implemented
+institutional_approval_status: deferred_until_institutionalization
+production_touched: false
+contains_sensitive_content: false
+purpose: resolver_evidencia_canonica_sem_promocao_de_conformidade
