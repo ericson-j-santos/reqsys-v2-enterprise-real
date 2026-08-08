@@ -18,6 +18,7 @@ on:
       - "**/*.yml"
       - "governance/idioma/termos.json"
       - "scripts/validar_idioma.py"
+      - "tests/test_validar_idioma.py"
 
 permissions:
   contents: read
@@ -38,28 +39,60 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Testar validador
+        run: python3 -m unittest tests/test_validar_idioma.py -v
+
       - name: Identificar arquivos alterados
-        id: alterados
         shell: bash
         run: |
-          git diff --name-only --diff-filter=ACMR             "${{ github.event.pull_request.base.sha }}"             "${{ github.event.pull_request.head.sha }}"             > /tmp/arquivos-alterados.txt
+          git diff --name-only --diff-filter=ACMR \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            > /tmp/arquivos-alterados.txt
           sed -n '1,200p' /tmp/arquivos-alterados.txt
 
       - name: Validar contrato e termos
         shell: bash
         run: |
           mapfile -t arquivos < /tmp/arquivos-alterados.txt
-          python3 scripts/validar_idioma.py "${arquivos[@]}"
+          python3 scripts/validar_idioma.py \
+            --saida-json artifacts/governanca/relatorio-idioma.json \
+            "${arquivos[@]}"
 
       - name: Registrar resumo
         if: always()
         shell: bash
         run: |
-          {
-            echo "## Validação de idioma"
-            echo
-            echo "- Idioma principal: português do Brasil"
-            echo "- Modo: consultivo"
-            echo "- Escopo: arquivos adicionados ou modificados"
-            echo "- Política: docs/governanca/POLITICA-IDIOMA.md"
-          } >> "${GITHUB_STEP_SUMMARY}"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          caminho = Path("artifacts/governanca/relatorio-idioma.json")
+          resumo = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          if not caminho.exists():
+              resumo.write_text("## Validação de idioma\n\nRelatório indisponível.\n", encoding="utf-8")
+              raise SystemExit(0)
+
+          relatorio = json.loads(caminho.read_text(encoding="utf-8"))
+          metricas = relatorio["metricas"]
+          with resumo.open("a", encoding="utf-8") as arquivo:
+              arquivo.write("## Validação de idioma\n\n")
+              arquivo.write(f"- Modo: {relatorio['modo']}\n")
+              arquivo.write(f"- Arquivos analisados: {metricas['arquivos_analisados']}\n")
+              arquivo.write(f"- Arquivos conformes: {metricas['arquivos_conformes']}\n")
+              arquivo.write(f"- Arquivos com aviso: {metricas['arquivos_com_aviso']}\n")
+              arquivo.write(f"- Ocorrências: {metricas['ocorrencias']}\n")
+              arquivo.write(
+                  f"- Taxa de conformidade: {metricas['taxa_conformidade_percentual']}%\n"
+              )
+          PY
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-validacao-idioma-${{ github.event.pull_request.number }}
+          path: artifacts/governanca/relatorio-idioma.json
+          if-no-files-found: warn
+          retention-days: 30
