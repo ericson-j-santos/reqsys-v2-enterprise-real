@@ -1,0 +1,12 @@
+schema_version: 1.0.0
+control_id: BACEN-03
+evidence_status: canonical_reference
+artifact_path: artifacts/bacen/bacen-03-incident-exercise-evidence.json
+artifact_name: bacen-03-incident-exercise-evidence
+workflow_path: .github/workflows/bacen-incident-exercise.yml
+source_scenario: governance/bacen/INCIDENT-EXERCISE-SCENARIO.json
+source_policy: governance/bacen/INCIDENT-RESPONSE-PLAN.md
+control_status: implemented
+production_touched: false
+contains_sensitive_content: false
+purpose: resolver_evidencia_operacional_canonica_sem_substituir_artifact_de_execucao
