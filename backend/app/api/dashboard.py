@@ -1,12 +1,13 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
 from app.db import get_db
 from app.models.requisito import Requisito
 from app.services.ai_quality import calcular_resumo_qualidade_ia
+from app.services.coleta_requisitos_observabilidade import calcular_metricas_coleta_requisitos
 from app.services.recomendacoes_ia import calcular_dashboard_ia
 from app.services.requisitos_metricas import calcular_metricas_requisitos
 
@@ -16,11 +17,13 @@ ENDPOINTS_PRINCIPAIS = [
     {'titulo': 'Status da API', 'url': '/health', 'metodo': 'GET'},
     {'titulo': 'Autenticação', 'url': '/v1/auth/login', 'metodo': 'POST'},
     {'titulo': 'Requisitos', 'url': '/v1/requisitos', 'metodo': 'GET/POST'},
+    {'titulo': 'Coleta governada', 'url': '/v1/dashboard/coleta-requisitos', 'metodo': 'GET'},
     {'titulo': 'Qualidade IA', 'url': '/v1/qualidade-ia/resumo', 'metodo': 'GET'},
     {'titulo': 'Auditoria', 'url': '/v1/auditoria/eventos', 'metodo': 'GET'},
     {'titulo': 'Relatórios', 'url': '/v1/relatorios/ssrs', 'metodo': 'GET'},
     {'titulo': 'Informações do Sistema', 'url': '/v1/sistema/info', 'metodo': 'GET'},
 ]
+
 
 @router.get('/requisitos')
 def metricas(db: Session = Depends(get_db)):
@@ -38,6 +41,20 @@ def metricas(db: Session = Depends(get_db)):
             'lista_endpoints': '/v1/sistema/endpoints'
         }
     })
+
+
+@router.get('/coleta-requisitos')
+def metricas_coleta_requisitos(
+    janela_dias: int = Query(default=30, ge=1, le=365),
+    db: Session = Depends(get_db),
+):
+    """Métricas auditáveis da entrada governada de requisitos."""
+
+    return ok(
+        calcular_metricas_coleta_requisitos(db, janela_dias=janela_dias),
+        meta={'contract': 'reqsys-dashboard-coleta-requisitos-v1'},
+    )
+
 
 @router.get('/info')
 def dashboard_info(db: Session = Depends(get_db)):
@@ -66,6 +83,7 @@ def dashboard_info(db: Session = Depends(get_db)):
             'auditoria_config': '/v1/auditoria/eventos/config-infra',
             'relatorios': '/v1/relatorios/ssrs',
             'qualidade_ia': '/v1/qualidade-ia/resumo',
+            'coleta_requisitos': '/v1/dashboard/coleta-requisitos',
         },
         'credenciais_teste': {
             'email': 'ericsonjosedossantos@tieri659.onmicrosoft.com',
@@ -87,4 +105,3 @@ def dashboard_info(db: Session = Depends(get_db)):
 @router.get('/ia')
 def dashboard_ia(janela_dias: int = 30, db: Session = Depends(get_db)):
     return ok(calcular_dashboard_ia(db, janela_dias=janela_dias))
-
