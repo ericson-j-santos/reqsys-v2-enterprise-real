@@ -1,0 +1,262 @@
+name: Teams Webhook DEV Bootstrap + E2E
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/teams-webhook-dev-bootstrap-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BASE_URL: https://reqsys-api-dev.fly.dev
+  FLY_APP: reqsys-api-dev
+  CORRELATION_ID: coleta-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
+  ARTIFACT_DIR: artifacts/teams-webhook-dev-bootstrap-e2e
+
+jobs:
+  bootstrap-e-evidencia:
+    name: Webhook governado -> Fly DEV -> coleta -> Teams -> Dashboard
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Verificar e sincronizar webhook governado
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          TEAMS_NOTIFICATIONS_WEBHOOK_URL: ${{ secrets.TEAMS_NOTIFICATIONS_WEBHOOK_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          test -n "${FLY_API_TOKEN:-}" || {
+            echo "BLOQUEIO: FLY_API_TOKEN ausente no environment development." >&2
+            exit 1
+          }
+
+          python - <<'PY' > "$ARTIFACT_DIR/gateway-before.json"
+          import json, os
+          from urllib.request import Request, urlopen
+          url = os.environ['BASE_URL'].rstrip('/') + '/v1/teams-gateway/status'
+          req = Request(url, headers={'Accept': 'application/json', 'X-Correlation-ID': os.environ['CORRELATION_ID']})
+          with urlopen(req, timeout=20) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          data = payload.get('data', payload)
+          rota = next((r for r in data.get('rotas', []) if r.get('canal') == 'webhook'), {})
+          print(json.dumps({'http_status': 200, 'webhook_disponivel': rota.get('disponivel') is True, 'campos_faltantes': rota.get('campos_faltantes', [])}, ensure_ascii=False, indent=2))
+          PY
+
+          WEBHOOK_READY="$(python -c "import json; print('true' if json.load(open('$ARTIFACT_DIR/gateway-before.json'))['webhook_disponivel'] else 'false')")"
+          if [ "$WEBHOOK_READY" = "true" ]; then
+            echo "Webhook já operacional no DEV; nenhuma alteração de segredo necessária."
+            exit 0
+          fi
+
+          if [ -z "${TEAMS_NOTIFICATIONS_WEBHOOK_URL:-}" ]; then
+            echo "BLOQUEIO: o environment GitHub 'development' não possui TEAMS_NOTIFICATIONS_WEBHOOK_URL." >&2
+            echo "A coleta está corretamente enfileirando, mas não existe credencial governada para entrega automática no Teams." >&2
+            exit 2
+          fi
+
+          echo "Webhook governado encontrado no GitHub; sincronizando com reqsys-api-dev sem expor o valor."
+          flyctl secrets set \
+            "TEAMS_NOTIFICATIONS_WEBHOOK_URL=${TEAMS_NOTIFICATIONS_WEBHOOK_URL}" \
+            --app "$FLY_APP"
+
+      - name: Aguardar rota webhook operacional
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, time
+          from pathlib import Path
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          url = os.environ['BASE_URL'].rstrip('/') + '/v1/teams-gateway/status'
+          result = {'webhook_disponivel': False, 'tentativas': 0, 'campos_faltantes': []}
+          for attempt in range(1, 25):
+              result['tentativas'] = attempt
+              try:
+                  req = Request(url, headers={'Accept': 'application/json', 'X-Correlation-ID': os.environ['CORRELATION_ID']})
+                  with urlopen(req, timeout=20) as response:
+                      payload = json.loads(response.read().decode('utf-8'))
+                  data = payload.get('data', payload)
+                  rota = next((r for r in data.get('rotas', []) if r.get('canal') == 'webhook'), {})
+                  result['webhook_disponivel'] = rota.get('disponivel') is True
+                  result['campos_faltantes'] = rota.get('campos_faltantes', [])
+                  if result['webhook_disponivel']:
+                      break
+              except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+                  pass
+              time.sleep(5)
+
+          Path(os.environ['ARTIFACT_DIR']).mkdir(parents=True, exist_ok=True)
+          Path(os.environ['ARTIFACT_DIR'], 'gateway-after.json').write_text(
+              json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8'
+          )
+          print(json.dumps(result, ensure_ascii=False))
+          if not result['webhook_disponivel']:
+              raise SystemExit('BLOQUEIO: rota webhook continua indisponível no DEV após sincronização.')
+          PY
+
+      - name: Executar coleta real e comprovar entrega
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import copy
+          import json
+          import os
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          base = os.environ['BASE_URL'].rstrip('/')
+          correlation = os.environ['CORRELATION_ID']
+          chave = f"bootstrap-e2e-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+
+          def call(method, path, payload=None):
+              body = json.dumps(payload, ensure_ascii=False).encode('utf-8') if payload is not None else None
+              headers = {'Accept': 'application/json', 'X-Correlation-ID': correlation}
+              if body is not None:
+                  headers['Content-Type'] = 'application/json; charset=utf-8'
+              req = Request(base + path, data=body, method=method, headers=headers)
+              try:
+                  with urlopen(req, timeout=30) as response:
+                      raw = response.read().decode('utf-8')
+                      status = response.status
+              except HTTPError as exc:
+                  raw = exc.read().decode('utf-8', errors='replace')
+                  status = exc.code
+              data = json.loads(raw) if raw else {}
+              if status != 200:
+                  raise RuntimeError(f'{method} {path}: HTTP {status}: {raw[:600]}')
+              return data
+
+          payload = {
+              'versao_contrato': '1.0.0',
+              'chave_idempotencia': chave,
+              'origem': 'reqsys',
+              'solicitante': 'Teste E2E automatizado',
+              'area': 'Engenharia ReqSys',
+              'sistema': 'ReqSys',
+              'tipo_demanda': 'automacao',
+              'problema': 'TESTE E2E DEV: comprovar entrega automática da coleta governada no Microsoft Teams.',
+              'objetivo': 'Validar fila, gateway, entrega e Dashboard com correlação ponta a ponta.',
+              'usuario_afetado': 'Equipe ReqSys',
+              'processo_atual': None,
+              'cenario_desejado': 'Eventos da coleta devem ser entregues pelo gateway governado e refletidos no Dashboard.',
+              'regras_negocio': [],
+              'criterios_aceite': ['A coleta em refinamento deve produzir acompanhamento rastreável.'],
+              'dados_necessarios': [],
+              'integracoes': [],
+              'restricoes': [],
+              'impacto_regulatorio': False,
+              'urgencia': 'baixa',
+              'data_limite': None,
+              'referencia_externa': None,
+              'observacoes': '[TESTE E2E DEV] Não representa demanda funcional real.'
+          }
+
+          ref = call('POST', '/api/requisitos/coleta/previsualizar', payload).get('data', {})
+          ref_eval = ref.get('avaliacao') or {}
+          ref_teams = ref.get('acompanhamento_teams') or {}
+
+          completo = copy.deepcopy(payload)
+          completo.update({
+              'processo_atual': 'A validação anterior não possuía prova automática ponta a ponta.',
+              'regras_negocio': ['Toda entrega automática deve usar a fila central e preservar correlation_id.'],
+              'criterios_aceite': [
+                  'O requisito deve atingir o gate de qualidade antes da geração.',
+                  'O evento gerado deve ficar ENVIADO no Teams e aparecer no Dashboard.'
+              ],
+              'dados_necessarios': ['correlation_id e estado da entrega'],
+              'referencia_externa': f"GHA-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+          })
+          ger = call('POST', '/api/requisitos/coleta/gerar', completo).get('data', {})
+          ger_eval = ger.get('avaliacao') or {}
+          ger_teams = ger.get('acompanhamento_teams') or {}
+          requisito = ger.get('requisito') or {}
+          dash = call('GET', '/v1/dashboard/coleta-requisitos?janela_dias=1').get('data', {})
+          dash_teams = dash.get('acompanhamento_teams') or {}
+
+          evidence = {
+              'schema_version': '1.0.0',
+              'contract': 'reqsys-teams-webhook-dev-bootstrap-e2e',
+              'correlation_id': correlation,
+              'refinamento': {
+                  'pontuacao': ref_eval.get('pontuacao'),
+                  'classificacao': ref_eval.get('classificacao'),
+                  'id_evento': ref_teams.get('id_evento'),
+                  'status_evento': ref_teams.get('status_evento'),
+                  'status_http': ref_teams.get('status_http'),
+                  'canal_usado': ref_teams.get('canal_usado'),
+                  'correlation_id': ref_teams.get('correlation_id'),
+              },
+              'geracao': {
+                  'pontuacao': ger_eval.get('pontuacao'),
+                  'classificacao': ger_eval.get('classificacao'),
+                  'requisito_codigo': requisito.get('codigo'),
+                  'id_evento': ger_teams.get('id_evento'),
+                  'status_evento': ger_teams.get('status_evento'),
+                  'status_http': ger_teams.get('status_http'),
+                  'canal_usado': ger_teams.get('canal_usado'),
+                  'correlation_id': ger_teams.get('correlation_id'),
+              },
+              'dashboard': dash_teams,
+              'bloqueios': [],
+          }
+
+          if ref_eval.get('pronto_para_gerar') is not False:
+              evidence['bloqueios'].append('Primeira coleta não ficou em refinamento.')
+          if ref_teams.get('status_evento') != 'ENVIADO':
+              evidence['bloqueios'].append(f"Refinamento={ref_teams.get('status_evento')}")
+          if ger_eval.get('pronto_para_gerar') is not True or not requisito.get('codigo'):
+              evidence['bloqueios'].append('Geração do requisito não atingiu o contrato.')
+          if ger_teams.get('status_evento') != 'ENVIADO':
+              evidence['bloqueios'].append(f"Geração={ger_teams.get('status_evento')}")
+          if ref_teams.get('correlation_id') != correlation or ger_teams.get('correlation_id') != correlation:
+              evidence['bloqueios'].append('correlation_id divergente.')
+          if ref_teams.get('id_evento') == ger_teams.get('id_evento'):
+              evidence['bloqueios'].append('Eventos de refinamento e geração não são independentes.')
+          if dash_teams.get('fonte') != 'teams_notification_queue':
+              evidence['bloqueios'].append('Dashboard não usa a fila central.')
+          if int(dash_teams.get('enviadas') or 0) < 2 or not dash_teams.get('ultima_entrega_em'):
+              evidence['bloqueios'].append('Dashboard não evidencia as entregas Teams.')
+
+          evidence['ok'] = not evidence['bloqueios']
+          out = Path(os.environ['ARTIFACT_DIR'])
+          out.mkdir(parents=True, exist_ok=True)
+          Path(out, 'evidence.json').write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(evidence, ensure_ascii=False, indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as fh:
+              fh.write('## Teams Webhook DEV + E2E\n\n')
+              fh.write(f"- Correlação: `{correlation}`\n")
+              fh.write(f"- Refinamento: `{ref_teams.get('status_evento')}`\n")
+              fh.write(f"- Geração: `{ger_teams.get('status_evento')}`\n")
+              fh.write(f"- Requisito: `{requisito.get('codigo') or 'n/a'}`\n")
+              fh.write(f"- Enviadas no Dashboard: `{dash_teams.get('enviadas')}`\n")
+              fh.write(f"- Resultado: `{'APROVADO' if evidence['ok'] else 'BLOQUEADO'}`\n")
+          if not evidence['ok']:
+              raise SystemExit('E2E bloqueado: ' + '; '.join(evidence['bloqueios']))
+          PY
+
+      - name: Publicar evidência governada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-webhook-dev-bootstrap-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/teams-webhook-dev-bootstrap-e2e/
+          if-no-files-found: warn
+          retention-days: 30
