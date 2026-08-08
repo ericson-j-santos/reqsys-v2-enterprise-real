@@ -46,6 +46,39 @@ BEGIN
     CREATE INDEX ix_gti_vinculo_correlacao ON dbo.gestao_ti_requisito_servico(correlation_id);
 END;
 
+MERGE dbo.gestao_ti_servicos WITH (HOLDLOCK) AS destino
+USING (VALUES (
+    'bde5fd56-5b4f-4ee4-8d64-5aa5f755e3ef',
+    'REQSYS',
+    N'ReqSys',
+    N'Plataforma corporativa de requisitos e gestão orientada a dados.',
+    'alta',
+    N'Equipe ReqSys',
+    N'Gestão de Produtos',
+    1,
+    1
+)) AS origem (
+    servico_id, codigo, nome, descricao, criticidade,
+    responsavel_tecnico, responsavel_negocio, versao_catalogo, ativo
+)
+ON destino.codigo = origem.codigo
+WHEN MATCHED THEN UPDATE SET
+    nome = origem.nome,
+    descricao = origem.descricao,
+    criticidade = origem.criticidade,
+    responsavel_tecnico = origem.responsavel_tecnico,
+    responsavel_negocio = origem.responsavel_negocio,
+    ativo = origem.ativo,
+    atualizado_em = SYSDATETIMEOFFSET()
+WHEN NOT MATCHED THEN INSERT (
+    servico_id, codigo, nome, descricao, criticidade,
+    responsavel_tecnico, responsavel_negocio, versao_catalogo, ativo
+) VALUES (
+    origem.servico_id, origem.codigo, origem.nome, origem.descricao,
+    origem.criticidade, origem.responsavel_tecnico,
+    origem.responsavel_negocio, origem.versao_catalogo, origem.ativo
+);
+
 COMMIT TRANSACTION;
 
 /*
