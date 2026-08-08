@@ -55,7 +55,9 @@ def criar_servico(
             detail={'code': 'SERVICO_JA_EXISTE', 'message': 'Código de serviço já cadastrado.'},
         )
 
-    servico = ServicoTI(**payload.model_dump(), codigo=codigo)
+    dados = payload.model_dump()
+    dados['codigo'] = codigo
+    servico = ServicoTI(**dados)
     db.add(servico)
     db.commit()
     db.refresh(servico)
