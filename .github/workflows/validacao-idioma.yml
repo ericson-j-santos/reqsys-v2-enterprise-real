@@ -1,0 +1,65 @@
+name: Validação de idioma
+
+on:
+  pull_request:
+    paths:
+      - "**/*.cs"
+      - "**/*.html"
+      - "**/*.java"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.md"
+      - "**/*.py"
+      - "**/*.sql"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.vue"
+      - "**/*.yaml"
+      - "**/*.yml"
+      - "governance/idioma/termos.json"
+      - "scripts/validar_idioma.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validacao-idioma-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validar:
+    name: Verificar português primeiro
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Identificar arquivos alterados
+        id: alterados
+        shell: bash
+        run: |
+          git diff --name-only --diff-filter=ACMR             "${{ github.event.pull_request.base.sha }}"             "${{ github.event.pull_request.head.sha }}"             > /tmp/arquivos-alterados.txt
+          sed -n '1,200p' /tmp/arquivos-alterados.txt
+
+      - name: Validar contrato e termos
+        shell: bash
+        run: |
+          mapfile -t arquivos < /tmp/arquivos-alterados.txt
+          python3 scripts/validar_idioma.py "${arquivos[@]}"
+
+      - name: Registrar resumo
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Validação de idioma"
+            echo
+            echo "- Idioma principal: português do Brasil"
+            echo "- Modo: consultivo"
+            echo "- Escopo: arquivos adicionados ou modificados"
+            echo "- Política: docs/governanca/POLITICA-IDIOMA.md"
+          } >> "${GITHUB_STEP_SUMMARY}"
