@@ -1,17 +1,20 @@
-schema_version: 1.0.0
-reconciliation_id: REQSYS-001-BACEN-GOVERNANCE-2026-07-31
-generated_at: '2026-07-31T14:53:00-03:00'
+schema_version: 1.1.0
+reconciliation_id: REQSYS-001-BACEN-GOVERNANCE-2026-08-08
+generated_at: '2026-08-08T13:51:00-03:00'
 mode: advisory
 production_touched: false
+lifecycle_stage: DEVELOPMENT
+rules:
+  - authenticated_issue_comment_is_decision_evidence_but_not_a_substitute_for_canonical_records
+  - technical_implementation_must_not_be_reported_as_institutional_approval
+  - institutional_approval_may_be_deferred_while_lifecycle_stage_is_nonproduction
+  - deferred_controls_must_not_exceed_technically_implemented_status
+  - production_promotion_requires_formal_authority_and_approval_record
 source_of_truth:
   matrix: governance/bacen/BACEN-CONTROL-MATRIX.yaml
   policy_metadata: governance/bacen/CYBERSECURITY-POLICY-METADATA.yaml
   executive_designation: governance/bacen/EXECUTIVE-DESIGNATION.yaml
   annual_report: governance/bacen/ANNUAL-CYBERSECURITY-REPORT.md
-rules:
-  - authenticated_issue_comment_is_decision_evidence_but_not_a_substitute_for_canonical_records
-  - control_status_must_not_be_promoted_when_required_canonical_fields_are_missing
-  - production_must_remain_blocked_while_any_critical_control_is_partial
 controls:
   - control_id: BACEN-01
     approval_issue: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1118
@@ -19,15 +22,23 @@ controls:
     decision: approved
     authenticated_actor: ericson-j-santos
     decision_evidence_recorded: true
+    lifecycle_stage: DEVELOPMENT
     current_matrix_status: partial
-    closure_issue: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1099
+    effective_preproduction_status: technically_implemented
+    institutional_approval_status: deferred_until_institutionalization
     closure_ready: false
     promote_control_status: false
-    canonicalization_status: pending
-    blockers:
-      - approval_authority_missing_in_policy_metadata
-      - signed_attestation_reference_not_recorded_in_policy_metadata
-    next_action: record_the_formally_designated_approval_authority_and_signed_attestation_reference_in_CYBERSECURITY_POLICY_METADATA
+    canonicalization_status: deferred_by_lifecycle
+    blockers: []
+    deferred_requirements:
+      - formal_approval_authority
+      - signed_attestation_reference
+      - institutional_approval_date
+    production_gate:
+      required: true
+      block_when_deferred_requirements_missing: true
+    human_action_required_now: false
+    next_action: continue_technical_evidence_and_require_formal_approval_before_production
   - control_id: BACEN-08
     approval_issue: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1119
     decision_comment: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1119#issuecomment-5141616243
@@ -35,7 +46,6 @@ controls:
     authenticated_actor: ericson-j-santos
     decision_evidence_recorded: true
     current_matrix_status: partial
-    closure_issue: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1101
     closure_ready: false
     promote_control_status: false
     canonicalization_status: pending
@@ -49,7 +59,10 @@ summary:
   approvals_recorded: 2
   controls_promoted: 0
   closure_ready: 0
+  deferred_institutional_approvals: 1
+  human_actions_suppressed_by_nonproduction_lifecycle:
+    - BACEN-01
   controls_remaining_partial:
     - BACEN-01
     - BACEN-08
-  decision: approvals_reconciled_without_false_compliance_promotion
+  decision: preproduction_governance_without_false_compliance_promotion

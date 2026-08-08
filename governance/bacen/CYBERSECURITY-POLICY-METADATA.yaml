@@ -1,12 +1,30 @@
-schema_version: 1.1.0
+schema_version: 1.2.0
 control_id: BACEN-01
 policy_path: governance/bacen/CYBERSECURITY-POLICY.md
 policy_version: 1.0.0
 technical_owner: SECURITY
 operational_owner: RUNTIME_OPERATOR
-approval_status: pending_formal_institutional_approval
+lifecycle_stage: DEVELOPMENT
+compliance_status: technically_implemented
+institutional_approval_required: false
+institutional_approval_gate_stage: PRODUCTION
+approval_status: deferred_until_institutionalization
 approval_authority: pending_formal_designation
 approval_record: null
+deferred_institutional_approval:
+  enabled: true
+  reason: product_and_process_under_development_pre_officialization
+  maximum_compliance_status: technically_implemented
+  production_gate:
+    approval_authority_required: true
+    approval_record_required: true
+    institutional_approval_date_required: true
+    block_production_when_missing: true
+  notification_policy:
+    suppress_human_action_while_nonproduction: true
+    reactivate_on_stage:
+      - PRODUCTION
+      - INSTITUTIONAL
 decision_evidence:
   issue_url: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1118
   comment_url: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1118#issuecomment-5141594075
@@ -20,7 +38,7 @@ decision_evidence:
   decision_record_date: '2026-07-31'
   evidence_source: authenticated_github_issue_comment
   personal_or_sensitive_content_replicated: false
-  verification_status: pending_formal_authority_and_signed_attestation
+  verification_status: deferred_formal_authority_and_signed_attestation_until_institutionalization
   automatic_status_promotion_allowed: false
 effective_from: '2026-07-28'
 last_technical_review_at: '2026-07-28'
@@ -30,6 +48,8 @@ review_triggers:
   - relevant_security_incident
   - regulatory_change
   - material_architecture_change
+  - production_promotion
+  - institutionalization
 required_sections:
   - Objetivo
   - Escopo
@@ -37,4 +57,4 @@ required_sections:
   - Governança
   - Evidências
 production_touched: false
-next_stage: canonicalize_approval_authority_and_signed_attestation
+next_stage: continue_technical_evidence_until_production_gate
