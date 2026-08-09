@@ -27,6 +27,7 @@ jobs:
       POWERPLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
       POWERPLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      TEAMS_NOTIFICATIONS_WEBHOOK_URL: ${{ secrets.TEAMS_NOTIFICATIONS_WEBHOOK_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,6 +43,7 @@ jobs:
             POWERPLATFORM_CLIENT_SECRET = -not [string]::IsNullOrWhiteSpace($env:POWERPLATFORM_CLIENT_SECRET)
             POWERPLATFORM_TENANT_ID = -not [string]::IsNullOrWhiteSpace($env:POWERPLATFORM_TENANT_ID)
             FLY_API_TOKEN = -not [string]::IsNullOrWhiteSpace($env:FLY_API_TOKEN)
+            TEAMS_NOTIFICATIONS_WEBHOOK_URL = -not [string]::IsNullOrWhiteSpace($env:TEAMS_NOTIFICATIONS_WEBHOOK_URL)
           }
           $state | ConvertTo-Json | Set-Content -Encoding UTF8 "$env:ARTIFACT_DIR/secret-availability.json"
           $state | ConvertTo-Json -Compress | Write-Host
@@ -50,6 +52,7 @@ jobs:
           }
 
       - name: Instalar módulos administrativos Power Platform
+        if: env.TEAMS_NOTIFICATIONS_WEBHOOK_URL == ''
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -60,11 +63,28 @@ jobs:
           Import-Module Microsoft.PowerApps.PowerShell -Force
           Write-Host "Windows PowerShell $($PSVersionTable.PSVersion) com módulos Power Platform carregados."
 
-      - name: Descobrir URI do gatilho por detalhe administrativo expandido
+      - name: Resolver callback governado ou por detalhe administrativo
         id: flow
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
+
+          if (-not [string]::IsNullOrWhiteSpace($env:TEAMS_NOTIFICATIONS_WEBHOOK_URL)) {
+            $flowTriggerUri = $env:TEAMS_NOTIFICATIONS_WEBHOOK_URL.Trim()
+            Write-Output "::add-mask::$flowTriggerUri"
+            $flowTriggerUri | Set-Content -NoNewline -Encoding UTF8 "$env:RUNNER_TEMP/teams_callback_url"
+            $result = [ordered]@{
+              callback_discovered = $true
+              callback_source = 'github-environment:reqsys-power-platform-dev'
+              flow_trigger_uri_present = $true
+              fly_token_present_in_powerplatform_environment = -not [string]::IsNullOrWhiteSpace($env:FLY_API_TOKEN)
+            }
+            $result | ConvertTo-Json | Set-Content -Encoding UTF8 "$env:ARTIFACT_DIR/probe.json"
+            $result | ConvertTo-Json -Compress | Write-Host
+            "callback_discovered=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding ascii -Append
+            exit 0
+          }
+
           Import-Module Microsoft.PowerApps.Administration.PowerShell -Force
           Import-Module Microsoft.PowerApps.PowerShell -Force
 
@@ -75,12 +95,7 @@ jobs:
             if ([string]::IsNullOrWhiteSpace($json)) { return $null }
             $match = [regex]::Match($json, '(?i)"flowTriggerUri"\s*:\s*"((?:\\.|[^"])*)"')
             if (-not $match.Success) { return $null }
-            $encoded = $match.Groups[1].Value
-            try {
-              return ('"' + $encoded + '"') | ConvertFrom-Json
-            } catch {
-              return $null
-            }
+            try { return ('"' + $match.Groups[1].Value + '"') | ConvertFrom-Json } catch { return $null }
           }
 
           Add-PowerAppsAccount `
@@ -98,29 +113,14 @@ jobs:
               break
             }
           }
-          if ($null -eq $targetEnvironment) {
-            throw 'BLOQUEIO: ambiente Power Platform DEV não localizado pela URL governada.'
-          }
+          if ($null -eq $targetEnvironment) { throw 'BLOQUEIO: ambiente Power Platform DEV não localizado.' }
 
           $environmentName = [string]$targetEnvironment.EnvironmentName
-          if ([string]::IsNullOrWhiteSpace($environmentName)) {
-            throw 'BLOQUEIO: EnvironmentName não retornado pelo Power Platform.'
-          }
+          $matches = @(Get-AdminFlow -EnvironmentName $environmentName | Where-Object { $_.DisplayName -eq $env:FLOW_DISPLAY_NAME })
+          if ($matches.Count -ne 1) { throw "BLOQUEIO: esperado 1 fluxo '$($env:FLOW_DISPLAY_NAME)'; encontrados $($matches.Count)." }
 
-          $matches = @(Get-AdminFlow -EnvironmentName $environmentName | Where-Object {
-            $_.DisplayName -eq $env:FLOW_DISPLAY_NAME
-          })
-          if ($matches.Count -ne 1) {
-            throw "BLOQUEIO: esperado 1 fluxo '$($env:FLOW_DISPLAY_NAME)'; encontrados $($matches.Count)."
-          }
-
-          $flow = $matches[0]
-          $flowName = [string]$flow.FlowName
-          if ([string]::IsNullOrWhiteSpace($flowName)) {
-            throw 'BLOQUEIO: FlowName não retornado para o fluxo localizado.'
-          }
-
-          $flowTriggerUri = Get-FlowTriggerUriFromObject -Node $flow
+          $flowName = [string]$matches[0].FlowName
+          $flowTriggerUri = Get-FlowTriggerUriFromObject -Node $matches[0]
           $source = 'Get-AdminFlow-summary'
 
           if ([string]::IsNullOrWhiteSpace([string]$flowTriggerUri)) {
@@ -131,8 +131,6 @@ jobs:
 
           if ([string]::IsNullOrWhiteSpace([string]$flowTriggerUri)) {
             $adminModule = Get-Module Microsoft.PowerApps.Administration.PowerShell
-            if ($null -eq $adminModule) { throw 'Módulo administrativo não está carregado.' }
-
             $expanded = & $adminModule {
               param($EnvironmentName, $FlowName)
               $route = "https://{flowEndpoint}/providers/Microsoft.ProcessSimple/scopes/admin/environments/{environment}/flows/{flowName}?api-version={apiVersion}&`$expand=definition" `
@@ -140,27 +138,20 @@ jobs:
                 | ReplaceMacro -Macro '{flowName}' -Value $FlowName
               InvokeApi -Method GET -Route $route -ApiVersion '2016-11-01'
             } $environmentName $flowName
-
-            if ($expanded -is [string]) {
-              try { $expanded = $expanded | ConvertFrom-Json } catch { }
-            }
             $flowTriggerUri = Get-FlowTriggerUriFromObject -Node $expanded
             $source = 'admin-expanded-definition'
           }
 
           $result = [ordered]@{
-            environment_resolved = $true
-            flow_resolved = $true
-            flow_name_present = $true
-            flow_trigger_uri_present = -not [string]::IsNullOrWhiteSpace([string]$flowTriggerUri)
+            callback_discovered = -not [string]::IsNullOrWhiteSpace([string]$flowTriggerUri)
             callback_source = $source
+            flow_trigger_uri_present = -not [string]::IsNullOrWhiteSpace([string]$flowTriggerUri)
             fly_token_present_in_powerplatform_environment = -not [string]::IsNullOrWhiteSpace($env:FLY_API_TOKEN)
           }
           $result | ConvertTo-Json | Set-Content -Encoding UTF8 "$env:ARTIFACT_DIR/probe.json"
           $result | ConvertTo-Json -Compress | Write-Host
-
           if ([string]::IsNullOrWhiteSpace([string]$flowTriggerUri)) {
-            throw 'BLOQUEIO: consulta administrativa expandida localizou o fluxo, mas não expôs flowTriggerUri.'
+            throw 'BLOQUEIO: callback não está salvo no ambiente e a API administrativa não o expõe para a entidade de serviço.'
           }
 
           $flowTriggerUri = [string]$flowTriggerUri
@@ -195,14 +186,9 @@ jobs:
         if: steps.flow.outputs.callback_discovered == 'true' && env.FLY_API_TOKEN == ''
         shell: powershell
         run: |
-          $result = [ordered]@{
-            callback_discovered = $true
-            fly_token_present = $false
-            synced_to_fly = $false
-            reason = 'FLY_API_TOKEN não está no mesmo environment seguro; callback não foi persistido em artifact/output.'
-          }
+          $result = [ordered]@{callback_discovered=$true; fly_token_present=$false; synced_to_fly=$false}
           $result | ConvertTo-Json | Set-Content -Encoding UTF8 "$env:ARTIFACT_DIR/sync.json"
-          throw 'BLOQUEIO: callback descoberto, porém FLY_API_TOKEN não está no mesmo environment seguro.'
+          throw 'BLOQUEIO: callback resolvido, porém FLY_API_TOKEN não está no mesmo environment seguro.'
 
       - name: Publicar evidência sanitizada
         if: always()
