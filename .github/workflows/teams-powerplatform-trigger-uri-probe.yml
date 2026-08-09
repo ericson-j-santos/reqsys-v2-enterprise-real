@@ -68,42 +68,19 @@ jobs:
           Import-Module Microsoft.PowerApps.Administration.PowerShell -Force
           Import-Module Microsoft.PowerApps.PowerShell -Force
 
-          function Find-PropertyValue {
-            param(
-              [Parameter(Mandatory=$false)] $Node,
-              [Parameter(Mandatory=$true)] [string] $PropertyName
-            )
+          function Get-FlowTriggerUriFromObject {
+            param([Parameter(Mandatory=$false)] $Node)
             if ($null -eq $Node) { return $null }
-            if ($Node -is [string] -or $Node -is [ValueType]) { return $null }
-
-            if ($Node -is [System.Collections.IDictionary]) {
-              foreach ($key in $Node.Keys) {
-                if ([string]::Equals([string]$key, $PropertyName, [System.StringComparison]::OrdinalIgnoreCase)) {
-                  $value = $Node[$key]
-                  if ($null -ne $value -and -not [string]::IsNullOrWhiteSpace([string]$value)) { return $value }
-                }
-                $found = Find-PropertyValue -Node $Node[$key] -PropertyName $PropertyName
-                if ($null -ne $found) { return $found }
-              }
+            $json = $Node | ConvertTo-Json -Depth 100 -Compress
+            if ([string]::IsNullOrWhiteSpace($json)) { return $null }
+            $match = [regex]::Match($json, '(?i)"flowTriggerUri"\s*:\s*"((?:\\.|[^"])*)"')
+            if (-not $match.Success) { return $null }
+            $encoded = $match.Groups[1].Value
+            try {
+              return ('"' + $encoded + '"') | ConvertFrom-Json
+            } catch {
               return $null
             }
-
-            foreach ($property in $Node.PSObject.Properties) {
-              if ([string]::Equals($property.Name, $PropertyName, [System.StringComparison]::OrdinalIgnoreCase)) {
-                $value = $property.Value
-                if ($null -ne $value -and -not [string]::IsNullOrWhiteSpace([string]$value)) { return $value }
-              }
-              $found = Find-PropertyValue -Node $property.Value -PropertyName $PropertyName
-              if ($null -ne $found) { return $found }
-            }
-
-            if ($Node -is [System.Collections.IEnumerable]) {
-              foreach ($item in $Node) {
-                $found = Find-PropertyValue -Node $item -PropertyName $PropertyName
-                if ($null -ne $found) { return $found }
-              }
-            }
-            return $null
           }
 
           Add-PowerAppsAccount `
@@ -143,12 +120,12 @@ jobs:
             throw 'BLOQUEIO: FlowName não retornado para o fluxo localizado.'
           }
 
-          $flowTriggerUri = Find-PropertyValue -Node $flow -PropertyName 'flowTriggerUri'
+          $flowTriggerUri = Get-FlowTriggerUriFromObject -Node $flow
           $source = 'Get-AdminFlow-summary'
 
           if ([string]::IsNullOrWhiteSpace([string]$flowTriggerUri)) {
             $detail = Get-AdminFlow -EnvironmentName $environmentName -FlowName $flowName
-            $flowTriggerUri = Find-PropertyValue -Node $detail -PropertyName 'flowTriggerUri'
+            $flowTriggerUri = Get-FlowTriggerUriFromObject -Node $detail
             $source = 'Get-AdminFlow-detail'
           }
 
@@ -167,7 +144,7 @@ jobs:
             if ($expanded -is [string]) {
               try { $expanded = $expanded | ConvertFrom-Json } catch { }
             }
-            $flowTriggerUri = Find-PropertyValue -Node $expanded -PropertyName 'flowTriggerUri'
+            $flowTriggerUri = Get-FlowTriggerUriFromObject -Node $expanded
             $source = 'admin-expanded-definition'
           }
 
