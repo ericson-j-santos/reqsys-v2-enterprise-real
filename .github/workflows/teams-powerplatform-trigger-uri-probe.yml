@@ -17,10 +17,10 @@ env:
 jobs:
   descobrir-e-sincronizar:
     name: Descobrir flowTriggerUri sem expor segredo
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     environment:
       name: reqsys-power-platform-dev
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       POWERPLATFORM_DEV_ENVIRONMENT_URL: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
       POWERPLATFORM_APP_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
@@ -32,83 +32,53 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validar configuração sem revelar valores
-        shell: bash
+        shell: powershell
         run: |
-          set -euo pipefail
-          mkdir -p "$ARTIFACT_DIR"
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          names = [
-              'POWERPLATFORM_DEV_ENVIRONMENT_URL',
-              'POWERPLATFORM_APP_ID',
-              'POWERPLATFORM_CLIENT_SECRET',
-              'POWERPLATFORM_TENANT_ID',
-              'FLY_API_TOKEN',
-          ]
-          state = {name: bool(os.environ.get(name)) for name in names}
-          Path(os.environ['ARTIFACT_DIR'], 'secret-availability.json').write_text(
-              json.dumps(state, indent=2) + '\n', encoding='utf-8'
-          )
-          print(json.dumps(state))
-          required = names[:4]
-          missing = [name for name in required if not state[name]]
-          if missing:
-              raise SystemExit('BLOQUEIO: configuração Power Platform ausente: ' + ', '.join(missing))
-          PY
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path $env:ARTIFACT_DIR | Out-Null
+          $state = [ordered]@{
+            POWERPLATFORM_DEV_ENVIRONMENT_URL = -not [string]::IsNullOrWhiteSpace($env:POWERPLATFORM_DEV_ENVIRONMENT_URL)
+            POWERPLATFORM_APP_ID = -not [string]::IsNullOrWhiteSpace($env:POWERPLATFORM_APP_ID)
+            POWERPLATFORM_CLIENT_SECRET = -not [string]::IsNullOrWhiteSpace($env:POWERPLATFORM_CLIENT_SECRET)
+            POWERPLATFORM_TENANT_ID = -not [string]::IsNullOrWhiteSpace($env:POWERPLATFORM_TENANT_ID)
+            FLY_API_TOKEN = -not [string]::IsNullOrWhiteSpace($env:FLY_API_TOKEN)
+          }
+          $state | ConvertTo-Json | Set-Content -Encoding UTF8 "$env:ARTIFACT_DIR/secret-availability.json"
+          $state | ConvertTo-Json -Compress | Write-Host
+          foreach ($name in @('POWERPLATFORM_DEV_ENVIRONMENT_URL','POWERPLATFORM_APP_ID','POWERPLATFORM_CLIENT_SECRET','POWERPLATFORM_TENANT_ID')) {
+            if (-not $state[$name]) { throw "BLOQUEIO: configuração obrigatória ausente: $name" }
+          }
 
       - name: Instalar módulos administrativos Power Platform
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
           Install-Module Microsoft.PowerApps.Administration.PowerShell -Scope CurrentUser -Force -AllowClobber
           Install-Module Microsoft.PowerApps.PowerShell -Scope CurrentUser -Force -AllowClobber
+          Import-Module Microsoft.PowerApps.Administration.PowerShell -Force
+          Import-Module Microsoft.PowerApps.PowerShell -Force
+          Write-Host "Windows PowerShell $($PSVersionTable.PSVersion) com módulos Power Platform carregados."
 
       - name: Descobrir URI do gatilho via Get-AdminFlow
         id: flow
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
+          Import-Module Microsoft.PowerApps.Administration.PowerShell -Force
+          Import-Module Microsoft.PowerApps.PowerShell -Force
 
-          function Find-ValueByKey {
-            param(
-              [Parameter(Mandatory=$true)] $Node,
-              [Parameter(Mandatory=$true)] [string] $WantedKey
-            )
-            if ($null -eq $Node) { return $null }
-            if ($Node -is [System.Collections.IDictionary]) {
-              foreach ($key in $Node.Keys) {
-                if ([string]::Equals([string]$key, $WantedKey, [System.StringComparison]::OrdinalIgnoreCase)) {
-                  $value = $Node[$key]
-                  if ($null -ne $value -and -not [string]::IsNullOrWhiteSpace([string]$value)) { return $value }
-                }
-                $found = Find-ValueByKey -Node $Node[$key] -WantedKey $WantedKey
-                if ($null -ne $found) { return $found }
-              }
-              return $null
-            }
-            if ($Node -is [System.Collections.IEnumerable] -and -not ($Node -is [string])) {
-              foreach ($item in $Node) {
-                $found = Find-ValueByKey -Node $item -WantedKey $WantedKey
-                if ($null -ne $found) { return $found }
-              }
-            }
-            return $null
-          }
-
-          Add-PowerAppsAccount \
-            -Endpoint prod \
-            -TenantID $env:POWERPLATFORM_TENANT_ID \
-            -ApplicationId $env:POWERPLATFORM_APP_ID \
+          Add-PowerAppsAccount `
+            -Endpoint prod `
+            -TenantID $env:POWERPLATFORM_TENANT_ID `
+            -ApplicationId $env:POWERPLATFORM_APP_ID `
             -ClientSecret $env:POWERPLATFORM_CLIENT_SECRET | Out-Null
 
           $targetUrl = $env:POWERPLATFORM_DEV_ENVIRONMENT_URL.TrimEnd('/').ToLowerInvariant()
-          $environments = @(Get-AdminPowerAppEnvironment)
           $targetEnvironment = $null
-          foreach ($candidate in $environments) {
-            $json = $candidate | ConvertTo-Json -Depth 30 -Compress
-            if ($json.ToLowerInvariant().Contains($targetUrl)) {
+          foreach ($candidate in @(Get-AdminPowerAppEnvironment)) {
+            $candidateJson = $candidate | ConvertTo-Json -Depth 30 -Compress
+            if ($candidateJson.ToLowerInvariant().Contains($targetUrl)) {
               $targetEnvironment = $candidate
               break
             }
@@ -119,59 +89,47 @@ jobs:
 
           $environmentName = [string]$targetEnvironment.EnvironmentName
           if ([string]::IsNullOrWhiteSpace($environmentName)) {
-            $envHash = ($targetEnvironment | ConvertTo-Json -Depth 30) | ConvertFrom-Json -AsHashtable
-            $environmentName = [string](Find-ValueByKey -Node $envHash -WantedKey 'EnvironmentName')
-          }
-          if ([string]::IsNullOrWhiteSpace($environmentName)) {
-            throw 'BLOQUEIO: EnvironmentName não encontrado no ambiente Power Platform DEV.'
+            throw 'BLOQUEIO: EnvironmentName não retornado pelo Power Platform.'
           }
 
-          $flows = @(Get-AdminFlow -EnvironmentName $environmentName)
-          $matches = @()
-          foreach ($candidate in $flows) {
-            $json = $candidate | ConvertTo-Json -Depth 50 -Compress
-            $hash = $json | ConvertFrom-Json -AsHashtable
-            $displayName = [string](Find-ValueByKey -Node $hash -WantedKey 'displayName')
-            if ($displayName -eq $env:FLOW_DISPLAY_NAME) {
-              $matches += $candidate
-            }
-          }
+          $matches = @(Get-AdminFlow -EnvironmentName $environmentName | Where-Object {
+            $_.DisplayName -eq $env:FLOW_DISPLAY_NAME
+          })
           if ($matches.Count -ne 1) {
             throw "BLOQUEIO: esperado 1 fluxo '$($env:FLOW_DISPLAY_NAME)'; encontrados $($matches.Count)."
           }
 
-          $flowJson = $matches[0] | ConvertTo-Json -Depth 80 -Compress
-          $flowHash = $flowJson | ConvertFrom-Json -AsHashtable
-          $flowName = [string](Find-ValueByKey -Node $flowHash -WantedKey 'FlowName')
-          if ([string]::IsNullOrWhiteSpace($flowName)) {
-            $flowName = [string](Find-ValueByKey -Node $flowHash -WantedKey 'name')
+          $flow = $matches[0]
+          $flowName = [string]$flow.FlowName
+          $flowTriggerUri = $null
+          if ($null -ne $flow.Internal -and $null -ne $flow.Internal.properties) {
+            $flowTriggerUri = [string]$flow.Internal.properties.flowTriggerUri
           }
-          $flowTriggerUri = [string](Find-ValueByKey -Node $flowHash -WantedKey 'flowTriggerUri')
 
           if ([string]::IsNullOrWhiteSpace($flowTriggerUri) -and -not [string]::IsNullOrWhiteSpace($flowName)) {
             $detail = Get-AdminFlow -EnvironmentName $environmentName -FlowName $flowName
-            $detailHash = ($detail | ConvertTo-Json -Depth 80 -Compress) | ConvertFrom-Json -AsHashtable
-            $flowTriggerUri = [string](Find-ValueByKey -Node $detailHash -WantedKey 'flowTriggerUri')
+            if ($null -ne $detail.Internal -and $null -ne $detail.Internal.properties) {
+              $flowTriggerUri = [string]$detail.Internal.properties.flowTriggerUri
+            }
           }
 
-          $result = @{
+          $result = [ordered]@{
             environment_resolved = $true
             flow_resolved = $true
             flow_name_present = -not [string]::IsNullOrWhiteSpace($flowName)
             flow_trigger_uri_present = -not [string]::IsNullOrWhiteSpace($flowTriggerUri)
             fly_token_present_in_powerplatform_environment = -not [string]::IsNullOrWhiteSpace($env:FLY_API_TOKEN)
           }
-          New-Item -ItemType Directory -Force -Path $env:ARTIFACT_DIR | Out-Null
           $result | ConvertTo-Json | Set-Content -Encoding UTF8 "$env:ARTIFACT_DIR/probe.json"
           $result | ConvertTo-Json -Compress | Write-Host
 
           if ([string]::IsNullOrWhiteSpace($flowTriggerUri)) {
-            throw 'BLOQUEIO: Get-AdminFlow não expôs flowTriggerUri para o fluxo HTTP.'
+            throw 'BLOQUEIO: Get-AdminFlow autenticou e localizou o fluxo, mas não expôs flowTriggerUri.'
           }
 
           Write-Output "::add-mask::$flowTriggerUri"
           $flowTriggerUri | Set-Content -NoNewline -Encoding UTF8 "$env:RUNNER_TEMP/teams_callback_url"
-          "callback_discovered=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "callback_discovered=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding ascii -Append
 
       - name: Setup Flyctl
         if: steps.flow.outputs.callback_discovered == 'true' && env.FLY_API_TOKEN != ''
@@ -179,46 +137,35 @@ jobs:
 
       - name: Sincronizar callback no Fly DEV sem revelar valor
         if: steps.flow.outputs.callback_discovered == 'true' && env.FLY_API_TOKEN != ''
-        shell: bash
+        shell: powershell
         run: |
-          set -euo pipefail
-          CALLBACK_URL="$(cat "$RUNNER_TEMP/teams_callback_url")"
-          echo "::add-mask::$CALLBACK_URL"
-          test -n "$CALLBACK_URL"
-          flyctl secrets set "TEAMS_NOTIFICATIONS_WEBHOOK_URL=${CALLBACK_URL}" --app "$FLY_APP"
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          Path(os.environ['ARTIFACT_DIR'], 'sync.json').write_text(
-              json.dumps({
-                  'callback_discovered': True,
-                  'fly_token_present': True,
-                  'synced_to_fly': True,
-                  'fly_app': os.environ['FLY_APP'],
-                  'secret_name': 'TEAMS_NOTIFICATIONS_WEBHOOK_URL',
-              }, indent=2) + '\n', encoding='utf-8'
-          )
-          PY
+          $ErrorActionPreference = 'Stop'
+          $callbackUrl = (Get-Content "$env:RUNNER_TEMP/teams_callback_url" -Raw).Trim()
+          if ([string]::IsNullOrWhiteSpace($callbackUrl)) { throw 'Callback descoberto ficou vazio no arquivo efêmero.' }
+          Write-Output "::add-mask::$callbackUrl"
+          & flyctl secrets set "TEAMS_NOTIFICATIONS_WEBHOOK_URL=$callbackUrl" --app $env:FLY_APP
+          if ($LASTEXITCODE -ne 0) { throw "flyctl secrets set falhou com código $LASTEXITCODE" }
+          $result = [ordered]@{
+            callback_discovered = $true
+            fly_token_present = $true
+            synced_to_fly = $true
+            fly_app = $env:FLY_APP
+            secret_name = 'TEAMS_NOTIFICATIONS_WEBHOOK_URL'
+          }
+          $result | ConvertTo-Json | Set-Content -Encoding UTF8 "$env:ARTIFACT_DIR/sync.json"
 
       - name: Bloquear se os escopos de segredo estiverem separados
         if: steps.flow.outputs.callback_discovered == 'true' && env.FLY_API_TOKEN == ''
-        shell: bash
+        shell: powershell
         run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          Path(os.environ['ARTIFACT_DIR'], 'sync.json').write_text(
-              json.dumps({
-                  'callback_discovered': True,
-                  'fly_token_present': False,
-                  'synced_to_fly': False,
-                  'reason': 'FLY_API_TOKEN não está disponível no environment reqsys-power-platform-dev; callback não foi persistido em artifact/output.',
-              }, indent=2) + '\n', encoding='utf-8'
-          )
-          PY
-          echo 'BLOQUEIO: callback descoberto, porém FLY_API_TOKEN não está no mesmo environment seguro.' >&2
-          exit 3
+          $result = [ordered]@{
+            callback_discovered = $true
+            fly_token_present = $false
+            synced_to_fly = $false
+            reason = 'FLY_API_TOKEN não está no mesmo environment seguro; callback não foi persistido em artifact/output.'
+          }
+          $result | ConvertTo-Json | Set-Content -Encoding UTF8 "$env:ARTIFACT_DIR/sync.json"
+          throw 'BLOQUEIO: callback descoberto, porém FLY_API_TOKEN não está no mesmo environment seguro.'
 
       - name: Publicar evidência sanitizada
         if: always()
