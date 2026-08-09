@@ -1,0 +1,230 @@
+name: Teams Power Platform Trigger URI Probe
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/teams-powerplatform-trigger-uri-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLOW_DISPLAY_NAME: robo_envia_teamsv2
+  FLY_APP: reqsys-api-dev
+  ARTIFACT_DIR: artifacts/teams-powerplatform-trigger-uri-probe
+
+jobs:
+  descobrir-e-sincronizar:
+    name: Descobrir flowTriggerUri sem expor segredo
+    runs-on: ubuntu-latest
+    environment:
+      name: reqsys-power-platform-dev
+    timeout-minutes: 20
+    env:
+      POWERPLATFORM_DEV_ENVIRONMENT_URL: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
+      POWERPLATFORM_APP_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      POWERPLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+      POWERPLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar configuração sem revelar valores
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          names = [
+              'POWERPLATFORM_DEV_ENVIRONMENT_URL',
+              'POWERPLATFORM_APP_ID',
+              'POWERPLATFORM_CLIENT_SECRET',
+              'POWERPLATFORM_TENANT_ID',
+              'FLY_API_TOKEN',
+          ]
+          state = {name: bool(os.environ.get(name)) for name in names}
+          Path(os.environ['ARTIFACT_DIR'], 'secret-availability.json').write_text(
+              json.dumps(state, indent=2) + '\n', encoding='utf-8'
+          )
+          print(json.dumps(state))
+          required = names[:4]
+          missing = [name for name in required if not state[name]]
+          if missing:
+              raise SystemExit('BLOQUEIO: configuração Power Platform ausente: ' + ', '.join(missing))
+          PY
+
+      - name: Instalar módulos administrativos Power Platform
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module Microsoft.PowerApps.Administration.PowerShell -Scope CurrentUser -Force -AllowClobber
+          Install-Module Microsoft.PowerApps.PowerShell -Scope CurrentUser -Force -AllowClobber
+
+      - name: Descobrir URI do gatilho via Get-AdminFlow
+        id: flow
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          function Find-ValueByKey {
+            param(
+              [Parameter(Mandatory=$true)] $Node,
+              [Parameter(Mandatory=$true)] [string] $WantedKey
+            )
+            if ($null -eq $Node) { return $null }
+            if ($Node -is [System.Collections.IDictionary]) {
+              foreach ($key in $Node.Keys) {
+                if ([string]::Equals([string]$key, $WantedKey, [System.StringComparison]::OrdinalIgnoreCase)) {
+                  $value = $Node[$key]
+                  if ($null -ne $value -and -not [string]::IsNullOrWhiteSpace([string]$value)) { return $value }
+                }
+                $found = Find-ValueByKey -Node $Node[$key] -WantedKey $WantedKey
+                if ($null -ne $found) { return $found }
+              }
+              return $null
+            }
+            if ($Node -is [System.Collections.IEnumerable] -and -not ($Node -is [string])) {
+              foreach ($item in $Node) {
+                $found = Find-ValueByKey -Node $item -WantedKey $WantedKey
+                if ($null -ne $found) { return $found }
+              }
+            }
+            return $null
+          }
+
+          Add-PowerAppsAccount \
+            -Endpoint prod \
+            -TenantID $env:POWERPLATFORM_TENANT_ID \
+            -ApplicationId $env:POWERPLATFORM_APP_ID \
+            -ClientSecret $env:POWERPLATFORM_CLIENT_SECRET | Out-Null
+
+          $targetUrl = $env:POWERPLATFORM_DEV_ENVIRONMENT_URL.TrimEnd('/').ToLowerInvariant()
+          $environments = @(Get-AdminPowerAppEnvironment)
+          $targetEnvironment = $null
+          foreach ($candidate in $environments) {
+            $json = $candidate | ConvertTo-Json -Depth 30 -Compress
+            if ($json.ToLowerInvariant().Contains($targetUrl)) {
+              $targetEnvironment = $candidate
+              break
+            }
+          }
+          if ($null -eq $targetEnvironment) {
+            throw 'BLOQUEIO: ambiente Power Platform DEV não localizado pela URL governada.'
+          }
+
+          $environmentName = [string]$targetEnvironment.EnvironmentName
+          if ([string]::IsNullOrWhiteSpace($environmentName)) {
+            $envHash = ($targetEnvironment | ConvertTo-Json -Depth 30) | ConvertFrom-Json -AsHashtable
+            $environmentName = [string](Find-ValueByKey -Node $envHash -WantedKey 'EnvironmentName')
+          }
+          if ([string]::IsNullOrWhiteSpace($environmentName)) {
+            throw 'BLOQUEIO: EnvironmentName não encontrado no ambiente Power Platform DEV.'
+          }
+
+          $flows = @(Get-AdminFlow -EnvironmentName $environmentName)
+          $matches = @()
+          foreach ($candidate in $flows) {
+            $json = $candidate | ConvertTo-Json -Depth 50 -Compress
+            $hash = $json | ConvertFrom-Json -AsHashtable
+            $displayName = [string](Find-ValueByKey -Node $hash -WantedKey 'displayName')
+            if ($displayName -eq $env:FLOW_DISPLAY_NAME) {
+              $matches += $candidate
+            }
+          }
+          if ($matches.Count -ne 1) {
+            throw "BLOQUEIO: esperado 1 fluxo '$($env:FLOW_DISPLAY_NAME)'; encontrados $($matches.Count)."
+          }
+
+          $flowJson = $matches[0] | ConvertTo-Json -Depth 80 -Compress
+          $flowHash = $flowJson | ConvertFrom-Json -AsHashtable
+          $flowName = [string](Find-ValueByKey -Node $flowHash -WantedKey 'FlowName')
+          if ([string]::IsNullOrWhiteSpace($flowName)) {
+            $flowName = [string](Find-ValueByKey -Node $flowHash -WantedKey 'name')
+          }
+          $flowTriggerUri = [string](Find-ValueByKey -Node $flowHash -WantedKey 'flowTriggerUri')
+
+          if ([string]::IsNullOrWhiteSpace($flowTriggerUri) -and -not [string]::IsNullOrWhiteSpace($flowName)) {
+            $detail = Get-AdminFlow -EnvironmentName $environmentName -FlowName $flowName
+            $detailHash = ($detail | ConvertTo-Json -Depth 80 -Compress) | ConvertFrom-Json -AsHashtable
+            $flowTriggerUri = [string](Find-ValueByKey -Node $detailHash -WantedKey 'flowTriggerUri')
+          }
+
+          $result = @{
+            environment_resolved = $true
+            flow_resolved = $true
+            flow_name_present = -not [string]::IsNullOrWhiteSpace($flowName)
+            flow_trigger_uri_present = -not [string]::IsNullOrWhiteSpace($flowTriggerUri)
+            fly_token_present_in_powerplatform_environment = -not [string]::IsNullOrWhiteSpace($env:FLY_API_TOKEN)
+          }
+          New-Item -ItemType Directory -Force -Path $env:ARTIFACT_DIR | Out-Null
+          $result | ConvertTo-Json | Set-Content -Encoding UTF8 "$env:ARTIFACT_DIR/probe.json"
+          $result | ConvertTo-Json -Compress | Write-Host
+
+          if ([string]::IsNullOrWhiteSpace($flowTriggerUri)) {
+            throw 'BLOQUEIO: Get-AdminFlow não expôs flowTriggerUri para o fluxo HTTP.'
+          }
+
+          Write-Output "::add-mask::$flowTriggerUri"
+          $flowTriggerUri | Set-Content -NoNewline -Encoding UTF8 "$env:RUNNER_TEMP/teams_callback_url"
+          "callback_discovered=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Setup Flyctl
+        if: steps.flow.outputs.callback_discovered == 'true' && env.FLY_API_TOKEN != ''
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Sincronizar callback no Fly DEV sem revelar valor
+        if: steps.flow.outputs.callback_discovered == 'true' && env.FLY_API_TOKEN != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          CALLBACK_URL="$(cat "$RUNNER_TEMP/teams_callback_url")"
+          echo "::add-mask::$CALLBACK_URL"
+          test -n "$CALLBACK_URL"
+          flyctl secrets set "TEAMS_NOTIFICATIONS_WEBHOOK_URL=${CALLBACK_URL}" --app "$FLY_APP"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path(os.environ['ARTIFACT_DIR'], 'sync.json').write_text(
+              json.dumps({
+                  'callback_discovered': True,
+                  'fly_token_present': True,
+                  'synced_to_fly': True,
+                  'fly_app': os.environ['FLY_APP'],
+                  'secret_name': 'TEAMS_NOTIFICATIONS_WEBHOOK_URL',
+              }, indent=2) + '\n', encoding='utf-8'
+          )
+          PY
+
+      - name: Bloquear se os escopos de segredo estiverem separados
+        if: steps.flow.outputs.callback_discovered == 'true' && env.FLY_API_TOKEN == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path(os.environ['ARTIFACT_DIR'], 'sync.json').write_text(
+              json.dumps({
+                  'callback_discovered': True,
+                  'fly_token_present': False,
+                  'synced_to_fly': False,
+                  'reason': 'FLY_API_TOKEN não está disponível no environment reqsys-power-platform-dev; callback não foi persistido em artifact/output.',
+              }, indent=2) + '\n', encoding='utf-8'
+          )
+          PY
+          echo 'BLOQUEIO: callback descoberto, porém FLY_API_TOKEN não está no mesmo environment seguro.' >&2
+          exit 3
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-powerplatform-trigger-uri-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/teams-powerplatform-trigger-uri-probe/
+          if-no-files-found: warn
+          retention-days: 30
