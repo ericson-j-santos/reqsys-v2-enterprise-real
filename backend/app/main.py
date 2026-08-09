@@ -48,8 +48,9 @@ from app.core.config import settings
 from app.core.envelope import ok
 from app.core.otel import configurar_opentelemetry
 from app.core.runtime_boot import build_health_payload, probe_database
-from app.db import Base, engine
+from app.db import Base, SessionLocal, engine
 from app.middleware.observability import observability_middleware
+from app.services.gestao_ti_seed import reconciliar_servico_reqsys_no_startup
 
 logging.basicConfig(
     level=logging.INFO,
@@ -77,6 +78,14 @@ def warm_database_on_startup() -> None:
     )
     if ready:
         logger.info('database_startup_probe_ok detail=%s', detail)
+        resultado_seed = reconciliar_servico_reqsys_no_startup(SessionLocal)
+        if resultado_seed is not None:
+            logger.info(
+                'gestao_ti_seed_startup_ok acao=%s servico_id=%s vinculos_migrados=%s',
+                resultado_seed.acao,
+                resultado_seed.servico_id,
+                resultado_seed.vinculos_migrados,
+            )
         return
     logger.error('database_startup_probe_failed detail=%s production=%s', detail, settings.is_production)
     if settings.is_production:
