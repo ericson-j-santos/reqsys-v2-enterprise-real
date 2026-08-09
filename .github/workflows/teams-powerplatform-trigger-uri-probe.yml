@@ -60,13 +60,51 @@ jobs:
           Import-Module Microsoft.PowerApps.PowerShell -Force
           Write-Host "Windows PowerShell $($PSVersionTable.PSVersion) com módulos Power Platform carregados."
 
-      - name: Descobrir URI do gatilho via Get-AdminFlow
+      - name: Descobrir URI do gatilho por detalhe administrativo expandido
         id: flow
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           Import-Module Microsoft.PowerApps.Administration.PowerShell -Force
           Import-Module Microsoft.PowerApps.PowerShell -Force
+
+          function Find-PropertyValue {
+            param(
+              [Parameter(Mandatory=$false)] $Node,
+              [Parameter(Mandatory=$true)] [string] $PropertyName
+            )
+            if ($null -eq $Node) { return $null }
+            if ($Node -is [string] -or $Node -is [ValueType]) { return $null }
+
+            if ($Node -is [System.Collections.IDictionary]) {
+              foreach ($key in $Node.Keys) {
+                if ([string]::Equals([string]$key, $PropertyName, [System.StringComparison]::OrdinalIgnoreCase)) {
+                  $value = $Node[$key]
+                  if ($null -ne $value -and -not [string]::IsNullOrWhiteSpace([string]$value)) { return $value }
+                }
+                $found = Find-PropertyValue -Node $Node[$key] -PropertyName $PropertyName
+                if ($null -ne $found) { return $found }
+              }
+              return $null
+            }
+
+            foreach ($property in $Node.PSObject.Properties) {
+              if ([string]::Equals($property.Name, $PropertyName, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $value = $property.Value
+                if ($null -ne $value -and -not [string]::IsNullOrWhiteSpace([string]$value)) { return $value }
+              }
+              $found = Find-PropertyValue -Node $property.Value -PropertyName $PropertyName
+              if ($null -ne $found) { return $found }
+            }
+
+            if ($Node -is [System.Collections.IEnumerable]) {
+              foreach ($item in $Node) {
+                $found = Find-PropertyValue -Node $item -PropertyName $PropertyName
+                if ($null -ne $found) { return $found }
+              }
+            }
+            return $null
+          }
 
           Add-PowerAppsAccount `
             -Endpoint prod `
@@ -101,32 +139,54 @@ jobs:
 
           $flow = $matches[0]
           $flowName = [string]$flow.FlowName
-          $flowTriggerUri = $null
-          if ($null -ne $flow.Internal -and $null -ne $flow.Internal.properties) {
-            $flowTriggerUri = [string]$flow.Internal.properties.flowTriggerUri
+          if ([string]::IsNullOrWhiteSpace($flowName)) {
+            throw 'BLOQUEIO: FlowName não retornado para o fluxo localizado.'
           }
 
-          if ([string]::IsNullOrWhiteSpace($flowTriggerUri) -and -not [string]::IsNullOrWhiteSpace($flowName)) {
+          $flowTriggerUri = Find-PropertyValue -Node $flow -PropertyName 'flowTriggerUri'
+          $source = 'Get-AdminFlow-summary'
+
+          if ([string]::IsNullOrWhiteSpace([string]$flowTriggerUri)) {
             $detail = Get-AdminFlow -EnvironmentName $environmentName -FlowName $flowName
-            if ($null -ne $detail.Internal -and $null -ne $detail.Internal.properties) {
-              $flowTriggerUri = [string]$detail.Internal.properties.flowTriggerUri
+            $flowTriggerUri = Find-PropertyValue -Node $detail -PropertyName 'flowTriggerUri'
+            $source = 'Get-AdminFlow-detail'
+          }
+
+          if ([string]::IsNullOrWhiteSpace([string]$flowTriggerUri)) {
+            $adminModule = Get-Module Microsoft.PowerApps.Administration.PowerShell
+            if ($null -eq $adminModule) { throw 'Módulo administrativo não está carregado.' }
+
+            $expanded = & $adminModule {
+              param($EnvironmentName, $FlowName)
+              $route = "https://{flowEndpoint}/providers/Microsoft.ProcessSimple/scopes/admin/environments/{environment}/flows/{flowName}?api-version={apiVersion}&`$expand=definition" `
+                | ReplaceMacro -Macro '{environment}' -Value $EnvironmentName `
+                | ReplaceMacro -Macro '{flowName}' -Value $FlowName
+              InvokeApi -Method GET -Route $route -ApiVersion '2016-11-01'
+            } $environmentName $flowName
+
+            if ($expanded -is [string]) {
+              try { $expanded = $expanded | ConvertFrom-Json } catch { }
             }
+            $flowTriggerUri = Find-PropertyValue -Node $expanded -PropertyName 'flowTriggerUri'
+            $source = 'admin-expanded-definition'
           }
 
           $result = [ordered]@{
             environment_resolved = $true
             flow_resolved = $true
-            flow_name_present = -not [string]::IsNullOrWhiteSpace($flowName)
-            flow_trigger_uri_present = -not [string]::IsNullOrWhiteSpace($flowTriggerUri)
+            flow_name_present = $true
+            flow_trigger_uri_present = -not [string]::IsNullOrWhiteSpace([string]$flowTriggerUri)
+            callback_source = $source
             fly_token_present_in_powerplatform_environment = -not [string]::IsNullOrWhiteSpace($env:FLY_API_TOKEN)
           }
           $result | ConvertTo-Json | Set-Content -Encoding UTF8 "$env:ARTIFACT_DIR/probe.json"
           $result | ConvertTo-Json -Compress | Write-Host
 
-          if ([string]::IsNullOrWhiteSpace($flowTriggerUri)) {
-            throw 'BLOQUEIO: Get-AdminFlow autenticou e localizou o fluxo, mas não expôs flowTriggerUri.'
+          if ([string]::IsNullOrWhiteSpace([string]$flowTriggerUri)) {
+            throw 'BLOQUEIO: consulta administrativa expandida localizou o fluxo, mas não expôs flowTriggerUri.'
           }
 
+          $flowTriggerUri = [string]$flowTriggerUri
           Write-Output "::add-mask::$flowTriggerUri"
           $flowTriggerUri | Set-Content -NoNewline -Encoding UTF8 "$env:RUNNER_TEMP/teams_callback_url"
           "callback_discovered=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding ascii -Append
