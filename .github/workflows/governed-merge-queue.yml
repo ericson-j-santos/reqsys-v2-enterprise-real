@@ -241,13 +241,15 @@ jobs:
           poll_seconds="$(jq -r '.poll_seconds' "$policy")"
 
           for attempt in $(seq 1 "$max_attempts"); do
-            current_sha="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid')"
+            current_sha="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid' 2>/dev/null)" \
+              || { echo "Aviso: falha transitória ao obter SHA do PR na tentativa $attempt; retentando."; sleep "$poll_seconds"; continue; }
             gh api --method GET \
               "repos/${GITHUB_REPOSITORY}/actions/runs" \
               -f head_sha="$EVALUATED_SHA" \
               -f event="pull_request" \
               -f per_page=100 \
-              > .tmp/current-sha-stability/workflow-runs.json
+              > .tmp/current-sha-stability/workflow-runs.json \
+              || { echo "Aviso: falha transitória na API do GitHub na tentativa $attempt; retentando."; sleep "$poll_seconds"; continue; }
 
             set +e
             python scripts/evaluate_current_sha_workflow_stability.py \
