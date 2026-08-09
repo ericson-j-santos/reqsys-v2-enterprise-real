@@ -241,31 +241,15 @@ jobs:
           poll_seconds="$(jq -r '.poll_seconds' "$policy")"
 
           for attempt in $(seq 1 "$max_attempts"); do
-            current_sha="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid')"
-            api_ok=false
-            for api_retry in 1 2 3; do
-              if gh api --method GET \
-                "repos/${GITHUB_REPOSITORY}/actions/runs" \
-                -f head_sha="$EVALUATED_SHA" \
-                -f event="pull_request" \
-                -f per_page=100 \
-                > .tmp/current-sha-stability/workflow-runs.json 2>/tmp/gh_api_err; then
-                api_ok=true
-                break
-              fi
-              err_msg="$(cat /tmp/gh_api_err)"
-              if echo "$err_msg" | grep -qE '(502|503|429|rate limit)'; then
-                echo "Aviso: gh api falhou com erro transiente (tentativa $api_retry/3): $err_msg"
-                sleep $((api_retry * 10))
-              else
-                echo "Erro permanente na chamada gh api: $err_msg"
-                break
-              fi
-            done
-            if [[ "$api_ok" == "false" ]]; then
-              echo "gh api falhou após 3 tentativas; abortando."
-              exit 1
-            fi
+            current_sha="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid' 2>/dev/null)" \
+              || { echo "Aviso: falha transitória ao obter SHA do PR na tentativa $attempt; retentando."; sleep "$poll_seconds"; continue; }
+            gh api --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/runs" \
+              -f head_sha="$EVALUATED_SHA" \
+              -f event="pull_request" \
+              -f per_page=100 \
+              > .tmp/current-sha-stability/workflow-runs.json \
+              || { echo "Aviso: falha transitória na API do GitHub na tentativa $attempt; retentando."; sleep "$poll_seconds"; continue; }
 
             set +e
             python scripts/evaluate_current_sha_workflow_stability.py \
