@@ -117,23 +117,65 @@ jobs:
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
           echo "html_url=$HTML_URL" >> "$GITHUB_OUTPUT"
 
-      - name: Validar checks obrigatórios do PR superior
+      - name: Validar check-runs reais do SHA
         shell: bash
         env:
-          PR_NUMBER: ${{ steps.validate.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
         run: |
           set -euo pipefail
 
-          set +e
-          gh pr checks "$PR_NUMBER"             --repo "$GITHUB_REPOSITORY"             --required             --json name,state,bucket,link             > "$EVIDENCE_DIR/required-checks.json"
-          checks_exit=$?
-          set -e
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: $API_VERSION" \
+            "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" \
+            > "$EVIDENCE_DIR/check-runs.json"
 
-          if [ "$checks_exit" -ne 0 ]; then
-            echo "Bloqueado: há checks obrigatórios ausentes, pendentes ou com falha." >&2
-            jq . "$EVIDENCE_DIR/required-checks.json" || true
+          TOTAL="$(jq '.total_count' "$EVIDENCE_DIR/check-runs.json")"
+          PENDING="$(jq '[.check_runs[] | select(.status != "completed")] | length' "$EVIDENCE_DIR/check-runs.json")"
+          BLOCKING="$(jq '[.check_runs[] | select(
+            .conclusion == "failure" or
+            .conclusion == "cancelled" or
+            .conclusion == "timed_out" or
+            .conclusion == "action_required" or
+            .conclusion == "startup_failure" or
+            .conclusion == "stale"
+          )] | length' "$EVIDENCE_DIR/check-runs.json")"
+
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "Bloqueado: nenhum check-run foi encontrado para o SHA $HEAD_SHA." >&2
             exit 1
           fi
+
+          if [ "$PENDING" -ne 0 ]; then
+            echo "Bloqueado: $PENDING check-run(s) ainda estão pendentes." >&2
+            jq '[.check_runs[] | select(.status != "completed") | {name, status, conclusion, html_url}]' \
+              "$EVIDENCE_DIR/check-runs.json"
+            exit 1
+          fi
+
+          if [ "$BLOCKING" -ne 0 ]; then
+            echo "Bloqueado: $BLOCKING check-run(s) terminaram com conclusão impeditiva." >&2
+            jq '[.check_runs[] | select(
+              .conclusion == "failure" or
+              .conclusion == "cancelled" or
+              .conclusion == "timed_out" or
+              .conclusion == "action_required" or
+              .conclusion == "startup_failure" or
+              .conclusion == "stale"
+            ) | {name, status, conclusion, html_url}]' "$EVIDENCE_DIR/check-runs.json"
+            exit 1
+          fi
+
+          jq '{
+            total_count,
+            conclusions: (
+              [.check_runs[].conclusion]
+              | group_by(.)
+              | map({key: .[0], value: length})
+              | from_entries
+            )
+          }' "$EVIDENCE_DIR/check-runs.json" \
+            > "$EVIDENCE_DIR/check-runs-summary.json"
 
       - name: Solicitar merge assíncrono
         id: request
@@ -222,18 +264,17 @@ jobs:
           PR_URL: ${{ steps.pr.outputs.html_url }}
         run: |
           {
-            echo "# Merge assíncrono governado"
-            echo
-            echo "| Campo | Valor |"
-            echo "|---|---|"
-            echo "| Correlation ID | `$CORRELATION_ID` |"
-            echo "| PR superior | [#$PR_NUMBER]($PR_URL) |"
-            echo "| SHA esperado | `${{ steps.validate.outputs.expected_head_sha }}` |"
-            echo "| Método | `${{ inputs.merge_method }}` |"
-            echo "| Solicitação | `${{ steps.request.outcome }}` |"
-            echo "| Acompanhamento | `${{ steps.request.outputs.already_merged == 'true' && 'already_merged' || 'polling_completed' }}` |"
-            echo
-            echo "O endpoint assíncrono avalia atomicamente todos os PRs da pilha até o PR informado."
+            printf '%s\n' '# Merge assíncrono governado'
+            printf '\n'
+            printf '%s\n' '| Campo | Valor |'
+            printf '%s\n' '|---|---|'
+            printf '| Correlation ID | \`%s\` |\n' "$CORRELATION_ID"
+            printf '| PR superior | [#%s](%s) |\n' "$PR_NUMBER" "$PR_URL"
+            printf '| SHA esperado | \`%s\` |\n' '${{ steps.validate.outputs.expected_head_sha }}'
+            printf '| Método | \`%s\` |\n' '${{ inputs.merge_method }}'
+            printf '| Solicitação | \`%s\` |\n' '${{ steps.request.outcome }}'
+            printf '| Acompanhamento | \`%s\` |\n' "${{ steps.request.outputs.already_merged == 'true' && 'already_merged' || 'polling_completed' }}"
+            printf '\n%s\n' 'O endpoint assíncrono avalia atomicamente todos os PRs da pilha até o PR informado.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publicar evidências
