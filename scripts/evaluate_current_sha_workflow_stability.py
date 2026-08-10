@@ -55,10 +55,14 @@ def evaluate_stability(
 ) -> dict[str, Any]:
     required = policy.get("required_workflows") or []
     allowed = set(policy.get("allowed_conclusions") or ["success", "neutral", "skipped"])
+    optional_when_not_registered = set(policy.get("optional_when_not_registered") or [])
     if not isinstance(required, list) or not required or not all(isinstance(item, str) and item.strip() for item in required):
         raise ValueError("policy required_workflows must be a non-empty string list")
     if not allowed:
         raise ValueError("policy allowed_conclusions must not be empty")
+    unknown_optional = optional_when_not_registered.difference(required)
+    if unknown_optional:
+        raise ValueError("policy optional_when_not_registered must be a subset of required_workflows")
 
     runs = runs_payload.get("workflow_runs") or []
     if not isinstance(runs, list):
@@ -90,11 +94,13 @@ def evaluate_stability(
         elif conclusion not in allowed:
             failed.append({"workflow": workflow, "conclusion": conclusion})
 
+    blocking_missing = [workflow for workflow in missing if workflow not in optional_when_not_registered]
+    tolerated_missing = [workflow for workflow in missing if workflow in optional_when_not_registered]
     same_sha = bool(evaluated_sha) and evaluated_sha == current_sha
-    stable = same_sha and not missing and not incomplete and not failed
+    stable = same_sha and not blocking_missing and not incomplete and not failed
     if not same_sha:
         decision = "head_sha_changed"
-    elif missing:
+    elif blocking_missing:
         decision = "required_workflows_not_registered"
     elif incomplete:
         decision = "required_workflows_incomplete"
@@ -115,11 +121,13 @@ def evaluate_stability(
         "decision": decision,
         "required_workflows": required,
         "allowed_conclusions": sorted(allowed),
-        "missing_workflows": missing,
+        "missing_workflows": blocking_missing,
+        "tolerated_missing_workflows": tolerated_missing,
+        "optional_when_not_registered": sorted(optional_when_not_registered),
         "incomplete_workflows": incomplete,
         "failed_workflows": failed,
         "observed_workflows": observed,
-        "absence_is_success": False,
+        "absence_is_success": bool(tolerated_missing) and not blocking_missing,
         "production_touched": False,
     }
 
