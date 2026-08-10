@@ -17,5 +17,9 @@
   "poll_seconds": 10,
   "max_attempts": 60,
   "absence_is_success": false,
-  "production_touched": false
+  "production_touched": false,
+  "optional_when_not_registered": [
+    "PR Quality Review",
+    "Test Quality Gate — Padrão Ouro"
+  ]
 }
