@@ -1,0 +1,246 @@
+name: Merge assíncrono governado de pilha
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Número do PR superior da pilha a integrar"
+        required: true
+        type: string
+      expected_head_sha:
+        description: "SHA esperado do PR superior; evita merge após alteração"
+        required: true
+        type: string
+      merge_method:
+        description: "Método de integração"
+        required: true
+        default: squash
+        type: choice
+        options:
+          - squash
+          - merge
+          - rebase
+      confirm_entire_stack:
+        description: "Confirmo que todos os PRs até o informado podem ser integrados atomicamente"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: read
+  checks: read
+  actions: read
+
+concurrency:
+  group: stacked-pr-async-merge-${{ inputs.pr_number }}
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  API_VERSION: "2026-03-10"
+  EVIDENCE_DIR: artifacts/stacked-pr-async-merge
+  CORRELATION_ID: stacked-pr-merge-${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  merge-stack:
+    name: Validar e integrar pilha
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validar confirmação e entradas
+        id: validate
+        shell: bash
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+          CONFIRM_ENTIRE_STACK: ${{ inputs.confirm_entire_stack }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+
+          if ! [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Número de PR inválido: $PR_NUMBER" >&2
+            exit 1
+          fi
+
+          if ! [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "SHA esperado inválido; informe os 40 caracteres do head atual." >&2
+            exit 1
+          fi
+
+          if [ "$CONFIRM_ENTIRE_STACK" != "true" ]; then
+            echo "Bloqueado: é obrigatório confirmar o merge atômico da pilha." >&2
+            exit 1
+          fi
+
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "expected_head_sha=${EXPECTED_HEAD_SHA,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Capturar estado atual do PR
+        id: pr
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.validate.outputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ steps.validate.outputs.expected_head_sha }}
+        run: |
+          set -euo pipefail
+
+          gh api             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: $API_VERSION"             "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER"             > "$EVIDENCE_DIR/pr-before.json"
+
+          STATE="$(jq -r '.state' "$EVIDENCE_DIR/pr-before.json")"
+          DRAFT="$(jq -r '.draft' "$EVIDENCE_DIR/pr-before.json")"
+          HEAD_SHA="$(jq -r '.head.sha' "$EVIDENCE_DIR/pr-before.json")"
+          MERGEABLE="$(jq -r '.mergeable' "$EVIDENCE_DIR/pr-before.json")"
+          HTML_URL="$(jq -r '.html_url' "$EVIDENCE_DIR/pr-before.json")"
+
+          if [ "$STATE" != "open" ]; then
+            echo "Bloqueado: PR $PR_NUMBER não está aberto." >&2
+            exit 1
+          fi
+
+          if [ "$DRAFT" = "true" ]; then
+            echo "Bloqueado: PR $PR_NUMBER ainda é draft." >&2
+            exit 1
+          fi
+
+          if [ "$HEAD_SHA" != "$EXPECTED_HEAD_SHA" ]; then
+            echo "Bloqueado: SHA atual ($HEAD_SHA) difere do SHA confirmado ($EXPECTED_HEAD_SHA)." >&2
+            exit 1
+          fi
+
+          if [ "$MERGEABLE" != "true" ]; then
+            echo "Bloqueado: mergeable=$MERGEABLE. Aguarde o GitHub calcular ou corrija conflitos." >&2
+            exit 1
+          fi
+
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "html_url=$HTML_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Validar checks obrigatórios do PR superior
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.validate.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          set +e
+          gh pr checks "$PR_NUMBER"             --repo "$GITHUB_REPOSITORY"             --required             --json name,state,bucket,link             > "$EVIDENCE_DIR/required-checks.json"
+          checks_exit=$?
+          set -e
+
+          if [ "$checks_exit" -ne 0 ]; then
+            echo "Bloqueado: há checks obrigatórios ausentes, pendentes ou com falha." >&2
+            jq . "$EVIDENCE_DIR/required-checks.json" || true
+            exit 1
+          fi
+
+      - name: Solicitar merge assíncrono
+        id: request
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.validate.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          MERGE_METHOD: ${{ inputs.merge_method }}
+        run: |
+          set -euo pipefail
+
+          jq -n             --arg sha "$HEAD_SHA"             --arg merge_method "$MERGE_METHOD"             '{
+              sha: $sha,
+              merge_method: $merge_method,
+              merge_action: "default",
+              commit_title: ("Merge governado da pilha até o PR #" + env.PR_NUMBER),
+              commit_message: ("correlation_id=" + env.CORRELATION_ID)
+            }' > "$EVIDENCE_DIR/request.json"
+
+          set +e
+          gh api             --method PUT             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: $API_VERSION"             "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge-async"             --input "$EVIDENCE_DIR/request.json"             > "$EVIDENCE_DIR/response.json"             2> "$EVIDENCE_DIR/request.stderr"
+          request_exit=$?
+          set -e
+
+          UUID="$(jq -r '.details.uuid // .uuid // empty' "$EVIDENCE_DIR/response.json" 2>/dev/null || true)"
+          STATUS="$(jq -r '.status // empty' "$EVIDENCE_DIR/response.json" 2>/dev/null || true)"
+
+          if [ "$STATUS" = "merged" ]; then
+            echo "already_merged=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -z "$UUID" ]; then
+            echo "Falha ao solicitar merge assíncrono (exit=$request_exit)." >&2
+            cat "$EVIDENCE_DIR/request.stderr" >&2
+            jq . "$EVIDENCE_DIR/response.json" 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "uuid=$UUID" >> "$GITHUB_OUTPUT"
+          echo "already_merged=false" >> "$GITHUB_OUTPUT"
+
+      - name: Acompanhar resultado assíncrono
+        if: steps.request.outputs.already_merged != 'true'
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.validate.outputs.pr_number }}
+          UUID: ${{ steps.request.outputs.uuid }}
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 30); do
+            gh api               -H "Accept: application/vnd.github+json"               -H "X-GitHub-Api-Version: $API_VERSION"               "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge-async/$UUID"               > "$EVIDENCE_DIR/result.json"
+
+            STATUS="$(jq -r '.status' "$EVIDENCE_DIR/result.json")"
+            echo "Tentativa $attempt/30: status=$STATUS"
+
+            case "$STATUS" in
+              merged)
+                exit 0
+                ;;
+              failed)
+                echo "Merge assíncrono recusado pelas regras do repositório." >&2
+                jq . "$EVIDENCE_DIR/result.json"
+                exit 1
+                ;;
+              pending)
+                sleep 10
+                ;;
+              *)
+                echo "Estado assíncrono desconhecido: $STATUS" >&2
+                jq . "$EVIDENCE_DIR/result.json"
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "Timeout: merge não terminou em 5 minutos." >&2
+          exit 1
+
+      - name: Publicar resumo
+        if: always()
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.validate.outputs.pr_number }}
+          PR_URL: ${{ steps.pr.outputs.html_url }}
+        run: |
+          {
+            echo "# Merge assíncrono governado"
+            echo
+            echo "| Campo | Valor |"
+            echo "|---|---|"
+            echo "| Correlation ID | `$CORRELATION_ID` |"
+            echo "| PR superior | [#$PR_NUMBER]($PR_URL) |"
+            echo "| SHA esperado | `${{ steps.validate.outputs.expected_head_sha }}` |"
+            echo "| Método | `${{ inputs.merge_method }}` |"
+            echo "| Solicitação | `${{ steps.request.outcome }}` |"
+            echo "| Acompanhamento | `${{ steps.request.outputs.already_merged == 'true' && 'already_merged' || 'polling_completed' }}` |"
+            echo
+            echo "O endpoint assíncrono avalia atomicamente todos os PRs da pilha até o PR informado."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar evidências
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stacked-pr-async-merge-${{ inputs.pr_number }}-${{ github.run_id }}
+          path: artifacts/stacked-pr-async-merge/
+          if-no-files-found: warn
+          retention-days: 30
