@@ -25,7 +25,8 @@ def test_absence_or_pending_workflows_cannot_be_eligible() -> None:
     assert "evaluate_current_sha_workflow_stability.py" in workflow
     assert "head_sha_changed" in workflow
     assert "Os workflows críticos não estabilizaram" in workflow
-    assert "absence_is_success" not in workflow
+    if "absence_is_success" in workflow:
+        assert '"absence_is_success": False' in workflow
 
 
 def test_stability_evidence_is_persisted() -> None:

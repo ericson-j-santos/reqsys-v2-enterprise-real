@@ -337,8 +337,6 @@ jobs:
           )
           required = policy.get("required_workflows") or []
           allowed = policy.get("allowed_conclusions") or ["success", "neutral", "skipped"]
-          absence_key = "absence" + "_is_success"
-
           report = {
               "schema_version": "1.0.0",
               "contract": "reqsys-current-sha-workflow-stability",
@@ -354,7 +352,7 @@ jobs:
               "incomplete_workflows": [],
               "failed_workflows": [],
               "observed_workflows": [],
-              absence_key: False,
+              "absence_is_success": False,
               "production_touched": False,
               "notes": [
                   "Artifact current-sha-workflow-stability ausente na etapa final; bloqueio mantido por fallback governado.",
