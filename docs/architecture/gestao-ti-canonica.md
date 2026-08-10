@@ -51,3 +51,12 @@ O vínculo fica em tabela própria e possui unicidade em `requisito_id`. Assim, 
 ## Reversibilidade
 
 A alteração é aditiva. A reversão da aplicação remove apenas o registro das novas rotas e modelos. A reversão física das tabelas deve ocorrer somente depois de confirmar que nenhum consumidor usa os contratos.
+
+## Identidade canônica entre ambientes
+
+O serviço `REQSYS` usa o UUID fixo `bde5fd56-5b4f-4ee4-8d64-5aa5f755e3ef` em
+SQLite, SQL Server e demais bancos suportados. No startup, após a prova de
+conectividade, uma reconciliação transacional cria a semente ausente ou migra
+vínculos de um UUID legado. A repetição é idempotente e conflitos entre código
+e UUID interrompem somente a reconciliação, com log estruturado, preservando a
+disponibilidade do runtime para diagnóstico.

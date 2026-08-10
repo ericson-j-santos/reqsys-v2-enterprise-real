@@ -25,7 +25,8 @@ def test_absence_or_pending_workflows_cannot_be_eligible() -> None:
     assert "evaluate_current_sha_workflow_stability.py" in workflow
     assert "head_sha_changed" in workflow
     assert "Os workflows críticos não estabilizaram" in workflow
-    assert "absence_is_success" not in workflow
+    if "absence_is_success" in workflow:
+        assert '"absence_is_success": False' in workflow
 
 
 def test_stability_evidence_is_persisted() -> None:
@@ -33,3 +34,11 @@ def test_stability_evidence_is_persisted() -> None:
     assert "current-sha-stability.json" in workflow
     assert "current-sha-workflow-stability" in workflow
     assert "current_sha_stability: $sha_stability[0]" in workflow
+
+
+def test_final_gate_tolerates_missing_stability_artifact() -> None:
+    workflow = workflow_path().read_text(encoding="utf-8")
+    assert "Baixar evidência de estabilidade do SHA atual" in workflow
+    assert "continue-on-error: true" in workflow
+    assert "Garantir fallback de estabilidade do SHA" in workflow
+    assert "stability_artifact_missing" in workflow
