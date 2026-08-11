@@ -1,0 +1,557 @@
+{
+  "status": "passed",
+  "summary": {
+    "scanned_files": 1523,
+    "blocking": 0,
+    "warnings": 78,
+    "findings": 78
+  },
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "docker-compose.dotnet.yml",
+      "line": 6,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "frontend-vuetify/index.html",
+      "line": 9,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/testar_urls_ambiente.sh",
+      "line": 9,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/testar_urls_ambiente.sh",
+      "line": 10,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/testar_urls_ambiente.sh",
+      "line": 11,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/reqsys_free_tier_backup.py",
+      "line": 97,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/pr_ci_watch.py",
+      "line": 246,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/workflow_command_center.py",
+      "line": 293,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/bootstrap_reqsys_r2_backup.py",
+      "line": 122,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/auto_rerun_governed.py",
+      "line": 224,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/runtime_production_smoke_governed.py",
+      "line": 64,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/runtime_production_smoke_governed.py",
+      "line": 65,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/build_bacen_backup_observability.py",
+      "line": 303,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/workflow_auto_remediation.py",
+      "line": 183,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/update_teams_v2_adaptive_card.py",
+      "line": 119,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/validate_executive_promotion_advisor_comparative_public_smoke_trend_card.py",
+      "line": 16,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/publicar_ambiente.sh",
+      "line": 11,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/publicar_ambiente.sh",
+      "line": 12,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/publicar_ambiente.sh",
+      "line": 13,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/actions_auto_operator.py",
+      "line": 206,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/trilha_e_arquitetura_viva.py",
+      "line": 45,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/coordenador_status_consolidator.py",
+      "line": 980,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/evaluate_github_workflow_token_readiness.py",
+      "line": 52,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_SECRET_HARDCODED",
+      "path": "scripts/executar-local.sh",
+      "line": 89,
+      "message": "Possível segredo/token hardcoded."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/vault_setup.py",
+      "line": 119,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_CONNECTION_STRING",
+      "path": "scripts/verificar_movimento_email_fontes.py",
+      "line": 79,
+      "message": "Possível connection string exposta."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/operational_governance_orchestrator.py",
+      "line": 263,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/smoke_executive_promotion_advisor_homologation_trend_public.py",
+      "line": 34,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/operational_analytics_engine.py",
+      "line": 290,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/notify_reqsys_logs_teams.py",
+      "line": 332,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/cutover_fly_postgres.py",
+      "line": 178,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/cutover_fly_postgres.py",
+      "line": 223,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/validate_public_runtime.py",
+      "line": 49,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/validate_public_runtime.py",
+      "line": 50,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/validate_executive_sync_stability_index_card.py",
+      "line": 22,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/smoke_runtime_executive_public_endpoint.py",
+      "line": 58,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/smoke_runtime_executive_public_endpoint.py",
+      "line": 59,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/notify_hitl_approval_teams.py",
+      "line": 122,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/configurar_fly_auth_azure.py",
+      "line": 175,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/github_actions_history_lake.py",
+      "line": 300,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_SECRET_HARDCODED",
+      "path": "scripts/trigger_gitlab_pipeline.py",
+      "line": 8,
+      "message": "Possível segredo/token hardcoded."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/validate_observability_e2e.py",
+      "line": 48,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/validate_observability_e2e.py",
+      "line": 49,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": "scripts/evaluate_backup_provider_readiness.py",
+      "line": 79,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/smoke_executive_promotion_advisor_comparative_trend_public_sync.py",
+      "line": 20,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "scripts/smoke_executive_promotion_advisor_comparative_trend_public_sync.py",
+      "line": 27,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_CORS_WILDCARD",
+      "path": "tools/validate_nginx_security.py",
+      "line": 32,
+      "message": "Possível CORS wildcard."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "LGPD_PII_LOGGING",
+      "path": ".github/workflows/github-workflow-permission-readiness-watch.yml",
+      "line": 165,
+      "message": "Possível log de PII/segredo."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_SECRET_HARDCODED",
+      "path": ".github/workflows/padrao-ouro-delivery-automation.yml",
+      "line": 76,
+      "message": "Possível segredo/token hardcoded."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": ".github/workflows/living-architecture-traceability.yml",
+      "line": 95,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_SECRET_HARDCODED",
+      "path": ".github/workflows/workflow-flakiness-inventory.yml",
+      "line": 28,
+      "message": "Possível segredo/token hardcoded."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_SECRET_HARDCODED",
+      "path": ".github/workflows/required-checks-materialization-inventory.yml",
+      "line": 30,
+      "message": "Possível segredo/token hardcoded."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_SECRET_HARDCODED",
+      "path": ".github/workflows/reqsys-backup-provider-readiness.yml",
+      "line": 100,
+      "message": "Possível segredo/token hardcoded."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_SECRET_HARDCODED",
+      "path": ".github/workflows/reqsys-backup-provider-readiness.yml",
+      "line": 123,
+      "message": "Possível segredo/token hardcoded."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": ".github/workflows/teams-commit-notification.yml",
+      "line": 164,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend-dotnet/src/ReqSys.Api/appsettings.json",
+      "line": 8,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "services/environment-observability-api/compose.observability.dev.yml",
+      "line": 7,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "services/environment-observability-api/compose.observability.dev.yml",
+      "line": 38,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "services/environment-observability-api/observability/dev/grafana-provisioning/datasources/prometheus.yml",
+      "line": 8,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "tools/geradores/gerar_servicos_email_teams.py",
+      "line": 192,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "infra/reverse-proxy/scripts/linux-apache-apply.sh",
+      "line": 75,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/services/automatic_diagram_server.py",
+      "line": 155,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/services/automatic_diagram_server.py",
+      "line": 156,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/services/automatic_diagram_server.py",
+      "line": 157,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/services/automatic_diagram_server.py",
+      "line": 158,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/services/teams_notification_solution_factory.py",
+      "line": 251,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/services/teams_gateway.py",
+      "line": 250,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/services/hub_lowcode.py",
+      "line": 612,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/services/teams_status_cards.py",
+      "line": 90,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/api/sistema.py",
+      "line": 82,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/api/sistema.py",
+      "line": 112,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/api/sistema.py",
+      "line": 137,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/api/sistema.py",
+      "line": 138,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/api/sistema.py",
+      "line": 139,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/api/relatorios.py",
+      "line": 73,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/api/dashboard.py",
+      "line": 96,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/api/dashboard.py",
+      "line": 97,
+      "message": "URL HTTP insegura fora de localhost."
+    },
+    {
+      "severity": "MEDIUM",
+      "code": "SEC_HTTP_INSECURE",
+      "path": "backend/app/core/config.py",
+      "line": 40,
+      "message": "URL HTTP insegura fora de localhost."
+    }
+  ]
+}
