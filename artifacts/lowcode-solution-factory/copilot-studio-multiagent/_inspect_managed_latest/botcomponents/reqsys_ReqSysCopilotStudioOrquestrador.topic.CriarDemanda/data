@@ -1,0 +1,65 @@
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    displayName: Criar demanda
+    triggerQueries:
+      - quero registrar uma demanda
+      - preciso abrir uma solicitacao
+      - criar nova demanda
+      - abrir demanda no reqsys
+
+  actions:
+    - kind: Question
+      id: question_titulo
+      variable: Topic.Titulo
+      prompt: Qual o titulo da demanda?
+      entity: StringPrebuiltEntity
+
+    - kind: Question
+      id: question_resultado
+      variable: Topic.ResultadoEsperado
+      prompt: Qual o resultado esperado?
+      entity: StringPrebuiltEntity
+
+    - kind: Question
+      id: question_origem
+      variable: Topic.Origem
+      prompt: Qual a origem?
+      entity: StringPrebuiltEntity
+
+    - kind: ConditionGroup
+      id: conditionGroup_rbac
+      conditions:
+        - id: conditionItem_rbac
+          condition: =User.Papel <> "ReqSys Solicitante" && User.Papel <> "ReqSys Administrador Low-Code"
+          actions:
+            - kind: SendActivity
+              id: sendMessage_unauthorized
+              activity: Acao nao autorizada. Papel minimo exigido: ReqSys Solicitante ou ReqSys Administrador Low-Code.
+
+            - kind: EndDialog
+              id: endDialog_unauthorized
+
+      elseActions:
+        - kind: Question
+          id: question_confirmacao
+          variable: Topic.Confirmacao
+          prompt: Confirma a execucao de criar demanda?
+          entity: BooleanPrebuiltEntity
+
+        - kind: InvokeFlowAction
+          id: invokeFlow_criar_demanda
+          flow: reqsys_ReqSysIntakeDeDemanda
+          input:
+            titulo: =Topic.Titulo
+            resultado_esperado: =Topic.ResultadoEsperado
+            origem: =Topic.Origem
+            correlation_id: =System.ConversationId
+          output:
+            resultado: Topic.ResultadoFlow
+
+        - kind: SendActivity
+          id: sendMessage_success
+          activity: Demanda registrada com sucesso. Correlation-Id: {System.ConversationId}

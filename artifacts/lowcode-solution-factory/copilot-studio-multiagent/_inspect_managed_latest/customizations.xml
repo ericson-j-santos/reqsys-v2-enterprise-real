@@ -1,0 +1,133 @@
+<ImportExportXml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26065.151" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26065.00151">
+  <Entities></Entities>
+  <Roles></Roles>
+  <Workflows>
+    <Workflow WorkflowId="{768fde7b-db2e-500f-8be1-7b4cbf1ed31e}" Name="ReqSys - Release governance" Description="ReqSys Copilot Studio multiagent P0 - copilot_release_go_no_go">
+      <JsonFileName>/Workflows/ReqSys-Releasegovernance-768FDE7B-DB2E-500F-8BE1-7B4CBF1ED31E.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1046" description="ReqSys - Release governance" />
+      </LocalizedNames>
+      <Descriptions>
+        <Description languagecode="1046" description="ReqSys Copilot Studio multiagent P0 - copilot_release_go_no_go" />
+      </Descriptions>
+    </Workflow>
+    <Workflow WorkflowId="{780422ae-8c74-57fc-8895-04f7f3513c33}" Name="ReqSys - Aprovacao de requisito" Description="ReqSys Copilot Studio multiagent P0 - copilot_aprovacao_decidida">
+      <JsonFileName>/Workflows/ReqSys-Aprovacaoderequisito-780422AE-8C74-57FC-8895-04F7F3513C33.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1046" description="ReqSys - Aprovacao de requisito" />
+      </LocalizedNames>
+      <Descriptions>
+        <Description languagecode="1046" description="ReqSys Copilot Studio multiagent P0 - copilot_aprovacao_decidida" />
+      </Descriptions>
+    </Workflow>
+    <Workflow WorkflowId="{69a54f8b-caec-53c4-9f5b-887230cf43d2}" Name="ReqSys - Consulta de status" Description="ReqSys Copilot Studio multiagent P0 - copilot_status_consultado">
+      <JsonFileName>/Workflows/ReqSys-Consultadestatus-69A54F8B-CAEC-53C4-9F5B-887230CF43D2.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1046" description="ReqSys - Consulta de status" />
+      </LocalizedNames>
+      <Descriptions>
+        <Description languagecode="1046" description="ReqSys Copilot Studio multiagent P0 - copilot_status_consultado" />
+      </Descriptions>
+    </Workflow>
+    <Workflow WorkflowId="{ae83d82a-8e04-5eb4-bf4a-dfadd5443a7a}" Name="ReqSys - Intake de demanda" Description="ReqSys Copilot Studio multiagent P0 - copilot_demanda_criada">
+      <JsonFileName>/Workflows/ReqSys-Intakededemanda-AE83D82A-8E04-5EB4-BF4A-DFADD5443A7A.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1046" description="ReqSys - Intake de demanda" />
+      </LocalizedNames>
+      <Descriptions>
+        <Description languagecode="1046" description="ReqSys Copilot Studio multiagent P0 - copilot_demanda_criada" />
+      </Descriptions>
+    </Workflow>
+  </Workflows>
+  <FieldSecurityProfiles></FieldSecurityProfiles>
+  <Templates />
+  <EntityMaps />
+  <EntityRelationships />
+  <OrganizationSettings />
+  <optionsets />
+  <CustomControls />
+  <EntityDataProviders />
+  <Languages>
+    <Language>1046</Language>
+  </Languages>
+</ImportExportXml>
