@@ -22,13 +22,13 @@ from app.schemas.teams_recipient_policy import (
     TeamsNotificationRecipientUpdate,
     TeamsRecipientPolicyMessageRequest,
 )
+from app.services.auditoria import registrar_evento
 from app.services.teams_flow_bot_provisioning import (
     buscar_flows_por_nome,
     clonar_flow_para_novo_dono,
     listar_workflows_da_solution,
     promover_flow_para_ambiente,
 )
-from app.services.auditoria import registrar_evento
 from app.services.teams_gateway import (
     atualizar_flow_bot_owner,
     criar_flow_bot_owner,
