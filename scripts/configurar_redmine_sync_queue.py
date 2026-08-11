@@ -112,6 +112,15 @@ def _linha(texto: str = '') -> None:
     print(texto)
 
 
+def _mascarar_exc(exc: Exception, *segredos: str) -> str:
+    """Converte exceção em string mascarando valores de segredos conhecidos."""
+    msg = f'{type(exc).__name__}: {exc}'
+    for segredo in segredos:
+        if segredo:
+            msg = msg.replace(segredo, '***')
+    return msg
+
+
 def _titulo(texto: str) -> None:
     _linha()
     _linha('=' * 78)
@@ -212,7 +221,7 @@ async def _verificar_dataverse(cfg: Settings, erros: list[str]) -> None:
         token = await dv.testar_autenticacao(cfg.redmine_sync_dataverse_url)
         _linha(f'  [OK] Token adquirido ({len(token)} caracteres).')
     except Exception as exc:
-        _linha(f'  [FALHA] {exc}')
+        _linha(f'  [FALHA] {_mascarar_exc(exc, cfg.azure_client_secret)}')
         erros.append('token_dataverse')
         return
 
@@ -231,7 +240,7 @@ async def _verificar_dataverse(cfg: Settings, erros: list[str]) -> None:
             )
             erros.append('application_user_ausente')
     except DataverseError as exc:
-        _linha(f'  [FALHA] {exc}')
+        _linha(f'  [FALHA] {_mascarar_exc(exc, cfg.azure_client_secret)}')
         erros.append('application_user_check')
 
     _titulo('3) Schema real das tabelas cr85a_* vs. assumido no código')
@@ -239,7 +248,7 @@ async def _verificar_dataverse(cfg: Settings, erros: list[str]) -> None:
         try:
             reais = await dv.listar_colunas(cfg.redmine_sync_dataverse_url, tabela)
         except DataverseError as exc:
-            _linha(f'\n  Tabela: {tabela}\n    [FALHA] {exc}')
+            _linha(f'\n  Tabela: {tabela}\n    [FALHA] {_mascarar_exc(exc, cfg.azure_client_secret)}')
             erros.append(f'schema_{tabela}')
             continue
 
@@ -313,7 +322,7 @@ def _verificar_redmine(cfg: Settings, erros: list[str], criar_issue_teste: bool)
             )
             _linha(f'  [OK] Issue de teste REAL criada: {resultado["redmine_url"]} (remova manualmente se desejar).')
         except IntegracaoError as exc:
-            _linha(f'  [FALHA] Criação de issue real falhou: {exc}')
+            _linha(f'  [FALHA] Criação de issue real falhou: {_mascarar_exc(exc, api_key)}')
             erros.append('redmine_criar_issue')
     else:
         _linha('  [PULADO] Criação de issue real não testada (use --criar-issue-teste para validar de ponta a ponta).')
