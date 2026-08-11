@@ -24,6 +24,12 @@ spec.loader.exec_module(module)
 DASHBOARD_HTML_PATH = Path(__file__).parents[1] / 'ops-dashboard' / 'movimento-email' / 'index.html'
 
 
+def _mktemp_path(*, suffix: str) -> str:
+    fd, path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
+    return path
+
+
 def _contexto_exemplo():
     return module.ContextoEmailMovimento(
         data_referencia=date(2026, 7, 26),
@@ -160,7 +166,7 @@ class FilaSqliteTest(unittest.TestCase):
     (instrução global obrigatória: timeout, log quando libera)."""
 
     def setUp(self):
-        self.caminho_db = tempfile.mktemp(suffix='.sqlite3')
+        self.caminho_db = _mktemp_path(suffix='.sqlite3')
         self.cfg = module.Config(queue_db_path=self.caminho_db)
         self.conexao = module._conectar_fila(self.cfg)
 
@@ -271,8 +277,8 @@ class CmdDashboardIntegracaoTest(unittest.TestCase):
     """cmd_dashboard fim a fim: fila sqlite -> data.json no formato esperado."""
 
     def setUp(self):
-        self.caminho_db = tempfile.mktemp(suffix='.sqlite3')
-        self.caminho_saida = tempfile.mktemp(suffix='.json')
+        self.caminho_db = _mktemp_path(suffix='.sqlite3')
+        self.caminho_saida = _mktemp_path(suffix='.json')
 
     def tearDown(self):
         for caminho in (self.caminho_db, self.caminho_saida):
