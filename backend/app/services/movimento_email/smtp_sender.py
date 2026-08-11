@@ -31,7 +31,8 @@ def _mascarar(detalhe: str) -> str:
 
 
 class EmailSender(Protocol):
-    def enviar(self, message: EmailMessage) -> None: ...
+    def enviar(self, message: EmailMessage) -> None:
+        pass
 
 
 class SmtpEmailSender:
