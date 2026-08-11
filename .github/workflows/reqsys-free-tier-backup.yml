@@ -11,6 +11,7 @@ on:
       - "scripts/reqsys_free_tier_backup.py"
       - "scripts/run_reqsys_free_tier_backup.sh"
       - "tests/test_reqsys_free_tier_backup.py"
+      - "tests/test_object_storage_workflow_contract.py"
       - "docs/operations/backup-free-tier-runbook.md"
   push:
     branches: [main]
@@ -71,10 +72,10 @@ jobs:
           python-version: "3.12"
       - name: Validate implementation
         run: |
-          python -m py_compile scripts/remote_sqlite_backup.py scripts/reqsys_free_tier_backup.py tests/test_reqsys_free_tier_backup.py
+          python -m py_compile scripts/remote_sqlite_backup.py scripts/reqsys_free_tier_backup.py tests/test_reqsys_free_tier_backup.py tests/test_object_storage_workflow_contract.py
           bash -n scripts/run_reqsys_free_tier_backup.sh
           python scripts/reqsys_free_tier_backup.py validate --inventory "$INVENTORY"
-          python -m unittest -v tests/test_reqsys_free_tier_backup.py
+          python -m unittest -v tests/test_reqsys_free_tier_backup.py tests/test_object_storage_workflow_contract.py
       - name: Build governed plan
         id: plan
         env:
