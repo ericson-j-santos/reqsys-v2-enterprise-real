@@ -18,12 +18,18 @@ from app.core.envelope import ok
 from app.core.security import require_admin
 from app.core.service_tokens import require_admin_or_service_token
 from app.db import get_db
-from app.schemas.movimento_email import MovimentoEmailConsumirRequest, MovimentoEmailJobRequest
+from app.schemas.movimento_email import (
+    MovimentoEmailConsumirRequest,
+    MovimentoEmailJobRequest,
+)
 from app.services.email_mime_report_service import EmailIdentity
 from app.services.movimento_email import queue_repository as fila
 from app.services.movimento_email.consumer import consumir_fila_email_movimento
 from app.services.movimento_email.jobs import executar_job_diario
-from app.services.movimento_email.repository import ExtracaoError, SqlServerProspeccaoMovimentoRepository
+from app.services.movimento_email.repository import (
+    ExtracaoError,
+    SqlServerProspeccaoMovimentoRepository,
+)
 from app.services.movimento_email.smtp_sender import EnvioEmailError, SmtpEmailSender
 
 logger = logging.getLogger('reqsys.movimento_email_api')
