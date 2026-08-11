@@ -41,13 +41,17 @@ class ExtracaoError(RuntimeError):
 class ProspeccaoMovimentoRepository(Protocol):
     """Porta de extração dos 4 datasets consumidos pelo e-mail diário."""
 
-    def get_fechamento(self, data_referencia: date) -> list[ItemFechamento]: ...
+    def get_fechamento(self, data_referencia: date) -> list[ItemFechamento]:
+        raise NotImplementedError
 
-    def get_pendencias_cadastro(self, data_referencia: date) -> list[ItemPendenciaCadastro]: ...
+    def get_pendencias_cadastro(self, data_referencia: date) -> list[ItemPendenciaCadastro]:
+        raise NotImplementedError
 
-    def get_pendencias_historicas(self, data_referencia: date) -> list[ItemPendenciaHistorica]: ...
+    def get_pendencias_historicas(self, data_referencia: date) -> list[ItemPendenciaHistorica]:
+        raise NotImplementedError
 
-    def get_pendencias_observacao(self, data_referencia: date) -> list[ItemPendenciaObservacao]: ...
+    def get_pendencias_observacao(self, data_referencia: date) -> list[ItemPendenciaObservacao]:
+        raise NotImplementedError
 
 
 def _carregar_sql(nome_arquivo: str) -> str:
