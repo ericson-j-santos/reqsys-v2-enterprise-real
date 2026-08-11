@@ -24,7 +24,14 @@ def _mock_response(json_body=None, status_code=200, text=''):
 
 
 @pytest.fixture(autouse=True)
-def _reset_state():
+def _reset_state(monkeypatch):
+    # Os testes de transporte mockam a aquisição do token, mas `_request`
+    # mantém o fail-fast de configuração para produção. Isole o ambiente do
+    # runner com credenciais sintéticas para que cada teste alcance o ponto
+    # explicitamente mockado.
+    monkeypatch.setattr(module.settings, 'azure_tenant_id', 'tenant-test')
+    monkeypatch.setattr(module.settings, 'azure_client_id', 'client-test')
+    monkeypatch.setattr(module.settings, 'azure_client_secret', 'secret-test')
     module.reset_circuit_breakers()
     yield
     module.reset_circuit_breakers()
