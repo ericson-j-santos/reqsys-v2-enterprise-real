@@ -2,8 +2,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from secrets import token_urlsafe
 
-from fastapi import APIRouter, Depends, Header
-from fastapi import HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
