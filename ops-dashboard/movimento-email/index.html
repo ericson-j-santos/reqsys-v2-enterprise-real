@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ReqSys — Movimento Email (#2861) — Fila e Saúde</title>
+  <style>
+    :root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#e5e7eb;background:#0b1220}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#0b1220,#111827);min-height:100vh}.wrap{max-width:1180px;margin:auto;padding:28px}.top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#93c5fd}.title{font-size:32px;margin:6px 0}.sub{color:#9ca3af}.status{padding:10px 16px;border-radius:999px;font-weight:700;background:#374151}.verde{background:#064e3b;color:#a7f3d0}.vermelho{background:#7f1d1d;color:#fecaca}.azul{background:#1e3a8a;color:#bfdbfe}.cinza{background:#374151;color:#d1d5db}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:24px 0}.card,.panel{background:rgba(17,24,39,.88);border:1px solid #263244;border-radius:16px;padding:18px;box-shadow:0 12px 30px rgba(0,0,0,.18)}.label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af}.value{font-size:29px;font-weight:750;margin-top:8px}.small{font-size:13px;color:#9ca3af;margin-top:6px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;padding:11px;border-bottom:1px solid #263244;font-size:13px}th{color:#9ca3af}.ok{color:#86efac}.bad{color:#fca5a5}.pending{color:#fde68a}.busy{color:#93c5fd}.footer{margin-top:20px;color:#6b7280;font-size:12px}.empty{padding:35px;text-align:center;color:#9ca3af}@media(max-width:800px){.grid{grid-template-columns:repeat(2,1fr)}.top{display:block}.status{display:inline-block;margin-top:15px}}@media(max-width:480px){.grid{grid-template-columns:1fr}.wrap{padding:18px}.title{font-size:25px}}
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <section class="top">
+    <div>
+      <div class="eyebrow">ReqSys · Migração rotina de e-mail (#2861)</div>
+      <h1 class="title">Prospecção Movimento — Fila de envio</h1>
+      <div class="sub">Contagem por status e itens recentes da fila (SQLite local ou tabela <code>movimento_email_dispatch</code>).</div>
+    </div>
+    <div id="status" class="status">Carregando</div>
+  </section>
+
+  <section class="grid">
+    <article class="card"><div class="label">Pendentes</div><div id="pending" class="value">—</div><div class="small">Aguardando envio</div></article>
+    <article class="card"><div class="label">Em processamento</div><div id="processing" class="value">—</div><div class="small">Reservados neste momento</div></article>
+    <article class="card"><div class="label">Enviados</div><div id="sent" class="value">—</div><div class="small">Confirmados via SMTP</div></article>
+    <article class="card"><div class="label">Com erro</div><div id="error" class="value">—</div><div class="small">Esgotaram as tentativas</div></article>
+  </section>
+
+  <section class="panel">
+    <div class="label">Itens recentes</div>
+    <div id="itens"></div>
+  </section>
+
+  <div id="generated" class="footer"></div>
+  <div class="footer">Autocontido — sem CDN externo. Dados gerados por <code>tools/geradores/movimento_email_autocontido.py dashboard</code> ou por <code>GET /v1/movimento-email/status</code>. Nenhum dado sensível (CPF/e-mail completo) é publicado aqui.</div>
+</main>
+<script>
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const STATUS_CLASS={PENDING:'pending',PROCESSING:'busy',SENT:'ok',ERROR:'bad'};
+fetch('./data.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json()}).then(d=>{
+  const c=d.contagens||{PENDING:0,PROCESSING:0,SENT:0,ERROR:0};
+  const st=document.getElementById('status');
+  const labels={verde:'SAUDÁVEL',azul:'EM EXECUÇÃO',vermelho:'FALHA CRÍTICA',cinza:'SEM EVIDÊNCIA'};
+  st.textContent=labels[d.saude]||'SEM EVIDÊNCIA';st.classList.add(d.saude||'cinza');
+  pending.textContent=c.PENDING||0;processing.textContent=c.PROCESSING||0;sent.textContent=c.SENT||0;error.textContent=c.ERROR||0;
+  const items=d.itens_recentes||[];
+  itens.innerHTML=items.length?`<table><thead><tr><th>ID</th><th>Correlation ID</th><th>Assunto</th><th>Status</th><th>Tentativas</th><th>Criado em</th></tr></thead><tbody>${items.map(x=>`<tr><td>${esc(x.id)}</td><td>${esc(x.correlation_id)}</td><td>${esc(x.assunto)}</td><td class="${STATUS_CLASS[x.status]||''}">${esc(x.status)}</td><td>${esc(x.retry_count)}</td><td>${esc(x.created_at)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Nenhum item na fila ainda.</div>';
+  generated.textContent='Atualizado em '+new Date(d.generated_at).toLocaleString('pt-BR');
+}).catch(e=>{status.textContent='DADOS INDISPONÍVEIS';status.classList.add('vermelho');itens.innerHTML='<div class="empty">Falha ao carregar data.json: '+esc(e.message)+'. Rode o gerador para criar o arquivo.</div>'});
+</script>
+</body>
+</html>
