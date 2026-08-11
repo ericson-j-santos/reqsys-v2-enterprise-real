@@ -27,7 +27,7 @@ concurrency:
 
 env:
   DASHBOARD_ISSUE: "1162"
-  REQUIRED_SECRETS: FLY_API_TOKEN,R2_ACCOUNT_ID,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET,RESTIC_PASSWORD
+  REQUIRED_SECRETS: FLY_API_TOKEN,OBJECT_STORAGE_ACCESS_KEY_ID,OBJECT_STORAGE_SECRET_ACCESS_KEY,OBJECT_STORAGE_BUCKET,RESTIC_PASSWORD
 
 jobs:
   contract-tests:
@@ -52,10 +52,11 @@ jobs:
     timeout-minutes: 12
     env:
       FLY_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      R2_ACCOUNT: ${{ secrets.R2_ACCOUNT_ID }}
-      R2_KEY: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET }}
+      STORAGE_ENDPOINT: ${{ vars.OBJECT_STORAGE_ENDPOINT || 'https://fly.storage.tigris.dev' }}
+      STORAGE_REGION: ${{ vars.OBJECT_STORAGE_REGION || 'auto' }}
+      STORAGE_KEY: ${{ secrets.OBJECT_STORAGE_ACCESS_KEY_ID }}
+      STORAGE_SECRET: ${{ secrets.OBJECT_STORAGE_SECRET_ACCESS_KEY }}
+      STORAGE_BUCKET: ${{ secrets.OBJECT_STORAGE_BUCKET }}
       RESTIC_SECRET: ${{ secrets.RESTIC_PASSWORD }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
@@ -71,10 +72,9 @@ jobs:
           set -euo pipefail
           present=()
           [[ -n "${FLY_TOKEN:-}" ]] && present+=(FLY_API_TOKEN)
-          [[ -n "${R2_ACCOUNT:-}" ]] && present+=(R2_ACCOUNT_ID)
-          [[ -n "${R2_KEY:-}" ]] && present+=(R2_ACCESS_KEY_ID)
-          [[ -n "${R2_SECRET:-}" ]] && present+=(R2_SECRET_ACCESS_KEY)
-          [[ -n "${R2_BUCKET_NAME:-}" ]] && present+=(R2_BUCKET)
+          [[ -n "${STORAGE_KEY:-}" ]] && present+=(OBJECT_STORAGE_ACCESS_KEY_ID)
+          [[ -n "${STORAGE_SECRET:-}" ]] && present+=(OBJECT_STORAGE_SECRET_ACCESS_KEY)
+          [[ -n "${STORAGE_BUCKET:-}" ]] && present+=(OBJECT_STORAGE_BUCKET)
           [[ -n "${RESTIC_SECRET:-}" ]] && present+=(RESTIC_PASSWORD)
           csv=$(IFS=,; echo "${present[*]}")
           configured=false
@@ -101,15 +101,15 @@ jobs:
           fi
           echo "result=$result" >> "$GITHUB_OUTPUT"
 
-      - name: Probe private R2 bucket
+      - name: Probe private S3-compatible bucket
         id: r2
         shell: bash
         run: |
           result=skipped
           if [[ "${{ steps.config.outputs.configured }}" == true ]]; then
-            if AWS_ACCESS_KEY_ID="$R2_KEY" AWS_SECRET_ACCESS_KEY="$R2_SECRET" AWS_DEFAULT_REGION=auto \
-               aws s3api head-bucket --endpoint-url "https://${R2_ACCOUNT}.r2.cloudflarestorage.com" \
-               --bucket "$R2_BUCKET_NAME" >/dev/null 2>&1; then result=pass; else result=fail; fi
+            if AWS_ACCESS_KEY_ID="$STORAGE_KEY" AWS_SECRET_ACCESS_KEY="$STORAGE_SECRET" AWS_DEFAULT_REGION="$STORAGE_REGION" \
+               aws s3api head-bucket --endpoint-url "$STORAGE_ENDPOINT" \
+               --bucket "$STORAGE_BUCKET" >/dev/null 2>&1; then result=pass; else result=fail; fi
           fi
           echo "result=$result" >> "$GITHUB_OUTPUT"
 
@@ -119,9 +119,9 @@ jobs:
         run: |
           result=skipped
           if [[ "${{ steps.config.outputs.configured }}" == true ]]; then
-            if AWS_ACCESS_KEY_ID="$R2_KEY" AWS_SECRET_ACCESS_KEY="$R2_SECRET" AWS_DEFAULT_REGION=auto \
+            if AWS_ACCESS_KEY_ID="$STORAGE_KEY" AWS_SECRET_ACCESS_KEY="$STORAGE_SECRET" AWS_DEFAULT_REGION="$STORAGE_REGION" \
                RESTIC_PASSWORD="$RESTIC_SECRET" \
-               RESTIC_REPOSITORY="s3:https://${R2_ACCOUNT}.r2.cloudflarestorage.com/${R2_BUCKET_NAME}/reqsys-backups" \
+               RESTIC_REPOSITORY="s3:${STORAGE_ENDPOINT%/}/${STORAGE_BUCKET}/reqsys-backups" \
                restic snapshots --json >/dev/null 2>&1; then result=pass; else result=fail; fi
           fi
           echo "result=$result" >> "$GITHUB_OUTPUT"
