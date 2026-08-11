@@ -23,7 +23,7 @@ beginDialog:
       id: invokeFlow_consultar_status
       flowId: 69a54f8b-caec-53c4-9f5b-887230cf43d2
       flow: reqsys_ReqSysConsultarStatus
-      inputs:
+      input:
         referencia: =Topic.Referencia
         correlation_id: =System.Conversation.Id
       output:

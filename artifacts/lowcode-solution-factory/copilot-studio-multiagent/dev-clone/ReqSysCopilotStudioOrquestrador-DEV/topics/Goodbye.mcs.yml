@@ -1,5 +1,6 @@
 mcs.metadata:
   componentName: Goodbye
+  description: This system topic triggers when the user says goodbye.
 kind: AdaptiveDialog
 beginDialog:
   kind: OnRecognizedIntent

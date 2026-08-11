@@ -1,5 +1,6 @@
 mcs.metadata:
   componentName: StartOver
+  description: This system topic resets the conversation.
 kind: AdaptiveDialog
 beginDialog:
   kind: OnRecognizedIntent

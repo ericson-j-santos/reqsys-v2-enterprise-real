@@ -1,17 +1,11 @@
 mcs.metadata:
   componentName: MultipleTopicsMatched
+  description: This system topic triggers when the user's utterance matches multiple topics.
 kind: AdaptiveDialog
 beginDialog:
-  kind: OnRecognizedIntent
+  kind: OnEndOfConversation
   id: main
-  intent:
-    displayName: Escolher assunto ReqSys
-    triggerQueries:
-      - quero falar de mais de um assunto
-      - demanda aprovacao ou release
-      - nao sei se e demanda ou release
-
   actions:
     - kind: SendActivity
-      id: sendMessage_ambiguo
-      activity: Encontrei mais de um assunto possivel: demanda, aprovacao ou release. Qual deles voce quer tratar agora?
+      id: sendMessage_eoc
+      activity: Conversa encerrada.

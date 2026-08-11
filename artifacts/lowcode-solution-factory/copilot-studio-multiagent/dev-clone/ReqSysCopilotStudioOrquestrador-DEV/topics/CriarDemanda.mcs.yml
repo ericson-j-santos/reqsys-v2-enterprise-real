@@ -42,7 +42,7 @@ beginDialog:
       id: invokeFlow_criar_demanda
       flowId: ae83d82a-8e04-5eb4-bf4a-dfadd5443a7a
       flow: reqsys_ReqSysIntakeDeDemanda
-      inputs:
+      input:
         titulo: =Topic.Titulo
         resultado_esperado: =Topic.ResultadoEsperado
         origem: =Topic.Origem
