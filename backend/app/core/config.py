@@ -171,6 +171,16 @@ class Settings(BaseSettings):
     copilotstudio_provisioning_webhook_url: str = Field(default_factory=lambda: get_secret('COPILOTSTUDIO_PROVISIONING_WEBHOOK_URL', '') or '')
     copilotstudio_provisioning_webhook_key: str = Field(default_factory=lambda: get_secret('COPILOTSTUDIO_PROVISIONING_WEBHOOK_KEY', '') or '')
 
+    # Redmine Sync Queue — worker que fecha o loop do fluxo Planner -> Dataverse
+    # -> Redmine (Redmine não pode ser chamado direto de dentro do Power
+    # Automate por causa de DLP; ver docs/architecture/redmine-sync-queue.md)
+    redmine_sync_dataverse_url: str = Field(default_factory=lambda: get_secret('REDMINE_SYNC_DATAVERSE_URL', '') or '')
+    redmine_sync_lote_max: int = Field(default_factory=lambda: int(get_secret('REDMINE_SYNC_LOTE_MAX', '20') or '20'))
+    redmine_sync_reserva_timeout_minutos: int = Field(
+        default_factory=lambda: int(get_secret('REDMINE_SYNC_RESERVA_TIMEOUT_MINUTOS', '15') or '15')
+    )
+    redmine_sync_max_tentativas: int = Field(default_factory=lambda: int(get_secret('REDMINE_SYNC_MAX_TENTATIVAS', '5') or '5'))
+
     # Migração da rotina de e-mail Prospecção Movimento — Portabilidade
     # Consignado (Funcionalidade #2861: substitui SSRS por pipeline Python —
     # ver docs/architecture/movimento-email-pipeline.md)

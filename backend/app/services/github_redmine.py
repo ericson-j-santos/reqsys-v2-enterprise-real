@@ -209,6 +209,39 @@ def publish_requisito_to_redmine(
     return {'issue_principal_id': principal_id, 'redmine_url': redmine_url, 'subtarefas': subtarefas, 'warnings': warnings}
 
 
+def criar_issue_generica(
+    subject: str,
+    tracker_id: int | None = None,
+    project_id: int | None = None,
+    description: str = '',
+) -> dict[str, Any]:
+    """Cria uma issue simples no Redmine a partir de campos já resolvidos.
+
+    Usada pelo worker da fila `cr85a_redminequeue` (ver
+    app/services/redmine_sync_queue.py) — reaproveita o mesmo adapter/retry/
+    circuit breaker desta integração em vez de duplicar a chamada HTTP.
+    """
+    base_url = (get_secret('REDMINE_BASE_URL', '') or '').strip().rstrip('/')
+    api_key = (get_secret('REDMINE_API_KEY', '') or '').strip()
+    env_project_id = (get_secret('REDMINE_PROJECT_ID', '') or '').strip()
+    effective_project_id = project_id or (int(env_project_id) if env_project_id.isdigit() else None)
+
+    if not base_url or not api_key or not effective_project_id:
+        raise IntegracaoError('Redmine não configurado. Defina REDMINE_BASE_URL, REDMINE_API_KEY e REDMINE_PROJECT_ID.')
+
+    issue_payload: dict[str, Any] = {'issue': {'project_id': effective_project_id, 'subject': subject or 'Issue sem título'}}
+    if description:
+        issue_payload['issue']['description'] = description
+    if tracker_id:
+        issue_payload['issue']['tracker_id'] = tracker_id
+
+    headers = {'X-Redmine-API-Key': api_key}
+    created = _request_json('POST', f'{base_url}/issues.json', headers=headers, payload=issue_payload)
+    issue = created.get('issue') or {}
+    issue_id = issue.get('id')
+    return {'issue_id': issue_id, 'redmine_url': f'{base_url}/issues/{issue_id}' if issue_id else None}
+
+
 def publish_issues_to_redmine(repo: str, issues: list[dict[str, Any]], project_id: int | None = None, tracker_id: int | None = None, priority_id: int | None = None) -> dict[str, Any]:
     base_url = (get_secret('REDMINE_BASE_URL', '') or '').strip().rstrip("/")
     api_key = (get_secret('REDMINE_API_KEY', '') or '').strip()
