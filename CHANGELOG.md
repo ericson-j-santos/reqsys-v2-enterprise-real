@@ -6,6 +6,20 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-07-23
+
+### Adicionado (Redmine Sync Queue · fecha o loop do fluxo PA-001-CreateRedmineIssue)
+
+- Novo worker `backend/app/services/redmine_sync_queue.py` + adapter genérico `backend/app/services/dataverse_queue_client.py` (Dataverse Web API OData, token client-credentials, resolução de `EntitySetName` via Metadata API — nunca adivinha pluralização): lê `cr85a_redminequeue` (`Status=PENDING`), cria a issue real no Redmine (`github_redmine.criar_issue_generica`, reaproveitando o adapter/retry/circuit breaker já existentes) e grava o resultado de volta em `cr85a_redminequeue` + `cr85a_agilesync` + `cr85a_auditlog` — o pedaço que faltava porque o conector HTTP genérico do Power Automate está bloqueado por DLP nesse tenant.
+- `POST /v1/redmine-sync/processar` (JWT admin ou `X-Service-Token` escopo `redmine_sync:processar`), `GET /v1/redmine-sync/status`, `GET /v1/redmine-sync/diagnostico/coluna` em `backend/app/api/redmine_sync.py`.
+- Limpeza automática de reservas travadas (`PROCESSING` > `REDMINE_SYNC_RESERVA_TIMEOUT_MINUTOS`, padrão 15 min) antes de reservar novo lote, com log/auditoria `QUEUE_RESERVATION_TIMEOUT_RECOVERED`; limite de tentativas (`REDMINE_SYNC_MAX_TENTATIVAS`, padrão 5) evita retry infinito; `dry_run` com formato de resposta deliberadamente distinto de um envio real; mascaramento de segredo (`X-Redmine-API-Key`/`Bearer`) em qualquer erro persistido.
+- `GET /v1/redmine-sync/diagnostico/coluna` automatiza o diagnóstico pendente do usuário para o erro "String or binary data would be truncated" em `cr85a_agilesync.cr85a_correlationid` — consulta a Metadata API do Dataverse ao vivo e retorna `attribute_type`/`max_length` reais, com alerta explícito quando o campo é curto demais para um `guid()` (36 caracteres).
+- Novas settings em `.env`/`config.py`: `REDMINE_SYNC_DATAVERSE_URL`, `REDMINE_SYNC_LOTE_MAX`, `REDMINE_SYNC_RESERVA_TIMEOUT_MINUTOS`, `REDMINE_SYNC_MAX_TENTATIVAS`.
+- Documentação viva em `docs/architecture/redmine-sync-queue.md`: diagrama do fluxo completo, estado atual x alvo x gaps, colunas novas ainda necessárias em `cr85a_redminequeue` (`cr85a_reservedat`, `cr85a_retrycount`, `cr85a_errordetail`, `cr85a_redmineissueid` opcional) e por que o processamento é sob demanda, não um poll automático contínuo (ADR-011).
+- 25 novos testes (`test_redmine_sync_queue_service.py`, `test_redmine_sync_api.py`, `test_dataverse_queue_client.py`), todos mockados.
+- `scripts/configurar_redmine_sync_queue.py` (novo, mesmo espírito de `scripts/configurar-redmine.ps1`/`verificar-redmine.ps1`): captura interativamente (`capturar`) as credenciais reais que faltam (`AZURE_*`, `REDMINE_*`, `REDMINE_SYNC_DATAVERSE_URL`) e valida tudo ao vivo (`verificar`) — token Azure AD/Dataverse, Application User do `AZURE_CLIENT_ID` no ambiente, schema real de `cr85a_redminequeue`/`cr85a_agilesync`/`cr85a_auditlog` contra o assumido no código (incluindo o diagnóstico do bloqueador `cr85a_correlationid`), e conectividade de leitura com o Redmine. Novas funções de suporte em `dataverse_queue_client.py`: `testar_autenticacao`, `verificar_application_user`, `listar_colunas`.
+- Também corrige `scripts/configurar-redmine.ps1`: o script lia `data[].nome`/`.status` de `/v1/sistema/segredos-status`, mas o endpoint real responde `data.segredos[].name`/`.resolved` (booleano) — a verificação de sucesso nunca refletia o estado real.
+
 ## [Unreleased] - 2026-07-27
 
 ### Corrigido (Teams Gateway · contrato de resposta)

@@ -77,15 +77,15 @@ Start-Sleep -Seconds 5  # aguarda restart do app apos secrets
 
 try {
     $r = Invoke-RestMethod "$apiHost/v1/sistema/segredos-status" -ErrorAction Stop
-    $secrets = $r.data
-    $redmineUrl   = ($secrets | Where-Object { $_.nome -eq "REDMINE_BASE_URL"   }).status
-    $redmineKey   = ($secrets | Where-Object { $_.nome -eq "REDMINE_API_KEY"    }).status
-    $redmineProj  = ($secrets | Where-Object { $_.nome -eq "REDMINE_PROJECT_ID" }).status
+    $secrets = $r.data.segredos
+    $redmineUrl   = ($secrets | Where-Object { $_.name -eq "REDMINE_BASE_URL"   }).resolved
+    $redmineKey   = ($secrets | Where-Object { $_.name -eq "REDMINE_API_KEY"    }).resolved
+    $redmineProj  = ($secrets | Where-Object { $_.name -eq "REDMINE_PROJECT_ID" }).resolved
     Write-Host "  REDMINE_BASE_URL   : $redmineUrl"
     Write-Host "  REDMINE_API_KEY    : $redmineKey"
     Write-Host "  REDMINE_PROJECT_ID : $redmineProj"
 
-    $allOk = ($redmineKey -ne "ausente") -and ($redmineProj -ne "ausente")
+    $allOk = ($redmineKey -eq $true) -and ($redmineProj -eq $true)
     if ($allOk) {
         Write-Host ""
         Write-Host "  [OK] Integracao Redmine configurada com sucesso!" -ForegroundColor Green
