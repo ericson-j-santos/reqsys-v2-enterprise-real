@@ -20,7 +20,11 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.core.resilience import CircuitBreaker, CircuitBreakerOpenError, call_with_retry_async
+from app.core.resilience import (
+    CircuitBreaker,
+    CircuitBreakerOpenError,
+    call_with_retry_async,
+)
 
 logger = logging.getLogger('reqsys.dataverse_queue_client')
 
