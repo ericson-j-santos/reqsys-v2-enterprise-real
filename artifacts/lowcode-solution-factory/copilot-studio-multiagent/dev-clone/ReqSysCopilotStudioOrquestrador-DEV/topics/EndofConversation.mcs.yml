@@ -1,10 +1,16 @@
 mcs.metadata:
   componentName: EndofConversation
-  description: This system topic triggers at the end of the conversation.
 kind: AdaptiveDialog
 beginDialog:
-  kind: OnEndOfConversation
+  kind: OnRecognizedIntent
   id: main
+  intent:
+    displayName: Encerrar conversa
+    triggerQueries:
+      - encerrar conversa
+      - finalizar atendimento
+      - pode encerrar
+
   actions:
     - kind: SendActivity
       id: sendMessage_eoc

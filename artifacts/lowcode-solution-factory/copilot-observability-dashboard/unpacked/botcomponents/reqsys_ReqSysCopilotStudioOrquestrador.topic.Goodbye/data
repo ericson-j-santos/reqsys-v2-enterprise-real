@@ -1,0 +1,13 @@
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    triggerQueries:
+      - tchau
+      - ate mais
+      - obrigado, encerrar
+  actions:
+    - kind: SendActivity
+      id: sendMessage_goodbye
+      activity: Ate breve. O historico desta conversa fica auditado por correlation_id (ADR-003).

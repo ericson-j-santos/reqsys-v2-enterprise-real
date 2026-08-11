@@ -1,0 +1,11 @@
+<botcomponent schemaname="reqsys_ReqSysCopilotStudioOrquestrador.topic.EndofConversation">
+  <componenttype>9</componenttype>
+  <description>This system topic triggers at the end of the conversation.</description>
+  <iscustomizable>0</iscustomizable>
+  <name>EndofConversation</name>
+  <parentbotid>
+    <schemaname>reqsys_ReqSysCopilotStudioOrquestrador</schemaname>
+  </parentbotid>
+  <statecode>0</statecode>
+  <statuscode>1</statuscode>
+</botcomponent>
