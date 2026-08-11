@@ -23,3 +23,16 @@ def test_scan_content_bloqueia_connection_string_sql_server() -> None:
     assert len(findings) == 1
     assert findings[0].code == "SEC_CONNECTION_STRING"
     assert findings[0].severity == "HIGH"
+
+
+def test_scan_content_bloqueia_fragmento_password_de_connection_string() -> None:
+    payload = (
+        'dsn = "Driver={SQL Server};'
+        + "Pass"
+        + 'word=segredo"\n'
+    )
+    findings = scan_content(ROOT / "backend/app/api/movimento_email.py", payload)
+
+    assert len(findings) == 1
+    assert findings[0].code == "SEC_CONNECTION_STRING"
+    assert findings[0].severity == "HIGH"
