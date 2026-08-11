@@ -107,6 +107,10 @@ providers:
       - REDMINE_BASE_URL
       - REDMINE_API_KEY
       - REDMINE_PROJECT_ID
+      - REDMINE_SYNC_DATAVERSE_URL
+      - REDMINE_SYNC_LOTE_MAX
+      - REDMINE_SYNC_RESERVA_TIMEOUT_MINUTOS
+      - REDMINE_SYNC_MAX_TENTATIVAS
     data_classification: operational_records
     criticality: medium
     risk_review_status: pending_formal_review
