@@ -296,7 +296,8 @@ class CmdDashboardIntegracaoTest(unittest.TestCase):
             del os.environ['MOVIMENTO_EMAIL_QUEUE_DB_PATH']
 
         self.assertEqual(codigo, 0)
-        dados = json.loads(open(self.caminho_saida, encoding='utf-8').read())
+        with open(self.caminho_saida, encoding='utf-8') as f:
+            dados = json.loads(f.read())
         self.assertEqual(dados['contagens']['PENDING'], 1)
         self.assertEqual(dados['saude'], 'verde')
         self.assertEqual(len(dados['itens_recentes']), 1)
