@@ -677,8 +677,12 @@ def enviar_smtp(cfg: Config, mensagem: EmailMessage) -> None:
                 smtp.login(cfg.smtp_user, cfg.smtp_password)
             smtp.send_message(mensagem)
 
+    def _enviar_com_status() -> bool:
+        _enviar_uma_vez()
+        return True
+
     try:
-        call_with_retry(_enviar_uma_vez, max_retries=3, backoff_seconds=1.0, retry_on=(smtplib.SMTPException, OSError), circuit=_CIRCUITO_SMTP)
+        call_with_retry(_enviar_com_status, max_retries=3, backoff_seconds=1.0, retry_on=(smtplib.SMTPException, OSError), circuit=_CIRCUITO_SMTP)
     except (smtplib.SMTPException, OSError) as exc:
         erro_mascarado = _mascarar_erro(str(exc))
         logger.error('movimento_email_smtp_falhou erro=%s', erro_mascarado)
