@@ -15,7 +15,10 @@ from app.services.movimento_email.email_service import (
     render_email_movimento_html,
     render_email_movimento_text,
 )
-from app.services.movimento_email.repository import ExtracaoError, ProspeccaoMovimentoRepository
+from app.services.movimento_email.repository import (
+    ExtracaoError,
+    ProspeccaoMovimentoRepository,
+)
 from app.services.movimento_email.transform import montar_contexto
 
 logger = logging.getLogger('reqsys.movimento_email.jobs')
