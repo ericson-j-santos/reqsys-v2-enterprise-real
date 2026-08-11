@@ -108,14 +108,6 @@ COLUNAS_ESPERADAS: dict[str, dict[str, str]] = {
 COLUNAS_OPCIONAIS: dict[str, set[str]] = {TABELA_REDMINE_QUEUE: {'cr85a_redmineissueid'}}
 
 
-def _mascarar_valor(valor: str) -> str:
-    if not valor:
-        return '(vazio)'
-    if len(valor) <= 6:
-        return '*' * len(valor)
-    return f'{valor[:3]}...{valor[-3:]}'
-
-
 def _linha(texto: str = '') -> None:
     print(texto)
 
@@ -134,11 +126,13 @@ def _flag_dest(nome: str) -> str:
 def cmd_status(_args: argparse.Namespace) -> int:
     _titulo('Status das variáveis necessárias — Redmine Sync Queue')
     faltando = []
-    for nome, segredo, descricao, _ajuda in VARIAVEIS:
+    for nome, _segredo, descricao, _ajuda in VARIAVEIS:
         valor = os.environ.get(nome, '')
         if valor:
-            preview = _mascarar_valor(valor) if segredo else valor
-            _linha(f'  [OK]     {nome:<28} {preview}')
+            # Não propague valores vindos do ambiente para stdout. Além de
+            # segredos explícitos, IDs/URLs podem ser classificados como
+            # sensíveis pelo scanner e não são necessários para o diagnóstico.
+            _linha(f'  [OK]     {nome:<28} configurado')
         else:
             _linha(f'  [FALTA]  {nome:<28} {descricao}')
             faltando.append(nome)
