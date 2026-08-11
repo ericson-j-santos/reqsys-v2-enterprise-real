@@ -1,8 +1,8 @@
-# Runbook — Backup gratuito Fly.io, restic e Cloudflare R2
+# Runbook — Backup gratuito Fly.io, Restic e armazenamento S3 compatível
 
 ## Estado alvo
 
-O ReqSys mantém uma cópia consistente do SQLite de cada ambiente, criptografa no cliente com `restic`, armazena em bucket R2 privado, restaura fora do Fly.io e publica somente evidências não sensíveis.
+O ReqSys mantém uma cópia consistente do SQLite de cada ambiente, criptografa no cliente com `restic` e armazena em bucket privado S3 compatível. O provedor recomendado é Tigris; Cloudflare R2 permanece somente como rollback temporário.
 
 ## Fluxo
 
@@ -10,71 +10,77 @@ O ReqSys mantém uma cópia consistente do SQLite de cada ambiente, criptografa 
 Fly Volume (/data/reqsys.db)
   -> sqlite3.Connection.backup() em arquivo temporário
   -> Fly SFTP para runner GitHub
-  -> verificação PRAGMA quick_check + SHA-256 + contagem por tabela
-  -> restic com criptografia no cliente
-  -> Cloudflare R2 privado
-  -> retenção e quota guard
-  -> restauração isolada no runner
-  -> comparação de SHA-256, estrutura e contagens
+  -> PRAGMA quick_check + SHA-256 + contagem por tabela
+  -> Restic com criptografia no cliente
+  -> Tigris privado (S3)
+  -> restauração isolada
   -> Dashboard GitHub #1162 e Adaptive Card no Teams
 ```
 
-## Ativação externa necessária
+## Configuração Tigris recomendada
 
-A automação entra em modo amarelo até que um bucket R2 privado e as credenciais de menor privilégio sejam cadastrados. Não há criação automática de conta Cloudflare porque isso exige aceite de termos e controle do proprietário.
+Crie um bucket privado por ambiente e cadastre:
 
-Cadastre os seguintes GitHub Actions secrets:
+### GitHub Actions secrets
 
-- `FLY_API_TOKEN` — token com acesso somente aos apps ReqSys necessários;
+- `FLY_API_TOKEN`;
+- `OBJECT_STORAGE_ACCESS_KEY_ID`;
+- `OBJECT_STORAGE_SECRET_ACCESS_KEY`;
+- `OBJECT_STORAGE_BUCKET`;
+- `RESTIC_PASSWORD`.
+
+### GitHub Actions variables
+
+- `OBJECT_STORAGE_ENDPOINT=https://fly.storage.tigris.dev`;
+- `OBJECT_STORAGE_REGION=auto`.
+
+Os valores secretos nunca devem ser gravados em arquivos, logs, issues ou artifacts.
+
+## Compatibilidade e rollback
+
+O workflow de backup aceita qualquer endpoint S3 compatível. Quando os secrets genéricos não estiverem configurados, o workflow principal ainda reconhece temporariamente os secrets legados do R2:
+
 - `R2_ACCOUNT_ID`;
-- `R2_ACCESS_KEY_ID` — permissão Object Read & Write restrita ao bucket;
+- `R2_ACCESS_KEY_ID`;
 - `R2_SECRET_ACCESS_KEY`;
-- `R2_BUCKET`;
-- `RESTIC_PASSWORD` — senha forte exclusiva, mantida fora do repositório.
+- `R2_BUCKET`.
 
-O endpoint S3 é montado automaticamente como:
-
-```text
-https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com
-```
+A prontidão operacional usa apenas o contrato genérico. Após uma execução DEV válida no Tigris, remova o fallback R2 em incremento separado.
 
 ## Rollout governado
 
-1. DEV está habilitado no inventário e inicia automaticamente quando os secrets existirem.
-2. Após uma execução DEV com backup, restauração e integridade verdes, alterar `enabled` de STG para `true`.
-3. Após uma execução STG verde, habilitar PROD em PR separado e com aprovação governada.
-4. Execução manual de ativo ainda desabilitado exige `include_disabled=true`; para PROD também exige `approve_prod=APROVO-PROD`.
+1. Configurar somente DEV.
+2. Executar **ReqSys Backup Provider Readiness** em modo estrito.
+3. Executar **ReqSys Free Tier Backup** com `environment=dev`.
+4. Exigir artifact `reqsys-backup-evidence-dev` com restauração e integridade válidas.
+5. Habilitar STG somente após evidência DEV.
+6. Habilitar PROD somente após evidência STG e aprovação explícita.
 
-## Quota gratuita
+## Quota Tigris
 
-- saudável: abaixo de 8 GiB;
-- alerta: entre 8 e 9 GiB;
-- crítico: a partir de 9 GiB;
-- limite técnico de segurança: 9 GiB, preservando margem antes da franquia de 10 GB-mês.
+A franquia gratuita atual é menor que a antiga margem operacional de R2. Adotar:
 
-O dashboard publica `restic stats --mode raw-data` e bloqueia o gate quando a quota fica crítica.
+- saudável: abaixo de 4 GiB;
+- alerta: entre 4 e 4,5 GiB;
+- crítico: a partir de 4,5 GiB;
+- limite técnico recomendado: 4,5 GiB.
 
-## Retenção inicial
-
-- 7 diários;
-- 4 semanais;
-- 3 mensais;
-- 1 anual.
-
-A retenção é aplicada por tag do ativo e seguida de `restic check`.
+O inventário e o dashboard aplicam esses limites automaticamente e bloqueiam o gate ao atingir 4,5 GiB.
 
 ## Recuperação
 
-1. Abra o Dashboard #1162 e localize o último `snapshot_id` saudável.
-2. Execute o workflow manual para o ambiente necessário ou use `restic restore <snapshot_id> --target <diretório-isolado>` em estação autorizada.
-3. Valide `PRAGMA quick_check`, SHA-256 e contagens por tabela.
-4. Para recuperação Fly, crie novo volume/Machine ou siga o runbook de incidente; não sobrescreva o banco original antes da aprovação.
+1. Abra o [Dashboard BACEN-04](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1162).
+2. Localize o último `snapshot_id` saudável.
+3. Restaure em diretório isolado.
+4. Valide `PRAGMA quick_check`, SHA-256 e contagens.
+5. Não sobrescreva o banco original antes da aprovação.
 
 ## Segurança
 
-- dumps e bancos restaurados são apagados do runner ao final;
-- artifacts contêm somente JSON de evidência e dashboard;
-- dados não são enviados à issue ou ao Teams;
-- o bucket deve permanecer privado;
-- logs não podem imprimir secrets, conteúdo do banco ou URLs assinadas;
-- rotacione tokens após incidente ou mudança de responsável.
+- bucket privado e credencial restrita ao bucket;
+- criptografia Restic antes do upload;
+- dumps e restaurações removidos do runner;
+- artifacts somente com evidências sanitizadas;
+- logs sem secrets, conteúdo do banco ou URLs assinadas;
+- rotação de credenciais após incidente;
+- `production_touched=false` até aprovação governada.
