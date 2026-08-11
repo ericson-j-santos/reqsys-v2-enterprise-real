@@ -6,13 +6,17 @@ Concentra volume, latência, erros e saturação sem persistir PII.
 from __future__ import annotations
 
 import hashlib
+import json
 import threading
 from collections import Counter
+from datetime import UTC, datetime
 from dataclasses import dataclass
 from enum import StrEnum
 from statistics import mean
 from time import perf_counter
 from typing import Final
+
+from sqlalchemy import Column, DateTime, Integer, MetaData, Table, Text, create_engine, select
 
 from app.core.telemetry import log_evento
 
@@ -158,3 +162,129 @@ def registrar_transicao_fila(
     )
     REGISTRO_FILA.registrar(evento)
     return evento
+
+
+
+class RepositorioSnapshotsFila:
+    """Persistência governada de agregados; não armazena demanda ou correlation_id."""
+
+    def __init__(self, database_url: str, limite: int = 200) -> None:
+        if limite < 1:
+            raise ValueError('limite_deve_ser_positivo')
+        self._limite = limite
+        self._engine = create_engine(database_url)
+        metadata = MetaData()
+        self._tabela = Table(
+            'observabilidade_fila_snapshot',
+            metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('gerado_em', DateTime(timezone=True), nullable=False),
+            Column('payload_json', Text, nullable=False),
+        )
+        metadata.create_all(self._engine)
+
+    def registrar(self, snapshot: dict) -> None:
+        payload = {
+            'schema_version': snapshot['schema_version'],
+            'fluxo': snapshot['fluxo'],
+            'quatro_sinais': snapshot['quatro_sinais'],
+            'guardrails': snapshot['guardrails'],
+        }
+        with self._engine.begin() as conexao:
+            conexao.execute(
+                self._tabela.insert().values(
+                    gerado_em=datetime.now(UTC),
+                    payload_json=json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                )
+            )
+            ids_excedentes = [
+                item[0]
+                for item in conexao.execute(
+                    select(self._tabela.c.id)
+                    .order_by(self._tabela.c.id.desc())
+                    .offset(self._limite)
+                )
+            ]
+            if ids_excedentes:
+                conexao.execute(self._tabela.delete().where(self._tabela.c.id.in_(ids_excedentes)))
+
+    def listar(self, limite: int = 20) -> list[dict]:
+        limite_seguro = min(max(1, limite), self._limite)
+        with self._engine.connect() as conexao:
+            linhas = conexao.execute(
+                select(self._tabela.c.gerado_em, self._tabela.c.payload_json)
+                .order_by(self._tabela.c.id.desc())
+                .limit(limite_seguro)
+            )
+            return [
+                {
+                    'gerado_em': gerado_em.isoformat(),
+                    **json.loads(payload_json),
+                }
+                for gerado_em, payload_json in linhas
+            ]
+
+
+def renderizar_metricas_prometheus(snapshot: dict) -> str:
+    """Exporta métricas agregadas com cardinalidade fixa por estado/transição."""
+    sinais = snapshot['quatro_sinais']
+    linhas = [
+        '# HELP reqsys_fila_transicoes_total Total de transicoes da fila.',
+        '# TYPE reqsys_fila_transicoes_total counter',
+    ]
+    for transicao, total in sorted(sinais['volume']['por_transicao'].items()):
+        origem, destino = transicao.split('->', maxsplit=1)
+        linhas.append(
+            f'reqsys_fila_transicoes_total{{origem="{origem}",destino="{destino}"}} {total}'
+        )
+    linhas.extend(
+        [
+            '# HELP reqsys_fila_latencia_p95_ms Latencia P95 das transicoes em milissegundos.',
+            '# TYPE reqsys_fila_latencia_p95_ms gauge',
+            f"reqsys_fila_latencia_p95_ms {sinais['latencia']['p95_ms']}",
+            '# HELP reqsys_fila_erros_total Total de erros nas transicoes.',
+            '# TYPE reqsys_fila_erros_total counter',
+            f"reqsys_fila_erros_total {sinais['erros']['total']}",
+            '# HELP reqsys_fila_demandas_ativas Demandas ainda ativas na fila.',
+            '# TYPE reqsys_fila_demandas_ativas gauge',
+            f"reqsys_fila_demandas_ativas {sinais['saturacao']['demandas_ativas']}",
+        ]
+    )
+    for estado in EstadoFila:
+        total = sinais['saturacao']['por_estado'].get(estado.value, 0)
+        linhas.append(f'reqsys_fila_estado_total{{estado="{estado.value}"}} {total}')
+    return '\n'.join(linhas) + '\n'
+
+
+def criar_cards_dashboard_fila(snapshot: dict) -> list[dict]:
+    sinais = snapshot['quatro_sinais']
+    return [
+        {
+            'id': 'fila-volume',
+            'titulo': 'Volume da fila',
+            'valor': sinais['volume']['transicoes_total'],
+            'unidade': 'transições',
+            'drilldown': '/api/runtime/fila/historico',
+        },
+        {
+            'id': 'fila-latencia-p95',
+            'titulo': 'Latência P95',
+            'valor': sinais['latencia']['p95_ms'],
+            'unidade': 'ms',
+            'drilldown': '/api/runtime/fila/metricas',
+        },
+        {
+            'id': 'fila-erros',
+            'titulo': 'Taxa de erros',
+            'valor': sinais['erros']['taxa_percentual'],
+            'unidade': '%',
+            'drilldown': '/api/runtime/fila/historico',
+        },
+        {
+            'id': 'fila-saturacao',
+            'titulo': 'Demandas ativas',
+            'valor': sinais['saturacao']['demandas_ativas'],
+            'unidade': 'demandas',
+            'drilldown': '/api/runtime/fila/historico',
+        },
+    ]
