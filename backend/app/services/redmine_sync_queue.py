@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
+from asyncio import to_thread
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -120,7 +121,7 @@ async def limpar_reservas_travadas(
     instrução global obrigatória para fluxos que reservam registros (ver
     CLAUDE.md do usuário). Roda sempre antes de reservar um novo lote."""
     entity_set = await dv.resolver_entity_set_name(environment_url, TABELA_REDMINE_QUEUE)
-    limite = (datetime.now(UTC) - timedelta(minutes=timeout_minutos)).isoformat()
+    limite = (datetime.now(UTC) - timedelta(minutes=timeout_minutos)).isoformat().replace('+00:00', 'Z')
     itens = await dv.list_rows(
         environment_url, entity_set,
         filtro=f"cr85a_status eq '{STATUS_PROCESSING}' and cr85a_reservedat le {limite}",
@@ -199,10 +200,23 @@ async def processar_fila_redmine(
                 'cr85a_reservedat': datetime.now(UTC).isoformat(),
             })
         except DataverseError as exc:
-            logger.warning('redmine_sync_reserva_falhou row_id=%s erro=%s', row_id, exc)
+            erro_reserva = _mascarar(str(exc))
+            logger.warning('redmine_sync_reserva_falhou row_id=%s erro=%s', row_id, erro_reserva)
+            falhas += 1
+            itens_processados.append({
+                'row_id': row_id,
+                'correlation_id': correlation_id,
+                'status': STATUS_PENDING,
+                'erro': erro_reserva,
+            })
+            # Sem reserva confirmada, criar a issue permitiria que dois
+            # workers processassem o mesmo item e gerassem duplicidade.
+            continue
 
         try:
-            resultado = criar_issue_generica(subject=subject, tracker_id=tracker_id)
+            # O adapter legado usa urllib síncrono; não bloqueie o event loop
+            # durante as chamadas externas do lote.
+            resultado = await to_thread(criar_issue_generica, subject=subject, tracker_id=tracker_id)
             await dv.update_row(environment_url, entity_set_queue, row_id, {'cr85a_status': STATUS_SENT})
             try:
                 await dv.update_row(environment_url, entity_set_queue, row_id, {'cr85a_redmineissueid': resultado['issue_id']})
