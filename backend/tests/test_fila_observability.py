@@ -4,10 +4,12 @@ import pytest
 
 from app.core.fila_observability import (
     EstadoFila,
+    PoliticaSLOFila,
     RegistroObservabilidadeFila,
     RepositorioSnapshotsFila,
     TransicaoFila,
     anonimizar_demanda_id,
+    avaliar_slos_fila,
     criar_cards_dashboard_fila,
     registrar_transicao_fila,
     renderizar_metricas_prometheus,
@@ -114,3 +116,51 @@ def test_dashboard_publica_os_quatro_sinais():
         'fila-saturacao',
     ]
     assert all(card['drilldown'].startswith('/api/runtime/fila/') for card in cards)
+
+
+
+def test_slo_identifica_erros_latencia_e_saturacao():
+    snapshot = RegistroObservabilidadeFila().snapshot()
+    snapshot['quatro_sinais']['erros'] = {'total': 2, 'taxa_percentual': 10.0, 'por_codigo': {}}
+    snapshot['quatro_sinais']['latencia']['p95_ms'] = 2500
+    snapshot['quatro_sinais']['saturacao']['demandas_ativas'] = 60
+
+    resultado = avaliar_slos_fila(snapshot, [], PoliticaSLOFila())
+
+    assert resultado['status'] == 'alerta'
+    assert {alerta['codigo'] for alerta in resultado['alertas']} == {
+        'FILA_TAXA_ERROS_ACIMA_SLO',
+        'FILA_LATENCIA_P95_ACIMA_SLO',
+        'FILA_SATURACAO_ACIMA_SLO',
+    }
+    assert resultado['guardrails']['sem_disparo_externo'] is True
+
+
+def test_slo_identifica_crescimento_continuo():
+    registro = RegistroObservabilidadeFila()
+    snapshot = registro.snapshot()
+    snapshot['quatro_sinais']['saturacao']['demandas_ativas'] = 3
+    historico = []
+    for valor in (2, 1):
+        item = registro.snapshot()
+        item['quatro_sinais']['saturacao']['demandas_ativas'] = valor
+        historico.append(item)
+
+    resultado = avaliar_slos_fila(
+        snapshot,
+        historico,
+        PoliticaSLOFila(demandas_ativas_maximas=100),
+    )
+
+    assert resultado['alertas'][0]['codigo'] == 'FILA_CRESCIMENTO_CONTINUO'
+
+
+def test_slo_sem_violacao_permanece_verde():
+    resultado = avaliar_slos_fila(
+        RegistroObservabilidadeFila().snapshot(),
+        [],
+        PoliticaSLOFila(),
+    )
+
+    assert resultado['status'] == 'dentro_do_slo'
+    assert resultado['alertas'] == []
