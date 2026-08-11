@@ -27,6 +27,7 @@ from app.api import (
     ia,
     incidentes,
     monitoramento_operacional,
+    movimento_email,
     operational_autonomy,
     operational_intelligence,
     pipeline,
@@ -132,6 +133,7 @@ app.include_router(codex_governado.router)
 app.include_router(webhooks.router)
 app.include_router(rastreabilidade.router)
 app.include_router(redmine_sync.router)
+app.include_router(movimento_email.router)
 app.include_router(hub_lowcode.router)
 app.include_router(teams_gateway.router)
 app.include_router(agents.router)

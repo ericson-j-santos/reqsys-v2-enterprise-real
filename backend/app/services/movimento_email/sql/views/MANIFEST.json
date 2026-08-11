@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0.0",
+  "solucao": "movimento-email-views",
+  "descricao": "Views de origem (contrato) da rotina de e-mail Prospecção Movimento — Portabilidade Consignado (#2861)",
+  "database_alvo": "SQL Server corporativo (MOVIMENTO_EMAIL_SOURCE_DSN)",
+  "versoes": [
+    {
+      "versao": "V1",
+      "descricao": "Cria as 4 views de contrato (stub, 0 linhas) consumidas por backend/app/services/movimento_email/repository.py — gap #2861-1: corpo real (FROM/JOIN contra o schema legado) ainda pendente de confirmação com a equipe de dados.",
+      "idempotente": true,
+      "mecanismo_idempotencia": "CREATE OR ALTER VIEW (SQL Server 2016 SP1+/Azure SQL Database)",
+      "arquivos": [
+        {
+          "arquivo": "V1__vw_prospeccao_movimento_fechamento_diario.sql",
+          "sha256": "9c350c929f21c044e8aec499a101f073e5a5052848290b27f1d6e442f034ae4e"
+        },
+        {
+          "arquivo": "V1__vw_prospeccao_movimento_pendencias_cadastro.sql",
+          "sha256": "6231356c6ee5798672e8c5b674b4c19ce40c396940cc097726099a350d28ad5e"
+        },
+        {
+          "arquivo": "V1__vw_prospeccao_movimento_pendencias_historicas.sql",
+          "sha256": "e08b872973535e5a3d83534ae945dc762be97ca8a0bd33cbd3c6f8f6aca0eec1"
+        },
+        {
+          "arquivo": "V1__vw_prospeccao_movimento_pendencias_observacao.sql",
+          "sha256": "4334406919521859fc7055df948fa3296096b145ec48831fa0ec4d2d4586c40b"
+        }
+      ],
+      "rollback": {
+        "arquivo": "V1__rollback.sql",
+        "sha256": "46908f49d137666c9ece4a13c823426a92e6709715b7afdfdcb743fb0bb503e4"
+      }
+    }
+  ]
+}

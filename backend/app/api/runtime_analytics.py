@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.feature_metrics import REGISTRY
+from app.core.fila_observability import REGISTRO_FILA
 from app.core.otel import otel_ativo
 from app.core.runtime_analytics import (
     DurableRuntimeAnalyticsStore,
@@ -130,6 +131,7 @@ def obter_runtime_analytics(
             'correlation_propagation': 'x-correlation-id',
         },
         'feature_metrics': REGISTRY.operational_analytics(),
+        'fila_atendimento': REGISTRO_FILA.snapshot(),
     }
     return ok(analytics, correlation_id)
 

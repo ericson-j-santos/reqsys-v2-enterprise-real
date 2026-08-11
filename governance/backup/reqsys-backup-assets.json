@@ -2,10 +2,10 @@
   "schema_version": "1.0.0",
   "dashboard_issue_number": 1162,
   "storage": {
-    "provider": "cloudflare-r2",
+    "provider": "tigris",
     "repository_prefix": "reqsys-backups",
-    "free_tier_warn_bytes": 8589934592,
-    "free_tier_hard_bytes": 9663676416
+    "free_tier_warn_bytes": 4294967296,
+    "free_tier_hard_bytes": 4831838208
   },
   "defaults": {
     "database_engine": "sqlite",

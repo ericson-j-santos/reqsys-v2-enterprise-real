@@ -12,14 +12,18 @@
 #   .\scripts\configurar-teams-graph.ps1 -UpdateEnvFile                # + grava valores nao-sensiveis no .env
 #   .\scripts\configurar-teams-graph.ps1 -GrantPermissions             # + adiciona Chat.Create/Chat.ReadWrite.All e concede admin consent
 #   .\scripts\configurar-teams-graph.ps1 -CreateSecret -UpdateEnvFile  # + gera novo client secret e grava no .env (nunca impresso no console)
+#   .\scripts\configurar-teams-graph.ps1 -AcquireDelegatedToken -UpdateEnvFile
+#       inicia login por device code e grava TEAMS_DELEGATED_TOKEN no .env.
 #
 # O script e idempotente: rodar de novo so relata o que ja esta OK.
+# O token delegado e temporario e precisa ser renovado quando expirar.
 
 param(
     [string]$AppDisplayName = "ReqSys Enterprise",
     [string]$AppId = "",
     [switch]$GrantPermissions,
     [switch]$CreateSecret,
+    [switch]$AcquireDelegatedToken,
     [switch]$UpdateEnvFile
 )
 
@@ -29,6 +33,7 @@ param(
 # executado (ex.: secret ja criado no Azure, porem nunca capturado/gravado).
 $ErrorActionPreference = "Continue"
 $MicrosoftGraphAppId = "00000003-0000-0000-c000-000000000000"
+$DelegatedScopes = "openid profile offline_access https://graph.microsoft.com/Chat.ReadWrite https://graph.microsoft.com/ChatMessage.Send"
 
 # App-only (nao existe "ChatMessage.Send" como permissao de aplicacao no Graph;
 # enviar mensagem app-only exige Chat.ReadWrite.All, que e uma permissao
@@ -153,13 +158,15 @@ if ($faltantes.Count -gt 0) {
     Write-Host "[3/4] Todas as permissoes necessarias ja estao concedidas." -ForegroundColor Green
 }
 
-# ---- 4. Client secret + .env ----
+# ---- 4. Client secret + token delegado + .env ----
 Write-Host ""
-Write-Host "[4/4] Client secret e .env..." -ForegroundColor Yellow
+Write-Host "[4/4] Client secret, token delegado e .env..." -ForegroundColor Yellow
 
 $root = Split-Path $PSScriptRoot -Parent
 $envFile = Join-Path $root ".env"
 $novoSecret = $null
+$delegatedToken = $null
+$delegatedExpiresIn = $null
 
 if ($CreateSecret) {
     Write-Host "  Gerando novo client secret (valido 12 meses)..."
@@ -172,6 +179,77 @@ if ($CreateSecret) {
     }
 } else {
     Write-Host "  (pulando criacao de secret; rode com -CreateSecret se AZURE_CLIENT_SECRET ainda nao existir)"
+}
+
+if ($AcquireDelegatedToken) {
+    Write-Host "  Iniciando login delegado por device code..."
+    $deviceCodeUrl = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/devicecode"
+    $tokenUrl = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
+    try {
+        $device = Invoke-RestMethod `
+            -Method Post `
+            -Uri $deviceCodeUrl `
+            -ContentType "application/x-www-form-urlencoded" `
+            -Body @{
+                client_id = $clientId
+                scope = $DelegatedScopes
+            }
+
+        Write-Host ""
+        Write-Host $device.message -ForegroundColor Cyan
+        Write-Host ""
+
+        $intervalSeconds = [Math]::Max([int]$device.interval, 5)
+        $deadline = (Get-Date).AddSeconds([int]$device.expires_in)
+        while ((Get-Date) -lt $deadline -and -not $delegatedToken) {
+            Start-Sleep -Seconds $intervalSeconds
+            try {
+                $tokenResponse = Invoke-RestMethod `
+                    -Method Post `
+                    -Uri $tokenUrl `
+                    -ContentType "application/x-www-form-urlencoded" `
+                    -Body @{
+                        grant_type = "urn:ietf:params:oauth:grant-type:device_code"
+                        client_id = $clientId
+                        device_code = $device.device_code
+                    }
+                $delegatedToken = $tokenResponse.access_token
+                $delegatedExpiresIn = $tokenResponse.expires_in
+            } catch {
+                $oauthError = $null
+                try {
+                    $oauthPayload = $_.ErrorDetails.Message | ConvertFrom-Json
+                    $oauthError = $oauthPayload.error
+                } catch {
+                    $oauthError = $null
+                }
+                if ($oauthError -eq "authorization_pending") {
+                    continue
+                }
+                if ($oauthError -eq "slow_down") {
+                    $intervalSeconds += 5
+                    continue
+                }
+                if ($oauthError -eq "authorization_declined") {
+                    throw "Login delegado recusado pelo usuario."
+                }
+                if ($oauthError -eq "expired_token") {
+                    throw "Device code expirou antes da conclusao do login."
+                }
+                throw
+            }
+        }
+        if (-not $delegatedToken) {
+            throw "Tempo limite do device code esgotado."
+        }
+        Write-Host "  [OK] Token delegado obtido; validade aproximada: $delegatedExpiresIn segundos." -ForegroundColor Green
+        Write-Host "       O valor nao sera impresso no console." -ForegroundColor Green
+    } catch {
+        Write-Host "  [ERRO] Nao foi possivel obter o token delegado: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "         Confirme que o app permite public client flows e possui Chat.ReadWrite/ChatMessage.Send delegadas." -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "  (pulando token delegado; rode com -AcquireDelegatedToken para fazer login por device code)"
 }
 
 if ($UpdateEnvFile) {
@@ -194,8 +272,11 @@ if ($UpdateEnvFile) {
     if ($novoSecret) {
         $content = Set-EnvVar $content "AZURE_CLIENT_SECRET" $novoSecret
     }
+    if ($delegatedToken) {
+        $content = Set-EnvVar $content "TEAMS_DELEGATED_TOKEN" $delegatedToken
+    }
     $content | Set-Content $envFile -Encoding UTF8 -NoNewline
-    Write-Host "  [OK] .env atualizado (AZURE_TENANT_ID, AZURE_CLIENT_ID, TEAMS_GRAPH_APP_SERVICE_PRINCIPAL_ID$(if ($novoSecret) { ', AZURE_CLIENT_SECRET' }))" -ForegroundColor Green
+    Write-Host "  [OK] .env atualizado (AZURE_TENANT_ID, AZURE_CLIENT_ID, TEAMS_GRAPH_APP_SERVICE_PRINCIPAL_ID$(if ($novoSecret) { ', AZURE_CLIENT_SECRET' })$(if ($delegatedToken) { ', TEAMS_DELEGATED_TOKEN' }))" -ForegroundColor Green
 } else {
     Write-Host "  (pulando gravacao no .env; rode com -UpdateEnvFile para persistir os valores capturados)"
 }
@@ -205,5 +286,6 @@ Write-Host "  AZURE_TENANT_ID                      = $tenantId"
 Write-Host "  AZURE_CLIENT_ID                      = $clientId"
 Write-Host "  TEAMS_GRAPH_APP_SERVICE_PRINCIPAL_ID  = $servicePrincipalId"
 Write-Host "  AZURE_CLIENT_SECRET                  = $(if ($novoSecret) { '[gerado agora - ver .env]' } elseif ($CreateSecret) { '[FALHOU]' } else { '[nao gerado nesta execucao]' })"
+Write-Host "  TEAMS_DELEGATED_TOKEN                = $(if ($delegatedToken) { '[capturado agora - ver .env; temporario]' } elseif ($AcquireDelegatedToken) { '[FALHOU]' } else { '[nao capturado nesta execucao]' })"
 Write-Host "  Permissoes Chat.Create/Chat.ReadWrite.All: $(if ($faltantes.Count -eq 0) { 'OK' } else { 'PENDENTE' })"
 Write-Host ""

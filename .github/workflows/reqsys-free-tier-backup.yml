@@ -11,6 +11,7 @@ on:
       - "scripts/reqsys_free_tier_backup.py"
       - "scripts/run_reqsys_free_tier_backup.sh"
       - "tests/test_reqsys_free_tier_backup.py"
+      - "tests/test_object_storage_workflow_contract.py"
       - "docs/operations/backup-free-tier-runbook.md"
   push:
     branches: [main]
@@ -71,10 +72,10 @@ jobs:
           python-version: "3.12"
       - name: Validate implementation
         run: |
-          python -m py_compile scripts/remote_sqlite_backup.py scripts/reqsys_free_tier_backup.py tests/test_reqsys_free_tier_backup.py
+          python -m py_compile scripts/remote_sqlite_backup.py scripts/reqsys_free_tier_backup.py tests/test_reqsys_free_tier_backup.py tests/test_object_storage_workflow_contract.py
           bash -n scripts/run_reqsys_free_tier_backup.sh
           python scripts/reqsys_free_tier_backup.py validate --inventory "$INVENTORY"
-          python -m unittest -v tests/test_reqsys_free_tier_backup.py
+          python -m unittest -v tests/test_reqsys_free_tier_backup.py tests/test_object_storage_workflow_contract.py
       - name: Build governed plan
         id: plan
         env:
@@ -82,6 +83,10 @@ jobs:
           INCLUDE_DISABLED: ${{ github.event.inputs.include_disabled || 'false' }}
           APPROVE_PROD: ${{ github.event.inputs.approve_prod || '' }}
           FLY_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          STORAGE_ENDPOINT: ${{ vars.OBJECT_STORAGE_ENDPOINT }}
+          STORAGE_KEY: ${{ secrets.OBJECT_STORAGE_ACCESS_KEY_ID }}
+          STORAGE_SECRET: ${{ secrets.OBJECT_STORAGE_SECRET_ACCESS_KEY }}
+          STORAGE_BUCKET: ${{ secrets.OBJECT_STORAGE_BUCKET }}
           R2_ACCOUNT: ${{ secrets.R2_ACCOUNT_ID }}
           R2_KEY: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -95,7 +100,15 @@ jobs:
             echo "PROD exige approve_prod=APROVO-PROD" >&2; exit 1
           fi
           matrix=$(python scripts/reqsys_free_tier_backup.py matrix --inventory "$INVENTORY" --target "$TARGET" "${extra[@]}")
-          missing=(); [[ -n "$FLY_TOKEN" ]] || missing+=(FLY_API_TOKEN); [[ -n "$R2_ACCOUNT" ]] || missing+=(R2_ACCOUNT_ID); [[ -n "$R2_KEY" ]] || missing+=(R2_ACCESS_KEY_ID); [[ -n "$R2_SECRET" ]] || missing+=(R2_SECRET_ACCESS_KEY); [[ -n "$R2_BUCKET_NAME" ]] || missing+=(R2_BUCKET); [[ -n "$RESTIC_SECRET" ]] || missing+=(RESTIC_PASSWORD)
+          missing=(); [[ -n "$FLY_TOKEN" ]] || missing+=(FLY_API_TOKEN)
+          generic_configured=false
+          [[ -n "$STORAGE_KEY" && -n "$STORAGE_SECRET" && -n "$STORAGE_BUCKET" ]] && generic_configured=true
+          r2_configured=false
+          [[ -n "$R2_ACCOUNT" && -n "$R2_KEY" && -n "$R2_SECRET" && -n "$R2_BUCKET_NAME" ]] && r2_configured=true
+          if [[ "$generic_configured" != true && "$r2_configured" != true ]]; then
+            missing+=(OBJECT_STORAGE_ACCESS_KEY_ID OBJECT_STORAGE_SECRET_ACCESS_KEY OBJECT_STORAGE_BUCKET)
+          fi
+          [[ -n "$RESTIC_SECRET" ]] || missing+=(RESTIC_PASSWORD)
           configured=true; (( ${#missing[@]} )) && configured=false
           csv=$(IFS=,; echo "${missing[*]}")
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"; echo "configured=$configured" >> "$GITHUB_OUTPUT"; echo "missing=$csv" >> "$GITHUB_OUTPUT"
@@ -112,11 +125,13 @@ jobs:
       matrix: ${{ fromJson(needs.validate.outputs.matrix) }}
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: auto
+      AWS_ACCESS_KEY_ID: ${{ secrets.OBJECT_STORAGE_ACCESS_KEY_ID || secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.OBJECT_STORAGE_SECRET_ACCESS_KEY || secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ vars.OBJECT_STORAGE_REGION || 'auto' }}
+      OBJECT_STORAGE_ENDPOINT: ${{ vars.OBJECT_STORAGE_ENDPOINT }}
+      OBJECT_STORAGE_BUCKET: ${{ secrets.OBJECT_STORAGE_BUCKET || secrets.R2_BUCKET }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
-      RESTIC_REPOSITORY: s3:https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com/${{ secrets.R2_BUCKET }}/reqsys-backups
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       CORRELATION_ID: backup-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.environment }}
       ASSET_JSON: ${{ toJson(matrix) }}
@@ -130,8 +145,20 @@ jobs:
           sudo apt-get update -q && sudo apt-get install -y -q restic
           curl -fsSL https://fly.io/install.sh | sh -s 0.4.49
           echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
+      - name: Resolve S3-compatible provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="${OBJECT_STORAGE_ENDPOINT:-}"
+          if [[ -z "$endpoint" && -n "${R2_ACCOUNT_ID:-}" ]]; then
+            endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          fi
+          endpoint="${endpoint:-https://fly.storage.tigris.dev}"
+          endpoint="${endpoint%/}"
+          echo "RESTIC_REPOSITORY=s3:${endpoint}/${OBJECT_STORAGE_BUCKET}/reqsys-backups" >> "$GITHUB_ENV"
+          echo "Object storage provider configured without exposing credentials." >> "$GITHUB_STEP_SUMMARY"
       - name: Backup, encrypt, restore and validate
-        run: scripts/run_reqsys_free_tier_backup.sh
+        run: bash scripts/run_reqsys_free_tier_backup.sh
       - name: Publish non-sensitive evidence
         if: always()
         uses: actions/upload-artifact@v4
