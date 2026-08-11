@@ -1,0 +1,55 @@
+name: Guard Rail — Prontidão para PR
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/criar-pr-governado.sh
+      - .github/workflows/pr-readiness-guard.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/criar-pr-governado.sh
+      - .github/workflows/pr-readiness-guard.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-readiness-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validar-guard-rail:
+    name: Validar contrato fail-closed
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Validar sintaxe
+        run: bash -n scripts/criar-pr-governado.sh
+      - name: Validar controles obrigatórios
+        shell: bash
+        run: |
+          set -euo pipefail
+          arquivo=scripts/criar-pr-governado.sh
+          controles=(
+            'set -Eeuo pipefail'
+            'gh auth status'
+            'git status --porcelain'
+            'git merge-base --is-ancestor'
+            'python -m ruff check'
+            'python -m pytest'
+            'npm audit --audit-level=high'
+            'npm run test:unit'
+            'npm run build'
+            'gh pr create'
+          )
+          for controle in "${controles[@]}"; do
+            grep -Fq -- "$controle" "$arquivo" || {
+              echo "Controle obrigatório ausente: $controle"
+              exit 1
+            }
+          done
+          echo "Contrato do Guard Rail de Prontidão para PR íntegro."
