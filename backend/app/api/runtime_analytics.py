@@ -11,6 +11,7 @@ from app.core.feature_metrics import REGISTRY
 from app.core.fila_observability import (
     REGISTRO_FILA,
     RepositorioSnapshotsFila,
+    avaliar_slos_fila,
     criar_cards_dashboard_fila,
     renderizar_metricas_prometheus,
 )
@@ -140,6 +141,7 @@ def obter_runtime_analytics(
         },
         'feature_metrics': REGISTRY.operational_analytics(),
         'fila_atendimento': fila_snapshot,
+        'fila_slos': avaliar_slos_fila(fila_snapshot, FILA_STORE.listar(20)),
         'fila_dashboard': {
             'titulo': 'Observabilidade da fila de atendimento',
             'cards': criar_cards_dashboard_fila(fila_snapshot),
@@ -184,3 +186,10 @@ def obter_metricas_prometheus_fila():
         renderizar_metricas_prometheus(REGISTRO_FILA.snapshot()),
         media_type='text/plain; version=0.0.4; charset=utf-8',
     )
+
+
+
+@router.get('/api/runtime/fila/alertas')
+def obter_alertas_slo_fila():
+    snapshot = REGISTRO_FILA.snapshot()
+    return ok(avaliar_slos_fila(snapshot, FILA_STORE.listar(20)))
