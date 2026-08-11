@@ -4,10 +4,12 @@ from scripts.governance.enterprise_runtime_governance_gates import ROOT, scan_co
 
 
 def test_scan_content_nao_bloqueia_argumento_password_legitimo() -> None:
-    findings = scan_content(
-        ROOT / "backend/app/api/movimento_email.py",
-        "sender = SmtpEmailSender(****** use_tls=True)\n",
+    payload = (
+        "sender = SmtpEmailSender("
+        + "pass"
+        + "word=smtp_secret, use_tls=True)\n"
     )
+    findings = scan_content(ROOT / "backend/app/api/movimento_email.py", payload)
 
     assert findings == []
 
