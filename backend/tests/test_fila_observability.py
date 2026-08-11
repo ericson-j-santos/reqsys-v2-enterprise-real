@@ -5,9 +5,12 @@ import pytest
 from app.core.fila_observability import (
     EstadoFila,
     RegistroObservabilidadeFila,
+    RepositorioSnapshotsFila,
     TransicaoFila,
     anonimizar_demanda_id,
+    criar_cards_dashboard_fila,
     registrar_transicao_fila,
+    renderizar_metricas_prometheus,
 )
 
 
@@ -69,3 +72,45 @@ def test_api_exige_correlation_id():
             correlation_id=' ',
             inicio=perf_counter(),
         )
+
+
+
+def test_persistencia_armazena_somente_agregados(tmp_path):
+    registro = RegistroObservabilidadeFila()
+    registro.registrar(_evento(EstadoFila.DISPONIVEL, EstadoFila.RESERVADA))
+    repositorio = RepositorioSnapshotsFila(
+        database_url=f"sqlite:///{tmp_path / 'fila.db'}",
+        limite=2,
+    )
+
+    repositorio.registrar(registro.snapshot())
+    historico = repositorio.listar()
+
+    assert len(historico) == 1
+    assert historico[0]['guardrails']['sem_pii'] is True
+    assert 'demanda_hash' not in str(historico[0])
+    assert 'correlation_id' not in str(historico[0])
+
+
+def test_metricas_prometheus_tem_cardinalidade_governada():
+    registro = RegistroObservabilidadeFila()
+    registro.registrar(_evento(EstadoFila.DISPONIVEL, EstadoFila.RESERVADA))
+
+    metricas = renderizar_metricas_prometheus(registro.snapshot())
+
+    assert 'reqsys_fila_transicoes_total{origem="DISPONIVEL",destino="RESERVADA"} 1' in metricas
+    assert 'reqsys_fila_latencia_p95_ms 25' in metricas
+    assert 'DEM-123' not in metricas
+    assert 'corr-teste' not in metricas
+
+
+def test_dashboard_publica_os_quatro_sinais():
+    cards = criar_cards_dashboard_fila(RegistroObservabilidadeFila().snapshot())
+
+    assert [card['id'] for card in cards] == [
+        'fila-volume',
+        'fila-latencia-p95',
+        'fila-erros',
+        'fila-saturacao',
+    ]
+    assert all(card['drilldown'].startswith('/api/runtime/fila/') for card in cards)
