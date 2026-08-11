@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import threading
 from collections import Counter
 from dataclasses import dataclass
@@ -288,3 +289,106 @@ def criar_cards_dashboard_fila(snapshot: dict) -> list[dict]:
             'drilldown': '/api/runtime/fila/historico',
         },
     ]
+
+
+
+@dataclass(frozen=True, slots=True)
+class PoliticaSLOFila:
+    taxa_erros_maxima_percentual: float = 5.0
+    latencia_p95_maxima_ms: int = 2000
+    demandas_ativas_maximas: int = 50
+    amostras_crescimento: int = 3
+
+    @classmethod
+    def de_ambiente(cls) -> 'PoliticaSLOFila':
+        return cls(
+            taxa_erros_maxima_percentual=float(
+                os.getenv('FILA_SLO_TAXA_ERROS_MAXIMA_PERCENTUAL', '5')
+            ),
+            latencia_p95_maxima_ms=int(os.getenv('FILA_SLO_LATENCIA_P95_MAXIMA_MS', '2000')),
+            demandas_ativas_maximas=int(os.getenv('FILA_SLO_DEMANDAS_ATIVAS_MAXIMAS', '50')),
+            amostras_crescimento=int(os.getenv('FILA_SLO_AMOSTRAS_CRESCIMENTO', '3')),
+        )
+
+
+def avaliar_slos_fila(
+    snapshot: dict,
+    historico: list[dict],
+    politica: PoliticaSLOFila | None = None,
+) -> dict:
+    politica_ativa = politica or PoliticaSLOFila.de_ambiente()
+    sinais = snapshot['quatro_sinais']
+    alertas: list[dict] = []
+
+    def adicionar_alerta(codigo: str, severidade: str, valor: float, limite: float) -> None:
+        alertas.append(
+            {
+                'codigo': codigo,
+                'severidade': severidade,
+                'valor_observado': valor,
+                'limite': limite,
+                'acao': 'investigar_por_correlation_id_e_transicao',
+            }
+        )
+
+    taxa_erros = sinais['erros']['taxa_percentual']
+    if taxa_erros > politica_ativa.taxa_erros_maxima_percentual:
+        adicionar_alerta(
+            'FILA_TAXA_ERROS_ACIMA_SLO',
+            'critica',
+            taxa_erros,
+            politica_ativa.taxa_erros_maxima_percentual,
+        )
+
+    latencia_p95 = sinais['latencia']['p95_ms']
+    if latencia_p95 > politica_ativa.latencia_p95_maxima_ms:
+        adicionar_alerta(
+            'FILA_LATENCIA_P95_ACIMA_SLO',
+            'alta',
+            latencia_p95,
+            politica_ativa.latencia_p95_maxima_ms,
+        )
+
+    demandas_ativas = sinais['saturacao']['demandas_ativas']
+    if demandas_ativas > politica_ativa.demandas_ativas_maximas:
+        adicionar_alerta(
+            'FILA_SATURACAO_ACIMA_SLO',
+            'alta',
+            demandas_ativas,
+            politica_ativa.demandas_ativas_maximas,
+        )
+
+    janela = historico[: politica_ativa.amostras_crescimento - 1]
+    serie = [
+        item['quatro_sinais']['saturacao']['demandas_ativas']
+        for item in reversed(janela)
+    ] + [demandas_ativas]
+    if len(serie) >= politica_ativa.amostras_crescimento and all(
+        atual > anterior for anterior, atual in zip(serie, serie[1:], strict=False)
+    ):
+        alertas.append(
+            {
+                'codigo': 'FILA_CRESCIMENTO_CONTINUO',
+                'severidade': 'alta',
+                'valor_observado': serie,
+                'limite': politica_ativa.amostras_crescimento,
+                'acao': 'verificar_consumidores_e_demandas_presas',
+            }
+        )
+
+    return {
+        'schema_version': '1.0.0',
+        'status': 'alerta' if alertas else 'dentro_do_slo',
+        'alertas': alertas,
+        'politica': {
+            'taxa_erros_maxima_percentual': politica_ativa.taxa_erros_maxima_percentual,
+            'latencia_p95_maxima_ms': politica_ativa.latencia_p95_maxima_ms,
+            'demandas_ativas_maximas': politica_ativa.demandas_ativas_maximas,
+            'amostras_crescimento': politica_ativa.amostras_crescimento,
+        },
+        'guardrails': {
+            'somente_avaliacao': True,
+            'sem_disparo_externo': True,
+            'sem_pii': True,
+        },
+    }
