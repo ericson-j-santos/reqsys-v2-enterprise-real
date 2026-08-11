@@ -6,6 +6,7 @@ uma automacao (ex.: GitHub Actions) e nao um usuario humano logado via JWT.
 """
 
 import hashlib
+import hmac
 import json
 from datetime import datetime, timezone
 
@@ -13,6 +14,7 @@ from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import get_current_user
 from app.db import get_db
 from app.models.service_token import ServiceToken
@@ -31,7 +33,12 @@ class ServiceAuthContext:
 
 
 def hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
+    """Gera identificador deterministico sem armazenar ou hashear o token sem chave."""
+    return hmac.new(
+        settings.jwt_secret.encode(),
+        token.encode(),
+        hashlib.sha256,
+    ).hexdigest()
 
 
 def _resolver_token(db: Session, token_bruto: str) -> ServiceToken | None:
