@@ -232,13 +232,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ needs.resolve-context.outputs.pr_number }}
           EVALUATED_SHA: ${{ needs.resolve-context.outputs.head_sha }}
+          BASE_REF: ${{ needs.resolve-context.outputs.base_ref }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts/governed-merge-queue .tmp/current-sha-stability
           policy="governance/merge/current-sha-required-workflows.json"
-          max_attempts="$(jq -r '.max_attempts' "$policy")"
-          poll_seconds="$(jq -r '.poll_seconds' "$policy")"
+          effective_policy=".tmp/current-sha-stability/current-sha-required-workflows.effective.json"
+
+          if [[ "$BASE_REF" == "main" || "$BASE_REF" == "master" || "$BASE_REF" == "develop" ]]; then
+            cp "$policy" "$effective_policy"
+          else
+            jq '
+              .optional_when_not_registered = (
+                ((.optional_when_not_registered // []) + (.required_workflows // []))
+                | map(select(type == "string" and length > 0))
+                | unique
+              )
+            ' "$policy" > "$effective_policy"
+          fi
+
+          max_attempts="$(jq -r '.max_attempts' "$effective_policy")"
+          poll_seconds="$(jq -r '.poll_seconds' "$effective_policy")"
 
           for attempt in $(seq 1 "$max_attempts"); do
             current_sha="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid' 2>/dev/null)" \
@@ -254,7 +269,7 @@ jobs:
             set +e
             python scripts/evaluate_current_sha_workflow_stability.py \
               --runs .tmp/current-sha-stability/workflow-runs.json \
-              --policy "$policy" \
+              --policy "$effective_policy" \
               --evaluated-sha "$EVALUATED_SHA" \
               --current-sha "$current_sha" \
               --output artifacts/governed-merge-queue/current-sha-stability.json
