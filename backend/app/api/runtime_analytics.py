@@ -1,14 +1,19 @@
 import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Header, Response
 
 from app.api.monitoramento_operacional import _criar_runtime_observability_snapshot
 from app.core.config import settings
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.feature_metrics import REGISTRY
-from app.core.fila_observability import REGISTRO_FILA
+from app.core.fila_observability import (
+    REGISTRO_FILA,
+    RepositorioSnapshotsFila,
+    criar_cards_dashboard_fila,
+    renderizar_metricas_prometheus,
+)
 from app.core.otel import otel_ativo
 from app.core.runtime_analytics import (
     DurableRuntimeAnalyticsStore,
@@ -22,6 +27,7 @@ from app.services.operational_mesh_signal import (
 router = APIRouter(tags=['Runtime Analytics'])
 logger = logging.getLogger(__name__)
 STORE = DurableRuntimeAnalyticsStore(database_url=settings.database_url, max_snapshots=100)
+FILA_STORE = RepositorioSnapshotsFila(database_url=settings.database_url, limite=200)
 
 
 def _resolver_correlation_id(x_correlation_id: str | None, x_request_id: str | None) -> str:
@@ -123,6 +129,8 @@ def obter_runtime_analytics(
         'endpoint': '/api/runtime/operational-mesh',
     }
     analytics['cross_runtime_analytics'] = cross_runtime
+    fila_snapshot = REGISTRO_FILA.snapshot()
+    FILA_STORE.registrar(fila_snapshot)
     analytics['operational_telemetry'] = {
         'correlation_id': correlation_id,
         'distributed_tracing': {
@@ -131,7 +139,13 @@ def obter_runtime_analytics(
             'correlation_propagation': 'x-correlation-id',
         },
         'feature_metrics': REGISTRY.operational_analytics(),
-        'fila_atendimento': REGISTRO_FILA.snapshot(),
+        'fila_atendimento': fila_snapshot,
+        'fila_dashboard': {
+            'titulo': 'Observabilidade da fila de atendimento',
+            'cards': criar_cards_dashboard_fila(fila_snapshot),
+            'historico': '/api/runtime/fila/historico',
+            'metricas': '/api/runtime/fila/metricas',
+        },
     }
     return ok(analytics, correlation_id)
 
@@ -149,3 +163,24 @@ def obter_runtime_evidence_incidents():
 @router.get('/api/runtime/evidence/scorecard')
 def obter_runtime_evidence_scorecard():
     return ok(_evidence_scorecard_payload())
+
+
+
+@router.get('/api/runtime/fila/historico')
+def obter_historico_observabilidade_fila(limite: int = 20):
+    limite_seguro = min(max(1, limite), 200)
+    return ok(
+        {
+            'schema_version': '1.0.0',
+            'items': FILA_STORE.listar(limite_seguro),
+            'guardrails': {'sem_pii': True, 'somente_agregados': True},
+        }
+    )
+
+
+@router.get('/api/runtime/fila/metricas')
+def obter_metricas_prometheus_fila():
+    return Response(
+        renderizar_metricas_prometheus(REGISTRO_FILA.snapshot()),
+        media_type='text/plain; version=0.0.4; charset=utf-8',
+    )
