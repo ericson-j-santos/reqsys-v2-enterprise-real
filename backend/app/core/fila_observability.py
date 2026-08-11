@@ -9,8 +9,8 @@ import hashlib
 import json
 import threading
 from collections import Counter
-from datetime import UTC, datetime
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
 from statistics import mean
 from time import perf_counter
