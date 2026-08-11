@@ -88,3 +88,37 @@ def test_latest_attempt_wins_over_cancelled_older_run() -> None:
         ]
     )
     assert report["stable"] is True
+
+
+def test_path_filtered_workflow_may_be_absent_but_still_blocks_when_failed() -> None:
+    policy = {
+        **POLICY,
+        "optional_when_not_registered": ["Security"],
+    }
+    absent_report = evaluate_stability(
+        runs_payload={"workflow_runs": [run("CI"), run("Evidence", run_id=2)]},
+        policy=policy,
+        evaluated_sha="abc",
+        current_sha="abc",
+        observed_at=datetime(2026, 7, 31, 18, 5, tzinfo=UTC),
+    )
+    assert absent_report["stable"] is True
+    assert absent_report["missing_workflows"] == []
+    assert absent_report["tolerated_missing_workflows"] == ["Security"]
+    assert absent_report["absence_is_success"] is True
+
+    failed_report = evaluate_stability(
+        runs_payload={
+            "workflow_runs": [
+                run("CI"),
+                run("Evidence", run_id=2),
+                run("Security", conclusion="failure", run_id=3),
+            ]
+        },
+        policy=policy,
+        evaluated_sha="abc",
+        current_sha="abc",
+        observed_at=datetime(2026, 7, 31, 18, 5, tzinfo=UTC),
+    )
+    assert failed_report["stable"] is False
+    assert failed_report["decision"] == "required_workflows_failed"
