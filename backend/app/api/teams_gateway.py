@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.security import require_admin
+from app.core.service_tokens import ServiceAuthContext, require_admin_or_service_token
 from app.db import get_db
 from app.schemas.teams_gateway import (
     TeamsFlowBotClonarFlowRequest,
@@ -21,6 +22,7 @@ from app.schemas.teams_recipient_policy import (
     TeamsNotificationRecipientUpdate,
     TeamsRecipientPolicyMessageRequest,
 )
+from app.services.auditoria import registrar_evento
 from app.services.teams_flow_bot_provisioning import (
     buscar_flows_por_nome,
     clonar_flow_para_novo_dono,
@@ -49,6 +51,10 @@ from app.services.teams_recipient_policy import (
 logger = logging.getLogger('reqsys.teams_gateway_api')
 
 router = APIRouter(prefix='/v1/teams-gateway', tags=['Teams Messaging Gateway'])
+
+# Instancia unica (nao recriada por request) para permitir override em testes
+# via app.dependency_overrides — ver require_admin_or_service_token.
+require_promover_solution_auth = require_admin_or_service_token('teams_gateway:promover_solution')
 
 
 def _serializar_flow_bot_owner(item) -> dict:
@@ -304,9 +310,33 @@ async def teams_gateway_flow_bot_clonar_flow(payload: TeamsFlowBotClonarFlowRequ
     return ok(resultado)
 
 
-@router.post('/flow-bot/promover-solution', dependencies=[Depends(require_admin)])
-async def teams_gateway_flow_bot_promover_solution(payload: TeamsFlowBotPromoverSolutionRequest):
-    """Promove o flow_bot de um ambiente para outro via Power Platform Solutions."""
+@router.post('/flow-bot/promover-solution')
+async def teams_gateway_flow_bot_promover_solution(
+    payload: TeamsFlowBotPromoverSolutionRequest,
+    ctx: ServiceAuthContext = Depends(require_promover_solution_auth),
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    """Promove o flow_bot de um ambiente para outro via Power Platform Solutions
+    (Dataverse ExportSolution/ImportSolution — API 100% documentada, diferente
+    da Flow Management API bruta usada em `/flow-bot/clonar-flow`).
+
+    Uso: promover dev → test → prod. NAO serve para criar donos de backup no
+    MESMO ambiente (Solutions casam componentes por unique name; reimportar a
+    mesma solution no mesmo ambiente atualiza o flow existente, nao cria um
+    irmao novo) — para isso use `/flow-bot/clonar-flow`.
+
+    Pre-requisito manual e inevitavel: o dono do ambiente-alvo precisa ja ter
+    autorizado a propria conexao Teams la; informe o `connection_id_destino`.
+
+    Autenticação: JWT admin (humano) OU `X-Service-Token` escopado para
+    `teams_gateway:promover_solution` (automação — ver app/core/service_tokens.py).
+    """
+    correlation_id = x_correlation_id or resolver_correlation_id()
+    registrar_evento(
+        db, correlation_id, ctx.ator, 'TEAMS_FLOW_BOT_PROMOCAO_INICIADA', 'teams_flow_bot_solution',
+        payload.solution_name,
+    )
     try:
         resultado = await promover_flow_para_ambiente(
             environment_url_origem=payload.environment_url_origem,
@@ -318,7 +348,15 @@ async def teams_gateway_flow_bot_promover_solution(payload: TeamsFlowBotPromover
             managed=payload.managed,
         )
     except httpx.HTTPStatusError as exc:
+        registrar_evento(
+            db, correlation_id, ctx.ator, 'TEAMS_FLOW_BOT_PROMOCAO_FALHA', 'teams_flow_bot_solution',
+            payload.solution_name,
+        )
         raise HTTPException(status_code=502, detail=f'Falha na Dataverse API: HTTP {exc.response.status_code}') from None
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
+    registrar_evento(
+        db, correlation_id, ctx.ator, 'TEAMS_FLOW_BOT_PROMOCAO_CONCLUIDA', 'teams_flow_bot_solution',
+        payload.solution_name,
+    )
     return ok(resultado)

@@ -10,6 +10,7 @@ from app.models.cdi_rate import CdiRate  # noqa: F401
 from app.models.configuracao_lowcode import ConfiguracaoLowCode  # noqa: F401
 from app.models.gestao_ti import RequisitoServico, ServicoTI  # noqa: F401
 from app.models.integracao_log import IntegracaoLog  # noqa: F401
+from app.models.movimento_email_dispatch import MovimentoEmailDispatch  # noqa: F401
 from app.models.orchestrator import (  # noqa: F401
     AdrCoordinationEvent,
     AgileProjectPackage,
@@ -25,6 +26,7 @@ from app.models.requisito import (  # noqa: F401
     RecommendationIAOutcome,
     Requisito,
 )
+from app.models.service_token import ServiceToken  # noqa: F401
 from app.models.teams_flow_bot_owner import TeamsFlowBotOwner  # noqa: F401
 from app.models.teams_notification_queue import TeamsNotificationQueueItem  # noqa: F401
 from app.models.teams_notification_recipient import (

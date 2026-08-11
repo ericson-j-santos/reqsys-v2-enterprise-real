@@ -99,7 +99,7 @@ RULES: list[tuple[str, str, re.Pattern[str], str]] = [
     (
         "HIGH",
         "SEC_CONNECTION_STRING",
-        re.compile(r"(?i)(Server=|Data Source=|User ID=|Password=|mongodb\+srv://|postgres://|mysql://|jdbc:sqlserver://)"),
+        re.compile(r'(?i)(Server=|Data Source=|User ID=|(?:["\']\s*|;\s*)Password=|mongodb\+srv://|postgres://|mysql://|jdbc:sqlserver://)'),
         "Possível connection string exposta.",
     ),
 ]

@@ -27,6 +27,7 @@ from app.api import (
     ia,
     incidentes,
     monitoramento_operacional,
+    movimento_email,
     operational_autonomy,
     operational_intelligence,
     pipeline,
@@ -38,6 +39,7 @@ from app.api import (
     relatorios,
     requisitos,
     runtime_analytics,
+    service_tokens,
     sistema,
     specs,
     teams_gateway,
@@ -121,6 +123,7 @@ app.include_router(processos.router)
 app.include_router(wiki.router)
 app.include_router(specs.router)
 app.include_router(cofre.router)
+app.include_router(service_tokens.router)
 app.include_router(connectors.router)
 app.include_router(ia.router)
 app.include_router(incidentes.router)
@@ -128,6 +131,7 @@ app.include_router(recomendacoes_ia.router)
 app.include_router(codex_governado.router)
 app.include_router(webhooks.router)
 app.include_router(rastreabilidade.router)
+app.include_router(movimento_email.router)
 app.include_router(hub_lowcode.router)
 app.include_router(teams_gateway.router)
 app.include_router(agents.router)

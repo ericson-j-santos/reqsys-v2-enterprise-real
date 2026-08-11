@@ -171,6 +171,30 @@ class Settings(BaseSettings):
     copilotstudio_provisioning_webhook_url: str = Field(default_factory=lambda: get_secret('COPILOTSTUDIO_PROVISIONING_WEBHOOK_URL', '') or '')
     copilotstudio_provisioning_webhook_key: str = Field(default_factory=lambda: get_secret('COPILOTSTUDIO_PROVISIONING_WEBHOOK_KEY', '') or '')
 
+    # Migração da rotina de e-mail Prospecção Movimento — Portabilidade
+    # Consignado (Funcionalidade #2861: substitui SSRS por pipeline Python —
+    # ver docs/architecture/movimento-email-pipeline.md)
+    movimento_email_source_dsn: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SOURCE_DSN', '') or '')
+    movimento_email_query_timeout_seconds: float = Field(
+        default_factory=lambda: float(get_secret('MOVIMENTO_EMAIL_QUERY_TIMEOUT_SECONDS', '30') or '30')
+    )
+    movimento_email_smtp_host: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SMTP_HOST', '') or '')
+    movimento_email_smtp_port: int = Field(default_factory=lambda: int(get_secret('MOVIMENTO_EMAIL_SMTP_PORT', '587') or '587'))
+    movimento_email_smtp_user: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SMTP_USER', '') or '')
+    movimento_email_smtp_password: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SMTP_PASSWORD', '') or '')
+    movimento_email_smtp_use_tls: bool = Field(default_factory=lambda: _bool_secret('MOVIMENTO_EMAIL_SMTP_USE_TLS', 'true'))
+    movimento_email_smtp_from: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SMTP_FROM', '') or '')
+    movimento_email_recipients: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_RECIPIENTS', '') or '')
+    movimento_email_lote_max: int = Field(default_factory=lambda: int(get_secret('MOVIMENTO_EMAIL_LOTE_MAX', '20') or '20'))
+    movimento_email_reserva_timeout_minutos: int = Field(
+        default_factory=lambda: int(get_secret('MOVIMENTO_EMAIL_RESERVA_TIMEOUT_MINUTOS', '15') or '15')
+    )
+    movimento_email_max_tentativas: int = Field(default_factory=lambda: int(get_secret('MOVIMENTO_EMAIL_MAX_TENTATIVAS', '5') or '5'))
+
+    @property
+    def movimento_email_recipients_list(self) -> list[str]:
+        return [e.strip() for e in self.movimento_email_recipients.split(',') if e.strip()]
+
     @property
     def is_production(self) -> bool:
         return self.app_environment.strip().lower() in _PRODUCTION_ENVIRONMENTS
