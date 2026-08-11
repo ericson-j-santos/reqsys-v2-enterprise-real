@@ -21,6 +21,7 @@ class ObjectStorageWorkflowContractTests(unittest.TestCase):
         self.assertIn("secrets.R2_ACCESS_KEY_ID", workflow)
         self.assertIn("R2_ACCOUNT_ID", workflow)
         self.assertNotIn("RESTIC_REPOSITORY: s3:https://${{ secrets.R2_ACCOUNT_ID }}", workflow)
+        self.assertIn("run: bash scripts/run_reqsys_free_tier_backup.sh", workflow)
 
     def test_readiness_uses_provider_neutral_secrets(self) -> None:
         workflow = READINESS_WORKFLOW.read_text(encoding="utf-8")
