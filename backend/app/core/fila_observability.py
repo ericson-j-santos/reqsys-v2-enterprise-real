@@ -17,7 +17,16 @@ from statistics import mean
 from time import perf_counter
 from typing import Final
 
-from sqlalchemy import Column, DateTime, Integer, MetaData, Table, Text, create_engine, select
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Integer,
+    MetaData,
+    Table,
+    Text,
+    create_engine,
+    select,
+)
 
 from app.core.telemetry import log_evento
 
