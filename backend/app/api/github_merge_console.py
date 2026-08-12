@@ -101,13 +101,16 @@ def solicitar_merge_assincrono(
     except GitHubError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
+    def _sanitize(value: object) -> str:
+        return str(value).replace('\n', ' ').replace('\r', ' ')
+
     logger.info(
         'github_merge_assincrono_solicitado ator=%s repo=%s pr=%s sha=%s correlation_id=%s',
-        usuario.get('sub', 'admin'),
-        body.repositorio,
-        body.pull_request,
-        body.sha_esperado,
-        x_correlation_id or 'nao-informado',
+        _sanitize(usuario.get('sub', 'admin')),
+        _sanitize(body.repositorio),
+        _sanitize(body.pull_request),
+        _sanitize(body.sha_esperado),
+        _sanitize(x_correlation_id or 'nao-informado'),
     )
     return ok({'solicitacao': resultado, 'checks': checks, 'correlation_id': x_correlation_id})
 
