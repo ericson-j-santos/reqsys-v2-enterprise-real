@@ -252,12 +252,12 @@ jobs:
             printf '%s\n' '| Campo | Valor |'
             printf '%s\n' '|---|---|'
             printf '| Correlation ID | \`%s\` |\n' "$CORRELATION_ID"
-            printf '| PR superior | [#%s](%s) |\n' "$PR_NUMBER" "$PR_URL"
-            printf '| SHA esperado | \`%s\` |\n' '${{ steps.validate.outputs.expected_head_sha }}'
-            printf '| Método | \`%s\` |\n' '${{ inputs.merge_method }}'
+            printf '| PR raiz | [#%s](%s) |\n' "$PR_NUMBER" "$PR_URL"
+            printf '| SHA capturado automaticamente | \`%s\` |\n' '${{ steps.pr.outputs.head_sha }}'
+            printf '| Método | \`merge\` |\n'
             printf '| Solicitação | \`%s\` |\n' '${{ steps.request.outcome }}'
             printf '| Acompanhamento | \`%s\` |\n' "${{ steps.request.outputs.already_merged == 'true' && 'already_merged' || 'polling_completed' }}"
-            printf '\n%s\n' 'O endpoint assíncrono avalia atomicamente todos os PRs da pilha até o PR informado.'
+            printf '\n%s\n' 'O workflow integra somente o PR raiz elegível e bloqueia posições superiores da pilha.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publicar evidências
