@@ -4,24 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: "Número do PR superior da pilha a integrar"
+        description: "Número do PR raiz da pilha a integrar"
         required: true
         type: string
-      expected_head_sha:
-        description: "SHA esperado do PR superior; evita merge após alteração"
-        required: true
-        type: string
-      merge_method:
-        description: "Método de integração"
-        required: true
-        default: squash
-        type: choice
-        options:
-          - squash
-          - merge
-          - rebase
-      confirm_entire_stack:
-        description: "Confirmo que todos os PRs até o informado podem ser integrados atomicamente"
+      confirm_root_merge:
+        description: "Confirmo o merge governado do PR raiz com método merge"
         required: true
         default: false
         type: boolean
@@ -53,8 +40,7 @@ jobs:
         shell: bash
         env:
           PR_NUMBER: ${{ inputs.pr_number }}
-          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
-          CONFIRM_ENTIRE_STACK: ${{ inputs.confirm_entire_stack }}
+          CONFIRM_ROOT_MERGE: ${{ inputs.confirm_root_merge }}
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE_DIR"
@@ -64,25 +50,18 @@ jobs:
             exit 1
           fi
 
-          if ! [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "SHA esperado inválido; informe os 40 caracteres do head atual." >&2
-            exit 1
-          fi
-
-          if [ "$CONFIRM_ENTIRE_STACK" != "true" ]; then
-            echo "Bloqueado: é obrigatório confirmar o merge atômico da pilha." >&2
+          if [ "$CONFIRM_ROOT_MERGE" != "true" ]; then
+            echo "Bloqueado: é obrigatório confirmar o merge governado do PR raiz." >&2
             exit 1
           fi
 
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "expected_head_sha=${EXPECTED_HEAD_SHA,,}" >> "$GITHUB_OUTPUT"
 
       - name: Capturar estado atual do PR
         id: pr
         shell: bash
         env:
           PR_NUMBER: ${{ steps.validate.outputs.pr_number }}
-          EXPECTED_HEAD_SHA: ${{ steps.validate.outputs.expected_head_sha }}
         run: |
           set -euo pipefail
 
@@ -93,6 +72,8 @@ jobs:
           HEAD_SHA="$(jq -r '.head.sha' "$EVIDENCE_DIR/pr-before.json")"
           MERGEABLE="$(jq -r '.mergeable' "$EVIDENCE_DIR/pr-before.json")"
           HTML_URL="$(jq -r '.html_url' "$EVIDENCE_DIR/pr-before.json")"
+          STACK_POSITION="$(jq -r '.stack.position // 1' "$EVIDENCE_DIR/pr-before.json")"
+          STACK_SIZE="$(jq -r '.stack.size // 1' "$EVIDENCE_DIR/pr-before.json")"
 
           if [ "$STATE" != "open" ]; then
             echo "Bloqueado: PR $PR_NUMBER não está aberto." >&2
@@ -104,8 +85,8 @@ jobs:
             exit 1
           fi
 
-          if [ "$HEAD_SHA" != "$EXPECTED_HEAD_SHA" ]; then
-            echo "Bloqueado: SHA atual ($HEAD_SHA) difere do SHA confirmado ($EXPECTED_HEAD_SHA)." >&2
+          if [ "$STACK_POSITION" -ne 1 ]; then
+            echo "Bloqueado: PR $PR_NUMBER ocupa a posição $STACK_POSITION/$STACK_SIZE. Integre primeiro o PR raiz da pilha." >&2
             exit 1
           fi
 
@@ -116,6 +97,8 @@ jobs:
 
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
           echo "html_url=$HTML_URL" >> "$GITHUB_OUTPUT"
+          echo "stack_position=$STACK_POSITION" >> "$GITHUB_OUTPUT"
+          echo "stack_size=$STACK_SIZE" >> "$GITHUB_OUTPUT"
 
       - name: Validar check-runs reais do SHA
         shell: bash
@@ -183,7 +166,7 @@ jobs:
         env:
           PR_NUMBER: ${{ steps.validate.outputs.pr_number }}
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
-          MERGE_METHOD: ${{ inputs.merge_method }}
+          MERGE_METHOD: merge
         run: |
           set -euo pipefail
 
