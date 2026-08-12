@@ -6,13 +6,27 @@ Concentra volume, latência, erros e saturação sem persistir PII.
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import threading
 from collections import Counter
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
 from statistics import mean
 from time import perf_counter
 from typing import Final
+
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Integer,
+    MetaData,
+    Table,
+    Text,
+    create_engine,
+    select,
+)
 
 from app.core.telemetry import log_evento
 
@@ -158,3 +172,232 @@ def registrar_transicao_fila(
     )
     REGISTRO_FILA.registrar(evento)
     return evento
+
+
+
+class RepositorioSnapshotsFila:
+    """Persistência governada de agregados; não armazena demanda ou correlation_id."""
+
+    def __init__(self, database_url: str, limite: int = 200) -> None:
+        if limite < 1:
+            raise ValueError('limite_deve_ser_positivo')
+        self._limite = limite
+        self._engine = create_engine(database_url)
+        metadata = MetaData()
+        self._tabela = Table(
+            'observabilidade_fila_snapshot',
+            metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('gerado_em', DateTime(timezone=True), nullable=False),
+            Column('payload_json', Text, nullable=False),
+        )
+        metadata.create_all(self._engine)
+
+    def registrar(self, snapshot: dict) -> None:
+        payload = {
+            'schema_version': snapshot['schema_version'],
+            'fluxo': snapshot['fluxo'],
+            'quatro_sinais': snapshot['quatro_sinais'],
+            'guardrails': snapshot['guardrails'],
+        }
+        with self._engine.begin() as conexao:
+            conexao.execute(
+                self._tabela.insert().values(
+                    gerado_em=datetime.now(UTC),
+                    payload_json=json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                )
+            )
+            ids_excedentes = [
+                item[0]
+                for item in conexao.execute(
+                    select(self._tabela.c.id)
+                    .order_by(self._tabela.c.id.desc())
+                    .offset(self._limite)
+                )
+            ]
+            if ids_excedentes:
+                conexao.execute(self._tabela.delete().where(self._tabela.c.id.in_(ids_excedentes)))
+
+    def listar(self, limite: int = 20) -> list[dict]:
+        limite_seguro = min(max(1, limite), self._limite)
+        with self._engine.connect() as conexao:
+            linhas = conexao.execute(
+                select(self._tabela.c.gerado_em, self._tabela.c.payload_json)
+                .order_by(self._tabela.c.id.desc())
+                .limit(limite_seguro)
+            )
+            return [
+                {
+                    'gerado_em': gerado_em.isoformat(),
+                    **json.loads(payload_json),
+                }
+                for gerado_em, payload_json in linhas
+            ]
+
+
+def renderizar_metricas_prometheus(snapshot: dict) -> str:
+    """Exporta métricas agregadas com cardinalidade fixa por estado/transição."""
+    sinais = snapshot['quatro_sinais']
+    linhas = [
+        '# HELP reqsys_fila_transicoes_total Total de transicoes da fila.',
+        '# TYPE reqsys_fila_transicoes_total counter',
+    ]
+    for transicao, total in sorted(sinais['volume']['por_transicao'].items()):
+        origem, destino = transicao.split('->', maxsplit=1)
+        linhas.append(
+            f'reqsys_fila_transicoes_total{{origem="{origem}",destino="{destino}"}} {total}'
+        )
+    linhas.extend(
+        [
+            '# HELP reqsys_fila_latencia_p95_ms Latencia P95 das transicoes em milissegundos.',
+            '# TYPE reqsys_fila_latencia_p95_ms gauge',
+            f"reqsys_fila_latencia_p95_ms {sinais['latencia']['p95_ms']}",
+            '# HELP reqsys_fila_erros_total Total de erros nas transicoes.',
+            '# TYPE reqsys_fila_erros_total counter',
+            f"reqsys_fila_erros_total {sinais['erros']['total']}",
+            '# HELP reqsys_fila_demandas_ativas Demandas ainda ativas na fila.',
+            '# TYPE reqsys_fila_demandas_ativas gauge',
+            f"reqsys_fila_demandas_ativas {sinais['saturacao']['demandas_ativas']}",
+        ]
+    )
+    for estado in EstadoFila:
+        total = sinais['saturacao']['por_estado'].get(estado.value, 0)
+        linhas.append(f'reqsys_fila_estado_total{{estado="{estado.value}"}} {total}')
+    return '\n'.join(linhas) + '\n'
+
+
+def criar_cards_dashboard_fila(snapshot: dict) -> list[dict]:
+    sinais = snapshot['quatro_sinais']
+    return [
+        {
+            'id': 'fila-volume',
+            'titulo': 'Volume da fila',
+            'valor': sinais['volume']['transicoes_total'],
+            'unidade': 'transições',
+            'drilldown': '/api/runtime/fila/historico',
+        },
+        {
+            'id': 'fila-latencia-p95',
+            'titulo': 'Latência P95',
+            'valor': sinais['latencia']['p95_ms'],
+            'unidade': 'ms',
+            'drilldown': '/api/runtime/fila/metricas',
+        },
+        {
+            'id': 'fila-erros',
+            'titulo': 'Taxa de erros',
+            'valor': sinais['erros']['taxa_percentual'],
+            'unidade': '%',
+            'drilldown': '/api/runtime/fila/historico',
+        },
+        {
+            'id': 'fila-saturacao',
+            'titulo': 'Demandas ativas',
+            'valor': sinais['saturacao']['demandas_ativas'],
+            'unidade': 'demandas',
+            'drilldown': '/api/runtime/fila/historico',
+        },
+    ]
+
+
+
+@dataclass(frozen=True, slots=True)
+class PoliticaSLOFila:
+    taxa_erros_maxima_percentual: float = 5.0
+    latencia_p95_maxima_ms: int = 2000
+    demandas_ativas_maximas: int = 50
+    amostras_crescimento: int = 3
+
+    @classmethod
+    def de_ambiente(cls) -> 'PoliticaSLOFila':
+        return cls(
+            taxa_erros_maxima_percentual=float(
+                os.getenv('FILA_SLO_TAXA_ERROS_MAXIMA_PERCENTUAL', '5')
+            ),
+            latencia_p95_maxima_ms=int(os.getenv('FILA_SLO_LATENCIA_P95_MAXIMA_MS', '2000')),
+            demandas_ativas_maximas=int(os.getenv('FILA_SLO_DEMANDAS_ATIVAS_MAXIMAS', '50')),
+            amostras_crescimento=int(os.getenv('FILA_SLO_AMOSTRAS_CRESCIMENTO', '3')),
+        )
+
+
+def avaliar_slos_fila(
+    snapshot: dict,
+    historico: list[dict],
+    politica: PoliticaSLOFila | None = None,
+) -> dict:
+    politica_ativa = politica or PoliticaSLOFila.de_ambiente()
+    sinais = snapshot['quatro_sinais']
+    alertas: list[dict] = []
+
+    def adicionar_alerta(codigo: str, severidade: str, valor: float, limite: float) -> None:
+        alertas.append(
+            {
+                'codigo': codigo,
+                'severidade': severidade,
+                'valor_observado': valor,
+                'limite': limite,
+                'acao': 'investigar_por_correlation_id_e_transicao',
+            }
+        )
+
+    taxa_erros = sinais['erros']['taxa_percentual']
+    if taxa_erros > politica_ativa.taxa_erros_maxima_percentual:
+        adicionar_alerta(
+            'FILA_TAXA_ERROS_ACIMA_SLO',
+            'critica',
+            taxa_erros,
+            politica_ativa.taxa_erros_maxima_percentual,
+        )
+
+    latencia_p95 = sinais['latencia']['p95_ms']
+    if latencia_p95 > politica_ativa.latencia_p95_maxima_ms:
+        adicionar_alerta(
+            'FILA_LATENCIA_P95_ACIMA_SLO',
+            'alta',
+            latencia_p95,
+            politica_ativa.latencia_p95_maxima_ms,
+        )
+
+    demandas_ativas = sinais['saturacao']['demandas_ativas']
+    if demandas_ativas > politica_ativa.demandas_ativas_maximas:
+        adicionar_alerta(
+            'FILA_SATURACAO_ACIMA_SLO',
+            'alta',
+            demandas_ativas,
+            politica_ativa.demandas_ativas_maximas,
+        )
+
+    janela = historico[: politica_ativa.amostras_crescimento - 1]
+    serie = [
+        item['quatro_sinais']['saturacao']['demandas_ativas']
+        for item in reversed(janela)
+    ] + [demandas_ativas]
+    if len(serie) >= politica_ativa.amostras_crescimento and all(
+        atual > anterior for anterior, atual in zip(serie, serie[1:], strict=False)
+    ):
+        alertas.append(
+            {
+                'codigo': 'FILA_CRESCIMENTO_CONTINUO',
+                'severidade': 'alta',
+                'valor_observado': serie,
+                'limite': politica_ativa.amostras_crescimento,
+                'acao': 'verificar_consumidores_e_demandas_presas',
+            }
+        )
+
+    return {
+        'schema_version': '1.0.0',
+        'status': 'alerta' if alertas else 'dentro_do_slo',
+        'alertas': alertas,
+        'politica': {
+            'taxa_erros_maxima_percentual': politica_ativa.taxa_erros_maxima_percentual,
+            'latencia_p95_maxima_ms': politica_ativa.latencia_p95_maxima_ms,
+            'demandas_ativas_maximas': politica_ativa.demandas_ativas_maximas,
+            'amostras_crescimento': politica_ativa.amostras_crescimento,
+        },
+        'guardrails': {
+            'somente_avaliacao': True,
+            'sem_disparo_externo': True,
+            'sem_pii': True,
+        },
+    }
