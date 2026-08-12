@@ -3,10 +3,6 @@ import os
 import sys
 from datetime import UTC, datetime
 
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
-
 import app.models  # noqa: F401
 from app.api import (
     actions_runtime_center,
@@ -55,6 +51,10 @@ from app.core.runtime_boot import build_health_payload, probe_database
 from app.db import Base, SessionLocal, engine
 from app.middleware.observability import observability_middleware
 from app.services.gestao_ti_seed import reconciliar_servico_reqsys_no_startup
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
+
 
 logging.basicConfig(
     level=logging.INFO,
