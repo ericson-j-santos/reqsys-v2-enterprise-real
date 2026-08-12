@@ -213,6 +213,7 @@ jobs:
         with:
           path: .
           format: cyclonedx-json
+          syft-version: v1.51.0
           output-file: artifacts/security-scanners/sbom/reqsys-sbom.cyclonedx.json
 
       - name: Upload SBOM artifact
