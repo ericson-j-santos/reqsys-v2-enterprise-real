@@ -1,0 +1,153 @@
+name: Configurar token GitHub no Fly DEV
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmacao:
+        description: "Digite CONFIGURAR_GITHUB_TOKEN_DEV para confirmar"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: configurar-github-token-reqsys-api-dev
+  cancel-in-progress: false
+
+jobs:
+  configurar:
+    name: Configurar e validar secret no reqsys-api-dev
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 15
+
+    env:
+      FLY_APP_NAME: reqsys-api-dev
+      HEALTH_URL: https://reqsys-api-dev.fly.dev/health
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      REQSYS_GITHUB_TOKEN: ${{ secrets.REQSYS_GITHUB_TOKEN }}
+
+    steps:
+      - name: Validar autorização e secrets
+        shell: bash
+        env:
+          CONFIRMACAO: ${{ inputs.confirmacao }}
+        run: |
+          set -euo pipefail
+          set +x
+
+          if [ "${CONFIRMACAO}" != "CONFIGURAR_GITHUB_TOKEN_DEV" ]; then
+            echo "::error::Confirmação inválida. Nenhuma alteração foi executada."
+            exit 1
+          fi
+
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo "::error::Secret FLY_API_TOKEN ausente no Environment development."
+            exit 1
+          fi
+
+          if [ -z "${REQSYS_GITHUB_TOKEN:-}" ]; then
+            echo "::error::Secret REQSYS_GITHUB_TOKEN ausente no Environment development."
+            exit 1
+          fi
+
+          echo "::add-mask::${FLY_API_TOKEN}"
+          echo "::add-mask::${REQSYS_GITHUB_TOKEN}"
+          echo "Guardrails aprovados para ${FLY_APP_NAME}."
+
+      - name: Instalar flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Validar acesso ao app antes da alteração
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          flyctl status --app "${FLY_APP_NAME}"
+
+      - name: Configurar GITHUB_TOKEN no backend DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+
+          flyctl secrets set             "GITHUB_TOKEN=${REQSYS_GITHUB_TOKEN}"             --app "${FLY_APP_NAME}"
+
+      - name: Confirmar registro do secret sem revelar valor
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+
+          if ! flyctl secrets list --app "${FLY_APP_NAME}" |
+            awk '$1 == "GITHUB_TOKEN" { encontrado=1 } END { exit(encontrado ? 0 : 1) }'; then
+            echo "::error::GITHUB_TOKEN não foi localizado na lista sanitizada de secrets."
+            exit 1
+          fi
+
+          echo "Secret GITHUB_TOKEN localizado no app; valor não exibido."
+
+      - name: Aguardar health check após reinício
+        id: health
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for tentativa in $(seq 1 18); do
+            codigo_http="$(curl               --silent               --show-error               --output /tmp/reqsys-health.json               --write-out '%{http_code}'               --max-time 10               "${HEALTH_URL}" || true)"
+
+            if [ "${codigo_http}" = "200" ]; then
+              echo "Health check aprovado na tentativa ${tentativa}: HTTP 200."
+              echo "health_status=healthy" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+
+            echo "Tentativa ${tentativa}/18: health HTTP ${codigo_http:-indisponível}."
+            sleep 10
+          done
+
+          echo "::error::Health check não estabilizou em até 180 segundos."
+          echo "health_status=unhealthy" >> "${GITHUB_OUTPUT}"
+          exit 1
+
+      - name: Validar status final
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          flyctl status --app "${FLY_APP_NAME}"
+
+      - name: Coletar logs sanitizados em caso de falha
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          echo "Coletando logs recentes do app; valores dos secrets não são consultados."
+          timeout 30s flyctl logs --app "${FLY_APP_NAME}" --no-tail || true
+
+      - name: Registrar evidência no resumo
+        if: always()
+        shell: bash
+        env:
+          HEALTH_STATUS: ${{ steps.health.outputs.health_status || 'não_executado' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "# Configuração governada — Fly DEV"
+            echo
+            echo "| Campo | Evidência |"
+            echo "|---|---|"
+            echo "| Aplicação | \`${FLY_APP_NAME}\` |"
+            echo "| Environment GitHub | \`development\` |"
+            echo "| Operador | \`${GITHUB_ACTOR}\` |"
+            echo "| Run ID | \`${GITHUB_RUN_ID}\` |"
+            echo "| Run attempt | \`${GITHUB_RUN_ATTEMPT}\` |"
+            echo "| SHA do workflow | \`${GITHUB_SHA}\` |"
+            echo "| Health | \`${HEALTH_STATUS}\` |"
+            echo "| Produção alterada | \`false\` |"
+            echo
+            echo "Os valores de FLY_API_TOKEN e REQSYS_GITHUB_TOKEN não foram registrados."
+          } >> "${GITHUB_STEP_SUMMARY}"

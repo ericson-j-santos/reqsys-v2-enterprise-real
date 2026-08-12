@@ -1,12 +1,25 @@
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.security import require_admin
 from app.main import app
 
-app.dependency_overrides[require_admin] = lambda: {'sub': 'admin-teste', 'papel': 'admin'}
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def override_admin_dependency():
+    previous = app.dependency_overrides.get(require_admin)
+    app.dependency_overrides[require_admin] = lambda: {'sub': 'admin-teste', 'papel': 'admin'}
+    try:
+        yield
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(require_admin, None)
+        else:
+            app.dependency_overrides[require_admin] = previous
 
 PR = {
     'title': 'PR empilhada',
@@ -62,6 +75,3 @@ def test_bloqueia_sha_divergente(_pr, _checks):
     assert response.status_code == 409
     assert 'SHA divergente' in response.json()['detail']
 
-
-def teardown_module():
-    app.dependency_overrides.clear()
