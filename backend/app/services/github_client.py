@@ -56,6 +56,7 @@ def _request_json(
     *,
     sleep=time.sleep,
     max_retries: int = GITHUB_MAX_RETRIES,
+    api_version: str = '2022-11-28',
 ) -> Any:
     token = (get_secret('GITHUB_TOKEN', '') or '').strip()
     if not token:
@@ -65,7 +66,7 @@ def _request_json(
     headers = {
         'Accept': 'application/vnd.github+json',
         'Authorization': f'Bearer {token}',
-        'X-GitHub-Api-Version': '2022-11-28',
+        'X-GitHub-Api-Version': api_version,
         'User-Agent': 'reqsys-figma-github-sync/1.0',
     }
     if body is not None:
@@ -143,4 +144,51 @@ def create_branch(repo: str, branch_name: str, from_sha: str) -> dict[str, Any]:
         'POST',
         f'/repos/{owner}/{name}/git/refs',
         {'ref': f'refs/heads/{branch_name}', 'sha': from_sha},
+    )
+
+
+def get_pull_request(repo: str, pull_number: int) -> dict[str, Any]:
+    owner, name = _parse_repo(repo)
+    return _request_json('GET', f'/repos/{owner}/{name}/pulls/{pull_number}')
+
+
+def list_check_runs(repo: str, commit_sha: str) -> list[dict[str, Any]]:
+    owner, name = _parse_repo(repo)
+    sha = parse.quote(commit_sha, safe='')
+    payload = _request_json('GET', f'/repos/{owner}/{name}/commits/{sha}/check-runs?per_page=100')
+    return payload.get('check_runs') or []
+
+
+def request_async_merge(
+    repo: str,
+    pull_number: int,
+    *,
+    expected_sha: str,
+    merge_method: str,
+    merge_action: str,
+    commit_title: str,
+    commit_message: str,
+) -> dict[str, Any]:
+    owner, name = _parse_repo(repo)
+    return _request_json(
+        'PUT',
+        f'/repos/{owner}/{name}/pulls/{pull_number}/merge-async',
+        {
+            'sha': expected_sha,
+            'merge_method': merge_method,
+            'merge_action': merge_action,
+            'commit_title': commit_title,
+            'commit_message': commit_message,
+        },
+        api_version='2026-03-10',
+    )
+
+
+def get_async_merge(repo: str, pull_number: int, merge_uuid: str) -> dict[str, Any]:
+    owner, name = _parse_repo(repo)
+    safe_uuid = parse.quote(merge_uuid, safe='')
+    return _request_json(
+        'GET',
+        f'/repos/{owner}/{name}/pulls/{pull_number}/merge-async/{safe_uuid}',
+        api_version='2026-03-10',
     )
