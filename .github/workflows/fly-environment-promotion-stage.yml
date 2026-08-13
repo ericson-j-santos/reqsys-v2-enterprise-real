@@ -199,7 +199,7 @@ jobs:
   verify:
     name: Verify ${{ inputs.environment }} after deploy
     needs: deploy
-    if: needs.deploy.result == 'success'
+    if: always() && needs.deploy.result == 'success'
     uses: ./.github/workflows/fly-environment-evidence-capture.yml
     with:
       environment: ${{ inputs.environment }}
