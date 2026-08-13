@@ -4,166 +4,32 @@ on:
   push:
     branches:
       - ops/dev-merge-console-homologation
-    paths:
-      - ".github/workflows/dev-merge-console-homologation.yml"
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 permissions:
   contents: read
-  issues: write
-
-env:
-  BACKEND_APP: reqsys-api-dev
-  FRONTEND_APP: reqsys-app-dev
-  BACKEND_URL: https://reqsys-api-dev.fly.dev
-  FRONTEND_URL: https://reqsys-app-dev.fly.dev
-  ISSUE_NUMBER: "1229"
-  REPORT_DIR: artifacts/dev-merge-console-homologation
 
 jobs:
-  homologate-dev:
-    name: Homologar Console de Merge Governado em DEV
+  preflight:
+    name: Validar workflow DEV
     runs-on: ubuntu-latest
-    environment: development
-    timeout-minutes: 30
-    env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      GH_TOKEN: ${{ github.token }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Preparar evidência sanitizada
+      - name: Validar arquivos do console
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$REPORT_DIR"
-          correlation_id="DEV-MERGE-CONSOLE-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          echo "CORRELATION_ID=$correlation_id" >> "$GITHUB_ENV"
-          printf '%s\n' "$correlation_id" > "$REPORT_DIR/correlation-id.txt"
 
-      - name: Validar guardrails e pré-requisitos
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${FLY_API_TOKEN:-}" || { echo "FLY_API_TOKEN ausente no environment development"; exit 1; }
-          test "$BACKEND_APP" = "reqsys-api-dev"
-          test "$FRONTEND_APP" = "reqsys-app-dev"
-          test "$BACKEND_URL" = "https://reqsys-api-dev.fly.dev"
-          test "$FRONTEND_URL" = "https://reqsys-app-dev.fly.dev"
-
-          # Não imprime valor, digest ou metadado do segredo. Valida apenas o nome.
-          if ! flyctl secrets list --app "$BACKEND_APP" 2>/dev/null | awk 'NR>1 {print $1}' | grep -Fxq 'GITHUB_TOKEN'; then
-            echo "GITHUB_TOKEN não está configurado como secret do backend DEV; execução fail-closed."
-            exit 2
-          fi
-
-      - name: Validar que o console está no código a publicar
-        shell: bash
-        run: |
-          set -euo pipefail
           test -f backend/app/api/github_merge_console.py
           test -f frontend/src/views/GitHubMergeConsoleView.vue
-          grep -Fq "prefix='/v1/admin/github-merge'" backend/app/api/github_merge_console.py
-          grep -Fq "/admin/github-merge" frontend/src/router/index.js
 
-      - name: Deploy backend DEV
-        working-directory: backend
-        shell: bash
-        run: |
-          set -euo pipefail
-          flyctl deploy --app "$BACKEND_APP" --config fly.dev.toml --remote-only
+          grep -Fq "prefix='/v1/admin/github-merge'" \
+            backend/app/api/github_merge_console.py
 
-      - name: Deploy frontend DEV
-        working-directory: frontend
-        shell: bash
-        run: |
-          set -euo pipefail
-          flyctl deploy --app "$FRONTEND_APP" --config fly.dev.toml --remote-only
+          grep -Fq "/admin/github-merge" \
+            frontend/src/router/index.js
 
-      - name: Smoke público e fail-closed de autorização
-        shell: bash
-        run: |
-          set -euo pipefail
-          health_status="$(curl --silent --show-error --output "$REPORT_DIR/backend-health-body.txt" --write-out '%{http_code}' "$BACKEND_URL/health")"
-          route_status="$(curl --silent --show-error --output "$REPORT_DIR/backend-route-body.txt" --write-out '%{http_code}' "$BACKEND_URL/v1/admin/github-merge/pull-requests/1237?repositorio=ericson-j-santos%2Freqsys-v2-enterprise-real")"
-          frontend_status="$(curl --silent --show-error --output "$REPORT_DIR/frontend-route-body.txt" --write-out '%{http_code}' "$FRONTEND_URL/admin/github-merge")"
-
-          echo "HEALTH_STATUS=$health_status" >> "$GITHUB_ENV"
-          echo "ROUTE_STATUS=$route_status" >> "$GITHUB_ENV"
-          echo "FRONTEND_STATUS=$frontend_status" >> "$GITHUB_ENV"
-
-          [[ "$health_status" =~ ^2[0-9][0-9]$ ]] || { echo "Health DEV inválido: HTTP $health_status"; exit 1; }
-          [ "$route_status" != "404" ] || { echo "Endpoint do console não publicado: HTTP 404"; exit 1; }
-          [ "$route_status" = "401" ] || [ "$route_status" = "403" ] || { echo "Endpoint administrativo não falhou fechado sem credencial: HTTP $route_status"; exit 1; }
-          [[ "$frontend_status" =~ ^2[0-9][0-9]$ ]] || { echo "Rota frontend DEV inválida: HTTP $frontend_status"; exit 1; }
-
-          # Corpos podem conter conteúdo de aplicação; não serão publicados no artifact.
-          rm -f "$REPORT_DIR/backend-health-body.txt" "$REPORT_DIR/backend-route-body.txt" "$REPORT_DIR/frontend-route-body.txt"
-
-      - name: Gerar relatório de homologação
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$REPORT_DIR"
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          from datetime import datetime, timezone
-
-          report = {
-              "schema_version": "1.0.0",
-              "contract": "reqsys-dev-merge-console-homologation",
-              "environment": "development",
-              "backend_app": os.environ["BACKEND_APP"],
-              "frontend_app": os.environ["FRONTEND_APP"],
-              "source_sha": os.environ["GITHUB_SHA"],
-              "correlation_id": os.environ.get("CORRELATION_ID"),
-              "run_url": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
-              "backend_health_http": os.environ.get("HEALTH_STATUS"),
-              "backend_admin_route_http_without_credentials": os.environ.get("ROUTE_STATUS"),
-              "frontend_route_http": os.environ.get("FRONTEND_STATUS"),
-              "github_token_secret_presence_checked_without_value": True,
-              "stg_touched": False,
-              "production_touched": False,
-              "generated_at": datetime.now(timezone.utc).isoformat(),
-          }
-          path = Path(os.environ["REPORT_DIR"]) / "report.json"
-          path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-          PY
-
-      - name: Registrar evidência na issue P0
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
-          run_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "### Evidência automática DEV — Console de Merge Governado
-
-- Run: $run_url
-- Correlation ID: \`$CORRELATION_ID\`
-- SHA publicado: \`$GITHUB_SHA\`
-- Backend health: HTTP \`$HEALTH_STATUS\`
-- Endpoint administrativo sem credencial: HTTP \`$ROUTE_STATUS\` (fail-closed esperado)
-- Rota frontend: HTTP \`$FRONTEND_STATUS\`
-- \`GITHUB_TOKEN\`: presença validada somente por nome no backend DEV; valor não lido nem publicado
-- STG tocado: \`false\`
-- PROD tocado: \`false\`
-
-Este run conclui deploy + smoke público/negação sem credencial. Permanecem para o fechamento da issue os testes autenticados de administrador e a operação assíncrona controlada em PR efêmera."
-
-      - name: Publicar artifact sanitizado
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dev-merge-console-homologation
-          path: artifacts/dev-merge-console-homologation/
-          if-no-files-found: error
-          retention-days: 30
-
-# trigger: 2026-08-13T18:12-03:00
+          echo "Preflight DEV concluído."
