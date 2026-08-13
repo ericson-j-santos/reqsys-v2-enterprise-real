@@ -1,14 +1,17 @@
-schema_version: 1.1.0
+schema_version: 1.2.0
 control_id: BACEN-08
 title: Designação do responsável executivo pelo programa de segurança cibernética
 mode: advisory
+lifecycle_stage: DEVELOPMENT
+institutional_designation_required: false
+institutional_designation_gate_stage: PRODUCTION
 notes: >
   Este arquivo é a fonte de verdade estrutural para o responsável executivo exigido
   pelo controle BACEN-08. Nenhum nome é preenchido por automação/IA — a designação
-  é um ato organizacional que exige decisão humana formal (ex.: ata de diretoria,
-  portaria interna ou documento equivalente). Enquanto `status` for
-  `pending_formal_designation`, o relatório anual não pode declarar o controle
-  como plenamente atendido.
+  é um ato organizacional que exige decisão humana formal. Enquanto o ReqSys estiver
+  em desenvolvimento interno/pré-oficialização, a designação institucional e o
+  sign-off formal do relatório anual ficam diferidos até o gate de produção. O
+  controle permanece partial e não pode ser promovido automaticamente.
 designation:
   status: pending_formal_designation
   executive_name: null
@@ -16,6 +19,22 @@ designation:
   designated_at: null
   designation_document_reference: null
   designated_by: null
+deferred_institutional_governance:
+  enabled: true
+  reason: product_and_process_under_development_pre_officialization
+  maximum_control_status: partial
+  production_gate:
+    executive_designation_required: true
+    designation_record_required: true
+    report_formal_signoff_required: true
+    executive_designated_at_required: true
+    report_signed_at_required: true
+    block_production_when_missing: true
+  notification_policy:
+    suppress_human_action_while_nonproduction: true
+    reactivate_on_stage:
+      - PRODUCTION
+      - INSTITUTIONAL
 decision_evidence:
   issue_url: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1119
   comment_url: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1119#issuecomment-5141616243
@@ -33,6 +52,8 @@ decision_evidence:
   report_signoff_reference: REF-2026-021
   evidence_source: authenticated_github_issue_comment
   personal_or_sensitive_content_replicated: false
-  verification_status: pending_designated_by_and_formal_report_signoff_metadata
+  verification_status: deferred_formal_designation_and_report_signoff_until_institutionalization
   automatic_status_promotion_allowed: false
 review_cycle_days: 365
+production_touched: false
+next_stage: continue_technical_evidence_until_production_gate

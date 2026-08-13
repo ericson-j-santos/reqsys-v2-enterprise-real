@@ -23,6 +23,7 @@ REQUIRED_FORMAL_FIELDS = (
     "designated_by",
 )
 ALLOWED_REFERENCE_SCHEMES = {"https", "sharepoint", "vault"}
+INSTITUTIONAL_STAGES = {"PRODUCTION", "INSTITUTIONAL"}
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -60,6 +61,24 @@ def build_report(path: Path, now: datetime | None = None) -> dict[str, Any]:
     if not isinstance(designation, dict):
         errors.append("invalid_designation_block")
         designation = {}
+
+    lifecycle_stage = str(payload.get("lifecycle_stage", "")).strip().upper()
+    if not lifecycle_stage:
+        errors.append("lifecycle_stage_missing")
+    institutional_stage = lifecycle_stage in INSTITUTIONAL_STAGES
+
+    deferred_contract = payload.get("deferred_institutional_governance")
+    deferred_enabled = isinstance(deferred_contract, dict) and deferred_contract.get("enabled") is True
+    production_gate = (
+        deferred_contract.get("production_gate")
+        if isinstance(deferred_contract, dict)
+        else None
+    )
+    if deferred_enabled and (
+        not isinstance(production_gate, dict)
+        or production_gate.get("block_production_when_missing") is not True
+    ):
+        errors.append("deferred_governance_production_gate_missing")
 
     status = str(designation.get("status", "unknown"))
     if status not in ALLOWED_STATUSES:
@@ -105,12 +124,32 @@ def build_report(path: Path, now: datetime | None = None) -> dict[str, Any]:
         and not review_overdue
         and not errors
     )
+    deferred_in_current_stage = deferred_enabled and not institutional_stage and not formally_valid
+    production_gate_blocking = institutional_stage and not formally_valid
+
+    if deferred_in_current_stage:
+        findings.append("institutional_governance_deferred_until_promotion")
+    if production_gate_blocking:
+        findings.append("formal_executive_designation_required_for_current_stage")
+
+    if formally_valid:
+        next_stage = "periodic_review"
+    elif deferred_in_current_stage:
+        next_stage = "continue_technical_evidence_until_production_gate"
+    else:
+        next_stage = "formal_designation_required"
+
+    automatic_blocking = bool(errors) or production_gate_blocking
+    human_action_required = not formally_valid and not deferred_in_current_stage
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "control_id": CONTROL_ID,
         "generated_at": current_time.isoformat(),
         "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "lifecycle_stage": lifecycle_stage,
+        "institutional_stage": institutional_stage,
+        "deferred_institutional_governance": deferred_enabled,
         "designation_status": status,
         "missing_required_fields": missing_fields,
         "designation_age_days": age_days,
@@ -119,12 +158,12 @@ def build_report(path: Path, now: datetime | None = None) -> dict[str, Any]:
         "reference_scheme": reference_scheme,
         "formal_designation_valid": formally_valid,
         "control_status": "implemented" if formally_valid else "partial",
-        "automatic_blocking": bool(errors),
+        "automatic_blocking": automatic_blocking,
         "errors": sorted(set(errors)),
         "findings": sorted(set(findings)),
-        "human_action_required": not formally_valid,
+        "human_action_required": human_action_required,
         "production_touched": False,
-        "next_stage": "formal_designation_or_periodic_review",
+        "next_stage": next_stage,
     }
 
 
