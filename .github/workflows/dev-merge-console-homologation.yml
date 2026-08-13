@@ -59,9 +59,8 @@ jobs:
 
           flyctl status --app reqsys-api-dev >/dev/null
 
-          if ! flyctl secrets list --app reqsys-api-dev 2>/dev/null \
-            | awk 'NR>1 {print $1}' \
-            | grep -Fxq 'GITHUB_TOKEN'; then
+          if ! flyctl secrets list --app reqsys-api-dev --json 2>/dev/null \
+            | jq -e 'any(.[]; .name == "GITHUB_TOKEN")' >/dev/null; then
             echo "GITHUB_TOKEN não está configurado como secret do backend DEV."
             exit 2
           fi
