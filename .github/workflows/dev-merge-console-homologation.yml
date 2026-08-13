@@ -1,0 +1,35 @@
+name: DEV Merge Console Homologation
+
+on:
+  push:
+    branches:
+      - ops/dev-merge-console-homologation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Validar workflow DEV
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar arquivos do console
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f backend/app/api/github_merge_console.py
+          test -f frontend/src/views/GitHubMergeConsoleView.vue
+
+          grep -Fq "prefix='/v1/admin/github-merge'" \
+            backend/app/api/github_merge_console.py
+
+          grep -Fq "/admin/github-merge" \
+            frontend/src/router/index.js
+
+          echo "Preflight DEV concluído."
