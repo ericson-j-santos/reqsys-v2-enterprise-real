@@ -3,7 +3,7 @@ name: DEV Merge Console Homologation
 on:
   push:
     branches:
-      - ops/dev-merge-console-homologation
+      - ops/dev-merge-console-fly-preflight
   workflow_dispatch:
 
 permissions:
@@ -11,8 +11,9 @@ permissions:
 
 jobs:
   preflight:
-    name: Validar workflow DEV
+    name: Validar workflow e credencial Fly DEV
     runs-on: ubuntu-latest
+    environment: development
 
     steps:
       - name: Checkout
@@ -32,4 +33,18 @@ jobs:
           grep -Fq "/admin/github-merge" \
             frontend/src/router/index.js
 
-          echo "Preflight DEV concluído."
+          echo "Preflight de código concluído."
+
+      - name: Validar credencial Fly sem expor valor
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${FLY_API_TOKEN:-}" || {
+            echo "FLY_API_TOKEN ausente no environment development."
+            exit 1
+          }
+
+          echo "FLY_API_TOKEN disponível no environment development."
