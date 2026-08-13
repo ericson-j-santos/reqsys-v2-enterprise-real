@@ -1,4 +1,4 @@
-schema_version: 1.13.0
+schema_version: 1.14.0
 framework:
   name: BACEN minimum cybersecurity controls
   references:
@@ -16,12 +16,14 @@ controls:
     metadata: governance/bacen/CYBERSECURITY-POLICY-METADATA.yaml
     workflow: .github/workflows/bacen-policy-governance-attestation.yml
     decision_evidence: governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml
-    decision_status: approval_comment_recorded_pending_canonical_authority
+    decision_status: approval_comment_recorded_deferred_until_institutionalization
     status: partial
-    evidence_stage: authenticated_approval_comment_received_pending_canonical_authority_and_signed_attestation
-    approval_status: pending_formal_institutional_approval
+    evidence_stage: technical_implementation_with_institutional_approval_deferred_until_production
+    lifecycle_stage: DEVELOPMENT
+    approval_status: deferred_until_institutionalization
+    institutional_approval_gate_stage: PRODUCTION
     production_touched: false
-    next_stage: canonicalize_approval_authority_and_signed_attestation
+    next_stage: continue_technical_evidence_until_production_gate
     review_cycle_days: 365
   - id: BACEN-02
     domain: identity
@@ -122,11 +124,14 @@ controls:
     designation_record: governance/bacen/EXECUTIVE-DESIGNATION.yaml
     workflow: .github/workflows/bacen-executive-readiness.yml
     decision_evidence: governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml
-    decision_status: approval_comment_recorded_pending_complete_canonical_records
+    decision_status: approval_comment_recorded_deferred_until_institutionalization
     status: partial
-    evidence_stage: authenticated_approval_comment_received_pending_complete_designation_and_report_signoff_metadata
+    evidence_stage: technical_readiness_with_executive_designation_and_report_signoff_deferred_until_production
+    lifecycle_stage: DEVELOPMENT
     executive_designation_status: pending_formal_designation
     report_signoff_status: pending_formal_signoff
+    institutional_governance_status: deferred_until_institutionalization
+    institutional_governance_gate_stage: PRODUCTION
     production_touched: false
-    next_stage: canonicalize_designated_by_and_formal_report_signoff_metadata
+    next_stage: continue_technical_evidence_until_production_gate
     review_cycle_days: 365
