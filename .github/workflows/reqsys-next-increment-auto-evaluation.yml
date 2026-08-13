@@ -38,6 +38,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           mkdir -p .tmp artifacts/reqsys-next-increment-auto-evaluation
           gh api --paginate "repos/${{ github.repository }}/pulls?state=open&per_page=100" \
             --jq '.[] | {number, state, draft, mergeable: (.mergeable // null), auto_merge_enabled: (.auto_merge != null), created_at, updated_at, html_url}' \
