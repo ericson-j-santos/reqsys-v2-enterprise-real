@@ -39,15 +39,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p .tmp artifacts/reqsys-next-increment-auto-evaluation
-          gh api --paginate --slurp "repos/${{ github.repository }}/pulls?state=open&per_page=100" \
-            --jq 'add | [.[] | {number, state, draft, mergeable: (.mergeable // null), auto_merge_enabled: (.auto_merge != null), created_at, updated_at, html_url}]' \
-            > .tmp/prs.json
-          gh api --paginate --slurp "repos/${{ github.repository }}/pulls?state=closed&sort=updated&direction=desc&per_page=100" \
-            --jq 'add | [.[] | select(.merged_at != null) | {number, created_at, merged_at, updated_at, html_url}]' \
-            > .tmp/merged-prs.json
-          gh api --paginate --slurp "repos/${{ github.repository }}/actions/runs?per_page=100" \
-            --jq 'add.workflow_runs | [.[] | {id, name, status, conclusion, event, head_branch, head_sha, created_at, updated_at, html_url}]' \
-            > .tmp/runs.json
+          gh api --paginate "repos/${{ github.repository }}/pulls?state=open&per_page=100" \
+            --jq '.[] | {number, state, draft, mergeable: (.mergeable // null), auto_merge_enabled: (.auto_merge != null), created_at, updated_at, html_url}' \
+            | jq -s '.' > .tmp/prs.json
+          gh api --paginate "repos/${{ github.repository }}/pulls?state=closed&sort=updated&direction=desc&per_page=100" \
+            --jq '.[] | select(.merged_at != null) | {number, created_at, merged_at, updated_at, html_url}' \
+            | jq -s '.' > .tmp/merged-prs.json
+          gh api --paginate "repos/${{ github.repository }}/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | {id, name, status, conclusion, event, head_branch, head_sha, created_at, updated_at, html_url}' \
+            | jq -s '.' > .tmp/runs.json
       - name: Collect public runtime and smoke evidence
         env:
           REQSYS_RUNTIME_BASE_URL: https://reqsys-api.fly.dev
