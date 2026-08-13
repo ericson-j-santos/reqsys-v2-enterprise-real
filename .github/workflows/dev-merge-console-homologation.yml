@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   preflight:
-    name: Validar workflow e credencial Fly DEV
+    name: Validar acesso Fly DEV e secret do backend
     runs-on: ubuntu-latest
     environment: development
 
@@ -41,10 +41,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           test -n "${FLY_API_TOKEN:-}" || {
             echo "FLY_API_TOKEN ausente no environment development."
             exit 1
           }
-
           echo "FLY_API_TOKEN disponível no environment development."
+
+      - name: Setup Flyctl pinado
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Validar acesso ao app e secret GITHUB_TOKEN sem ler valor
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          flyctl status --app reqsys-api-dev >/dev/null
+
+          if ! flyctl secrets list --app reqsys-api-dev 2>/dev/null \
+            | awk 'NR>1 {print $1}' \
+            | grep -Fxq 'GITHUB_TOKEN'; then
+            echo "GITHUB_TOKEN não está configurado como secret do backend DEV."
+            exit 2
+          fi
+
+          echo "Acesso Fly DEV validado e GITHUB_TOKEN presente por nome no backend DEV."
