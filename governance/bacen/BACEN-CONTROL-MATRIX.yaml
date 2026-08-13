@@ -1,4 +1,4 @@
-schema_version: 1.14.0
+schema_version: 1.15.0
 framework:
   name: BACEN minimum cybersecurity controls
   references:
@@ -39,11 +39,14 @@ controls:
     review_register: governance/bacen/ACCESS-REVIEW-REGISTER.yaml
     workflow: .github/workflows/bacen-02-consolidated-readiness.yml
     status: partial
-    evidence_stage: consolidated_access_review_and_mfa_readiness_pending_real_evidence
+    evidence_stage: technical_access_control_readiness_with_formal_review_and_validated_mfa_deferred_until_production
+    lifecycle_stage: DEVELOPMENT
     quarterly_review_status: pending_first_formal_review
     mfa_evidence_status: pending_idp_integration
+    institutional_governance_status: deferred_until_institutionalization
+    institutional_governance_gate_stage: PRODUCTION
     production_touched: false
-    next_stage: complete_formal_quarterly_review_and_ingest_validated_idp_mfa_evidence
+    next_stage: continue_technical_access_control_evidence_until_production_gate
     review_cycle_days: 90
   - id: BACEN-03
     domain: incidents
