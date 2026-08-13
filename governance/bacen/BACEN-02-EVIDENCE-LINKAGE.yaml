@@ -1,6 +1,7 @@
-schema_version: 1.0.0
+schema_version: 1.1.0
 control_id: BACEN-02
 mode: advisory
+lifecycle_stage: DEVELOPMENT
 primary_evidence: artifacts/bacen/bacen-02-consolidated-readiness.json
 source_evidence:
   access_review: artifacts/bacen/bacen-02-access-review-readiness.json
@@ -9,9 +10,13 @@ source_evidence:
 workflow: .github/workflows/bacen-02-consolidated-readiness.yml
 status: partial
 status_rule: implemented_only_when_formal_review_and_validated_mfa_are_both_evidenced
+institutional_governance_status: deferred_until_institutionalization
+institutional_governance_gate_stage: PRODUCTION
 production_touched: false
 automatic_blocking_scope:
   - structural_contract_failure
   - invalid_control_id
   - inconsistent_source_status
-next_stage: complete_formal_quarterly_review_and_ingest_validated_idp_mfa_evidence
+  - production_or_institutional_stage_without_formal_review
+  - production_or_institutional_stage_without_validated_mfa
+next_stage: continue_technical_access_control_evidence_until_production_gate
