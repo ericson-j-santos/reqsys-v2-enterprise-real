@@ -59,6 +59,7 @@ def test_stage_deploys_exact_current_main_sha_and_verifies() -> None:
     assert "Deploy frontend exact source" in workflow
     assert "uses: ./.github/workflows/fly-environment-evidence-capture.yml" in workflow
     assert "strict: true" in workflow
+    assert "if: always() && needs.deploy.result == 'success'" in workflow
 
 
 def test_contract_documents_fail_closed_and_rollback_policy() -> None:
