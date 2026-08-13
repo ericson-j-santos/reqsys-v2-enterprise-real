@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from scripts.evaluate_reqsys_next_increment import build_report
 
 
@@ -80,3 +82,9 @@ def test_failed_smoke_blocks_production():
     assert report["production_ready"] is False
     assert report["next_safe_increment"] == "restore_runtime_and_smoke_evidence"
     assert "runtime_smoke_failure" in report["human_blockers"]
+
+
+def test_workflow_uses_supported_gh_pagination_contract():
+    workflow = Path(".github/workflows/reqsys-next-increment-auto-evaluation.yml").read_text(encoding="utf-8")
+    assert "--paginate --slurp" not in workflow
+    assert workflow.count("| jq -s '.'") == 3
