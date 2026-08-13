@@ -1,8 +1,11 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "control_id": "BACEN-02",
+  "lifecycle_stage": "DEVELOPMENT",
   "provider": "external_identity_provider",
   "environment": "STG",
+  "evidence_required_now": false,
+  "evidence_gate_stage": "PRODUCTION",
   "evidence_status": "pending_integration",
   "collected_at": null,
   "period_start": null,
@@ -12,6 +15,15 @@
   "privileged_identities_with_mfa": 0,
   "evidence_reference": null,
   "source_system": null,
+  "deferred_external_evidence": {
+    "enabled": true,
+    "reason": "product_and_process_under_development_pre_officialization",
+    "production_gate": {
+      "validated_mfa_evidence_required": true,
+      "full_privileged_identity_coverage_required": true,
+      "block_production_when_missing": true
+    }
+  },
   "production_touched": false,
-  "notes": "Contrato estrutural. Não declara MFA evidenciado sem dados reais do provedor de identidade."
+  "notes": "Contrato estrutural. Em DEVELOPMENT não declara MFA evidenciado nem exige payload externo; PRODUCTION/INSTITUTIONAL exige evidência real validada do provedor de identidade."
 }
