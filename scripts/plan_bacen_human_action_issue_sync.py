@@ -51,7 +51,7 @@ def body_for(item: dict[str, Any]) -> str:
             marker(control_id),
             f"# Ação formal pendente — {control_id}",
             "",
-            "Esta issue é mantida automaticamente pelo ReqSys enquanto o controle permanecer `partial` ou `gap`.",
+            "Esta issue é mantida automaticamente pelo ReqSys enquanto existir ação humana formal ativa para o estágio atual.",
             "",
             "## Estado evidenciado",
             "",
@@ -60,6 +60,7 @@ def body_for(item: dict[str, Any]) -> str:
             f"- Papel responsável: `{item.get('responsible_role') or 'não definido'}`",
             f"- Ação requerida: `{item.get('required_action') or 'não definida'}`",
             f"- Evidência esperada: `{item.get('evidence_reference') or 'não definida'}`",
+            f"- Lifecycle: `{item.get('lifecycle_stage') or 'não definido'}`",
             "",
             "## Campos que exigem informação real",
             "",
@@ -69,9 +70,48 @@ def body_for(item: dict[str, Any]) -> str:
             "",
             "## Critério de encerramento",
             "",
-            "A issue será fechada automaticamente quando a matriz registrar o controle como `implemented` e a evidência formal correspondente estiver versionada.",
+            "A issue será encerrada quando a ação deixar de ser ativa: por implementação formal do controle ou por diferimento explícito para um gate institucional posterior.",
             "",
             "`production_touched=false`",
+            "",
+        ]
+    )
+
+
+def deferred_title_for(item: dict[str, Any]) -> str:
+    control_id = str(item["control_id"])
+    return f"[{control_id}][DEFERRED] Ação formal — reativar no gate institucional"
+
+
+def deferred_body_for(item: dict[str, Any]) -> str:
+    control_id = str(item["control_id"])
+    gate = str(item.get("institutional_gate_stage") or "PRODUCTION")
+    return "\n".join(
+        [
+            marker(control_id),
+            f"# {control_id} — ação formal diferida pelo ciclo de vida",
+            "",
+            "A ação humana formal deste controle não está ativa enquanto o ReqSys permanecer em desenvolvimento interno/pré-oficialização.",
+            "",
+            "## Estado evidenciado",
+            "",
+            f"- Status do controle: `{item.get('status')}`",
+            f"- Lifecycle: `{item.get('lifecycle_stage') or 'não definido'}`",
+            "- Governança institucional: `deferred_until_institutionalization`",
+            f"- Gate de reativação: `{gate}`",
+            f"- Próxima ação técnica: `{item.get('required_action') or 'não definida'}`",
+            f"- Evidência esperada: `{item.get('evidence_reference') or 'não definida'}`",
+            "- Produção: `production_touched=false`",
+            "",
+            "## Decisão operacional",
+            "",
+            "A ausência atual de aprovação, revisão, assinatura ou evidência institucional real não deve gerar dado fabricado nem ação humana imediata. O controle mantém seu status regulatório atual e será reavaliado no gate institucional.",
+            "",
+            "## Reativação futura",
+            "",
+            f"Ao alcançar `{gate}` ou outro estágio institucional equivalente, reativar a ação formal e exigir as evidências reais definidas pelo controle.",
+            "",
+            "Encerramento atual significa **ação formal diferida**, não controle `implemented` e não conformidade institucional declarada.",
             "",
         ]
     )
@@ -85,8 +125,11 @@ def issue_control_id(issue: dict[str, Any]) -> str | None:
 
 def build_plan(backlog: dict[str, Any], existing_issues: list[dict[str, Any]]) -> dict[str, Any]:
     items = backlog.get("items") or []
+    deferred_items = backlog.get("deferred_items") or []
     if not isinstance(items, list):
         raise ValueError("backlog items must be a list")
+    if not isinstance(deferred_items, list):
+        raise ValueError("backlog deferred_items must be a list")
     if not isinstance(existing_issues, list):
         raise ValueError("existing issues must be a list")
 
@@ -100,6 +143,7 @@ def build_plan(backlog: dict[str, Any], existing_issues: list[dict[str, Any]]) -
 
     operations: list[dict[str, Any]] = []
     pending_ids: set[str] = set()
+    deferred_ids: set[str] = set()
 
     for item in items:
         if not isinstance(item, dict) or not item.get("control_id"):
@@ -157,8 +201,59 @@ def build_plan(backlog: dict[str, Any], existing_issues: list[dict[str, Any]]) -
                     }
                 )
 
+    for item in deferred_items:
+        if not isinstance(item, dict) or not item.get("control_id"):
+            continue
+        control_id = str(item["control_id"])
+        deferred_ids.add(control_id)
+        candidates = sorted(
+            by_control.get(control_id, []),
+            key=lambda issue: (str(issue.get("state") or "") == "open", int(issue.get("number") or 0)),
+            reverse=True,
+        )
+        if not candidates:
+            continue
+
+        current = candidates[0]
+        expected_title = deferred_title_for(item)
+        expected_body = deferred_body_for(item)
+        expected_labels = labels_for(item)
+        needs_defer = (
+            str(current.get("title") or "") != expected_title
+            or str(current.get("body") or "") != expected_body
+            or normalize_labels(current) != expected_labels
+            or str(current.get("state") or "").lower() != "closed"
+        )
+        if needs_defer:
+            operations.append(
+                {
+                    "action": "defer",
+                    "number": int(current["number"]),
+                    "control_id": control_id,
+                    "title": expected_title,
+                    "body": expected_body,
+                    "labels": expected_labels,
+                    "comment": (
+                        "Ação formal diferida pelo lifecycle atual; reativar no gate "
+                        f"{item.get('institutional_gate_stage') or 'PRODUCTION'}. "
+                        "O controle não foi promovido para `implemented`."
+                    ),
+                }
+            )
+
+        for duplicate in candidates[1:]:
+            if str(duplicate.get("state") or "").lower() == "open":
+                operations.append(
+                    {
+                        "action": "close",
+                        "number": int(duplicate["number"]),
+                        "control_id": control_id,
+                        "comment": "Fechada automaticamente por duplicidade de ação formal diferida.",
+                    }
+                )
+
     for control_id, issues in by_control.items():
-        if control_id in pending_ids:
+        if control_id in pending_ids or control_id in deferred_ids:
             continue
         for issue in issues:
             if str(issue.get("state") or "").lower() == "open":
@@ -173,14 +268,15 @@ def build_plan(backlog: dict[str, Any], existing_issues: list[dict[str, Any]]) -
 
     action_counts = {
         action: sum(op["action"] == action for op in operations)
-        for action in ("create", "update", "close")
+        for action in ("create", "update", "defer", "close")
     }
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "contract": "reqsys-bacen-human-action-issue-sync",
         "generated_at": datetime.now(UTC).isoformat(),
         "mode": "idempotent_issue_sync",
         "pending_controls": len(pending_ids),
+        "deferred_controls": len(deferred_ids),
         "operations": operations,
         "summary": {**action_counts, "total_operations": len(operations)},
         "personal_assignees_fabricated": False,

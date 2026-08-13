@@ -183,6 +183,23 @@ jobs:
                           "state": "open",
                       },
                   )
+              elif action == "defer":
+                  api(
+                      "POST",
+                      f"repos/{repo}/issues/{operation['number']}/comments",
+                      {"body": operation["comment"]},
+                  )
+                  api(
+                      "PATCH",
+                      f"repos/{repo}/issues/{operation['number']}",
+                      {
+                          "title": operation["title"],
+                          "body": operation["body"],
+                          "labels": operation["labels"],
+                          "state": "closed",
+                          "state_reason": "not_planned",
+                      },
+                  )
               elif action == "close":
                   api(
                       "POST",
@@ -239,10 +256,12 @@ jobs:
               raise SystemExit(0)
           plan = json.loads(path.read_text(encoding="utf-8"))
           summary = plan["summary"]
-          print(f"\n- Controles pendentes: **{plan['pending_controls']}**")
+          print(f"\n- Controles com ação ativa: **{plan['pending_controls']}**")
+          print(f"- Controles diferidos: **{plan.get('deferred_controls', 0)}**")
           print(f"- Issues a criar: **{summary['create']}**")
           print(f"- Issues a atualizar/reabrir: **{summary['update']}**")
-          print(f"- Issues a fechar: **{summary['close']}**")
+          print(f"- Issues a diferir: **{summary.get('defer', 0)}**")
+          print(f"- Issues a fechar por implementação/duplicidade: **{summary['close']}**")
           print("- Aprovações fabricadas: **false**")
           print("- Produção acessada: **false**")
           notification = Path(

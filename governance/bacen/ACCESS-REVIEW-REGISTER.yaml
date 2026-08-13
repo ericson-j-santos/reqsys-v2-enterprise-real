@@ -1,9 +1,14 @@
-schema_version: 1.0.0
+schema_version: 1.1.0
 control_id: BACEN-02
 mode: advisory
+lifecycle_stage: DEVELOPMENT
 review_cycle_days: 90
 review_owner: SECURITY
 approval_owner: GOVERNANCE
+formal_review_required_now: false
+formal_review_gate_stage: PRODUCTION
+external_mfa_evidence_required_now: false
+external_mfa_evidence_gate_stage: PRODUCTION
 scope:
   environments:
     - DEV
@@ -36,9 +41,23 @@ mfa:
   source: external_identity_provider
   evidence_status: pending_idp_integration
   evidence_reference: null
+deferred_access_governance:
+  enabled: true
+  reason: product_and_process_under_development_pre_officialization
+  maximum_control_status: partial
+  production_gate:
+    formal_quarterly_review_required: true
+    validated_mfa_evidence_required: true
+    block_production_when_missing: true
+  notification_policy:
+    suppress_human_action_while_nonproduction: true
+    reactivate_on_stage:
+      - PRODUCTION
+      - INSTITUTIONAL
 production_touched: false
-next_stage: integrate_identity_provider_mfa_and_complete_first_formal_quarterly_review
+next_stage: continue_technical_access_control_evidence_until_production_gate
 notes: >
-  Este registro estrutura o processo trimestral, mas não declara revisão humana,
-  MFA ou aprovação concluídas. Campos formais devem ser preenchidos somente a partir
-  de evidência real do provedor de identidade e do processo organizacional.
+  O registro preserva a estrutura técnica da revisão trimestral e da evidência MFA.
+  Enquanto o ReqSys estiver em desenvolvimento interno/pré-oficialização, revisão
+  formal e evidência externa validada ficam diferidas até o gate institucional.
+  Nenhum campo humano ou evidência do IdP é fabricado pela automação.
