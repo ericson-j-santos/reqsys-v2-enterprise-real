@@ -19,6 +19,15 @@ PRIORITY_BY_CRITICALITY = {
     "medium": "P2",
     "low": "P3",
 }
+LIFECYCLE_OVERLAY_FIELDS = {
+    "lifecycle_stage",
+    "approval_status",
+    "institutional_approval_gate_stage",
+    "institutional_governance_status",
+    "institutional_governance_gate_stage",
+    "next_stage",
+    "production_touched",
+}
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -30,6 +39,39 @@ def load_yaml(path: Path) -> dict[str, Any]:
 
 def _normalized(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _load_lifecycle_overlay(matrix_path: Path, control_id: str) -> tuple[dict[str, Any], Path | None]:
+    path = matrix_path.parent / f"{control_id}-LIFECYCLE.yaml"
+    if not path.exists():
+        return {}, None
+
+    overlay = load_yaml(path)
+    overlay_control_id = _normalized(overlay.get("control_id"))
+    if overlay_control_id != control_id:
+        raise ValueError(
+            f"Lifecycle contract inválido em {path}: control_id={overlay_control_id!r}"
+        )
+    return overlay, path
+
+
+def _effective_control(
+    control: dict[str, Any],
+    matrix_path: Path,
+) -> tuple[dict[str, Any], Path | None]:
+    control_id = _normalized(control.get("id"))
+    if not control_id:
+        return dict(control), None
+
+    overlay, overlay_path = _load_lifecycle_overlay(matrix_path, control_id)
+    if not overlay:
+        return dict(control), None
+
+    effective = dict(control)
+    for field in LIFECYCLE_OVERLAY_FIELDS:
+        if field in overlay:
+            effective[field] = overlay[field]
+    return effective, overlay_path
 
 
 def _deferred_by_lifecycle(control: dict[str, Any]) -> bool:
@@ -85,21 +127,33 @@ def build_backlog(matrix_path: Path) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
     deferred_items: list[dict[str, Any]] = []
     findings: list[str] = []
+    lifecycle_contracts: list[dict[str, str]] = []
 
     for control in controls:
         if not isinstance(control, dict):
             findings.append("invalid_control_entry")
             continue
 
-        status = _normalized(control.get("status")).lower()
+        effective_control, lifecycle_path = _effective_control(control, matrix_path)
+        status = _normalized(effective_control.get("status")).lower()
         if status not in TARGET_STATUSES:
             continue
 
-        item = _base_item(control)
+        item = _base_item(effective_control)
         control_id = item["control_id"]
         if not control_id:
             findings.append("pending_control_id_missing")
             continue
+
+        if lifecycle_path is not None:
+            lifecycle_contracts.append(
+                {
+                    "control_id": control_id,
+                    "path": str(lifecycle_path),
+                    "sha256": hashlib.sha256(lifecycle_path.read_bytes()).hexdigest(),
+                }
+            )
+
         if not item["responsible_role"]:
             findings.append(f"owner_role_missing:{control_id}")
         if not item["required_action"]:
@@ -107,7 +161,7 @@ def build_backlog(matrix_path: Path) -> dict[str, Any]:
         if not item["evidence_reference"]:
             findings.append(f"evidence_reference_missing:{control_id}")
 
-        if _deferred_by_lifecycle(control):
+        if _deferred_by_lifecycle(effective_control):
             deferred_items.append(
                 {
                     **item,
@@ -129,6 +183,7 @@ def build_backlog(matrix_path: Path) -> dict[str, Any]:
     sort_key = lambda item: (priority_order[item["priority"]], item["control_id"])
     items.sort(key=sort_key)
     deferred_items.sort(key=sort_key)
+    lifecycle_contracts.sort(key=lambda item: item["control_id"])
     automatic_blocking = bool(findings)
 
     if items:
@@ -139,11 +194,12 @@ def build_backlog(matrix_path: Path) -> dict[str, Any]:
         next_stage = "no_pending_human_actions"
 
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "generated_at": datetime.now(UTC).isoformat(),
         "mode": "advisory",
         "matrix_path": str(matrix_path),
         "matrix_sha256": hashlib.sha256(matrix_path.read_bytes()).hexdigest(),
+        "lifecycle_contracts": lifecycle_contracts,
         "summary": {
             "pending_controls": len(items),
             "deferred_controls": len(deferred_items),

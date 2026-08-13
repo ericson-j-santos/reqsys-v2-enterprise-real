@@ -1,7 +1,12 @@
-schema_version: 1.0.0
+schema_version: 1.1.0
 control_id: BACEN-05
 mode: advisory
+lifecycle_stage: DEVELOPMENT
 review_cycle_days: 30
+formal_dpa_required_now: false
+formal_dpa_gate_stage: PRODUCTION
+legal_signoff_required_now: false
+legal_signoff_gate_stage: PRODUCTION
 requirements:
   required_fields:
     - data_processing_terms
@@ -103,3 +108,23 @@ vendors:
     portability: pending_verification
     termination_and_deletion: pending_verification
     legal_signoff: pending
+deferred_vendor_governance:
+  enabled: true
+  reason: product_and_process_under_development_pre_officialization
+  maximum_control_status: partial
+  production_gate:
+    validated_dpa_evidence_required: true
+    formal_legal_signoff_required: true
+    block_production_when_missing: true
+  notification_policy:
+    suppress_human_action_while_nonproduction: true
+    reactivate_on_stage:
+      - PRODUCTION
+      - INSTITUTIONAL
+production_touched: false
+next_stage: continue_technical_vendor_evidence_until_production_gate
+notes: >
+  O manifesto preserva a estrutura técnica de gestão de terceiros sem fabricar
+  documentos DPA, aprovações ou assinaturas jurídicas. Enquanto o ReqSys estiver
+  em desenvolvimento interno/pré-oficialização, as evidências formais ficam
+  diferidas até o gate institucional de produção.

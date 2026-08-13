@@ -6,16 +6,22 @@ on:
     paths:
       - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
       - "governance/bacen/VENDOR-DPA-READINESS.yaml"
+      - "governance/bacen/BACEN-05-LIFECYCLE.yaml"
       - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
       - "scripts/generate_bacen_vendor_dpa_readiness.py"
+      - "scripts/consolidate_bacen_05_evidence.py"
+      - "tests/test_bacen_05_deferred_vendor_governance.py"
       - ".github/workflows/bacen-vendor-dpa-readiness.yml"
   push:
     branches: [main]
     paths:
       - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
       - "governance/bacen/VENDOR-DPA-READINESS.yaml"
+      - "governance/bacen/BACEN-05-LIFECYCLE.yaml"
       - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
       - "scripts/generate_bacen_vendor_dpa_readiness.py"
+      - "scripts/consolidate_bacen_05_evidence.py"
+      - "tests/test_bacen_05_deferred_vendor_governance.py"
       - ".github/workflows/bacen-vendor-dpa-readiness.yml"
   schedule:
     - cron: "17 9 1 * *"
@@ -42,11 +48,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependency
-        run: python -m pip install --disable-pip-version-check PyYAML
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML pytest
 
-      - name: Compile implementation
-        run: python -m py_compile scripts/generate_bacen_vendor_dpa_readiness.py
+      - name: Compile and test lifecycle behavior
+        run: |
+          python -m py_compile scripts/generate_bacen_vendor_dpa_readiness.py
+          python -m py_compile scripts/consolidate_bacen_05_evidence.py
+          python -m pytest tests/test_bacen_05_deferred_vendor_governance.py -q
 
       - name: Generate readiness evidence
         run: |
@@ -65,6 +74,11 @@ jobs:
           assert evidence["control_id"] == "BACEN-05"
           assert evidence["technical_readiness_passed"] is True
           assert evidence["control_status"] in {"partial", "implemented"}
+          assert evidence["lifecycle_stage"] == "DEVELOPMENT"
+          assert evidence["readiness_status"] == "deferred_until_institutionalization"
+          assert evidence["human_action_required"] is False
+          assert evidence["external_evidence_required"] is False
+          assert evidence["production_gate_blocking"] is False
           assert len(evidence["register_sha256"]) == 64
           assert len(evidence["manifest_sha256"]) == 64
           assert evidence["production_touched"] is False
@@ -96,7 +110,10 @@ jobs:
           summary = evidence["summary"]
           print(f"\n- Fornecedores registrados: **{summary['registered_vendors']}**")
           print(f"- Aprovações formais completas: **{summary['formally_approved_vendors']}**")
-          print(f"- Pendências: **{summary['pending_vendors']}**")
+          print(f"- Pendências documentais: **{summary['pending_vendors']}**")
+          print(f"- Lifecycle: **{evidence['lifecycle_stage']}**")
+          print(f"- Prontidão: **{evidence['readiness_status']}**")
+          print(f"- Ação humana agora: **{evidence['human_action_required']}**")
           print(f"- Prontidão técnica: **{evidence['technical_readiness_passed']}**")
           print(f"- Status do controle: **{evidence['control_status']}**")
           print("- Modo: **advisory**")

@@ -1,0 +1,15 @@
+schema_version: 1.0.0
+control_id: BACEN-05
+lifecycle_stage: DEVELOPMENT
+institutional_governance_status: deferred_until_institutionalization
+institutional_governance_gate_stage: PRODUCTION
+maximum_control_status_before_gate: partial
+formal_requirements:
+  validated_dpa_evidence: deferred_until_production
+  formal_legal_signoff: deferred_until_production
+production_gate:
+  validated_dpa_evidence_required: true
+  formal_legal_signoff_required: true
+  block_when_missing: true
+production_touched: false
+next_stage: continue_technical_vendor_evidence_until_production_gate
