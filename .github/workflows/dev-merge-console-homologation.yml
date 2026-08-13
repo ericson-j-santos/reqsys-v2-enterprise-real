@@ -165,3 +165,5 @@ Este run conclui deploy + smoke público/negação sem credencial. Permanecem pa
           path: artifacts/dev-merge-console-homologation/
           if-no-files-found: error
           retention-days: 30
+
+# trigger: 2026-08-13T18:12-03:00
