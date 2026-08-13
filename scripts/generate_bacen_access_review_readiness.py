@@ -25,6 +25,7 @@ REQUIRED_PRIVILEGED_ROLES = {
     "PLATFORM_ADMIN",
 }
 FORMAL_REVIEW_STATUSES = {"completed", "approved"}
+INSTITUTIONAL_STAGES = {"PRODUCTION", "INSTITUTIONAL"}
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -41,6 +42,25 @@ def build_evidence(register_path: Path) -> dict[str, Any]:
     mfa = document.get("mfa") or {}
     if not all(isinstance(block, dict) for block in (scope, review, mfa)):
         raise ValueError("Blocos scope, review e mfa devem ser objetos")
+
+    lifecycle_stage = str(document.get("lifecycle_stage") or "DEVELOPMENT").strip().upper()
+    institutional_stage = lifecycle_stage in INSTITUTIONAL_STAGES
+    deferred_contract = document.get("deferred_access_governance")
+    deferred_enabled = isinstance(deferred_contract, dict) and deferred_contract.get("enabled") is True
+    production_gate = (
+        deferred_contract.get("production_gate")
+        if isinstance(deferred_contract, dict)
+        else None
+    )
+
+    structural_findings: list[str] = []
+    if deferred_enabled and (
+        not isinstance(production_gate, dict)
+        or production_gate.get("block_production_when_missing") is not True
+        or production_gate.get("formal_quarterly_review_required") is not True
+        or production_gate.get("validated_mfa_evidence_required") is not True
+    ):
+        structural_findings.append("deferred_access_governance_production_gate_invalid")
 
     dimensions = set(scope.get("review_dimensions") or [])
     roles = set(scope.get("privileged_roles") or [])
@@ -65,6 +85,12 @@ def build_evidence(register_path: Path) -> dict[str, Any]:
         str(mfa.get("evidence_status")) == "evidenced"
         and bool(mfa.get("evidence_reference"))
     )
+    formal_governance_complete = formal_review_completed and mfa_evidenced
+
+    deferred_in_current_stage = (
+        deferred_enabled and not institutional_stage and not formal_governance_complete
+    )
+    production_gate_blocking = institutional_stage and not formal_governance_complete
 
     structural_checks_passed = (
         cycle_days == 90
@@ -72,6 +98,7 @@ def build_evidence(register_path: Path) -> dict[str, Any]:
         and not missing_roles
         and not review_overdue
         and document.get("production_touched") is False
+        and not structural_findings
     )
 
     findings: list[str] = []
@@ -85,13 +112,37 @@ def build_evidence(register_path: Path) -> dict[str, Any]:
         findings.append("formal_quarterly_access_review_pending")
     if not mfa_evidenced:
         findings.append("identity_provider_mfa_evidence_pending")
+    if deferred_in_current_stage:
+        findings.append("formal_access_governance_deferred_until_institutionalization")
+    if production_gate_blocking:
+        findings.append("formal_access_governance_required_for_current_stage")
+    findings.extend(structural_findings)
+
+    implemented = structural_checks_passed and formal_governance_complete
+    automatic_blocking = not structural_checks_passed or production_gate_blocking
+    human_action_required = not formal_review_completed and not deferred_in_current_stage
+    external_evidence_required = not mfa_evidenced and not deferred_in_current_stage
+
+    if implemented:
+        readiness_status = "formal_access_governance_validated"
+        next_stage = "periodic_access_review"
+    elif deferred_in_current_stage:
+        readiness_status = "deferred_until_institutionalization"
+        next_stage = "continue_technical_access_control_evidence_until_production_gate"
+    else:
+        readiness_status = "formal_access_governance_required"
+        next_stage = "complete_formal_quarterly_review_and_ingest_validated_idp_mfa_evidence"
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "control_id": "BACEN-02",
         "generated_at": datetime.now(UTC).isoformat(),
         "register_path": str(register_path),
         "register_sha256": hashlib.sha256(register_path.read_bytes()).hexdigest(),
+        "lifecycle_stage": lifecycle_stage,
+        "institutional_stage": institutional_stage,
+        "deferred_access_governance": deferred_enabled,
+        "readiness_status": readiness_status,
         "review_cycle_days": cycle_days,
         "review_status": review_status,
         "formal_review_completed": formal_review_completed,
@@ -99,16 +150,18 @@ def build_evidence(register_path: Path) -> dict[str, Any]:
         "next_review_due_at": str(next_review_due_at) if next_review_due_at else None,
         "review_overdue": review_overdue,
         "mfa_evidenced": mfa_evidenced,
+        "formal_governance_complete": formal_governance_complete,
         "missing_review_dimensions": missing_dimensions,
         "missing_privileged_roles": missing_roles,
         "structural_checks_passed": structural_checks_passed,
-        "control_status": "implemented" if formal_review_completed and mfa_evidenced else "partial",
-        "findings": findings,
-        "human_action_required": not formal_review_completed,
-        "external_evidence_required": not mfa_evidenced,
-        "automatic_blocking": False,
+        "control_status": "implemented" if implemented else "partial",
+        "findings": sorted(set(findings)),
+        "human_action_required": human_action_required,
+        "external_evidence_required": external_evidence_required,
+        "production_gate_blocking": production_gate_blocking,
+        "automatic_blocking": automatic_blocking,
         "production_touched": False,
-        "next_stage": document.get("next_stage"),
+        "next_stage": next_stage,
     }
 
 
@@ -117,10 +170,15 @@ def build_log_summary(evidence: dict[str, Any]) -> dict[str, Any]:
     return {
         "control_id": evidence["control_id"],
         "control_status": evidence["control_status"],
+        "lifecycle_stage": evidence["lifecycle_stage"],
+        "readiness_status": evidence["readiness_status"],
         "structural_checks_passed": evidence["structural_checks_passed"],
         "formal_review_completed": evidence["formal_review_completed"],
         "mfa_evidenced": evidence["mfa_evidenced"],
         "review_overdue": evidence["review_overdue"],
+        "human_action_required": evidence["human_action_required"],
+        "external_evidence_required": evidence["external_evidence_required"],
+        "automatic_blocking": evidence["automatic_blocking"],
         "findings_count": len(evidence["findings"]),
     }
 
@@ -138,7 +196,7 @@ def main() -> int:
         encoding="utf-8",
     )
     print(json.dumps(build_log_summary(evidence), ensure_ascii=False))
-    return 0 if evidence["structural_checks_passed"] else 1
+    return 1 if evidence["automatic_blocking"] else 0
 
 
 if __name__ == "__main__":
