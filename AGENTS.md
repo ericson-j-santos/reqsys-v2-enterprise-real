@@ -40,6 +40,10 @@ Guia operacional canônico para agentes, automações e assistentes que atuam ne
 | `diagram_generator_portable/` | Pacote Python standalone do gerador de diagramas (sem dependência de backend). |
 | `ops-dashboard/` | Dados e artefatos do dashboard operacional e notificações Teams. |
 | `config/` | Arquivos de configuração auxiliares. |
+| `governance/` | Políticas e artifacts de governança: `governance/bacen/` (controles BACEN, matriz, lifecycle, policies YAML), `governance/backup/` (assets de backup), `governance/idioma/` (terminologia), `governance/merge/` (workflows obrigatórios por SHA), `governance/notifications/` (políticas de recipientes Teams). |
+| `data/` | Histórico operacional: snapshots de CI, histórico operacional e estatísticas. |
+| `evidence/` | Evidência consolidada por domínio (ex.: `evidence/ux/`). |
+| `reports/` | Relatórios de runtime analytics e governance operacional. |
 
 ## Comandos essenciais
 
@@ -182,6 +186,24 @@ python scripts/vault_setup.py get KEY           # lê segredo
 python scripts/vault_setup.py status            # estado do vault
 python scripts/vault_setup.py import-env        # importa .env para o vault
 python scripts/vault_setup.py gen-token         # gera VAULT_API_TOKEN
+```
+
+### Cofre standalone portátil (sem dependência do backend)
+
+Cofre local AES-256-GCM + keyring do SO, isolado por máquina (PR #1213). Não depende de FastAPI, banco de dados ou rede.
+
+```bash
+python scripts/gerar_cofre_standalone.py                        # recria cofre_vault_standalone.py no diretório atual (autocontido)
+pip install keyring cryptography
+python scripts/cofre_vault_standalone.py init                   # cria master key no keyring do SO
+python scripts/cofre_vault_standalone.py set JWT_SECRET "valor" # grava segredo
+python scripts/cofre_vault_standalone.py get JWT_SECRET         # lê segredo
+python scripts/cofre_vault_standalone.py list                   # lista chaves (sem valores)
+python scripts/cofre_vault_standalone.py status                 # estado do cofre
+python scripts/cofre_vault_standalone.py dashboard [saida.html] # gera dashboard HTML
+python scripts/cofre_vault_standalone.py import-env [caminho/.env]  # importa .env para o cofre
+python scripts/cofre_vault_standalone.py gen-token              # gera token de API
+python scripts/test_cofre_vault_standalone.py                   # testes do cofre standalone
 ```
 
 ### OpenAPI / contratos
@@ -350,6 +372,17 @@ python scripts/diagram_generator.py --show-versions                 # manifest d
 
 Servidor automático de diagramas/BPMN no backend (prefixo `/v1/diagramas`, ver `docs/AUTOMATIC_DIAGRAM_BPMN_SERVER.md`): geração de Mermaid + BPMN 2.0 XML com hash SHA-256, histórico/comparação de versões e governança de promoção (`POST .../versoes/{revision}/promover`, `GET .../ativo`, `GET .../auditoria-promocoes`).
 
+### Redmine Sync Queue
+
+Worker de sincronização da fila `cr85a_redminequeue` (Dataverse → Redmine), fecha o loop do fluxo PA-001. Arquitetura: `docs/architecture/redmine-sync-queue.md`. API backend: prefixo `/v1/redmine-sync`.
+
+```bash
+python scripts/configurar_redmine_sync_queue.py status     # mostra o que está configurado (nunca imprime segredo em texto puro)
+python scripts/configurar_redmine_sync_queue.py capturar   # perguntando interativamente, grava em .env o que faltar
+python scripts/configurar_redmine_sync_queue.py verificar  # testa ao vivo: token Azure AD/Dataverse, schema cr85a_*, Redmine
+python scripts/configurar_redmine_sync_queue.py tudo       # capturar + verificar em sequência
+```
+
 ### Rollback governado de observabilidade (Fly.io)
 
 ```bash
@@ -495,6 +528,14 @@ Não considerar um PR pronto para merge quando o E2E responsivo estiver ausente,
 | `ReqSys Free Tier Backup` | PR/push main | Backup SQLite via Restic+R2 em Fly Machine |
 | `ReqSys Backup Provider Readiness` | PR, agendado, `workflow_dispatch` | Prontidão de provedores R2/Restic |
 | `ReqSys Backup Rollout Readiness` | PR, `workflow_run`, `workflow_dispatch` | Decisão de rollout DEV→STG por evidência (BACEN-04) |
+| `Fly Automatic Environment Promotion` | `workflow_run`, agendado, `workflow_dispatch` | Promoção automática de ambiente com gate pós-deploy (usa `fly-environment-promotion-stage.yml` reutilizável) |
+| `DEV Merge Console Homologation` | Push (branch específica), `workflow_dispatch` | Homologação do console de merge no Fly DEV (preflight de acesso e secrets) |
+| `Merge assíncrono governado de pilha` | `workflow_dispatch` | Merge assíncrono governado de PRs em pilha (stacked) |
+| `Configurar GitHub Token Fly DEV` | `workflow_dispatch` | Configura e valida token GitHub no `reqsys-api-dev` |
+| `Security Specialized Scanners` | PR/push main, `workflow_dispatch` | Scanners de segurança especializados (strict mode opcional) |
+| `BACEN Human Actions Backlog` | PR/push (paths: governance/bacen), agendado, `workflow_dispatch` | Backlog de ações humanas BACEN a partir da matriz de controle |
+| `BACEN Vendor DPA Readiness` | PR/push (paths: governance/bacen), agendado, `workflow_dispatch` | Prontidão de DPA de vendor BACEN-05 |
+| `BACEN Human Action Issue Sync` | `workflow_dispatch`, agendado, push main | Sincronização de issues GitHub para ações humanas BACEN |
 
 ## Gates de produção
 
@@ -616,6 +657,8 @@ Ambientes públicos definidos em `infra/public-access-urls.json` e validados por
 Boot resiliente Fly.io: `scripts/fly_boot.sh` — garante volume gravável antes de uvicorn; fallback para `/tmp` via `REQSYS_BOOT_FALLBACK=true`.
 
 Endpoints de runtime health disponíveis: `/health`, `/api/runtime/health`, `/api/runtime/readiness`, `/api/runtime/liveness`. Em prod, também `/api/runtime/metrics`.
+
+Endpoints backend adicionais: `/v1/admin/github-merge` (Console de Merge Governado — merge/squash/rebase de PRs via API, exige admin), `/v1/redmine-sync` (Redmine Sync Queue — processamento da fila Dataverse→Redmine), `/api/runtime/analytics` (Runtime Analytics — métricas, dashboard e SLOs da fila).
 
 Manifesto canônico de ambientes: `infra/fly-environments.json` — define promoção `dev → hml → prod`, smoke endpoints por ambiente, secrets obrigatórios e apps Fly.io. Validado por `scripts/validate_fly_enterprise_sync.py`.
 
