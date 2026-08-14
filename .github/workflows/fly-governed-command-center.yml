@@ -211,7 +211,23 @@ jobs:
               timeout 60s flyctl logs --app "${APP_NAME}" --no-tail 2>&1 | tee -a "${REPORT_DIR}/execution.log" || true
               ;;
             deploy)
-              flyctl deploy --app "${APP_NAME}" --remote-only 2>&1 | tee -a "${REPORT_DIR}/execution.log"
+              case "${APP_NAME}" in
+                reqsys-api-dev)
+                  (cd backend && flyctl deploy --config fly.dev.toml --app "${APP_NAME}" --remote-only) 2>&1 | tee -a "${REPORT_DIR}/execution.log"
+                  ;;
+                reqsys-api-stg)
+                  (cd backend && flyctl deploy --config fly.staging.toml --app "${APP_NAME}" --remote-only) 2>&1 | tee -a "${REPORT_DIR}/execution.log"
+                  ;;
+                reqsys-app-dev)
+                  (cd frontend && flyctl deploy --config fly.dev.toml --app "${APP_NAME}" --remote-only) 2>&1 | tee -a "${REPORT_DIR}/execution.log"
+                  ;;
+                reqsys-app-stg)
+                  (cd frontend && flyctl deploy --config fly.staging.toml --app "${APP_NAME}" --remote-only) 2>&1 | tee -a "${REPORT_DIR}/execution.log"
+                  ;;
+                *)
+                  flyctl deploy --app "${APP_NAME}" --remote-only 2>&1 | tee -a "${REPORT_DIR}/execution.log"
+                  ;;
+              esac
               ;;
             restart)
               flyctl apps restart "${APP_NAME}" 2>&1 | tee -a "${REPORT_DIR}/execution.log"
