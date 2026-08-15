@@ -49,6 +49,8 @@ _EXACT_SENSITIVE_NAMES = {
 }
 _SENSITIVE_MARKERS = ("credential", "private_key", "secret", "token")
 _SAFE_PUBLIC_ARTIFACTS = {
+    ".github/workflows/credential-control-plane.yml",
+    "config/credential-control-plane.json",
     "frontend/artifacts/figma-tokens/drift-report.json",
     "frontend/artifacts/figma-tokens/manifest.json",
     "frontend/artifacts/figma-tokens/reqsys.tokens.json",
