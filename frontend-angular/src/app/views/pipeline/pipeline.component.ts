@@ -1,5 +1,6 @@
 import { Component, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
@@ -28,6 +29,7 @@ interface PipelineStep {
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     MatButtonModule,
     MatCardModule,
     MatCheckboxModule,
