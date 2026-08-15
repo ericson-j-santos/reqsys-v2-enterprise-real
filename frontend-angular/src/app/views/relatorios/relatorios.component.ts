@@ -51,6 +51,7 @@ interface SsrsStatusResponse {
     MatListModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    InstitucionalStatusBannerComponent,
   ],
   template: `
     <div class="reports-page">
