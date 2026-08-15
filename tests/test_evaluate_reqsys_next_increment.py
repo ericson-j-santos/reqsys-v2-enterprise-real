@@ -84,7 +84,11 @@ def test_failed_smoke_blocks_production():
     assert "runtime_smoke_failure" in report["human_blockers"]
 
 
-def test_workflow_uses_supported_gh_pagination_contract():
+def test_workflow_uses_bounded_github_collection_contract():
     workflow = Path(".github/workflows/reqsys-next-increment-auto-evaluation.yml").read_text(encoding="utf-8")
-    assert "--paginate --slurp" not in workflow
-    assert workflow.count("| jq -s '.'") == 3
+    assert "--paginate" not in workflow
+    assert "API_TIMEOUT_SECONDS: '30'" in workflow
+    assert "MERGED_PR_MAX_PAGES: '2'" in workflow
+    assert "RUN_MAX_PAGES: '3'" in workflow
+    assert workflow.count('timeout "${API_TIMEOUT_SECONDS}s" gh api') == 3
+    assert "timeout-minutes: 10" in workflow

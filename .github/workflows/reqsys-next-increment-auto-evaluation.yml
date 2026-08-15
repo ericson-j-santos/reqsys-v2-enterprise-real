@@ -37,18 +37,37 @@ jobs:
       - name: Collect PRs, merged delivery velocity and workflow runs
         env:
           GH_TOKEN: ${{ github.token }}
+          API_TIMEOUT_SECONDS: '30'
+          MERGED_PR_MAX_PAGES: '2'
+          RUN_MAX_PAGES: '3'
         run: |
           set -euo pipefail
           mkdir -p .tmp artifacts/reqsys-next-increment-auto-evaluation
-          gh api --paginate "repos/${{ github.repository }}/pulls?state=open&per_page=100" \
+
+          : > .tmp/prs.jsonl
+          timeout "${API_TIMEOUT_SECONDS}s" gh api \
+            "repos/${{ github.repository }}/pulls?state=open&per_page=100&page=1" \
             --jq '.[] | {number, state, draft, mergeable: (.mergeable // null), auto_merge_enabled: (.auto_merge != null), created_at, updated_at, html_url}' \
-            | jq -s '.' > .tmp/prs.json
-          gh api --paginate "repos/${{ github.repository }}/pulls?state=closed&sort=updated&direction=desc&per_page=100" \
-            --jq '.[] | select(.merged_at != null) | {number, created_at, merged_at, updated_at, html_url}' \
-            | jq -s '.' > .tmp/merged-prs.json
-          gh api --paginate "repos/${{ github.repository }}/actions/runs?per_page=100" \
-            --jq '.workflow_runs[] | {id, name, status, conclusion, event, head_branch, head_sha, created_at, updated_at, html_url}' \
-            | jq -s '.' > .tmp/runs.json
+            > .tmp/prs.jsonl
+          jq -s '.' .tmp/prs.jsonl > .tmp/prs.json
+
+          : > .tmp/merged-prs.jsonl
+          for page in $(seq 1 "$MERGED_PR_MAX_PAGES"); do
+            timeout "${API_TIMEOUT_SECONDS}s" gh api \
+              "repos/${{ github.repository }}/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=${page}" \
+              --jq '.[] | select(.merged_at != null) | {number, created_at, merged_at, updated_at, html_url}' \
+              >> .tmp/merged-prs.jsonl
+          done
+          jq -s '.' .tmp/merged-prs.jsonl > .tmp/merged-prs.json
+
+          : > .tmp/runs.jsonl
+          for page in $(seq 1 "$RUN_MAX_PAGES"); do
+            timeout "${API_TIMEOUT_SECONDS}s" gh api \
+              "repos/${{ github.repository }}/actions/runs?per_page=100&page=${page}" \
+              --jq '.workflow_runs[] | {id, name, status, conclusion, event, head_branch, head_sha, created_at, updated_at, html_url}' \
+              >> .tmp/runs.jsonl
+          done
+          jq -s '.' .tmp/runs.jsonl > .tmp/runs.json
       - name: Collect public runtime and smoke evidence
         env:
           REQSYS_RUNTIME_BASE_URL: https://reqsys-api.fly.dev
