@@ -10,8 +10,8 @@
         "test:coverage": "vitest run --coverage"
     },
     "dependencies": {
-        "@mdi/font": "^7.4.47",
         "@azure/msal-browser": "^4.0.0",
+        "@mdi/font": "^7.4.47",
         "@vitejs/plugin-vue": "^5.2.1",
         "axios": "^1.7.9",
         "pinia": "^2.3.0",
@@ -21,10 +21,10 @@
         "vuetify": "^3.7.15"
     },
     "devDependencies": {
-        "@vitest/coverage-v8": "^2.0.0",
+        "@vitest/coverage-v8": "^4.1.10",
         "@vue/test-utils": "^2.4.6",
         "jsdom": "^25.0.0",
         "vite-plugin-vuetify": "^2.0.4",
-        "vitest": "^2.0.0"
+        "vitest": "^4.1.10"
     }
 }
