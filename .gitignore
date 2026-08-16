@@ -72,3 +72,4 @@ backend/artifacts/
 
 # Keep the .NET solution scaffold tracked even though IDE solution files are ignored globally
 !backend-dotnet/*.sln
+frontend-angular/.angular/
