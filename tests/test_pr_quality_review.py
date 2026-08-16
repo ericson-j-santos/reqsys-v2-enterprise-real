@@ -74,6 +74,14 @@ def test_governed_classifier_allows_public_figma_token_artifact() -> None:
     assert artifact.is_sensitive is False
 
 
+def test_governed_classifier_allows_control_plane_runtime_workflow() -> None:
+    workflow = governed_changed_file(
+        ".github/workflows/credential-control-plane-runtime-health.yml"
+    )
+
+    assert workflow.is_sensitive is False
+
+
 def test_governed_classifier_keeps_real_token_config_sensitive() -> None:
     token_config = governed_changed_file("config/access-token.json")
 
