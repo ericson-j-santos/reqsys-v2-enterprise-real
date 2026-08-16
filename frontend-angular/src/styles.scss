@@ -1,19 +1,19 @@
 @use "@angular/material" as mat;
 
 // Define paletas institucionais
-$primary-palette: mat.define-palette(mat.$blue-palette, 700, 500, 900);
-$accent-palette: mat.define-palette(mat.$orange-palette, 500, 300, 700);
-$warn-palette: mat.define-palette(mat.$red-palette);
+$primary-palette: mat.m2-define-palette(mat.$m2-blue-palette, 700, 500, 900);
+$accent-palette: mat.m2-define-palette(mat.$m2-orange-palette, 500, 300, 700);
+$warn-palette: mat.m2-define-palette(mat.$m2-red-palette);
 
 // Tema institucional claro
-$reqsys-theme: mat.define-light-theme(
+$reqsys-theme: mat.m2-define-light-theme(
   (
     color: (
       primary: $primary-palette,
       accent: $accent-palette,
       warn: $warn-palette,
     ),
-    typography: mat.define-typography-config(
+    typography: mat.m2-define-typography-config(
       $font-family: 'Arial, "Helvetica Neue", sans-serif',
     ),
     density: 0,
