@@ -1,0 +1,207 @@
+name: Teams Flow Bot Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      ambiente_logico:
+        description: 'Rotulo logico do ambiente de destino (governa o gate extra de producao)'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+          - prod
+      environment_url_destino:
+        description: 'URL do ambiente Power Platform de destino (ex: https://orgXXXX.crm2.dynamics.com)'
+        required: true
+        type: string
+      connection_id_destino:
+        description: 'Connection ID ja autorizado manualmente no ambiente destino (pre-requisito humano inevitavel, ver docs/architecture/teams-flow-bot-promotion.md)'
+        required: true
+        type: string
+      connection_reference_logical_name:
+        description: 'Nome logico da connection reference dentro da solution'
+        required: true
+        type: string
+      solution_name:
+        description: 'Nome da solution Power Platform'
+        required: true
+        default: 'robo_envia_teamsv2'
+        type: string
+      novo_flow_display_name:
+        description: 'Nome de exibicao do flow no ambiente destino'
+        required: true
+        default: 'robo_envia_teamsv2'
+        type: string
+      managed:
+        description: 'Importar como solution managed (recomendado para test/prod)'
+        required: true
+        default: true
+        type: boolean
+      confirmation:
+        description: 'Digite PROMOVER-TEAMS-FLOW-BOT para confirmar'
+        required: true
+        type: string
+      approve_producao:
+        description: 'Obrigatorio quando ambiente_logico=prod: APROVO-PROMOCAO-PROD'
+        required: false
+        default: ''
+        type: string
+      issue_number:
+        description: 'Issue para comentar evidencia (opcional)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: teams-flow-bot-promotion-${{ inputs.ambiente_logico }}
+  cancel-in-progress: false
+
+jobs:
+  promover:
+    name: Promover flow bot (${{ inputs.ambiente_logico }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: reqsys-power-platform-dev
+    env:
+      CORRELATION_ID: teams-flow-bot-promotion-${{ github.run_id }}-${{ github.run_attempt }}
+      REQSYS_API_BASE_URL: ${{ secrets.REQSYS_API_BASE_URL }}
+      REQSYS_API_SERVICE_TOKEN: ${{ secrets.REQSYS_API_SERVICE_TOKEN }}
+      ENVIRONMENT_URL_ORIGEM: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
+    steps:
+      - name: Validar confirmacao, gate de producao e secrets obrigatorios
+        shell: pwsh
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          AMBIENTE_LOGICO: ${{ inputs.ambiente_logico }}
+          APPROVE_PRODUCAO: ${{ inputs.approve_producao }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+
+          if ($env:CONFIRMATION -ne 'PROMOVER-TEAMS-FLOW-BOT') {
+            throw 'Confirmacao invalida; promocao bloqueada.'
+          }
+
+          if ($env:AMBIENTE_LOGICO -eq 'prod' -and $env:APPROVE_PRODUCAO -ne 'APROVO-PROMOCAO-PROD') {
+            throw 'ambiente_logico=prod exige approve_producao=APROVO-PROMOCAO-PROD explicito.'
+          }
+
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:REQSYS_API_BASE_URL)) { $missing += 'REQSYS_API_BASE_URL' }
+          if ([string]::IsNullOrWhiteSpace($env:REQSYS_API_SERVICE_TOKEN)) { $missing += 'REQSYS_API_SERVICE_TOKEN' }
+          if ([string]::IsNullOrWhiteSpace($env:ENVIRONMENT_URL_ORIGEM)) { $missing += 'POWER_PLATFORM_ENVIRONMENT_URL' }
+
+          if ($missing.Count -gt 0) {
+            Write-Host "::error::Secrets obrigatorios ausentes: $($missing -join ', ')"
+            if ($missing -contains 'REQSYS_API_SERVICE_TOKEN') {
+              Write-Host '::error::REQSYS_API_SERVICE_TOKEN nao esta configurado no environment reqsys-power-platform-dev.'
+              Write-Host '::error::Mintar via login admin real + POST /v1/admin/service-tokens com scope "teams_gateway:promover_solution", depois: gh secret set REQSYS_API_SERVICE_TOKEN --env reqsys-power-platform-dev'
+            }
+            throw "Nao e possivel prosseguir sem os secrets acima."
+          }
+
+          Write-Host 'Confirmacao, gate de producao e secrets validados.'
+
+      - name: Registrar manifesto da promocao
+        shell: pwsh
+        env:
+          MANAGED_INPUT: ${{ inputs.managed }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $managedBool = ($env:MANAGED_INPUT -eq 'true')
+          $manifest = [ordered]@{
+            schema_version = '1.0.0'
+            capability = 'Teams Flow Bot Promotion'
+            correlation_id = '${{ env.CORRELATION_ID }}'
+            ambiente_logico = '${{ inputs.ambiente_logico }}'
+            solution_name = '${{ inputs.solution_name }}'
+            environment_url_destino = '${{ inputs.environment_url_destino }}'
+            connection_reference_logical_name = '${{ inputs.connection_reference_logical_name }}'
+            novo_flow_display_name = '${{ inputs.novo_flow_display_name }}'
+            managed = $managedBool
+            source = @{
+              repository = '${{ github.repository }}'
+              run_id = '${{ github.run_id }}'
+              sha = '${{ github.sha }}'
+              run_url = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+            generated_at = (Get-Date).ToUniversalTime().ToString('o')
+          }
+          $manifest | ConvertTo-Json -Depth 10 | Set-Content -Path artifacts/teams-flow-bot-promotion-manifest.json -Encoding utf8
+          Get-Content artifacts/teams-flow-bot-promotion-manifest.json
+
+      - name: Executar promocao via API ReqSys (promover-solution)
+        id: promover
+        shell: pwsh
+        env:
+          CONNECTION_ID_DESTINO: ${{ inputs.connection_id_destino }}
+          MANAGED_INPUT: ${{ inputs.managed }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $managedBool = ($env:MANAGED_INPUT -eq 'true')
+          $headers = @{
+            'Content-Type'    = 'application/json'
+            'X-Service-Token' = $env:REQSYS_API_SERVICE_TOKEN
+            'X-Correlation-Id' = '${{ env.CORRELATION_ID }}'
+          }
+          $body = @{
+            environment_url_origem = $env:ENVIRONMENT_URL_ORIGEM
+            environment_url_destino = '${{ inputs.environment_url_destino }}'
+            solution_name = '${{ inputs.solution_name }}'
+            connection_reference_logical_name = '${{ inputs.connection_reference_logical_name }}'
+            connection_id_destino = $env:CONNECTION_ID_DESTINO
+            novo_flow_display_name = '${{ inputs.novo_flow_display_name }}'
+            managed = $managedBool
+          } | ConvertTo-Json
+
+          $url = $env:REQSYS_API_BASE_URL.TrimEnd('/') + '/v1/teams-gateway/flow-bot/promover-solution'
+          try {
+            $response = Invoke-RestMethod -Method Post -Uri $url -Headers $headers -Body $body
+          } catch {
+            $errBody = $_.ErrorDetails.Message
+            Write-Host "::error::Falha na promocao: $errBody"
+            if ($errBody) {
+              Set-Content -Path artifacts/teams-flow-bot-promotion-error.json -Value $errBody -Encoding utf8
+            }
+            throw
+          }
+          $response | ConvertTo-Json -Depth 20 | Set-Content -Path artifacts/teams-flow-bot-promotion-result.json -Encoding utf8
+          Get-Content artifacts/teams-flow-bot-promotion-result.json
+
+      - name: Upload evidencia da promocao
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-flow-bot-promotion-evidence
+          path: artifacts/*.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Comentar na issue de acompanhamento
+        if: ${{ always() && inputs.issue_number != '' }}
+        shell: pwsh
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $status = if ($env:JOB_STATUS -eq 'success') { 'sucesso' } else { 'falha' }
+          $lines = @(
+            '### Teams Flow Bot Promotion'
+            ''
+            "- Resultado: **$status**"
+            '- Ambiente logico: `${{ inputs.ambiente_logico }}`'
+            '- Ambiente destino: `${{ inputs.environment_url_destino }}`'
+            '- Solution: `${{ inputs.solution_name }}`'
+            '- Correlation ID: `${{ env.CORRELATION_ID }}`'
+            "- Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          )
+          $body = $lines -join "`n"
+          gh issue comment ${{ inputs.issue_number }} --body $body
