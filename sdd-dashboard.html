@@ -365,21 +365,26 @@
   <div class="summary-grid">
     <div class="stat-card purple">
       <div class="stat-value">3</div>
-      <div class="stat-label">Specs iniciadas</div>
+      <div class="stat-label">Specs rastreadas (.sdd/specs)</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-value">1</div>
+      <div class="stat-label">Em requirements (rascunho)</div>
     </div>
     <div class="stat-card blue">
       <div class="stat-value">1</div>
-      <div class="stat-label">Em tasks-generated</div>
-    </div>
-    <div class="stat-card yellow">
-      <div class="stat-value">2</div>
-      <div class="stat-label">Em initialized</div>
+      <div class="stat-label">Implementação em andamento</div>
     </div>
     <div class="stat-card green">
-      <div class="stat-value">0</div>
-      <div class="stat-label">Implementadas</div>
+      <div class="stat-value">1</div>
+      <div class="stat-label">Implementada e verificada</div>
     </div>
   </div>
+  <p style="font-size:0.72rem;color:var(--muted);margin:-20px 0 32px;">
+    Dados reconstruídos em 2026-08-16 a partir de commits e código real do repositório — ver
+    <code style="background:var(--surface2);padding:1px 6px;border-radius:4px;color:#c4b5fd;">.sdd/specs/&lt;feature&gt;/spec.json</code>
+    de cada spec para as evidências.
+  </p>
 
   <!-- PIPELINE DE FASES -->
   <p class="section-title">Fluxo SDD — Fases obrigatórias</p>
@@ -399,9 +404,9 @@
       <div class="phase-name" style="color:#93c5fd">Design</div>
       <div class="phase-cmd">/sdd:spec-design</div>
     </div>
-    <div class="phase-step p-tasks active">
+    <div class="phase-step p-tasks">
       <div class="phase-num">FASE 1C</div>
-      <div class="phase-name" style="color:#67e8f9">Tarefas ← atual</div>
+      <div class="phase-name" style="color:#67e8f9">Tarefas</div>
       <div class="phase-cmd">/sdd:spec-tasks</div>
     </div>
     <div class="phase-step p-impl">
@@ -422,16 +427,16 @@
           <div class="spec-name">pipeline-encoding-fix</div>
           <div class="spec-project">ReqSys v2 Enterprise · Python/FastAPI</div>
         </div>
-        <span class="phase-badge badge-tasks-gen">tasks-generated</span>
+        <span class="phase-badge badge-done">done</span>
       </div>
 
       <div class="progress-bar-wrap">
         <div class="progress-label">
           <span>Progresso da spec</span>
-          <span>75%</span>
+          <span>100%</span>
         </div>
         <div class="progress-bar">
-          <div class="progress-fill" style="width:75%;background:linear-gradient(90deg,#6366f1,#06b6d4)"></div>
+          <div class="progress-fill" style="width:100%;background:linear-gradient(90deg,#6366f1,#22c55e)"></div>
         </div>
       </div>
 
@@ -440,13 +445,13 @@
         <div class="artifact"><span class="dot dot-done"></span> requirements.md</div>
         <div class="artifact"><span class="dot dot-done"></span> design.md</div>
         <div class="artifact"><span class="dot dot-done"></span> research.md</div>
-        <div class="artifact"><span class="dot dot-current"></span> tasks.md</div>
-        <div class="artifact"><span class="dot dot-pending"></span> implementação</div>
+        <div class="artifact"><span class="dot dot-done"></span> tasks.md</div>
+        <div class="artifact"><span class="dot dot-done"></span> implementação</div>
       </div>
 
       <div class="spec-next">
-        <span class="next-label">▶ Próximo</span>
-        Aprovar tasks → <code>/sdd:spec-impl pipeline-encoding-fix 1.1</code>
+        <span class="next-label">▶ Verificado</span>
+        CI anti-mojibake ativo + <code>scripts/check_encoding.py</code> OK (137 arquivos, 2026-08-16)
       </div>
     </div>
 
@@ -457,31 +462,31 @@
           <div class="spec-name">backlog-redmine-sync</div>
           <div class="spec-project">ReqSys v2 Enterprise · Python/FastAPI</div>
         </div>
-        <span class="phase-badge badge-initialized">initialized</span>
+        <span class="phase-badge badge-impl">implementação</span>
       </div>
 
       <div class="progress-bar-wrap">
         <div class="progress-label">
           <span>Progresso da spec</span>
-          <span>10%</span>
+          <span>85%</span>
         </div>
         <div class="progress-bar">
-          <div class="progress-fill" style="width:10%;background:linear-gradient(90deg,#6366f1,#8b5cf6)"></div>
+          <div class="progress-fill" style="width:85%;background:linear-gradient(90deg,#6366f1,#22c55e)"></div>
         </div>
       </div>
 
       <div class="spec-artifacts">
         <div class="artifact"><span class="dot dot-done"></span> spec.json</div>
-        <div class="artifact"><span class="dot dot-current"></span> requirements.md</div>
-        <div class="artifact"><span class="dot dot-pending"></span> design.md</div>
-        <div class="artifact"><span class="dot dot-pending"></span> research.md</div>
-        <div class="artifact"><span class="dot dot-pending"></span> tasks.md</div>
-        <div class="artifact"><span class="dot dot-pending"></span> implementação</div>
+        <div class="artifact"><span class="dot dot-done"></span> requirements.md</div>
+        <div class="artifact"><span class="dot dot-done"></span> design.md</div>
+        <div class="artifact"><span class="dot dot-pending"></span> research.md (n/a)</div>
+        <div class="artifact"><span class="dot dot-done"></span> tasks.md</div>
+        <div class="artifact"><span class="dot dot-current"></span> implementação</div>
       </div>
 
       <div class="spec-next">
         <span class="next-label">▶ Próximo</span>
-        <code>/sdd:spec-requirements backlog-redmine-sync</code>
+        Config real pendente → <code>python scripts/configurar_redmine_sync_queue.py capturar</code>
       </div>
     </div>
 
@@ -490,24 +495,24 @@
       <div class="spec-card-header">
         <div>
           <div class="spec-name">ai-metrics-incident-report</div>
-          <div class="spec-project">AI Metrics Backend · Python/FastAPI</div>
+          <div class="spec-project">ReqSys v2 Enterprise (subsistema IA) · rota híbrida p/ futuro "AI Metrics Backend"</div>
         </div>
-        <span class="phase-badge badge-initialized">initialized</span>
+        <span class="phase-badge badge-req-generated">requirements (rascunho)</span>
       </div>
 
       <div class="progress-bar-wrap">
         <div class="progress-label">
           <span>Progresso da spec</span>
-          <span>10%</span>
+          <span>20%</span>
         </div>
         <div class="progress-bar">
-          <div class="progress-fill" style="width:10%;background:linear-gradient(90deg,#6366f1,#8b5cf6)"></div>
+          <div class="progress-fill" style="width:20%;background:linear-gradient(90deg,#6366f1,#8b5cf6)"></div>
         </div>
       </div>
 
       <div class="spec-artifacts">
         <div class="artifact"><span class="dot dot-done"></span> spec.json</div>
-        <div class="artifact"><span class="dot dot-current"></span> requirements.md</div>
+        <div class="artifact"><span class="dot dot-current"></span> requirements.md (draft)</div>
         <div class="artifact"><span class="dot dot-pending"></span> design.md</div>
         <div class="artifact"><span class="dot dot-pending"></span> research.md</div>
         <div class="artifact"><span class="dot dot-pending"></span> tasks.md</div>
@@ -515,8 +520,8 @@
       </div>
 
       <div class="spec-next">
-        <span class="next-label">▶ Próximo</span>
-        <code>/sdd:spec-requirements ai-metrics-incident-report</code>
+        <span class="next-label">▶ Bloqueado em</span>
+        3 perguntas em aberto no requirements.md (chave de correlação, modelo de extração, primeiro consumidor)
       </div>
     </div>
 
@@ -544,23 +549,23 @@
             <td><span class="check">✓</span></td>
             <td><span class="check">✓</span> gerado <span class="check">✓</span> aprovado</td>
             <td><span class="check">✓</span> gerado <span class="check">✓</span> aprovado</td>
-            <td><span class="curr">◉</span> gerado</td>
-            <td><span class="cross">○</span></td>
-            <td><span class="cross">○</span></td>
+            <td><span class="check">✓</span> gerado <span class="check">✓</span> aprovado</td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
           </tr>
           <tr>
             <td class="spec-col">backlog-redmine-sync</td>
             <td><span class="check">✓</span></td>
-            <td><span class="cross">○</span></td>
-            <td><span class="cross">○</span></td>
-            <td><span class="cross">○</span></td>
-            <td><span class="cross">○</span></td>
+            <td><span class="check">✓</span> gerado <span class="check">✓</span> aprovado</td>
+            <td><span class="check">✓</span> gerado <span class="check">✓</span> aprovado</td>
+            <td><span class="check">✓</span> gerado <span class="check">✓</span> aprovado</td>
+            <td><span class="curr">◉</span> merge feito, config pendente</td>
             <td><span class="cross">○</span></td>
           </tr>
           <tr>
             <td class="spec-col">ai-metrics-incident-report</td>
             <td><span class="check">✓</span></td>
-            <td><span class="cross">○</span></td>
+            <td><span class="curr">◉</span> rascunho</td>
             <td><span class="cross">○</span></td>
             <td><span class="cross">○</span></td>
             <td><span class="cross">○</span></td>
@@ -643,8 +648,8 @@
 </main>
 
 <footer>
-  Gerado em 2026-06-14 · Repositório: <strong>ericson-j-santos/my-first-spec-project</strong> ·
-  Projeto coordenado: <strong>reqsys-v2-enterprise-real</strong>
+  Reconstruído em 2026-08-16 a partir de git log/código real · Repositório: <strong>ericson-j-santos/reqsys-v2-enterprise-real</strong> ·
+  Specs em: <strong>.sdd/specs/&lt;feature&gt;/</strong>
 </footer>
 
 </body>
