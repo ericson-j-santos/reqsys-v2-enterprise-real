@@ -1,0 +1,23 @@
+{
+  "feature_name": "backlog-redmine-sync",
+  "project": "ReqSys v2 Enterprise — backend/app/services/redmine_sync_queue.py (Python/FastAPI)",
+  "created_at": "2026-07-23",
+  "updated_at": "2026-08-16",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Worker + API que fecha o loop do fluxo Power Automate PA-001-CreateRedmineIssue (Planner -> Dataverse -> Redmine). O Redmine bloqueia chamada HTTP direta por politica de DLP do tenant, entao o fluxo grava em Dataverse (cr85a_redminequeue) e este worker le a fila e efetivamente cria os issues no Redmine.",
+  "reconstruction_note": "spec.json escrito em 2026-08-16 a partir de trabalho ja real e mergeado (PR #1211, commit 0290d6cb na branch feat/redmine-sync-queue), nao de um .sdd/specs original — este spec nunca existiu formalmente, so foi construido agora para dar rastreabilidade ao que ja foi implementado.",
+  "status_summary": "Codigo implementado e mergeado em origin/main. Configuracao de producao incompleta: REDMINE_API_KEY, REDMINE_PROJECT_ID e REDMINE_SYNC_DATAVERSE_URL ainda vazios em .env (verificado em 2026-08-16). Nunca testado end-to-end contra Dataverse/Redmine reais.",
+  "evidence": [
+    "commit 0290d6cb: feat(redmine): worker de sincronizacao da fila cr85a_redminequeue",
+    "merge para origin/main: 15d6e976 (PR #1211)",
+    "backend/app/services/redmine_sync_queue.py, dataverse_queue_client.py, api/redmine_sync.py, schemas/redmine_sync.py",
+    "docs/architecture/redmine-sync-queue.md",
+    "14+11 testes unitarios (test_redmine_sync_api.py, test_redmine_sync_queue_service.py, dataverse_queue_client)",
+    "scripts/configurar_redmine_sync_queue.py (status/capturar/verificar/tudo)"
+  ]
+}

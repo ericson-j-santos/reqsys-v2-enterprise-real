@@ -240,10 +240,10 @@
   <h1>⚙ SDD Dashboard</h1>
   <p class="sub">Spec-Driven Development — Acompanhamento de Especificações</p>
   <div class="header-meta">
-    <span>📁 ericson-j-santos/my-first-spec-project</span>
-    <span>📅 Gerado em: 2026-06-14</span>
-    <span>📋 3 specs ativas</span>
-    <span>✅ Steering configurado</span>
+    <span>📁 ericson-j-santos/reqsys-v2-enterprise-real</span>
+    <span>📅 Reconstruído em: 2026-08-16 (a partir de git log/código real)</span>
+    <span>📋 3 specs em .sdd/specs/</span>
+    <span>✅ 1 implementada · 1 em implementação · 1 em rascunho</span>
   </div>
 </header>
 
@@ -306,17 +306,17 @@
             <div class="card-title">Correção de Encoding — pipeline.py</div>
             <div class="card-proj">ReqSys v2 Enterprise · FastAPI Python 3.12</div>
           </div>
-          <span class="badge b-tasks">Tarefas Geradas</span>
+          <span class="badge b-ready">Implementada</span>
         </div>
 
         <!-- Barra de progresso: steering, init, req, design, tasks, impl -->
         <div class="pbar">
           <div class="pb done"></div>
           <div class="pb done"></div>
-          <div class="pb warn"></div>
-          <div class="pb warn"></div>
-          <div class="pb warn"></div>
-          <div class="pb"></div>
+          <div class="pb done"></div>
+          <div class="pb done"></div>
+          <div class="pb done"></div>
+          <div class="pb done"></div>
         </div>
 
         <div class="checklist">
@@ -328,28 +328,27 @@
             <div class="cicon">✓</div>
             <span class="ctext">spec-init — Spec inicializada</span>
           </div>
-          <div class="ci ci-warn">
-            <div class="cicon">!</div>
-            <span class="ctext">spec-requirements — Gerado · aguarda aprovação</span>
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">spec-requirements — Aprovado</span>
           </div>
-          <div class="ci ci-warn">
-            <div class="cicon">!</div>
-            <span class="ctext">spec-design — Gerado · aguarda aprovação</span>
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">spec-design — Aprovado</span>
           </div>
-          <div class="ci ci-warn">
-            <div class="cicon">!</div>
-            <span class="ctext">spec-tasks — Gerado · aguarda aprovação</span>
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">spec-tasks — Aprovado</span>
           </div>
-          <div class="ci ci-pend">
-            <div class="cicon">6</div>
-            <span class="ctext">spec-impl — Pendente</span>
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">spec-impl — Concluído e verificado</span>
           </div>
         </div>
 
         <div class="next">
-          <span class="nlabel">Próxima ação</span>
-          Revisar design.md e tasks.md, depois executar implementação
-          <code>/sdd:spec-impl pipeline-encoding-fix 1.1</code>
+          <span class="nlabel">Verificado em 2026-08-16</span>
+          CI anti-mojibake ativo + <code>scripts/check_encoding.py</code> OK (137 arquivos, 0 mojibake)
         </div>
       </div>
 
@@ -360,16 +359,16 @@
             <div class="card-title">Sincronização Backlog → Redmine</div>
             <div class="card-proj">ReqSys v2 Enterprise · FastAPI + Redmine API</div>
           </div>
-          <span class="badge b-init">Inicializada</span>
+          <span class="badge b-design" style="background:#dcfce7;color:#166534">Implementação</span>
         </div>
 
         <div class="pbar">
           <div class="pb done"></div>
           <div class="pb done"></div>
+          <div class="pb done"></div>
+          <div class="pb done"></div>
+          <div class="pb done"></div>
           <div class="pb active"></div>
-          <div class="pb"></div>
-          <div class="pb"></div>
-          <div class="pb"></div>
         </div>
 
         <div class="checklist">
@@ -381,28 +380,28 @@
             <div class="cicon">✓</div>
             <span class="ctext">spec-init — Spec inicializada</span>
           </div>
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">spec-requirements — Aprovado</span>
+          </div>
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">spec-design — Aprovado</span>
+          </div>
+          <div class="ci ci-done">
+            <div class="cicon">✓</div>
+            <span class="ctext">spec-tasks — Aprovado</span>
+          </div>
           <div class="ci ci-active">
             <div class="cicon">→</div>
-            <span class="ctext">spec-requirements — A gerar</span>
-          </div>
-          <div class="ci ci-pend">
-            <div class="cicon">4</div>
-            <span class="ctext">spec-design — Pendente</span>
-          </div>
-          <div class="ci ci-pend">
-            <div class="cicon">5</div>
-            <span class="ctext">spec-tasks — Pendente</span>
-          </div>
-          <div class="ci ci-pend">
-            <div class="cicon">6</div>
-            <span class="ctext">spec-impl — Pendente</span>
+            <span class="ctext">spec-impl — Código mergeado (PR #1211), config pendente</span>
           </div>
         </div>
 
         <div class="next">
           <span class="nlabel">Próxima ação</span>
-          Gerar requisitos
-          <code>/sdd:spec-requirements backlog-redmine-sync</code>
+          Preencher credenciais reais (.env) e validar ao vivo
+          <code>python scripts/configurar_redmine_sync_queue.py capturar</code>
         </div>
       </div>
 
@@ -411,9 +410,9 @@
         <div class="card-head">
           <div>
             <div class="card-title">Relatório de Incidentes — AI Metrics</div>
-            <div class="card-proj">AI Metrics Backend · FastAPI + SQLite</div>
+            <div class="card-proj">ReqSys v2 (subsistema IA) · rota híbrida p/ futuro "AI Metrics Backend"</div>
           </div>
-          <span class="badge b-init">Inicializada</span>
+          <span class="badge b-req">Requisitos (rascunho)</span>
         </div>
 
         <div class="pbar">
@@ -436,7 +435,7 @@
           </div>
           <div class="ci ci-active">
             <div class="cicon">→</div>
-            <span class="ctext">spec-requirements — A gerar</span>
+            <span class="ctext">spec-requirements — Rascunho, 3 perguntas em aberto</span>
           </div>
           <div class="ci ci-pend">
             <div class="cicon">4</div>
@@ -453,9 +452,9 @@
         </div>
 
         <div class="next">
-          <span class="nlabel">Próxima ação</span>
-          Gerar requisitos
-          <code>/sdd:spec-requirements ai-metrics-incident-report</code>
+          <span class="nlabel">Bloqueado em</span>
+          Chave de correlação entre as 4 fontes, modelo de extração futura, primeiro consumidor —
+          ver <code>.sdd/specs/ai-metrics-incident-report/requirements.md</code>
         </div>
       </div>
 
@@ -485,27 +484,27 @@
             <td>ReqSys v2</td>
             <td><span class="dot d-done"></span>Feito</td>
             <td><span class="dot d-done"></span>Feito</td>
-            <td><span class="dot d-warn"></span>Revisão</td>
-            <td><span class="dot d-warn"></span>Revisão</td>
-            <td><span class="dot d-warn"></span>Revisão</td>
-            <td><span class="dot d-pend"></span>—</td>
+            <td><span class="dot d-done"></span>Feito</td>
+            <td><span class="dot d-done"></span>Feito</td>
+            <td><span class="dot d-done"></span>Feito</td>
+            <td><span class="dot d-done"></span>Feito</td>
           </tr>
           <tr>
             <td><strong>backlog-redmine-sync</strong></td>
             <td>ReqSys v2</td>
             <td><span class="dot d-done"></span>Feito</td>
             <td><span class="dot d-done"></span>Feito</td>
-            <td><span class="dot d-pend"></span>—</td>
-            <td><span class="dot d-pend"></span>—</td>
-            <td><span class="dot d-pend"></span>—</td>
-            <td><span class="dot d-pend"></span>—</td>
+            <td><span class="dot d-done"></span>Feito</td>
+            <td><span class="dot d-done"></span>Feito</td>
+            <td><span class="dot d-done"></span>Feito</td>
+            <td><span class="dot d-warn"></span>Config pendente</td>
           </tr>
           <tr>
             <td><strong>ai-metrics-incident-report</strong></td>
-            <td>AI Metrics</td>
+            <td>ReqSys v2 (híbrido)</td>
             <td><span class="dot d-done"></span>Feito</td>
             <td><span class="dot d-done"></span>Feito</td>
-            <td><span class="dot d-pend"></span>—</td>
+            <td><span class="dot d-warn"></span>Rascunho</td>
             <td><span class="dot d-pend"></span>—</td>
             <td><span class="dot d-pend"></span>—</td>
             <td><span class="dot d-pend"></span>—</td>
@@ -595,7 +594,7 @@
 </main>
 
 <footer>
-  SDD Dashboard · ericson-j-santos/my-first-spec-project · Gerado em 2026-06-14
+  SDD Dashboard · ericson-j-santos/reqsys-v2-enterprise-real · Reconstruído em 2026-08-16 · Specs em .sdd/specs/
 </footer>
 
 </body>
