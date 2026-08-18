@@ -11,6 +11,7 @@ on:
       - 'scripts/sincronizar_ollama_gateway_repo.sh'
       - 'scripts/iniciar_codex_local.sh'
       - '.github/workflows/codex-local-online.yml'
+      - '.github/workflows/deploy-reqsys-pages-composite.yml'
   push:
     branches: [ main ]
     paths:
@@ -22,12 +23,12 @@ on:
       - 'scripts/sincronizar_ollama_gateway_repo.sh'
       - 'scripts/iniciar_codex_local.sh'
       - '.github/workflows/codex-local-online.yml'
+      - '.github/workflows/deploy-reqsys-pages-composite.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  actions: write
 
 concurrency:
   group: codex-local-online-pages
@@ -49,21 +50,21 @@ jobs:
           echo "## Codex Local Online" >> "$GITHUB_STEP_SUMMARY"
           echo "- Validacao estatica: OK" >> "$GITHUB_STEP_SUMMARY"
           echo "- App: tools/codex-local-online/index.html" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Publicacao: GitHub Pages apos merge na main ou workflow_dispatch" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Publicacao: subrota /codex-local-online/ pelo Pages canônico" >> "$GITHUB_STEP_SUMMARY"
 
-  deploy:
-    name: Publicar GitHub Pages
+  request-canonical-pages:
+    name: Solicitar publicação canônica do Pages
     needs: validate
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: tools/codex-local-online
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Delegar publicação ao dashboard Teams
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run teams-notification-dashboard.yml \
+            --repo "${{ github.repository }}" \
+            --ref main
+          echo "Codex Local Online validado; publicação delegada ao pipeline canônico do ReqSys Pages."

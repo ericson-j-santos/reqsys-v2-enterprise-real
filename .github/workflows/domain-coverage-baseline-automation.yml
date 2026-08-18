@@ -75,8 +75,9 @@ jobs:
           mkdir -p docs/ops-dashboard/data
           cp artifacts/domain-coverage/baseline-diff.json docs/ops-dashboard/data/domain-coverage-baseline-diff.json
 
-      - name: Criar PR governado de ativação
+      - name: Criar proposta governada de ativação
         if: steps.policy.outputs.required == 'true'
+        id: proposal
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ steps.source.outputs.run_id }}
@@ -86,21 +87,68 @@ jobs:
           BRANCH="automation/domain-coverage-baseline-${RUN_ID}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$BRANCH"
-          git add config/domain-coverage-policy.json docs/ops-dashboard/data/domain-coverage-baseline-diff.json
-          git commit -m "chore(test): ativar baseline medido de cobertura por domínio"
-          git push origin "$BRANCH"
-          gh pr create \
+
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "Branch de proposta já existe: $BRANCH"
+          else
+            git switch -c "$BRANCH"
+            git add config/domain-coverage-policy.json docs/ops-dashboard/data/domain-coverage-baseline-diff.json
+            git commit -m "chore(test): ativar baseline medido de cobertura por domínio"
+            git push origin "$BRANCH"
+          fi
+
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+          existing_pr="$(gh pr list --base main --head "$BRANCH" --state open --json url --jq '.[0].url // empty')"
+          if [[ -n "$existing_pr" ]]; then
+            echo "pr_url=$existing_pr" >> "$GITHUB_OUTPUT"
+            echo "creation_status=existing" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          set +e
+          pr_output="$(gh pr create \
             --base main \
             --head "$BRANCH" \
             --title "chore(test): ativar baseline medido de cobertura por domínio" \
-            --body "## Origem\n\nArtifact do workflow Domain Coverage Governance, run **${RUN_ID}**.\n\n## Governança\n\n- Ativa o modo regression_gate.\n- Versiona somente percentuais com arquivos e statements medidos.\n- Publica diff no Ops Dashboard.\n- Requer ao menos uma revisão APPROVED antes do merge.\n- Não altera metas-alvo nem tolerância sem revisão humana."
+            --body "## Origem\n\nArtifact do workflow Domain Coverage Governance, run **${RUN_ID}**.\n\n## Governança\n\n- Ativa o modo regression_gate.\n- Versiona somente percentuais com arquivos e statements medidos.\n- Publica diff no Ops Dashboard.\n- Requer ao menos uma revisão APPROVED antes do merge.\n- Não altera metas-alvo nem tolerância sem revisão humana." 2>&1)"
+          pr_status=$?
+          set -e
+
+          if [[ $pr_status -eq 0 ]]; then
+            echo "pr_url=$pr_output" >> "$GITHUB_OUTPUT"
+            echo "creation_status=created" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if grep -Fq "GitHub Actions is not permitted to create or approve pull requests" <<<"$pr_output"; then
+            echo "::warning title=PR requer criação externa::A política do repositório impede o GITHUB_TOKEN de criar PR. A branch governada foi preservada: $BRANCH"
+            echo "creation_status=manual_required" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "$pr_output" >&2
+          exit "$pr_status"
 
       - name: Resumo
         if: always()
         run: |
-          echo "## Domain Coverage Baseline Automation" >> "$GITHUB_STEP_SUMMARY"
-          echo "Baseline necessário: ${{ steps.policy.outputs.required }}" >> "$GITHUB_STEP_SUMMARY"
-          if [[ -f artifacts/domain-coverage/baseline-diff.json ]]; then
-            cat artifacts/domain-coverage/baseline-diff.json >> "$GITHUB_STEP_SUMMARY"
-          fi
+          {
+            echo "## Domain Coverage Baseline Automation"
+            echo "- Baseline necessário: **${{ steps.policy.outputs.required }}**"
+            if [[ "${{ steps.policy.outputs.required }}" == "true" ]]; then
+              echo "- Branch proposta: \`${{ steps.proposal.outputs.branch }}\`"
+              echo "- Estado da criação do PR: **${{ steps.proposal.outputs.creation_status }}**"
+              if [[ -n "${{ steps.proposal.outputs.pr_url }}" ]]; then
+                echo "- PR: ${{ steps.proposal.outputs.pr_url }}"
+              elif [[ "${{ steps.proposal.outputs.creation_status }}" == "manual_required" ]]; then
+                echo "- Ação governada: criar PR externamente a partir da branch proposta; nenhuma permissão global foi ampliada."
+              fi
+            fi
+            if [[ -f artifacts/domain-coverage/baseline-diff.json ]]; then
+              echo
+              echo '```json'
+              cat artifacts/domain-coverage/baseline-diff.json
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -8,6 +8,7 @@ on:
       - "docs-site/**"
       - "docs/offline/**"
       - ".github/workflows/docs-mkdocs.yml"
+      - ".github/workflows/deploy-reqsys-pages-composite.yml"
   push:
     branches:
       - main
@@ -17,13 +18,12 @@ on:
       - "docs-site/**"
       - "docs/offline/**"
       - ".github/workflows/docs-mkdocs.yml"
+      - ".github/workflows/deploy-reqsys-pages-composite.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-  actions: read
+  actions: write
 
 env:
   PYTHON_VERSION: "3.12"
@@ -86,41 +86,26 @@ jobs:
           fi
 
       - name: Upload documentation artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
+          name: mkdocs-site
           path: site
+          if-no-files-found: error
+          retention-days: 30
 
-  deploy-pages:
-    name: Deploy GitHub Pages
+  request-canonical-pages:
+    name: Solicitar publicação canônica do Pages
     needs: build-docs
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
-      - name: Configure Pages
-        id: configure-pages
-        continue-on-error: true
-        uses: actions/configure-pages@v5
-
-      - name: Deploy Pages
-        id: deployment
-        if: steps.configure-pages.outcome == 'success'
-        continue-on-error: true
-        uses: actions/deploy-pages@v4
-
-      - name: Report Pages deployment status
-        if: always()
+      - name: Delegar publicação ao dashboard Teams
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          if [[ "${{ steps.configure-pages.outcome }}" != "success" ]]; then
-            echo "GitHub Pages ainda não está configurado para este repositório. Build MkDocs permaneceu validado; deploy tratado como não bloqueante."
-            exit 0
-          fi
-          if [[ "${{ steps.deployment.outcome }}" != "success" ]]; then
-            echo "Deploy GitHub Pages não estabilizou nesta execução. Build MkDocs permaneceu validado; deploy tratado como não bloqueante."
-            exit 0
-          fi
-          echo "GitHub Pages publicado com sucesso: ${{ steps.deployment.outputs.page_url }}"
+          set -euo pipefail
+          gh workflow run teams-notification-dashboard.yml \
+            --repo "${{ github.repository }}" \
+            --ref main
+          echo "MkDocs validado; publicação delegada ao pipeline canônico do ReqSys Pages."
