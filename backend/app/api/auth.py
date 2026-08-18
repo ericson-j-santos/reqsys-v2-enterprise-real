@@ -19,22 +19,16 @@ from app.services.certificate_auth import (
     validar_login_certificado,
 )
 from app.services.rbac import permissoes
+from app.services.role_resolution import resolver_papel
 
 logger = logging.getLogger('reqsys.security')
 
 router = APIRouter(prefix='/v1/auth', tags=['Auth'])
 
-# Mapeamento de admins conhecidos pelo prefixo do e-mail
-_ADMINS = {'ericsonjosedossantos', 'admin'}
-
 _NOMES: dict[str, str] = {
     'ericsonjosedossantos': 'Ericson Santos',
     'admin': 'Administrador',
 }
-
-
-def _papel_from_email(email: str) -> str:
-    return 'admin' if email.split('@')[0] in _ADMINS else 'analista'
 
 
 def _nome_from_email(email: str) -> str:
@@ -45,19 +39,27 @@ def _nome_from_email(email: str) -> str:
     return ' '.join(p.capitalize() for p in parts) if len(parts) > 1 else prefix.capitalize()
 
 
-def _demo_login_is_enabled() -> bool:
-    """Resolve o gate pelo ambiente público efetivo, preservando bloqueio em produção.
+def _usuario_autorizado(email: str, nome: str, *, entra_roles=None, extras: dict | None = None) -> tuple[dict, str]:
+    resolucao = resolver_papel(email, entra_roles=entra_roles)
+    usuario = {
+        'email': email,
+        'nome': nome,
+        'papel': resolucao.papel,
+        'permissoes': permissoes(resolucao.papel),
+        'role_source': resolucao.origem,
+    }
+    if extras:
+        usuario.update(extras)
+    return usuario, resolucao.papel
 
-    APP_ENV pode permanecer ``production`` em imagens otimizadas de DEV/STG. O ambiente
-    funcional exposto deve ser determinado por PUBLIC_ENVIRONMENT quando configurado.
-    """
+
+def _demo_login_is_enabled() -> bool:
+    """Resolve o gate pelo ambiente público efetivo, preservando bloqueio em produção."""
     return bool(
         settings.allow_demo_login
         and settings.normalized_public_environment != 'producao'
     )
 
-
-# ─── Azure AD (Microsoft Entra ID) ────────────────────────────────────────────
 
 class AzureLoginInput(BaseModel):
     id_token: str
@@ -84,16 +86,19 @@ def login_azure(body: AzureLoginInput, request: Request, db: Session = Depends(g
     info = extrair_usuario(claims)
     email = info['email']
     nome = info['nome']
-    papel = _papel_from_email(email)
+    usuario, papel = _usuario_autorizado(email, nome, entra_roles=claims.get('roles', []))
 
-    logger.info('azure_login ip=%s email=%s papel=%s', request.client.host if request.client else '?', mascarar_email(email), papel)
+    logger.info(
+        'azure_login ip=%s email=%s papel=%s role_source=%s',
+        request.client.host if request.client else '?',
+        mascarar_email(email),
+        papel,
+        usuario['role_source'],
+    )
     registrar_evento(db, obter_correlation_id(), email, 'LOGIN_AZURE', 'usuario', email)
-    usuario = {'email': email, 'nome': nome, 'papel': papel, 'permissoes': permissoes(papel)}
     token = criar_token({'sub': email, 'papel': papel})
     return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})
 
-
-# ─── OAuth2 PKCE code exchange (fluxo principal) ─────────────────────────────
 
 class AzureCodeInput(BaseModel):
     code: str
@@ -113,12 +118,12 @@ def login_azure_code(body: AzureCodeInput, request: Request, db: Session = Depen
     url = _TOKEN_URL.format(tenant=settings.azure_tenant_id)
     try:
         resp = httpx.post(url, data={
-            'client_id':     settings.azure_client_id,
-            'code':          body.code,
+            'client_id': settings.azure_client_id,
+            'code': body.code,
             'code_verifier': body.verifier,
-            'redirect_uri':  body.redirectUri,
-            'grant_type':    'authorization_code',
-            'scope':         'openid profile email',
+            'redirect_uri': body.redirectUri,
+            'grant_type': 'authorization_code',
+            'scope': 'openid profile email',
         }, timeout=15)
     except httpx.RequestError as exc:
         logger.error('azure_code_exchange_network_error: %s', exc)
@@ -126,8 +131,11 @@ def login_azure_code(body: AzureCodeInput, request: Request, db: Session = Depen
 
     if not resp.is_success:
         err = resp.json().get('error_description') or resp.text
-        logger.warning('azure_code_exchange_failed ip=%s err=%s',
-                       request.client.host if request.client else '?', err)
+        logger.warning(
+            'azure_code_exchange_failed ip=%s err=%s',
+            request.client.host if request.client else '?',
+            err,
+        )
         raise HTTPException(401, f'Token exchange falhou: {err}')
 
     tokens = resp.json()
@@ -140,22 +148,22 @@ def login_azure_code(body: AzureCodeInput, request: Request, db: Session = Depen
     except Exception as exc:
         raise HTTPException(401, f'ID token inválido: {exc}')
 
-    info  = extrair_usuario(claims)
+    info = extrair_usuario(claims)
     email = info['email']
-    nome  = info['nome']
-    papel = _papel_from_email(email)
+    nome = info['nome']
+    usuario, papel = _usuario_autorizado(email, nome, entra_roles=claims.get('roles', []))
 
-    logger.info('azure_pkce_login ip=%s email=%s papel=%s',
-                request.client.host if request.client else '?', mascarar_email(email), papel)
+    logger.info(
+        'azure_pkce_login ip=%s email=%s papel=%s role_source=%s',
+        request.client.host if request.client else '?',
+        mascarar_email(email),
+        papel,
+        usuario['role_source'],
+    )
     registrar_evento(db, obter_correlation_id(), email, 'LOGIN_AZURE_PKCE', 'usuario', email)
-    usuario = {'email': email, 'nome': nome, 'papel': papel, 'permissoes': permissoes(papel)}
-    token   = criar_token({'sub': email, 'papel': papel})
+    token = criar_token({'sub': email, 'papel': papel})
     return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})
 
-
-# ─── Config pública (sem autenticação) ────────────────────────────────────────
-
-# Certificado digital (fluxo hibrido)
 
 @router.post('/certificate/challenge')
 def certificate_challenge():
@@ -184,17 +192,22 @@ def certificate_verify(body: CertificateVerifyInput, request: Request, db: Sessi
         raise HTTPException(401, str(exc))
 
     email = identidade.reqsys_email
-    papel = _papel_from_email(email)
-    usuario = {
-        'email': email,
-        'nome': identidade.display_name,
-        'papel': papel,
-        'permissoes': permissoes(papel),
-        'auth_provider': 'certificate',
-        'certificate_subject': identidade.subject,
-        'certificate_issuer': identidade.issuer,
-    }
-    logger.info('certificate_login ip=%s email=%s papel=%s', request.client.host if request.client else '?', mascarar_email(email), papel)
+    usuario, papel = _usuario_autorizado(
+        email,
+        identidade.display_name,
+        extras={
+            'auth_provider': 'certificate',
+            'certificate_subject': identidade.subject,
+            'certificate_issuer': identidade.issuer,
+        },
+    )
+    logger.info(
+        'certificate_login ip=%s email=%s papel=%s role_source=%s',
+        request.client.host if request.client else '?',
+        mascarar_email(email),
+        papel,
+        usuario['role_source'],
+    )
     registrar_evento(db, obter_correlation_id(), email, 'LOGIN_CERTIFICADO', 'usuario', email)
     token = criar_token({'sub': email, 'papel': papel, 'auth_provider': 'certificate'})
     return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})
@@ -221,8 +234,6 @@ def auth_config():
     })
 
 
-# ─── Login demo (mantido somente para desenvolvimento controlado) ─────────────
-
 class LoginInput(BaseModel):
     email: EmailStr = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
     senha: str | None = None
@@ -240,10 +251,15 @@ def login(body: LoginInput, request: Request, db: Session = Depends(get_db)):
         )
         raise HTTPException(403, 'Login demo desabilitado neste ambiente')
 
-    email = body.email
-    papel = _papel_from_email(email)
-    logger.info('demo_login ip=%s email=%s papel=%s', request.client.host if request.client else '?', mascarar_email(email), papel)
+    email = str(body.email)
+    usuario, papel = _usuario_autorizado(email, _nome_from_email(email))
+    logger.info(
+        'demo_login ip=%s email=%s papel=%s role_source=%s',
+        request.client.host if request.client else '?',
+        mascarar_email(email),
+        papel,
+        usuario['role_source'],
+    )
     registrar_evento(db, obter_correlation_id(), email, 'LOGIN_DEMO', 'usuario', email)
-    usuario = {'email': email, 'nome': _nome_from_email(email), 'papel': papel, 'permissoes': permissoes(papel)}
     token = criar_token({'sub': email, 'papel': papel})
     return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})
