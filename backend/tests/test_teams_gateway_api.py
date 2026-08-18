@@ -14,8 +14,35 @@ def test_teams_gateway_status_endpoint():
 
     assert response.status_code == 200
     data = response.json()['data']
-    assert data['schema_version'] == '1.0.0'
+    assert data['schema_version'] == '1.1.0'
     assert {rota['canal'] for rota in data['rotas']} >= {'graph_delegado', 'webhook', 'graph_app_only', 'bot'}
+
+
+@patch('app.api.teams_gateway.teams_graph_identity_status')
+def test_teams_gateway_status_graph_app_only_usa_registro_governado(mock_status_identidade):
+    mock_status_identidade.return_value = {
+        'configured': True,
+        'profile_name': 'reqsys-dev-teams-confidential',
+        'environment': 'development',
+        'client_id_suffix': '12345678',
+        'rotation_due_at': '2026-09-01T12:00:00+00:00',
+        'rotation_required': False,
+    }
+
+    response = client.get('/v1/teams-gateway/status')
+
+    assert response.status_code == 200
+    rotas = response.json()['data']['rotas']
+    graph_app = next(rota for rota in rotas if rota['canal'] == 'graph_app_only')
+    assert graph_app['disponivel'] is True
+    assert graph_app['campos_faltantes'] == []
+    mock_status_identidade.assert_called_once_with()
+
+
+def test_teams_gateway_identity_status_exige_admin():
+    response = client.get('/v1/teams-gateway/identity-status')
+
+    assert response.status_code in (401, 403)
 
 
 def test_teams_gateway_routes_endpoint():
