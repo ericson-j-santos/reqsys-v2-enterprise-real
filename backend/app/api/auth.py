@@ -2,14 +2,14 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.correlation import obter_correlation_id
 from app.core.envelope import ok
 from app.core.pii_masking import mascarar_email
-from app.core.security import criar_token
+from app.core.security import criar_token, get_current_user, require_admin
 from app.db import get_db
 from app.services.auditoria import registrar_evento
 from app.services.azure_auth import extrair_usuario, validar_token_azure
@@ -20,6 +20,7 @@ from app.services.certificate_auth import (
 )
 from app.services.rbac import permissoes
 from app.services.role_resolution import resolver_papel
+from app.services.session_management import invalidate_all, snapshot
 
 logger = logging.getLogger('reqsys.security')
 
@@ -41,12 +42,15 @@ def _nome_from_email(email: str) -> str:
 
 def _usuario_autorizado(email: str, nome: str, *, entra_roles=None, extras: dict | None = None) -> tuple[dict, str]:
     resolucao = resolver_papel(email, entra_roles=entra_roles)
+    state = snapshot()
     usuario = {
         'email': email,
         'nome': nome,
         'papel': resolucao.papel,
         'permissoes': permissoes(resolucao.papel),
         'role_source': resolucao.origem,
+        'session_epoch': state.session_epoch,
+        'authz_version': state.authz_version,
     }
     if extras:
         usuario.update(extras)
@@ -61,6 +65,31 @@ def _demo_login_is_enabled() -> bool:
     )
 
 
+def _session_confirmation_phrase() -> str:
+    return 'INVALIDAR-SESSOES-PROD' if settings.is_production else 'INVALIDAR-SESSOES-DEV'
+
+
+def _masked_actor(value: str | None) -> str:
+    actor = (value or 'admin').strip()
+    return mascarar_email(actor) if '@' in actor else actor[:80]
+
+
+def _session_status_payload() -> dict:
+    state = snapshot()
+    return {
+        'environment': settings.normalized_environment,
+        'session_epoch': state.session_epoch,
+        'authz_version': state.authz_version,
+        'invalidated_at': state.invalidated_at.isoformat() if state.invalidated_at else None,
+        'invalidated_by': state.invalidated_by,
+        'invalidation_reason': state.invalidation_reason,
+        'correlation_id': state.correlation_id,
+        'required_confirmation': _session_confirmation_phrase(),
+        'production_touched': settings.is_production,
+        'active_session_inventory': 'stateless_not_enumerated',
+    }
+
+
 class AzureLoginInput(BaseModel):
     id_token: str
 
@@ -69,6 +98,11 @@ class CertificateVerifyInput(BaseModel):
     certificate_pem: str
     challenge: str
     signature_base64: str
+
+
+class InvalidateAllSessionsInput(BaseModel):
+    confirmacao: str = Field(min_length=1, max_length=100)
+    motivo: str = Field(min_length=8, max_length=1000)
 
 
 @router.post('/azure')
@@ -263,3 +297,73 @@ def login(body: LoginInput, request: Request, db: Session = Depends(get_db)):
     registrar_evento(db, obter_correlation_id(), email, 'LOGIN_DEMO', 'usuario', email)
     token = criar_token({'sub': email, 'papel': papel})
     return ok({'access_token': token, 'token_type': 'bearer', 'usuario': usuario})
+
+
+@router.get('/session')
+def current_session(user: dict = Depends(get_current_user)):
+    state = snapshot()
+    papel = str(user.get('papel') or '')
+    return ok({
+        'papel': papel,
+        'permissoes': permissoes(papel),
+        'session_epoch': state.session_epoch,
+        'authz_version': state.authz_version,
+        'auth_provider': user.get('auth_provider'),
+    })
+
+
+@router.post('/session/refresh')
+def refresh_session(user: dict = Depends(get_current_user)):
+    papel = str(user.get('papel') or '')
+    token_payload = {'sub': user.get('sub'), 'papel': papel}
+    if user.get('auth_provider'):
+        token_payload['auth_provider'] = user.get('auth_provider')
+
+    access_token = criar_token(token_payload)
+    state = snapshot()
+    return ok({
+        'access_token': access_token,
+        'token_type': 'bearer',
+        'usuario': {
+            'papel': papel,
+            'permissoes': permissoes(papel),
+            'session_epoch': state.session_epoch,
+            'authz_version': state.authz_version,
+        },
+    })
+
+
+@router.get('/sessions/admin/status')
+def sessions_admin_status(_: dict = Depends(require_admin)):
+    return ok(_session_status_payload())
+
+
+@router.post('/sessions/admin/invalidate-all')
+def sessions_admin_invalidate_all(
+    body: InvalidateAllSessionsInput,
+    user: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    expected = _session_confirmation_phrase()
+    if body.confirmacao != expected:
+        raise HTTPException(status_code=409, detail=f'Confirmação inválida. Informe exatamente {expected}.')
+
+    correlation_id = obter_correlation_id()
+    actor = _masked_actor(user.get('sub'))
+    state = invalidate_all(
+        actor=actor,
+        reason=body.motivo,
+        correlation_id=correlation_id,
+        db=db,
+    )
+    registrar_evento(
+        db,
+        correlation_id,
+        actor,
+        'INVALIDAR_TODAS_SESSOES',
+        'security_session_state',
+        str(state.session_epoch),
+    )
+    payload = _session_status_payload()
+    payload['decision'] = 'all_human_sessions_invalidated'
+    return ok(payload)
