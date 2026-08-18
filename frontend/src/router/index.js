@@ -29,6 +29,7 @@ import OrquestradorIAView from '../views/OrquestradorIAView.vue'
 import CoordenacaoAdrView from '../views/CoordenacaoAdrView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import GitHubMergeConsoleView from '../views/GitHubMergeConsoleView.vue'
+import TeamsRecipientPoliciesView from '../views/TeamsRecipientPoliciesView.vue'
 import { useAuthStore } from '../stores/auth'
 
 export const routes = [
@@ -68,6 +69,11 @@ export const routes = [
   { path: '/orquestrador-ia', component: OrquestradorIAView, meta: { recurso: 'dashboard:read' } },
   { path: '/coordenacao-adr', component: CoordenacaoAdrView, meta: { recurso: 'dashboard:read' } },
   { path: '/admin/github-merge', component: GitHubMergeConsoleView, meta: { recurso: 'auditoria:read' } },
+  {
+    path: '/admin/teams-recipient-policies',
+    component: TeamsRecipientPoliciesView,
+    meta: { recurso: 'teams-recipient-policies:admin' },
+  },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { public: true } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })

@@ -34,4 +34,5 @@ export const ROTAS_RESPONSIVAS = [
   { path: '/orquestrador-ia', testId: 'route-orquestrador-ia', titulo: 'Orquestrador IA' },
   { path: '/coordenacao-adr', testId: 'route-coordenacao-adr', titulo: 'Coordenação ADR' },
   { path: '/admin/github-merge', testId: 'route-github-merge', titulo: 'Console de Merge Governado' },
+  { path: '/admin/teams-recipient-policies', testId: 'route-teams-recipient-policies', titulo: 'Políticas de Destinatários Teams' },
 ]

@@ -7,6 +7,7 @@ PERMISSOES_POR_PAPEL = {
         'rastreabilidade:read',
         'auditoria:read',
         'relatorios:read',
+        'teams-recipient-policies:admin',
         'demanda:iniciar',
         'demanda:cancelar',
         'demanda:aprovar',

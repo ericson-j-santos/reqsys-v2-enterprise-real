@@ -23,6 +23,15 @@ def test_admin_mantem_permissoes_completas():
     assert 'dossie:arquivar' in escopos
 
 
+def test_politicas_teams_sao_restritas_ao_admin():
+    escopo = 'teams-recipient-policies:admin'
+    assert tem_permissao('admin', escopo) is True
+    assert tem_permissao('ADMIN', escopo) is True
+    assert tem_permissao('analista', escopo) is False
+    assert tem_permissao('auditor', escopo) is False
+    assert tem_permissao('gestor', escopo) is False
+
+
 @pytest.mark.parametrize(
     'papel_legado,esperado',
     [
