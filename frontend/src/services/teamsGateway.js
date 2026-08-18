@@ -6,6 +6,11 @@ export async function obterStatusTeamsGateway() {
   return data.data
 }
 
+export async function obterStatusIdentidadeTeamsGateway() {
+  const { data } = await api.get('/v1/teams-gateway/identity-status')
+  return data.data
+}
+
 export async function simularRotaTeamsGateway(payload) {
   const { data } = await api.post('/v1/teams-gateway/routes', payload)
   return data.data
