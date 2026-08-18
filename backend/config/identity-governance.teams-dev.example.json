@@ -1,0 +1,14 @@
+[
+  {
+    "name": "reqsys-dev-teams-confidential",
+    "environment": "development",
+    "purpose": "teams-proactive-messaging",
+    "data_classification": "confidential",
+    "tenant_id": "00000000-0000-0000-0000-000000000000",
+    "client_id": "22222222-2222-2222-2222-222222222222",
+    "current_secret_ref": "vault://reqsys/dev/teams/client-secret-current",
+    "next_secret_ref": "vault://reqsys/dev/teams/client-secret-next",
+    "rotated_at": "2026-08-01T00:00:00Z",
+    "max_age_days": 60
+  }
+]
