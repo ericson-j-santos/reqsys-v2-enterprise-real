@@ -20,6 +20,10 @@
         Resetar sessão e autenticar novamente
       </v-btn>
     </div>
+
+    <div v-if="erroSessao" class="text-caption mt-2" role="status">
+      {{ erroSessao }}
+    </div>
   </v-alert>
 </template>
 
@@ -32,6 +36,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const atualizando = ref(false)
+const erroSessao = ref('')
 
 const forbiddenResource = computed(() => {
   const value = route.query.forbidden
@@ -45,11 +50,17 @@ const forbiddenPath = computed(() => {
 
 async function atualizarPermissoes() {
   atualizando.value = true
+  erroSessao.value = ''
   try {
     await auth.atualizarSessao()
     if (auth.pode(forbiddenResource.value)) {
       await router.replace(forbiddenPath.value)
+      return
     }
+    erroSessao.value = 'A permissão continua indisponível após a atualização da sessão.'
+  } catch (error) {
+    if (error?.response?.status === 401) return
+    erroSessao.value = 'Não foi possível atualizar a sessão. Tente novamente ou force uma nova autenticação.'
   } finally {
     atualizando.value = false
   }
