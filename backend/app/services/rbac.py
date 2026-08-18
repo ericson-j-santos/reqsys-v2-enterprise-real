@@ -9,6 +9,7 @@ PERMISSOES_POR_PAPEL = {
         'relatorios:read',
         'teams-recipient-policies:admin',
         'operational-deploy:admin',
+        'security-sessions:admin',
         'demanda:iniciar',
         'demanda:cancelar',
         'demanda:aprovar',
