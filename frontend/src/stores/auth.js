@@ -51,16 +51,21 @@ export const useAuthStore = defineStore('auth', {
       this.salvarSessao(dados)
     },
     async atualizarSessao() {
-      const { data } = await api.post('/v1/auth/session/refresh')
-      const atualizacao = data?.data || {}
-      if (!atualizacao.access_token || !atualizacao.usuario) {
-        throw new Error('Resposta inválida ao atualizar sessão')
+      try {
+        const { data } = await api.post('/v1/auth/session/refresh')
+        const atualizacao = data?.data || {}
+        if (!atualizacao.access_token || !atualizacao.usuario) {
+          throw new Error('Resposta inválida ao atualizar sessão')
+        }
+        this.token = atualizacao.access_token
+        this.usuario = sanitizeUsuario({ ...(this.usuario || {}), ...atualizacao.usuario })
+        localStorage.setItem('reqsys_token', this.token)
+        localStorage.setItem('reqsys_usuario', JSON.stringify(this.usuario))
+        return this.usuario
+      } catch (error) {
+        if (error?.response?.status === 401) this.sair()
+        throw error
       }
-      this.token = atualizacao.access_token
-      this.usuario = sanitizeUsuario({ ...(this.usuario || {}), ...atualizacao.usuario })
-      localStorage.setItem('reqsys_token', this.token)
-      localStorage.setItem('reqsys_usuario', JSON.stringify(this.usuario))
-      return this.usuario
     },
     sair() {
       this.token = null
