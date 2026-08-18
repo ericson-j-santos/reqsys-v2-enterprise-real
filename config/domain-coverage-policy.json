@@ -40,7 +40,7 @@
   },
   "baseline": {
     "core": 86.85,
-    "services": 92.38,
+    "services": 92.37,
     "api": 89.42,
     "repositories": 100.0,
     "runtime": 97.52
