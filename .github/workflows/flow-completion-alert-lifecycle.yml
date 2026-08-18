@@ -86,7 +86,7 @@ jobs:
           artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "reqsys-flow-completion-monitor" and .expired == false)) | .[0].id // empty')"
           test -n "$artifact_id"
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/current.zip
-          unzip -q .tmp/current.zip -d .tmp/current
+          unzip -oq .tmp/current.zip -d .tmp/current
           test -f .tmp/current/report.json
 
       - name: Restaurar estado anterior
@@ -97,7 +97,7 @@ jobs:
           previous_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=flow-completion-alert-state&per_page=20" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
           if [ -n "$previous_id" ]; then
             gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${previous_id}/zip" > .tmp/previous.zip
-            unzip -q .tmp/previous.zip -d .tmp/previous
+            unzip -oq .tmp/previous.zip -d .tmp/previous
             candidate="$(find .tmp/previous -name state.json -print -quit)"
             [ -z "$candidate" ] || cp "$candidate" .tmp/previous/state.json
           fi

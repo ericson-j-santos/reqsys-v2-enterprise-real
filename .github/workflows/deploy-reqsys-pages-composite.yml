@@ -19,12 +19,12 @@ concurrency:
 
 jobs:
   deploy:
-    name: Publicar dashboard Teams e showcase sem colisão
+    name: Publicar Pages canônico sem colisão
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -36,16 +36,29 @@ jobs:
         with:
           ref: main
 
+      - name: Setup Python para documentação
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências da documentação
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check -r requirements-docs.txt
+
       - name: Montar site composto
         shell: bash
         run: |
           set -euo pipefail
 
           rm -rf site
-          mkdir -p site/showcase
+          mkdir -p site/showcase site/codex-local-online
 
           cp ops-dashboard/teams-notification/index.html site/index.html
           cp -a docs/public-showcase/reqsys-linkedin/. site/showcase/
+          cp -a tools/codex-local-online/. site/codex-local-online/
+          mkdocs build --strict --site-dir site/docs
           : > site/.nojekyll
 
           fetch_fresh_json() {
@@ -82,6 +95,8 @@ jobs:
           test -s site/certification-status.json
           test -s site/showcase/index.html
           test -s site/showcase/assets/styles.css
+          test -s site/codex-local-online/index.html
+          test -s site/docs/index.html
 
           grep -Fq 'Teams' site/index.html
           grep -Fq 'SLO' site/index.html
@@ -138,5 +153,7 @@ jobs:
             echo '- `/data.json`: contrato dinâmico do dashboard Teams'
             echo '- `/certification-status.json`: evidência de certificação'
             echo '- `/showcase/`: showcase público ReqSys'
-            echo '- Publicação concorrente do showcase: removida'
+            echo '- `/docs/`: documentação MkDocs'
+            echo '- `/codex-local-online/`: interface Codex Local Online'
+            echo '- Publicadores concorrentes: desabilitados; este workflow é o proprietário canônico do Pages.'
           } >> "$GITHUB_STEP_SUMMARY"
