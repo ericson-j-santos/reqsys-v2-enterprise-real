@@ -35,4 +35,5 @@ export const ROTAS_RESPONSIVAS = [
   { path: '/coordenacao-adr', testId: 'route-coordenacao-adr', titulo: 'Coordenação ADR' },
   { path: '/admin/github-merge', testId: 'route-github-merge', titulo: 'Console de Merge Governado' },
   { path: '/admin/teams-recipient-policies', testId: 'route-teams-recipient-policies', titulo: 'Políticas de Destinatários Teams' },
+  { path: '/admin/operational-deploy', testId: 'route-operational-deploy', titulo: 'Central de Administração Operacional' },
 ]
