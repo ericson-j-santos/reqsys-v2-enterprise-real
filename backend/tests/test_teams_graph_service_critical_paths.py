@@ -11,6 +11,7 @@ os.environ.setdefault('APP_ENV', 'test')
 os.environ.setdefault('DATABASE_URL', 'sqlite:///./test_reqsys_teams_graph_service.db')
 os.environ.setdefault('JWT_SECRET', 'reqsys-test-secret-with-minimum-safe-length')
 
+from app.core.identity_governance import IdentityGovernanceError  # noqa: E402
 from app.db import Base, SessionLocal, engine  # noqa: E402
 from app.services import hub_lowcode as svc  # noqa: E402
 
@@ -32,10 +33,47 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def _identity_mock():
+    identity = MagicMock()
+    identity.evidence.return_value = {
+        'profile_name': 'reqsys-test-teams-confidential',
+        'environment': 'test',
+        'purpose': 'teams-proactive-messaging',
+        'data_classification': 'confidential',
+        'client_id_suffix': '12345678',
+        'rotation_due_at': '2099-01-01T00:00:00+00:00',
+        'rotation_required': False,
+    }
+    return identity
+
+
 def _mock_credenciais_graph(monkeypatch):
-    monkeypatch.setattr(svc.settings, 'azure_tenant_id', 'tenant-id')
-    monkeypatch.setattr(svc.settings, 'azure_client_id', 'client-id')
-    monkeypatch.setattr(svc.settings, 'azure_client_secret', 'client-secret')
+    async def _token():
+        return 'tok-governado', _identity_mock()
+
+    monkeypatch.setattr(svc, 'acquire_teams_graph_token', _token)
+    monkeypatch.setattr(
+        svc,
+        'teams_graph_identity_status',
+        lambda: {'configured': True, **_identity_mock().evidence()},
+    )
+
+
+def _mock_identidade_graph_ausente(monkeypatch):
+    async def _token():
+        raise IdentityGovernanceError('REQSYS_IDENTITY_GOVERNANCE_FILE não configurado; seleção de identidade bloqueada.')
+
+    monkeypatch.setattr(svc, 'acquire_teams_graph_token', _token)
+    monkeypatch.setattr(
+        svc,
+        'teams_graph_identity_status',
+        lambda: {
+            'configured': False,
+            'purpose': 'teams-proactive-messaging',
+            'data_classification': 'confidential',
+            'error': 'identidade governada não configurada',
+        },
+    )
 
 
 def _mock_httpx_post_sequence(mock_client_cls, *respostas):
@@ -68,16 +106,14 @@ def _resp(status_code=200, json_data=None, raise_error=None):
     return mock_resp
 
 
-def test_enviar_mensagem_chat_sem_credenciais_degrada(monkeypatch):
-    monkeypatch.setattr(svc.settings, 'azure_tenant_id', '')
-    monkeypatch.setattr(svc.settings, 'azure_client_id', '')
-    monkeypatch.setattr(svc.settings, 'azure_client_secret', '')
+def test_enviar_mensagem_chat_sem_identidade_governada_degrada(monkeypatch):
+    _mock_identidade_graph_ausente(monkeypatch)
 
     resultado = _run(svc.enviar_mensagem_chat_teams('chat-1', 'ola'))
 
     assert resultado['configurado'] is False
     assert resultado['enviado'] is False
-    assert 'AZURE' in resultado['erro']
+    assert 'IDENTITY_GOVERNANCE' in resultado['erro']
 
 
 def test_enviar_mensagem_chat_sem_chat_id(monkeypatch):
@@ -93,7 +129,6 @@ def test_enviar_mensagem_chat_sucesso_registra_log(mock_client_cls, monkeypatch)
     _mock_credenciais_graph(monkeypatch)
     _mock_httpx_post_sequence(
         mock_client_cls,
-        _resp(json_data={'access_token': 'tok'}),
         _resp(status_code=201, json_data={'id': 'msg-123'}),
     )
 
@@ -106,6 +141,7 @@ def test_enviar_mensagem_chat_sucesso_registra_log(mock_client_cls, monkeypatch)
     assert resultado['configurado'] is True
     assert resultado['enviado'] is True
     assert resultado['message_id'] == 'msg-123'
+    assert resultado['identity']['profile_name'] == 'reqsys-test-teams-confidential'
 
     db = SessionLocal()
     try:
@@ -122,7 +158,6 @@ def test_enviar_mensagem_chat_http_error_nao_retenta(mock_client_cls, monkeypatc
     erro_http = httpx.HTTPStatusError('forbidden', request=MagicMock(), response=_resp(status_code=403, json_data={}))
     mock_client = _mock_httpx_post_sequence(
         mock_client_cls,
-        _resp(json_data={'access_token': 'tok'}),
         MagicMock(raise_for_status=MagicMock(side_effect=erro_http)),
     )
 
@@ -130,14 +165,12 @@ def test_enviar_mensagem_chat_http_error_nao_retenta(mock_client_cls, monkeypatc
 
     assert resultado['enviado'] is False
     assert 'HTTP 403' in resultado['erro']
-    assert mock_client.post.call_count == 2  # 1 chamada de token + 1 tentativa de envio (sem retry em erro HTTP definitivo)
+    assert mock_client.post.call_count == 1
 
 
 @patch('app.services.hub_lowcode.httpx.AsyncClient')
-def test_criar_chat_individual_sem_credenciais_degrada(mock_client_cls, monkeypatch):
-    monkeypatch.setattr(svc.settings, 'azure_tenant_id', '')
-    monkeypatch.setattr(svc.settings, 'azure_client_id', '')
-    monkeypatch.setattr(svc.settings, 'azure_client_secret', '')
+def test_criar_chat_individual_sem_identidade_governada_degrada(mock_client_cls, monkeypatch):
+    _mock_identidade_graph_ausente(monkeypatch)
 
     resultado = _run(svc.criar_chat_individual_teams('user-a', 'user-b'))
 
@@ -159,7 +192,6 @@ def test_criar_chat_individual_entre_dois_usuarios_reais(mock_client_cls, monkey
     _mock_credenciais_graph(monkeypatch)
     _mock_httpx_post_sequence(
         mock_client_cls,
-        _resp(json_data={'access_token': 'tok'}),
         _resp(status_code=201, json_data={'id': 'chat-999'}),
     )
 
@@ -167,6 +199,7 @@ def test_criar_chat_individual_entre_dois_usuarios_reais(mock_client_cls, monkey
 
     assert resultado['ok'] is True
     assert resultado['chat_id'] == 'chat-999'
+    assert resultado['identity']['profile_name'] == 'reqsys-test-teams-confidential'
 
 
 def test_enviar_mensagem_como_usuario_sem_token(monkeypatch):
@@ -176,11 +209,7 @@ def test_enviar_mensagem_como_usuario_sem_token(monkeypatch):
 
 
 @patch('app.services.hub_lowcode.httpx.AsyncClient')
-def test_enviar_mensagem_como_usuario_sucesso_nao_usa_client_secret(mock_client_cls, monkeypatch):
-    # Nenhuma credencial app-only configurada — o envio delegado nao deve precisar delas.
-    monkeypatch.setattr(svc.settings, 'azure_tenant_id', '')
-    monkeypatch.setattr(svc.settings, 'azure_client_id', '')
-    monkeypatch.setattr(svc.settings, 'azure_client_secret', '')
+def test_enviar_mensagem_como_usuario_sucesso_nao_usa_identidade_app_only(mock_client_cls, monkeypatch):
     _mock_httpx_post_sequence(mock_client_cls, _resp(status_code=201, json_data={'id': 'msg-delegado-1'}))
 
     db = SessionLocal()
@@ -193,7 +222,7 @@ def test_enviar_mensagem_como_usuario_sucesso_nao_usa_client_secret(mock_client_
 
     assert resultado['enviado'] is True
     assert resultado['message_id'] == 'msg-delegado-1'
-    assert mock_client_cls.return_value.post.call_count == 1  # sem chamada de token app-only
+    assert mock_client_cls.return_value.post.call_count == 1
 
 
 @patch('app.services.hub_lowcode.httpx.AsyncClient')
@@ -202,9 +231,8 @@ def test_criar_chat_e_enviar_como_usuario_fluxo_completo(mock_client_cls, monkey
 
     _mock_httpx_post_sequence(
         mock_client_cls,
-        _resp(json_data={'access_token': 'tok'}),              # token app-only para criar chat
-        _resp(status_code=201, json_data={'id': 'chat-999'}),  # criação do chat (app-only)
-        _resp(status_code=201, json_data={'id': 'msg-1'}),     # envio (delegado, sem chamada de token)
+        _resp(status_code=201, json_data={'id': 'chat-999'}),
+        _resp(status_code=201, json_data={'id': 'msg-1'}),
     )
 
     resultado = _run(svc.criar_chat_e_enviar_como_usuario('user-a', 'user-b', 'Ola direto', 'user-delegated-token'))
@@ -212,6 +240,7 @@ def test_criar_chat_e_enviar_como_usuario_fluxo_completo(mock_client_cls, monkey
     assert resultado['enviado'] is True
     assert resultado['chat_id'] == 'chat-999'
     assert resultado['message_id'] == 'msg-1'
+    assert resultado['identity']['profile_name'] == 'reqsys-test-teams-confidential'
 
 
 def test_listar_chats_como_usuario_sem_token():
