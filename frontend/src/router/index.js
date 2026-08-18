@@ -31,6 +31,7 @@ import NotFoundView from '../views/NotFoundView.vue'
 import GitHubMergeConsoleView from '../views/GitHubMergeConsoleView.vue'
 import TeamsRecipientPoliciesView from '../views/TeamsRecipientPoliciesView.vue'
 import OperationalDeployView from '../views/OperationalDeployView.vue'
+import SessionManagementView from '../views/SessionManagementView.vue'
 import { useAuthStore } from '../stores/auth'
 
 export const routes = [
@@ -76,16 +77,32 @@ export const routes = [
     meta: { recurso: 'teams-recipient-policies:admin' },
   },
   { path: '/admin/operational-deploy', component: OperationalDeployView, meta: { recurso: 'operational-deploy:admin' } },
+  { path: '/admin/session-management', component: SessionManagementView, meta: { recurso: 'security-sessions:admin' } },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { public: true } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (!to.meta.public && !auth.autenticado) {
     return { path: '/login', query: to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : {} }
   }
   if (to.meta.recurso && auth.usuario && !auth.pode(to.meta.recurso)) {
-    return { path: '/', query: { forbidden: String(to.meta.recurso) } }
+    try {
+      await auth.atualizarSessao()
+    } catch {
+      // 401 é tratado como reset de sessão; demais falhas preservam fail-closed.
+    }
+    if (auth.pode(to.meta.recurso)) return true
+    if (!auth.autenticado) {
+      return { path: '/login', query: { redirect: to.fullPath, reset: 'security' } }
+    }
+    return {
+      path: '/',
+      query: {
+        forbidden: String(to.meta.recurso),
+        forbidden_path: to.fullPath,
+      },
+    }
   }
 })
 export default router
