@@ -80,6 +80,7 @@ export const NAV_TEMAS = [
       { to: '/governanca', icon: 'mdi-shield-check-outline', title: 'Governança', tip: 'Gates, CI/CD, observabilidade, políticas e evidências.' },
       { to: '/codex', icon: 'mdi-code-braces', title: 'Codex', tip: 'Análise de código com LLM local ou mock, governada pelo ReqSys.' },
       { to: '/admin/operational-deploy', icon: 'mdi-rocket-launch-outline', title: 'Central operacional', tip: 'Publicar backend e frontend em DEV com confirmação governada, evidência e sem expor credenciais.' },
+      { to: '/admin/session-management', icon: 'mdi-account-lock-outline', title: 'Sessões', tip: 'Atualizar permissões e invalidar sessões humanas de forma governada.' },
       { to: '/admin/github-merge', icon: 'mdi-source-merge', title: 'Merge GitHub', tip: 'Executar e acompanhar merge assíncrono governado de PRs empilhadas.' },
       { to: '/admin/teams-recipient-policies', icon: 'mdi-account-group-outline', title: 'Políticas Teams', tip: 'Administrar aprovadores e operadores Teams com readiness em dry-run e identidades mascaradas.' },
       { to: '/orquestrador-ia', icon: 'mdi-sitemap-outline', title: 'Orquestrador IA', tip: 'Classifica demandas por tema e aciona o coordenador de IA correspondente.' },
