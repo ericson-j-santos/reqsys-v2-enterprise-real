@@ -40,6 +40,15 @@ def test_deploy_operacional_e_restrito_ao_admin():
     assert tem_permissao('gestor', escopo) is False
 
 
+def test_gerenciamento_de_sessoes_e_restrito_ao_admin():
+    escopo = 'security-sessions:admin'
+    assert tem_permissao('admin', escopo) is True
+    assert tem_permissao('ADMIN', escopo) is True
+    assert tem_permissao('analista', escopo) is False
+    assert tem_permissao('auditor', escopo) is False
+    assert tem_permissao('gestor', escopo) is False
+
+
 @pytest.mark.parametrize(
     'papel_legado,esperado',
     [
