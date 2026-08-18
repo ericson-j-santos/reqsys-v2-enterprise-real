@@ -30,6 +30,7 @@ import CoordenacaoAdrView from '../views/CoordenacaoAdrView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import GitHubMergeConsoleView from '../views/GitHubMergeConsoleView.vue'
 import TeamsRecipientPoliciesView from '../views/TeamsRecipientPoliciesView.vue'
+import OperationalDeployView from '../views/OperationalDeployView.vue'
 import { useAuthStore } from '../stores/auth'
 
 export const routes = [
@@ -74,6 +75,7 @@ export const routes = [
     component: TeamsRecipientPoliciesView,
     meta: { recurso: 'teams-recipient-policies:admin' },
   },
+  { path: '/admin/operational-deploy', component: OperationalDeployView, meta: { recurso: 'operational-deploy:admin' } },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { public: true } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })

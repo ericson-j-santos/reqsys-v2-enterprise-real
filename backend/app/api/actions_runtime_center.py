@@ -11,12 +11,18 @@ from app.services.actions_runtime_monitor import (
     montar_snapshot_operacional,
     normalizar_run,
 )
+from app.services.operational_deploy import executar_deploy_dev, preparar_deploy_dev
 
 router = APIRouter(prefix='/v1/actions-runtime', tags=['Actions Runtime Center'])
 
 
 class RunsSnapshotRequest(BaseModel):
     runs: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+
+
+class DeployDevRequest(BaseModel):
+    aplicacao: str
+    confirmar: bool = False
 
 
 @router.get('/status')
@@ -32,6 +38,7 @@ def status_actions_runtime(user: dict = Depends(get_current_user)):
                 'score_saude',
                 'pareto_falhas',
                 'decisao_operacional',
+                'deploy_dev_governado',
             ],
         }
     )
@@ -65,6 +72,48 @@ def github_runs(
             'resumo': classificar_runs(runs),
         }
     )
+
+
+@router.get('/operational-deploy/catalog')
+def catalogo_deploy_dev(user: dict = Depends(require_admin)):
+    return ok(
+        {
+            'ambiente': 'development',
+            'approval_mode': 'single_confirmation_dev',
+            'production_touched': False,
+            'aplicacoes': [
+                {'id': 'backend', 'titulo': 'Backend ReqSys', 'app_name': 'reqsys-api-dev'},
+                {'id': 'frontend', 'titulo': 'Frontend ReqSys', 'app_name': 'reqsys-app-dev'},
+            ],
+        }
+    )
+
+
+@router.post('/operational-deploy/validate')
+def validar_deploy_dev(body: DeployDevRequest, user: dict = Depends(require_admin)):
+    try:
+        operacao = preparar_deploy_dev(body.aplicacao)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return ok(operacao.__dict__)
+
+
+@router.post('/operational-deploy/execute')
+def executar_deploy_dev_api(body: DeployDevRequest, user: dict = Depends(require_admin)):
+    if not body.confirmar:
+        raise HTTPException(status_code=409, detail='Confirmação explícita obrigatória para deploy em DEV.')
+    try:
+        resultado = executar_deploy_dev(body.aplicacao)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f'Falha ao acionar execução governada: {exc}',
+        ) from exc
+    resultado['requested_by'] = user.get('sub')
+    resultado['production_touched'] = False
+    return ok(resultado)
 
 
 @router.post('/webhook/github')

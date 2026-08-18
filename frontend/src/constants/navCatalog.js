@@ -29,24 +29,9 @@ export const NAV_TEMAS = [
     topic: 'Entrada · refinamento · publicação',
     icon: 'mdi-file-document-edit',
     subgroups: [
-      {
-        id: 'entrada',
-        title: 'Entrada',
-        topic: 'Captura, triagem e cadastro',
-        paths: ['/requisitos'],
-      },
-      {
-        id: 'pipeline',
-        title: 'Refinamento e fluxo',
-        topic: 'Qualidade, IA, histórias e aprovação',
-        paths: ['/pipeline', '/agile-runtime'],
-      },
-      {
-        id: 'publicacao',
-        title: 'Publicação',
-        topic: 'Rastreio e entrega',
-        paths: ['/rastreabilidade'],
-      },
+      { id: 'entrada', title: 'Entrada', topic: 'Captura, triagem e cadastro', paths: ['/requisitos'] },
+      { id: 'pipeline', title: 'Refinamento e fluxo', topic: 'Qualidade, IA, histórias e aprovação', paths: ['/pipeline', '/agile-runtime'] },
+      { id: 'publicacao', title: 'Publicação', topic: 'Rastreio e entrega', paths: ['/rastreabilidade'] },
     ],
     items: [
       { to: '/requisitos', icon: 'mdi-file-document-edit', title: 'Requisitos', tip: 'Cadastro, listagem e acompanhamento dos requisitos.', subgroupId: 'entrada' },
@@ -94,6 +79,7 @@ export const NAV_TEMAS = [
       { to: '/specs', icon: 'mdi-file-code-outline', title: 'Specs SDD', tip: 'Especificações técnicas e contratos de features.' },
       { to: '/governanca', icon: 'mdi-shield-check-outline', title: 'Governança', tip: 'Gates, CI/CD, observabilidade, políticas e evidências.' },
       { to: '/codex', icon: 'mdi-code-braces', title: 'Codex', tip: 'Análise de código com LLM local ou mock, governada pelo ReqSys.' },
+      { to: '/admin/operational-deploy', icon: 'mdi-rocket-launch-outline', title: 'Central operacional', tip: 'Publicar backend e frontend em DEV com confirmação governada, evidência e sem expor credenciais.' },
       { to: '/admin/github-merge', icon: 'mdi-source-merge', title: 'Merge GitHub', tip: 'Executar e acompanhar merge assíncrono governado de PRs empilhadas.' },
       { to: '/admin/teams-recipient-policies', icon: 'mdi-account-group-outline', title: 'Políticas Teams', tip: 'Administrar aprovadores e operadores Teams com readiness em dry-run e identidades mascaradas.' },
       { to: '/orquestrador-ia', icon: 'mdi-sitemap-outline', title: 'Orquestrador IA', tip: 'Classifica demandas por tema e aciona o coordenador de IA correspondente.' },
@@ -111,7 +97,6 @@ export const NAV_TEMAS = [
   },
 ]
 
-/** Lista plana (compatibilidade com testes e buscas). */
 export const NAV_ITEMS_FLAT = NAV_TEMAS.flatMap((tema) =>
   tema.items.map((item) => ({ ...item, temaId: tema.id, temaTitle: tema.title })),
 )

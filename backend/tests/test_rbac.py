@@ -12,7 +12,6 @@ from app.services.rbac import (
 
 @pytest.mark.parametrize('papel', ['admin', 'analista', 'auditor', 'gestor'])
 def test_papeis_legados_continuam_com_permissoes_inalteradas(papel):
-    """Papeis legados sao os valores reais emitidos em JWT/frontend hoje — nao podem mudar."""
     assert permissoes(papel) != []
     assert 'dashboard:read' in permissoes(papel)
 
@@ -25,6 +24,15 @@ def test_admin_mantem_permissoes_completas():
 
 def test_politicas_teams_sao_restritas_ao_admin():
     escopo = 'teams-recipient-policies:admin'
+    assert tem_permissao('admin', escopo) is True
+    assert tem_permissao('ADMIN', escopo) is True
+    assert tem_permissao('analista', escopo) is False
+    assert tem_permissao('auditor', escopo) is False
+    assert tem_permissao('gestor', escopo) is False
+
+
+def test_deploy_operacional_e_restrito_ao_admin():
+    escopo = 'operational-deploy:admin'
     assert tem_permissao('admin', escopo) is True
     assert tem_permissao('ADMIN', escopo) is True
     assert tem_permissao('analista', escopo) is False
@@ -55,7 +63,6 @@ def test_papel_canonico_desconhecido_retorna_proprio_valor():
 
 
 def test_permissoes_aceita_nome_canonico_equivalente_ao_legado():
-    """permissoes('SECURITY') deve resolver para o mesmo conjunto de 'auditor'."""
     assert permissoes('SECURITY') == permissoes('auditor')
     assert permissoes('ADMIN') == permissoes('admin')
     assert permissoes('RUNTIME_OPERATOR') == permissoes('gestor')
@@ -68,7 +75,7 @@ def test_viewer_e_ai_governor_sao_papeis_novos_sem_equivalente_legado():
 
     assert viewer == ['dashboard:read', 'rastreabilidade:read', 'relatorios:read']
     assert 'ia:governanca:aprovar' in ai_governor
-    assert 'requisitos:write' not in viewer  # somente leitura
+    assert 'requisitos:write' not in viewer
 
 
 def test_tem_permissao_funciona_com_papel_legado_e_canonico():

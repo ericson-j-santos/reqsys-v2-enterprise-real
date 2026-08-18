@@ -8,6 +8,7 @@ PERMISSOES_POR_PAPEL = {
         'auditoria:read',
         'relatorios:read',
         'teams-recipient-policies:admin',
+        'operational-deploy:admin',
         'demanda:iniciar',
         'demanda:cancelar',
         'demanda:aprovar',
@@ -73,8 +74,6 @@ class PapelPadrao(str, Enum):
     AI_GOVERNOR = 'AI_GOVERNOR'
 
 
-# Mapeamento do papel legado (valor real hoje em JWT/frontend) para o papel
-# padrao ADR-004 correspondente.
 PAPEL_LEGADO_PARA_PADRAO: dict[str, PapelPadrao] = {
     'admin': PapelPadrao.ADMIN,
     'analista': PapelPadrao.ANALYST,
@@ -82,8 +81,6 @@ PAPEL_LEGADO_PARA_PADRAO: dict[str, PapelPadrao] = {
     'gestor': PapelPadrao.RUNTIME_OPERATOR,
 }
 
-# Papeis da taxonomia ADR-004 sem equivalente legado direto: precisam de um
-# conjunto de permissoes proprio (nao herdado de PERMISSOES_POR_PAPEL).
 PERMISSOES_EXTRA_PADRAO: dict[PapelPadrao, list[str]] = {
     PapelPadrao.VIEWER: [
         'dashboard:read',
@@ -101,7 +98,6 @@ PERMISSOES_EXTRA_PADRAO: dict[PapelPadrao, list[str]] = {
 
 
 def _chave_legado(papel: str) -> str | None:
-    """Resolve `papel` (legado ou canonico ADR-004) para a chave legado em PERMISSOES_POR_PAPEL."""
     if papel in PERMISSOES_POR_PAPEL:
         return papel
     papel_upper = (papel or '').upper()
@@ -112,7 +108,6 @@ def _chave_legado(papel: str) -> str | None:
 
 
 def papel_canonico(papel: str) -> str:
-    """Traduz um papel (legado ou ja canonico) para a taxonomia padrao ADR-004."""
     if papel in PAPEL_LEGADO_PARA_PADRAO:
         return PAPEL_LEGADO_PARA_PADRAO[papel].value
     papel_upper = (papel or '').upper()
