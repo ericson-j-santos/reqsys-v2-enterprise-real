@@ -7,7 +7,10 @@ from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 
 from app.core.config import settings
-from app.services.session_management import token_security_claims, validate_token_security
+from app.services.session_management import (
+    token_security_claims,
+    validate_token_security,
+)
 
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 _bearer = HTTPBearer(auto_error=False)
