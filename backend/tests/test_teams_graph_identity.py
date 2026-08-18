@@ -90,6 +90,64 @@ def test_keyvault_sem_provider_bloqueia(monkeypatch, tmp_path):
         identity_service.resolve_teams_graph_identity()
 
 
+def test_referencia_sem_provider_bloqueia():
+    with pytest.raises(IdentityGovernanceError, match='Referência de segredo inválida'):
+        identity_service._resolve_secret_reference('TEAMS_GRAPH_SECRET')
+
+
+def test_referencia_sem_chave_bloqueia():
+    with pytest.raises(IdentityGovernanceError, match='sem chave'):
+        identity_service._resolve_secret_reference('env://')
+
+
+def test_provider_desconhecido_bloqueia():
+    with pytest.raises(IdentityGovernanceError, match='não suportado'):
+        identity_service._resolve_secret_reference('arquivo://segredo')
+
+
+def test_vault_local_resolve_sem_fallback_remoto():
+    with (
+        patch('app.services.teams_graph_identity.read_secret_from_vault', return_value='vault-secret') as local,
+        patch('app.services.teams_graph_identity.read_secret_from_remote_vault') as remoto,
+    ):
+        secret = identity_service._resolve_secret_reference('vault://reqsys/teams/current')
+
+    assert secret == 'vault-secret'
+    local.assert_called_once_with('reqsys/teams/current')
+    remoto.assert_not_called()
+
+
+def test_vault_remoto_e_usado_quando_local_vazio():
+    with (
+        patch('app.services.teams_graph_identity.read_secret_from_vault', return_value=None),
+        patch('app.services.teams_graph_identity.read_secret_from_remote_vault', return_value='remote-secret') as remoto,
+    ):
+        secret = identity_service._resolve_secret_reference('vault://reqsys/teams/current')
+
+    assert secret == 'remote-secret'
+    remoto.assert_called_once_with('reqsys/teams/current')
+
+
+def test_status_identidade_configurada(monkeypatch, tmp_path):
+    _configure(monkeypatch, tmp_path)
+
+    status = identity_service.teams_graph_identity_status()
+
+    assert status['configured'] is True
+    assert status['profile_name'] == 'reqsys-test-teams-confidential'
+    assert status['data_classification'] == 'confidential'
+    assert 'client_secret' not in status
+
+
+def test_status_identidade_invalida_retorna_bloqueio(monkeypatch):
+    monkeypatch.delenv('REQSYS_IDENTITY_GOVERNANCE_FILE', raising=False)
+
+    status = identity_service.teams_graph_identity_status()
+
+    assert status['configured'] is False
+    assert 'IDENTITY_GOVERNANCE_FILE' in status['error']
+
+
 @patch('app.services.teams_graph_identity.httpx.AsyncClient')
 def test_token_usa_tenant_client_e_secret_do_registro(mock_client_cls, monkeypatch, tmp_path):
     _configure(monkeypatch, tmp_path)
@@ -111,3 +169,19 @@ def test_token_usa_tenant_client_e_secret_do_registro(mock_client_cls, monkeypat
     assert kwargs['data']['client_id'] == 'client-governado-12345678'
     assert kwargs['data']['client_secret'] == 'secret-governado'
     assert kwargs['data']['scope'] == 'https://graph.microsoft.com/.default'
+
+
+@patch('app.services.teams_graph_identity.httpx.AsyncClient')
+def test_token_sem_access_token_bloqueia(mock_client_cls, monkeypatch, tmp_path):
+    _configure(monkeypatch, tmp_path)
+    response = MagicMock()
+    response.raise_for_status = MagicMock()
+    response.json.return_value = {}
+    client = AsyncMock()
+    client.post = AsyncMock(return_value=response)
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = client
+
+    with pytest.raises(IdentityGovernanceError, match='não retornou access_token'):
+        asyncio.run(identity_service.acquire_teams_graph_token())
