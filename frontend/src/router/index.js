@@ -75,7 +75,7 @@ export const routes = [
     component: TeamsRecipientPoliciesView,
     meta: { recurso: 'teams-recipient-policies:admin' },
   },
-  { path: '/admin/operational-deploy', component: OperationalDeployView, meta: { recurso: 'auditoria:read' } },
+  { path: '/admin/operational-deploy', component: OperationalDeployView, meta: { recurso: 'operational-deploy:admin' } },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { public: true } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })
