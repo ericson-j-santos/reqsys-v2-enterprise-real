@@ -19,15 +19,14 @@ interface NavItem {
 }
 
 @Component({
-  selector: 'app-layout',
-  standalone: true,
-  imports: [
-    CommonModule, RouterModule, RouterOutlet,
-    MatSidenavModule, MatToolbarModule, MatListModule,
-    MatIconModule, MatButtonModule, MatDividerModule, MatTooltipModule
-  ],
-  templateUrl: './app-layout.component.html',
-  styleUrls: ['./app-layout.component.scss']
+    selector: 'app-layout',
+    imports: [
+        CommonModule, RouterModule, RouterOutlet,
+        MatSidenavModule, MatToolbarModule, MatListModule,
+        MatIconModule, MatButtonModule, MatDividerModule, MatTooltipModule
+    ],
+    templateUrl: './app-layout.component.html',
+    styleUrls: ['./app-layout.component.scss']
 })
 export class AppLayoutComponent implements OnInit {
   @ViewChild('sidenav') sidenav!: MatSidenav;

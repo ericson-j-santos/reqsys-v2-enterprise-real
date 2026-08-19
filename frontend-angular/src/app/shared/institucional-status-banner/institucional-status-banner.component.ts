@@ -7,10 +7,9 @@ import { MatButtonModule } from '@angular/material/button';
 export type BannerType = 'loading' | 'error' | 'warning' | 'info' | 'success' | 'empty';
 
 @Component({
-  selector: 'app-institucional-status-banner',
-  standalone: true,
-  imports: [CommonModule, MatProgressSpinnerModule, MatIconModule, MatButtonModule],
-  template: `
+    selector: 'app-institucional-status-banner',
+    imports: [CommonModule, MatProgressSpinnerModule, MatIconModule, MatButtonModule],
+    template: `
     <div
       class="institucional-banner"
       [class]="'banner-' + type"
@@ -38,7 +37,7 @@ export type BannerType = 'loading' | 'error' | 'warning' | 'info' | 'success' | 
       >{{ retryLabel }}</button>
     </div>
   `,
-  styles: [`
+    styles: [`
     :host { display: block; }
 
     .institucional-banner {

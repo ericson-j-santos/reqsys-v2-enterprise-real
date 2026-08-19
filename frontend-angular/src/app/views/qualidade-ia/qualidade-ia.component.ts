@@ -39,20 +39,19 @@ interface QualityPayload {
 interface Envelope<T> { data?: T; }
 
 @Component({
-  selector: 'app-qualidade-ia',
-  standalone: true,
-  imports: [
-    CommonModule,
-    MatButtonModule,
-    MatCardModule,
-    MatChipsModule,
-    MatDividerModule,
-    MatIconModule,
-    MatProgressBarModule,
-    MatProgressSpinnerModule,
-    InstitucionalStatusBannerComponent,
-  ],
-  template: `
+    selector: 'app-qualidade-ia',
+    imports: [
+        CommonModule,
+        MatButtonModule,
+        MatCardModule,
+        MatChipsModule,
+        MatDividerModule,
+        MatIconModule,
+        MatProgressBarModule,
+        MatProgressSpinnerModule,
+        InstitucionalStatusBannerComponent,
+    ],
+    template: `
     <div class="quality-page">
       <section class="page-header">
         <div>
@@ -156,7 +155,7 @@ interface Envelope<T> { data?: T; }
         </mat-card>
       </section>
     </div>`,
-  styles: [`
+    styles: [`
     .quality-page { display:flex; flex-direction:column; gap:16px; }
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
     h2 { margin:0 0 8px; font-size:1.75rem; color:#005ca9; }

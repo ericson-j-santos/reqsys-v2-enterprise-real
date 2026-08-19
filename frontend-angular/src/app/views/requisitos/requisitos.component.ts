@@ -29,15 +29,14 @@ const MOCK: Requisito[] = [
 ];
 
 @Component({
-  selector: 'app-requisitos',
-  standalone: true,
-  imports: [
-    CommonModule, FormsModule, MatTableModule, MatFormFieldModule,
-    MatInputModule, MatSelectModule, MatChipsModule, MatButtonModule,
-    MatIconModule, MatCardModule, MatTooltipModule
-  ],
-  templateUrl: './requisitos.component.html',
-  styleUrls: ['./requisitos.component.scss']
+    selector: 'app-requisitos',
+    imports: [
+        CommonModule, FormsModule, MatTableModule, MatFormFieldModule,
+        MatInputModule, MatSelectModule, MatChipsModule, MatButtonModule,
+        MatIconModule, MatCardModule, MatTooltipModule
+    ],
+    templateUrl: './requisitos.component.html',
+    styleUrls: ['./requisitos.component.scss']
 })
 export class RequisitosComponent implements OnInit {
   displayedColumns = ['codigo', 'titulo', 'status', 'urgencia', 'score_ia', 'responsavel', 'acoes'];
