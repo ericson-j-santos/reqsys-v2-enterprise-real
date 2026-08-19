@@ -178,9 +178,16 @@ def _mock_credenciais_graph(monkeypatch):
     monkeypatch.setattr(svc.settings, 'sharepoint_site_id', 'site-id')
 
 
-@patch('app.services.hub_lowcode.httpx.AsyncClient')
-def test_listar_pacotes_ia_com_mock_graph(mock_client_cls, monkeypatch):
-    _mock_credenciais_graph(monkeypatch)
+class _IdentidadeSharePointFake:
+    def evidence(self):
+        return {'profile_name': 'sp-test'}
+
+
+@patch('app.services.sharepoint_packages.httpx.AsyncClient')
+@patch('app.services.sharepoint_packages.acquire_sharepoint_graph_token', new_callable=AsyncMock)
+def test_listar_pacotes_ia_com_mock_graph(mock_acquire_token, mock_client_cls, monkeypatch):
+    monkeypatch.setattr(svc.settings, 'sharepoint_site_id', 'site-id')
+    mock_acquire_token.return_value = ('token', _IdentidadeSharePointFake())
 
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
@@ -204,7 +211,6 @@ def test_listar_pacotes_ia_com_mock_graph(mock_client_cls, monkeypatch):
         ]
     }
     mock_client = AsyncMock()
-    mock_client.post = AsyncMock(return_value=MagicMock(raise_for_status=MagicMock(), json=lambda: {'access_token': 'token'}))
     mock_client.get = AsyncMock(return_value=mock_resp)
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -218,11 +224,16 @@ def test_listar_pacotes_ia_com_mock_graph(mock_client_cls, monkeypatch):
     assert resultado['itens'][0]['commit'] == 'abcdef123456'
 
 
-@patch('app.services.hub_lowcode.httpx.AsyncClient')
-def test_listar_pacotes_ia_degrada_em_excecao(mock_client_cls, monkeypatch):
-    _mock_credenciais_graph(monkeypatch)
+@patch('app.services.sharepoint_packages.httpx.AsyncClient')
+@patch('app.services.sharepoint_packages.acquire_sharepoint_graph_token', new_callable=AsyncMock)
+def test_listar_pacotes_ia_degrada_em_excecao(mock_acquire_token, mock_client_cls, monkeypatch):
+    import httpx
+
+    monkeypatch.setattr(svc.settings, 'sharepoint_site_id', 'site-id')
+    mock_acquire_token.return_value = ('token', _IdentidadeSharePointFake())
+
     mock_client = AsyncMock()
-    mock_client.post = AsyncMock(side_effect=RuntimeError('graph indisponivel'))
+    mock_client.get = AsyncMock(side_effect=httpx.ConnectError('graph indisponivel'))
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client_cls.return_value = mock_client
@@ -232,6 +243,19 @@ def test_listar_pacotes_ia_degrada_em_excecao(mock_client_cls, monkeypatch):
     assert resultado['configurado'] is True
     assert resultado['itens'] == []
     assert 'graph indisponivel' in resultado['erro']
+
+
+@patch('app.services.sharepoint_packages.acquire_sharepoint_graph_token', new_callable=AsyncMock)
+def test_listar_pacotes_ia_bloqueia_quando_identidade_nao_resolve(mock_acquire_token, monkeypatch):
+    from app.core.identity_governance import IdentityGovernanceError
+
+    monkeypatch.setattr(svc.settings, 'sharepoint_site_id', 'site-id')
+    mock_acquire_token.side_effect = IdentityGovernanceError('perfil SharePoint ausente')
+
+    resultado = _run(svc.listar_pacotes_ia())
+
+    assert resultado['configurado'] is False
+    assert 'perfil SharePoint ausente' in resultado['erro']
 
 
 @patch('app.services.hub_lowcode.httpx.AsyncClient')

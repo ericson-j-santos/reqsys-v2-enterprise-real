@@ -23,6 +23,7 @@ from app.core.resilience import (
 )
 from app.models.configuracao_lowcode import ConfiguracaoLowCode
 from app.models.integracao_log import IntegracaoLog
+from app.services.sharepoint_packages import listar_pacotes_ia_governado
 from app.services.teams_graph_identity import (
     acquire_teams_graph_token,
     teams_graph_identity_status,
@@ -100,44 +101,9 @@ async def _token_dataverse(instance_url: str) -> str:
 # ---------------------------------------------------------------------------
 
 async def listar_pacotes_ia(limit: int = 20) -> dict[str, Any]:
-    if not _tem_credenciais_graph() or not settings.sharepoint_site_id:
-        return {'configurado': False, 'itens': [], 'erro': 'Credenciais Graph ou SHAREPOINT_SITE_ID não configurados'}
-
-    try:
-        token = await _token_grafico()
-        url = (
-            f'{_GRAPH_BASE}/sites/{settings.sharepoint_site_id}'
-            f'/lists/{settings.sharepoint_list_ia}/items'
-            f'?$expand=fields'
-            f'&$orderby=lastModifiedDateTime desc'
-            f'&$top={limit}'
-        )
-        async with httpx.AsyncClient(timeout=15) as c:
-            resp = await c.get(url, headers={'Authorization': f'Bearer {token}'})
-            resp.raise_for_status()
-            raw = resp.json().get('value', [])
-
-        itens = []
-        for item in raw:
-            f = item.get('fields', {})
-            itens.append({
-                'id': item.get('id'),
-                'projeto': f.get('Projeto', ''),
-                'branch': f.get('Branch', ''),
-                'commit': (f.get('CommitHash') or '')[:12],
-                'tech_stack': f.get('TechStack', ''),
-                'total_arquivos': f.get('TotalArquivos', 0),
-                'tamanho_mb': f.get('TamanhoPacoteMb', 0),
-                'status': f.get('Status', ''),
-                'chave': f.get('ChaveIdempotencia', ''),
-                'gerado_em': f.get('DataGeracaoUtc', ''),
-                'processado_em': f.get('ProcessadoEmUtc', ''),
-            })
-        return {'configurado': True, 'itens': itens, 'erro': None}
-
-    except Exception as exc:
-        logger.warning('hub_lowcode: erro ao ler pacotes SP: %s', exc)
-        return {'configurado': True, 'itens': [], 'erro': str(exc)}
+    """Delega ao adaptador SharePoint governado (identidade dedicada, sem
+    fallback para AZURE_CLIENT_ID/AZURE_CLIENT_SECRET genéricos)."""
+    return await listar_pacotes_ia_governado(limit)
 
 
 # ---------------------------------------------------------------------------
