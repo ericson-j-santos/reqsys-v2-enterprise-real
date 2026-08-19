@@ -22,5 +22,17 @@
     "next_secret_ref": "vault://reqsys/dev/teams/client-secret-next",
     "rotated_at": "2026-08-01T00:00:00Z",
     "max_age_days": 60
+  },
+  {
+    "name": "reqsys-dev-sharepoint-confidential",
+    "environment": "development",
+    "purpose": "sharepoint-package-catalog-read",
+    "data_classification": "confidential",
+    "tenant_id": "00000000-0000-0000-0000-000000000000",
+    "client_id": "33333333-3333-3333-3333-333333333333",
+    "current_secret_ref": "vault://reqsys/dev/sharepoint/client-secret-current",
+    "next_secret_ref": "vault://reqsys/dev/sharepoint/client-secret-next",
+    "rotated_at": "2026-08-01T00:00:00Z",
+    "max_age_days": 60
   }
 ]
