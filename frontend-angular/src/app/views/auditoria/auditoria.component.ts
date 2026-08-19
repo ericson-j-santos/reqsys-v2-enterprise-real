@@ -25,22 +25,21 @@ interface AuditEvent {
 interface Envelope<T> { data?: T; }
 
 @Component({
-  selector: 'app-auditoria',
-  standalone: true,
-  imports: [
-    CommonModule,
-    MatButtonModule,
-    MatCardModule,
-    MatChipsModule,
-    MatDividerModule,
-    MatFormFieldModule,
-    MatIconModule,
-    MatInputModule,
-    MatProgressSpinnerModule,
-    MatSelectModule,
-    InstitucionalStatusBannerComponent,
-  ],
-  template: `
+    selector: 'app-auditoria',
+    imports: [
+        CommonModule,
+        MatButtonModule,
+        MatCardModule,
+        MatChipsModule,
+        MatDividerModule,
+        MatFormFieldModule,
+        MatIconModule,
+        MatInputModule,
+        MatProgressSpinnerModule,
+        MatSelectModule,
+        InstitucionalStatusBannerComponent,
+    ],
+    template: `
     <div class="audit-page">
       <section class="page-header">
         <div>
@@ -117,7 +116,7 @@ interface Envelope<T> { data?: T; }
         </mat-card>
       </section>
     </div>`,
-  styles: [`
+    styles: [`
     .audit-page { display:flex; flex-direction:column; gap:16px; }
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
     h2 { margin:0 0 8px; font-size:1.75rem; color:#005ca9; }

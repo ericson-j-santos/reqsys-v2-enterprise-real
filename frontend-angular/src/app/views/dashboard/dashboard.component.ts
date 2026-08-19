@@ -32,15 +32,14 @@ interface QualidadeItem {
 }
 
 @Component({
-  selector: 'app-dashboard',
-  standalone: true,
-  imports: [
-    CommonModule, RouterLink, MatButtonModule, MatCardModule, MatIconModule,
-    MatProgressBarModule, MatChipsModule, MatDividerModule,
-    InstitucionalStatusBannerComponent
-  ],
-  templateUrl: './dashboard.component.html',
-  styleUrls: ['./dashboard.component.scss']
+    selector: 'app-dashboard',
+    imports: [
+        CommonModule, RouterLink, MatButtonModule, MatCardModule, MatIconModule,
+        MatProgressBarModule, MatChipsModule, MatDividerModule,
+        InstitucionalStatusBannerComponent
+    ],
+    templateUrl: './dashboard.component.html',
+    styleUrls: ['./dashboard.component.scss']
 })
 export class DashboardComponent implements OnInit {
   cols = signal(4);

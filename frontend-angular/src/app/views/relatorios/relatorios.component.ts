@@ -39,21 +39,20 @@ interface SsrsStatusResponse {
 }
 
 @Component({
-  selector: 'app-relatorios',
-  standalone: true,
-  imports: [
-    CommonModule,
-    MatButtonModule,
-    MatCardModule,
-    MatChipsModule,
-    MatDividerModule,
-    MatIconModule,
-    MatListModule,
-    MatProgressSpinnerModule,
-    MatTooltipModule,
-    InstitucionalStatusBannerComponent,
-  ],
-  template: `
+    selector: 'app-relatorios',
+    imports: [
+        CommonModule,
+        MatButtonModule,
+        MatCardModule,
+        MatChipsModule,
+        MatDividerModule,
+        MatIconModule,
+        MatListModule,
+        MatProgressSpinnerModule,
+        MatTooltipModule,
+        InstitucionalStatusBannerComponent,
+    ],
+    template: `
     <div class="reports-page">
       <section class="reports-header">
         <div>
@@ -214,7 +213,7 @@ interface SsrsStatusResponse {
         </div>
       </section>
     </div>`,
-  styles: [`
+    styles: [`
     .reports-page {
       display: flex;
       flex-direction: column;

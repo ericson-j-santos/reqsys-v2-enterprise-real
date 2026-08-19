@@ -29,20 +29,19 @@ interface Envelope<T> {
 }
 
 @Component({
-  selector: 'app-segredos-status',
-  standalone: true,
-  imports: [
-    CommonModule,
-    MatButtonModule,
-    MatCardModule,
-    MatChipsModule,
-    MatDividerModule,
-    MatIconModule,
-    MatListModule,
-    MatProgressSpinnerModule,
-    InstitucionalStatusBannerComponent,
-  ],
-  template: `
+    selector: 'app-segredos-status',
+    imports: [
+        CommonModule,
+        MatButtonModule,
+        MatCardModule,
+        MatChipsModule,
+        MatDividerModule,
+        MatIconModule,
+        MatListModule,
+        MatProgressSpinnerModule,
+        InstitucionalStatusBannerComponent,
+    ],
+    template: `
     <div class="secrets-page">
       <section class="page-header">
         <div>
@@ -148,8 +147,8 @@ interface Envelope<T> {
           </mat-card-content>
         </mat-card>
       </section>
-    </div>` ,
-  styles: [`
+    </div>`,
+    styles: [`
     .secrets-page {
       display: flex;
       flex-direction: column;

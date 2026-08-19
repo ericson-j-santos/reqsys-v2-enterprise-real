@@ -12,15 +12,14 @@ import { AuthService } from '../../core/auth.service';
 import { MicrosoftAuthService } from '../../core/microsoft-auth.service';
 
 @Component({
-  selector: 'app-login',
-  standalone: true,
-  imports: [
-    CommonModule, ReactiveFormsModule,
-    MatCardModule, MatFormFieldModule, MatInputModule,
-    MatButtonModule, MatIconModule, MatProgressSpinnerModule
-  ],
-  templateUrl: './login.component.html',
-  styleUrls: ['./login.component.scss']
+    selector: 'app-login',
+    imports: [
+        CommonModule, ReactiveFormsModule,
+        MatCardModule, MatFormFieldModule, MatInputModule,
+        MatButtonModule, MatIconModule, MatProgressSpinnerModule
+    ],
+    templateUrl: './login.component.html',
+    styleUrls: ['./login.component.scss']
 })
 export class LoginComponent {
   loading = signal(false);

@@ -26,19 +26,18 @@ interface EventoAuditoria {
 interface Envelope<T> { data?: T; }
 
 @Component({
-  selector: 'app-rastreabilidade',
-  standalone: true,
-  imports: [
-    CommonModule,
-    MatButtonModule,
-    MatCardModule,
-    MatChipsModule,
-    MatDividerModule,
-    MatIconModule,
-    MatProgressSpinnerModule,
-    InstitucionalStatusBannerComponent,
-  ],
-  template: `
+    selector: 'app-rastreabilidade',
+    imports: [
+        CommonModule,
+        MatButtonModule,
+        MatCardModule,
+        MatChipsModule,
+        MatDividerModule,
+        MatIconModule,
+        MatProgressSpinnerModule,
+        InstitucionalStatusBannerComponent,
+    ],
+    template: `
     <div class="trace-page">
       <section class="page-header">
         <div>
@@ -99,7 +98,7 @@ interface Envelope<T> { data?: T; }
         </mat-card-content>
       </mat-card>
     </div>`,
-  styles: [`
+    styles: [`
     .trace-page { display:flex; flex-direction:column; gap:16px; }
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
     h2 { margin:0 0 8px; font-size:1.75rem; color:#005ca9; }

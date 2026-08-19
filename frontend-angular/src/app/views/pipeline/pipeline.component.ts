@@ -25,24 +25,23 @@ interface PipelineStep {
 }
 
 @Component({
-  selector: 'app-pipeline',
-  standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    MatButtonModule,
-    MatCardModule,
-    MatCheckboxModule,
-    MatChipsModule,
-    MatDividerModule,
-    MatFormFieldModule,
-    MatIconModule,
-    MatInputModule,
-    MatProgressSpinnerModule,
-    MatSelectModule,
-    InstitucionalStatusBannerComponent,
-  ],
-  template: `
+    selector: 'app-pipeline',
+    imports: [
+        CommonModule,
+        FormsModule,
+        MatButtonModule,
+        MatCardModule,
+        MatCheckboxModule,
+        MatChipsModule,
+        MatDividerModule,
+        MatFormFieldModule,
+        MatIconModule,
+        MatInputModule,
+        MatProgressSpinnerModule,
+        MatSelectModule,
+        InstitucionalStatusBannerComponent,
+    ],
+    template: `
     <div class="pipeline-page">
       <section class="page-header">
         <div>
@@ -160,7 +159,7 @@ interface PipelineStep {
         </div>
       </section>
     </div>`,
-  styles: [`
+    styles: [`
     .pipeline-page { display:flex; flex-direction:column; gap:16px; }
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
     h2 { margin:0 0 8px; font-size:1.75rem; color:#005ca9; }
