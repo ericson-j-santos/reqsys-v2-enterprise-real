@@ -23,6 +23,7 @@ from app.api import (  # noqa: E402
     requisitos,
     teams_gateway,
 )
+
 diagramas.router.include_router(diagram_version_governance.router)
 hub_lowcode.router.include_router(prompt_development_coordinator.router)
 teams_gateway.router.include_router(notificacoes.router)
