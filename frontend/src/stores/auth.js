@@ -50,11 +50,31 @@ export const useAuthStore = defineStore('auth', {
       const dados = await loginWithCertificateAgent()
       this.salvarSessao(dados)
     },
+    async atualizarSessao() {
+      try {
+        const { data } = await api.post('/v1/auth/session/refresh')
+        const atualizacao = data?.data || {}
+        if (!atualizacao.access_token || !atualizacao.usuario) {
+          throw new Error('Resposta inválida ao atualizar sessão')
+        }
+        this.token = atualizacao.access_token
+        this.usuario = sanitizeUsuario({ ...(this.usuario || {}), ...atualizacao.usuario })
+        localStorage.setItem('reqsys_token', this.token)
+        localStorage.setItem('reqsys_usuario', JSON.stringify(this.usuario))
+        return this.usuario
+      } catch (error) {
+        if (error?.response?.status === 401) this.sair()
+        throw error
+      }
+    },
     sair() {
       this.token = null
       this.usuario = null
       localStorage.removeItem('reqsys_token')
       localStorage.removeItem('reqsys_usuario')
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('reqsys_correlation_id')
+      }
     },
     pode(recurso) { return this.permissoes.includes(recurso) }
   }

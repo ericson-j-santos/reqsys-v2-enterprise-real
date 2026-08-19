@@ -7,6 +7,10 @@ from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 
 from app.core.config import settings
+from app.services.session_management import (
+    token_security_claims,
+    validate_token_security,
+)
 
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 _bearer = HTTPBearer(auto_error=False)
@@ -18,6 +22,7 @@ def criar_token(payload: dict, minutos: int | None = None):
     ttl_minutes = settings.jwt_exp_minutes if minutos is None else minutos
     dados['iat'] = agora
     dados['exp'] = agora + timedelta(minutes=ttl_minutes)
+    dados.update(token_security_claims())
 
     if settings.jwt_issuer:
         dados['iss'] = settings.jwt_issuer
@@ -56,9 +61,18 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
             settings.jwt_secret,
             **_jwt_decode_kwargs(),
         )
-        return payload
     except InvalidTokenError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Token inválido ou expirado')
+
+    valid, reason = validate_token_security(payload)
+    if not valid:
+        if reason == 'AUTHORIZATION_CHANGED':
+            detail = 'AUTHORIZATION_CHANGED: permissões alteradas; autentique-se novamente'
+        else:
+            detail = 'SESSION_REVOKED: sessão invalidada por ação de segurança'
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
+
+    return payload
 
 
 def require_admin(user: dict = Depends(get_current_user)) -> dict:

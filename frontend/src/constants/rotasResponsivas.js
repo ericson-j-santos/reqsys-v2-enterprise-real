@@ -36,4 +36,5 @@ export const ROTAS_RESPONSIVAS = [
   { path: '/admin/github-merge', testId: 'route-github-merge', titulo: 'Console de Merge Governado' },
   { path: '/admin/teams-recipient-policies', testId: 'route-teams-recipient-policies', titulo: 'Políticas de Destinatários Teams' },
   { path: '/admin/operational-deploy', testId: 'route-operational-deploy', titulo: 'Central de Administração Operacional' },
+  { path: '/admin/session-management', testId: 'route-session-management', titulo: 'Gerenciamento de Sessões' },
 ]
