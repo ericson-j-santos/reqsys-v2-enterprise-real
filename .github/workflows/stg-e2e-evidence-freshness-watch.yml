@@ -144,7 +144,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh workflow run stg-end-to-end-evidence.yml --ref main
+          gh workflow run stg-end-to-end-evidence.yml --repo "$GITHUB_REPOSITORY" --ref main
           echo "requested=true" >> "$GITHUB_OUTPUT"
           echo "Remediation dispatch requested for stg-end-to-end-evidence.yml on main." >> "$GITHUB_STEP_SUMMARY"
 
