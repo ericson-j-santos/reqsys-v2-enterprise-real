@@ -23,6 +23,14 @@ from app.api import (  # noqa: E402
     requisitos,
     teams_gateway,
 )
+from app.services import hub_lowcode as hub_lowcode_service  # noqa: E402
+from app.services.sharepoint_packages import listar_pacotes_ia_governado  # noqa: E402
+
+# Composição explícita do adaptador SharePoint governado. O endpoint existente
+# e o status consolidado passam a usar a mesma implementação sem criar rota
+# paralela nem fallback para AZURE_CLIENT_ID/AZURE_CLIENT_SECRET.
+hub_lowcode.listar_pacotes_ia = listar_pacotes_ia_governado
+hub_lowcode_service.listar_pacotes_ia = listar_pacotes_ia_governado
 
 diagramas.router.include_router(diagram_version_governance.router)
 hub_lowcode.router.include_router(prompt_development_coordinator.router)
