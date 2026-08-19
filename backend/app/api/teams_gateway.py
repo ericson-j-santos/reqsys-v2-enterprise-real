@@ -40,6 +40,7 @@ from app.services.teams_gateway import (
     status_gateway,
     validar_jwt_bot_framework,
 )
+from app.services.teams_graph_identity import teams_graph_identity_status
 from app.services.teams_recipient_policy import (
     atualizar_destinatario,
     criar_destinatario,
@@ -85,10 +86,33 @@ def _serializar_destinatario(item) -> dict:
     }
 
 
+def _status_gateway_com_identidade(db: Session) -> dict:
+    status = status_gateway(db)
+    identidade = teams_graph_identity_status()
+    configurada = bool(identidade.get('configured'))
+
+    for rota in status.get('rotas', []):
+        if rota.get('canal') != 'graph_app_only':
+            continue
+        rota['disponivel'] = configurada
+        rota['campos_faltantes'] = [] if configurada else [
+            'ApplicationIdentityRegistry: perfil Teams Graph indisponivel'
+        ]
+
+    status['schema_version'] = '1.1.0'
+    return status
+
+
 @router.get('/status')
 def teams_gateway_status(db: Session = Depends(get_db)):
-    """Retorna rotas disponiveis, politica de roteamento e pendencias de configuracao."""
-    return ok(status_gateway(db))
+    """Retorna rotas disponíveis usando a identidade efetiva do Teams Graph."""
+    return ok(_status_gateway_com_identidade(db))
+
+
+@router.get('/identity-status', dependencies=[Depends(require_admin)])
+def teams_gateway_identity_status():
+    """Retorna somente metadados seguros da Application usada pelo Teams Graph."""
+    return ok(teams_graph_identity_status())
 
 
 @router.post('/routes')

@@ -12,6 +12,59 @@
     <v-alert v-if="erro" type="error" variant="tonal" class="mb-4" role="alert">{{ erro }}</v-alert>
     <v-alert v-if="mensagem" type="success" variant="tonal" class="mb-4" role="status">{{ mensagem }}</v-alert>
 
+    <v-card variant="outlined" class="mb-5" data-testid="teams-graph-identity-status">
+      <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-3">
+        <span>Application Teams Graph</span>
+        <v-chip :color="corStatusIdentidade" size="small" variant="tonal">
+          {{ textoStatusIdentidade }}
+        </v-chip>
+      </v-card-title>
+      <v-card-text>
+        <v-progress-linear v-if="carregandoIdentidade" indeterminate class="mb-3" />
+        <v-alert v-else-if="erroIdentidade" type="error" variant="tonal" class="mb-3">
+          {{ erroIdentidade }}
+        </v-alert>
+        <template v-else-if="identidadeTeams">
+          <v-alert v-if="!identidadeTeams.configured" type="error" variant="tonal" class="mb-3">
+            {{ identidadeTeams.error || 'A Application do Teams Graph não está disponível para este ambiente.' }}
+          </v-alert>
+          <template v-else>
+            <v-row class="mb-2">
+              <v-col cols="12" sm="6" md="3">
+                <small class="text-medium-emphasis d-block">Perfil</small>
+                <strong>{{ identidadeTeams.profile_name }}</strong>
+              </v-col>
+              <v-col cols="12" sm="6" md="3">
+                <small class="text-medium-emphasis d-block">Ambiente</small>
+                <strong>{{ identidadeTeams.environment }}</strong>
+              </v-col>
+              <v-col cols="12" sm="6" md="3">
+                <small class="text-medium-emphasis d-block">Client ID</small>
+                <code>••••{{ identidadeTeams.client_id_suffix }}</code>
+              </v-col>
+              <v-col cols="12" sm="6" md="3">
+                <small class="text-medium-emphasis d-block">Próxima rotação</small>
+                <strong>{{ formatarDataIdentidade(identidadeTeams.rotation_due_at) }}</strong>
+              </v-col>
+            </v-row>
+            <v-alert :type="identidadeTeams.rotation_required ? 'warning' : 'success'" variant="tonal" class="mb-3">
+              {{ identidadeTeams.rotation_required
+                ? 'A credencial atual precisa ser rotacionada antes de novos envios app-only.'
+                : 'A credencial atual está dentro da janela de rotação.' }}
+            </v-alert>
+          </template>
+        </template>
+        <v-btn
+          variant="text"
+          prepend-icon="mdi-refresh"
+          :loading="carregandoIdentidade"
+          @click="carregarIdentidade"
+        >
+          Atualizar status
+        </v-btn>
+      </v-card-text>
+    </v-card>
+
     <v-row class="mb-2">
       <v-col v-for="politica in politicas" :key="politica.id" cols="12" md="6">
         <v-card variant="outlined" class="h-100">
@@ -170,6 +223,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import PageHeader from '../components/PageHeader.vue'
+import { obterStatusIdentidadeTeamsGateway } from '../services/teamsGateway'
 import {
   POLITICAS_TEAMS_CANONICAS,
   atualizarDestinatario,
@@ -187,6 +241,9 @@ const politicaSelecionada = ref(politicas[0].id)
 const membros = ref([])
 const readiness = reactive({})
 const carregando = ref(false)
+const carregandoIdentidade = ref(false)
+const identidadeTeams = ref(null)
+const erroIdentidade = ref('')
 const salvando = ref(false)
 const removendo = ref(false)
 const validandoReadiness = ref(false)
@@ -214,6 +271,17 @@ const formularioValido = computed(() => Boolean(
   Number(formulario.prioridade) >= 0,
 ))
 
+const textoStatusIdentidade = computed(() => {
+  if (carregandoIdentidade.value) return 'Consultando'
+  if (erroIdentidade.value || !identidadeTeams.value?.configured) return 'Bloqueada'
+  return identidadeTeams.value.rotation_required ? 'Rotação necessária' : 'Ativa'
+})
+
+const corStatusIdentidade = computed(() => {
+  if (erroIdentidade.value || !identidadeTeams.value?.configured) return 'error'
+  return identidadeTeams.value.rotation_required ? 'warning' : 'success'
+})
+
 const readinessGeral = computed(() => {
   const resultados = politicas.map((p) => readiness[p.id]).filter(Boolean)
   if (!resultados.length) return { tipo: 'info', texto: 'Readiness ainda não executada nesta sessão.' }
@@ -224,6 +292,16 @@ const readinessGeral = computed(() => {
   }
   return { tipo: 'error', texto: `${prontos}/2 políticas READY. Mantenha o fallback legado e corrija os bloqueios antes de promover.` }
 })
+
+function formatarDataIdentidade(valor) {
+  if (!valor) return 'Não informado'
+  const data = new Date(valor)
+  if (Number.isNaN(data.getTime())) return 'Data inválida'
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(data)
+}
 
 function membrosDaPolitica(politica) {
   return membros.value.filter((item) => item.politica === politica)
@@ -248,6 +326,19 @@ function corReadiness(politica) {
 function limparFeedback() {
   erro.value = ''
   mensagem.value = ''
+}
+
+async function carregarIdentidade() {
+  carregandoIdentidade.value = true
+  erroIdentidade.value = ''
+  try {
+    identidadeTeams.value = await obterStatusIdentidadeTeamsGateway()
+  } catch (error) {
+    identidadeTeams.value = null
+    erroIdentidade.value = detalheErroPolitica(error)
+  } finally {
+    carregandoIdentidade.value = false
+  }
 }
 
 async function carregar() {
@@ -364,7 +455,10 @@ async function executarReadinessCompleta() {
   }
 }
 
-onMounted(carregar)
+onMounted(() => {
+  carregar()
+  carregarIdentidade()
+})
 </script>
 
 <style scoped>
