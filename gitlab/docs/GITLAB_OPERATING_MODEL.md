@@ -1,8 +1,10 @@
 # ReqSys v2 Enterprise GitLab Edition
 
-## Status atual (2026-07-12) — ver ADR-044
+## Status atual (2026-08-19) — ver ADR-044
 
-**Esta NÃO é a linha de CI ativa do projeto.** A linha de CI de produção continua sendo exclusivamente o GitHub Actions (`.github/workflows/`). Não existe projeto GitLab provisionado nem remote configurado — tudo aqui é scaffolding local, sem runner real por trás.
+**Esta NÃO é a linha de CI ativa do projeto.** A linha de CI de produção continua sendo exclusivamente o GitHub Actions (`.github/workflows/`).
+
+O projeto GitLab **existe e está provisionado** (remote `gitlab` configurado, `git@gitlab.com:ericson-j-santos/reqsys-v2-enterprise-real.git`), mas a sincronização foi manual e pontual — um único merge em 2026-08-02 (`66f77fe5`, "sincronizar GitLab main com GitHub main (padrao ouro)"), sem mecanismo de sync contínuo. A branch `main` do GitLab está, portanto, defasada em relação ao GitHub `main` desde então. Não há evidência de que uma pipeline tenha rodado de fato em runner GitLab real — o texto abaixo descreve o que roda *se* executado, não o que já foi validado ao vivo.
 
 O que já é real (roda de fato, se executado em um runner GitLab):
 

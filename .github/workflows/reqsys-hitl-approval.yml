@@ -374,10 +374,12 @@ jobs:
           actor="$(jq -r .approval.actor artifacts/hitl-decision/decision.json)"
           case "$decision" in
             approve)
-              gh issue edit "$ISSUE_NUMBER" --add-label hitl-approved --remove-label hitl-approval-request --state closed
+              gh issue edit "$ISSUE_NUMBER" --add-label hitl-approved --remove-label hitl-approval-request
+              gh issue close "$ISSUE_NUMBER" --reason completed
               ;;
             reject)
-              gh issue edit "$ISSUE_NUMBER" --add-label hitl-rejected --remove-label hitl-approval-request --state closed
+              gh issue edit "$ISSUE_NUMBER" --add-label hitl-rejected --remove-label hitl-approval-request
+              gh issue close "$ISSUE_NUMBER" --reason "not planned"
               ;;
             adjust)
               gh issue edit "$ISSUE_NUMBER" --add-label hitl-adjustment-requested
