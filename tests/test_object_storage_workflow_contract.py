@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKUP_WORKFLOW = ROOT / ".github/workflows/reqsys-free-tier-backup.yml"
 READINESS_WORKFLOW = ROOT / ".github/workflows/reqsys-backup-provider-readiness.yml"
+BACKUP_RUNNER = ROOT / "scripts/run_reqsys_free_tier_backup.sh"
 INVENTORY = ROOT / "governance/backup/reqsys-backup-assets.json"
 
 
@@ -22,6 +23,26 @@ class ObjectStorageWorkflowContractTests(unittest.TestCase):
         self.assertIn("R2_ACCOUNT_ID", workflow)
         self.assertNotIn("RESTIC_REPOSITORY: s3:https://${{ secrets.R2_ACCOUNT_ID }}", workflow)
         self.assertIn("run: bash scripts/run_reqsys_free_tier_backup.sh", workflow)
+
+    def test_backup_preserves_fly_scale_to_zero_machine_state(self) -> None:
+        runner = BACKUP_RUNNER.read_text(encoding="utf-8")
+        self.assertIn('MACHINE_INITIAL_STATE="unknown"', runner)
+        self.assertIn('MACHINE_STARTED_FOR_BACKUP=false', runner)
+        self.assertIn('flyctl machine start "$MACHINE_ID" -a "$FLY_APP"', runner)
+        self.assertIn(
+            'flyctl machine wait "$MACHINE_ID" -a "$FLY_APP" --state started',
+            runner,
+        )
+        self.assertIn('flyctl machine stop "$MACHINE_ID" -a "$FLY_APP"', runner)
+        self.assertIn(
+            'flyctl machine wait "$MACHINE_ID" -a "$FLY_APP" --state stopped',
+            runner,
+        )
+        self.assertIn("machine_initial_state", runner)
+        self.assertIn("machine_started_for_backup", runner)
+        self.assertIn("machine_restored_to_initial_state", runner)
+        self.assertIn("evidence['machine_lifecycle']=lifecycle", runner)
+        self.assertNotIn("Nenhuma Fly Machine em execução.", runner)
 
     def test_readiness_uses_provider_neutral_secrets(self) -> None:
         workflow = READINESS_WORKFLOW.read_text(encoding="utf-8")
