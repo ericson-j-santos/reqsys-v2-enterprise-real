@@ -1,0 +1,220 @@
+name: Governed Merged Branch Cleanup
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/governed-merged-branch-cleanup.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: governed-merged-branch-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Cleanup merged fix/hotfix branches
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete only branches proven safe
+        id: cleanup
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const repositoryFullName = `${owner}/${repo}`;
+            const defaultBranch = context.payload.repository?.default_branch || 'main';
+            const prefixes = ['fix/', 'hotfix/'];
+
+            const branches = await github.paginate(github.rest.repos.listBranches, {
+              owner,
+              repo,
+              per_page: 100,
+            });
+
+            const openPulls = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            const closedPulls = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'closed',
+              sort: 'updated',
+              direction: 'desc',
+              per_page: 100,
+            });
+
+            const isSameRepository = (pull) =>
+              pull.head?.repo?.full_name === repositoryFullName;
+
+            const openHeads = new Set(
+              openPulls
+                .filter(isSameRepository)
+                .map((pull) => pull.head.ref),
+            );
+
+            const exactMergedPulls = new Map();
+            for (const pull of closedPulls) {
+              if (!isSameRepository(pull)) continue;
+              if (!pull.merged_at) continue;
+              if (pull.base?.ref !== defaultBranch) continue;
+
+              const key = `${pull.head.ref}:${pull.head.sha}`;
+              if (!exactMergedPulls.has(key)) {
+                exactMergedPulls.set(key, pull);
+              }
+            }
+
+            const evidence = {
+              schema_version: '1.0.0',
+              repository: repositoryFullName,
+              default_branch: defaultBranch,
+              run_id: context.runId,
+              run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+              generated_at: new Date().toISOString(),
+              safety_contract: {
+                prefixes,
+                requires_no_open_pr: true,
+                requires_merged_pr_to_default_branch: true,
+                requires_current_sha_equal_merged_pr_head_sha: true,
+                protected_branches_are_never_deleted: true,
+              },
+              counts: {
+                repository_branches: branches.length,
+                candidates: 0,
+                eligible: 0,
+                deleted: 0,
+                skipped: 0,
+                failures: 0,
+              },
+              deleted: [],
+              skipped: [],
+              failures: [],
+            };
+
+            for (const branch of branches) {
+              const name = branch.name;
+              if (!prefixes.some((prefix) => name.startsWith(prefix))) continue;
+
+              evidence.counts.candidates += 1;
+              const sha = branch.commit.sha;
+
+              if (branch.protected) {
+                evidence.skipped.push({ branch: name, sha, reason: 'protected' });
+                evidence.counts.skipped += 1;
+                continue;
+              }
+
+              if (openHeads.has(name)) {
+                evidence.skipped.push({ branch: name, sha, reason: 'open_pr_exists' });
+                evidence.counts.skipped += 1;
+                continue;
+              }
+
+              const mergedPull = exactMergedPulls.get(`${name}:${sha}`);
+              if (!mergedPull) {
+                evidence.skipped.push({
+                  branch: name,
+                  sha,
+                  reason: 'no_exact_merged_pr_for_current_sha',
+                });
+                evidence.counts.skipped += 1;
+                continue;
+              }
+
+              evidence.counts.eligible += 1;
+
+              try {
+                await github.rest.git.deleteRef({
+                  owner,
+                  repo,
+                  ref: `heads/${name}`,
+                });
+
+                let verifiedDeleted = false;
+                try {
+                  await github.rest.git.getRef({
+                    owner,
+                    repo,
+                    ref: `heads/${name}`,
+                  });
+                } catch (error) {
+                  if (error.status === 404) {
+                    verifiedDeleted = true;
+                  } else {
+                    throw error;
+                  }
+                }
+
+                if (!verifiedDeleted) {
+                  throw new Error('ref still exists after deleteRef');
+                }
+
+                evidence.deleted.push({
+                  branch: name,
+                  sha,
+                  pull_request: mergedPull.number,
+                  merged_at: mergedPull.merged_at,
+                  verified_deleted: true,
+                });
+                evidence.counts.deleted += 1;
+              } catch (error) {
+                evidence.failures.push({
+                  branch: name,
+                  sha,
+                  pull_request: mergedPull.number,
+                  error: String(error.message || error),
+                });
+                evidence.counts.failures += 1;
+              }
+            }
+
+            fs.writeFileSync(
+              'branch-cleanup-evidence.json',
+              `${JSON.stringify(evidence, null, 2)}\n`,
+              'utf8',
+            );
+
+            await core.summary
+              .addHeading('Governed merged branch cleanup')
+              .addTable([
+                [{ data: 'Metric', header: true }, { data: 'Value', header: true }],
+                ['Repository branches', String(evidence.counts.repository_branches)],
+                ['fix/hotfix candidates', String(evidence.counts.candidates)],
+                ['Eligible by exact merge proof', String(evidence.counts.eligible)],
+                ['Deleted and verified', String(evidence.counts.deleted)],
+                ['Skipped fail-closed', String(evidence.counts.skipped)],
+                ['Failures', String(evidence.counts.failures)],
+              ])
+              .addRaw(
+                evidence.deleted.length
+                  ? `\nDeleted: ${evidence.deleted.map((item) => `\`${item.branch}\` (#${item.pull_request})`).join(', ')}\n`
+                  : '\nNo branch met the exact deletion contract.\n',
+              )
+              .write();
+
+            if (evidence.counts.failures > 0) {
+              core.setFailed(
+                `${evidence.counts.failures} eligible branch deletion(s) failed verification`,
+              );
+            }
+
+      - name: Publish cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-branch-cleanup-evidence
+          path: branch-cleanup-evidence.json
+          if-no-files-found: error
+          retention-days: 30
