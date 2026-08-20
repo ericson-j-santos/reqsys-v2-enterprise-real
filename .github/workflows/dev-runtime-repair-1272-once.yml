@@ -34,15 +34,15 @@ jobs:
           gh api --method POST \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/fly-environment-homologation-gate.yml/dispatches" \
             -f ref=main \
-            -F 'inputs[environment]=dev' \
+            -f 'inputs[environment]=dev' \
             -F 'inputs[deploy]=true' \
-            -F 'inputs[issue_number]=1272' \
-            -F "inputs[expected_sha]=$EXPECTED_SHA" \
+            -f 'inputs[issue_number]=1272' \
+            -f "inputs[expected_sha]=$EXPECTED_SHA" \
             -F 'inputs[strict_publication_sync]=true' \
             -F 'inputs[run_dry_run]=true' \
             -F 'inputs[comment_issue]=true' \
-            -F 'inputs[approve_prod_deploy]=' \
-            -F 'inputs[smoke_timeout_seconds]=20'
+            -f 'inputs[approve_prod_deploy]=' \
+            -f 'inputs[smoke_timeout_seconds]=20'
 
       - name: Registrar guardrails
         run: |
