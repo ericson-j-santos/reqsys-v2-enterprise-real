@@ -1,0 +1,132 @@
+name: DEV Database URL Drift Confirm 1272
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dev-database-url-drift-confirm-1272.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-database-url-drift-confirm-1272-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  confirm:
+    name: Confirmar override DATABASE_URL DEV sem expor valor
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: development
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar flyctl pinado
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Coletar somente nomes de secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          mkdir -p artifacts/dev-database-url-drift-1272 /tmp/dev-database-url-drift-1272
+
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo 'FLY_API_TOKEN ausente no environment development.' >&2
+            exit 1
+          fi
+
+          flyctl secrets list --json --app reqsys-api-dev \
+            > /tmp/dev-database-url-drift-1272/secrets.json
+
+          python - <<'PY'
+          import json
+          import re
+          import time
+          from pathlib import Path
+
+          secrets_path = Path('/tmp/dev-database-url-drift-1272/secrets.json')
+          payload = json.loads(secrets_path.read_text(encoding='utf-8'))
+
+          if isinstance(payload, dict):
+              items = payload.get('items') or payload.get('secrets') or payload.get('Secrets') or []
+          elif isinstance(payload, list):
+              items = payload
+          else:
+              items = []
+
+          names = set()
+          for item in items:
+              if not isinstance(item, dict):
+                  continue
+              name = item.get('name') or item.get('Name')
+              if name:
+                  names.add(str(name))
+
+          fly_toml = Path('backend/fly.dev.toml').read_text(encoding='utf-8')
+          gitops_sqlite = bool(re.search(r'DATABASE_URL\s*=\s*"sqlite:////data/reqsys\.db"', fly_toml))
+          database_url_secret_present = 'DATABASE_URL' in names
+          repo_neon_reference = any(
+              'neon.tech' in path.read_text(encoding='utf-8', errors='ignore')
+              for path in Path('.').rglob('*')
+              if path.is_file() and '.git' not in path.parts and path.stat().st_size < 2_000_000
+          )
+
+          if database_url_secret_present and gitops_sqlite and not repo_neon_reference:
+              classification = 'stale_database_url_secret_confirmed'
+          elif database_url_secret_present and gitops_sqlite:
+              classification = 'database_url_secret_override_present'
+          else:
+              classification = 'database_url_secret_override_not_confirmed'
+
+          evidence = {
+              'schema_version': '1.0.0',
+              'contract': 'dev-database-url-drift-confirm-1272',
+              'generated_at_epoch': int(time.time()),
+              'app': 'reqsys-api-dev',
+              'database_url_secret_present': database_url_secret_present,
+              'gitops_persistent_sqlite_declared': gitops_sqlite,
+              'repo_neon_reference_present': repo_neon_reference,
+              'classification': classification,
+              'guardrails': {
+                  'read_only': True,
+                  'secret_names_persisted': False,
+                  'secret_values_persisted': False,
+                  'production_touched': False,
+              },
+          }
+          Path('artifacts/dev-database-url-drift-1272/evidence.json').write_text(
+              json.dumps(evidence, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Resumir confirmação
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('artifacts/dev-database-url-drift-1272/evidence.json').read_text(encoding='utf-8'))
+          with open('/tmp/summary.md', 'w', encoding='utf-8') as out:
+              out.write('## DEV DATABASE_URL drift confirmation\n\n')
+              out.write(f"- DATABASE_URL secret presente: `{data['database_url_secret_present']}`\n")
+              out.write(f"- GitOps SQLite persistente: `{data['gitops_persistent_sqlite_declared']}`\n")
+              out.write(f"- Referência Neon versionada: `{data['repo_neon_reference_present']}`\n")
+              out.write(f"- Classificação: `{data['classification']}`\n")
+              out.write('- production_touched: `false`\n')
+          PY
+          cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar evidência
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-database-url-drift-1272-evidence
+          path: artifacts/dev-database-url-drift-1272/evidence.json
+          if-no-files-found: error
+          retention-days: 30
