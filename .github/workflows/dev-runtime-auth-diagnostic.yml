@@ -54,7 +54,7 @@ jobs:
             grep -E '^(app|primary_region)|auto_stop_machines|auto_start_machines|min_machines_running|memory|cpus' frontend/fly.dev.toml || true
             echo
             echo '# backend/fly.dev.toml'
-            grep -E '^(app|primary_region)|ALLOW_DEMO_LOGIN|APP_ENV|PUBLIC_ENVIRONMENT|auto_stop_machines|auto_start_machines|min_machines_running|memory|cpus|path = "/(health|api/runtime)' backend/fly.dev.toml || true
+            grep -E '^(app|primary_region)|DATABASE_URL|ALLOW_DEMO_LOGIN|APP_ENV|PUBLIC_ENVIRONMENT|auto_stop_machines|auto_start_machines|min_machines_running|memory|cpus|path = "/(health|api/runtime)' backend/fly.dev.toml || true
           } > "${REPORT_DIR}/gitops-config.txt"
 
       - name: Instalar flyctl
@@ -88,10 +88,10 @@ jobs:
           } > "${REPORT_DIR}/fly-state.txt" 2>&1
 
           flyctl secrets list --app reqsys-api-dev 2>/dev/null \
-            | grep -E '^(AZURE_TENANT_ID|AZURE_CLIENT_ID|ALLOW_DEMO_LOGIN)([[:space:]]|$)' \
+            | grep -E '^(DATABASE_URL|AZURE_TENANT_ID|AZURE_CLIENT_ID|ALLOW_DEMO_LOGIN)([[:space:]]|$)' \
             | awk '{print $1"=present"}' \
             > "${REPORT_DIR}/secret-presence.txt" || true
-          for key in AZURE_TENANT_ID AZURE_CLIENT_ID ALLOW_DEMO_LOGIN; do
+          for key in DATABASE_URL AZURE_TENANT_ID AZURE_CLIENT_ID ALLOW_DEMO_LOGIN; do
             if ! grep -q "^${key}=present$" "${REPORT_DIR}/secret-presence.txt"; then
               echo "${key}=not_listed_as_secret" >> "${REPORT_DIR}/secret-presence.txt"
             fi
@@ -123,11 +123,12 @@ jobs:
 
           set +e
           timeout 20s flyctl logs --app reqsys-api-dev --no-tail 2>&1 \
-            | grep -Ei 'reqsys\.boot|starting_uvicorn|startup|database|sqlite|health|readiness|liveness|error|exception|traceback|oom|out of memory|killed|uvicorn' \
+            | grep -Ei 'reqsys\.boot|starting_uvicorn|startup|database|sqlite|postgres|quota|health|readiness|liveness|error|exception|traceback|oom|out of memory|killed|uvicorn' \
             | tail -n 160 \
             | sed -E \
                 -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[EMAIL_MASKED]/g' \
                 -e 's/((Bearer|token|secret|password|senha)[=: ]+)[^ ]+/\1[MASKED]/Ig' \
+                -e 's/(postgres(ql)?:\/\/)[^ @]+@/\1[MASKED]@/Ig' \
             > "${REPORT_DIR}/backend-boot-safe.log"
           set -e
 
@@ -191,9 +192,12 @@ jobs:
           AZURE_ENABLED=$(jq -r '.azure_enabled // false' "${REPORT_DIR}/auth-config.safe.json")
           DEMO_ENABLED=$(jq -r '.demo_login_enabled // false' "${REPORT_DIR}/auth-config.safe.json")
           MISSING_FIELDS=$(jq -r '(.missing_fields // []) | join(",")' "${REPORT_DIR}/auth-config.safe.json")
+          DB_SECRET_PRESENT=$(grep -q '^DATABASE_URL=present$' "${REPORT_DIR}/secret-presence.txt" && echo true || echo false)
 
           CAUSE='undetermined'
-          if [ "${READINESS_OK}" -lt 10 ]; then
+          if grep -Eqi 'exceeded the compute time quota' "${REPORT_DIR}/backend-boot-safe.log"; then
+            CAUSE='database_compute_quota_exceeded'
+          elif [ "${READINESS_OK}" -lt 10 ]; then
             CAUSE='backend_runtime_instability'
           elif [ "${AUTH_REACHABLE}" != 'true' ]; then
             CAUSE='auth_config_endpoint_unreachable'
@@ -212,6 +216,7 @@ jobs:
             echo "auth_reachable=${AUTH_REACHABLE}"
             echo "azure_enabled=${AZURE_ENABLED}"
             echo "demo_login_enabled=${DEMO_ENABLED}"
+            echo "database_url_secret_present=${DB_SECRET_PRESENT}"
             echo "missing_fields=${MISSING_FIELDS}"
             echo "classified_cause=${CAUSE}"
             echo 'production_touched=false'
@@ -226,6 +231,7 @@ jobs:
             echo "- Auth config alcançável: **${AUTH_REACHABLE}**"
             echo "- Azure/Entra habilitado: **${AZURE_ENABLED}**"
             echo "- Demo login habilitado no runtime: **${DEMO_ENABLED}**"
+            echo "- DATABASE_URL listado como Fly secret: **${DB_SECRET_PRESENT}**"
             echo "- Campos Entra ausentes: **${MISSING_FIELDS:-indeterminados quando endpoint auth está indisponível}**"
             echo "- Causa classificada: **${CAUSE}**"
             echo '- Produção tocada: **false**'
