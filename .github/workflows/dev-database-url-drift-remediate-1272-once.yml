@@ -1,0 +1,216 @@
+name: DEV Database URL Drift Remediate 1272 Once
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dev-database-url-drift-remediate-1272-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-database-url-drift-remediate-1272-once
+  cancel-in-progress: false
+
+jobs:
+  remediate:
+    name: Remover override stale e validar DEV
+    if: github.head_ref == 'fix/dev-runtime-machine-exit-diagnostic-1272'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: development
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      APP_NAME: reqsys-api-dev
+      REPORT_DIR: artifacts/dev-database-url-drift-1272-remediation
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar flyctl pinado
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Preflight fail-closed
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          mkdir -p "$REPORT_DIR" /tmp/dev-db-remediation-1272
+
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo 'FLY_API_TOKEN ausente no environment development.' >&2
+            exit 1
+          fi
+
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path('backend/fly.dev.toml').read_text(encoding='utf-8')
+          if not re.search(r'DATABASE_URL\s*=\s*"sqlite:////data/reqsys\.db"', text):
+              raise SystemExit('Fail-closed: GitOps DEV não declara SQLite persistente esperado.')
+          if not re.search(r'min_machines_running\s*=\s*1', text):
+              raise SystemExit('Fail-closed: min_machines_running=1 não confirmado.')
+          PY
+
+          flyctl secrets list --json --app "$APP_NAME" > /tmp/dev-db-remediation-1272/secrets-before.json
+
+          database_url_present="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/dev-db-remediation-1272/secrets-before.json').read_text(encoding='utf-8'))
+          items = payload if isinstance(payload, list) else payload.get('items') or payload.get('secrets') or payload.get('Secrets') or []
+          names = {
+              str(item.get('name') or item.get('Name'))
+              for item in items
+              if isinstance(item, dict) and (item.get('name') or item.get('Name'))
+          }
+          print('true' if 'DATABASE_URL' in names else 'false')
+          PY
+          )"
+
+          echo "database_url_present=${database_url_present}" >> "$GITHUB_OUTPUT"
+
+          cat > "$REPORT_DIR/preflight.json" <<EOF
+          {
+            "schema_version": "1.0.0",
+            "contract": "dev-database-url-drift-remediation-preflight",
+            "app": "${APP_NAME}",
+            "database_url_secret_present_before": ${database_url_present},
+            "gitops_persistent_sqlite_confirmed": true,
+            "production_touched": false,
+            "secret_values_persisted": false
+          }
+          EOF
+
+      - name: Remover somente DATABASE_URL stale em modo staged
+        if: steps.preflight.outputs.database_url_present == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          flyctl secrets unset DATABASE_URL --app "$APP_NAME" --stage
+
+      - name: Deploy explícito do backend DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          deploy_log="/tmp/dev-db-remediation-1272/deploy.log"
+          (
+            cd backend
+            flyctl deploy --remote-only \
+              --config fly.dev.toml \
+              --app "$APP_NAME" \
+              --build-arg "GITHUB_SHA=${GITHUB_SHA}" \
+              --wait-timeout 5m
+          ) 2>&1 | tee "$deploy_log"
+
+      - name: Confirmar remoção do override sem expor valores
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          flyctl secrets list --json --app "$APP_NAME" > /tmp/dev-db-remediation-1272/secrets-after.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/dev-db-remediation-1272/secrets-after.json').read_text(encoding='utf-8'))
+          items = payload if isinstance(payload, list) else payload.get('items') or payload.get('secrets') or payload.get('Secrets') or []
+          names = {
+              str(item.get('name') or item.get('Name'))
+              for item in items
+              if isinstance(item, dict) and (item.get('name') or item.get('Name'))
+          }
+          if 'DATABASE_URL' in names:
+              raise SystemExit('Fail-closed: DATABASE_URL continua cadastrado como secret após remediação.')
+          PY
+
+      - name: Aguardar estabilização curta
+        shell: bash
+        run: sleep 12
+
+      - name: Validar 10/10 runtime e autenticação
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/diagnose_dev_runtime_auth.py \
+            --attempts 10 \
+            --timeout-seconds 8 \
+            --interval-seconds 0.5 \
+            --strict \
+            --output "$REPORT_DIR/runtime-evidence.json"
+
+      - name: Consolidar evidência de remediação
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import time
+          from pathlib import Path
+
+          report = Path('artifacts/dev-database-url-drift-1272-remediation')
+          preflight_path = report / 'preflight.json'
+          runtime_path = report / 'runtime-evidence.json'
+
+          preflight = json.loads(preflight_path.read_text(encoding='utf-8')) if preflight_path.exists() else {}
+          runtime = json.loads(runtime_path.read_text(encoding='utf-8')) if runtime_path.exists() else {}
+          classification = runtime.get('classification') or {}
+          probe_summary = runtime.get('probe_summary') or {}
+
+          critical = ('frontend', 'health', 'runtime_health', 'readiness', 'liveness', 'auth_config')
+          probes_10_10 = all(
+              probe_summary.get(name, {}).get('success_count') == 10
+              and probe_summary.get(name, {}).get('failure_count') == 0
+              for name in critical
+          )
+          ready = classification.get('status') == 'ready'
+          auth_available = classification.get('auth_available') is True
+
+          evidence = {
+              'schema_version': '1.0.0',
+              'contract': 'dev-database-url-drift-remediation-1272',
+              'generated_at_epoch': int(time.time()),
+              'app': 'reqsys-api-dev',
+              'database_url_secret_present_before': preflight.get('database_url_secret_present_before'),
+              'database_url_secret_present_after': False if runtime_path.exists() else None,
+              'runtime_ready': ready,
+              'auth_available': auth_available,
+              'critical_probes_10_10': probes_10_10,
+              'correlation_id': runtime.get('correlation_id'),
+              'production_touched': False,
+              'secret_values_persisted': False,
+          }
+          (report / 'remediation-evidence.json').write_text(
+              json.dumps(evidence, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8',
+          )
+
+          with open('/tmp/remediation-summary.md', 'w', encoding='utf-8') as out:
+              out.write('## DEV #1272 — remediação DATABASE_URL\n\n')
+              out.write(f"- Secret DATABASE_URL antes: `{evidence['database_url_secret_present_before']}`\n")
+              out.write(f"- Secret DATABASE_URL depois: `{evidence['database_url_secret_present_after']}`\n")
+              out.write(f"- Runtime ready: `{ready}`\n")
+              out.write(f"- Auth disponível: `{auth_available}`\n")
+              out.write(f"- Probes críticos 10/10: `{probes_10_10}`\n")
+              out.write(f"- Correlation ID: `{evidence['correlation_id']}`\n")
+              out.write('- production_touched: `false`\n')
+          PY
+          cat /tmp/remediation-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar evidência de remediação
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-database-url-drift-1272-remediation
+          path: artifacts/dev-database-url-drift-1272-remediation
+          if-no-files-found: error
+          retention-days: 30
