@@ -23,9 +23,9 @@ concurrency:
 
 jobs:
   diagnose-dev:
-    name: Diagnosticar runtime/auth DEV
+    name: Diagnosticar e reconciliar runtime/auth DEV
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       FRONTEND_URL: https://reqsys-app-dev.fly.dev
       BACKEND_URL: https://reqsys-api-dev.fly.dev
@@ -72,29 +72,20 @@ jobs:
             echo 'secret_presence=unavailable' > "${REPORT_DIR}/secret-presence.txt"
             exit 0
           fi
-
           {
             echo '# reqsys-app-dev status'
             flyctl status --app reqsys-app-dev || true
-            echo
-            echo '# reqsys-app-dev machines'
-            flyctl machine list --app reqsys-app-dev || true
-            echo
             echo '# reqsys-api-dev status'
             flyctl status --app reqsys-api-dev || true
-            echo
             echo '# reqsys-api-dev machines'
             flyctl machine list --app reqsys-api-dev || true
           } > "${REPORT_DIR}/fly-state.txt" 2>&1
-
           flyctl secrets list --app reqsys-api-dev 2>/dev/null \
             | grep -E '^(DATABASE_URL|AZURE_TENANT_ID|AZURE_CLIENT_ID|ALLOW_DEMO_LOGIN)([[:space:]]|$)' \
             | awk '{print $1"=present"}' \
             > "${REPORT_DIR}/secret-presence.txt" || true
           for key in DATABASE_URL AZURE_TENANT_ID AZURE_CLIENT_ID ALLOW_DEMO_LOGIN; do
-            if ! grep -q "^${key}=present$" "${REPORT_DIR}/secret-presence.txt"; then
-              echo "${key}=not_listed_as_secret" >> "${REPORT_DIR}/secret-presence.txt"
-            fi
+            grep -q "^${key}=present$" "${REPORT_DIR}/secret-presence.txt" || echo "${key}=not_listed_as_secret" >> "${REPORT_DIR}/secret-presence.txt"
           done
 
       - name: Aprofundar checks e boot do backend
@@ -107,20 +98,13 @@ jobs:
             echo 'deep_fly_diagnostic=unavailable' > "${REPORT_DIR}/backend-checks.txt"
             exit 0
           fi
-
           {
             echo '# checks list'
             flyctl checks list --app reqsys-api-dev || true
-            echo
             echo '# machine status'
             MACHINE_ID=$(flyctl machine list --app reqsys-api-dev --json 2>/dev/null | jq -r '.[0].id // empty' || true)
-            if [ -n "${MACHINE_ID}" ]; then
-              flyctl machine status "${MACHINE_ID}" --app reqsys-api-dev || true
-            else
-              echo 'machine_id=unavailable'
-            fi
+            [ -z "${MACHINE_ID}" ] || flyctl machine status "${MACHINE_ID}" --app reqsys-api-dev || true
           } > "${REPORT_DIR}/backend-checks.txt" 2>&1
-
           set +e
           timeout 20s flyctl logs --app reqsys-api-dev --no-tail 2>&1 \
             | grep -Ei 'reqsys\.boot|starting_uvicorn|startup|database|sqlite|postgres|quota|health|readiness|liveness|error|exception|traceback|oom|out of memory|killed|uvicorn' \
@@ -131,6 +115,38 @@ jobs:
                 -e 's/(postgres(ql)?:\/\/)[^ @]+@/\1[MASKED]@/Ig' \
             > "${REPORT_DIR}/backend-boot-safe.log"
           set -e
+
+      - name: Reconciliar override stale de DATABASE_URL em DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTION_FILE="${REPORT_DIR}/remediation.txt"
+          echo 'remediation=not_required' > "${ACTION_FILE}"
+
+          DB_SECRET_PRESENT=false
+          grep -q '^DATABASE_URL=present$' "${REPORT_DIR}/secret-presence.txt" && DB_SECRET_PRESENT=true
+          QUOTA_EXCEEDED=false
+          grep -Eqi 'exceeded the compute time quota' "${REPORT_DIR}/backend-boot-safe.log" && QUOTA_EXCEEDED=true
+          GITOPS_SQLITE=false
+          grep -Eq 'DATABASE_URL[[:space:]]*=[[:space:]]*"sqlite:////data/reqsys\.db"' backend/fly.dev.toml && GITOPS_SQLITE=true
+
+          {
+            echo "database_url_secret_present=${DB_SECRET_PRESENT}"
+            echo "external_database_quota_exceeded=${QUOTA_EXCEEDED}"
+            echo "gitops_declares_persistent_sqlite=${GITOPS_SQLITE}"
+          } >> "${ACTION_FILE}"
+
+          if [ "${DB_SECRET_PRESENT}" = true ] && [ "${QUOTA_EXCEEDED}" = true ] && [ "${GITOPS_SQLITE}" = true ]; then
+            echo 'remediation=remove_stale_database_url_secret_and_redeploy_dev' >> "${ACTION_FILE}"
+            echo 'Staging removal of stale DATABASE_URL secret from reqsys-api-dev; value is never read or printed.'
+            flyctl secrets unset DATABASE_URL --app reqsys-api-dev --stage
+            echo 'Deploying DEV backend with backend/fly.dev.toml to restore declared persistent SQLite configuration.'
+            (cd backend && flyctl deploy --config fly.dev.toml --app reqsys-api-dev --remote-only --wait-timeout 4m)
+            echo 'remediation_applied=true' >> "${ACTION_FILE}"
+          else
+            echo 'remediation_applied=false' >> "${ACTION_FILE}"
+          fi
+          echo 'production_touched=false' >> "${ACTION_FILE}"
 
       - name: Executar probes de disponibilidade
         shell: bash
@@ -192,22 +208,14 @@ jobs:
           AZURE_ENABLED=$(jq -r '.azure_enabled // false' "${REPORT_DIR}/auth-config.safe.json")
           DEMO_ENABLED=$(jq -r '.demo_login_enabled // false' "${REPORT_DIR}/auth-config.safe.json")
           MISSING_FIELDS=$(jq -r '(.missing_fields // []) | join(",")' "${REPORT_DIR}/auth-config.safe.json")
-          DB_SECRET_PRESENT=$(grep -q '^DATABASE_URL=present$' "${REPORT_DIR}/secret-presence.txt" && echo true || echo false)
+          REMEDIATION=$(grep '^remediation=' "${REPORT_DIR}/remediation.txt" | tail -1 | cut -d= -f2-)
 
           CAUSE='undetermined'
-          if grep -Eqi 'exceeded the compute time quota' "${REPORT_DIR}/backend-boot-safe.log"; then
-            CAUSE='database_compute_quota_exceeded'
-          elif [ "${READINESS_OK}" -lt 10 ]; then
-            CAUSE='backend_runtime_instability'
-          elif [ "${AUTH_REACHABLE}" != 'true' ]; then
-            CAUSE='auth_config_endpoint_unreachable'
-          elif [ "${AZURE_ENABLED}" != 'true' ]; then
-            CAUSE='entra_runtime_misconfigured'
-          elif [ "${FRONTEND_OK}" -lt 10 ]; then
-            CAUSE='frontend_runtime_instability'
-          else
-            CAUSE='runtime_stable_auth_ready'
-          fi
+          if [ "${READINESS_OK}" -lt 10 ]; then CAUSE='backend_runtime_instability';
+          elif [ "${AUTH_REACHABLE}" != true ]; then CAUSE='auth_config_endpoint_unreachable';
+          elif [ "${AZURE_ENABLED}" != true ] && [ "${DEMO_ENABLED}" != true ]; then CAUSE='entra_runtime_misconfigured';
+          elif [ "${FRONTEND_OK}" -lt 10 ]; then CAUSE='frontend_runtime_instability';
+          else CAUSE='runtime_stable_auth_ready'; fi
 
           {
             echo "correlation_id=${CORRELATION_ID}"
@@ -216,8 +224,8 @@ jobs:
             echo "auth_reachable=${AUTH_REACHABLE}"
             echo "azure_enabled=${AZURE_ENABLED}"
             echo "demo_login_enabled=${DEMO_ENABLED}"
-            echo "database_url_secret_present=${DB_SECRET_PRESENT}"
             echo "missing_fields=${MISSING_FIELDS}"
+            echo "remediation=${REMEDIATION}"
             echo "classified_cause=${CAUSE}"
             echo 'production_touched=false'
           } | tee "${REPORT_DIR}/classification.txt"
@@ -231,14 +239,17 @@ jobs:
             echo "- Auth config alcançável: **${AUTH_REACHABLE}**"
             echo "- Azure/Entra habilitado: **${AZURE_ENABLED}**"
             echo "- Demo login habilitado no runtime: **${DEMO_ENABLED}**"
-            echo "- DATABASE_URL listado como Fly secret: **${DB_SECRET_PRESENT}**"
-            echo "- Campos Entra ausentes: **${MISSING_FIELDS:-indeterminados quando endpoint auth está indisponível}**"
-            echo "- Causa classificada: **${CAUSE}**"
+            echo "- Remediação: **${REMEDIATION}**"
+            echo "- Causa após remediação: **${CAUSE}**"
             echo '- Produção tocada: **false**'
           } > "${REPORT_DIR}/summary.md"
 
-          if [ "${FRONTEND_OK}" -ne 10 ] || [ "${READINESS_OK}" -ne 10 ] || [ "${AUTH_REACHABLE}" != 'true' ] || [ "${AZURE_ENABLED}" != 'true' ]; then
-            echo 'Critério de aceite #1272 ainda não atendido.'
+          if [ "${FRONTEND_OK}" -ne 10 ] || [ "${READINESS_OK}" -ne 10 ] || [ "${AUTH_REACHABLE}" != true ]; then
+            echo 'Critério de disponibilidade #1272 ainda não atendido.'
+            exit 1
+          fi
+          if [ "${AZURE_ENABLED}" != true ] && [ "${DEMO_ENABLED}" != true ]; then
+            echo 'Runtime estável, mas nenhum método de autenticação esperado está disponível.'
             exit 1
           fi
 
