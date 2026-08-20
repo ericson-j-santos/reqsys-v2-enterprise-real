@@ -1,0 +1,233 @@
+name: DEV Runtime Auth Diagnostic
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/dev-runtime-auth-diagnostic.yml'
+      - 'backend/fly.dev.toml'
+      - 'frontend/fly.dev.toml'
+      - 'backend/app/api/auth.py'
+      - 'backend/app/core/config.py'
+      - 'frontend/src/views/LoginView.vue'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-runtime-auth-diagnostic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose-dev:
+    name: Diagnosticar runtime/auth DEV
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FRONTEND_URL: https://reqsys-app-dev.fly.dev
+      BACKEND_URL: https://reqsys-api-dev.fly.dev
+      REPORT_DIR: artifacts/dev-runtime-auth-diagnostic
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar evidência
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${REPORT_DIR}"
+          CORRELATION_ID="DEV-AUTH-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date -u +%Y%m%dT%H%M%SZ)"
+          echo "CORRELATION_ID=${CORRELATION_ID}" >> "${GITHUB_ENV}"
+          printf 'correlation_id=%s\nproduction_touched=false\n' "${CORRELATION_ID}" > "${REPORT_DIR}/metadata.txt"
+
+      - name: Evidenciar configuração GitOps DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '# frontend/fly.dev.toml'
+            grep -E '^(app|primary_region)|auto_stop_machines|auto_start_machines|min_machines_running|memory|cpus' frontend/fly.dev.toml || true
+            echo
+            echo '# backend/fly.dev.toml'
+            grep -E '^(app|primary_region)|ALLOW_DEMO_LOGIN|APP_ENV|PUBLIC_ENVIRONMENT|auto_stop_machines|auto_start_machines|min_machines_running|memory|cpus|path = "/(health|api/runtime)' backend/fly.dev.toml || true
+          } > "${REPORT_DIR}/gitops-config.txt"
+
+      - name: Instalar flyctl
+        if: env.FLY_API_TOKEN != ''
+        uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+
+      - name: Inspecionar estado Fly sem expor secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo 'fly_inspection=unavailable: FLY_API_TOKEN ausente no GitHub Actions' > "${REPORT_DIR}/fly-state.txt"
+            echo 'secret_presence=unavailable' > "${REPORT_DIR}/secret-presence.txt"
+            exit 0
+          fi
+
+          {
+            echo '# reqsys-app-dev status'
+            flyctl status --app reqsys-app-dev || true
+            echo
+            echo '# reqsys-app-dev machines'
+            flyctl machine list --app reqsys-app-dev || true
+            echo
+            echo '# reqsys-api-dev status'
+            flyctl status --app reqsys-api-dev || true
+            echo
+            echo '# reqsys-api-dev machines'
+            flyctl machine list --app reqsys-api-dev || true
+          } > "${REPORT_DIR}/fly-state.txt" 2>&1
+
+          flyctl secrets list --app reqsys-api-dev 2>/dev/null \
+            | grep -E '^(AZURE_TENANT_ID|AZURE_CLIENT_ID|ALLOW_DEMO_LOGIN)([[:space:]]|$)' \
+            | awk '{print $1"=present"}' \
+            > "${REPORT_DIR}/secret-presence.txt" || true
+
+          for key in AZURE_TENANT_ID AZURE_CLIENT_ID ALLOW_DEMO_LOGIN; do
+            if ! grep -q "^${key}=present$" "${REPORT_DIR}/secret-presence.txt"; then
+              echo "${key}=not_listed_as_secret" >> "${REPORT_DIR}/secret-presence.txt"
+            fi
+          done
+
+      - name: Executar probes de disponibilidade
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          probe_10() {
+            local name="$1"
+            local url="$2"
+            local file="${REPORT_DIR}/${name}.csv"
+            echo 'attempt,http_status,ttfb_seconds,total_seconds,curl_exit' > "${file}"
+            for attempt in $(seq 1 10); do
+              set +e
+              metrics=$(curl -sS -L --connect-timeout 5 --max-time 12 -o /dev/null \
+                -w '%{http_code},%{time_starttransfer},%{time_total}' "${url}")
+              rc=$?
+              set -e
+              if [ -z "${metrics}" ]; then metrics='000,0,0'; fi
+              echo "${attempt},${metrics},${rc}" >> "${file}"
+              sleep 1
+            done
+          }
+
+          probe_once() {
+            local name="$1"
+            local url="$2"
+            set +e
+            metrics=$(curl -sS -L --connect-timeout 5 --max-time 12 -o /dev/null \
+              -w '%{http_code},%{time_starttransfer},%{time_total}' "${url}")
+            rc=$?
+            set -e
+            printf 'http_status,ttfb_seconds,total_seconds,curl_exit\n%s,%s\n' "${metrics:-000,0,0}" "${rc}" \
+              > "${REPORT_DIR}/${name}.csv"
+          }
+
+          probe_10 frontend "${FRONTEND_URL}/"
+          probe_10 readiness "${BACKEND_URL}/api/runtime/readiness"
+          probe_once health "${BACKEND_URL}/health"
+          probe_once runtime-health "${BACKEND_URL}/api/runtime/health"
+          probe_once liveness "${BACKEND_URL}/api/runtime/liveness"
+
+      - name: Capturar auth config sanitizado
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="${REPORT_DIR}/auth-config.raw.json"
+          safe="${REPORT_DIR}/auth-config.safe.json"
+          set +e
+          curl -sS --connect-timeout 5 --max-time 12 "${BACKEND_URL}/v1/auth/config" -o "${raw}"
+          rc=$?
+          set -e
+          if [ "${rc}" -ne 0 ] || ! jq -e . "${raw}" >/dev/null 2>&1; then
+            printf '{"reachable":false,"curl_exit":%s}\n' "${rc}" > "${safe}"
+            rm -f "${raw}"
+            exit 0
+          fi
+
+          jq '{
+            reachable: true,
+            azure_enabled: (.data.azure_enabled // false),
+            certificate_enabled: (.data.certificate_enabled // false),
+            demo_login_enabled: (.data.demo_login_enabled // false),
+            environment: (.data.environment // null),
+            auth_status: (.data.auth_status // null),
+            missing_fields: (.data.missing_fields // []),
+            expected_redirect_uri: (.data.expected_redirect_uri // null)
+          }' "${raw}" > "${safe}"
+          rm -f "${raw}"
+
+      - name: Classificar causa e validar aceite
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          count_2xx() {
+            awk -F, 'NR>1 && $2 ~ /^2[0-9][0-9]$/ && $5 == 0 {c++} END {print c+0}' "$1"
+          }
+
+          FRONTEND_OK=$(count_2xx "${REPORT_DIR}/frontend.csv")
+          READINESS_OK=$(count_2xx "${REPORT_DIR}/readiness.csv")
+          AUTH_REACHABLE=$(jq -r '.reachable // false' "${REPORT_DIR}/auth-config.safe.json")
+          AZURE_ENABLED=$(jq -r '.azure_enabled // false' "${REPORT_DIR}/auth-config.safe.json")
+          DEMO_ENABLED=$(jq -r '.demo_login_enabled // false' "${REPORT_DIR}/auth-config.safe.json")
+          MISSING_FIELDS=$(jq -r '(.missing_fields // []) | join(",")' "${REPORT_DIR}/auth-config.safe.json")
+
+          CAUSE='undetermined'
+          if [ "${READINESS_OK}" -lt 10 ]; then
+            CAUSE='backend_runtime_instability'
+          elif [ "${AUTH_REACHABLE}" != 'true' ]; then
+            CAUSE='auth_config_endpoint_unreachable'
+          elif [ "${AZURE_ENABLED}" != 'true' ]; then
+            CAUSE='entra_runtime_misconfigured'
+          elif [ "${FRONTEND_OK}" -lt 10 ]; then
+            CAUSE='frontend_runtime_instability'
+          else
+            CAUSE='runtime_stable_auth_ready'
+          fi
+
+          {
+            echo "correlation_id=${CORRELATION_ID}"
+            echo "frontend_2xx=${FRONTEND_OK}/10"
+            echo "readiness_2xx=${READINESS_OK}/10"
+            echo "auth_reachable=${AUTH_REACHABLE}"
+            echo "azure_enabled=${AZURE_ENABLED}"
+            echo "demo_login_enabled=${DEMO_ENABLED}"
+            echo "missing_fields=${MISSING_FIELDS}"
+            echo "classified_cause=${CAUSE}"
+            echo 'production_touched=false'
+          } | tee "${REPORT_DIR}/classification.txt"
+
+          {
+            echo '# DEV Runtime/Auth Diagnostic'
+            echo
+            echo "- Correlation ID: \`${CORRELATION_ID}\`"
+            echo "- Frontend 2xx: **${FRONTEND_OK}/10**"
+            echo "- Readiness 2xx: **${READINESS_OK}/10**"
+            echo "- Auth config alcançável: **${AUTH_REACHABLE}**"
+            echo "- Azure/Entra habilitado: **${AZURE_ENABLED}**"
+            echo "- Demo login habilitado no runtime: **${DEMO_ENABLED}**"
+            echo "- Campos Entra ausentes: **${MISSING_FIELDS:-nenhum}**"
+            echo "- Causa classificada: **${CAUSE}**"
+            echo '- Produção tocada: **false**'
+          } > "${REPORT_DIR}/summary.md"
+
+          if [ "${FRONTEND_OK}" -ne 10 ] || [ "${READINESS_OK}" -ne 10 ] || [ "${AUTH_REACHABLE}" != 'true' ] || [ "${AZURE_ENABLED}" != 'true' ]; then
+            echo 'Critério de aceite #1272 ainda não atendido.'
+            exit 1
+          fi
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-runtime-auth-diagnostic
+          path: artifacts/dev-runtime-auth-diagnostic
+          if-no-files-found: error
+          retention-days: 30
