@@ -1,0 +1,155 @@
+name: DEV Runtime Auth Diagnostic
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/dev-runtime-auth-diagnostic.yml'
+      - 'backend/fly.dev.toml'
+      - 'frontend/fly.dev.toml'
+      - 'backend/app/api/auth.py'
+      - 'backend/app/core/config.py'
+      - 'backend/app/core/runtime_boot.py'
+      - 'backend/app/main.py'
+      - 'backend/fly_boot.sh'
+      - 'frontend/src/views/LoginView.vue'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-runtime-auth-diagnostic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose-dev:
+    name: Diagnosticar e reconciliar runtime/auth DEV
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FRONTEND_URL: https://reqsys-app-dev.fly.dev
+      BACKEND_URL: https://reqsys-api-dev.fly.dev
+      REPORT_DIR: artifacts/dev-runtime-auth-diagnostic
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar evidência
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${REPORT_DIR}"
+          CORRELATION_ID="DEV-AUTH-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date -u +%Y%m%dT%H%M%SZ)"
+          echo "CORRELATION_ID=${CORRELATION_ID}" >> "${GITHUB_ENV}"
+          printf 'correlation_id=%s\nproduction_touched=false\n' "${CORRELATION_ID}" > "${REPORT_DIR}/metadata.txt"
+
+      - name: Evidenciar configuração GitOps DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -E 'DATABASE_URL|ALLOW_DEMO_LOGIN|APP_ENV|PUBLIC_ENVIRONMENT|min_machines_running' backend/fly.dev.toml > "${REPORT_DIR}/gitops-config.txt" || true
+
+      - name: Instalar flyctl
+        if: env.FLY_API_TOKEN != ''
+        uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+
+      - name: Inspecionar estado Fly sem expor secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo 'secret_presence=unavailable' > "${REPORT_DIR}/secret-presence.txt"
+            exit 0
+          fi
+          flyctl secrets list --app reqsys-api-dev 2>/dev/null \
+            | grep -E '^(DATABASE_URL|AZURE_TENANT_ID|AZURE_CLIENT_ID|ALLOW_DEMO_LOGIN)([[:space:]]|$)' \
+            | awk '{print $1"=present"}' > "${REPORT_DIR}/secret-presence.txt" || true
+          for key in DATABASE_URL AZURE_TENANT_ID AZURE_CLIENT_ID ALLOW_DEMO_LOGIN; do
+            grep -q "^${key}=present$" "${REPORT_DIR}/secret-presence.txt" || echo "${key}=not_listed_as_secret" >> "${REPORT_DIR}/secret-presence.txt"
+          done
+
+      - name: Reconciliar override stale de DATABASE_URL em DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTION_FILE="${REPORT_DIR}/remediation.txt"
+          echo 'remediation=not_required' > "${ACTION_FILE}"
+          DB_SECRET_PRESENT=false
+          grep -q '^DATABASE_URL=present$' "${REPORT_DIR}/secret-presence.txt" && DB_SECRET_PRESENT=true
+          GITOPS_SQLITE=false
+          grep -Eq 'DATABASE_URL[[:space:]]*=[[:space:]]*"sqlite:////data/reqsys\.db"' backend/fly.dev.toml && GITOPS_SQLITE=true
+          echo "database_url_secret_present=${DB_SECRET_PRESENT}" >> "${ACTION_FILE}"
+          echo "gitops_declares_persistent_sqlite=${GITOPS_SQLITE}" >> "${ACTION_FILE}"
+          # A presença de DATABASE_URL como secret é por si só drift: secrets Fly
+          # sobrescrevem [env]. Não dependemos de uma mensagem transitória de log.
+          if [ "${DB_SECRET_PRESENT}" = true ] && [ "${GITOPS_SQLITE}" = true ]; then
+            echo 'remediation=remove_stale_database_url_secret_and_redeploy_dev' >> "${ACTION_FILE}"
+            flyctl secrets unset DATABASE_URL --app reqsys-api-dev --stage
+            (cd backend && flyctl deploy --config fly.dev.toml --app reqsys-api-dev --remote-only --wait-timeout 4m)
+            echo 'remediation_applied=true' >> "${ACTION_FILE}"
+          else
+            echo 'remediation_applied=false' >> "${ACTION_FILE}"
+          fi
+          echo 'production_touched=false' >> "${ACTION_FILE}"
+
+      - name: Executar probes de disponibilidade
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe_10() {
+            local name="$1" url="$2" file="${REPORT_DIR}/$1.csv"
+            echo 'attempt,http_status,ttfb_seconds,total_seconds,curl_exit' > "${file}"
+            for attempt in $(seq 1 10); do
+              set +e
+              metrics=$(curl -sS -L --connect-timeout 5 --max-time 12 -o /dev/null -w '%{http_code},%{time_starttransfer},%{time_total}' "${url}")
+              rc=$?
+              set -e
+              [ -n "${metrics}" ] || metrics='000,0,0'
+              echo "${attempt},${metrics},${rc}" >> "${file}"
+              sleep 1
+            done
+          }
+          probe_10 frontend "${FRONTEND_URL}/"
+          probe_10 readiness "${BACKEND_URL}/api/runtime/readiness"
+
+      - name: Capturar auth config sanitizado
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="${REPORT_DIR}/auth-config.raw.json"; safe="${REPORT_DIR}/auth-config.safe.json"
+          set +e
+          curl -sS --connect-timeout 5 --max-time 12 "${BACKEND_URL}/v1/auth/config" -o "${raw}"; rc=$?
+          set -e
+          if [ "${rc}" -ne 0 ] || ! jq -e . "${raw}" >/dev/null 2>&1; then
+            printf '{"reachable":false,"curl_exit":%s}\n' "${rc}" > "${safe}"; rm -f "${raw}"; exit 0
+          fi
+          jq '{reachable:true,azure_enabled:(.data.azure_enabled//false),demo_login_enabled:(.data.demo_login_enabled//false),missing_fields:(.data.missing_fields//[])}' "${raw}" > "${safe}"
+          rm -f "${raw}"
+
+      - name: Classificar causa e validar aceite
+        shell: bash
+        run: |
+          set -euo pipefail
+          count_2xx() { awk -F, 'NR>1 && $2 ~ /^2[0-9][0-9]$/ && $5 == 0 {c++} END {print c+0}' "$1"; }
+          FRONTEND_OK=$(count_2xx "${REPORT_DIR}/frontend.csv")
+          READINESS_OK=$(count_2xx "${REPORT_DIR}/readiness.csv")
+          AUTH_REACHABLE=$(jq -r '.reachable // false' "${REPORT_DIR}/auth-config.safe.json")
+          AZURE_ENABLED=$(jq -r '.azure_enabled // false' "${REPORT_DIR}/auth-config.safe.json")
+          DEMO_ENABLED=$(jq -r '.demo_login_enabled // false' "${REPORT_DIR}/auth-config.safe.json")
+          REMEDIATION=$(grep '^remediation=' "${REPORT_DIR}/remediation.txt" | tail -1 | cut -d= -f2-)
+          printf 'correlation_id=%s\nfrontend_2xx=%s/10\nreadiness_2xx=%s/10\nauth_reachable=%s\nazure_enabled=%s\ndemo_login_enabled=%s\nremediation=%s\nproduction_touched=false\n' "$CORRELATION_ID" "$FRONTEND_OK" "$READINESS_OK" "$AUTH_REACHABLE" "$AZURE_ENABLED" "$DEMO_ENABLED" "$REMEDIATION" | tee "${REPORT_DIR}/classification.txt"
+          [ "${FRONTEND_OK}" -eq 10 ] && [ "${READINESS_OK}" -eq 10 ] && [ "${AUTH_REACHABLE}" = true ] || { echo 'Critério de disponibilidade #1272 ainda não atendido.'; exit 1; }
+          [ "${AZURE_ENABLED}" = true ] || [ "${DEMO_ENABLED}" = true ] || { echo 'Runtime estável, mas nenhum método de autenticação esperado está disponível.'; exit 1; }
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-runtime-auth-diagnostic
+          path: artifacts/dev-runtime-auth-diagnostic
+          if-no-files-found: error
+          retention-days: 30
