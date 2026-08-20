@@ -148,7 +148,7 @@ def probe_url(name: str, url: str, timeout_seconds: float) -> dict[str, Any]:
 def aggregate_probes(probes: dict[str, list[dict[str, Any]]], attempts: int) -> dict[str, Any]:
     aggregate: dict[str, Any] = {}
     for name, rows in probes.items():
-        elapsed = [int(row["elapsed_ms"]) for row in rows]
+        elapsed = [int(row["elapsed_ms"]) for row in rows if row.get("elapsed_ms") is not None]
         statuses = sorted({row.get("status_code") for row in rows if row.get("status_code") is not None})
         success_count = sum(1 for row in rows if row.get("ok"))
         aggregate[name] = {
@@ -317,7 +317,7 @@ def _wall_clock_timeout_row(attempt: int) -> dict[str, Any]:
     return {
         "ok": False,
         "status_code": None,
-        "elapsed_ms": 0,
+        "elapsed_ms": None,
         "correlation_id": None,
         "error": "diagnostic_wall_clock_timeout",
         "attempt": attempt,
