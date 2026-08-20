@@ -1,0 +1,61 @@
+name: GitLab Main Mirror
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Validar sincronização sem alterar GitLab"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitlab-main-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITLAB_MIRROR_TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
+      GITLAB_MIRROR_REPOSITORY: https://gitlab.com/ericson-j-santos/reqsys-v2-enterprise-real.git
+      CORRELATION_ID: gitlab-mirror-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout fonte canônica
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validar credencial dedicada
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${GITLAB_MIRROR_TOKEN:-}" ]; then
+            echo "::error::Secret GITLAB_MIRROR_TOKEN não configurado."
+            exit 1
+          fi
+
+      - name: Executar mirror fail-closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          python scripts/sync_gitlab_mirror.py "${args[@]}"
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitlab-main-mirror-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: audit/gitlab-mirror-sync.json
+          if-no-files-found: warn
+          retention-days: 30
