@@ -1,0 +1,87 @@
+name: DEV Runtime Auth Diagnostics
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/diagnose_dev_runtime_auth.py'
+      - 'tests/test_diagnose_dev_runtime_auth.py'
+      - '.github/workflows/dev-runtime-auth-diagnostics.yml'
+      - 'backend/fly.dev.toml'
+      - 'frontend/fly.dev.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-runtime-auth-diagnostics-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    name: Diagnosticar runtime e autenticação DEV
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependência de teste
+        run: python -m pip install --disable-pip-version-check pytest
+
+      - name: Validar contrato do diagnóstico
+        run: python -m pytest -q tests/test_diagnose_dev_runtime_auth.py
+
+      - name: Executar 10 probes por alvo
+        run: |
+          python scripts/diagnose_dev_runtime_auth.py \
+            --attempts 10 \
+            --timeout-seconds 5 \
+            --interval-seconds 0.5 \
+            --output artifacts/dev-runtime-auth-diagnostics/evidence.json
+
+      - name: Publicar resumo sanitizado
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('artifacts/dev-runtime-auth-diagnostics/evidence.json')
+          if not path.exists():
+              print('Evidência não foi produzida.')
+              raise SystemExit(0)
+
+          payload = json.loads(path.read_text(encoding='utf-8'))
+          classification = payload['classification']
+          print('## DEV Runtime Auth Diagnostics', file=open('/tmp/summary.md', 'w', encoding='utf-8'))
+          with open('/tmp/summary.md', 'a', encoding='utf-8') as out:
+              out.write(f"\n- Status: `{classification['status']}`\n")
+              out.write(f"- Risco: `{classification['operational_risk']}`\n")
+              out.write(f"- Auth disponível: `{classification['auth_available']}`\n")
+              out.write(f"- Min machines >= 1: `{classification['minimum_running_configuration_ok']}`\n")
+              out.write(f"- Causas suspeitas: `{', '.join(classification['suspected_causes']) or 'nenhuma'}`\n")
+              out.write('- production_touched: `false`\n\n')
+              out.write('| Alvo | Sucesso | Falha | p95 ms | HTTP |\n|---|---:|---:|---:|---|\n')
+              for name, data in payload['probe_summary'].items():
+                  out.write(
+                      f"| {name} | {data['success_count']} | {data['failure_count']} | "
+                      f"{data['latency_ms']['p95']} | {data['status_codes']} |\n"
+                  )
+          PY
+          cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload da evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-runtime-auth-diagnostics
+          path: artifacts/dev-runtime-auth-diagnostics/evidence.json
+          if-no-files-found: warn
+          retention-days: 30
