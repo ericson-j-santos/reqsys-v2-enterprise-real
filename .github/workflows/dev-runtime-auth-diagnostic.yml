@@ -9,6 +9,9 @@ on:
       - 'frontend/fly.dev.toml'
       - 'backend/app/api/auth.py'
       - 'backend/app/core/config.py'
+      - 'backend/app/core/runtime_boot.py'
+      - 'backend/app/main.py'
+      - 'backend/fly_boot.sh'
       - 'frontend/src/views/LoginView.vue'
 
 permissions:
@@ -88,47 +91,71 @@ jobs:
             | grep -E '^(AZURE_TENANT_ID|AZURE_CLIENT_ID|ALLOW_DEMO_LOGIN)([[:space:]]|$)' \
             | awk '{print $1"=present"}' \
             > "${REPORT_DIR}/secret-presence.txt" || true
-
           for key in AZURE_TENANT_ID AZURE_CLIENT_ID ALLOW_DEMO_LOGIN; do
             if ! grep -q "^${key}=present$" "${REPORT_DIR}/secret-presence.txt"; then
               echo "${key}=not_listed_as_secret" >> "${REPORT_DIR}/secret-presence.txt"
             fi
           done
 
+      - name: Aprofundar checks e boot do backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > "${REPORT_DIR}/backend-checks.txt"
+          : > "${REPORT_DIR}/backend-boot-safe.log"
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo 'deep_fly_diagnostic=unavailable' > "${REPORT_DIR}/backend-checks.txt"
+            exit 0
+          fi
+
+          {
+            echo '# checks list'
+            flyctl checks list --app reqsys-api-dev || true
+            echo
+            echo '# machine status'
+            MACHINE_ID=$(flyctl machine list --app reqsys-api-dev --json 2>/dev/null | jq -r '.[0].id // empty' || true)
+            if [ -n "${MACHINE_ID}" ]; then
+              flyctl machine status "${MACHINE_ID}" --app reqsys-api-dev || true
+            else
+              echo 'machine_id=unavailable'
+            fi
+          } > "${REPORT_DIR}/backend-checks.txt" 2>&1
+
+          set +e
+          timeout 20s flyctl logs --app reqsys-api-dev --no-tail 2>&1 \
+            | grep -Ei 'reqsys\.boot|starting_uvicorn|startup|database|sqlite|health|readiness|liveness|error|exception|traceback|oom|out of memory|killed|uvicorn' \
+            | tail -n 160 \
+            | sed -E \
+                -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[EMAIL_MASKED]/g' \
+                -e 's/((Bearer|token|secret|password|senha)[=: ]+)[^ ]+/\1[MASKED]/Ig' \
+            > "${REPORT_DIR}/backend-boot-safe.log"
+          set -e
+
       - name: Executar probes de disponibilidade
         shell: bash
         run: |
           set -euo pipefail
-
           probe_10() {
-            local name="$1"
-            local url="$2"
-            local file="${REPORT_DIR}/${name}.csv"
+            local name="$1" url="$2" file="${REPORT_DIR}/$1.csv"
             echo 'attempt,http_status,ttfb_seconds,total_seconds,curl_exit' > "${file}"
             for attempt in $(seq 1 10); do
               set +e
-              metrics=$(curl -sS -L --connect-timeout 5 --max-time 12 -o /dev/null \
-                -w '%{http_code},%{time_starttransfer},%{time_total}' "${url}")
+              metrics=$(curl -sS -L --connect-timeout 5 --max-time 12 -o /dev/null -w '%{http_code},%{time_starttransfer},%{time_total}' "${url}")
               rc=$?
               set -e
-              if [ -z "${metrics}" ]; then metrics='000,0,0'; fi
+              [ -n "${metrics}" ] || metrics='000,0,0'
               echo "${attempt},${metrics},${rc}" >> "${file}"
               sleep 1
             done
           }
-
           probe_once() {
-            local name="$1"
-            local url="$2"
+            local name="$1" url="$2"
             set +e
-            metrics=$(curl -sS -L --connect-timeout 5 --max-time 12 -o /dev/null \
-              -w '%{http_code},%{time_starttransfer},%{time_total}' "${url}")
+            metrics=$(curl -sS -L --connect-timeout 5 --max-time 12 -o /dev/null -w '%{http_code},%{time_starttransfer},%{time_total}' "${url}")
             rc=$?
             set -e
-            printf 'http_status,ttfb_seconds,total_seconds,curl_exit\n%s,%s\n' "${metrics:-000,0,0}" "${rc}" \
-              > "${REPORT_DIR}/${name}.csv"
+            printf 'http_status,ttfb_seconds,total_seconds,curl_exit\n%s,%s\n' "${metrics:-000,0,0}" "${rc}" > "${REPORT_DIR}/${name}.csv"
           }
-
           probe_10 frontend "${FRONTEND_URL}/"
           probe_10 readiness "${BACKEND_URL}/api/runtime/readiness"
           probe_once health "${BACKEND_URL}/health"
@@ -150,28 +177,14 @@ jobs:
             rm -f "${raw}"
             exit 0
           fi
-
-          jq '{
-            reachable: true,
-            azure_enabled: (.data.azure_enabled // false),
-            certificate_enabled: (.data.certificate_enabled // false),
-            demo_login_enabled: (.data.demo_login_enabled // false),
-            environment: (.data.environment // null),
-            auth_status: (.data.auth_status // null),
-            missing_fields: (.data.missing_fields // []),
-            expected_redirect_uri: (.data.expected_redirect_uri // null)
-          }' "${raw}" > "${safe}"
+          jq '{reachable:true,azure_enabled:(.data.azure_enabled//false),certificate_enabled:(.data.certificate_enabled//false),demo_login_enabled:(.data.demo_login_enabled//false),environment:(.data.environment//null),auth_status:(.data.auth_status//null),missing_fields:(.data.missing_fields//[]),expected_redirect_uri:(.data.expected_redirect_uri//null)}' "${raw}" > "${safe}"
           rm -f "${raw}"
 
       - name: Classificar causa e validar aceite
         shell: bash
         run: |
           set -euo pipefail
-
-          count_2xx() {
-            awk -F, 'NR>1 && $2 ~ /^2[0-9][0-9]$/ && $5 == 0 {c++} END {print c+0}' "$1"
-          }
-
+          count_2xx() { awk -F, 'NR>1 && $2 ~ /^2[0-9][0-9]$/ && $5 == 0 {c++} END {print c+0}' "$1"; }
           FRONTEND_OK=$(count_2xx "${REPORT_DIR}/frontend.csv")
           READINESS_OK=$(count_2xx "${REPORT_DIR}/readiness.csv")
           AUTH_REACHABLE=$(jq -r '.reachable // false' "${REPORT_DIR}/auth-config.safe.json")
@@ -213,7 +226,7 @@ jobs:
             echo "- Auth config alcançável: **${AUTH_REACHABLE}**"
             echo "- Azure/Entra habilitado: **${AZURE_ENABLED}**"
             echo "- Demo login habilitado no runtime: **${DEMO_ENABLED}**"
-            echo "- Campos Entra ausentes: **${MISSING_FIELDS:-nenhum}**"
+            echo "- Campos Entra ausentes: **${MISSING_FIELDS:-indeterminados quando endpoint auth está indisponível}**"
             echo "- Causa classificada: **${CAUSE}**"
             echo '- Produção tocada: **false**'
           } > "${REPORT_DIR}/summary.md"
