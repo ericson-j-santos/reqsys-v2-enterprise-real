@@ -5,6 +5,11 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -16,6 +21,7 @@ concurrency:
 
 jobs:
   cleanup:
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     name: Cleanup merged fix/hotfix branches
     runs-on: ubuntu-latest
     timeout-minutes: 10
