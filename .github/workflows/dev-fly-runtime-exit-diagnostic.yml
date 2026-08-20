@@ -1,0 +1,266 @@
+name: DEV Fly Runtime Exit Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dev-fly-runtime-exit-diagnostic.yml'
+      - 'backend/fly.dev.toml'
+      - 'backend/fly_boot.sh'
+      - 'backend/Dockerfile.fly'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-fly-runtime-exit-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    name: Diagnosticar saída da Machine Fly DEV
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: development
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar flyctl pinado
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Validar credencial sem expor valor
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo 'FLY_API_TOKEN ausente no GitHub Environment development.' >&2
+            exit 1
+          fi
+
+      - name: Coletar estado e logs read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          mkdir -p /tmp/reqsys-fly-exit artifacts/dev-fly-runtime-exit-diagnostic
+
+          status_rc=0
+          logs_rc=0
+          machine_rc=0
+
+          flyctl status --json --app reqsys-api-dev \
+            > /tmp/reqsys-fly-exit/status.json \
+            2> /tmp/reqsys-fly-exit/status.err || status_rc=$?
+
+          timeout 65s flyctl logs --app reqsys-api-dev --no-tail \
+            > /tmp/reqsys-fly-exit/logs.raw \
+            2> /tmp/reqsys-fly-exit/logs.err || logs_rc=$?
+
+          machine_id="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.capture_fly_environment_state import _extract_machine_records
+
+          path = Path('/tmp/reqsys-fly-exit/status.json')
+          if not path.exists() or not path.stat().st_size:
+              raise SystemExit(0)
+          try:
+              payload = json.loads(path.read_text(encoding='utf-8'))
+          except json.JSONDecodeError:
+              raise SystemExit(0)
+          machines = _extract_machine_records(payload)
+          if machines and machines[0].get('id'):
+              print(machines[0]['id'])
+          PY
+          )"
+
+          if [ -n "$machine_id" ]; then
+            flyctl machine status "$machine_id" --app reqsys-api-dev \
+              > /tmp/reqsys-fly-exit/machine.raw \
+              2> /tmp/reqsys-fly-exit/machine.err || machine_rc=$?
+          else
+            machine_rc=2
+            : > /tmp/reqsys-fly-exit/machine.raw
+            echo 'machine_id_not_resolved' > /tmp/reqsys-fly-exit/machine.err
+          fi
+
+          export STATUS_RC="$status_rc" LOGS_RC="$logs_rc" MACHINE_RC="$machine_rc"
+
+      - name: Sanitizar e classificar evidência
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import time
+          from pathlib import Path
+
+          from scripts.capture_fly_environment_state import _extract_machine_records
+
+          root = Path('/tmp/reqsys-fly-exit')
+          out = Path('artifacts/dev-fly-runtime-exit-diagnostic/evidence.json')
+
+          def read_text(name):
+              path = root / name
+              if not path.exists():
+                  return ''
+              return path.read_text(encoding='utf-8', errors='replace')
+
+          status_text = read_text('status.json')
+          try:
+              status_payload = json.loads(status_text) if status_text.strip() else None
+          except json.JSONDecodeError:
+              status_payload = None
+
+          machines = _extract_machine_records(status_payload) if status_payload is not None else []
+          states = {}
+          regions = set()
+          for machine in machines:
+              state = str(machine.get('state') or 'unknown').lower()
+              states[state] = states.get(state, 0) + 1
+              if machine.get('region'):
+                  regions.add(str(machine['region']))
+
+          sensitive_patterns = [
+              (re.compile(r'(?i)\bBearer\s+\S+'), 'Bearer [REDACTED]'),
+              (re.compile(r'(?i)\b(token|secret|password|authorization|api[_-]?key)\s*[=:]\s*\S+'), r'\1=[REDACTED]'),
+              (re.compile(r'\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]{5,})?\b'), '[REDACTED_JWT]'),
+              (re.compile(r'https?://\S+'), '[REDACTED_URL]'),
+              (re.compile(r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b', re.I), '[REDACTED_EMAIL]'),
+              (re.compile(r'\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b', re.I), '[REDACTED_UUID]'),
+              (re.compile(r'\b[0-9a-f]{32,}\b', re.I), '[REDACTED_HEX]'),
+          ]
+
+          interesting = re.compile(
+              r'(?i)(reqsys\.boot|uvicorn|traceback|exception|error|failed|failure|'
+              r'oom|out of memory|exit(?:ed| code)?|health|volume|mount|sqlite|database|'
+              r'panic|killed|signal|stopp|restart)'
+          )
+
+          def sanitize(line):
+              value = line.strip()
+              for pattern, replacement in sensitive_patterns:
+                  value = pattern.sub(replacement, value)
+              return value[:1000]
+
+          raw_sources = {
+              'logs': read_text('logs.raw') + '\n' + read_text('logs.err'),
+              'machine_status': read_text('machine.raw') + '\n' + read_text('machine.err'),
+              'status_error': read_text('status.err'),
+          }
+
+          evidence_lines = []
+          for source, raw in raw_sources.items():
+              for line in raw.splitlines()[-2000:]:
+                  if interesting.search(line):
+                      safe = sanitize(line)
+                      if safe:
+                          evidence_lines.append({'source': source, 'line': safe})
+
+          evidence_lines = evidence_lines[-120:]
+
+          all_safe_text = '\n'.join(item['line'] for item in evidence_lines)
+          residual_sensitive = bool(
+              re.search(r'(?i)\bBearer\s+\S+|\beyJ[A-Za-z0-9_-]{10,}\.|'
+                        r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b',
+                        all_safe_text)
+          )
+
+          states_lower = set(states)
+          stopped_only = bool(states) and states_lower.issubset({'stopped', 'destroyed', 'failed', 'dead'})
+          exit_signal = any(
+              re.search(r'(?i)(exit(?:ed| code)?|oom|out of memory|panic|killed|'
+                        r'boot_aborted|traceback|exception|failed)', item['line'])
+              for item in evidence_lines
+          )
+
+          if stopped_only and exit_signal:
+              dominant_cause = 'machine_stopped_with_process_exit_signal'
+          elif stopped_only:
+              dominant_cause = 'machine_stopped_without_exit_reason_in_safe_logs'
+          elif not states:
+              dominant_cause = 'machine_state_unavailable'
+          else:
+              dominant_cause = 'machine_not_confirmed_stopped'
+
+          payload = {
+              'schema_version': '1.0.0',
+              'contract': 'dev-fly-runtime-exit-diagnostic',
+              'generated_at_epoch': int(time.time()),
+              'app': 'reqsys-api-dev',
+              'commands': {
+                  'status_ok': os.environ.get('STATUS_RC') == '0',
+                  'logs_ok': os.environ.get('LOGS_RC') in {'0', '124'},
+                  'machine_status_ok': os.environ.get('MACHINE_RC') == '0',
+              },
+              'machines': {
+                  'count': len(machines),
+                  'states': states,
+                  'regions': sorted(regions),
+              },
+              'classification': {
+                  'dominant_cause': dominant_cause,
+                  'stopped_only': stopped_only,
+                  'exit_signal_detected': exit_signal,
+              },
+              'safe_evidence_lines': evidence_lines,
+              'guardrails': {
+                  'read_only': True,
+                  'production_touched': False,
+                  'raw_logs_persisted': False,
+                  'machine_ids_persisted': False,
+                  'secret_values_persisted': False,
+                  'upn_or_email_persisted': False,
+                  'residual_sensitive_pattern_detected': residual_sensitive,
+              },
+          }
+
+          out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          if residual_sensitive:
+              raise SystemExit('Falha fechada: padrão sensível residual após sanitização.')
+          PY
+
+      - name: Resumir diagnóstico
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('artifacts/dev-fly-runtime-exit-diagnostic/evidence.json')
+          if not path.exists():
+              print('Evidência sanitizada não foi produzida.')
+              raise SystemExit(0)
+
+          data = json.loads(path.read_text(encoding='utf-8'))
+          c = data['classification']
+          m = data['machines']
+          with open('/tmp/dev-fly-exit-summary.md', 'w', encoding='utf-8') as out:
+              out.write('## DEV Fly Runtime Exit Diagnostic\n\n')
+              out.write(f"- Machines: `{m['count']}`\n")
+              out.write(f"- Estados: `{m['states']}`\n")
+              out.write(f"- Causa dominante: `{c['dominant_cause']}`\n")
+              out.write(f"- Sinal de saída do processo: `{c['exit_signal_detected']}`\n")
+              out.write('- production_touched: `false`\n')
+              out.write('- raw_logs_persisted: `false`\n')
+          PY
+          cat /tmp/dev-fly-exit-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-fly-runtime-exit-diagnostic
+          path: artifacts/dev-fly-runtime-exit-diagnostic/evidence.json
+          if-no-files-found: error
+          retention-days: 30
