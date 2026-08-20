@@ -1,0 +1,57 @@
+name: DEV Runtime Repair 1272 Once
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dev-runtime-repair-1272-once.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    name: Disparar deploy governado DEV para #1272
+    if: github.head_ref == 'fix/dev-runtime-auth-diagnostics-1272'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Resolver SHA atual da main
+        id: main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Disparar Fly Environment Homologation Gate em DEV
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/fly-environment-homologation-gate.yml/dispatches" \
+            -f ref=main \
+            -F 'inputs[environment]=dev' \
+            -F 'inputs[deploy]=true' \
+            -F 'inputs[issue_number]=1272' \
+            -F "inputs[expected_sha]=$EXPECTED_SHA" \
+            -F 'inputs[strict_publication_sync]=true' \
+            -F 'inputs[run_dry_run]=true' \
+            -F 'inputs[comment_issue]=true' \
+            -F 'inputs[approve_prod_deploy]=' \
+            -F 'inputs[smoke_timeout_seconds]=20'
+
+      - name: Registrar guardrails
+        run: |
+          {
+            echo '## Remediação governada #1272'
+            echo '- ambiente: `dev`'
+            echo '- deploy: `true`'
+            echo '- workflow alvo: `fly-environment-homologation-gate.yml`'
+            echo '- issue de auditoria: `#1272`'
+            echo '- production_touched: `false`'
+            echo '- alteração direta de secret: `false`'
+          } >> "$GITHUB_STEP_SUMMARY"
