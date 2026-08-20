@@ -16,7 +16,7 @@ import tomllib
 import urllib.error
 import urllib.request
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, wait
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +39,12 @@ SAFE_AUTH_FIELDS = (
     "missing_fields",
     "expected_redirect_uri",
 )
+
+TIMEOUT_ERRORS = {
+    "TimeoutError",
+    "socket.timeout",
+    "diagnostic_wall_clock_timeout",
+}
 
 
 def _percentile(values: list[int], percentile: float) -> int | None:
@@ -95,7 +101,7 @@ def probe_url(name: str, url: str, timeout_seconds: float) -> dict[str, Any]:
     request = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "ReqSysDevRuntimeAuthDiagnostics/1.0",
+            "User-Agent": "ReqSysDevRuntimeAuthDiagnostics/1.1",
             "Cache-Control": "no-cache",
         },
     )
@@ -129,12 +135,13 @@ def probe_url(name: str, url: str, timeout_seconds: float) -> dict[str, Any]:
             "error": f"http_{exc.code}",
         }
     except Exception as exc:  # noqa: BLE001 - evidência deve capturar falhas operacionais
+        error_name = "TimeoutError" if isinstance(exc, TimeoutError) or "timed out" in str(exc).lower() else type(exc).__name__
         return {
             "ok": False,
             "status_code": None,
             "elapsed_ms": int((time.perf_counter() - started) * 1000),
             "correlation_id": None,
-            "error": type(exc).__name__,
+            "error": error_name,
         }
 
 
@@ -218,28 +225,198 @@ def classify(aggregate: dict[str, Any], auth: dict[str, Any], static_state: dict
     }
 
 
-def diagnose(repo_root: Path, attempts: int, timeout_seconds: float, interval_seconds: float) -> dict[str, Any]:
+def build_performance_summary(
+    probes: dict[str, list[dict[str, Any]]],
+    aggregate: dict[str, Any],
+    round_metrics: list[dict[str, Any]],
+    total_duration_ms: int,
+    budget_seconds: float,
+    warning_seconds: float,
+    budget_exceeded: bool,
+) -> dict[str, Any]:
+    all_elapsed = [
+        int(row["elapsed_ms"])
+        for rows in probes.values()
+        for row in rows
+        if row.get("elapsed_ms") is not None
+    ]
+    timeout_count = sum(
+        1
+        for rows in probes.values()
+        for row in rows
+        if row.get("error") in TIMEOUT_ERRORS
+    )
+
+    slowest_round = max(round_metrics, key=lambda row: row["duration_ms"]) if round_metrics else None
+
+    endpoint_candidates = [
+        (name, data["latency_ms"].get("p95"))
+        for name, data in aggregate.items()
+        if data.get("latency_ms", {}).get("p95") is not None
+    ]
+    if endpoint_candidates:
+        slowest_endpoint_name, slowest_endpoint_p95 = max(endpoint_candidates, key=lambda item: int(item[1]))
+        slowest_endpoint = {
+            "name": slowest_endpoint_name,
+            "p95_ms": int(slowest_endpoint_p95),
+        }
+    else:
+        slowest_endpoint = None
+
+    budget_ms = int(budget_seconds * 1000)
+    warning_ms = int(warning_seconds * 1000)
+    if budget_exceeded or total_duration_ms > budget_ms:
+        status = "red"
+        alert_code = "diagnostic_wall_clock_timeout"
+    elif total_duration_ms > warning_ms:
+        status = "yellow"
+        alert_code = "diagnostic_slow_warning"
+    else:
+        status = "green"
+        alert_code = None
+
+    return {
+        "status": status,
+        "alert_code": alert_code,
+        "total_duration_ms": total_duration_ms,
+        "overall_p95_ms": _percentile(all_elapsed, 0.95),
+        "timeout_count": timeout_count,
+        "budget_seconds": budget_seconds,
+        "warning_seconds": warning_seconds,
+        "budget_exceeded": budget_exceeded,
+        "slowest_round": slowest_round,
+        "slowest_endpoint": slowest_endpoint,
+        "rounds": round_metrics,
+    }
+
+
+def apply_performance_classification(
+    classification: dict[str, Any],
+    performance: dict[str, Any],
+) -> dict[str, Any]:
+    result = dict(classification)
+    causes = list(result.get("suspected_causes") or [])
+    result["diagnostic_performance"] = performance["status"]
+
+    if performance["status"] == "yellow":
+        if "diagnostic_slow_warning" not in causes:
+            causes.append("diagnostic_slow_warning")
+        if result.get("operational_risk") == "low":
+            result["operational_risk"] = "medium"
+    elif performance["status"] == "red":
+        if "diagnostic_wall_clock_timeout" not in causes:
+            causes.append("diagnostic_wall_clock_timeout")
+        result["status"] = "degraded"
+        result["operational_risk"] = "high"
+
+    result["suspected_causes"] = causes
+    return result
+
+
+def _wall_clock_timeout_row(attempt: int) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "status_code": None,
+        "elapsed_ms": 0,
+        "correlation_id": None,
+        "error": "diagnostic_wall_clock_timeout",
+        "attempt": attempt,
+    }
+
+
+def diagnose(
+    repo_root: Path,
+    attempts: int,
+    timeout_seconds: float,
+    interval_seconds: float,
+    budget_seconds: float = 60.0,
+    warning_seconds: float = 30.0,
+) -> dict[str, Any]:
     static_state = load_static_fly_state(repo_root)
     probes: dict[str, list[dict[str, Any]]] = {name: [] for name in TARGETS}
+    round_metrics: list[dict[str, Any]] = []
+    diagnostic_started = time.perf_counter()
+    deadline = diagnostic_started + budget_seconds
+    budget_exceeded = False
 
     for attempt in range(1, attempts + 1):
-        with ThreadPoolExecutor(max_workers=len(TARGETS)) as executor:
-            futures = {
-                executor.submit(probe_url, name, url, timeout_seconds): name
-                for name, url in TARGETS.items()
+        round_started = time.perf_counter()
+        remaining_seconds = deadline - round_started
+
+        if remaining_seconds <= 0:
+            budget_exceeded = True
+            for skipped_attempt in range(attempt, attempts + 1):
+                for name in TARGETS:
+                    probes[name].append(_wall_clock_timeout_row(skipped_attempt))
+            break
+
+        request_timeout = min(timeout_seconds, max(0.1, remaining_seconds))
+        executor = ThreadPoolExecutor(max_workers=len(TARGETS))
+        futures = {
+            executor.submit(probe_url, name, url, request_timeout): name
+            for name, url in TARGETS.items()
+        }
+        done, not_done = wait(futures, timeout=max(0.0, remaining_seconds))
+
+        for future in done:
+            name = futures[future]
+            result = future.result()
+            result["attempt"] = attempt
+            probes[name].append(result)
+
+        if not_done:
+            budget_exceeded = True
+            for future in not_done:
+                name = futures[future]
+                future.cancel()
+                probes[name].append(_wall_clock_timeout_row(attempt))
+
+        executor.shutdown(wait=False, cancel_futures=True)
+
+        round_duration_ms = int((time.perf_counter() - round_started) * 1000)
+        round_metrics.append(
+            {
+                "attempt": attempt,
+                "duration_ms": round_duration_ms,
+                "budget_remaining_ms": max(0, int((deadline - time.perf_counter()) * 1000)),
             }
-            for future in as_completed(futures):
-                probes[futures[future]].append(future.result())
+        )
+
+        if budget_exceeded:
+            for skipped_attempt in range(attempt + 1, attempts + 1):
+                for name in TARGETS:
+                    probes[name].append(_wall_clock_timeout_row(skipped_attempt))
+            break
+
         if attempt < attempts and interval_seconds > 0:
-            time.sleep(interval_seconds)
+            sleep_seconds = min(interval_seconds, max(0.0, deadline - time.perf_counter()))
+            if sleep_seconds > 0:
+                time.sleep(sleep_seconds)
+
+    total_duration_ms = int((time.perf_counter() - diagnostic_started) * 1000)
+    if total_duration_ms > int(budget_seconds * 1000):
+        budget_exceeded = True
 
     aggregate = aggregate_probes(probes, attempts)
     auth_samples = [row.get("auth") for row in probes["auth_config"] if row.get("ok") and row.get("auth")]
     auth = auth_samples[-1] if auth_samples else {}
-    classification = classify(aggregate, auth, static_state)
+
+    performance = build_performance_summary(
+        probes=probes,
+        aggregate=aggregate,
+        round_metrics=round_metrics,
+        total_duration_ms=total_duration_ms,
+        budget_seconds=budget_seconds,
+        warning_seconds=warning_seconds,
+        budget_exceeded=budget_exceeded,
+    )
+    classification = apply_performance_classification(
+        classify(aggregate, auth, static_state),
+        performance,
+    )
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "contract": "dev-runtime-auth-diagnostics",
         "correlation_id": str(uuid.uuid4()),
         "generated_at_epoch": int(time.time()),
@@ -250,6 +427,7 @@ def diagnose(repo_root: Path, attempts: int, timeout_seconds: float, interval_se
         "static_fly_configuration": static_state,
         "runtime_auth": auth,
         "probe_summary": aggregate,
+        "performance": performance,
         "classification": classification,
         "guardrails": {
             "read_only": True,
@@ -266,14 +444,31 @@ def main() -> int:
     parser.add_argument("--attempts", type=int, default=10)
     parser.add_argument("--timeout-seconds", type=float, default=5.0)
     parser.add_argument("--interval-seconds", type=float, default=0.5)
+    parser.add_argument("--budget-seconds", type=float, default=60.0)
+    parser.add_argument("--warning-seconds", type=float, default=30.0)
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
 
     if args.attempts < 1 or args.attempts > 50:
         parser.error("--attempts deve estar entre 1 e 50")
+    if args.timeout_seconds <= 0:
+        parser.error("--timeout-seconds deve ser maior que zero")
+    if args.interval_seconds < 0:
+        parser.error("--interval-seconds não pode ser negativo")
+    if args.warning_seconds <= 0:
+        parser.error("--warning-seconds deve ser maior que zero")
+    if args.budget_seconds <= args.warning_seconds:
+        parser.error("--budget-seconds deve ser maior que --warning-seconds")
 
     repo_root = Path(__file__).resolve().parents[1]
-    payload = diagnose(repo_root, args.attempts, args.timeout_seconds, args.interval_seconds)
+    payload = diagnose(
+        repo_root,
+        args.attempts,
+        args.timeout_seconds,
+        args.interval_seconds,
+        args.budget_seconds,
+        args.warning_seconds,
+    )
     output = repo_root / args.output
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -281,11 +476,15 @@ def main() -> int:
     print(json.dumps({
         "status": payload["classification"]["status"],
         "operational_risk": payload["classification"]["operational_risk"],
+        "diagnostic_performance": payload["performance"]["status"],
+        "diagnostic_duration_ms": payload["performance"]["total_duration_ms"],
         "suspected_causes": payload["classification"]["suspected_causes"],
         "production_touched": False,
         "evidence": str(output.relative_to(repo_root)),
     }, ensure_ascii=False))
 
+    if payload["performance"]["status"] == "red":
+        return 3
     if args.strict and payload["classification"]["status"] != "ready":
         return 2
     return 0
