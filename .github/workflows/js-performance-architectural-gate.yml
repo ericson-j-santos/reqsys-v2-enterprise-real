@@ -1,0 +1,115 @@
+name: JS Performance Architectural Gate
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.vue"
+      - "scripts/js_performance_gate.py"
+      - "tests/test_js_performance_gate.py"
+      - ".github/workflows/js-performance-architectural-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: js-performance-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  performance-gate:
+    name: Validate JavaScript performance architecture
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unit tests do gate
+        run: python -m unittest tests.test_js_performance_gate -v
+
+      - name: Fetch base branch
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+
+      - name: Analisar diff do PR
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p artifacts/js-performance-gate
+          python scripts/js_performance_gate.py \
+            --base-ref "origin/${{ github.base_ref }}" \
+            --report artifacts/js-performance-gate/report.json
+
+      - name: Analisar repositório completo
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          mkdir -p artifacts/js-performance-gate
+          python scripts/js_performance_gate.py \
+            --all \
+            --report artifacts/js-performance-gate/report.json
+
+      - name: Resumo executivo
+        if: always()
+        shell: bash
+        run: |
+          if [[ ! -f artifacts/js-performance-gate/report.json ]]; then
+            echo "## JS Performance Architectural Gate" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Relatório não foi produzido; consulte a etapa que falhou." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("artifacts/js-performance-gate/report.json").read_text(encoding="utf-8"))
+          summary = report["summary"]
+          print("## JS Performance Architectural Gate")
+          print()
+          print("| Métrica | Valor |")
+          print("|---|---:|")
+          print(f"| Status | `{summary['status']}` |")
+          print(f"| Arquivos analisados | {summary['scanned_files']} |")
+          print(f"| Bloqueios | {summary['blockers']} |")
+          print(f"| Alertas | {summary['warnings']} |")
+          print(f"| Supressões justificadas | {summary['suppressed']} |")
+          print()
+
+          active = [f for f in report["findings"] if not f["suppressed"]]
+          if active:
+              print("### Achados")
+              print()
+              for item in active[:30]:
+                  print(
+                      f"- **{item['severity'].upper()} {item['rule_id']}** "
+                      f"`{item['path']}:{item['line']}` — {item['message']}"
+                  )
+          else:
+              print("Nenhum risco novo identificado no escopo analisado.")
+          PY
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: js-performance-gate-evidence
+          path: artifacts/js-performance-gate
+          if-no-files-found: warn
+          retention-days: 14
