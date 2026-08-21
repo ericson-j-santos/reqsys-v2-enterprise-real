@@ -18,3 +18,9 @@ def test_false_auto_bloqueia_gate():
 def test_erro_em_revisao_nao_e_false_auto():
     m=mod.calcular_metricas([{'expected':'ILSON LIMA','predicted':'1LSON LIMA','state':'REVISAO'}])
     assert m.exact_match == 0 and m.false_auto == 0
+
+def test_corpus_versionado_tem_ids_unicos_e_versao_canonica():
+    corpus=mod.carregar_corpus_versionado()
+    assert len(corpus) >= 8
+    assert len({x['case_id'] for x in corpus}) == len(corpus)
+    assert all(x['corpus_version'] == mod.CORPUS_VERSION for x in corpus)
