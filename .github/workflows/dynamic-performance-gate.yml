@@ -6,7 +6,9 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "scripts/runtime_performance_gate.py"
+      - "scripts/performance_history.py"
       - "tests/test_runtime_performance_gate.py"
+      - "tests/test_performance_history.py"
       - "config/runtime-performance-budgets.json"
       - "frontend/scripts/browser-performance-gate.mjs"
       - "backend/app/core/otel.py"
@@ -14,6 +16,7 @@ on:
       - "backend/tests/test_otel_critical_paths.py"
       - "services/environment-observability-api/collector/config.yaml"
       - "services/environment-observability-api/tests/test_collector_contract.py"
+      - "docs/padrao-ouro/JS_PERFORMANCE_ARCHITECTURAL_GATE.md"
       - ".github/workflows/dynamic-performance-gate.yml"
   workflow_run:
     workflows:
@@ -30,7 +33,7 @@ on:
         required: true
         default: "https://reqsys-app.fly.dev"
       strict:
-        description: "Bloquear quando orçamento de performance for violado"
+        description: "Bloquear quando orçamento absoluto ou regressão madura for violado"
         required: true
         type: boolean
         default: true
@@ -39,6 +42,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: dynamic-performance-${{ github.event.pull_request.number || github.event.workflow_run.id || github.ref }}
@@ -61,6 +65,12 @@ jobs:
       - name: Test runtime performance budget engine
         run: python -m unittest discover -s tests -p "test_runtime_performance_gate.py" -v
 
+      - name: Test 7d 30d baseline and regression engine
+        run: python -m unittest discover -s tests -p "test_performance_history.py" -v
+
+      - name: Compile performance history collector
+        run: python -m py_compile scripts/performance_history.py
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -75,7 +85,7 @@ jobs:
       github.event_name != 'workflow_run' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -99,28 +109,45 @@ jobs:
           INPUT_API_URL: ${{ inputs.api_url }}
           INPUT_APP_URL: ${{ inputs.app_url }}
           INPUT_STRICT: ${{ inputs.strict }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
           api_url="${INPUT_API_URL:-https://reqsys-api.fly.dev}"
           app_url="${INPUT_APP_URL:-https://reqsys-app.fly.dev}"
           strict="false"
           mode="advisory"
+          lane="pr"
+          source_sha="${GITHUB_SHA}"
+          source_branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             strict="${INPUT_STRICT:-true}"
             mode="manual"
+            if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+              lane="main"
+            fi
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             strict="true"
             mode="post-deploy"
+            lane="main"
+            source_sha="${WORKFLOW_RUN_SHA:-${GITHUB_SHA}}"
+            source_branch="${WORKFLOW_RUN_BRANCH:-main}"
           elif [[ "${{ github.event_name }}" == "schedule" ]]; then
             strict="false"
             mode="scheduled-baseline"
+            lane="main"
           fi
 
           echo "api_url=${api_url}" >> "$GITHUB_OUTPUT"
           echo "app_url=${app_url}" >> "$GITHUB_OUTPUT"
           echo "strict=${strict}" >> "$GITHUB_OUTPUT"
           echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+          echo "lane=${lane}" >> "$GITHUB_OUTPUT"
+          echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
+          echo "source_branch=${source_branch}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=dynamic-performance-evidence-${lane}" >> "$GITHUB_OUTPUT"
+          echo "baseline_artifact=dynamic-performance-evidence-main" >> "$GITHUB_OUTPUT"
           mkdir -p artifacts/performance
 
       - name: Measure endpoint p95 p99 and throughput
@@ -172,6 +199,33 @@ jobs:
             --output artifacts/performance/browser-performance.json \
             ${strict_arg}
 
+      - name: Build rolling 7d 30d history and dashboard
+        id: history
+        if: always()
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          strict_arg=""
+          if [[ "${{ steps.policy.outputs.strict }}" == "true" ]]; then
+            strict_arg="--strict"
+          fi
+          python scripts/performance_history.py \
+            --current-api artifacts/performance/runtime-performance.json \
+            --current-browser artifacts/performance/browser-performance.json \
+            --policy config/runtime-performance-budgets.json \
+            --repository "${GITHUB_REPOSITORY}" \
+            --artifact-name "${{ steps.policy.outputs.baseline_artifact }}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --event-name "${{ github.event_name }}" \
+            --head-sha "${{ steps.policy.outputs.source_sha }}" \
+            --head-branch "${{ steps.policy.outputs.source_branch }}" \
+            --mode "${{ steps.policy.outputs.mode }}" \
+            --output-json artifacts/performance/performance-history.json \
+            --output-dashboard artifacts/performance/performance-dashboard.html \
+            ${strict_arg}
+
       - name: Build performance summary
         if: always()
         shell: bash
@@ -180,79 +234,113 @@ jobs:
           import json
           from pathlib import Path
 
-          api_path = Path('artifacts/performance/runtime-performance.json')
-          browser_path = Path('artifacts/performance/browser-performance.json')
+          api_path = Path("artifacts/performance/runtime-performance.json")
+          browser_path = Path("artifacts/performance/browser-performance.json")
+          history_path = Path("artifacts/performance/performance-history.json")
 
-          print('## Dynamic Performance Gate')
+          print("## Dynamic Performance Gate")
           print()
           print(f"- Mode: `${{ steps.policy.outputs.mode }}`")
           print(f"- Strict: `${{ steps.policy.outputs.strict }}`")
+          print(f"- Lane: `${{ steps.policy.outputs.lane }}`")
           print(f"- API: `${{ steps.policy.outputs.api_url }}`")
           print(f"- App: `${{ steps.policy.outputs.app_url }}`")
           print()
 
           if api_path.exists():
-              api = json.loads(api_path.read_text(encoding='utf-8'))
-              print('### Endpoint budgets')
+              api = json.loads(api_path.read_text(encoding="utf-8"))
+              print("### Endpoint budgets")
               print()
-              print('| Endpoint | Status | p95 ms | p99 ms | RPS | Error % |')
-              print('|---|---|---:|---:|---:|---:|')
-              for item in api.get('results', []):
-                  metrics = item.get('metrics', {})
+              print("| Endpoint | Status | p95 ms | p99 ms | RPS | Error % |")
+              print("|---|---|---:|---:|---:|---:|")
+              for item in api.get("results", []):
+                  metrics = item.get("metrics", {})
                   print(
                       f"| `{item.get('path')}` | {item.get('status')} | "
                       f"{metrics.get('p95_ms')} | {metrics.get('p99_ms')} | "
                       f"{metrics.get('throughput_rps')} | {metrics.get('error_rate_percent')} |"
                   )
           else:
-              print('### Endpoint budgets')
-              print('Relatório HTTP não produzido.')
+              print("### Endpoint budgets")
+              print("Relatório HTTP não produzido.")
 
           print()
           if browser_path.exists():
-              browser = json.loads(browser_path.read_text(encoding='utf-8'))
-              metrics = browser.get('metrics', {})
-              print('### JavaScript runtime')
+              browser = json.loads(browser_path.read_text(encoding="utf-8"))
+              metrics = browser.get("metrics", {})
+              print("### JavaScript runtime")
               print()
-              print('| Métrica | Valor |')
-              print('|---|---:|')
+              print("| Métrica | Valor |")
+              print("|---|---:|")
               for key in (
-                  'event_loop_lag_p95_ms',
-                  'event_loop_lag_max_ms',
-                  'long_task_count',
-                  'max_long_task_ms',
-                  'lcp_ms',
-                  'heap_before_gc_mb',
-                  'heap_after_gc_mb',
-                  'heap_reclaimed_mb',
-                  'gc_roundtrip_ms',
+                  "event_loop_lag_p95_ms",
+                  "event_loop_lag_max_ms",
+                  "long_task_count",
+                  "max_long_task_ms",
+                  "lcp_ms",
+                  "heap_before_gc_mb",
+                  "heap_after_gc_mb",
+                  "heap_reclaimed_mb",
+                  "gc_roundtrip_ms",
               ):
                   print(f"| `{key}` | {metrics.get(key)} |")
-              if browser.get('violations'):
-                  print()
-                  print('Violações:')
-                  for violation in browser['violations']:
-                      print(f'- {violation}')
           else:
-              print('### JavaScript runtime')
-              print('Relatório de browser não produzido.')
+              print("### JavaScript runtime")
+              print("Relatório de browser não produzido.")
+
+          print()
+          print("### Histórico 7/30 dias")
+          if history_path.exists():
+              history = json.loads(history_path.read_text(encoding="utf-8"))
+              summary = history.get("summary", {})
+              baselines = history.get("baselines", {})
+              print()
+              print(f"- Status: `{summary.get('status')}`")
+              print(f"- Amostras rolling: `{summary.get('samples_total')}`")
+              print(f"- Regressões: `{summary.get('regressions_total')}`")
+              for window in ("7", "30"):
+                  item = baselines.get(window, {})
+                  print(
+                      f"- Baseline {window}d: `{item.get('sample_count', 0)}/"
+                      f"{item.get('minimum_samples', 0)}` amostras; "
+                      f"mature=`{item.get('mature', False)}`"
+                  )
+              if history.get("regressions"):
+                  print()
+                  print("| Escopo | Alvo | Métrica | Janela | Regressão |")
+                  print("|---|---|---|---:|---:|")
+                  for item in history["regressions"]:
+                      delta = item.get("delta_percent")
+                      delta_text = (
+                          f"{delta:+.1f}%"
+                          if delta is not None
+                          else f"{item.get('delta_points', 0):+.2f} pp"
+                      )
+                      print(
+                          f"| {item.get('scope')} | `{item.get('subject')}` | "
+                          f"`{item.get('metric')}` | {item.get('window_days')}d | {delta_text} |"
+                      )
+              print()
+              print("Dashboard HTML disponível no artifact desta execução.")
+          else:
+              print("Histórico/dashboard não produzido.")
           PY
 
       - name: Upload dynamic performance evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dynamic-performance-evidence
+          name: ${{ steps.policy.outputs.artifact_name }}
           path: artifacts/performance
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 45
 
-      - name: Enforce post-deploy performance budget
+      - name: Enforce post-deploy performance budget and mature regression
         if: always()
         shell: bash
         run: |
           if [[ "${{ steps.policy.outputs.strict }}" != "true" ]]; then
-            echo "Modo advisory: evidência coletada sem bloqueio."
+            echo "Modo advisory: evidência e regressão coletadas sem bloqueio."
             exit 0
           fi
 
@@ -261,16 +349,32 @@ jobs:
           from pathlib import Path
 
           failures = []
-          for name in ('runtime-performance.json', 'browser-performance.json'):
-              path = Path('artifacts/performance') / name
+          performance_dir = Path("artifacts/performance")
+
+          for name in ("runtime-performance.json", "browser-performance.json"):
+              path = performance_dir / name
               if not path.exists():
-                  failures.append(f'{name}: artifact ausente')
+                  failures.append(f"{name}: artifact ausente")
                   continue
-              payload = json.loads(path.read_text(encoding='utf-8'))
-              if payload.get('status') != 'passed' and payload.get('summary', {}).get('status') != 'passed':
-                  failures.append(f"{name}: {payload.get('status') or payload.get('summary', {}).get('status')}")
+              payload = json.loads(path.read_text(encoding="utf-8"))
+              status = payload.get("status") or payload.get("summary", {}).get("status")
+              if status != "passed":
+                  failures.append(f"{name}: {status}")
+
+          history_path = performance_dir / "performance-history.json"
+          if not history_path.exists():
+              failures.append("performance-history.json: artifact ausente")
+          else:
+              history = json.loads(history_path.read_text(encoding="utf-8"))
+              history_status = history.get("summary", {}).get("status")
+              if history_status == "blocked":
+                  failures.append(
+                      f"performance-history.json: {history.get('summary', {}).get('regressions_total', 0)} regressões maduras"
+                  )
+              elif history_status not in ("passed", "insufficient_history"):
+                  failures.append(f"performance-history.json: status inesperado {history_status}")
 
           if failures:
-              raise SystemExit('Performance gate bloqueado: ' + '; '.join(failures))
-          print('Performance gate aprovado em modo strict.')
+              raise SystemExit("Performance gate bloqueado: " + "; ".join(failures))
+          print("Performance gate aprovado: budgets absolutos e regressão histórica conformes.")
           PY
