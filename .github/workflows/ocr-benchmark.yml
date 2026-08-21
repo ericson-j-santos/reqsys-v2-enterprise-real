@@ -1,0 +1,53 @@
+name: OCR Benchmark Gate
+on:
+  pull_request:
+    paths:
+      - 'backend/ocr_evidencia/**'
+      - 'backend/app/ocr/**'
+      - 'backend/tests/test_ocr_*.py'
+      - 'scripts/ocr_benchmark.py'
+      - 'benchmark/ocr/**'
+      - '.github/workflows/ocr-benchmark.yml'
+      - 'backend/Dockerfile'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ocr-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Testar bounded context e contrato das métricas
+        working-directory: backend
+        run: |
+          python -m pip install --disable-pip-version-check pytest==9.0.3
+          pytest -q tests/test_ocr_worker.py tests/test_ocr_benchmark_contract.py
+  synthetic-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar runtime OCR
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-por imagemagick poppler-utils fonts-dejavu-core
+      - name: Executar CER, Exact Match e False AUTO
+        run: |
+          python scripts/ocr_benchmark.py --output artifacts/ocr-benchmark.json synthetic --workdir artifacts/ocr-work
+      - name: Publicar evidência do benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-benchmark
+          path: artifacts/ocr-benchmark.json
+          if-no-files-found: error
