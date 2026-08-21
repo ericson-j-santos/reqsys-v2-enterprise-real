@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
-  "policy_version": "2026-08-21.2",
-  "description": "Orçamentos iniciais de performance para endpoints públicos e runtime JavaScript do ReqSys. Valores devem ser recalibrados por evidência histórica, nunca afrouxados apenas para fazer o CI passar.",
+  "policy_version": "2026-08-21.3",
+  "description": "Orçamentos de performance para endpoints públicos, runtime JavaScript e regressão histórica 7/30 dias do ReqSys. Valores só devem ser recalibrados com evidência histórica.",
   "defaults": {
     "samples": 20,
     "concurrency": 4,
@@ -15,6 +15,21 @@
     "max_lcp_ms": 4000,
     "max_heap_after_gc_mb": 128,
     "max_gc_roundtrip_ms": 750
+  },
+  "history": {
+    "retention_days": 45,
+    "windows_days": [
+      7,
+      30
+    ],
+    "minimum_baseline_samples": 5,
+    "artifact_name_main": "dynamic-performance-evidence-main",
+    "regression": {
+      "max_latency_increase_percent": 30,
+      "max_throughput_drop_percent": 30,
+      "max_error_rate_increase_pp": 1,
+      "max_browser_metric_increase_percent": 30
+    }
   },
   "endpoints": [
     {
