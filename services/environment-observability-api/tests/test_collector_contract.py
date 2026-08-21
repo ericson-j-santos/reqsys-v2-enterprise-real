@@ -17,6 +17,13 @@ def test_collector_has_health_queue_retry_and_internal_metrics() -> None:
     assert "port: 8888" in CONFIG
 
 
+def test_collector_exports_application_metrics_and_traces() -> None:
+    assert "traces:" in CONFIG
+    assert "metrics:" in CONFIG
+    assert CONFIG.count("receivers: [otlp]") >= 2
+    assert CONFIG.count("exporters: [otlphttp/upstream, debug/sampled]") >= 2
+
+
 def test_collector_requires_explicit_upstream_and_environment() -> None:
     assert "${env:OTEL_UPSTREAM_ENDPOINT}" in CONFIG
     assert "${env:APP_ENV}" in CONFIG
