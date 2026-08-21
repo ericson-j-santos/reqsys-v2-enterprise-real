@@ -1,0 +1,146 @@
+{
+  "schema_version": "1.0.0",
+  "contract": "reqsys-credential-control-plane-lifecycle",
+  "execution": {
+    "default_mode": "plan",
+    "fail_closed": true,
+    "secret_store": {
+      "provider": "azure_key_vault",
+      "authentication": "github_oidc",
+      "vault_name_env": "REQSYS_KEY_VAULT_NAME",
+      "allow_github_secret_fallback": false
+    },
+    "identity_federation": {
+      "github_actions": {
+        "mode": "oidc",
+        "long_lived_github_token_required": false
+      }
+    }
+  },
+  "managed_credentials": [
+    {
+      "credential_id": "gitlab-main-mirror",
+      "provider": "gitlab",
+      "secret_name": "reqsys-gitlab-main-mirror-token",
+      "enabled": true,
+      "rotation": {
+        "strategy": "gitlab_self_rotate",
+        "interval_days": 30,
+        "warning_days": 7,
+        "expires_in_days": 30
+      },
+      "target": {
+        "project": "ericson-j-santos/reqsys-v2-enterprise-real"
+      },
+      "consumers": [
+        "github-actions:gitlab-main-mirror"
+      ]
+    },
+    {
+      "credential_id": "fly-api-dev-deploy",
+      "provider": "fly",
+      "secret_name": "reqsys-fly-api-dev-deploy-token",
+      "issuer_secret_name": "reqsys-fly-control-plane-org-token",
+      "token_name": "reqsys-api-dev-ci",
+      "enabled": true,
+      "rotation": {
+        "strategy": "fly_replace_deploy_token",
+        "interval_days": 30,
+        "warning_days": 7,
+        "expires_in_days": 30
+      },
+      "target": { "app": "reqsys-api-dev" },
+      "consumers": ["github-actions:fly-dev"]
+    },
+    {
+      "credential_id": "fly-app-dev-deploy",
+      "provider": "fly",
+      "secret_name": "reqsys-fly-app-dev-deploy-token",
+      "issuer_secret_name": "reqsys-fly-control-plane-org-token",
+      "token_name": "reqsys-app-dev-ci",
+      "enabled": true,
+      "rotation": {
+        "strategy": "fly_replace_deploy_token",
+        "interval_days": 30,
+        "warning_days": 7,
+        "expires_in_days": 30
+      },
+      "target": { "app": "reqsys-app-dev" },
+      "consumers": ["github-actions:fly-dev"]
+    },
+    {
+      "credential_id": "fly-api-hml-deploy",
+      "provider": "fly",
+      "secret_name": "reqsys-fly-api-hml-deploy-token",
+      "issuer_secret_name": "reqsys-fly-control-plane-org-token",
+      "token_name": "reqsys-api-stg-ci",
+      "enabled": true,
+      "rotation": {
+        "strategy": "fly_replace_deploy_token",
+        "interval_days": 30,
+        "warning_days": 7,
+        "expires_in_days": 30
+      },
+      "target": { "app": "reqsys-api-stg" },
+      "consumers": ["github-actions:fly-staging"]
+    },
+    {
+      "credential_id": "fly-app-hml-deploy",
+      "provider": "fly",
+      "secret_name": "reqsys-fly-app-hml-deploy-token",
+      "issuer_secret_name": "reqsys-fly-control-plane-org-token",
+      "token_name": "reqsys-app-stg-ci",
+      "enabled": true,
+      "rotation": {
+        "strategy": "fly_replace_deploy_token",
+        "interval_days": 30,
+        "warning_days": 7,
+        "expires_in_days": 30
+      },
+      "target": { "app": "reqsys-app-stg" },
+      "consumers": ["github-actions:fly-staging"]
+    },
+    {
+      "credential_id": "fly-api-prod-deploy",
+      "provider": "fly",
+      "secret_name": "reqsys-fly-api-prod-deploy-token",
+      "issuer_secret_name": "reqsys-fly-control-plane-org-token",
+      "token_name": "reqsys-api-prod-ci",
+      "enabled": true,
+      "rotation": {
+        "strategy": "fly_replace_deploy_token",
+        "interval_days": 30,
+        "warning_days": 7,
+        "expires_in_days": 30
+      },
+      "target": { "app": "reqsys-api" },
+      "consumers": ["github-actions:fly-production"]
+    },
+    {
+      "credential_id": "fly-app-prod-deploy",
+      "provider": "fly",
+      "secret_name": "reqsys-fly-app-prod-deploy-token",
+      "issuer_secret_name": "reqsys-fly-control-plane-org-token",
+      "token_name": "reqsys-app-prod-ci",
+      "enabled": true,
+      "rotation": {
+        "strategy": "fly_replace_deploy_token",
+        "interval_days": 30,
+        "warning_days": 7,
+        "expires_in_days": 30
+      },
+      "target": { "app": "reqsys-app" },
+      "consumers": ["github-actions:fly-production"]
+    }
+  ],
+  "bootstrap_credentials": [
+    {
+      "credential_id": "fly-control-plane-org-token",
+      "provider": "fly",
+      "secret_name": "reqsys-fly-control-plane-org-token",
+      "purpose": "Emitir, validar e revogar deploy tokens app-scoped do ReqSys",
+      "manual_bootstrap_required": true,
+      "stored_only_in_external_secret_store": true
+    }
+  ]
+}
