@@ -1,0 +1,186 @@
+name: Credential Control Plane Lifecycle
+
+on:
+  pull_request:
+    paths:
+      - "config/control-plane-lifecycle-policy.json"
+      - "scripts/credential_control_plane_lifecycle.py"
+      - "tests/test_credential_control_plane_lifecycle.py"
+      - "docs/runbooks/credential-control-plane-lifecycle.md"
+      - ".github/workflows/control-plane-lifecycle.yml"
+  push:
+    branches: [main]
+    paths:
+      - "config/control-plane-lifecycle-policy.json"
+      - "scripts/credential_control_plane_lifecycle.py"
+      - "tests/test_credential_control_plane_lifecycle.py"
+      - "docs/runbooks/credential-control-plane-lifecycle.md"
+      - ".github/workflows/control-plane-lifecycle.yml"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Operação do lifecycle"
+        required: true
+        type: choice
+        default: plan
+        options: [plan, execute]
+      provider:
+        description: "Provedor a avaliar"
+        required: true
+        type: choice
+        default: all
+        options: [all, gitlab, fly]
+  schedule:
+    - cron: "17 9 * * *"
+
+concurrency:
+  group: credential-control-plane-lifecycle-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  LIFECYCLE_EVIDENCE: audit/credential-control-plane-lifecycle.json
+
+jobs:
+  contract-tests:
+    name: Validar contrato de lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Executar testes focados
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir "pytest==9.0.3"
+          python -m pytest -q tests/test_credential_control_plane_lifecycle.py
+
+      - name: Validar política sem acessar secrets
+        run: |
+          python scripts/credential_control_plane_lifecycle.py \
+            --mode validate \
+            --output "$LIFECYCLE_EVIDENCE"
+
+      - name: Publicar evidência de contrato
+        uses: actions/upload-artifact@v4
+        with:
+          name: credential-lifecycle-contract-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.LIFECYCLE_EVIDENCE }}
+          if-no-files-found: error
+          retention-days: 30
+
+  lifecycle:
+    name: Planejar ou executar lifecycle
+    if: ${{ github.event_name != 'pull_request' && vars.CCP_ENABLED == 'true' }}
+    needs: contract-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      CORRELATION_ID: credential-lifecycle-${{ github.run_id }}-${{ github.run_attempt }}
+      REQSYS_CREDENTIAL_MUTATION_ENABLED: ${{ vars.CCP_MUTATION_ENABLED }}
+      AZURE_CORE_OUTPUT: none
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar configuração OIDC
+        shell: bash
+        env:
+          CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+          CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name não configurado. Lifecycle permanece fail-closed."
+              exit 2
+            fi
+          done
+
+      - name: Autenticar no Azure por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Flyctl
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.provider == 'all' || inputs.provider == 'fly' }}
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Executar lifecycle governado
+        shell: bash
+        env:
+          REQUESTED_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'plan' }}
+          REQUESTED_PROVIDER: ${{ github.event_name == 'workflow_dispatch' && inputs.provider || 'all' }}
+          AUTO_ROTATE: ${{ vars.CCP_AUTO_ROTATE }}
+        run: |
+          set -euo pipefail
+          mode="$REQUESTED_MODE"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            if [ "${AUTO_ROTATE:-false}" = "true" ]; then
+              mode="execute"
+            else
+              mode="plan"
+            fi
+          fi
+
+          if [ "$mode" = "execute" ] && [ "${REQSYS_CREDENTIAL_MUTATION_ENABLED:-false}" != "true" ]; then
+            echo "::error::Execução mutável solicitada, mas CCP_MUTATION_ENABLED não está true."
+            exit 2
+          fi
+
+          args=(--mode "$mode" --output "$LIFECYCLE_EVIDENCE" --correlation-id "$CORRELATION_ID")
+          if [ "$REQUESTED_PROVIDER" != "all" ]; then
+            args+=(--provider "$REQUESTED_PROVIDER")
+          fi
+          python scripts/credential_control_plane_lifecycle.py "${args[@]}"
+
+      - name: Resumo operacional sanitizado
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["LIFECYCLE_EVIDENCE"])
+          if not path.exists():
+              raise SystemExit(0)
+          data = json.loads(path.read_text(encoding="utf-8"))
+          plan = data.get("plan") or {}
+          summary = plan.get("summary") or {}
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write("# Credential Control Plane Lifecycle\n\n")
+              out.write(f"- Status: **{data.get('status', 'UNKNOWN')}**\n")
+              out.write(f"- Modo: **{data.get('mode', 'unknown')}**\n")
+              out.write(f"- Plano: **{plan.get('status', 'n/a')}**\n")
+              out.write(f"- Credenciais avaliadas: **{summary.get('credentials_evaluated', 0)}**\n")
+              out.write(f"- Ações requeridas: **{summary.get('actionable', 0)}**\n")
+              out.write(f"- Bloqueios: **{summary.get('blocked', 0)}**\n")
+              out.write(f"- Rotações/criações concluídas: **{len(data.get('results') or [])}**\n")
+              out.write("- Valores secretos expostos: **não**\n")
+              out.write(f"- Correlation ID: `{data.get('correlation_id', 'n/a')}`\n")
+          PY
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: credential-lifecycle-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.LIFECYCLE_EVIDENCE }}
+          if-no-files-found: warn
+          retention-days: 90
