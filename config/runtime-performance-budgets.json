@@ -1,12 +1,20 @@
 {
   "schema_version": "1.0.0",
-  "policy_version": "2026-08-21.1",
-  "description": "Orçamentos iniciais de performance para endpoints públicos do ReqSys. Valores devem ser recalibrados por evidência histórica, nunca afrouxados apenas para fazer o CI passar.",
+  "policy_version": "2026-08-21.2",
+  "description": "Orçamentos iniciais de performance para endpoints públicos e runtime JavaScript do ReqSys. Valores devem ser recalibrados por evidência histórica, nunca afrouxados apenas para fazer o CI passar.",
   "defaults": {
     "samples": 20,
     "concurrency": 4,
     "warmup": 3,
     "timeout_seconds": 5
+  },
+  "browser": {
+    "max_event_loop_lag_p95_ms": 100,
+    "max_event_loop_lag_max_ms": 250,
+    "max_long_task_ms": 250,
+    "max_lcp_ms": 4000,
+    "max_heap_after_gc_mb": 128,
+    "max_gc_roundtrip_ms": 750
   },
   "endpoints": [
     {
