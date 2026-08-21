@@ -1,0 +1,276 @@
+name: Dynamic Performance Gate
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "scripts/runtime_performance_gate.py"
+      - "tests/test_runtime_performance_gate.py"
+      - "config/runtime-performance-budgets.json"
+      - "frontend/scripts/browser-performance-gate.mjs"
+      - "backend/app/core/otel.py"
+      - "backend/app/middleware/observability.py"
+      - "backend/tests/test_otel_critical_paths.py"
+      - "services/environment-observability-api/collector/config.yaml"
+      - "services/environment-observability-api/tests/test_collector_contract.py"
+      - ".github/workflows/dynamic-performance-gate.yml"
+  workflow_run:
+    workflows:
+      - ReqSys Fly Runtime P0
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "URL pública da API ReqSys"
+        required: true
+        default: "https://reqsys-api.fly.dev"
+      app_url:
+        description: "URL pública do frontend ReqSys"
+        required: true
+        default: "https://reqsys-app.fly.dev"
+      strict:
+        description: "Bloquear quando orçamento de performance for violado"
+        required: true
+        type: boolean
+        default: true
+  schedule:
+    - cron: "43 9 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dynamic-performance-${{ github.event.pull_request.number || github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract-validation:
+    name: Validate performance contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test runtime performance budget engine
+        run: python -m unittest discover -s tests -p "test_runtime_performance_gate.py" -v
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate browser probe syntax
+        run: node --check frontend/scripts/browser-performance-gate.mjs
+
+  dynamic-runtime:
+    name: Measure live runtime performance
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Resolve execution policy
+        id: policy
+        shell: bash
+        env:
+          INPUT_API_URL: ${{ inputs.api_url }}
+          INPUT_APP_URL: ${{ inputs.app_url }}
+          INPUT_STRICT: ${{ inputs.strict }}
+        run: |
+          set -euo pipefail
+          api_url="${INPUT_API_URL:-https://reqsys-api.fly.dev}"
+          app_url="${INPUT_APP_URL:-https://reqsys-app.fly.dev}"
+          strict="false"
+          mode="advisory"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            strict="${INPUT_STRICT:-true}"
+            mode="manual"
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            strict="true"
+            mode="post-deploy"
+          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+            strict="false"
+            mode="scheduled-baseline"
+          fi
+
+          echo "api_url=${api_url}" >> "$GITHUB_OUTPUT"
+          echo "app_url=${app_url}" >> "$GITHUB_OUTPUT"
+          echo "strict=${strict}" >> "$GITHUB_OUTPUT"
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+          mkdir -p artifacts/performance
+
+      - name: Measure endpoint p95 p99 and throughput
+        id: api_performance
+        continue-on-error: true
+        shell: bash
+        run: |
+          strict_arg=""
+          if [[ "${{ steps.policy.outputs.strict }}" == "true" ]]; then
+            strict_arg="--strict"
+          fi
+          python scripts/runtime_performance_gate.py \
+            --base-url "${{ steps.policy.outputs.api_url }}" \
+            --budgets config/runtime-performance-budgets.json \
+            --output artifacts/performance/runtime-performance.json \
+            ${strict_arg}
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --ignore-scripts
+
+      - name: Resolve Chromium runtime
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v google-chrome >/dev/null 2>&1; then
+            echo "CHROMIUM_EXECUTABLE_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          elif command -v google-chrome-stable >/dev/null 2>&1; then
+            echo "CHROMIUM_EXECUTABLE_PATH=$(command -v google-chrome-stable)" >> "$GITHUB_ENV"
+          elif command -v chromium >/dev/null 2>&1; then
+            echo "CHROMIUM_EXECUTABLE_PATH=$(command -v chromium)" >> "$GITHUB_ENV"
+          else
+            npx playwright install chromium
+          fi
+
+      - name: Measure browser event loop heap GC and LCP
+        id: browser_performance
+        continue-on-error: true
+        shell: bash
+        run: |
+          strict_arg=""
+          if [[ "${{ steps.policy.outputs.strict }}" == "true" ]]; then
+            strict_arg="--strict"
+          fi
+          node frontend/scripts/browser-performance-gate.mjs \
+            --url "${{ steps.policy.outputs.app_url }}" \
+            --budgets config/runtime-performance-budgets.json \
+            --output artifacts/performance/browser-performance.json \
+            ${strict_arg}
+
+      - name: Build performance summary
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          api_path = Path('artifacts/performance/runtime-performance.json')
+          browser_path = Path('artifacts/performance/browser-performance.json')
+
+          print('## Dynamic Performance Gate')
+          print()
+          print(f"- Mode: `${{ steps.policy.outputs.mode }}`")
+          print(f"- Strict: `${{ steps.policy.outputs.strict }}`")
+          print(f"- API: `${{ steps.policy.outputs.api_url }}`")
+          print(f"- App: `${{ steps.policy.outputs.app_url }}`")
+          print()
+
+          if api_path.exists():
+              api = json.loads(api_path.read_text(encoding='utf-8'))
+              print('### Endpoint budgets')
+              print()
+              print('| Endpoint | Status | p95 ms | p99 ms | RPS | Error % |')
+              print('|---|---|---:|---:|---:|---:|')
+              for item in api.get('results', []):
+                  metrics = item.get('metrics', {})
+                  print(
+                      f"| `{item.get('path')}` | {item.get('status')} | "
+                      f"{metrics.get('p95_ms')} | {metrics.get('p99_ms')} | "
+                      f"{metrics.get('throughput_rps')} | {metrics.get('error_rate_percent')} |"
+                  )
+          else:
+              print('### Endpoint budgets')
+              print('Relatório HTTP não produzido.')
+
+          print()
+          if browser_path.exists():
+              browser = json.loads(browser_path.read_text(encoding='utf-8'))
+              metrics = browser.get('metrics', {})
+              print('### JavaScript runtime')
+              print()
+              print('| Métrica | Valor |')
+              print('|---|---:|')
+              for key in (
+                  'event_loop_lag_p95_ms',
+                  'event_loop_lag_max_ms',
+                  'long_task_count',
+                  'max_long_task_ms',
+                  'lcp_ms',
+                  'heap_before_gc_mb',
+                  'heap_after_gc_mb',
+                  'heap_reclaimed_mb',
+                  'gc_roundtrip_ms',
+              ):
+                  print(f"| `{key}` | {metrics.get(key)} |")
+              if browser.get('violations'):
+                  print()
+                  print('Violações:')
+                  for violation in browser['violations']:
+                      print(f'- {violation}')
+          else:
+              print('### JavaScript runtime')
+              print('Relatório de browser não produzido.')
+          PY
+
+      - name: Upload dynamic performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dynamic-performance-evidence
+          path: artifacts/performance
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce post-deploy performance budget
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${{ steps.policy.outputs.strict }}" != "true" ]]; then
+            echo "Modo advisory: evidência coletada sem bloqueio."
+            exit 0
+          fi
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          failures = []
+          for name in ('runtime-performance.json', 'browser-performance.json'):
+              path = Path('artifacts/performance') / name
+              if not path.exists():
+                  failures.append(f'{name}: artifact ausente')
+                  continue
+              payload = json.loads(path.read_text(encoding='utf-8'))
+              if payload.get('status') != 'passed' and payload.get('summary', {}).get('status') != 'passed':
+                  failures.append(f"{name}: {payload.get('status') or payload.get('summary', {}).get('status')}")
+
+          if failures:
+              raise SystemExit('Performance gate bloqueado: ' + '; '.join(failures))
+          print('Performance gate aprovado em modo strict.')
+          PY
