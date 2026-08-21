@@ -5,7 +5,13 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import app.core.otel as module
-from app.core.otel import anotar_span_correlation, configurar_opentelemetry, otel_ativo
+from app.core.otel import (
+    _signal_endpoint,
+    anotar_span_correlation,
+    configurar_opentelemetry,
+    otel_ativo,
+    registrar_http_metricas,
+)
 
 
 def test_configurar_opentelemetry_desabilitado_quando_flag_off(monkeypatch):
@@ -45,3 +51,37 @@ def test_anotar_span_correlation_define_atributo(monkeypatch):
         with patch('opentelemetry.trace', fake_trace, create=True):
             anotar_span_correlation()
     span.set_attribute.assert_called_once()
+
+
+def test_signal_endpoint_normaliza_base_e_signal_path():
+    assert _signal_endpoint('http://collector:4318', 'traces') == 'http://collector:4318/v1/traces'
+    assert _signal_endpoint('http://collector:4318/v1/traces', 'metrics') == 'http://collector:4318/v1/metrics'
+    assert _signal_endpoint('http://collector:4318/v1/metrics/', 'traces') == 'http://collector:4318/v1/traces'
+
+
+def test_registrar_http_metricas_noop_quando_inativo(monkeypatch):
+    monkeypatch.setattr(module, '_otel_configured', False)
+    registrar_http_metricas(method='GET', route='/health', status_code=200, duration_ms=5)
+
+
+def test_registrar_http_metricas_registra_counter_e_histograma(monkeypatch):
+    counter = MagicMock()
+    histogram = MagicMock()
+    monkeypatch.setattr(module, '_otel_configured', True)
+    monkeypatch.setattr(module, '_http_request_counter', counter)
+    monkeypatch.setattr(module, '_http_duration_histogram', histogram)
+
+    registrar_http_metricas(
+        method='get',
+        route='/api/requisitos/{codigo}',
+        status_code=200,
+        duration_ms=12.4,
+    )
+
+    attributes = {
+        'http.request.method': 'GET',
+        'http.route': '/api/requisitos/{codigo}',
+        'http.response.status_code': 200,
+    }
+    counter.add.assert_called_once_with(1, attributes)
+    histogram.record.assert_called_once_with(12.4, attributes)

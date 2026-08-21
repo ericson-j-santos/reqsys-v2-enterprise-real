@@ -21,7 +21,7 @@ O estado OCR não substitui o estado técnico do runtime: falha técnica segue r
 
 ## Benchmark
 
-PR CI mede CER, Exact Match e False AUTO. Smoke: Exact Match >= 90%, CER <= 2%, False AUTO = 0. Gate completo alvo: Exact Match >= 98%, CER <= 0,5%, False AUTO <= 0,1% e zero False AUTO no corpus adversarial.
+PR CI mede CER, Exact Match e False AUTO. Smoke: Exact Match >= 90%, CER <= 2%, False AUTO = 0. Gate completo alvo: Exact Match >= 98%, CER <= 0,5%, False AUTO <= 0,1% e zero False AUTO no corpus adversarial crítico.
 
 `benchmark/ocr/datasets-v1.json` versiona fontes. MIDV-2020 exige aceite de licença; XFUND declara CC BY-NC-SA 4.0; FUNSD restringe uso a pesquisa/educação não comercial. Por isso não são baixados automaticamente em CI corporativo. O IBGE pode gerar snapshot explícito:
 

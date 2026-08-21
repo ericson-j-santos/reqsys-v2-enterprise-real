@@ -82,3 +82,7 @@ service:
       receivers: [otlp]
       processors: [memory_limiter, resource/environment, batch]
       exporters: [otlphttp/upstream, debug/sampled]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/environment, batch]
+      exporters: [otlphttp/upstream, debug/sampled]
