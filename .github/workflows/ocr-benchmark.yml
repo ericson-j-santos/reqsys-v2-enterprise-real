@@ -4,7 +4,7 @@ on:
     paths:
       - 'backend/ocr_evidencia/**'
       - 'backend/app/ocr/**'
-      - 'backend/tests/test_ocr_*.py'
+      - 'backend/ocr_tests/**'
       - 'scripts/ocr_benchmark.py'
       - 'benchmark/ocr/**'
       - '.github/workflows/ocr-benchmark.yml'
@@ -28,7 +28,7 @@ jobs:
         working-directory: backend
         run: |
           python -m pip install --disable-pip-version-check pytest==9.0.3
-          pytest -q tests/test_ocr_worker.py tests/test_ocr_benchmark_contract.py
+          pytest -q ocr_tests
   synthetic-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 12
