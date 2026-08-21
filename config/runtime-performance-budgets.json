@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "policy_version": "2026-08-21.1",
+  "description": "Orçamentos iniciais de performance para endpoints públicos do ReqSys. Valores devem ser recalibrados por evidência histórica, nunca afrouxados apenas para fazer o CI passar.",
+  "defaults": {
+    "samples": 20,
+    "concurrency": 4,
+    "warmup": 3,
+    "timeout_seconds": 5
+  },
+  "endpoints": [
+    {
+      "name": "health",
+      "method": "GET",
+      "path": "/health",
+      "expected_status": 200,
+      "budget": {
+        "max_p95_ms": 1500,
+        "max_p99_ms": 2500,
+        "max_error_rate_percent": 0,
+        "min_throughput_rps": 2
+      }
+    },
+    {
+      "name": "runtime-health",
+      "method": "GET",
+      "path": "/api/runtime/health",
+      "expected_status": 200,
+      "budget": {
+        "max_p95_ms": 1500,
+        "max_p99_ms": 2500,
+        "max_error_rate_percent": 0,
+        "min_throughput_rps": 2
+      }
+    },
+    {
+      "name": "runtime-readiness",
+      "method": "GET",
+      "path": "/api/runtime/readiness",
+      "expected_status": 200,
+      "budget": {
+        "max_p95_ms": 2000,
+        "max_p99_ms": 3500,
+        "max_error_rate_percent": 0,
+        "min_throughput_rps": 1
+      }
+    },
+    {
+      "name": "runtime-liveness",
+      "method": "GET",
+      "path": "/api/runtime/liveness",
+      "expected_status": 200,
+      "budget": {
+        "max_p95_ms": 1000,
+        "max_p99_ms": 1800,
+        "max_error_rate_percent": 0,
+        "min_throughput_rps": 3
+      }
+    }
+  ]
+}
