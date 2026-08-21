@@ -96,6 +96,7 @@ async function main() {
 
   const browser = await chromium.launch({
     headless: true,
+    executablePath: process.env.CHROMIUM_EXECUTABLE_PATH || undefined,
     args: ['--js-flags=--expose-gc'],
   })
 
