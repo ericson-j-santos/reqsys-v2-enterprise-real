@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: gitlab-main-mirror
@@ -23,7 +24,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      GITLAB_MIRROR_TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
       GITLAB_MIRROR_REPOSITORY: https://gitlab.com/ericson-j-santos/reqsys-v2-enterprise-real.git
       CORRELATION_ID: gitlab-mirror-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -32,14 +32,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validar credencial dedicada
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "${GITLAB_MIRROR_TOKEN:-}" ]; then
-            echo "::error::Secret GITLAB_MIRROR_TOKEN não configurado."
-            exit 1
-          fi
+      - name: Resolver credencial GitLab no Control Plane
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: gitlab-main-mirror
+          consumer: github-actions:gitlab-main-mirror
+          export-env: GITLAB_MIRROR_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/gitlab-mirror-credential-resolution.json
 
       - name: Executar mirror fail-closed
         shell: bash
@@ -56,6 +59,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gitlab-main-mirror-evidence-${{ github.run_id }}-${{ github.run_attempt }}
-          path: audit/gitlab-mirror-sync.json
+          path: |
+            audit/gitlab-mirror-sync.json
+            audit/gitlab-mirror-credential-resolution.json
           if-no-files-found: warn
           retention-days: 30
