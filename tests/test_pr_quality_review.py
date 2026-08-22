@@ -82,6 +82,22 @@ def test_governed_classifier_allows_control_plane_runtime_workflow() -> None:
     assert workflow.is_sensitive is False
 
 
+def test_governed_classifier_allows_credential_named_workflow_source() -> None:
+    workflow = governed_changed_file(
+        ".github/workflows/credential-control-plane-cutover-smoke.yml"
+    )
+
+    assert workflow.is_sensitive is False
+
+
+def test_governed_classifier_allows_credential_named_composite_action() -> None:
+    action = governed_changed_file(
+        ".github/actions/resolve-managed-credential/action.yml"
+    )
+
+    assert action.is_sensitive is False
+
+
 def test_governed_classifier_keeps_real_token_config_sensitive() -> None:
     token_config = governed_changed_file("config/access-token.json")
 
