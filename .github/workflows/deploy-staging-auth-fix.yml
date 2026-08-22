@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: deploy-staging-auth-fix
@@ -64,12 +65,27 @@ jobs:
     environment: staging
     steps:
       - uses: actions/checkout@v4
+      - name: Resolver credencial Fly API staging
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-hml-deploy
+          consumer: github-actions:fly-staging
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/fly-staging-api-credential-resolution.json
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Deploy backend staging
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         working-directory: backend
         run: flyctl deploy --remote-only --config fly.staging.toml --app reqsys-api-stg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fly-staging-api-credential-${{ github.run_id }}-${{ github.run_attempt }}
+          path: audit/fly-staging-api-credential-resolution.json
+          if-no-files-found: warn
 
   deploy-frontend:
     name: Deploy frontend staging
@@ -79,12 +95,27 @@ jobs:
     environment: staging
     steps:
       - uses: actions/checkout@v4
+      - name: Resolver credencial Fly frontend staging
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-app-hml-deploy
+          consumer: github-actions:fly-staging
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/fly-staging-frontend-credential-resolution.json
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Deploy frontend staging
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         working-directory: frontend
         run: flyctl deploy --remote-only --config fly.staging.toml --app reqsys-app-stg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fly-staging-frontend-credential-${{ github.run_id }}-${{ github.run_attempt }}
+          path: audit/fly-staging-frontend-credential-resolution.json
+          if-no-files-found: warn
 
   validate-runtime:
     name: Validar auth Azure em staging
