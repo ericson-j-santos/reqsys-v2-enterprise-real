@@ -22,7 +22,11 @@ from app.ocr.worker import (
     OcrWorker,
     registrar_ocr_worker,
 )
-from app.services.runtime_core import RuntimeEventBus, RuntimeEventEnvelope, RuntimeEventStatus
+from app.services.runtime_core import (
+    RuntimeEventBus,
+    RuntimeEventEnvelope,
+    RuntimeEventStatus,
+)
 
 router = APIRouter(prefix='/v1/ocr', tags=['OCR Governado'])
 
