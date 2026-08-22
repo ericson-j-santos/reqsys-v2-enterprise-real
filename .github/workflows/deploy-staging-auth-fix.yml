@@ -72,7 +72,7 @@ jobs:
           consumer: github-actions:fly-staging
           export-env: FLY_API_TOKEN
           vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
-          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_HML }}
           azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
           azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           evidence-path: audit/fly-staging-api-credential-resolution.json
@@ -102,7 +102,7 @@ jobs:
           consumer: github-actions:fly-staging
           export-env: FLY_API_TOKEN
           vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
-          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_HML }}
           azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
           azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           evidence-path: audit/fly-staging-frontend-credential-resolution.json
