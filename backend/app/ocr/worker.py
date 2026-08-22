@@ -17,7 +17,10 @@ from typing import Protocol
 
 from app.services.runtime_core import RuntimeEventBus, RuntimeEventEnvelope
 from ocr_evidencia import __version__ as OCR_EVIDENCIA_VERSION
-from ocr_evidencia.adaptadores.ocr_tesseract import ConfiguracaoOCRNome, TesseractMultipass
+from ocr_evidencia.adaptadores.ocr_tesseract import (
+    ConfiguracaoOCRNome,
+    TesseractMultipass,
+)
 from ocr_evidencia.dominio.nome import ResultadoConsensoNome, consensuar_nome
 
 EVENTO_OCR_SOLICITADO = 'OCR_DOCUMENTO_SOLICITADO'
