@@ -111,9 +111,10 @@ class RepositorioResultadosOcrSqlAlchemy:
     def listar(self, *, status: str | None = None, limite: int = 100) -> list[dict]:
         limite = max(1, min(int(limite), 500))
         with self._session_factory() as db:
-            stmt = select(OcrResultadoPersistido).order_by(OcrResultadoPersistido.criado_em.desc()).limit(limite)
+            stmt = select(OcrResultadoPersistido)
             if status:
                 stmt = stmt.where(OcrResultadoPersistido.status_revisao == status.upper())
+            stmt = stmt.order_by(OcrResultadoPersistido.criado_em.desc()).limit(limite)
             itens = list(db.scalars(stmt))
             return [self._metadata(item) for item in itens]
 
