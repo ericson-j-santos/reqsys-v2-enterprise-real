@@ -39,7 +39,7 @@ jobs:
           consumer: github-actions:gitlab-main-mirror
           export-env: GITLAB_MIRROR_TOKEN
           vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
-          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_GITLAB }}
           azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
           azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           evidence-path: audit/gitlab-mirror-credential-resolution.json
