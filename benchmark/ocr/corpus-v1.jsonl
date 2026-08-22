@@ -1,0 +1,8 @@
+{"case_id":"BR-NOME-001","corpus_version":"br-nomes-sinteticos-v1","source":"synthetic-curated+ibge-ranking-v2","expected":"MARIA SILVA","degradation":{"pointsize":64}}
+{"case_id":"BR-NOME-002","corpus_version":"br-nomes-sinteticos-v1","source":"synthetic-curated+ibge-ranking-v2","expected":"JOAO SANTOS","degradation":{"pointsize":64}}
+{"case_id":"BR-NOME-003","corpus_version":"br-nomes-sinteticos-v1","source":"synthetic-curated+ibge-ranking-v2","expected":"ANA SOUZA","degradation":{"pointsize":64,"blur":0.15}}
+{"case_id":"BR-NOME-004","corpus_version":"br-nomes-sinteticos-v1","source":"synthetic-curated+ibge-ranking-v2","expected":"CARLOS ALMEIDA","degradation":{"pointsize":62,"rotation":0.3}}
+{"case_id":"BR-NOME-005","corpus_version":"br-nomes-sinteticos-v1","source":"synthetic-curated+ibge-ranking-v2","expected":"LUIZ OLIVEIRA","degradation":{"pointsize":62,"blur":0.1}}
+{"case_id":"BR-NOME-006","corpus_version":"br-nomes-sinteticos-v1","source":"synthetic-adversarial","expected":"ILSON LIMA","degradation":{"pointsize":60}}
+{"case_id":"BR-NOME-007","corpus_version":"br-nomes-sinteticos-v1","source":"synthetic-adversarial","expected":"ISIS LUZ","degradation":{"pointsize":60}}
+{"case_id":"BR-NOME-008","corpus_version":"br-nomes-sinteticos-v1","source":"synthetic-curated+ibge-ranking-v2","expected":"BRUNO BARBOSA","degradation":{"pointsize":62}}

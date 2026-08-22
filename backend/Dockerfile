@@ -2,7 +2,10 @@ FROM python:3.12-slim
 WORKDIR /app
 
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends unixodbc unixodbc-dev \
+	&& apt-get install -y --no-install-recommends \
+		unixodbc unixodbc-dev \
+		tesseract-ocr tesseract-ocr-por \
+		poppler-utils imagemagick fonts-dejavu-core \
 	&& rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

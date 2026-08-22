@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "policy": "public-datasets-are-opt-in; PR CI uses deterministic synthetic corpus",
+  "datasets": [
+    {"id":"ibge-nomes","purpose":"vocabulário de nomes brasileiros para geração sintética, nunca autocorreção","source":"https://servicodados.ibge.gov.br/api/docs/nomes?versao=2","mode":"metadata/generator","automation":"supported: scripts/ocr_benchmark.py fetch-ibge","license_note":"Fonte oficial pública; snapshot usado apenas para vocabulário de geração sintética."},
+    {"id":"cin-modelo-informacional","purpose":"layout/campos oficiais para templates sintéticos sem validade documental","source":"https://www.gov.br/governodigital/pt-br/identidade/cin/cefic","mode":"template-reference","automation":"template-reference-only","license_note":"Referência oficial; gerar somente AMOSTRA/SEM VALIDADE."},
+    {"id":"midv-2020","purpose":"documentos de identidade sintéticos e variações de captura","source":"https://l3i-share.univ-lr.fr/MIDV2020/midv2020.html","mode":"manual/opt-in","automation":"blocked-by-license-review","license_note":"Acesso exige aceite de licença/formulário; não baixar automaticamente no CI."},
+    {"id":"xfund-pt","purpose":"document understanding com português, bounding boxes e pares chave/valor","source":"https://github.com/doc-analysis/XFUND","mode":"manual/opt-in","automation":"blocked-by-license-review","license_note":"CC BY-NC-SA 4.0; não habilitar em CI corporativo/comercial sem validação jurídica."},
+    {"id":"funsd","purpose":"stress test de scans ruidosos e formulários","source":"https://guillaumejaume.github.io/FUNSD/","mode":"manual/opt-in","automation":"blocked-by-license-review","license_note":"Uso não comercial/pesquisa/educação; não habilitar em CI corporativo sem validação jurídica."}
+  ]
+}
