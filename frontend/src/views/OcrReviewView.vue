@@ -170,8 +170,8 @@ async function abrir(item) {
   try { detalhe.value = await detalharRevisaoOcr(item.job_id) } catch (e) { erro.value = detalheErroOcr(e); dialogo.value = false } finally { carregandoDetalhe.value = false }
 }
 
-function fechar() {
-  if (salvando.value) return
+function fechar(forcar = false) {
+  if (salvando.value && !forcar) return
   dialogo.value = false
   detalhe.value = null
   observacao.value = ''
@@ -185,7 +185,7 @@ async function decidir(decisao) {
   try {
     await decidirRevisaoOcr(detalhe.value.job_id, decisao, observacao.value)
     mensagem.value = `Resultado ${decisao === 'APROVADO' ? 'aprovado' : 'rejeitado'} com evidência protegida.`
-    fechar()
+    fechar(true)
     await carregar()
   } catch (e) {
     erro.value = detalheErroOcr(e)
