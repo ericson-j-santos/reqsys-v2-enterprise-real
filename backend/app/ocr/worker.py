@@ -82,7 +82,9 @@ class OcrWorker:
     def __init__(self, motor: MotorOcrNome, repositorio: RepositorioResultadosOcr, *, input_root: str | Path | None = None) -> None:
         self.motor = motor
         self.repositorio = repositorio
-        root = input_root or os.getenv('OCR_INPUT_ROOT', '/tmp/reqsys-ocr')
+        root = input_root or os.getenv('OCR_INPUT_ROOT')
+        if not root:
+            raise ValueError('OCR_INPUT_ROOT é obrigatório quando input_root não for informado')
         self.input_root = Path(root).resolve()
 
     def __call__(self, envelope: RuntimeEventEnvelope) -> None:
