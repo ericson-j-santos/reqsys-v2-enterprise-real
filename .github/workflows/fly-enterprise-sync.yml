@@ -186,6 +186,9 @@ jobs:
         id: env
         env:
           TARGET_ENVIRONMENT: ${{ matrix.target_environment }}
+          CCP_AZURE_CLIENT_ID_DEV: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          CCP_AZURE_CLIENT_ID_HML: ${{ vars.CCP_AZURE_CLIENT_ID_HML }}
+          CCP_AZURE_CLIENT_ID_PROD: ${{ vars.CCP_AZURE_CLIENT_ID_PROD }}
         run: |
           set -euo pipefail
           python - <<'PY' >> "$GITHUB_OUTPUT"
@@ -194,11 +197,11 @@ jobs:
           env = os.environ["TARGET_ENVIRONMENT"]
           cfg = data["environments"][env]
           mapping = {
-              "dev": ("fly-api-dev-deploy", "fly-app-dev-deploy", "github-actions:fly-dev"),
-              "hml": ("fly-api-hml-deploy", "fly-app-hml-deploy", "github-actions:fly-staging"),
-              "prod": ("fly-api-prod-deploy", "fly-app-prod-deploy", "github-actions:fly-production"),
+              "dev": ("fly-api-dev-deploy", "fly-app-dev-deploy", "github-actions:fly-dev", os.environ.get("CCP_AZURE_CLIENT_ID_DEV", "")),
+              "hml": ("fly-api-hml-deploy", "fly-app-hml-deploy", "github-actions:fly-staging", os.environ.get("CCP_AZURE_CLIENT_ID_HML", "")),
+              "prod": ("fly-api-prod-deploy", "fly-app-prod-deploy", "github-actions:fly-production", os.environ.get("CCP_AZURE_CLIENT_ID_PROD", "")),
           }
-          api_credential_id, frontend_credential_id, consumer = mapping[env]
+          api_credential_id, frontend_credential_id, consumer, azure_client_id = mapping[env]
           print(f"api_url={cfg['api_url']}")
           print(f"frontend_url={cfg['frontend_url']}")
           print(f"fly_config={cfg['fly_config']}")
@@ -209,6 +212,7 @@ jobs:
           print(f"api_credential_id={api_credential_id}")
           print(f"frontend_credential_id={frontend_credential_id}")
           print(f"credential_consumer={consumer}")
+          print(f"azure_client_id={azure_client_id}")
           PY
       - name: Resolver credencial Fly da API
         uses: ./.github/actions/resolve-managed-credential
@@ -217,7 +221,7 @@ jobs:
           consumer: ${{ steps.env.outputs.credential_consumer }}
           export-env: FLY_API_TOKEN
           vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
-          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          azure-client-id: ${{ steps.env.outputs.azure_client_id }}
           azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
           azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           evidence-path: audit/fly-enterprise-api-${{ matrix.target_environment }}.json
@@ -286,7 +290,7 @@ jobs:
           consumer: ${{ steps.env.outputs.credential_consumer }}
           export-env: FLY_API_TOKEN
           vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
-          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          azure-client-id: ${{ steps.env.outputs.azure_client_id }}
           azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
           azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           evidence-path: audit/fly-enterprise-frontend-${{ matrix.target_environment }}.json
