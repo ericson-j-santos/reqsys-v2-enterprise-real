@@ -2,8 +2,8 @@
 """Entry point governado do PR Quality Review.
 
 Corrige a classificação de arquivos sensíveis sem alterar a API do analisador
-legado. Arquivos de código ou documentação cujo nome contém palavras como
-``secret`` ou ``token`` não são segredos por si só. O bloqueio crítico deve
+legado. Arquivos de código, automação ou documentação cujo nome contém palavras
+como ``secret`` ou ``token`` não são segredos por si só. O bloqueio crítico deve
 ocorrer apenas para artefatos com formato e nome compatíveis com material
 sensível real.
 """
@@ -35,6 +35,10 @@ _SAFE_CODE_AND_DOC_EXTENSIONS = {
     ".txt",
     ".vue",
 }
+_SAFE_AUTOMATION_PREFIXES = (
+    ".github/actions/",
+    ".github/workflows/",
+)
 _SENSITIVE_EXTENSIONS = {".key", ".p12", ".pfx", ".pem"}
 _SENSITIVE_CONFIG_EXTENSIONS = {"", ".conf", ".ini", ".json", ".toml", ".yaml", ".yml"}
 _EXACT_SENSITIVE_NAMES = {
@@ -64,6 +68,8 @@ def _is_sensitive(self: review.ChangedFile) -> bool:
     name = Path(lowered).name
     suffix = Path(name).suffix.lower()
 
+    if lowered.startswith(_SAFE_AUTOMATION_PREFIXES):
+        return False
     if lowered in _SAFE_PUBLIC_ARTIFACTS:
         return False
     if any(lowered.endswith(template_suffix) for template_suffix in review.SAFE_TEMPLATE_SUFFIXES):
