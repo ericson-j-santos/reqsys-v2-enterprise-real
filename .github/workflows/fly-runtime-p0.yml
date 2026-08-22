@@ -26,6 +26,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   validate-config:
@@ -77,13 +78,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolver credencial Fly API produção
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-prod-deploy
+          consumer: github-actions:fly-production
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/fly-runtime-p0-credential-resolution.json
+
       - name: Setup Flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy --remote-only --config fly.toml
+
+      - name: Publicar evidência de credencial
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly-runtime-p0-credential-${{ github.run_id }}-${{ github.run_attempt }}
+          path: audit/fly-runtime-p0-credential-resolution.json
+          if-no-files-found: warn
+          retention-days: 30
 
   public-smoke:
     name: Public runtime smoke
