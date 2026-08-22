@@ -162,7 +162,7 @@ def test_criar_job_publica_evento_e_retorna_metadata(monkeypatch):
     )
     response = ocr_review.criar_job_ocr(payload, user={'sub': 'admin'}, x_correlation_id='corr-001')
     assert response['data']['status_revisao'] == 'PENDENTE'
-    assert response['correlation_id'] == 'corr-001'
+    assert response['meta']['correlation_id'] == 'corr-001'
 
 
 def test_criar_job_mapeia_dlq_para_422(monkeypatch):
