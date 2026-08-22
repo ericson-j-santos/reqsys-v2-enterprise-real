@@ -29,6 +29,7 @@ from app.api import (
     incidentes,
     monitoramento_operacional,
     movimento_email,
+    ocr_review,
     operational_autonomy,
     operational_intelligence,
     pipeline,
@@ -146,6 +147,7 @@ app.include_router(govbi.router)
 app.include_router(github_merge_console.router)
 app.include_router(rag_governado.router)
 app.include_router(operational_autonomy.router)
+app.include_router(ocr_review.router)
 
 
 @app.middleware('http')
