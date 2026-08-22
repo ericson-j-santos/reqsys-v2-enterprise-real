@@ -1,11 +1,61 @@
 {
-  "schema_version": "1.0.0",
-  "policy": "public-datasets-are-opt-in; PR CI uses deterministic synthetic corpus",
+  "schema_version": "1.1.0",
+  "policy": "datasets restritos exigem contexto permitido e aceite explícito; CI corporativo permanece fail-closed",
   "datasets": [
-    {"id":"ibge-nomes","purpose":"vocabulário de nomes brasileiros para geração sintética, nunca autocorreção","source":"https://servicodados.ibge.gov.br/api/docs/nomes?versao=2","mode":"metadata/generator","automation":"supported: scripts/ocr_benchmark.py fetch-ibge","license_note":"Fonte oficial pública; snapshot usado apenas para vocabulário de geração sintética."},
-    {"id":"cin-modelo-informacional","purpose":"layout/campos oficiais para templates sintéticos sem validade documental","source":"https://www.gov.br/governodigital/pt-br/identidade/cin/cefic","mode":"template-reference","automation":"template-reference-only","license_note":"Referência oficial; gerar somente AMOSTRA/SEM VALIDADE."},
-    {"id":"midv-2020","purpose":"documentos de identidade sintéticos e variações de captura","source":"https://l3i-share.univ-lr.fr/MIDV2020/midv2020.html","mode":"manual/opt-in","automation":"blocked-by-license-review","license_note":"Acesso exige aceite de licença/formulário; não baixar automaticamente no CI."},
-    {"id":"xfund-pt","purpose":"document understanding com português, bounding boxes e pares chave/valor","source":"https://github.com/doc-analysis/XFUND","mode":"manual/opt-in","automation":"blocked-by-license-review","license_note":"CC BY-NC-SA 4.0; não habilitar em CI corporativo/comercial sem validação jurídica."},
-    {"id":"funsd","purpose":"stress test de scans ruidosos e formulários","source":"https://guillaumejaume.github.io/FUNSD/","mode":"manual/opt-in","automation":"blocked-by-license-review","license_note":"Uso não comercial/pesquisa/educação; não habilitar em CI corporativo sem validação jurídica."}
+    {
+      "id": "ibge-nomes",
+      "purpose": "vocabulário de nomes brasileiros para geração sintética, nunca autocorreção",
+      "source": "https://servicodados.ibge.gov.br/api/docs/nomes?versao=2",
+      "mode": "metadata/generator",
+      "license_status": "PUBLIC_OFFICIAL_METADATA",
+      "allowed_contexts": ["corporate-ci", "research-noncommercial"],
+      "requires_human_acceptance": false,
+      "automation": "supported: scripts/ocr_benchmark.py fetch-ibge",
+      "license_note": "Fonte oficial pública; snapshot usado apenas para vocabulário de geração sintética."
+    },
+    {
+      "id": "cin-modelo-informacional",
+      "purpose": "layout/campos oficiais para templates sintéticos sem validade documental",
+      "source": "https://www.gov.br/governodigital/pt-br/identidade/cin/cefic",
+      "mode": "template-reference",
+      "license_status": "PUBLIC_OFFICIAL_REFERENCE",
+      "allowed_contexts": ["corporate-ci", "research-noncommercial"],
+      "requires_human_acceptance": false,
+      "automation": "template-reference-only",
+      "license_note": "Referência oficial; gerar somente AMOSTRA/SEM VALIDADE."
+    },
+    {
+      "id": "midv-2020",
+      "purpose": "documentos de identidade mock e variações de captura",
+      "source": "https://l3i-share.univ-lr.fr/MIDV2020/midv2020.html",
+      "mode": "manual/opt-in",
+      "license_status": "RESTRICTED_EXPLICIT_PERMISSION",
+      "allowed_contexts": ["research-noncommercial"],
+      "requires_human_acceptance": true,
+      "automation": "allowed-only-after-policy-gate",
+      "license_note": "Acesso exige aceite da licença/formulário; L3i exige permissão explícita para atividade comercial."
+    },
+    {
+      "id": "xfund-pt",
+      "purpose": "document understanding em português, bounding boxes e pares chave/valor",
+      "source": "https://github.com/doc-analysis/XFUND",
+      "mode": "manual/opt-in",
+      "license_status": "CC-BY-NC-SA-4.0",
+      "allowed_contexts": ["research-noncommercial"],
+      "requires_human_acceptance": true,
+      "automation": "allowed-only-after-policy-gate",
+      "license_note": "CC BY-NC-SA 4.0; proibido no CI corporativo/comercial sem autorização jurídica específica."
+    },
+    {
+      "id": "funsd",
+      "purpose": "stress test de scans ruidosos e formulários",
+      "source": "https://guillaumejaume.github.io/FUNSD/",
+      "mode": "manual/opt-in",
+      "license_status": "NONCOMMERCIAL_RESEARCH_EDUCATION_ONLY",
+      "allowed_contexts": ["research-noncommercial"],
+      "requires_human_acceptance": true,
+      "automation": "allowed-only-after-policy-gate",
+      "license_note": "Termos limitam o uso a pesquisa/educação não comercial e exigem aceite antes do download."
+    }
   ]
 }

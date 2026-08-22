@@ -42,6 +42,10 @@ test.describe('responsividade padrão ouro — 21 rotas', () => {
 
   for (const viewport of VIEWPORTS) {
     test(`rotas operacionais sem overflow horizontal em ${viewport.name}`, async ({ page }) => {
+      // O cenário valida 20 rotas autenticadas sequencialmente. O timeout padrão de 30s
+      // é insuficiente sob variação normal do runner, embora cada rota tenha limite próprio.
+      test.setTimeout(60_000)
+
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
 
       await page.goto('/login')
@@ -51,9 +55,11 @@ test.describe('responsividade padrão ouro — 21 rotas', () => {
       await loginDemo(page)
 
       for (const rota of ROTAS_RESPONSIVAS.filter((item) => !item.public)) {
-        await page.goto(rota.path)
-        await expect(page.getByTestId(rota.testId)).toBeVisible({ timeout: 15000 })
-        expect(await hasMainHorizontalOverflow(page)).toBe(false)
+        await test.step(`${viewport.name}: ${rota.path}`, async () => {
+          await page.goto(rota.path)
+          await expect(page.getByTestId(rota.testId)).toBeVisible({ timeout: 15000 })
+          expect(await hasMainHorizontalOverflow(page)).toBe(false)
+        })
       }
     })
   }

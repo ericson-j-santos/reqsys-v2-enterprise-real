@@ -32,6 +32,7 @@ import GitHubMergeConsoleView from '../views/GitHubMergeConsoleView.vue'
 import TeamsRecipientPoliciesView from '../views/TeamsRecipientPoliciesView.vue'
 import OperationalDeployView from '../views/OperationalDeployView.vue'
 import SessionManagementView from '../views/SessionManagementView.vue'
+import OcrReviewView from '../views/OcrReviewView.vue'
 import { useAuthStore } from '../stores/auth'
 
 export const routes = [
@@ -78,6 +79,7 @@ export const routes = [
   },
   { path: '/admin/operational-deploy', component: OperationalDeployView, meta: { recurso: 'operational-deploy:admin' } },
   { path: '/admin/session-management', component: SessionManagementView, meta: { recurso: 'security-sessions:admin' } },
+  { path: '/admin/ocr-review', component: OcrReviewView, meta: { recurso: 'ocr-review:admin' } },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { public: true } }
 ]
 const router = createRouter({ history: createWebHistory(), routes })

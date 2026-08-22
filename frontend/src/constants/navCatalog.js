@@ -79,6 +79,7 @@ export const NAV_TEMAS = [
       { to: '/specs', icon: 'mdi-file-code-outline', title: 'Specs SDD', tip: 'Especificações técnicas e contratos de features.' },
       { to: '/governanca', icon: 'mdi-shield-check-outline', title: 'Governança', tip: 'Gates, CI/CD, observabilidade, políticas e evidências.' },
       { to: '/codex', icon: 'mdi-code-braces', title: 'Codex', tip: 'Análise de código com LLM local ou mock, governada pelo ReqSys.' },
+      { to: '/admin/ocr-review', icon: 'mdi-text-box-search-outline', title: 'Revisão OCR', tip: 'Revisar resultados OCR abaixo do limiar AUTO com PII criptografada e decisão auditável.' },
       { to: '/admin/operational-deploy', icon: 'mdi-rocket-launch-outline', title: 'Central operacional', tip: 'Publicar backend e frontend em DEV com confirmação governada, evidência e sem expor credenciais.' },
       { to: '/admin/session-management', icon: 'mdi-account-lock-outline', title: 'Sessões', tip: 'Atualizar permissões e invalidar sessões humanas de forma governada.' },
       { to: '/admin/github-merge', icon: 'mdi-source-merge', title: 'Merge GitHub', tip: 'Executar e acompanhar merge assíncrono governado de PRs empilhadas.' },

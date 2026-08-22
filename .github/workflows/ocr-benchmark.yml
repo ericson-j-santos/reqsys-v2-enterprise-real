@@ -4,8 +4,13 @@ on:
     paths:
       - 'backend/ocr_evidencia/**'
       - 'backend/app/ocr/**'
+      - 'backend/app/api/ocr_review.py'
       - 'backend/ocr_tests/**'
-      - 'scripts/ocr_benchmark.py'
+      - 'frontend/src/views/OcrReviewView.vue'
+      - 'frontend/src/services/ocrReview.js'
+      - 'frontend/src/router/index.js'
+      - 'frontend/src/constants/navCatalog.js'
+      - 'scripts/ocr_*.py'
       - 'benchmark/ocr/**'
       - '.github/workflows/ocr-benchmark.yml'
       - 'backend/Dockerfile'
@@ -24,11 +29,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Testar bounded context e contrato das métricas
+      - name: Instalar dependências mínimas do contrato OCR
         working-directory: backend
         run: |
-          python -m pip install --disable-pip-version-check pytest==9.0.3
-          pytest -q ocr_tests
+          python -m pip install --disable-pip-version-check \
+            pytest==9.0.3 \
+            sqlalchemy==2.0.41 \
+            cryptography==50.0.0 \
+            pydantic==2.13.4 \
+            pydantic-settings==2.7.1
+      - name: Testar bounded context, criptografia e políticas
+        working-directory: backend
+        run: pytest -q ocr_tests
+      - name: Provar fail-closed de datasets restritos no CI corporativo
+        run: |
+          set +e
+          python scripts/ocr_dataset_policy.py midv-2020 --context corporate-ci --accepted; midv=$?
+          python scripts/ocr_dataset_policy.py xfund-pt --context corporate-ci --accepted; xfund=$?
+          python scripts/ocr_dataset_policy.py funsd --context corporate-ci --accepted; funsd=$?
+          set -e
+          test "$midv" -eq 3
+          test "$xfund" -eq 3
+          test "$funsd" -eq 3
   synthetic-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 12
