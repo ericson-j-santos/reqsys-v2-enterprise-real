@@ -8,7 +8,10 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/stg-blocking-policy-authorization.yml"
+      - ".github/workflows/stg-enforcement-approval.yml"
       - ".github/workflows/stg-temporary-exception-retirement.yml"
+      - ".github/workflows/governed-pr-sync.yml"
+      - "scripts/build_stg_enforcement_approval.py"
 
 permissions:
   contents: read
@@ -18,50 +21,86 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate-expiry:
+  validate-retirement:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate temporary exception lifecycle
-        id: lifecycle
+      - name: Validate permanent retirement guardrails
         run: |
           set -euo pipefail
           mkdir -p artifacts/stg-temporary-exception-retirement
           python - <<'PY'
           import json
-          import re
           from datetime import datetime, timezone
           from pathlib import Path
 
-          workflow = Path('.github/workflows/stg-blocking-policy-authorization.yml')
-          text = workflow.read_text(encoding='utf-8')
-          match = re.search(r'TEMPORARY_EXCEPTION_EXPIRES_AT:\s*"([^"]+)"', text)
-          if not match:
-              raise SystemExit('temporary exception expiry is missing')
+          targets = {
+              '.github/workflows/stg-blocking-policy-authorization.yml': (
+                  'TEMPORARY_EXCEPTION_EXPIRES_AT',
+                  'temporary_exception',
+                  'repository-owner-explicit-request',
+              ),
+              '.github/workflows/stg-enforcement-approval.yml': (
+                  'workflow_run:',
+                  'automatic-temporary',
+                  'default: REQSYS-TEMP-AUTO-APPROVAL',
+                  'github-actions[bot]',
+              ),
+              '.github/workflows/governed-pr-sync.yml': (
+                  'recapture_stg_approval',
+                  'gh workflow run stg-enforcement-approval.yml',
+              ),
+          }
+          violations = []
+          for relative_path, forbidden_tokens in targets.items():
+              text = Path(relative_path).read_text(encoding='utf-8')
+              for token in forbidden_tokens:
+                  if token in text:
+                      violations.append(f'{relative_path}:{token}')
 
-          expires_at = datetime.fromisoformat(match.group(1))
+          blocking_text = Path('.github/workflows/stg-blocking-policy-authorization.yml').read_text(encoding='utf-8')
+          approval_text = Path('.github/workflows/stg-enforcement-approval.yml').read_text(encoding='utf-8')
+          builder_text = Path('scripts/build_stg_enforcement_approval.py').read_text(encoding='utf-8')
+          authorization = json.loads(
+              Path('docs/contracts/stg-blocking-change-authorization.json').read_text(encoding='utf-8')
+          )
+          transition = authorization.get('exception_retirement_transition') or {}
+          required_checks = {
+              'blocking_strict_evidence_only': 'mode=strict_evidence_only' in blocking_text,
+              'blocking_fails_without_artifact': "printf '{}\\n' > .tmp/approval/approval.json" in blocking_text,
+              'approval_manual_dispatch': 'workflow_dispatch:' in approval_text,
+              'approval_authenticated_actor': 'AUTHENTICATED_ACTOR:' in approval_text,
+              'approval_sender_type_user': 'AUTHENTICATED_ACTOR_TYPE:' in approval_text,
+              'approval_pr_binding': '--source-pr-number' in approval_text,
+              'approval_scope_binding': '--approval-scope' in approval_text,
+              'retirement_reference': transition.get('reference') == 'GH-RUN-32615688406',
+              'retirement_base_sha': transition.get('required_base_sha') == '4dd44b064b6099eba78a88ad84d7e465345e11dd',
+              'retirement_head_ref': transition.get('required_head_ref') == 'hotfix/retire-stg-temporary-exception',
+              'retirement_not_reusable': transition.get('reusable') is False,
+              'canonical_maturity_key': 'history.get("stg_enforcement_maturity")' in builder_text,
+              'legacy_maturity_key_absent': 'history.get("stg_maturity")' not in builder_text,
+          }
+          violations.extend(name for name, valid in required_checks.items() if not valid)
+
           now = datetime.now(timezone.utc)
-          expired = now >= expires_at
-          status = 'expired' if expired else 'active'
-          remaining_seconds = max(0, int((expires_at - now).total_seconds()))
-
           report = {
-              'schema_version': '1.0.0',
+              'schema_version': '1.1.0',
               'contract': 'reqsys-stg-temporary-exception-retirement',
               'generated_at': now.isoformat(),
               'git_sha': '${{ github.sha }}',
-              'status': status,
-              'expired': expired,
-              'expires_at': expires_at.isoformat(),
-              'remaining_seconds': remaining_seconds,
+              'status': 'retired' if not violations else 'regression_detected',
+              'temporary_exception_present': bool(violations),
+              'strict_evidence_only': not violations,
               'automatic_deploy': False,
               'automatic_policy_change': False,
+              'checks': required_checks,
+              'violations': violations,
               'next_action': (
-                  'remove_temporary_exception_and_restore_strict_evidence_only'
-                  if expired
-                  else 'preserve_audited_temporary_exception_until_expiry'
+                  'preserve_strict_evidence_only_authorization'
+                  if not violations
+                  else 'remove_regression_and_restore_strict_evidence_only'
               ),
           }
           Path('artifacts/stg-temporary-exception-retirement/report.json').write_text(
@@ -69,23 +108,25 @@ jobs:
               encoding='utf-8',
           )
           print(json.dumps(report, ensure_ascii=False))
-          Path('/tmp/expired').write_text('true' if expired else 'false', encoding='utf-8')
+          if violations:
+              raise SystemExit(f'STG temporary exception retirement regression: {violations}')
           PY
-          echo "expired=$(cat /tmp/expired)" >> "$GITHUB_OUTPUT"
 
-      - name: Publish lifecycle summary
+      - name: Publish retirement summary
         if: always()
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
+
           path = Path('artifacts/stg-temporary-exception-retirement/report.json')
           data = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
               out.write('# STG Temporary Exception Retirement\n\n')
               out.write(f"- Status: **{data.get('status', 'unresolved')}**\n")
-              out.write(f"- Expires at: **{data.get('expires_at', 'unresolved')}**\n")
-              out.write(f"- Remaining seconds: **{data.get('remaining_seconds', 'unresolved')}**\n")
+              out.write(f"- Temporary exception present: **{data.get('temporary_exception_present', 'unresolved')}**\n")
+              out.write(f"- Strict evidence-only: **{data.get('strict_evidence_only', 'unresolved')}**\n")
+              out.write(f"- Violations: **{', '.join(data.get('violations') or []) or 'none'}**\n")
               out.write(f"- Next action: **{data.get('next_action', 'unresolved')}**\n")
               out.write('- Automatic deploy: **disabled**\n')
               out.write('- Automatic policy change: **disabled**\n')
@@ -98,9 +139,3 @@ jobs:
           name: stg-temporary-exception-retirement
           path: artifacts/stg-temporary-exception-retirement/report.json
           retention-days: 365
-
-      - name: Block expired exception
-        if: steps.lifecycle.outputs.expired == 'true'
-        run: |
-          echo "::error::Temporary STG exception expired. Remove the exception and restore strict evidence-only authorization."
-          exit 1

@@ -1,14 +1,14 @@
 {
   "allowed": true,
   "reason": "hotfix_escopo_fechado",
-  "detail": "Hotfix com referencia OPS-GAP-CI-RECOVERY-20260823.",
+  "detail": "Hotfix com referencia GH-RUN-32615688406.",
   "strict_mode": false,
   "canonical_drift_count": 0,
   "contract_drift_count": 0,
   "strict_blocked": false,
   "increment_type": "hotfix",
-  "reference": "OPS-GAP-CI-RECOVERY-20260823",
-  "intent": "corrigir paginação JSON dos workflows Teams e autocópia do lifecycle",
+  "reference": "GH-RUN-32615688406",
+  "intent": "aposentar exceção STG expirada e exigir artifact de aprovação governada",
   "coordenador_state": "yellow",
   "coordenador_decision": "bloquear_novas_frentes_ate_consolidar",
   "increment_gate": {

@@ -20,31 +20,6 @@ on:
         required: false
         default: .github/workflows/environment-promotion-history.yml
         type: string
-      recapture_stg_approval:
-        description: Dispatch STG Enforcement Approval after the SHA changes
-        required: true
-        default: false
-        type: boolean
-      decision:
-        description: Human STG decision used only when recapture is enabled
-        required: false
-        default: approve
-        type: choice
-        options:
-          - approve
-          - reject
-      rationale:
-        description: Human rationale used only when recapture is enabled
-        required: false
-        type: string
-      ticket:
-        description: Governance ticket used only when recapture is enabled
-        required: false
-        type: string
-      history_run_id:
-        description: Successful Environment Promotion History run ID
-        required: false
-        type: string
 
 permissions:
   actions: write
@@ -169,31 +144,6 @@ jobs:
           new_sha="$(git rev-parse HEAD)"
           echo "new_sha=$new_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Dispatch STG approval for the new SHA
-        if: ${{ inputs.recapture_stg_approval }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
-          DECISION: ${{ inputs.decision }}
-          RATIONALE: ${{ inputs.rationale }}
-          TICKET: ${{ inputs.ticket }}
-          HISTORY_RUN_ID: ${{ inputs.history_run_id }}
-        run: |
-          set -euo pipefail
-          test -n "$RATIONALE" || { echo "::error::rationale is required"; exit 1; }
-          test -n "$TICKET" || { echo "::error::ticket is required"; exit 1; }
-          case "$HISTORY_RUN_ID" in
-            ''|*[!0-9]*) echo "::error::history_run_id must be numeric"; exit 1 ;;
-          esac
-
-          gh workflow run stg-enforcement-approval.yml \
-            --ref main \
-            -f decision="$DECISION" \
-            -f policy_pr_number="$PR_NUMBER" \
-            -f rationale="$RATIONALE" \
-            -f ticket="$TICKET" \
-            -f history_run_id="$HISTORY_RUN_ID"
-
       - name: Publish PR audit comment
         if: always()
         env:
@@ -203,7 +153,6 @@ jobs:
           NEW_SHA: ${{ steps.push.outputs.new_sha }}
           BASE_REF: ${{ steps.pr.outputs.base_ref }}
           CONFLICTS: ${{ steps.merge.outputs.conflicts }}
-          RECAPTURE: ${{ inputs.recapture_stg_approval }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -216,10 +165,10 @@ jobs:
           - Previous SHA: \`${OLD_SHA:-unresolved}\`
           - Current SHA: \`${NEW_SHA:-not-pushed}\`
           - Conflicts: \`${CONFLICTS:-not-evaluated}\`
-          - STG approval recapture requested: **${RECAPTURE}**
+          - STG approval recapture: **manual human dispatch required after SHA changes**
           - Execution: ${RUN_URL}
 
-          Automatic resolution is restricted to the explicitly supplied allowlist. Unknown conflicts fail closed.
+          Automatic resolution is restricted to the explicitly supplied allowlist. Unknown conflicts fail closed. This workflow never dispatches or impersonates STG approval.
           EOF
           )
           gh pr comment "$PR_NUMBER" --body "$body"
@@ -236,6 +185,6 @@ jobs:
             echo "- Previous SHA: \`${{ steps.pr.outputs.old_sha }}\`"
             echo "- Current SHA: \`${{ steps.push.outputs.new_sha }}\`"
             echo "- Conflicts: \`${{ steps.merge.outputs.conflicts }}\`"
-            echo "- Approval recapture: **${{ inputs.recapture_stg_approval }}**"
+            echo "- STG approval recapture: **manual human dispatch required**"
             echo "- Fail closed: **enabled**"
           } >> "$GITHUB_STEP_SUMMARY"

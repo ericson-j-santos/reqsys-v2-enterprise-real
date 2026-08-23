@@ -422,7 +422,7 @@ Gates determinísticos (report-only, exceto onde indicado) para promoção gover
 ```bash
 python scripts/evaluate_environment_promotion_gate.py --environment stg --readiness <readiness.json> --flow <flow.json> --output <out.json>  # gate de prontidão por ambiente (exit 1 se bloqueante)
 python scripts/update_environment_promotion_history.py --decision <decision.json> --history <history.json> --output <out.json>  # persiste histórico/maturidade do gate
-python scripts/validate_stg_policy_approval.py --approval <approval.json> --expected-sha <sha> --output <out.json>  # valida artifact de aprovação STG (exit 0/1)
+python scripts/validate_stg_policy_approval.py --approval <approval.json> --expected-sha <sha> --expected-pr-number <pr> --output <out.json>  # valida artifact de aprovação STG (exit 0/1)
 python scripts/build_stg_enforcement_approval.py           # constrói artifact de enforcement/approval STG
 ```
 
@@ -505,12 +505,12 @@ Não considerar um PR pronto para merge quando o E2E responsivo estiver ausente,
 | `Environment Promotion Readiness Gate` | PR (paths), `workflow_dispatch` | Gate de prontidão de promoção por ambiente (dev/stg/prod) |
 | `Environment Promotion History` | `workflow_run`, `workflow_dispatch` | Persiste histórico e maturidade do gate de promoção |
 | `STG Blocking Policy Authorization` | PR (paths), `workflow_dispatch` | Autoriza mudança de política de blocking STG |
-| `STG Enforcement Approval` | `workflow_run`, `workflow_dispatch` | Aprovação break-glass governada do enforcement STG |
+| `STG Enforcement Approval` | `workflow_dispatch` | Aprovação humana governada, vinculada ao PR/SHA, do enforcement STG |
 | `STG Post-Merge Validation` | Push main, PR (paths) | Validação pós-merge auditável dos gates STG |
 | `STG E2E Evidence Freshness Watch` | Agendado, `workflow_dispatch` | Monitora frescor da evidência e2e STG (remediação controlada) |
 | `STG End-to-End Evidence` | `workflow_run`, `workflow_dispatch` | Consolida evidência e2e pós-merge STG |
 | `STG End-to-End Post-Merge Trigger` | Push main, `workflow_dispatch` | Dispara evidência e2e após merge em STG |
-| `STG Temporary Exception Retirement` | Agendado, push main, `workflow_dispatch` | Aposenta automaticamente exceção temporária STG |
+| `STG Temporary Exception Retirement` | Agendado, push main, `workflow_dispatch` | Impede regressão após a aposentadoria permanente da exceção STG |
 | `Governed PR Sync` | `workflow_dispatch` | Sincronização governada de PR com a branch base |
 | `ReqSys Next Increment Auto-Evaluation` | Agendado, push main, `workflow_dispatch` | Avalia automaticamente o próximo incremento seguro |
 | `ReqSys Single State` | Agendado, `workflow_run`, `workflow_dispatch` | Publica fonte determinística do Estado Único ReqSys |

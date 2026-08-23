@@ -11,8 +11,16 @@ on:
       - ".github/workflows/teams-provisional-gold-certification.yml"
       - ".github/workflows/teams-certification-progress-status.yml"
       - ".github/workflows/flow-completion-alert-lifecycle.yml"
+      - ".github/workflows/stg-blocking-policy-authorization.yml"
+      - ".github/workflows/stg-enforcement-approval.yml"
+      - ".github/workflows/stg-temporary-exception-retirement.yml"
+      - ".github/workflows/governed-pr-sync.yml"
       - ".github/workflows/workflow-regression-contracts.yml"
+      - "scripts/build_stg_enforcement_approval.py"
+      - "scripts/validate_stg_policy_approval.py"
       - "scripts/validate_workflow_regression_contracts.py"
+      - "tests/test_build_stg_enforcement_approval.py"
+      - "tests/test_validate_stg_policy_approval.py"
   push:
     branches: [main]
     paths:
@@ -23,8 +31,16 @@ on:
       - ".github/workflows/teams-provisional-gold-certification.yml"
       - ".github/workflows/teams-certification-progress-status.yml"
       - ".github/workflows/flow-completion-alert-lifecycle.yml"
+      - ".github/workflows/stg-blocking-policy-authorization.yml"
+      - ".github/workflows/stg-enforcement-approval.yml"
+      - ".github/workflows/stg-temporary-exception-retirement.yml"
+      - ".github/workflows/governed-pr-sync.yml"
       - ".github/workflows/workflow-regression-contracts.yml"
+      - "scripts/build_stg_enforcement_approval.py"
+      - "scripts/validate_stg_policy_approval.py"
       - "scripts/validate_workflow_regression_contracts.py"
+      - "tests/test_build_stg_enforcement_approval.py"
+      - "tests/test_validate_stg_policy_approval.py"
   workflow_dispatch:
 
 permissions:
@@ -61,5 +77,6 @@ jobs:
             echo "- Falha real do CI estrito permanece bloqueante"
             echo "- Teams: paginação JSON agregada com --slurp"
             echo "- Flow Completion: estado anterior isolado do fallback"
+            echo "- STG: exceção aposentada e aprovação estritamente humana"
             echo "- Resultado: **${{ job.status }}**"
           } >> "$GITHUB_STEP_SUMMARY"
