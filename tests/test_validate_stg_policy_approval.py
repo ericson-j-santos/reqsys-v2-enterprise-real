@@ -6,6 +6,7 @@ def approval(**overrides):
         "contract": "reqsys-stg-enforcement-approval",
         "status": "approved_for_policy_change",
         "requested_decision": "approve",
+        "approval_scope": "policy_change",
         "effective_approval": True,
         "approval_mode": "human_workflow_dispatch",
         "automatic_policy_change": False,
@@ -21,6 +22,8 @@ def approval(**overrides):
             "history_contract_valid": True,
             "maturity_status": "ready_for_human_approval",
             "ready_for_human_approval": True,
+            "policy_change_ready": True,
+            "exception_retirement_evidence_valid": True,
             "criteria_met": True,
             "automatic_change_allowed": False,
             "source_pr_number": 1292,
@@ -36,6 +39,29 @@ def test_valid_approval_authorizes_policy_change():
     result = validate(approval(), "abc123", "42", "1292")
     assert result["valid"] is True
     assert result["decision"] == "authorized"
+
+
+def test_valid_scoped_approval_authorizes_exception_retirement():
+    payload = approval(
+        status="approved_for_exception_retirement",
+        approval_scope="exception_retirement",
+    )
+    payload["evidence"]["maturity_status"] = "collecting_evidence"
+    payload["evidence"]["ready_for_human_approval"] = False
+    payload["evidence"]["criteria_met"] = False
+    payload["evidence"]["policy_change_ready"] = False
+    result = validate(payload, "abc123", "42", "1292", "exception_retirement")
+    assert result["valid"] is True
+    assert result["decision"] == "authorized"
+
+
+def test_retirement_scope_cannot_authorize_policy_change():
+    payload = approval(
+        status="approved_for_exception_retirement",
+        approval_scope="exception_retirement",
+    )
+    result = validate(payload, "abc123", "42", "1292", "policy_change")
+    assert "approval_scope_mismatch" in result["reasons"]
 
 
 def test_missing_artifact_blocks():

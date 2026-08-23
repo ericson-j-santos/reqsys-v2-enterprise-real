@@ -100,6 +100,16 @@ jobs:
               raise SystemExit('temporary STG exception must remain forbidden')
           if authorization.get('approval_binding') != ['source_pr_number', 'source_sha']:
               raise SystemExit('approval must remain bound to PR number and exact SHA')
+          transition = authorization.get('exception_retirement_transition') or {}
+          expected_transition = {
+              'reference': 'GH-RUN-32615688406',
+              'approval_scope': 'exception_retirement',
+              'required_base_sha': '4dd44b064b6099eba78a88ad84d7e465345e11dd',
+              'required_head_ref': 'hotfix/retire-stg-temporary-exception',
+              'reusable': False,
+          }
+          if transition != expected_transition:
+              raise SystemExit('one-time exception retirement transition contract changed')
 
           blocking_text = blocking_workflow_path.read_text(encoding='utf-8')
           approval_text = approval_workflow_path.read_text(encoding='utf-8')
@@ -144,6 +154,8 @@ jobs:
               'approval_human_actor': 'AUTHENTICATED_ACTOR:' in approval_text,
               'approval_sender_type_user': 'AUTHENTICATED_ACTOR_TYPE:' in approval_text,
               'approval_pr_and_sha_bound': '--source-pr-number' in approval_text and '--source-sha' in approval_text,
+              'approval_scope_bound': '--approval-scope' in approval_text and '--expected-scope' in approval_text,
+              'retirement_transition_one_time': 'GH-RUN-32615688406' in approval_text and 'reusable' in approval_text,
               'canonical_maturity_key': 'history.get("stg_enforcement_maturity")' in builder_text,
               'legacy_maturity_key_absent': 'history.get("stg_maturity")' not in builder_text,
               'validator_requires_human_mode': 'approval_mode_not_human_dispatch' in validator_text,

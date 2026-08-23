@@ -12,5 +12,12 @@
   "human_approval_required": true,
   "automated_approval_allowed": false,
   "temporary_exception_allowed": false,
+  "exception_retirement_transition": {
+    "reference": "GH-RUN-32615688406",
+    "approval_scope": "exception_retirement",
+    "required_base_sha": "4dd44b064b6099eba78a88ad84d7e465345e11dd",
+    "required_head_ref": "hotfix/retire-stg-temporary-exception",
+    "reusable": false
+  },
   "fail_closed": true
 }

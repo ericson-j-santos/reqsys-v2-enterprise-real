@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 ALLOWED_DECISIONS = {"approve", "reject"}
+ALLOWED_APPROVAL_SCOPES = {"policy_change", "exception_retirement"}
 EXPECTED_HISTORY_CONTRACT = "reqsys-environment-promotion-history"
 HUMAN_APPROVAL_MODE = "human_workflow_dispatch"
 
@@ -32,6 +33,7 @@ def normalize_text(value: str, field: str, minimum: int = 3) -> str:
 def build_record(
     history: dict[str, Any],
     decision: str,
+    approval_scope: str,
     approver: str,
     approver_type: str,
     rationale: str,
@@ -44,6 +46,9 @@ def build_record(
     decision = decision.strip().lower()
     if decision not in ALLOWED_DECISIONS:
         raise ValueError(f"decision must be one of: {sorted(ALLOWED_DECISIONS)}")
+    approval_scope = approval_scope.strip().lower()
+    if approval_scope not in ALLOWED_APPROVAL_SCOPES:
+        raise ValueError(f"approval_scope must be one of: {sorted(ALLOWED_APPROVAL_SCOPES)}")
 
     maturity = history.get("stg_enforcement_maturity") or {}
     maturity_status = maturity.get("status")
@@ -53,29 +58,46 @@ def build_record(
     valid_count = maturity.get("valid_count")
     blocking_count = maturity.get("blocking_count")
     canonical_history = history.get("contract") == EXPECTED_HISTORY_CONTRACT
-    canonical_window = (
+    canonical_counts = (
         isinstance(required_window, int)
         and not isinstance(required_window, bool)
         and required_window > 0
         and isinstance(observed_window, int)
         and not isinstance(observed_window, bool)
-        and observed_window >= required_window
+        and 0 <= observed_window <= required_window
         and isinstance(approved_count, int)
         and not isinstance(approved_count, bool)
-        and approved_count >= required_window - 1
+        and 0 <= approved_count <= observed_window
         and isinstance(valid_count, int)
         and not isinstance(valid_count, bool)
-        and valid_count >= required_window
+        and 0 <= valid_count <= observed_window
         and isinstance(blocking_count, int)
         and not isinstance(blocking_count, bool)
-        and blocking_count == 0
+        and 0 <= blocking_count <= observed_window
     )
-    evidence_ready = (
+    canonical_maturity = (
         canonical_history
+        and maturity_status in {"ready_for_human_approval", "collecting_evidence"}
+        and maturity.get("automatic_change_allowed") is False
+        and isinstance(maturity.get("criteria_met"), bool)
+        and canonical_counts
+        and (
+            (maturity_status == "ready_for_human_approval" and maturity.get("criteria_met") is True)
+            or (maturity_status == "collecting_evidence" and maturity.get("criteria_met") is False)
+        )
+    )
+    policy_change_ready = (
+        canonical_maturity
         and maturity_status == "ready_for_human_approval"
         and maturity.get("criteria_met") is True
-        and maturity.get("automatic_change_allowed") is False
-        and canonical_window
+        and observed_window >= required_window
+        and approved_count >= required_window - 1
+        and valid_count >= required_window
+        and blocking_count == 0
+    )
+    exception_retirement_ready = canonical_maturity
+    evidence_ready = (
+        policy_change_ready if approval_scope == "policy_change" else exception_retirement_ready
     )
 
     approver = normalize_text(approver, "approver")
@@ -100,17 +122,21 @@ def build_record(
         raise ValueError("temporary automated approval tickets are not accepted")
 
     effective = decision == "approve" and evidence_ready
-    status = (
-        "approved_for_policy_change"
-        if effective
-        else "rejected"
-        if decision == "reject"
-        else "blocked_by_evidence"
-    )
+    if effective:
+        status = (
+            "approved_for_policy_change"
+            if approval_scope == "policy_change"
+            else "approved_for_exception_retirement"
+        )
+    elif decision == "reject":
+        status = "rejected"
+    else:
+        status = "blocked_by_evidence"
     timestamp = generated_at or datetime.now(timezone.utc).isoformat()
 
     canonical = {
         "decision": decision,
+        "approval_scope": approval_scope,
         "approver": approver,
         "approver_type": approver_type,
         "ticket": ticket,
@@ -125,12 +151,13 @@ def build_record(
     ).hexdigest()[:20]
 
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "contract": "reqsys-stg-enforcement-approval",
         "generated_at": timestamp,
         "correlation_id": correlation_id,
         "status": status,
         "requested_decision": decision,
+        "approval_scope": approval_scope,
         "effective_approval": effective,
         "approval_mode": HUMAN_APPROVAL_MODE,
         "automatic_policy_change": False,
@@ -143,7 +170,9 @@ def build_record(
         },
         "evidence": {
             "maturity_status": maturity_status,
-            "ready_for_human_approval": evidence_ready,
+            "ready_for_human_approval": policy_change_ready,
+            "policy_change_ready": policy_change_ready,
+            "exception_retirement_evidence_valid": exception_retirement_ready,
             "history_contract_valid": canonical_history,
             "criteria_met": maturity.get("criteria_met") is True,
             "automatic_change_allowed": maturity.get("automatic_change_allowed"),
@@ -158,6 +187,8 @@ def build_record(
         },
         "next_action": (
             "authorize_bound_policy_pr"
+            if effective and approval_scope == "policy_change"
+            else "retire_expired_exception_on_bound_pr"
             if effective
             else "preserve_current_policy_and_collect_evidence"
             if status == "blocked_by_evidence"
@@ -170,6 +201,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--history", type=Path, required=True)
     parser.add_argument("--decision", required=True)
+    parser.add_argument("--approval-scope", required=True, choices=sorted(ALLOWED_APPROVAL_SCOPES))
     parser.add_argument("--approver", required=True)
     parser.add_argument("--approver-type", required=True)
     parser.add_argument("--rationale", required=True)
@@ -183,6 +215,7 @@ def main() -> int:
     record = build_record(
         history=load_object(args.history),
         decision=args.decision,
+        approval_scope=args.approval_scope,
         approver=args.approver,
         approver_type=args.approver_type,
         rationale=args.rationale,

@@ -63,6 +63,10 @@ jobs:
           blocking_text = Path('.github/workflows/stg-blocking-policy-authorization.yml').read_text(encoding='utf-8')
           approval_text = Path('.github/workflows/stg-enforcement-approval.yml').read_text(encoding='utf-8')
           builder_text = Path('scripts/build_stg_enforcement_approval.py').read_text(encoding='utf-8')
+          authorization = json.loads(
+              Path('docs/contracts/stg-blocking-change-authorization.json').read_text(encoding='utf-8')
+          )
+          transition = authorization.get('exception_retirement_transition') or {}
           required_checks = {
               'blocking_strict_evidence_only': 'mode=strict_evidence_only' in blocking_text,
               'blocking_fails_without_artifact': "printf '{}\\n' > .tmp/approval/approval.json" in blocking_text,
@@ -70,6 +74,11 @@ jobs:
               'approval_authenticated_actor': 'AUTHENTICATED_ACTOR:' in approval_text,
               'approval_sender_type_user': 'AUTHENTICATED_ACTOR_TYPE:' in approval_text,
               'approval_pr_binding': '--source-pr-number' in approval_text,
+              'approval_scope_binding': '--approval-scope' in approval_text,
+              'retirement_reference': transition.get('reference') == 'GH-RUN-32615688406',
+              'retirement_base_sha': transition.get('required_base_sha') == '4dd44b064b6099eba78a88ad84d7e465345e11dd',
+              'retirement_head_ref': transition.get('required_head_ref') == 'hotfix/retire-stg-temporary-exception',
+              'retirement_not_reusable': transition.get('reusable') is False,
               'canonical_maturity_key': 'history.get("stg_enforcement_maturity")' in builder_text,
               'legacy_maturity_key_absent': 'history.get("stg_maturity")' not in builder_text,
           }

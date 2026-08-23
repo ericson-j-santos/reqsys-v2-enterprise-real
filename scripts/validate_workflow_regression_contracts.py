@@ -154,6 +154,13 @@ def validate_stg_strict_evidence_only_authorization() -> None:
         "tipo de ator User": "AUTHENTICATED_ACTOR_TYPE:" in approval_text,
         "vínculo ao PR": "--source-pr-number" in approval_text,
         "vínculo ao SHA": "--source-sha" in approval_text,
+        "vínculo ao escopo": "--approval-scope" in approval_text,
+        "escopo esperado": "--expected-scope" in blocking_text,
+        "transição única": (
+            "GH-RUN-32615688406" in approval_text
+            and "4dd44b064b6099eba78a88ad84d7e465345e11dd" in approval_text
+            and "hotfix/retire-stg-temporary-exception" in approval_text
+        ),
         "maturidade canônica": 'history.get("stg_enforcement_maturity")' in builder_text,
         "chave legada ausente": 'history.get("stg_maturity")' not in builder_text,
         "validador exige modo humano": "approval_mode_not_human_dispatch" in validator_text,

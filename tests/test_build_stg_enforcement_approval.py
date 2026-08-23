@@ -21,6 +21,7 @@ def history(status="ready_for_human_approval"):
 
 def kwargs():
     return {
+        "approval_scope": "policy_change",
         "approver": "github:governance-owner",
         "approver_type": "User",
         "rationale": "Cinco execuções válidas e estabilidade observada.",
@@ -43,6 +44,17 @@ def test_approval_is_blocked_when_maturity_is_not_ready():
     record = build_record(history("collecting_evidence"), decision="approve", **kwargs())
     assert record["status"] == "blocked_by_evidence"
     assert record["effective_approval"] is False
+
+
+def test_exception_retirement_accepts_canonical_collecting_history():
+    inputs = kwargs()
+    inputs["approval_scope"] = "exception_retirement"
+    payload = history("collecting_evidence")
+    payload["stg_enforcement_maturity"]["approved_count"] = 0
+    record = build_record(payload, decision="approve", **inputs)
+    assert record["status"] == "approved_for_exception_retirement"
+    assert record["effective_approval"] is True
+    assert record["next_action"] == "retire_expired_exception_on_bound_pr"
 
 
 def test_rejection_preserves_current_policy():
