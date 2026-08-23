@@ -117,7 +117,7 @@ jobs:
             && [ "$HEAD_REF" = "$expected_head_ref" ]; then
             mapfile -t changed_files < <(
               gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${POLICY_PR}/files?per_page=100" \
-                --jq '.[][] | .filename'
+                | jq -r '.[][] | .filename'
             )
             allowed_files=(
               ".github/workflows/governed-pr-sync.yml"

@@ -117,6 +117,16 @@ def validate_stg_strict_evidence_only_authorization() -> None:
     builder_text = builder_path.read_text(encoding="utf-8")
     validator_text = validator_path.read_text(encoding="utf-8")
 
+    for path, text in ((blocking_path, blocking_text), (approval_path, approval_text)):
+        blocks = re.findall(r"mapfile -t changed_files < <\((.*?)\n\s*\)", text, re.S)
+        if not blocks:
+            fail(f"{path} deve resolver arquivos alterados de forma paginada")
+        for block in blocks:
+            if "--slurp" in block and "--jq" in block:
+                fail(f"{path} não pode combinar opções incompatíveis --slurp e --jq")
+            if "gh api --paginate --slurp" not in block or "| jq -r '.[][] | .filename'" not in block:
+                fail(f"{path} deve agregar páginas antes de extrair nomes de arquivos")
+
     forbidden = {
         str(blocking_path): (
             "TEMPORARY_EXCEPTION_EXPIRES_AT",
