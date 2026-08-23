@@ -104,12 +104,74 @@ def validate_flow_completion_previous_state_isolation() -> None:
         fail("Estado anterior deve preservar fallback JSON vazio")
 
 
+def validate_stg_strict_evidence_only_authorization() -> None:
+    blocking_path = ROOT / ".github/workflows/stg-blocking-policy-authorization.yml"
+    approval_path = ROOT / ".github/workflows/stg-enforcement-approval.yml"
+    sync_path = ROOT / ".github/workflows/governed-pr-sync.yml"
+    builder_path = ROOT / "scripts/build_stg_enforcement_approval.py"
+    validator_path = ROOT / "scripts/validate_stg_policy_approval.py"
+
+    blocking_text = blocking_path.read_text(encoding="utf-8")
+    approval_text = approval_path.read_text(encoding="utf-8")
+    sync_text = sync_path.read_text(encoding="utf-8")
+    builder_text = builder_path.read_text(encoding="utf-8")
+    validator_text = validator_path.read_text(encoding="utf-8")
+
+    forbidden = {
+        str(blocking_path): (
+            "TEMPORARY_EXCEPTION_EXPIRES_AT",
+            "temporary_exception",
+            "repository-owner-explicit-request",
+        ),
+        str(approval_path): (
+            "workflow_run:",
+            "automatic-temporary",
+            "default: REQSYS-TEMP-AUTO-APPROVAL",
+            "github-actions[bot]",
+        ),
+        str(sync_path): (
+            "recapture_stg_approval",
+            "gh workflow run stg-enforcement-approval.yml",
+        ),
+    }
+    texts = {
+        str(blocking_path): blocking_text,
+        str(approval_path): approval_text,
+        str(sync_path): sync_text,
+    }
+    for path, tokens in forbidden.items():
+        for token in tokens:
+            if token in texts[path]:
+                fail(f"Autorização STG não pode reintroduzir {token!r} em {path}")
+
+    required = {
+        "blocking strict evidence-only": "mode=strict_evidence_only" in blocking_text,
+        "blocking sem artifact falha fechado": (
+            "printf '{}\\n' > .tmp/approval/approval.json" in blocking_text
+        ),
+        "aprovação somente manual": "workflow_dispatch:" in approval_text,
+        "ator GitHub autenticado": "AUTHENTICATED_ACTOR:" in approval_text,
+        "tipo de ator User": "AUTHENTICATED_ACTOR_TYPE:" in approval_text,
+        "vínculo ao PR": "--source-pr-number" in approval_text,
+        "vínculo ao SHA": "--source-sha" in approval_text,
+        "maturidade canônica": 'history.get("stg_enforcement_maturity")' in builder_text,
+        "chave legada ausente": 'history.get("stg_maturity")' not in builder_text,
+        "validador exige modo humano": "approval_mode_not_human_dispatch" in validator_text,
+        "validador exige ator User": "approval_actor_type_not_user" in validator_text,
+        "sync exige recaptura humana": "manual human dispatch required" in sync_text,
+    }
+    missing = [name for name, present in required.items() if not present]
+    if missing:
+        fail(f"Guardrails STG obrigatórios ausentes: {', '.join(missing)}")
+
+
 def main() -> int:
     checks = [
         validate_cofre_runtime_gate,
         validate_pr_evidence_gate,
         validate_teams_paginated_workflow_queries,
         validate_flow_completion_previous_state_isolation,
+        validate_stg_strict_evidence_only_authorization,
     ]
     failures: list[str] = []
     for check in checks:

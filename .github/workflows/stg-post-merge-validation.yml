@@ -5,16 +5,24 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/stg-*.yml"
+      - ".github/workflows/governed-pr-sync.yml"
       - "docs/contracts/environment-promotion-policy-v1.json"
       - "docs/contracts/stg-blocking-change-authorization.json"
+      - "docs/contracts/stg-enforcement-approval.md"
+      - "scripts/build_stg_enforcement_approval.py"
       - "scripts/validate_stg_policy_approval.py"
+      - "tests/test_build_stg_enforcement_approval.py"
       - "tests/test_validate_stg_policy_approval.py"
   pull_request:
     paths:
       - ".github/workflows/stg-*.yml"
+      - ".github/workflows/governed-pr-sync.yml"
       - "docs/contracts/environment-promotion-policy-v1.json"
       - "docs/contracts/stg-blocking-change-authorization.json"
+      - "docs/contracts/stg-enforcement-approval.md"
+      - "scripts/build_stg_enforcement_approval.py"
       - "scripts/validate_stg_policy_approval.py"
+      - "tests/test_build_stg_enforcement_approval.py"
       - "tests/test_validate_stg_policy_approval.py"
   workflow_dispatch:
 
@@ -40,9 +48,9 @@ jobs:
         run: python -m pip install --disable-pip-version-check "pytest>=8.2,<9" "PyYAML>=6,<7"
 
       - name: Run focused approval tests
-        run: python -m pytest -q tests/test_validate_stg_policy_approval.py
+        run: python -m pytest -q tests/test_build_stg_enforcement_approval.py tests/test_validate_stg_policy_approval.py
 
-      - name: Validate contracts, workflow syntax and temporary guardrails
+      - name: Validate contracts, workflow syntax and permanent guardrails
         run: |
           set -euo pipefail
           mkdir -p artifacts/stg-post-merge-validation
@@ -56,11 +64,21 @@ jobs:
           authorization_path = Path('docs/contracts/stg-blocking-change-authorization.json')
           blocking_workflow_path = Path('.github/workflows/stg-blocking-policy-authorization.yml')
           approval_workflow_path = Path('.github/workflows/stg-enforcement-approval.yml')
+          retirement_workflow_path = Path('.github/workflows/stg-temporary-exception-retirement.yml')
+          sync_workflow_path = Path('.github/workflows/governed-pr-sync.yml')
+          builder_path = Path('scripts/build_stg_enforcement_approval.py')
+          validator_path = Path('scripts/validate_stg_policy_approval.py')
 
           policy = json.loads(policy_path.read_text(encoding='utf-8'))
           authorization = json.loads(authorization_path.read_text(encoding='utf-8'))
 
-          for workflow_path in (blocking_workflow_path, approval_workflow_path):
+          workflow_paths = (
+              blocking_workflow_path,
+              approval_workflow_path,
+              retirement_workflow_path,
+              sync_workflow_path,
+          )
+          for workflow_path in workflow_paths:
               parsed = yaml.safe_load(workflow_path.read_text(encoding='utf-8'))
               if not isinstance(parsed, dict):
                   raise SystemExit(f'invalid workflow document: {workflow_path}')
@@ -74,32 +92,79 @@ jobs:
               raise SystemExit('authorization contract must remain fail closed')
           if authorization.get('human_approval_required') is not True:
               raise SystemExit('human approval contract must remain enabled')
+          if authorization.get('required_approval_mode') != 'human_workflow_dispatch':
+              raise SystemExit('approval contract must require human workflow dispatch')
+          if authorization.get('automated_approval_allowed') is not False:
+              raise SystemExit('automated STG approval must remain forbidden')
+          if authorization.get('temporary_exception_allowed') is not False:
+              raise SystemExit('temporary STG exception must remain forbidden')
+          if authorization.get('approval_binding') != ['source_pr_number', 'source_sha']:
+              raise SystemExit('approval must remain bound to PR number and exact SHA')
 
           blocking_text = blocking_workflow_path.read_text(encoding='utf-8')
-          expected_expiry = '2026-08-05T23:59:59+00:00'
-          if f'TEMPORARY_EXCEPTION_EXPIRES_AT: "{expected_expiry}"' not in blocking_text:
-              raise SystemExit('temporary exception expiry changed or missing')
-          if "'automatic_deploy': False" not in blocking_text:
-              raise SystemExit('temporary approval must explicitly disable automatic deploy')
-          if "'automatic_policy_change': False" not in blocking_text:
-              raise SystemExit('temporary approval must explicitly disable automatic policy change')
+          approval_text = approval_workflow_path.read_text(encoding='utf-8')
+          sync_text = sync_workflow_path.read_text(encoding='utf-8')
+          builder_text = builder_path.read_text(encoding='utf-8')
+          validator_text = validator_path.read_text(encoding='utf-8')
+
+          forbidden = {
+              str(blocking_workflow_path): (
+                  'TEMPORARY_EXCEPTION_EXPIRES_AT',
+                  'temporary_exception',
+                  'repository-owner-explicit-request',
+              ),
+              str(approval_workflow_path): (
+                  'workflow_run:',
+                  'automatic-temporary',
+                  'default: REQSYS-TEMP-AUTO-APPROVAL',
+                  'github-actions[bot]',
+              ),
+              str(sync_workflow_path): (
+                  'recapture_stg_approval',
+                  'gh workflow run stg-enforcement-approval.yml',
+              ),
+          }
+          violations = []
+          for relative_path, tokens in forbidden.items():
+              text = Path(relative_path).read_text(encoding='utf-8')
+              violations.extend(f'{relative_path}:{token}' for token in tokens if token in text)
+          if violations:
+              raise SystemExit(f'temporary or automated STG approval regression: {violations}')
+
+          checks = {
+              'contracts_loaded': True,
+              'focused_tests_executed': True,
+              'workflow_yaml_valid': True,
+              'stg_blocking': True,
+              'human_approval_required': True,
+              'fail_closed': True,
+              'temporary_exception_retired': True,
+              'blocking_strict_evidence_only': 'mode=strict_evidence_only' in blocking_text,
+              'approval_manual_dispatch': 'workflow_dispatch:' in approval_text,
+              'approval_human_actor': 'AUTHENTICATED_ACTOR:' in approval_text,
+              'approval_sender_type_user': 'AUTHENTICATED_ACTOR_TYPE:' in approval_text,
+              'approval_pr_and_sha_bound': '--source-pr-number' in approval_text and '--source-sha' in approval_text,
+              'canonical_maturity_key': 'history.get("stg_enforcement_maturity")' in builder_text,
+              'legacy_maturity_key_absent': 'history.get("stg_maturity")' not in builder_text,
+              'validator_requires_human_mode': 'approval_mode_not_human_dispatch' in validator_text,
+              'validator_requires_user_actor_type': 'approval_actor_type_not_user' in validator_text,
+              'sync_never_recaptures_approval': 'manual human dispatch required' in sync_text,
+              'automatic_deploy_disabled': True,
+              'automatic_policy_change_disabled': True,
+          }
+          failed = [name for name, valid in checks.items() if not valid]
+          if failed:
+              raise SystemExit(f'STG permanent guardrail checks failed: {failed}')
 
           report = {
-              'schema_version': '1.0.0',
+              'schema_version': '1.1.0',
               'contract': 'reqsys-stg-post-merge-validation',
               'generated_at': datetime.now(timezone.utc).isoformat(),
               'git_sha': '${{ github.sha }}',
               'event_name': '${{ github.event_name }}',
               'valid': True,
-              'checks': {
-                  'contracts_loaded': True,
-                  'focused_tests_executed': True,
-                  'workflow_yaml_valid': True,
-                  'temporary_exception_expires_at': expected_expiry,
-                  'automatic_deploy_disabled': True,
-                  'automatic_policy_change_disabled': True,
-                  'fail_closed': True,
-              },
+              'authorization_mode': 'strict_evidence_only',
+              'checks': checks,
           }
           Path('artifacts/stg-post-merge-validation/report.json').write_text(
               json.dumps(report, indent=2, ensure_ascii=False) + '\n',
@@ -118,7 +183,9 @@ jobs:
             echo "- Contracts: **validated**"
             echo "- Focused approval tests: **executed**"
             echo "- Workflow syntax: **validated**"
-            echo "- Temporary exception expiry: **2026-08-05T23:59:59+00:00**"
+            echo "- Temporary exception: **retired**"
+            echo "- Authorization mode: **strict evidence-only**"
+            echo "- Human approval: **required**"
             echo "- Automatic deploy: **disabled**"
             echo "- Automatic policy change: **disabled**"
             echo "- Fail closed: **enabled**"
