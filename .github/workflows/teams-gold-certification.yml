@@ -61,7 +61,7 @@ jobs:
           def workflow_runs(filename: str) -> list[dict]:
               completed = subprocess.run(
                   [
-                      "gh", "api", "--paginate",
+                      "gh", "api", "--paginate", "--slurp",
                       f"repos/{repository}/actions/workflows/{filename}/runs?per_page=100",
                   ],
                   text=True,
@@ -70,11 +70,9 @@ jobs:
               )
               if completed.returncode != 0:
                   raise SystemExit(completed.stderr or f"Falha ao consultar {filename}")
+              pages = json.loads(completed.stdout)
               results: list[dict] = []
-              for document in completed.stdout.splitlines():
-                  if not document.strip():
-                      continue
-                  payload = json.loads(document)
+              for payload in pages:
                   for run in payload.get("workflow_runs", []):
                       created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
                       if created >= cutoff and run.get("status") == "completed":

@@ -7,6 +7,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+TEAMS_PAGINATED_WORKFLOWS = (
+    ".github/workflows/teams-notification-slo.yml",
+    ".github/workflows/teams-gold-certification.yml",
+    ".github/workflows/teams-provisional-gold-certification.yml",
+    ".github/workflows/teams-certification-progress-status.yml",
+)
 
 
 def fail(message: str) -> None:
@@ -70,8 +76,41 @@ def validate_pr_evidence_gate() -> None:
         fail("Falha real do CI estrito deve continuar bloqueante")
 
 
+def validate_teams_paginated_workflow_queries() -> None:
+    for relative_path in TEAMS_PAGINATED_WORKFLOWS:
+        text = (ROOT / relative_path).read_text(encoding="utf-8")
+        paginate_count = text.count('"--paginate"') + text.count("'--paginate'")
+        slurp_count = text.count('"--slurp"') + text.count("'--slurp'")
+
+        if paginate_count == 0:
+            fail(f"Consulta paginada ausente em {relative_path}")
+        if slurp_count < paginate_count:
+            fail(f"Toda consulta --paginate deve usar --slurp em {relative_path}")
+        if ".stdout.splitlines()" in text:
+            fail(f"Saída JSON paginada não pode ser separada por linhas em {relative_path}")
+        if not re.search(r"json\.loads\((?:completed|result)\.stdout\)", text):
+            fail(f"Lista de páginas JSON deve ser decodificada integralmente em {relative_path}")
+
+
+def validate_flow_completion_previous_state_isolation() -> None:
+    relative_path = ".github/workflows/flow-completion-alert-lifecycle.yml"
+    text = (ROOT / relative_path).read_text(encoding="utf-8")
+
+    if "unzip -oq .tmp/previous.zip -d .tmp/previous/artifact" not in text:
+        fail("Artifact anterior deve ser extraído fora do state.json de fallback")
+    if "find .tmp/previous/artifact" not in text:
+        fail("Busca do estado anterior deve permanecer isolada no diretório do artifact")
+    if 'echo \'{}\' > .tmp/previous/state.json' not in text:
+        fail("Estado anterior deve preservar fallback JSON vazio")
+
+
 def main() -> int:
-    checks = [validate_cofre_runtime_gate, validate_pr_evidence_gate]
+    checks = [
+        validate_cofre_runtime_gate,
+        validate_pr_evidence_gate,
+        validate_teams_paginated_workflow_queries,
+        validate_flow_completion_previous_state_isolation,
+    ]
     failures: list[str] = []
     for check in checks:
         try:
