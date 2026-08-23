@@ -6,6 +6,11 @@ on:
     paths:
       - ".github/workflows/cofre-runtime-evidence-gate.yml"
       - ".github/workflows/pr-evidence-gate.yml"
+      - ".github/workflows/teams-notification-slo.yml"
+      - ".github/workflows/teams-gold-certification.yml"
+      - ".github/workflows/teams-provisional-gold-certification.yml"
+      - ".github/workflows/teams-certification-progress-status.yml"
+      - ".github/workflows/flow-completion-alert-lifecycle.yml"
       - ".github/workflows/workflow-regression-contracts.yml"
       - "scripts/validate_workflow_regression_contracts.py"
   push:
@@ -13,6 +18,11 @@ on:
     paths:
       - ".github/workflows/cofre-runtime-evidence-gate.yml"
       - ".github/workflows/pr-evidence-gate.yml"
+      - ".github/workflows/teams-notification-slo.yml"
+      - ".github/workflows/teams-gold-certification.yml"
+      - ".github/workflows/teams-provisional-gold-certification.yml"
+      - ".github/workflows/teams-certification-progress-status.yml"
+      - ".github/workflows/flow-completion-alert-lifecycle.yml"
       - ".github/workflows/workflow-regression-contracts.yml"
       - "scripts/validate_workflow_regression_contracts.py"
   workflow_dispatch:
@@ -49,5 +59,7 @@ jobs:
             echo "- Cofre: runner.temp restrito ao escopo do job"
             echo "- Evidence Gate: timeout transitório não vira falha definitiva"
             echo "- Falha real do CI estrito permanece bloqueante"
+            echo "- Teams: paginação JSON agregada com --slurp"
+            echo "- Flow Completion: estado anterior isolado do fallback"
             echo "- Resultado: **${{ job.status }}**"
           } >> "$GITHUB_STEP_SUMMARY"

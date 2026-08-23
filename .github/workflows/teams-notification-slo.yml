@@ -51,7 +51,7 @@ jobs:
 
           completed = subprocess.run(
               [
-                  "gh", "api", "--paginate",
+                  "gh", "api", "--paginate", "--slurp",
                   f"repos/{repository}/actions/workflows/{workflow_file}/runs?per_page=100",
               ],
               text=True,
@@ -61,11 +61,9 @@ jobs:
           if completed.returncode != 0:
               raise SystemExit(completed.stderr or "Falha ao consultar execuções do workflow Teams")
 
+          pages = json.loads(completed.stdout)
           runs = []
-          for document in completed.stdout.splitlines():
-              if not document.strip():
-                  continue
-              payload = json.loads(document)
+          for payload in pages:
               for run in payload.get("workflow_runs", []):
                   created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
                   if created >= cutoff and run.get("status") == "completed":
