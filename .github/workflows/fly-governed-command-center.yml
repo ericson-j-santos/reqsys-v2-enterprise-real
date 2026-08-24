@@ -44,6 +44,7 @@ on:
 permissions:
   contents: read
   actions: read
+  id-token: write
 
 concurrency:
   group: fly-governed-command-center-${{ github.event.inputs.app_name }}-${{ github.event.inputs.environment }}
@@ -74,9 +75,10 @@ jobs:
         needs.production-gate.result == 'skipped'
       )
     timeout-minutes: 20
+    environment:
+      name: ${{ github.event.inputs.environment == 'production' && 'production' || github.event.inputs.environment == 'homologation' && 'staging' || 'development' }}
 
     env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       APP_NAME: ${{ github.event.inputs.app_name }}
       TARGET_ENVIRONMENT: ${{ github.event.inputs.environment }}
       COMMAND: ${{ github.event.inputs.command }}
@@ -87,6 +89,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Autenticar Azure por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND }}
+          tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolver token Fly (bootstrap/controlador) do Key Vault
+        shell: bash
+        run: |
+          set -euo pipefail
+          value="$(az keyvault secret show \
+            --vault-name "${{ vars.REQSYS_KEY_VAULT_NAME }}" \
+            --name reqsys-fly-control-plane-org-token \
+            --query value -o tsv)"
+          if [ -z "$value" ]; then
+            echo "::error::Token Fly ausente no Key Vault (reqsys-fly-control-plane-org-token)."
+            exit 2
+          fi
+          echo "::add-mask::$value"
+          echo "FLY_API_TOKEN=$value" >> "$GITHUB_ENV"
 
       - name: Instalar flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
@@ -132,8 +156,8 @@ jobs:
           echo "Correlation ID: ${CORRELATION_ID}" | tee -a "${REPORT_DIR}/validation.txt"
 
           if [ -z "${FLY_API_TOKEN:-}" ]; then
-            echo "ERRO: FLY_API_TOKEN ausente nos GitHub Actions Secrets." | tee -a "${REPORT_DIR}/validation.txt"
-            echo "Ação requerida: cadastrar secret FLY_API_TOKEN no repositório ou organização." | tee -a "${REPORT_DIR}/validation.txt"
+            echo "ERRO: FLY_API_TOKEN não foi resolvido a partir do Key Vault." | tee -a "${REPORT_DIR}/validation.txt"
+            echo "Ação requerida: verificar reqsys-fly-control-plane-org-token no Key Vault e o RBAC do reader." | tee -a "${REPORT_DIR}/validation.txt"
             exit 1
           fi
 
