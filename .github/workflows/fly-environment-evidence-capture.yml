@@ -53,6 +53,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: fly-environment-evidence-${{ inputs.environment }}-${{ inputs.expected_sha }}
@@ -115,9 +116,47 @@ jobs:
           print(f"frontend_app={cfg['frontend_app']}")
           PY
 
-      - name: Capture sanitized Fly state
+      - name: Resolver identidade Fly do ambiente
+        id: identity
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          case "$TARGET_ENVIRONMENT" in
+            dev)
+              echo "credential-id=fly-api-dev-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-dev" >> "$GITHUB_OUTPUT"
+              echo "azure-client-id=${{ vars.CCP_AZURE_CLIENT_ID_DEV }}" >> "$GITHUB_OUTPUT"
+              ;;
+            hml)
+              echo "credential-id=fly-api-hml-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-staging" >> "$GITHUB_OUTPUT"
+              echo "azure-client-id=${{ vars.CCP_AZURE_CLIENT_ID_HML }}" >> "$GITHUB_OUTPUT"
+              ;;
+            prod)
+              echo "credential-id=fly-api-prod-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-production" >> "$GITHUB_OUTPUT"
+              echo "azure-client-id=${{ vars.CCP_AZURE_CLIENT_ID_PROD }}" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Ambiente invalido: $TARGET_ENVIRONMENT" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Resolver credencial Fly API
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: ${{ steps.identity.outputs.credential-id }}
+          consumer: ${{ steps.identity.outputs.consumer }}
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ steps.identity.outputs.azure-client-id }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: ${{ env.ARTIFACT_DIR }}/credential-resolution.json
+
+      - name: Capture sanitized Fly state
         run: |
           set -euo pipefail
           python scripts/capture_fly_environment_state.py \
