@@ -62,6 +62,7 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    environment: development
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       configured: ${{ steps.plan.outputs.configured }}
