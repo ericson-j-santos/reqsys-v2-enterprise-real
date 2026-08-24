@@ -50,12 +50,18 @@ on:
       - 'backend/app/api/auth.py'
       - 'backend/app/core/config.py'
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   configurar-auth-azure-manual:
     name: Configurar secrets Fly e validar Azure AD — manual
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    environment:
+      name: ${{ inputs.app_env == 'production' && 'production' || inputs.app_env == 'staging' && 'staging' || 'development' }}
 
     steps:
       - name: Checkout
@@ -89,9 +95,48 @@ jobs:
       - name: Instalar flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Resolver identidade Fly do ambiente
+        id: identity
+        env:
+          APP_ENV: ${{ inputs.app_env }}
+        run: |
+          set -euo pipefail
+          case "$APP_ENV" in
+            development)
+              echo "credential-id=fly-api-dev-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-dev" >> "$GITHUB_OUTPUT"
+              echo "azure-client-id=${{ vars.CCP_AZURE_CLIENT_ID_DEV }}" >> "$GITHUB_OUTPUT"
+              ;;
+            staging)
+              echo "credential-id=fly-api-hml-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-staging" >> "$GITHUB_OUTPUT"
+              echo "azure-client-id=${{ vars.CCP_AZURE_CLIENT_ID_HML }}" >> "$GITHUB_OUTPUT"
+              ;;
+            production)
+              echo "credential-id=fly-api-prod-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-production" >> "$GITHUB_OUTPUT"
+              echo "azure-client-id=${{ vars.CCP_AZURE_CLIENT_ID_PROD }}" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Ambiente invalido: $APP_ENV" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Resolver credencial Fly API
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: ${{ steps.identity.outputs.credential-id }}
+          consumer: ${{ steps.identity.outputs.consumer }}
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ steps.identity.outputs.azure-client-id }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/configurar-fly-auth-azure-manual-credential-resolution.json
+
       - name: Resolver secrets, configurar Fly e validar
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
           VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
           AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
@@ -135,14 +180,22 @@ jobs:
             fly_app: reqsys-api
             app_public_url: https://reqsys-app.fly.dev
             api_public_url: https://reqsys-api.fly.dev
+            credential_id: fly-api-prod-deploy
+            consumer: github-actions:fly-production
           - environment: staging
             fly_app: reqsys-api-stg
             app_public_url: https://reqsys-app-stg.fly.dev
             api_public_url: https://reqsys-api-stg.fly.dev
+            credential_id: fly-api-hml-deploy
+            consumer: github-actions:fly-staging
           - environment: development
             fly_app: reqsys-api-dev
             app_public_url: https://reqsys-app-dev.fly.dev
             api_public_url: https://reqsys-api-dev.fly.dev
+            credential_id: fly-api-dev-deploy
+            consumer: github-actions:fly-dev
+    environment:
+      name: ${{ matrix.environment }}
 
     steps:
       - name: Checkout
@@ -176,9 +229,20 @@ jobs:
       - name: Instalar flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Resolver credencial Fly API
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: ${{ matrix.credential_id }}
+          consumer: ${{ matrix.consumer }}
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ matrix.environment == 'development' && vars.CCP_AZURE_CLIENT_ID_DEV || matrix.environment == 'staging' && vars.CCP_AZURE_CLIENT_ID_HML || vars.CCP_AZURE_CLIENT_ID_PROD }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/configurar-fly-auth-azure-${{ matrix.environment }}-credential-resolution.json
+
       - name: Resolver secrets, configurar Fly e validar ambiente
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
           VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
           AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
