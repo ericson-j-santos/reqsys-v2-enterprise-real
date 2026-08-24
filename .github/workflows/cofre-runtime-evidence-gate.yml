@@ -24,9 +24,6 @@ on:
         required: false
         type: string
         default: "20"
-    secrets:
-      COFRE_ADMIN_JWT:
-        required: true
 
 permissions:
   contents: read
@@ -119,9 +116,24 @@ jobs:
           echo "::add-mask::$state_key"
           echo "COFRE_STATE_FERNET_KEY=$state_key" >> "$GITHUB_ENV"
 
+      - name: Obter JWT admin via demo login (DEV/STG apenas, produção bloqueada pela API)
+        env:
+          BASE_URL: ${{ needs.validate-inputs.outputs.base_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -sS --fail --max-time 20 -X POST "$BASE_URL/v1/auth/login" \
+            -H "Content-Type: application/json" -d '{}')"
+          token="$(python -c "import json,sys; d=json.loads(sys.argv[1]); print(d.get('data',{}).get('access_token') or '')" "$response")"
+          if [ -z "$token" ]; then
+            echo "::error::Login demo não retornou access_token (verifique ALLOW_DEMO_LOGIN no ambiente)."
+            exit 2
+          fi
+          echo "::add-mask::$token"
+          echo "COFRE_ADMIN_JWT=$token" >> "$GITHUB_ENV"
+
       - name: Validar ciclo antes do restart
         env:
-          COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
           BASE_URL: ${{ needs.validate-inputs.outputs.base_url }}
           TARGET_ENV: ${{ inputs.environment }}
           TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
@@ -185,7 +197,6 @@ jobs:
 
       - name: Validar persistência e cleanup
         env:
-          COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
           BASE_URL: ${{ needs.validate-inputs.outputs.base_url }}
           TARGET_ENV: ${{ inputs.environment }}
           TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
