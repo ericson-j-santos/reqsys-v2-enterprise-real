@@ -17,8 +17,6 @@ on:
     secrets:
       COFRE_ADMIN_JWT:
         required: true
-      FLY_API_TOKEN:
-        required: true
     outputs:
       approved:
         description: Indica que a pré-condição do Cofre foi aprovada
@@ -30,6 +28,7 @@ on:
 permissions:
   contents: read
   actions: read
+  id-token: write
 
 concurrency:
   group: cofre-production-promotion-precondition
@@ -44,7 +43,6 @@ jobs:
       timeout_seconds: ${{ inputs.timeout_seconds }}
     secrets:
       COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
   promotion-guard:
     name: Autorizar promoção após evidência STG
