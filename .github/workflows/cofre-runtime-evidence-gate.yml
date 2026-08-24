@@ -27,12 +27,11 @@ on:
     secrets:
       COFRE_ADMIN_JWT:
         required: true
-      FLY_API_TOKEN:
-        required: true
 
 permissions:
   contents: read
   actions: read
+  id-token: write
 
 concurrency:
   group: cofre-runtime-evidence-${{ github.workflow }}-${{ github.ref_name }}
@@ -50,6 +49,9 @@ jobs:
       base_url: ${{ steps.resolve.outputs.base_url }}
       fly_app: ${{ steps.resolve.outputs.fly_app }}
       github_environment: ${{ steps.resolve.outputs.github_environment }}
+      credential_id: ${{ steps.resolve.outputs.credential_id }}
+      consumer: ${{ steps.resolve.outputs.consumer }}
+      azure_client_id: ${{ steps.resolve.outputs.azure_client_id }}
     steps:
       - name: Resolver ambiente permitido
         id: resolve
@@ -63,11 +65,17 @@ jobs:
               echo "base_url=https://reqsys-api-dev.fly.dev" >> "$GITHUB_OUTPUT"
               echo "fly_app=reqsys-api-dev" >> "$GITHUB_OUTPUT"
               echo "github_environment=development" >> "$GITHUB_OUTPUT"
+              echo "credential_id=fly-api-dev-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-dev" >> "$GITHUB_OUTPUT"
+              echo "azure_client_id=${{ vars.CCP_AZURE_CLIENT_ID_DEV }}" >> "$GITHUB_OUTPUT"
               ;;
             stg)
               echo "base_url=https://reqsys-api-stg.fly.dev" >> "$GITHUB_OUTPUT"
               echo "fly_app=reqsys-api-stg" >> "$GITHUB_OUTPUT"
               echo "github_environment=staging" >> "$GITHUB_OUTPUT"
+              echo "credential_id=fly-api-hml-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-staging" >> "$GITHUB_OUTPUT"
+              echo "azure_client_id=${{ vars.CCP_AZURE_CLIENT_ID_HML }}" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "Somente dev e stg são permitidos. Produção é bloqueada por contrato." >&2
@@ -131,9 +139,20 @@ jobs:
       - name: Setup Flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Resolver credencial Fly API
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: ${{ needs.validate-inputs.outputs.credential_id }}
+          consumer: ${{ needs.validate-inputs.outputs.consumer }}
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ needs.validate-inputs.outputs.azure_client_id }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: ${{ env.ARTIFACT_DIR }}/credential-resolution.json
+
       - name: Reiniciar runtime de forma controlada
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_APP: ${{ needs.validate-inputs.outputs.fly_app }}
         run: |
           set -euo pipefail
