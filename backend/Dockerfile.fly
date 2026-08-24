@@ -14,12 +14,18 @@ RUN apt-get update \
         curl \
         unixodbc \
         unixodbc-dev \
+        tesseract-ocr \
+        tesseract-ocr-por \
+        poppler-utils \
+        imagemagick \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY app /app/app
+COPY ocr_evidencia /app/ocr_evidencia
 COPY diagram_generator_portable /app/diagram_generator_portable
 COPY fly_boot.sh /app/fly_boot.sh
 
