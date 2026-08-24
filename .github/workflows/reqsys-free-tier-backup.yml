@@ -48,6 +48,7 @@ on:
 permissions:
   contents: read
   issues: write
+  id-token: write
 
 concurrency:
   group: reqsys-free-tier-backup-${{ github.event.inputs.environment || 'scheduled' }}
@@ -61,6 +62,7 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    environment: development
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       configured: ${{ steps.plan.outputs.configured }}
@@ -76,13 +78,23 @@ jobs:
           bash -n scripts/run_reqsys_free_tier_backup.sh
           python scripts/reqsys_free_tier_backup.py validate --inventory "$INVENTORY"
           python -m unittest -v tests/test_reqsys_free_tier_backup.py tests/test_object_storage_workflow_contract.py
+      - name: Resolver credencial Fly API (checagem de disponibilidade)
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-dev-deploy
+          consumer: github-actions:fly-dev
+          export-env: FLY_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/reqsys-free-tier-backup-validate-credential-resolution.json
       - name: Build governed plan
         id: plan
         env:
           TARGET: ${{ github.event.inputs.environment || 'all' }}
           INCLUDE_DISABLED: ${{ github.event.inputs.include_disabled || 'false' }}
           APPROVE_PROD: ${{ github.event.inputs.approve_prod || '' }}
-          FLY_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           STORAGE_ENDPOINT: ${{ vars.OBJECT_STORAGE_ENDPOINT }}
           STORAGE_KEY: ${{ secrets.OBJECT_STORAGE_ACCESS_KEY_ID }}
           STORAGE_SECRET: ${{ secrets.OBJECT_STORAGE_SECRET_ACCESS_KEY }}
@@ -124,7 +136,6 @@ jobs:
       max-parallel: 1
       matrix: ${{ fromJson(needs.validate.outputs.matrix) }}
     env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.OBJECT_STORAGE_ACCESS_KEY_ID || secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.OBJECT_STORAGE_SECRET_ACCESS_KEY || secrets.R2_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: ${{ vars.OBJECT_STORAGE_REGION || 'auto' }}
@@ -140,6 +151,46 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Resolver identidade Fly do ambiente
+        id: identity
+        env:
+          TARGET_ENVIRONMENT: ${{ matrix.environment }}
+        run: |
+          set -euo pipefail
+          case "$TARGET_ENVIRONMENT" in
+            dev)
+              echo "credential-id=fly-api-dev-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-dev" >> "$GITHUB_OUTPUT"
+              echo "azure-client-id=${{ vars.CCP_AZURE_CLIENT_ID_DEV }}" >> "$GITHUB_OUTPUT"
+              ;;
+            stg)
+              echo "credential-id=fly-api-hml-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-staging" >> "$GITHUB_OUTPUT"
+              echo "azure-client-id=${{ vars.CCP_AZURE_CLIENT_ID_HML }}" >> "$GITHUB_OUTPUT"
+              ;;
+            prod)
+              echo "credential-id=fly-api-prod-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-production" >> "$GITHUB_OUTPUT"
+              echo "azure-client-id=${{ vars.CCP_AZURE_CLIENT_ID_PROD }}" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Ambiente invalido: $TARGET_ENVIRONMENT" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Resolver credencial Fly API
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: ${{ steps.identity.outputs.credential-id }}
+          consumer: ${{ steps.identity.outputs.consumer }}
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ steps.identity.outputs.azure-client-id }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: artifacts/backup/${{ matrix.id }}/credential-resolution.json
+
       - name: Install Fly CLI and restic
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q restic

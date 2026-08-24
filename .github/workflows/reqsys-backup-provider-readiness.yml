@@ -22,6 +22,7 @@ on:
 permissions:
   contents: read
   issues: write
+  id-token: write
 
 concurrency:
   group: reqsys-backup-provider-readiness-${{ github.ref }}
@@ -52,8 +53,8 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    environment: development
     env:
-      FLY_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       STORAGE_ENDPOINT: ${{ vars.OBJECT_STORAGE_ENDPOINT || 'https://fly.storage.tigris.dev' }}
       STORAGE_REGION: ${{ vars.OBJECT_STORAGE_REGION || 'auto' }}
       STORAGE_KEY: ${{ secrets.OBJECT_STORAGE_ACCESS_KEY_ID }}
@@ -66,6 +67,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Resolver credencial Fly API
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-dev-deploy
+          consumer: github-actions:fly-dev
+          export-env: FLY_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/reqsys-backup-provider-readiness-credential-resolution.json
 
       - name: Detect configured secret names
         id: config
