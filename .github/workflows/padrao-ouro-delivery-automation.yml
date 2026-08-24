@@ -43,6 +43,7 @@ permissions:
   pull-requests: write
   issues: write
   actions: read
+  id-token: write
 
 concurrency:
   group: padrao-ouro-delivery-${{ github.event_name }}-${{ github.ref_name }}
@@ -153,7 +154,6 @@ jobs:
       - name: Preflight de secrets externos
         id: preflight
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
           VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
           AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
@@ -163,10 +163,7 @@ jobs:
           configured=true
           reason="ready"
 
-          if [ -z "${FLY_API_TOKEN}" ]; then
-            configured=false
-            reason="missing_fly_api_token"
-          elif { [ -z "${AZURE_TENANT_ID_SECRET}" ] || [ -z "${AZURE_CLIENT_ID_SECRET}" ]; } && { [ -z "${COFRE_API_URL}" ] || [ -z "${VAULT_API_TOKEN}" ]; }; then
+          if { [ -z "${AZURE_TENANT_ID_SECRET}" ] || [ -z "${AZURE_CLIENT_ID_SECRET}" ]; } && { [ -z "${COFRE_API_URL}" ] || [ -z "${VAULT_API_TOKEN}" ]; }; then
             configured=false
             reason="missing_azure_or_vault_source"
           fi
@@ -188,11 +185,24 @@ jobs:
           python-version: "3.12"
       - uses: superfly/flyctl-actions/setup-flyctl@master
         if: steps.preflight.outputs.configured == 'true'
+
+      - name: Resolver credencial Fly API produção
+        if: steps.preflight.outputs.configured == 'true'
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-prod-deploy
+          consumer: github-actions:fly-production
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_PROD }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/padrao-ouro-credential-resolution-secrets.json
+
       - name: Aplicar secrets JWT/Azure no reqsys-api
         id: apply
         if: steps.preflight.outputs.configured == 'true'
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
           VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
           AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
@@ -249,9 +259,19 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Resolver credencial Fly API produção
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-prod-deploy
+          consumer: github-actions:fly-production
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_PROD }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/padrao-ouro-credential-resolution-api.json
+
       - name: Deploy reqsys-api
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -312,9 +332,19 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Resolver credencial Fly frontend produção
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-app-prod-deploy
+          consumer: github-actions:fly-production
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_PROD }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/padrao-ouro-credential-resolution-frontend.json
+
       - name: Deploy reqsys-app
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         working-directory: frontend
         run: flyctl deploy --remote-only --config fly.toml --app reqsys-app
 

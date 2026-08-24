@@ -22,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: fly-environment-promotion-stage-${{ inputs.environment }}
@@ -94,10 +95,51 @@ jobs:
           print(f"frontend_config={cfg['frontend_fly_config']}")
           PY
 
+      - name: Resolver identidade Fly do ambiente
+        id: identity
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          case "$TARGET_ENVIRONMENT" in
+            dev)
+              echo "api-credential-id=fly-api-dev-deploy" >> "$GITHUB_OUTPUT"
+              echo "app-credential-id=fly-app-dev-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-dev" >> "$GITHUB_OUTPUT"
+              echo "azure-client-id=${{ vars.CCP_AZURE_CLIENT_ID_DEV }}" >> "$GITHUB_OUTPUT"
+              ;;
+            hml)
+              echo "api-credential-id=fly-api-hml-deploy" >> "$GITHUB_OUTPUT"
+              echo "app-credential-id=fly-app-hml-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-staging" >> "$GITHUB_OUTPUT"
+              echo "azure-client-id=${{ vars.CCP_AZURE_CLIENT_ID_HML }}" >> "$GITHUB_OUTPUT"
+              ;;
+            prod)
+              echo "api-credential-id=fly-api-prod-deploy" >> "$GITHUB_OUTPUT"
+              echo "app-credential-id=fly-app-prod-deploy" >> "$GITHUB_OUTPUT"
+              echo "consumer=github-actions:fly-production" >> "$GITHUB_OUTPUT"
+              echo "azure-client-id=${{ vars.CCP_AZURE_CLIENT_ID_PROD }}" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Ambiente invalido: $TARGET_ENVIRONMENT" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Resolver credencial Fly API
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: ${{ steps.identity.outputs.api-credential-id }}
+          consumer: ${{ steps.identity.outputs.consumer }}
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ steps.identity.outputs.azure-client-id }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: ${{ env.PRE_DEPLOY_ARTIFACT_DIR }}/credential-resolution-api.json
+
       - name: Capture pre-deploy Fly state
         continue-on-error: true
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           python scripts/capture_fly_environment_state.py \
             --environment "${{ inputs.environment }}" \
@@ -107,8 +149,6 @@ jobs:
 
       - name: Configure development demo login
         if: inputs.environment == 'dev'
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           set -euo pipefail
           flyctl secrets set ALLOW_DEMO_LOGIN=true --app "${{ steps.env.outputs.api_app }}"
@@ -116,7 +156,6 @@ jobs:
       - name: Configure staging Azure metadata when supplied
         if: inputs.environment == 'hml'
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
           VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
           AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
@@ -139,7 +178,6 @@ jobs:
 
       - name: Deploy API exact SHA
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_APP: ${{ steps.env.outputs.api_app }}
           FLY_CONFIG: ${{ steps.env.outputs.backend_config }}
         shell: bash
@@ -172,9 +210,20 @@ jobs:
             sleep 60
           done
 
+      - name: Resolver credencial Fly frontend
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: ${{ steps.identity.outputs.app-credential-id }}
+          consumer: ${{ steps.identity.outputs.consumer }}
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ steps.identity.outputs.azure-client-id }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: ${{ env.PRE_DEPLOY_ARTIFACT_DIR }}/credential-resolution-app.json
+
       - name: Deploy frontend exact source
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_APP: ${{ steps.env.outputs.frontend_app }}
           FLY_CONFIG: ${{ steps.env.outputs.frontend_config }}
         shell: bash
