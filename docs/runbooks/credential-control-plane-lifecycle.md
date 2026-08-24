@@ -140,6 +140,12 @@ Essa credencial é o bootstrap/controlador e possui blast radius maior que os de
 
 Critério de conclusão: `plan --provider fly` identifica tokens app-scoped ausentes como `CREATE`, sem `BOOTSTRAP_REQUIRED` para o emissor.
 
+> **Limitação confirmada da Fly (2026-08-23):** tokens `org` (`fly tokens create org`) **não têm permissão de emitir outros tokens** — a mutação `createLimitedAccessToken` retorna `Not authorized to access this createlimitedaccesstoken` quando invocada com um token org como emissor. Confirmado tanto em execução real do workflow (`execute --provider fly`) quanto na comunidade oficial da Fly ([community.fly.io/t/org-api-token-cannot-create-deploy-tokens](https://community.fly.io/t/org-api-token-cannot-create-deploy-tokens/18602)). É uma restrição deliberada do modelo de macaroons da Fly (evita autoelevação de um token restrito), não um bug de configuração.
+>
+> A alternativa óbvia — usar o `fly auth token` (o antigo "personal access token" de sessão) como emissor — **não é viável**: a própria Fly marca esse comando como *deprecated* e documenta que o token "pode expirar rapidamente e não deve ser usado em lugares que precisam continuar funcionando por muito tempo".
+>
+> **Consequência prática:** `reqsys-fly-control-plane-org-token` continua útil só para `validate_app`/leitura de status, não como emissor automático dos 6 deploy tokens app-scoped. A criação/rotação desses 6 tokens (`fly-api-dev-deploy`, `fly-app-dev-deploy`, `fly-api-hml-deploy`, `fly-app-hml-deploy`, `fly-api-prod-deploy`, `fly-app-prod-deploy`) permanece uma ação humana periódica (a cada `interval_days: 30`, quando `plan` reportar `ROTATION_DUE`), até a Fly expor algum mecanismo de identidade delegável para isso. `execute --provider fly` deve ser tratado como bloqueado por design até então.
+
 ## 6. Ativação segura
 
 Executar nesta ordem:

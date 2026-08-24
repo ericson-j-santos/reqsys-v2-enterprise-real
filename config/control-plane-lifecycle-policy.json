@@ -45,9 +45,9 @@
       "enabled": true,
       "rotation": {
         "strategy": "fly_replace_deploy_token",
-        "interval_days": 30,
-        "warning_days": 7,
-        "expires_in_days": 30
+        "interval_days": 365,
+        "warning_days": 30,
+        "expires_in_days": 365
       },
       "target": { "app": "reqsys-api-dev" },
       "consumers": ["github-actions:fly-dev"]
@@ -61,9 +61,9 @@
       "enabled": true,
       "rotation": {
         "strategy": "fly_replace_deploy_token",
-        "interval_days": 30,
-        "warning_days": 7,
-        "expires_in_days": 30
+        "interval_days": 365,
+        "warning_days": 30,
+        "expires_in_days": 365
       },
       "target": { "app": "reqsys-app-dev" },
       "consumers": ["github-actions:fly-dev"]
@@ -77,9 +77,9 @@
       "enabled": true,
       "rotation": {
         "strategy": "fly_replace_deploy_token",
-        "interval_days": 30,
-        "warning_days": 7,
-        "expires_in_days": 30
+        "interval_days": 365,
+        "warning_days": 30,
+        "expires_in_days": 365
       },
       "target": { "app": "reqsys-api-stg" },
       "consumers": ["github-actions:fly-staging"]
@@ -93,9 +93,9 @@
       "enabled": true,
       "rotation": {
         "strategy": "fly_replace_deploy_token",
-        "interval_days": 30,
-        "warning_days": 7,
-        "expires_in_days": 30
+        "interval_days": 365,
+        "warning_days": 30,
+        "expires_in_days": 365
       },
       "target": { "app": "reqsys-app-stg" },
       "consumers": ["github-actions:fly-staging"]
@@ -109,9 +109,9 @@
       "enabled": true,
       "rotation": {
         "strategy": "fly_replace_deploy_token",
-        "interval_days": 30,
-        "warning_days": 7,
-        "expires_in_days": 30
+        "interval_days": 365,
+        "warning_days": 30,
+        "expires_in_days": 365
       },
       "target": { "app": "reqsys-api" },
       "consumers": ["github-actions:fly-production"]
@@ -125,9 +125,9 @@
       "enabled": true,
       "rotation": {
         "strategy": "fly_replace_deploy_token",
-        "interval_days": 30,
-        "warning_days": 7,
-        "expires_in_days": 30
+        "interval_days": 365,
+        "warning_days": 30,
+        "expires_in_days": 365
       },
       "target": { "app": "reqsys-app" },
       "consumers": ["github-actions:fly-production"]
