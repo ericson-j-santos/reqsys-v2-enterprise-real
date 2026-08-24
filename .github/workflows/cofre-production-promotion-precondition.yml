@@ -14,9 +14,6 @@ on:
         required: false
         type: string
         default: "20"
-    secrets:
-      COFRE_ADMIN_JWT:
-        required: true
     outputs:
       approved:
         description: Indica que a pré-condição do Cofre foi aprovada
@@ -41,8 +38,6 @@ jobs:
     with:
       environment: stg
       timeout_seconds: ${{ inputs.timeout_seconds }}
-    secrets:
-      COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
 
   promotion-guard:
     name: Autorizar promoção após evidência STG
