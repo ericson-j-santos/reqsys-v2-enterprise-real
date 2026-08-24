@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   actions: read
+  id-token: write
 
 concurrency:
   group: coleta-requisitos-teams-e2e-dev
@@ -33,6 +34,18 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+
+      - name: Resolver credencial Fly API DEV
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-dev-deploy
+          consumer: github-actions:fly-dev
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/coleta-requisitos-teams-e2e-dev-credential-resolution.json
 
       - name: Setup Flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
@@ -87,7 +100,6 @@ jobs:
       - name: Publicar main no DEV quando necessário
         if: steps.runtime.outputs.deploy_needed == 'true'
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           EXPECTED_SHA: ${{ steps.runtime.outputs.expected_sha }}
         shell: bash
         run: |
@@ -141,7 +153,6 @@ jobs:
 
       - name: Verificar e sincronizar webhook governado
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           TEAMS_NOTIFICATIONS_WEBHOOK_URL: ${{ secrets.TEAMS_NOTIFICATIONS_WEBHOOK_URL }}
         shell: bash
         run: |

@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: configurar-github-token-reqsys-api-dev
@@ -25,10 +26,24 @@ jobs:
     env:
       FLY_APP_NAME: reqsys-api-dev
       HEALTH_URL: https://reqsys-api-dev.fly.dev/health
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       REQSYS_GITHUB_TOKEN: ${{ secrets.REQSYS_GITHUB_TOKEN }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolver credencial Fly API DEV
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-dev-deploy
+          consumer: github-actions:fly-dev
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/configurar-integracao-github-fly-dev-credential-resolution.json
+
       - name: Validar autorização e secrets
         shell: bash
         env:
