@@ -78,7 +78,6 @@ jobs:
           python scripts/reqsys_free_tier_backup.py validate --inventory "$INVENTORY"
           python -m unittest -v tests/test_reqsys_free_tier_backup.py tests/test_object_storage_workflow_contract.py
       - name: Resolver credencial Fly API (checagem de disponibilidade)
-        if: github.event_name != 'pull_request'
         uses: ./.github/actions/resolve-managed-credential
         with:
           credential-id: fly-api-dev-deploy
