@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: dev-runtime-auth-diagnostic-${{ github.ref }}
@@ -26,15 +27,27 @@ jobs:
     name: Diagnosticar e reconciliar runtime/auth DEV
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    environment: dev
     env:
       FRONTEND_URL: https://reqsys-app-dev.fly.dev
       BACKEND_URL: https://reqsys-api-dev.fly.dev
       REPORT_DIR: artifacts/dev-runtime-auth-diagnostic
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolver credencial Fly API DEV
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-dev-deploy
+          consumer: github-actions:fly-dev
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/dev-runtime-auth-diagnostic-credential-resolution.json
 
       - name: Preparar evidência
         shell: bash
