@@ -1,10 +1,12 @@
 <template>
   <v-app>
-    <UserExperienceGuardrails v-if="$route.path !== '/login'" />
-    <RouteFeedback v-if="$route.path !== '/login'" />
-    <UserJourneyFeedback v-if="$route.path !== '/login'" />
-    <DashboardEmptyStateBridge v-if="$route.path !== '/login'" />
-    <AppLayout v-if="$route.path !== '/login'" />
+    <template v-if="!$route.meta.standalone && $route.path !== '/login'">
+      <UserExperienceGuardrails />
+      <RouteFeedback />
+      <UserJourneyFeedback />
+      <DashboardEmptyStateBridge />
+      <AppLayout />
+    </template>
     <router-view v-else />
   </v-app>
 </template>
