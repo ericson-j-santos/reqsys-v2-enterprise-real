@@ -17,7 +17,9 @@ from collections.abc import Iterable
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from app.core.correlation import obter_correlation_id
 from app.models.requisito import Requisito
+from app.services.requisito_ml_runtime import avaliar_requisito_observacional
 
 
 class RequisitoRepository:
@@ -99,4 +101,16 @@ class RequisitoRepository:
         self._db.add(requisito)
         self._db.commit()
         self._db.refresh(requisito)
+
+        texto_observacional = '\n'.join(
+            valor.strip()
+            for valor in (requisito.titulo or '', requisito.descricao or '')
+            if valor and valor.strip()
+        )
+        if texto_observacional:
+            avaliar_requisito_observacional(
+                texto_observacional,
+                correlation_id=obter_correlation_id(),
+            )
+
         return requisito
