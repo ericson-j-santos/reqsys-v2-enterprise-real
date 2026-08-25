@@ -92,7 +92,8 @@
       "evidence": [
         "O runbook docs/runbooks/ops-dashboard.md define docs/ops-dashboard/index.html como entrega canônica.",
         "O workflow Ops Dashboard publica o artifact ops-dashboard-static.",
-        "A árvore contém index.html, dados, contratos e painéis operacionais derivados."
+        "A árvore contém index.html, dados, contratos e painéis operacionais derivados.",
+        "Os painéis teams-notification e movimento-email foram copiados para esta árvore canônica preservando os mesmos blobs Git dos HTMLs legados."
       ],
       "blocking_dependencies": [],
       "exit_criteria": [],
@@ -107,21 +108,19 @@
       "target": "docs/ops-dashboard",
       "risk": "medium",
       "evidence": [
-        "ops-dashboard/ contém apenas HTMLs estáticos específicos de movimento-email e teams-notification.",
-        "O runbook operacional define docs/ops-dashboard/index.html como dashboard canônico.",
-        "O workflow Ops Dashboard publica o artifact ops-dashboard-static a partir da implementação canônica em docs/ops-dashboard."
+        "Os HTMLs de movimento-email e teams-notification foram copiados para docs/ops-dashboard sem alteração de conteúdo.",
+        "A cadeia operacional de Teams foi migrada para docs/ops-dashboard/teams-notification em workflows de geração, certificação, readiness, smoke e deploy composto.",
+        "O diretório raiz permanece temporariamente por compatibilidade com o default do gerador autocontido de Movimento Email."
       ],
       "blocking_dependencies": [
-        "referências históricas a ops-dashboard/movimento-email",
-        "referências históricas a ops-dashboard/teams-notification"
+        "tools/geradores/movimento_email_autocontido.py ainda usa ops-dashboard/movimento-email/data.json como destino padrão do comando dashboard."
       ],
       "exit_criteria": [
-        "Identificar consumidores ativos dos dois HTMLs legados.",
-        "Migrar links e conteúdo útil para docs/ops-dashboard ou para módulos funcionais do frontend canônico.",
-        "Validar que workflows, docs e runbooks não apontam mais para ops-dashboard/.",
-        "Excluir o diretório legado somente após zero referências operacionais."
+        "Migrar o default e as referências internas de dashboard em tools/geradores/movimento_email_autocontido.py para docs/ops-dashboard/movimento-email.",
+        "Confirmar zero referências operacionais ao caminho raiz ops-dashboard/ fora de documentação histórica/governança.",
+        "Excluir ops-dashboard/ somente após o bloqueio acima ficar zerado e os gates permanecerem verdes."
       ],
-      "next_action": "Consolidar os dois HTMLs legados no dashboard operacional canônico e eliminar links antigos."
+      "next_action": "Migrar o default do gerador Movimento Email para docs/ops-dashboard/movimento-email e então remover ops-dashboard/ com guardrail contra reintrodução."
     }
   ]
 }
