@@ -26,7 +26,7 @@
     "teams_gateway_trigger": "frontend/src/services/teamsGateway.js"
   },
   "guardrail": {
-    "script": "scripts/validate_legacy_frontend_references.py",
+    "script": "scripts/check_legacy_frontend_references.py",
     "test": "tests/test_legacy_frontend_retirement.py",
     "policy": "Falhar quando frontend-angular ou frontend-vuetify reaparecerem em superficies operacionais."
   },
