@@ -68,7 +68,7 @@ Requisito -> GitLab Issue -> Label IA -> Branch -> Merge Request -> Pipeline -> 
 
 ## Próximos incrementos
 
-1. Conectar issues GitLab ao roteador multi-IA.
+1. Conectar issues GitLab ao roteador multi-IA. Código pronto em 2026-08-25 (`gitlab/scripts/route_issue_by_label.py`, jobs `gitlab_route_issues_dry_run`/`_apply` em `gitlab/ci/governance.yml`) — falta rodar `_dry_run` uma vez contra issues reais para validar antes de considerar concluído.
 2. Criar pipelines semânticos por domínio.
 3. ~~Adicionar SAST/secret detection/container scanning.~~ Feito (`gitlab/ci/security.yml`, `gitlab/ci/devsecops.yml`).
 4. Integrar environments e review apps.

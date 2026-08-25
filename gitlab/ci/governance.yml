@@ -45,3 +45,40 @@ gitlab_governance_provision_apply:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
   allow_failure: false
+
+# Routes open issues labelled ia:* to their domain branch (see
+# gitlab/docs/GITLAB_OPERATING_MODEL.md). Manual, protected and idempotent,
+# same GITLAB_PROVISIONING_TOKEN as the jobs above. Apply performs real
+# writes (branch creation, labelling, commenting) so it stays manual-only
+# until this has been exercised a few times, not schedule-triggered.
+gitlab_route_issues_dry_run:
+  stage: governance
+  image: python:3.12-alpine
+  script:
+    - python gitlab/scripts/route_issue_by_label.py --output-dir audit
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - audit/gitlab-issue-routing.json
+      - audit/gitlab-issue-routing.md
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual
+  allow_failure: false
+
+gitlab_route_issues_apply:
+  stage: governance
+  image: python:3.12-alpine
+  script:
+    - python gitlab/scripts/route_issue_by_label.py --apply --output-dir audit
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - audit/gitlab-issue-routing.json
+      - audit/gitlab-issue-routing.md
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual
+  allow_failure: false
