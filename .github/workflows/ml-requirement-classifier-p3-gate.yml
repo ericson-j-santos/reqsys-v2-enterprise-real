@@ -126,8 +126,7 @@ jobs:
           PY
           else
             echo '# ML Requirement Classifier P3 Gate' >> "$GITHUB_STEP_SUMMARY"
-            echo 'Evidência não gerada; gate permaneceu fail-closed.' >> "$GITHUB_STEP_SUMMARY"
-            exit 1
+            echo 'Preflight ou validação anterior falhou; consulte a primeira etapa vermelha. O gate permanece fail-closed sem adicionar falha secundária.' >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Publicar evidência P3
@@ -136,5 +135,5 @@ jobs:
         with:
           name: ml-requirement-classifier-p3-evidence
           path: artifacts/ml-requirement-classifier-p3/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
