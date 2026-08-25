@@ -25,6 +25,19 @@ PALAVRAS_CHAVE: dict[str, tuple[str, ...]] = {
     'FUNCIONAL': ('deve', 'permitir', 'cadastrar', 'consultar', 'alterar', 'excluir', 'aprovar', 'rejeitar', 'calcular', 'emitir', 'gerar'),
 }
 
+# Verbos funcionais como "deve" e "permitir" aparecem também em requisitos
+# de segurança, desempenho, UX e operação. Eles são sinais genéricos e, por
+# isso, não podem empatar com um sinal específico de domínio como "latência".
+PESO_CATEGORIA: dict[str, float] = {
+    'FUNCIONAL': 0.5,
+    'NAO_FUNCIONAL': 1.0,
+    'SEGURANCA': 1.0,
+    'INTEGRACAO': 1.0,
+    'DADOS': 1.0,
+    'UX': 1.0,
+    'OPERACIONAL': 1.0,
+}
+
 
 @dataclass(frozen=True)
 class ClassificacaoRequisito:
@@ -61,11 +74,12 @@ def classificar_requisito(texto: str) -> ClassificacaoRequisito:
     for categoria in CATEGORIAS:
         evidencias: list[str] = []
         score = 0.0
+        peso = PESO_CATEGORIA[categoria]
         for palavra in PALAVRAS_CHAVE[categoria]:
             ocorrencias = contagem.get(palavra, 0)
             if ocorrencias:
                 evidencias.append(palavra)
-                score += float(ocorrencias)
+                score += float(ocorrencias) * peso
         scores[categoria] = score
         evidencias_por_categoria[categoria] = evidencias
 
