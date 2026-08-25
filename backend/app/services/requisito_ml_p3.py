@@ -63,6 +63,8 @@ class PoliticaRuntimeML:
     ganho_f1_holdout_minimo: float
     js_divergence_alerta: float
     taxa_baixa_confianca_alerta: float
+    minimo_amostras_reais_aprovadas_canary: int
+    minimo_amostras_reais_aprovadas_active: int
     distribuicao_referencia: dict[str, float]
 
 
@@ -142,6 +144,8 @@ def carregar_politica_runtime(caminho: Path) -> PoliticaRuntimeML:
         ganho_f1_holdout_minimo=float(item['ganho_f1_holdout_minimo']),
         js_divergence_alerta=float(item['js_divergence_alerta']),
         taxa_baixa_confianca_alerta=float(item['taxa_baixa_confianca_alerta']),
+        minimo_amostras_reais_aprovadas_canary=int(item['minimo_amostras_reais_aprovadas_canary']),
+        minimo_amostras_reais_aprovadas_active=int(item['minimo_amostras_reais_aprovadas_active']),
         distribuicao_referencia=_normalizar_distribuicao(item['distribuicao_referencia']),
     )
     if politica.modelo_versao != MODELO_VERSAO:
@@ -164,6 +168,10 @@ def carregar_politica_runtime(caminho: Path) -> PoliticaRuntimeML:
         raise ValueError('js_divergence_alerta deve estar entre 0 e 1')
     if not 0 <= politica.taxa_baixa_confianca_alerta <= 1:
         raise ValueError('taxa_baixa_confianca_alerta deve estar entre 0 e 1')
+    if politica.minimo_amostras_reais_aprovadas_canary < 1:
+        raise ValueError('mínimo de amostras reais para canary deve ser maior que zero')
+    if politica.minimo_amostras_reais_aprovadas_active < politica.minimo_amostras_reais_aprovadas_canary:
+        raise ValueError('mínimo de amostras reais para active deve ser >= canary')
     return politica
 
 
@@ -322,14 +330,38 @@ def classificar_runtime(
     politica: PoliticaRuntimeML,
     modelo: ClassificadorRequisitoSupervisionado,
     modo: str | None = None,
+    amostras_reais_aprovadas: int = 0,
 ) -> DecisaoRuntimeML:
     if not correlation_id.strip():
         raise ValueError('correlation_id é obrigatório')
     modo_efetivo = (modo or politica.modo_padrao).lower()
     if modo_efetivo not in MODOS_RUNTIME:
         raise ValueError(f'modo de runtime inválido: {modo_efetivo}')
+    if amostras_reais_aprovadas < 0:
+        raise ValueError('amostras_reais_aprovadas não pode ser negativo')
 
     baseline = classificar_requisito(texto)
+    if modo_efetivo in {'canary', 'active'}:
+        minimo = (
+            politica.minimo_amostras_reais_aprovadas_canary
+            if modo_efetivo == 'canary'
+            else politica.minimo_amostras_reais_aprovadas_active
+        )
+        if amostras_reais_aprovadas < minimo:
+            return DecisaoRuntimeML(
+                categoria=baseline.categoria,
+                confianca=baseline.confianca,
+                engine=baseline.baseline,
+                modo=modo_efetivo,
+                correlation_id=correlation_id,
+                modelo_categoria=None,
+                modelo_confianca=None,
+                baseline_categoria=baseline.categoria,
+                canary_selected=False,
+                fallback_reason='REAL_SAMPLE_GATE_BLOCKED',
+                evidencias=baseline.evidencias,
+            )
+
     if modo_efetivo == 'off':
         return DecisaoRuntimeML(
             categoria=baseline.categoria,
