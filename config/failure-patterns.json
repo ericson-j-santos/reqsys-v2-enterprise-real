@@ -148,8 +148,7 @@
       "severity": "high",
       "confidence": "high",
       "match_any": [
-        "\"regression\": true",
-        "Coverage regression by domain"
+        "\"regression\": true"
       ],
       "tags": ["python", "pytest", "coverage", "regression", "quality"],
       "recommended_action": "Nao reduzir baseline nem tolerancia. Identificar arquivos novos ou alterados com cobertura insuficiente, adicionar testes de ramos reais e reexecutar o gate de cobertura.",
