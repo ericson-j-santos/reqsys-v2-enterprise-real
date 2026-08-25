@@ -27,6 +27,7 @@ import AnalyticsHubView from '../views/AnalyticsHubView.vue'
 import UserFinalShellView from '../views/UserFinalShellView.vue'
 import OrquestradorIAView from '../views/OrquestradorIAView.vue'
 import CoordenacaoAdrView from '../views/CoordenacaoAdrView.vue'
+import ShowcaseView from '../views/ShowcaseView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import GitHubMergeConsoleView from '../views/GitHubMergeConsoleView.vue'
 import TeamsRecipientPoliciesView from '../views/TeamsRecipientPoliciesView.vue'
@@ -37,6 +38,13 @@ import { useAuthStore } from '../stores/auth'
 
 export const routes = [
   { path: '/login', component: LoginView, meta: { public: true } },
+  {
+    path: '/showcase',
+    alias: '/demo',
+    name: 'showcase',
+    component: ShowcaseView,
+    meta: { public: true, standalone: true, title: 'ReqSys Showcase' },
+  },
   { path: '/', component: DashboardView, meta: { recurso: 'dashboard:read' } },
   { path: '/home', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
   { path: '/workspace', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
