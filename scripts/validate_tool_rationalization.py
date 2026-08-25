@@ -92,6 +92,9 @@ def validate_inventory_data(data: dict[str, Any], repo_root: Path) -> list[str]:
             if not (repo_root / item_path).exists():
                 errors.append(f"path inexistente: {item_path}.")
 
+        if not isinstance(kind, str) or not kind.strip():
+            errors.append(f"{prefix}.kind deve ser texto não vazio.")
+
         if decision not in ALLOWED_DECISIONS:
             errors.append(f"{prefix}.decision inválida: {decision!r}.")
 
@@ -134,8 +137,16 @@ def validate_inventory_data(data: dict[str, Any], repo_root: Path) -> list[str]:
         if not (repo_root / target).exists():
             errors.append(f"canonical_targets.{kind} aponta para path inexistente: {target}.")
 
+        canonical_count = canonical_by_kind.get(kind, 0)
+        if canonical_count != 1:
+            errors.append(
+                f"canonical_targets.{kind} exige exatamente um item canônico; encontrados {canonical_count}."
+            )
+
     for kind, count in canonical_by_kind.items():
-        if count > 1:
+        if kind not in canonical_targets:
+            errors.append(f"Item canônico encontrado para kind não declarado: {kind}.")
+        elif count > 1:
             errors.append(f"Mais de um item canônico definido para kind={kind}.")
 
     return errors
