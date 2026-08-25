@@ -98,6 +98,23 @@
       "next_action": "Manter como fonte canônica do MkDocs; reduzir duplicação progressiva com docs/ sem migração destrutiva."
     },
     {
+      "id": "docs-ops-dashboard",
+      "path": "docs/ops-dashboard",
+      "kind": "operations_dashboard",
+      "decision": "MANTER",
+      "canonical": true,
+      "target": "docs/ops-dashboard",
+      "risk": "low",
+      "evidence": [
+        "O runbook docs/runbooks/ops-dashboard.md define docs/ops-dashboard/index.html como entrega canônica.",
+        "O workflow Ops Dashboard publica o artifact ops-dashboard-static.",
+        "A árvore contém index.html, dados, contratos e painéis operacionais derivados."
+      ],
+      "blocking_dependencies": [],
+      "exit_criteria": [],
+      "next_action": "Manter como destino canônico para dashboards operacionais estáticos."
+    },
+    {
       "id": "ops-dashboard",
       "path": "ops-dashboard",
       "kind": "operations_dashboard",
