@@ -1,10 +1,12 @@
 # ReqSys v2 Enterprise GitLab Edition
 
-## Status atual (2026-08-19) — ver ADR-044
+## Status atual (2026-08-25) — ver ADR-044
 
 **Esta NÃO é a linha de CI ativa do projeto.** A linha de CI de produção continua sendo exclusivamente o GitHub Actions (`.github/workflows/`).
 
-O projeto GitLab **existe e está provisionado** (remote `gitlab` configurado, `git@gitlab.com:ericson-j-santos/reqsys-v2-enterprise-real.git`), mas a sincronização foi manual e pontual — um único merge em 2026-08-02 (`66f77fe5`, "sincronizar GitLab main com GitHub main (padrao ouro)"), sem mecanismo de sync contínuo. A branch `main` do GitLab está, portanto, defasada em relação ao GitHub `main` desde então. Não há evidência de que uma pipeline tenha rodado de fato em runner GitLab real — o texto abaixo descreve o que roda *se* executado, não o que já foi validado ao vivo.
+O projeto GitLab **existe e está provisionado** (remote `gitlab` configurado, `git@gitlab.com:ericson-j-santos/reqsys-v2-enterprise-real.git`). A branch `main` do GitLab está **em dia** com o GitHub `main` (confirmado via `git ls-remote gitlab main` em 2026-08-25, mesmo commit do `origin`/local) — a sincronização deixou de ser um evento manual pontual e passou a acompanhar o GitHub de perto (via `.github/workflows/gitlab-main-mirror.yml`).
+
+**Pipelines já rodaram de fato** (confirmado ao vivo no painel `-/pipelines` em 2026-08-25, 16 execuções) — mas todas falhavam por um bug real: `gitlab_operational_evidence_gate` (`gitlab/ci/evidence.yml`) exigia via `needs:` três jobs (`backend_sast_bandit`, `backend_dependency_scanning_pip_audit`, `frontend_dependency_scanning_npm_audit`) que só existiam condicionalmente (`rules: changes:`), quebrando a criação do pipeline inteiro em qualquer commit fora de `backend/**`/`frontend/**`. Corrigido em 2026-08-25: os três scanners passaram a rodar sempre (removido `rules: changes:` de `gitlab/ci/security.yml` e `gitlab/ci/devsecops.yml`), eliminando a inconsistência com o gate que já os exigia como obrigatórios. Ainda não há confirmação de um pipeline **verde** desde a correção — validar na próxima execução real.
 
 O que já é real (roda de fato, se executado em um runner GitLab):
 
