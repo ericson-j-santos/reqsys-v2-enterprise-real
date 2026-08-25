@@ -84,12 +84,24 @@ jobs:
       - name: Resolve source run
         id: source
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          INPUT_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
         run: |
-          if [[ "${{ github.event_name }}" == workflow_run ]]; then
-            echo "run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            raw_run_id="$WORKFLOW_RUN_ID"
           else
-            echo "run_id=${{ inputs.source_run_id }}" >> "$GITHUB_OUTPUT"
+            raw_run_id="$INPUT_SOURCE_RUN_ID"
           fi
+          run_id="$(printf '%s' "$raw_run_id" | tr -d '[:space:]')"
+          if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "::error::source_run_id inválido após normalização: '$raw_run_id'."
+            exit 2
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Resolved source_run_id=$run_id" >> "$GITHUB_STEP_SUMMARY"
       - name: Download DEV evidence
         continue-on-error: true
         uses: actions/download-artifact@v4
@@ -221,12 +233,24 @@ jobs:
       - name: Resolve source run
         id: source
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          INPUT_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
         run: |
-          if [[ "${{ github.event_name }}" == workflow_run ]]; then
-            echo "run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            raw_run_id="$WORKFLOW_RUN_ID"
           else
-            echo "run_id=${{ inputs.source_run_id }}" >> "$GITHUB_OUTPUT"
+            raw_run_id="$INPUT_SOURCE_RUN_ID"
           fi
+          run_id="$(printf '%s' "$raw_run_id" | tr -d '[:space:]')"
+          if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "::error::source_run_id inválido após normalização: '$raw_run_id'."
+            exit 2
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Resolved source_run_id=$run_id" >> "$GITHUB_STEP_SUMMARY"
       - name: Download STG evidence
         continue-on-error: true
         uses: actions/download-artifact@v4
