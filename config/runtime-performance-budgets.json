@@ -21,6 +21,7 @@
     "windows_days": [7, 30],
     "minimum_baseline_samples": 5,
     "artifact_name_main": "dynamic-performance-evidence-main",
+    "block_on_single_regression": false,
     "regression": {
       "max_latency_increase_percent": 30,
       "max_throughput_drop_percent": 30,
