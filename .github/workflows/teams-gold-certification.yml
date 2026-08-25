@@ -113,7 +113,7 @@ jobs:
               ".github/workflows/teams-service-operational-readiness.yml",
               "docs/runbooks/teams-notification-service.md",
               "tools/geradores/teams_graph_gateway_autocontido.py",
-              "ops-dashboard/teams-notification/index.html",
+              "docs/ops-dashboard/teams-notification/index.html",
           ]
           missing_files = [path for path in structural_files if not Path(path).is_file()]
 
