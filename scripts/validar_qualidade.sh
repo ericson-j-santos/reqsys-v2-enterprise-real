@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo "[1/4] Guardrail de frontends legados"
-python scripts/validate_legacy_frontend_references.py
+python scripts/check_legacy_frontend_references.py
 
 echo "[2/4] Testes backend"
 (
