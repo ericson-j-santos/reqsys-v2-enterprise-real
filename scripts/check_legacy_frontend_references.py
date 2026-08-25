@@ -5,6 +5,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MARKERS = ("frontend-angular", "frontend-vuetify")
+LEGACY_DIRECTORIES = MARKERS
 STATIC_FILES = (
     "playwright.config.ts",
     "package.json",
@@ -34,14 +35,24 @@ def find_references(repo_root: Path = REPO_ROOT) -> list[str]:
     return results
 
 
+def find_legacy_directories(repo_root: Path = REPO_ROOT) -> list[str]:
+    return [name for name in LEGACY_DIRECTORIES if (repo_root / name).exists()]
+
+
 def main() -> int:
-    results = find_references()
-    if results:
-        print("Referências operacionais legadas encontradas:", file=sys.stderr)
-        for item in results:
-            print(f"- {item}", file=sys.stderr)
+    references = find_references()
+    directories = find_legacy_directories()
+    if references or directories:
+        if references:
+            print("Referências operacionais legadas encontradas:", file=sys.stderr)
+            for item in references:
+                print(f"- {item}", file=sys.stderr)
+        if directories:
+            print("Diretórios legados reintroduzidos:", file=sys.stderr)
+            for item in directories:
+                print(f"- {item}", file=sys.stderr)
         return 1
-    print("Nenhuma referência operacional a frontends legados.")
+    print("Frontends legados ausentes e sem referências operacionais.")
     return 0
 
 
