@@ -1,4 +1,12 @@
-from app.services.rag_governado import criar_chunks, normalizar_documentos, recuperar_fontes_semanticas, responder_rag_governado
+from app.services.rag_governado import (
+    criar_chunks,
+    indexar_chunks_persistentes,
+    normalizar_documentos,
+    recuperar_fontes_semanticas,
+    recuperar_fontes_semanticas_persistidas,
+    responder_rag_governado,
+    responder_rag_governado_persistido,
+)
 
 
 def test_rag_responde_somente_com_fontes_recuperadas():
@@ -56,3 +64,25 @@ def test_chunking_rejeita_configuracao_invalida():
         assert 'invalida' in str(exc)
     else:
         raise AssertionError('Era esperado ValueError')
+
+
+def test_indexar_chunks_persistentes_grava_e_e_idempotente(db_session):
+    documentos = normalizar_documentos([{'id': 'persist-doc', 'titulo': 'Retencao', 'conteudo': 'Politica de retencao de dados de auditoria por cinco anos.'}])
+
+    total_primeira = indexar_chunks_persistentes(db_session, documentos)
+    total_segunda = indexar_chunks_persistentes(db_session, documentos)
+
+    assert total_primeira >= 1
+    assert total_segunda == total_primeira
+
+    fontes = recuperar_fontes_semanticas_persistidas(db_session, 'Qual a politica de retencao de dados?')
+    assert fontes
+    assert fontes[0].titulo == 'Retencao'
+
+
+def test_responder_rag_governado_persistido_bloqueia_sem_evidencia(db_session):
+    resposta = responder_rag_governado_persistido(db_session, 'Pergunta sem nenhuma correspondencia indexada xyzabc123', correlation_id='teste-persist-vazio')
+
+    assert resposta.status_fluxo == 'SEM_EVIDENCIA_BLOQUEADO'
+    assert resposta.engine == 'semantic-hash-embedding+postgres-vector-store-v1'
+    assert resposta.fontes == []
