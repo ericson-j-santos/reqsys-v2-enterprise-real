@@ -22,6 +22,13 @@ def test_classificador_identifica_categoria(texto, categoria):
     assert resultado.baseline == 'keyword-weighted-v1'
 
 
+def test_sinal_especifico_supera_verbo_funcional_generico():
+    resultado = classificar_requisito('A API deve responder com latência inferior a 500 ms.')
+    assert resultado.categoria == 'NAO_FUNCIONAL'
+    assert resultado.scores['NAO_FUNCIONAL'] > resultado.scores['FUNCIONAL']
+    assert 'latência' in resultado.evidencias
+
+
 def test_classificador_rejeita_texto_vazio():
     with pytest.raises(ValueError, match='obrigatório'):
         classificar_requisito('   ')
