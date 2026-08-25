@@ -35,12 +35,12 @@
       "evidence": [
         "Usa Vue 3 + Vite + Vuetify, sobrepondo a stack do frontend canônico.",
         "Ainda é iniciado pelo playwright.config.ts raiz em localhost:5174.",
-        "Mantém suíte E2E histórica com arquivos *vuetify.spec.ts."
+        "A cobertura de acessibilidade foi consolidada na suíte canônica; resta e2e/login-vuetify.spec.ts como dependência E2E legada."
       ],
       "blocking_dependencies": [
         "playwright.config.ts:webServer frontend-vuetify",
         "playwright.config.ts:project vuetify",
-        "e2e/*vuetify.spec.ts",
+        "e2e/login-vuetify.spec.ts",
         "scripts de qualidade que ainda referenciam frontend-vuetify"
       ],
       "exit_criteria": [
@@ -50,7 +50,7 @@
         "Confirmar build, testes e E2E verdes somente com frontend canônico.",
         "Arquivar ou excluir o diretório em PR separada após zero dependências ativas."
       ],
-      "next_action": "Congelar novas features e migrar primeiro a cobertura E2E útil para frontend/."
+      "next_action": "Retirar o spec de login legado após confirmar que os cenários vigentes estão cobertos no frontend canônico."
     },
     {
       "id": "frontend-angular",
@@ -63,12 +63,12 @@
       "evidence": [
         "É uma implementação Angular 17 paralela com autenticação/RBAC próprios.",
         "Ainda é iniciada pelo playwright.config.ts raiz em localhost:4200.",
-        "Mantém suíte E2E histórica com arquivos *angular.spec.ts."
+        "A cobertura de acessibilidade foi consolidada na suíte canônica; resta e2e/login-angular.spec.ts como dependência E2E legada."
       ],
       "blocking_dependencies": [
         "playwright.config.ts:webServer frontend-angular",
         "playwright.config.ts:project angular",
-        "e2e/*angular.spec.ts",
+        "e2e/login-angular.spec.ts",
         "scripts de qualidade que ainda referenciam frontend-angular"
       ],
       "exit_criteria": [
@@ -78,7 +78,7 @@
         "Confirmar que nenhuma rota ou requisito vigente existe apenas no Angular.",
         "Arquivar ou excluir o diretório em PR separada após zero dependências ativas."
       ],
-      "next_action": "Congelar novas features e comparar a cobertura funcional com frontend/ antes da retirada."
+      "next_action": "Retirar o spec de login legado após confirmar que os cenários vigentes estão cobertos no frontend canônico."
     },
     {
       "id": "docs-site",
