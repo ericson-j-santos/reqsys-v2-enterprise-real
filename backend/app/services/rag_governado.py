@@ -10,16 +10,31 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import requests
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.pii_masking import mascarar_pii
 from app.models.rag_chunk_embedding import RagChunkEmbedding
+from app.services.llm_provider import LLMGateway
 
 logger = logging.getLogger('reqsys.rag')
 
 ENGINE_MEMORIA = 'semantic-hash-embedding+memory-vector-store-v1'
 ENGINE_PERSISTIDO = 'semantic-hash-embedding+postgres-vector-store-v1'
+
+_SYSTEM_PROMPT_LLM_RAG = (
+    'Você é um assistente corporativo governado. Responda exclusivamente com base nas fontes '
+    'fornecidas pelo usuário. Se as fontes não cobrirem a pergunta, diga explicitamente que não '
+    'há evidência suficiente. Nunca invente informação fora das fontes.'
+)
+_METODOS_LLM_POR_PROVIDER = {
+    'openai': 'gerar_openai',
+    'claude': 'gerar_claude',
+    'groq': 'gerar_groq',
+    'gemini': 'gerar_gemini',
+}
 
 
 @dataclass(frozen=True)
@@ -200,26 +215,68 @@ def recuperar_fontes_semanticas_persistidas(db: Session, pergunta: str, top_k: i
     return sorted(resultados, key=lambda fonte: fonte.score, reverse=True)[:top_k]
 
 
-def _montar_resposta(fontes: list[FonteRAG], *, correlation_id: str, engine: str) -> RespostaRAG:
+def _montar_prompt_llm(pergunta: str, fontes: list[FonteRAG]) -> str:
+    contexto = '\n\n'.join(f'[fonte {indice}, score={fonte.score:.4f}] {fonte.trecho}' for indice, fonte in enumerate(fontes, start=1))
+    return f'Pergunta: {pergunta}\n\nFontes recuperadas:\n{contexto}\n\nResponda com base apenas nessas fontes.'
+
+
+def gerar_resposta_llm(pergunta: str, fontes: list[FonteRAG], *, gateway: LLMGateway | None = None) -> str | None:
+    """Gera a resposta em linguagem natural via LLM externo, se REQSYS_RAG_LLM_PROVIDER/_API_KEY estiverem configurados.
+
+    Retorna None (nunca levanta) quando não há credencial, o provider não é suportado ou a
+    chamada falha — o chamador deve cair para a resposta determinística por fontes nesse caso.
+    """
+    provider = (settings.reqsys_rag_llm_provider or '').strip().lower()
+    api_key = settings.reqsys_rag_llm_api_key
+    if not provider or not api_key or not fontes:
+        return None
+    metodo = _METODOS_LLM_POR_PROVIDER.get(provider)
+    if metodo is None:
+        logger.warning('rag_llm_provider_nao_suportado provider=%s', provider)
+        return None
+    gw = gateway or LLMGateway()
+    try:
+        return getattr(gw, metodo)(
+            api_key=api_key,
+            model=settings.reqsys_rag_llm_model or '',
+            prompt=_montar_prompt_llm(pergunta, fontes),
+            system_prompt=_SYSTEM_PROMPT_LLM_RAG,
+        )
+    except (RuntimeError, requests.RequestException, KeyError, IndexError) as exc:
+        logger.warning('rag_llm_geracao_falhou provider=%s erro=%s', provider, exc)
+        return None
+
+
+def _montar_resposta(pergunta_mascarada: str, fontes: list[FonteRAG], *, correlation_id: str, engine: str) -> RespostaRAG:
     if not fontes:
         logger.info('rag_sem_evidencia correlation_id=%s engine=%s', correlation_id, engine)
         return RespostaRAG(resposta='Não há evidência suficiente nas fontes disponíveis para responder com segurança.', fontes=[], correlation_id=correlation_id, status_fluxo='SEM_EVIDENCIA_BLOQUEADO', engine=engine, avisos=['Resposta bloqueada por ausência de fontes recuperadas.', 'Inclua documentos no payload ou configure REQSYS_RAG_DOCUMENTS_PATH.'])
 
     bullets = '\n'.join(f'- [{fonte.score:.4f}] {fonte.trecho}' for fonte in fontes)
-    resposta = f'Resposta baseada exclusivamente nas fontes recuperadas:\n{bullets}\n\nValidação: confirme as fontes antes de usar como decisão operacional definitiva.'
-    logger.info('rag_com_fontes correlation_id=%s fontes=%s engine=%s', correlation_id, len(fontes), engine)
-    return RespostaRAG(resposta=resposta, fontes=fontes, correlation_id=correlation_id, status_fluxo='COM_FONTES', engine=engine, avisos=['Modo governado: recuperação vetorial local, fonte obrigatória e mascaramento básico de PII.'])
+    resposta_llm = gerar_resposta_llm(pergunta_mascarada, fontes)
+    if resposta_llm:
+        provider = (settings.reqsys_rag_llm_provider or '').strip().lower()
+        resposta = f'{resposta_llm}\n\nFontes utilizadas:\n{bullets}'
+        engine_final = f'{engine}+llm-{provider}'
+        avisos = ['Modo governado: resposta gerada por LLM exclusivamente a partir das fontes recuperadas.', f'Provider: {provider}.']
+    else:
+        resposta = f'Resposta baseada exclusivamente nas fontes recuperadas:\n{bullets}\n\nValidação: confirme as fontes antes de usar como decisão operacional definitiva.'
+        engine_final = engine
+        avisos = ['Modo governado: recuperação vetorial local, fonte obrigatória e mascaramento básico de PII.']
+
+    logger.info('rag_com_fontes correlation_id=%s fontes=%s engine=%s', correlation_id, len(fontes), engine_final)
+    return RespostaRAG(resposta=resposta, fontes=fontes, correlation_id=correlation_id, status_fluxo='COM_FONTES', engine=engine_final, avisos=avisos)
 
 
 def responder_rag_governado(pergunta: str, documentos: list[DocumentoRAG], *, top_k: int = 4, correlation_id: str | None = None) -> RespostaRAG:
     correlation_id = correlation_id or gerar_correlation_id()
     pergunta_mascarada = mascarar_pii(pergunta.strip())
     fontes = recuperar_fontes_semanticas(pergunta_mascarada, documentos, top_k=top_k)
-    return _montar_resposta(fontes, correlation_id=correlation_id, engine=ENGINE_MEMORIA)
+    return _montar_resposta(pergunta_mascarada, fontes, correlation_id=correlation_id, engine=ENGINE_MEMORIA)
 
 
 def responder_rag_governado_persistido(db: Session, pergunta: str, *, top_k: int = 4, correlation_id: str | None = None) -> RespostaRAG:
     correlation_id = correlation_id or gerar_correlation_id()
     pergunta_mascarada = mascarar_pii(pergunta.strip())
     fontes = recuperar_fontes_semanticas_persistidas(db, pergunta_mascarada, top_k=top_k)
-    return _montar_resposta(fontes, correlation_id=correlation_id, engine=ENGINE_PERSISTIDO)
+    return _montar_resposta(pergunta_mascarada, fontes, correlation_id=correlation_id, engine=ENGINE_PERSISTIDO)

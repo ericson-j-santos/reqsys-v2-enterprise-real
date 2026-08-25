@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     reqsys_rag_documents_path: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_DOCUMENTS_PATH', '') or '')
     reqsys_rag_vector_store: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_VECTOR_STORE', 'in_memory') or 'in_memory')
     reqsys_rag_require_sources: bool = Field(default_factory=lambda: _bool_secret('REQSYS_RAG_REQUIRE_SOURCES', 'true'))
+    reqsys_rag_llm_provider: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_LLM_PROVIDER', '') or '')
+    reqsys_rag_llm_api_key: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_LLM_API_KEY', '') or '')
+    reqsys_rag_llm_model: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_LLM_MODEL', '') or '')
 
     # Fila de autonomia operacional — memória somente em DEV/testes; Redis Streams em STG/PROD.
     operational_queue_provider: str = Field(default_factory=lambda: get_secret('OPERATIONAL_QUEUE_PROVIDER', '') or '')
