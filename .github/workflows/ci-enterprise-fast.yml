@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/ci_enterprise_guardrails.py
-          python scripts/validate_legacy_frontend_references.py
+          python scripts/check_legacy_frontend_references.py
 
       - name: Publicar relatorio de guardrails
         if: always()
@@ -66,7 +66,7 @@ jobs:
         id: detect
         shell: bash
         run: |
-          if [ -f scripts/ci_enterprise_guardrails.py ] && [ -f scripts/validate_legacy_frontend_references.py ]; then
+          if [ -f scripts/ci_enterprise_guardrails.py ] && [ -f scripts/check_legacy_frontend_references.py ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -92,7 +92,7 @@ jobs:
         run: >-
           ruff check
           scripts/ci_enterprise_guardrails.py
-          scripts/validate_legacy_frontend_references.py
+          scripts/check_legacy_frontend_references.py
           --output-format=github
 
       - name: Smoke Python do guardrail
@@ -101,7 +101,7 @@ jobs:
         run: >-
           python -m py_compile
           scripts/ci_enterprise_guardrails.py
-          scripts/validate_legacy_frontend_references.py
+          scripts/check_legacy_frontend_references.py
 
   frontend-fast:
     name: Frontend fast checks
