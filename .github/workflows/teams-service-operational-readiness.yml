@@ -6,7 +6,7 @@ on:
       - docs/runbooks/teams-notification-service.md
       - .github/workflows/teams-*.yml
       - tools/geradores/teams_graph_gateway_autocontido.py
-      - ops-dashboard/teams-notification/**
+      - docs/ops-dashboard/teams-notification/**
   workflow_dispatch:
 
 permissions:
@@ -33,7 +33,7 @@ jobs:
             '.github/workflows/teams-notification-dashboard.yml'
             '.github/workflows/teams-dashboard-availability-monitor.yml'
             'tools/geradores/teams_graph_gateway_autocontido.py'
-            'ops-dashboard/teams-notification/index.html'
+            'docs/ops-dashboard/teams-notification/index.html'
             'docs/runbooks/teams-notification-service.md'
           )
           for path in "${required[@]}"; do
@@ -70,7 +70,7 @@ jobs:
           grep -Fq 'SLO_TARGET' .github/workflows/teams-notification-slo.yml
           grep -Fq 'deploy-pages' .github/workflows/teams-notification-dashboard.yml
           grep -Fq 'MAX_DATA_AGE_HOURS' .github/workflows/teams-dashboard-availability-monitor.yml
-          ! grep -R --include='*.json' --include='*.html' -E 'https://[^ ]*(webhook|logic\.azure|powerautomate)' ops-dashboard/teams-notification
+          ! grep -R --include='*.json' --include='*.html' -E 'https://[^ ]*(webhook|logic\.azure|powerautomate)' docs/ops-dashboard/teams-notification
 
       - name: Registrar evidência
         run: |

@@ -55,7 +55,7 @@ jobs:
           rm -rf site
           mkdir -p site/showcase site/codex-local-online
 
-          cp ops-dashboard/teams-notification/index.html site/index.html
+          cp docs/ops-dashboard/teams-notification/index.html site/index.html
           cp -a docs/public-showcase/reqsys-linkedin/. site/showcase/
           cp -a tools/codex-local-online/. site/codex-local-online/
           mkdocs build --strict --site-dir site/docs

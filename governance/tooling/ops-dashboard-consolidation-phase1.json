@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "as_of": "2026-08-25",
+  "phase": "canonicalization",
+  "base_sha": "335163d0b44eff94688bbd75f20da12072282d4b",
+  "canonical_target": "docs/ops-dashboard",
+  "legacy_root": "ops-dashboard",
+  "legacy_root_removed": false,
+  "removal_authorized": false,
+  "copied_assets": [
+    {
+      "source": "ops-dashboard/movimento-email/index.html",
+      "target": "docs/ops-dashboard/movimento-email/index.html",
+      "blob_sha": "3b9bab0af65525545ba276bec3adc6e276c65643"
+    },
+    {
+      "source": "ops-dashboard/teams-notification/index.html",
+      "target": "docs/ops-dashboard/teams-notification/index.html",
+      "blob_sha": "4ff9bc411b6944d7a58256f3948a927f1ea58a47"
+    }
+  ],
+  "migrated_operational_consumers": [
+    ".github/workflows/teams-notification-dashboard.yml",
+    ".github/workflows/teams-public-dashboard-smoke.yml",
+    ".github/workflows/teams-certification-dashboard-contract.yml",
+    ".github/workflows/teams-public-dashboard-smoke-contract.yml",
+    ".github/workflows/teams-service-operational-readiness.yml",
+    ".github/workflows/deploy-reqsys-pages-composite.yml",
+    ".github/workflows/teams-gold-certification.yml"
+  ],
+  "remaining_blockers": [
+    {
+      "path": "tools/geradores/movimento_email_autocontido.py",
+      "reason": "O comando dashboard ainda usa ops-dashboard/movimento-email/data.json como destino padrão.",
+      "required_change": "Migrar default, help e referências internas para docs/ops-dashboard/movimento-email antes de remover o diretório raiz."
+    }
+  ],
+  "rollback": {
+    "base_sha": "335163d0b44eff94688bbd75f20da12072282d4b",
+    "strategy": "Reverter o PR de canonicalização se houver regressão comprovada; não reescrever histórico."
+  }
+}
