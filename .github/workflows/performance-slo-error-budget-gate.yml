@@ -1,0 +1,141 @@
+name: Performance SLO Error Budget Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/performance_slo_error_budget.py"
+      - "tests/test_performance_slo_error_budget.py"
+      - "config/runtime-performance-budgets.json"
+      - ".github/workflows/performance-slo-error-budget-gate.yml"
+      - "docs/padrao-ouro/PERFORMANCE_SLO_ERROR_BUDGET.md"
+  workflow_run:
+    workflows:
+      - Dynamic Performance Gate
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: performance-slo-${{ github.event.pull_request.number || github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract-validation:
+    name: Validate performance SLO contracts
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test SLO error budget and sustained degradation
+        run: python -m unittest discover -s tests -p "test_performance_slo_error_budget.py" -v
+      - name: Compile evaluator
+        run: python -m py_compile scripts/performance_slo_error_budget.py
+
+  evaluate-main-slo:
+    name: Evaluate main performance SLO and error budget
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download Dynamic Performance Gate evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: dynamic-performance-evidence-main
+          path: artifacts/performance
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Evaluate SLO error budget and 3-run degradation
+        id: slo
+        continue-on-error: true
+        run: |
+          python scripts/performance_slo_error_budget.py \
+            --history artifacts/performance/performance-history.json \
+            --policy config/runtime-performance-budgets.json \
+            --output artifacts/performance/performance-slo-evidence.json \
+            --environment prod \
+            --correlation-id "performance-slo-${{ github.event.workflow_run.id }}" \
+            --strict
+
+      - name: Publish SLO summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          path = Path('artifacts/performance/performance-slo-evidence.json')
+          print('## Performance SLO / Error Budget')
+          if not path.exists():
+              print('\nEvidência SLO ausente.')
+              raise SystemExit(0)
+          data = json.loads(path.read_text(encoding='utf-8'))
+          summary = data.get('summary', {})
+          print(f"\n- Status: `{data.get('status')}`")
+          print(f"- Risk: `{data.get('operational_risk')}`")
+          print(f"- SLO breaches: `{summary.get('breach_count', 0)}`")
+          print(f"- Error budget warnings: `{summary.get('warning_count', 0)}`")
+          print(f"- Regressões pontuais: `{summary.get('point_regressions_total', 0)}`")
+          print(f"- Degradações sustentadas: `{summary.get('sustained_degradations_total', 0)}`")
+          print('\n| SLO | Atual | Alvo | Budget restante | Status |')
+          print('|---|---:|---:|---:|---|')
+          for item in data.get('slos', []):
+              actual = item.get('actual_percent')
+              remaining = item.get('error_budget_remaining_percent')
+              actual_text = '—' if actual is None else f'{actual:.2f}%'
+              remaining_text = '—' if remaining is None else f'{remaining:.2f}%'
+              print(f"| `{item.get('slo_id')}` | {actual_text} | {item.get('target_percent')}% | {remaining_text} | {item.get('status')} |")
+          findings = (data.get('sustained_degradation') or {}).get('findings') or []
+          if findings:
+              print('\n### Degradação sustentada')
+              for item in findings:
+                  print(f"- `{item.get('subject')}` / `{item.get('metric')}`: {item.get('required_consecutive')} execuções consecutivas.")
+          PY
+
+      - name: Upload SLO evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-slo-evidence
+          path: artifacts/performance/performance-slo-evidence.json
+          if-no-files-found: error
+          retention-days: 45
+
+      - name: Enforce SLO decision
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('artifacts/performance/performance-slo-evidence.json')
+          if not path.exists():
+              raise SystemExit('Performance SLO gate bloqueado: evidência ausente')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          status = data.get('status')
+          if status == 'blocked':
+              raise SystemExit('Performance SLO gate bloqueado: error budget esgotado ou degradação sustentada')
+          if status not in ('passed', 'watch', 'insufficient_history'):
+              raise SystemExit(f'Performance SLO gate bloqueado: status inesperado {status}')
+          print(f'Performance SLO gate aprovado: {status}')
+          PY

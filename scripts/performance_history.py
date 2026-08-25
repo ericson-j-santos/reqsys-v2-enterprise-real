@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-VERSION = "1.0.0"
+VERSION = "1.1.1"
 DEFAULT_ARTIFACT_NAME = "dynamic-performance-evidence-main"
 API_HIGHER_WORSE = ("p95_ms", "p99_ms")
 BROWSER_HIGHER_WORSE = (
@@ -402,8 +402,8 @@ def render_dashboard(report: dict[str, Any]) -> str:
     regressions = report["regressions"]
     summary = report["summary"]
     snapshots = report["snapshots"]
-    status = summary["status"]
-    status_class = "ok" if status == "passed" else "warn" if status == "insufficient_history" else "bad"
+    status = summary.get("decision", summary["status"])
+    status_class = "ok" if status == "passed" else "warn" if status in {"insufficient_history", "watch"} else "bad"
 
     endpoint_rows = []
     for path, metrics in (current.get("api") or {}).items():
@@ -467,11 +467,11 @@ def render_dashboard(report: dict[str, Any]) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>ReqSys Performance History</title>
 <style>:root{{color-scheme:dark;font-family:Inter,Segoe UI,Arial,sans-serif}}body{{margin:0;background:#0b1220;color:#e5e7eb}}main{{max-width:1280px;margin:auto;padding:24px}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:18px 0}}.card{{background:#111827;border:1px solid #334155;border-radius:12px;padding:16px}}.value{{font-size:1.55rem;font-weight:700}}.ok{{color:#4ade80}}.warn{{color:#facc15}}.bad{{color:#f87171}}table{{width:100%;border-collapse:collapse;background:#111827;margin:10px 0 24px}}th,td{{padding:10px;border:1px solid #334155;text-align:left}}th{{background:#172033}}code,svg{{color:#7dd3fc}}small{{color:#94a3b8}}</style></head><body><main>
 <h1>ReqSys — Performance 7/30 dias</h1><small>Gerado em {html.escape(report['generated_at'])} · run {html.escape(str(current.get('run_id','')))} · SHA {html.escape(str(current.get('head_sha',''))[:12])}</small>
-<section class="cards"><div class="card"><div>Status</div><div class="value {status_class}">{html.escape(status)}</div></div><div class="card"><div>Amostras rolling</div><div class="value">{summary['samples_total']}</div></div><div class="card"><div>Baseline 7d</div><div class="value">{b7.get('sample_count',0)}/{b7.get('minimum_samples',0)}</div></div><div class="card"><div>Baseline 30d</div><div class="value">{b30.get('sample_count',0)}/{b30.get('minimum_samples',0)}</div></div><div class="card"><div>Regressões</div><div class="value {'bad' if regressions else 'ok'}">{len(regressions)}</div></div></section>
+<section class="cards"><div class="card"><div>Status</div><div class="value {status_class}">{html.escape(status)}</div></div><div class="card"><div>Amostras rolling</div><div class="value">{summary['samples_total']}</div></div><div class="card"><div>Baseline 7d</div><div class="value">{b7.get('sample_count',0)}/{b7.get('minimum_samples',0)}</div></div><div class="card"><div>Baseline 30d</div><div class="value">{b30.get('sample_count',0)}/{b30.get('minimum_samples',0)}</div></div><div class="card"><div>Regressões</div><div class="value {'warn' if regressions else 'ok'}">{len(regressions)}</div></div></section>
 <h2>Endpoints</h2><table><thead><tr><th>Endpoint</th><th>p95 atual</th><th>p95 7d</th><th>Δ 7d</th><th>p95 30d</th><th>RPS</th><th>Erro</th><th>Tendência</th></tr></thead><tbody>{''.join(endpoint_rows)}</tbody></table>
 <h2>Runtime JavaScript</h2><table><thead><tr><th>Métrica</th><th>Atual</th><th>Mediana 7d</th><th>Δ 7d</th><th>Mediana 30d</th></tr></thead><tbody>{''.join(browser_rows)}</tbody></table>
 <h2>Regressões maduras</h2><table><thead><tr><th>Escopo</th><th>Alvo</th><th>Métrica</th><th>Janela</th><th>Atual</th><th>Baseline</th><th>Regressão</th></tr></thead><tbody>{''.join(regression_rows)}</tbody></table>
-<p><small>Baseline usa mediana, exclui a amostra atual e só bloqueia após a maturidade mínima configurada.</small></p></main></body></html>"""
+<p><small>Baseline usa mediana e exclui a amostra atual. Regressão relativa isolada é decision=watch quando block_on_single_regression=false; o status de máquina permanece passed para compatibilidade. Bloqueio sustentado é tratado pelo Performance SLO Error Budget Gate.</small></p></main></body></html>"""
 
 
 def build_report(
@@ -497,7 +497,13 @@ def build_report(
         history_policy.get("regression") or {},
     )
     mature = [int(key) for key, value in baselines.items() if value.get("mature")]
-    status = "blocked" if regressions else "passed" if mature else "insufficient_history"
+    block_single = bool(history_policy.get("block_on_single_regression", True))
+    if regressions:
+        decision = "blocked" if block_single else "watch"
+        status = "blocked" if block_single else "passed"
+    else:
+        status = "passed" if mature else "insufficient_history"
+        decision = status
     return {
         "schema_version": "1.0.0",
         "history_version": VERSION,
@@ -506,11 +512,13 @@ def build_report(
         "generated_at": iso_utc(datetime.now(UTC)),
         "summary": {
             "status": status,
+            "decision": decision,
             "samples_total": len(merged),
             "mature_windows": mature,
             "regressions_total": len(regressions),
             "minimum_baseline_samples": minimum_samples,
             "retention_days": retention_days,
+            "block_on_single_regression": block_single,
         },
         "current": current,
         "baselines": baselines,
