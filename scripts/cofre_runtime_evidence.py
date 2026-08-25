@@ -59,7 +59,7 @@ class ApiClient:
             "User-Agent": "reqsys-cofre-runtime-evidence/1.1",
         }
         if self.admin_jwt:
-            headers["Authorization"] = f"Bearer {self.admin_jwt}"
+            headers["X-Service-Token"] = self.admin_jwt
         if vault_token:
             headers["X-Vault-Token"] = vault_token
         body = None

@@ -18,10 +18,12 @@ from app.core.secrets import (
     vault_initialized,
     write_secret_to_vault,
 )
-from app.core.security import require_admin
+from app.core.service_tokens import ServiceAuthContext, require_admin_or_service_token
 from app.db import get_db
 from app.models.vault_token import VaultToken
 from app.services.auditoria import registrar_evento
+
+_require_cofre_admin = require_admin_or_service_token('cofre:runtime_evidence')
 
 router = APIRouter(prefix='/v1/cofre', tags=['Cofre'])
 
@@ -152,13 +154,13 @@ def _exigir_escopo(ctx: VaultTokenContext, key: str) -> None:
 @router.post('/init')
 def inicializar_vault(
     overwrite: bool = False,
-    user: dict = Depends(require_admin),
+    ctx: ServiceAuthContext = Depends(_require_cofre_admin),
     db: Session = Depends(get_db),
     x_correlation_id: str | None = Header(default=None),
 ):
     """Cria a master key no keyring do sistema. Necessário uma única vez por ambiente."""
     criado = init_vault(overwrite=overwrite)
-    _auditar(db, x_correlation_id, user.get('sub', 'admin'), 'COFRE_INICIALIZADO', 'global', {'overwrite': overwrite, 'criado': criado})
+    _auditar(db, x_correlation_id, ctx.ator, 'COFRE_INICIALIZADO', 'global', {'overwrite': overwrite, 'criado': criado})
     if not criado and not overwrite:
         return ok({
             'status': 'ja_inicializado',
@@ -168,7 +170,7 @@ def inicializar_vault(
     return ok({'status': 'inicializado', 'service': _vault_service_name()})
 
 
-@router.get('/status', dependencies=[Depends(require_admin)])
+@router.get('/status', dependencies=[Depends(_require_cofre_admin)])
 def status_vault():
     """Retorna se o vault está inicializado e qual service name está em uso."""
     return ok({
@@ -181,14 +183,14 @@ def status_vault():
 @router.post('/segredos')
 def gravar_segredo(
     payload: GravarSegredoPayload,
-    user: dict = Depends(require_admin),
+    ctx: ServiceAuthContext = Depends(_require_cofre_admin),
     db: Session = Depends(get_db),
     x_correlation_id: str | None = Header(default=None),
 ):
     """Criptografa e armazena um segredo no cofre."""
     try:
         write_secret_to_vault(payload.key, payload.value)
-        _auditar(db, x_correlation_id, user.get('sub', 'admin'), 'COFRE_SEGREDO_GRAVADO', payload.key)
+        _auditar(db, x_correlation_id, ctx.ator, 'COFRE_SEGREDO_GRAVADO', payload.key)
         return ok({'key': payload.key, 'gravado': True})
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -197,7 +199,7 @@ def gravar_segredo(
 @router.delete('/segredos/{key}')
 def remover_segredo(
     key: str,
-    user: dict = Depends(require_admin),
+    ctx: ServiceAuthContext = Depends(_require_cofre_admin),
     db: Session = Depends(get_db),
     x_correlation_id: str | None = Header(default=None),
 ):
@@ -205,7 +207,7 @@ def remover_segredo(
     if key in _BLOCKED_KEYS:
         raise HTTPException(status_code=400, detail='Chave reservada não pode ser removida por esta rota')
     removido = delete_secret_from_vault(key)
-    _auditar(db, x_correlation_id, user.get('sub', 'admin'), 'COFRE_SEGREDO_REMOVIDO', key, {'removido': removido})
+    _auditar(db, x_correlation_id, ctx.ator, 'COFRE_SEGREDO_REMOVIDO', key, {'removido': removido})
     return ok({'key': key, 'removido': removido})
 
 
@@ -216,7 +218,7 @@ def remover_segredo(
 @router.post('/tokens')
 def criar_token(
     payload: CriarTokenPayload,
-    user: dict = Depends(require_admin),
+    ctx: ServiceAuthContext = Depends(_require_cofre_admin),
     db: Session = Depends(get_db),
     x_correlation_id: str | None = Header(default=None),
 ):
@@ -226,7 +228,7 @@ def criar_token(
     db.add(registro)
     db.commit()
     db.refresh(registro)
-    _auditar(db, x_correlation_id, user.get('sub', 'admin'), 'COFRE_TOKEN_CRIADO', payload.label, {'id': registro.id, 'key_patterns': payload.key_patterns})
+    _auditar(db, x_correlation_id, ctx.ator, 'COFRE_TOKEN_CRIADO', payload.label, {'id': registro.id, 'key_patterns': payload.key_patterns})
     return ok({
         'id': registro.id,
         'label': registro.label,
@@ -236,7 +238,7 @@ def criar_token(
     })
 
 
-@router.get('/tokens', dependencies=[Depends(require_admin)])
+@router.get('/tokens', dependencies=[Depends(_require_cofre_admin)])
 def listar_tokens(db: Session = Depends(get_db)):
     """Lista tokens escopados sem expor o valor do token."""
     tokens = db.query(VaultToken).order_by(VaultToken.created_at.desc()).all()
@@ -258,7 +260,7 @@ def listar_tokens(db: Session = Depends(get_db)):
 @router.delete('/tokens/{token_id}')
 def revogar_token(
     token_id: int,
-    user: dict = Depends(require_admin),
+    ctx: ServiceAuthContext = Depends(_require_cofre_admin),
     db: Session = Depends(get_db),
     x_correlation_id: str | None = Header(default=None),
 ):
@@ -270,7 +272,7 @@ def revogar_token(
         registro.revoked_at = datetime.now(timezone.utc)
         db.add(registro)
         db.commit()
-    _auditar(db, x_correlation_id, user.get('sub', 'admin'), 'COFRE_TOKEN_REVOGADO', registro.label, {'id': token_id})
+    _auditar(db, x_correlation_id, ctx.ator, 'COFRE_TOKEN_REVOGADO', registro.label, {'id': token_id})
     return ok({'id': token_id, 'revogado': True})
 
 
