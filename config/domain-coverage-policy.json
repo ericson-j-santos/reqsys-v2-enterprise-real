@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "mode": "regression_gate",
   "allowed_regression_percentage_points": 0.0,
   "domains": {
@@ -39,7 +39,7 @@
     }
   },
   "baseline": {
-    "core": 86.85,
+    "core": 87.82,
     "services": 92.37,
     "api": 89.42,
     "repositories": 100.0,
