@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "updated_at": "2026-06-23",
+  "updated_at": "2026-08-25",
   "description": "Catalogo versionado de padroes conhecidos de falha operacional do ReqSys.",
   "safety_policy": {
     "automatic_remediation_enabled": false,
@@ -132,12 +132,29 @@
         "ruff format",
         "would reformat",
         "Found ",
-        "E501"
+        "E501",
+        "I001",
+        "Import block is un-sorted"
       ],
       "tags": ["python", "ruff", "lint", "quality"],
       "recommended_action": "Corrigir lint/formatacao no codigo-fonte e manter falha como bloqueio legitimo, sem rerun como solucao.",
       "can_auto_rerun": false,
       "can_auto_fix": true
+    },
+    {
+      "id": "FPE-PY-COVERAGE-REGRESSION-001",
+      "name": "Python domain coverage regression",
+      "category": "quality_gate",
+      "severity": "high",
+      "confidence": "high",
+      "match_any": [
+        "\"regression\": true",
+        "Coverage regression by domain"
+      ],
+      "tags": ["python", "pytest", "coverage", "regression", "quality"],
+      "recommended_action": "Nao reduzir baseline nem tolerancia. Identificar arquivos novos ou alterados com cobertura insuficiente, adicionar testes de ramos reais e reexecutar o gate de cobertura.",
+      "can_auto_rerun": false,
+      "can_auto_fix": false
     },
     {
       "id": "FPE-TEST-FAIL-001",
