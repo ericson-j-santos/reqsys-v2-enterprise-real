@@ -38,7 +38,11 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Executar guardrails enterprise
-        run: python scripts/ci_enterprise_guardrails.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci_enterprise_guardrails.py
+          python scripts/validate_legacy_frontend_references.py
 
       - name: Publicar relatorio de guardrails
         if: always()
@@ -62,7 +66,7 @@ jobs:
         id: detect
         shell: bash
         run: |
-          if [ -f scripts/ci_enterprise_guardrails.py ]; then
+          if [ -f scripts/ci_enterprise_guardrails.py ] && [ -f scripts/validate_legacy_frontend_references.py ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -85,12 +89,19 @@ jobs:
       - name: Ruff backend
         if: steps.detect.outputs.enabled == 'true'
         shell: bash
-        run: ruff check scripts/ci_enterprise_guardrails.py --output-format=github
+        run: >-
+          ruff check
+          scripts/ci_enterprise_guardrails.py
+          scripts/validate_legacy_frontend_references.py
+          --output-format=github
 
       - name: Smoke Python do guardrail
         if: steps.detect.outputs.enabled == 'true'
         shell: bash
-        run: python -m py_compile scripts/ci_enterprise_guardrails.py
+        run: >-
+          python -m py_compile
+          scripts/ci_enterprise_guardrails.py
+          scripts/validate_legacy_frontend_references.py
 
   frontend-fast:
     name: Frontend fast checks
