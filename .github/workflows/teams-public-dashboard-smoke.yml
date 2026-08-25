@@ -10,7 +10,7 @@ on:
     paths:
       - .github/workflows/teams-public-dashboard-smoke.yml
       - .github/workflows/teams-notification-dashboard.yml
-      - ops-dashboard/teams-notification/**
+      - docs/ops-dashboard/teams-notification/**
 
 permissions:
   contents: read
