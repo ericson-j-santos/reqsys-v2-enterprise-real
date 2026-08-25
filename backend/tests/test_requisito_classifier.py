@@ -1,6 +1,9 @@
 import pytest
 
-from app.services.requisito_classifier import avaliar_classificador, classificar_requisito
+from app.services.requisito_classifier import (
+    avaliar_classificador,
+    classificar_requisito,
+)
 
 
 @pytest.mark.parametrize(
