@@ -23,11 +23,11 @@ class ReqSysFreeTierBackupTests(unittest.TestCase):
     def inventory(self) -> dict[str, object]:
         return json.loads(Path("governance/backup/reqsys-backup-assets.json").read_text())
 
-    def test_inventory_is_valid_for_dev_and_stg_rollout(self) -> None:
+    def test_inventory_is_valid_for_governed_rollout(self) -> None:
         inventory = self.inventory()
         self.assertEqual(validate_inventory(inventory), [])
         selected = select(inventory, "all", include_disabled=False)
-        self.assertEqual([asset["environment"] for asset in selected], ["dev", "stg"])
+        selected_envs = [asset["environment"] for asset in selected]
 
         stg = next(asset for asset in inventory["assets"] if asset["environment"] == "stg")
         self.assertTrue(stg["enabled"])
@@ -36,9 +36,32 @@ class ReqSysFreeTierBackupTests(unittest.TestCase):
         self.assertFalse(stg["rollout_evidence"]["production_allowed"])
         self.assertTrue(str(stg["rollout_evidence"]["source_run_id"]).isdigit())
 
-        prod = select(inventory, "prod", include_disabled=True)[0]
-        self.assertFalse(prod["enabled"])
-        self.assertEqual(merged(inventory, prod)["database_path"], "/data/reqsys.db")
+        prod = next(asset for asset in inventory["assets"] if asset["environment"] == "prod")
+        if prod["enabled"]:
+            self.assertEqual(selected_envs, ["dev", "stg", "prod"])
+            self.assertEqual(prod["rollout_state"], "approved_after_valid_stg_restore_evidence")
+            evidence = prod["rollout_evidence"]
+            self.assertEqual(evidence["source_environment"], "stg")
+            self.assertEqual(
+                evidence["decision"],
+                "prod_rollout_candidate_requires_approval",
+            )
+            self.assertEqual(
+                evidence["human_approval_mode"],
+                "workflow_dispatch_APROVO-PROD",
+            )
+            self.assertTrue(evidence["production_allowed"])
+            self.assertTrue(str(evidence["source_run_id"]).isdigit())
+            self.assertTrue(str(evidence["source_artifact_digest"]).startswith("sha256:"))
+        else:
+            self.assertEqual(selected_envs, ["dev", "stg"])
+            self.assertEqual(
+                prod["rollout_state"],
+                "enable_after_stg_restore_evidence_and_approval",
+            )
+
+        selected_prod = select(inventory, "prod", include_disabled=True)[0]
+        self.assertEqual(merged(inventory, selected_prod)["database_path"], "/data/reqsys.db")
 
     def test_consistent_sqlite_backup_and_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -48,7 +71,10 @@ class ReqSysFreeTierBackupTests(unittest.TestCase):
             metadata = root / "metadata.json"
             with sqlite3.connect(source) as connection:
                 connection.execute("CREATE TABLE item(id INTEGER PRIMARY KEY, name TEXT)")
-                connection.executemany("INSERT INTO item(name) VALUES (?)", [("a",), ("b",)])
+                connection.executemany(
+                    "INSERT INTO item(name) VALUES (?)",
+                    [("a",), ("b",)],
+                )
             remote = create_backup(source, backup, metadata)
             local = sqlite_manifest(backup)
             self.assertEqual(remote["quick_check"], "ok")
@@ -73,7 +99,13 @@ class ReqSysFreeTierBackupTests(unittest.TestCase):
             asset,
             manifest,
             dict(manifest),
-            {"status":"healthy","total_size_bytes":100,"warn_bytes":800,"hard_bytes":900,"utilization_percent":11.111},
+            {
+                "status": "healthy",
+                "total_size_bytes": 100,
+                "warn_bytes": 800,
+                "hard_bytes": 900,
+                "utilization_percent": 11.111,
+            },
             "snapshot-1",
             "https://example.test/run",
             "corr-1",
@@ -88,15 +120,28 @@ class ReqSysFreeTierBackupTests(unittest.TestCase):
 
     def test_dashboard_reports_configuration_block(self) -> None:
         result = build_dashboard(
-            self.inventory(), [], False, ["R2_ACCESS_KEY_ID"], "https://example.test/run", "skipped"
+            self.inventory(),
+            [],
+            False,
+            ["R2_ACCESS_KEY_ID"],
+            "https://example.test/run",
+            "skipped",
         )
         self.assertEqual(result["health"], "warning")
         self.assertEqual(result["assets"][0]["status"], "blocked_configuration")
-        self.assertIn("R2_ACCESS_KEY_ID", dashboard_markdown(result))
+        markdown = dashboard_markdown(result)
+        self.assertIn("R2_ACCESS_KEY_ID", markdown)
+        self.assertIn("quota alerta em 4 GiB e bloqueia em 4.5 GiB", markdown)
+        self.assertNotIn("quota alerta em 8 GiB e bloqueia em 9 GiB", markdown)
 
     def test_dashboard_marks_failed_execution_critical(self) -> None:
         result = build_dashboard(
-            self.inventory(), [], True, [], "https://example.test/run", "failure"
+            self.inventory(),
+            [],
+            True,
+            [],
+            "https://example.test/run",
+            "failure",
         )
         self.assertEqual(result["health"], "critical")
         self.assertEqual(result["assets"][0]["status"], "critical")

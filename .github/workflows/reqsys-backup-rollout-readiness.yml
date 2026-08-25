@@ -6,7 +6,9 @@ on:
     paths:
       - ".github/workflows/reqsys-backup-rollout-readiness.yml"
       - "scripts/evaluate_backup_rollout_readiness.py"
+      - "scripts/reqsys_free_tier_backup.py"
       - "tests/test_evaluate_backup_rollout_readiness.py"
+      - "tests/test_reqsys_free_tier_backup.py"
   workflow_run:
     workflows: ["ReqSys Free Tier Backup"]
     types: [completed]
@@ -17,10 +19,15 @@ on:
         required: true
         type: string
       strict:
-        description: Falhar quando DEV não autorizar candidato STG
+        description: Falhar quando a evidência não autorizar o próximo estágio
         required: true
         type: boolean
         default: false
+      approve_prod:
+        description: Para propor PROD informe APROVO-PROD
+        required: false
+        type: string
+        default: ""
 
 permissions:
   actions: read
@@ -49,8 +56,8 @@ jobs:
         run: python -m pip install --disable-pip-version-check pytest
       - name: Validate implementation
         run: |
-          python -m py_compile scripts/evaluate_backup_rollout_readiness.py
-          python -m pytest -q tests/test_evaluate_backup_rollout_readiness.py
+          python -m py_compile scripts/evaluate_backup_rollout_readiness.py scripts/reqsys_free_tier_backup.py
+          python -m pytest -q tests/test_evaluate_backup_rollout_readiness.py tests/test_reqsys_free_tier_backup.py
 
   evaluate-dev:
     if: >-
@@ -66,6 +73,7 @@ jobs:
       stg_allowed: ${{ steps.result.outputs.stg_allowed }}
       decision: ${{ steps.result.outputs.decision }}
       source_run_id: ${{ steps.source.outputs.run_id }}
+      source_artifact_digest: ${{ steps.artifact.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,7 +81,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Resolve source run
         id: source
         shell: bash
@@ -83,7 +90,6 @@ jobs:
           else
             echo "run_id=${{ inputs.source_run_id }}" >> "$GITHUB_OUTPUT"
           fi
-
       - name: Download DEV evidence
         continue-on-error: true
         uses: actions/download-artifact@v4
@@ -93,8 +99,7 @@ jobs:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ steps.source.outputs.run_id }}
-
-      - name: Resolve evidence and artifact digest
+      - name: Resolve DEV evidence and artifact digest
         id: artifact
         shell: bash
         env:
@@ -108,7 +113,6 @@ jobs:
             --jq '.artifacts[] | select(.name=="reqsys-backup-evidence-dev") | .digest' \
             | head -n1 || true)
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-
       - name: Evaluate immutable DEV evidence
         id: result
         shell: bash
@@ -125,33 +129,34 @@ jobs:
             "${args[@]}" \
             --source-run-id "$SOURCE_RUN_ID" \
             --source-artifact-digest "$DIGEST" \
-            --output artifacts/backup/rollout-readiness.json
-          decision=$(jq -r .decision artifacts/backup/rollout-readiness.json)
-          stg_allowed=$(jq -r .stg_allowed artifacts/backup/rollout-readiness.json)
+            --source-environment dev \
+            --output artifacts/backup/rollout-readiness-dev.json
+          decision=$(jq -r .decision artifacts/backup/rollout-readiness-dev.json)
+          stg_allowed=$(jq -r .stg_allowed artifacts/backup/rollout-readiness-dev.json)
           echo "decision=$decision" >> "$GITHUB_OUTPUT"
           echo "stg_allowed=$stg_allowed" >> "$GITHUB_OUTPUT"
-          echo "## BACEN-04 — Rollout readiness" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Decision: **$decision**" >> "$GITHUB_STEP_SUMMARY"
-          echo "- STG allowed: **$stg_allowed**" >> "$GITHUB_STEP_SUMMARY"
-          echo "- PROD allowed: **false**" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Production touched: **false**" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Update rollout status on central dashboard
+          {
+            echo "## BACEN-04 — DEV → STG"
+            echo "- Decision: **$decision**"
+            echo "- STG allowed: **$stg_allowed**"
+            echo "- PROD allowed: **false**"
+            echo "- Production touched: **false**"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Update DEV rollout status on central dashboard
         uses: actions/github-script@v7
         env:
-          REPORT: artifacts/backup/rollout-readiness.json
+          REPORT: artifacts/backup/rollout-readiness-dev.json
         with:
           script: |
             const fs = require("fs");
             const report = JSON.parse(fs.readFileSync(process.env.REPORT, "utf8"));
-            const marker = "<!-- reqsys-backup-rollout-readiness -->";
+            const marker = "<!-- reqsys-backup-rollout-readiness-dev -->";
             const failed = report.checks.filter(item => !item.passed).map(item => item.name);
             const body = `${marker}
             ## Rollout DEV → STG BACEN-04
 
             - Decisão: **${report.decision}**
             - STG elegível: **${report.stg_allowed}**
-            - PROD elegível: **false**
             - Checks pendentes: \`${failed.join(", ") || "nenhum"}\`
             - Run de origem: \`${report.source_run_id}\`
             - Artifact digest: \`${report.source_artifact_digest || "ausente"}\`
@@ -179,18 +184,160 @@ jobs:
                 body
               });
             }
-
       - uses: actions/upload-artifact@v4
         with:
-          name: reqsys-backup-rollout-readiness
-          path: artifacts/backup/rollout-readiness.json
+          name: reqsys-backup-rollout-readiness-dev
+          path: artifacts/backup/rollout-readiness-dev.json
           if-no-files-found: error
           retention-days: 365
-
-      - name: Enforce strict manual mode
+      - name: Enforce strict DEV mode
         if: github.event_name == 'workflow_dispatch' && inputs.strict && steps.result.outputs.stg_allowed != 'true'
         run: |
           echo "::error::DEV evidence does not authorize an STG rollout candidate."
+          exit 1
+
+  evaluate-stg:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.conclusion == 'success'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      prod_allowed: ${{ steps.result.outputs.prod_allowed }}
+      decision: ${{ steps.result.outputs.decision }}
+      source_run_id: ${{ steps.source.outputs.run_id }}
+      source_artifact_digest: ${{ steps.artifact.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolve source run
+        id: source
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == workflow_run ]]; then
+            echo "run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_id=${{ inputs.source_run_id }}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Download STG evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: reqsys-backup-evidence-stg
+          path: downloaded/stg
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.source.outputs.run_id }}
+      - name: Resolve STG evidence and artifact digest
+        id: artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          evidence=$(find downloaded/stg -type f -name evidence.json -print -quit 2>/dev/null || true)
+          echo "evidence=$evidence" >> "$GITHUB_OUTPUT"
+          digest=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts" \
+            --jq '.artifacts[] | select(.name=="reqsys-backup-evidence-stg") | .digest' \
+            | head -n1 || true)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Evaluate immutable STG evidence
+        id: result
+        shell: bash
+        env:
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+          EVIDENCE: ${{ steps.artifact.outputs.evidence }}
+          DIGEST: ${{ steps.artifact.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/backup
+          args=()
+          [[ -n "$EVIDENCE" ]] && args+=(--evidence "$EVIDENCE")
+          python scripts/evaluate_backup_rollout_readiness.py \
+            "${args[@]}" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-artifact-digest "$DIGEST" \
+            --source-environment stg \
+            --output artifacts/backup/rollout-readiness-stg.json
+          decision=$(jq -r .decision artifacts/backup/rollout-readiness-stg.json)
+          prod_allowed=$(jq -r .prod_allowed artifacts/backup/rollout-readiness-stg.json)
+          echo "decision=$decision" >> "$GITHUB_OUTPUT"
+          echo "prod_allowed=$prod_allowed" >> "$GITHUB_OUTPUT"
+          {
+            echo "## BACEN-04 — STG → PROD"
+            echo "- Decision: **$decision**"
+            echo "- PROD evidence eligible: **$prod_allowed**"
+            echo "- Human approval required: **true**"
+            echo "- Automatic PROD enable allowed: **false**"
+            echo "- Production touched: **false**"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Update STG rollout status on central dashboard
+        uses: actions/github-script@v7
+        env:
+          REPORT: artifacts/backup/rollout-readiness-stg.json
+        with:
+          script: |
+            const fs = require("fs");
+            const report = JSON.parse(fs.readFileSync(process.env.REPORT, "utf8"));
+            const marker = "<!-- reqsys-backup-rollout-readiness-stg -->";
+            const failed = report.checks.filter(item => !item.passed).map(item => item.name);
+            const body = `${marker}
+            ## Rollout STG → PROD BACEN-04
+
+            - Decisão: **${report.decision}**
+            - PROD elegível por evidência: **${report.prod_allowed}**
+            - Aprovação humana obrigatória: **true**
+            - Habilitação automática de PROD: **false**
+            - Checks pendentes: \`${failed.join(", ") || "nenhum"}\`
+            - Run de origem: \`${report.source_run_id}\`
+            - Artifact digest: \`${report.source_artifact_digest || "ausente"}\`
+            - Produção acessada: **false**
+            `;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.DASHBOARD_ISSUE),
+              per_page: 100
+            });
+            const current = comments.find(comment => comment.body?.includes(marker));
+            if (current) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: current.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: Number(process.env.DASHBOARD_ISSUE),
+                body
+              });
+            }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-backup-rollout-readiness-stg
+          path: artifacts/backup/rollout-readiness-stg.json
+          if-no-files-found: error
+          retention-days: 365
+      - name: Enforce strict STG mode
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          inputs.strict &&
+          inputs.approve_prod == 'APROVO-PROD' &&
+          steps.result.outputs.prod_allowed != 'true'
+        run: |
+          echo "::error::STG evidence does not authorize a PROD rollout candidate."
           exit 1
 
   propose-stg:
@@ -199,26 +346,42 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
       SOURCE_RUN_ID: ${{ needs.evaluate-dev.outputs.source_run_id }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-      - name: Prepare isolated STG enablement proposal
+      - name: Prepare idempotent STG enablement proposal
         id: prepare
         shell: bash
         run: |
           set -euo pipefail
           branch="automation/enable-stg-backup-${SOURCE_RUN_ID}"
-          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
-            echo "created=false" >> "$GITHUB_OUTPUT"
-            echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+          if python - <<'PY'
+          import json
+          from pathlib import Path
+          doc=json.loads(Path("governance/backup/reqsys-backup-assets.json").read_text())
+          stg=next(x for x in doc["assets"] if x["environment"]=="stg")
+          raise SystemExit(0 if stg["enabled"] else 1)
+          PY
+          then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git checkout -b "$branch"
-          SOURCE_RUN_ID="$SOURCE_RUN_ID" python - <<'PY'
+
+          git fetch origin main
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            git fetch origin "$branch:refs/remotes/origin/proposal"
+            git checkout -B "$branch" refs/remotes/origin/proposal
+            git rebase origin/main
+            git push --force-with-lease origin "$branch"
+          else
+            git checkout -b "$branch"
+            SOURCE_RUN_ID="$SOURCE_RUN_ID" python - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -229,8 +392,6 @@ jobs:
           if assets["prod"]["enabled"] is not False:
               raise SystemExit("PROD must remain disabled")
           stg = assets["stg"]
-          if stg["enabled"] is True:
-              raise SystemExit(0)
           stg["enabled"] = True
           stg["rollout_state"] = "candidate_after_valid_dev_restore_evidence"
           stg["rollout_evidence"] = {
@@ -238,29 +399,32 @@ jobs:
               "decision": "stg_rollout_candidate",
               "production_allowed": False,
           }
-          path.write_text(
-              json.dumps(document, ensure_ascii=False, indent=2) + "\n",
-              encoding="utf-8",
-          )
+          path.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
           PY
-          if git diff --quiet; then
-            echo "created=false" >> "$GITHUB_OUTPUT"
-            echo "branch=$branch" >> "$GITHUB_OUTPUT"
-            exit 0
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add governance/backup/reqsys-backup-assets.json
+            git commit -m "feat(backup): propose STG rollout after DEV evidence"
+            git push origin "$branch"
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add governance/backup/reqsys-backup-assets.json
-          git commit -m "feat(backup): propose STG rollout after DEV evidence"
-          git push origin "$branch"
-          echo "created=true" >> "$GITHUB_OUTPUT"
-          echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
-      - name: Open governed STG rollout PR
-        if: steps.prepare.outputs.created == 'true'
+          if git diff --quiet origin/main...HEAD; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Ensure governed STG rollout PR exists
+        if: steps.prepare.outputs.has_changes == 'true'
         env:
           BRANCH: ${{ steps.prepare.outputs.branch }}
         run: |
+          set -euo pipefail
+          [[ -n "${GH_TOKEN:-}" ]] || { echo "::error::GH_PAT_ACTIONS não configurado."; exit 2; }
+          existing=$(gh pr list --state open --base main --head "$BRANCH" --json number --jq '.[0].number // empty')
+          if [[ -n "$existing" ]]; then
+            echo "PR #$existing already exists for $BRANCH" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           cat > /tmp/pr-body.md <<EOF
           ## Evidência de origem
 
@@ -276,4 +440,116 @@ jobs:
             --base main \
             --head "$BRANCH" \
             --title "feat(backup): habilitar STG após evidência DEV válida" \
+            --body-file /tmp/pr-body.md
+
+  propose-prod:
+    needs: evaluate-stg
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      needs.evaluate-stg.outputs.prod_allowed == 'true' &&
+      inputs.approve_prod == 'APROVO-PROD'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: production
+    env:
+      GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+      SOURCE_RUN_ID: ${{ needs.evaluate-stg.outputs.source_run_id }}
+      SOURCE_ARTIFACT_DIGEST: ${{ needs.evaluate-stg.outputs.source_artifact_digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Prepare idempotent PROD enablement proposal
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="automation/enable-prod-backup-${SOURCE_RUN_ID}"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+          if python - <<'PY'
+          import json
+          from pathlib import Path
+          doc=json.loads(Path("governance/backup/reqsys-backup-assets.json").read_text())
+          prod=next(x for x in doc["assets"] if x["environment"]=="prod")
+          raise SystemExit(0 if prod["enabled"] else 1)
+          PY
+          then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch origin main
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            git fetch origin "$branch:refs/remotes/origin/proposal"
+            git checkout -B "$branch" refs/remotes/origin/proposal
+            git rebase origin/main
+            git push --force-with-lease origin "$branch"
+          else
+            git checkout -b "$branch"
+            SOURCE_RUN_ID="$SOURCE_RUN_ID" SOURCE_ARTIFACT_DIGEST="$SOURCE_ARTIFACT_DIGEST" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("governance/backup/reqsys-backup-assets.json")
+          document = json.loads(path.read_text(encoding="utf-8"))
+          assets = {item["environment"]: item for item in document["assets"]}
+          if assets["stg"]["enabled"] is not True:
+              raise SystemExit("STG must remain enabled before PROD proposal")
+          prod = assets["prod"]
+          if prod["enabled"] is True:
+              raise SystemExit(0)
+          prod["enabled"] = True
+          prod["rollout_state"] = "approved_after_valid_stg_restore_evidence"
+          prod["rollout_evidence"] = {
+              "source_run_id": os.environ["SOURCE_RUN_ID"],
+              "source_artifact_digest": os.environ["SOURCE_ARTIFACT_DIGEST"],
+              "source_environment": "stg",
+              "decision": "prod_rollout_candidate_requires_approval",
+              "human_approval_mode": "workflow_dispatch_APROVO-PROD",
+              "production_allowed": True,
+          }
+          path.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add governance/backup/reqsys-backup-assets.json
+            git commit -m "feat(backup): propose PROD rollout after STG evidence and approval"
+            git push origin "$branch"
+          fi
+
+          if git diff --quiet origin/main...HEAD; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Ensure governed PROD rollout PR exists
+        if: steps.prepare.outputs.has_changes == 'true'
+        env:
+          BRANCH: ${{ steps.prepare.outputs.branch }}
+        run: |
+          set -euo pipefail
+          [[ -n "${GH_TOKEN:-}" ]] || { echo "::error::GH_PAT_ACTIONS não configurado."; exit 2; }
+          existing=$(gh pr list --state open --base main --head "$BRANCH" --json number --jq '.[0].number // empty')
+          if [[ -n "$existing" ]]; then
+            echo "PR #$existing already exists for $BRANCH" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cat > /tmp/pr-body.md <<EOF
+          ## BACEN-04 — promoção governada STG → PROD
+
+          - Run STG de origem: ${SOURCE_RUN_ID}
+          - Artifact digest: ${SOURCE_ARTIFACT_DIGEST}
+          - Decisão: \`prod_rollout_candidate_requires_approval\`
+          - Aprovação humana: \`workflow_dispatch / APROVO-PROD\`
+          - Habilitação automática de PROD: \`false\`
+
+          Esta PR habilita somente o ativo PROD no inventário após evidência STG válida e aprovação humana explícita. O merge continua sujeito aos checks e à revisão governada.
+          EOF
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "feat(backup): habilitar PROD após evidência STG e aprovação" \
             --body-file /tmp/pr-body.md
