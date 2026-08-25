@@ -8,7 +8,7 @@ on:
     branches:
       - main
     paths:
-      - ops-dashboard/teams-notification/**
+      - docs/ops-dashboard/teams-notification/**
       - .github/workflows/teams-notification-dashboard.yml
       - .github/workflows/teams-gold-certification.yml
       - .github/workflows/teams-provisional-gold-certification.yml
@@ -234,7 +234,7 @@ jobs:
 
           site = Path("site")
           site.mkdir(exist_ok=True)
-          source = Path("ops-dashboard/teams-notification/index.html")
+          source = Path("docs/ops-dashboard/teams-notification/index.html")
           (site / "index.html").write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
           (site / "data.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
           (site / "certification-status.json").write_text(json.dumps(certification_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
