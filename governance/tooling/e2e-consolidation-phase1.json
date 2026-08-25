@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0.0",
+  "as_of": "2026-08-25",
+  "canonical_suite": "frontend/tests/e2e",
+  "legacy_suite": "e2e",
+  "summary": {
+    "total_scenarios": 11,
+    "migrar": 1,
+    "ja_coberto": 7,
+    "descartar": 3,
+    "legacy_files_before": 4,
+    "legacy_files_retired_in_phase": 2,
+    "legacy_files_after": 2
+  },
+  "scenarios": [
+    {
+      "source": "e2e/accessibility-angular.spec.ts",
+      "scenario": "campos de login possuem nome acessível",
+      "classification": "JA_COBERTO",
+      "evidence": "frontend/tests/e2e/accessibility-visual.spec.ts executa axe WCAG 2A/2AA/2.1AA e o LoginView canônico declara labels E-mail e Senha.",
+      "target": "frontend/tests/e2e/accessibility-visual.spec.ts"
+    },
+    {
+      "source": "e2e/accessibility-angular.spec.ts",
+      "scenario": "tab navega de E-mail para Senha",
+      "classification": "MIGRAR",
+      "migration_status": "CONCLUIDO",
+      "evidence": "Cobertura explícita de ordem de foco não existia na suíte canônica.",
+      "target": "frontend/tests/e2e/login.spec.js"
+    },
+    {
+      "source": "e2e/accessibility-vuetify.spec.ts",
+      "scenario": "campos de login possuem nome acessível",
+      "classification": "JA_COBERTO",
+      "evidence": "Cobertura equivalente ao cenário Angular e ao axe da suíte canônica.",
+      "target": "frontend/tests/e2e/accessibility-visual.spec.ts"
+    },
+    {
+      "source": "e2e/accessibility-vuetify.spec.ts",
+      "scenario": "botão Entrar possui nome acessível",
+      "classification": "JA_COBERTO",
+      "evidence": "A suíte canônica usa getByRole(button, name=/entrar/i) e o axe inclui regra de nome acessível de controles.",
+      "target": "frontend/tests/e2e/login.spec.js"
+    },
+    {
+      "source": "e2e/login-angular.spec.ts",
+      "scenario": "login com credenciais válidas",
+      "classification": "JA_COBERTO",
+      "evidence": "frontend/tests/e2e/login.spec.js valida login, redirecionamento e token de sessão.",
+      "target": "frontend/tests/e2e/login.spec.js"
+    },
+    {
+      "source": "e2e/login-angular.spec.ts",
+      "scenario": "exibe erro com credenciais inválidas",
+      "classification": "JA_COBERTO",
+      "evidence": "frontend/tests/e2e/login.spec.js valida permanência em /login e ausência de token com senha inválida.",
+      "target": "frontend/tests/e2e/login.spec.js"
+    },
+    {
+      "source": "e2e/login-angular.spec.ts",
+      "scenario": "preencher credenciais demo Analista",
+      "classification": "DESCARTAR",
+      "evidence": "O LoginView canônico não possui mais atalhos de perfil Analista; demo é condicionado a demo_login_enabled.",
+      "target": null
+    },
+    {
+      "source": "e2e/login-angular.spec.ts",
+      "scenario": "preencher credenciais demo Auditor",
+      "classification": "DESCARTAR",
+      "evidence": "O LoginView canônico não possui mais atalhos de perfil Auditor; manter o teste perpetuaria comportamento obsoleto.",
+      "target": null
+    },
+    {
+      "source": "e2e/login-vuetify.spec.ts",
+      "scenario": "login com credenciais válidas",
+      "classification": "JA_COBERTO",
+      "evidence": "Duplicado do cenário Angular e já coberto pela suíte canônica.",
+      "target": "frontend/tests/e2e/login.spec.js"
+    },
+    {
+      "source": "e2e/login-vuetify.spec.ts",
+      "scenario": "exibe erro com credenciais inválidas",
+      "classification": "JA_COBERTO",
+      "evidence": "Duplicado do cenário Angular e já coberto pela suíte canônica.",
+      "target": "frontend/tests/e2e/login.spec.js"
+    },
+    {
+      "source": "e2e/login-vuetify.spec.ts",
+      "scenario": "preencher credenciais demo Admin",
+      "classification": "DESCARTAR",
+      "evidence": "O LoginView canônico não possui mais atalho Admin e não deve reintroduzir credenciais rápidas de implementação legada.",
+      "target": null
+    }
+  ],
+  "retirement": {
+    "retired_files": [
+      "e2e/accessibility-angular.spec.ts",
+      "e2e/accessibility-vuetify.spec.ts"
+    ],
+    "remaining_legacy_files": [
+      "e2e/login-angular.spec.ts",
+      "e2e/login-vuetify.spec.ts"
+    ],
+    "next_phase": "Substituir os dois specs de login legados por evidência canônica e retirar os projetos/webServers Angular/Vuetify do Playwright raiz somente quando não houver referência obrigatória."
+  }
+}
