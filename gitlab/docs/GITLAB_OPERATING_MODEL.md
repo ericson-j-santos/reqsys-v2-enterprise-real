@@ -70,6 +70,6 @@ Requisito -> GitLab Issue -> Label IA -> Branch -> Merge Request -> Pipeline -> 
 
 1. Conectar issues GitLab ao roteador multi-IA.
 2. Criar pipelines semânticos por domínio.
-3. Adicionar SAST/secret detection/container scanning.
+3. ~~Adicionar SAST/secret detection/container scanning.~~ Feito (`gitlab/ci/security.yml`, `gitlab/ci/devsecops.yml`).
 4. Integrar environments e review apps.
-5. Publicar dashboard de evidências GitLab.
+5. ~~Publicar dashboard de evidências GitLab.~~ Feito em 2026-08-25: `gitlab_evidence_dashboard` (`gitlab/ci/evidence.yml`) agrega gate operacional + scanners em `audit/gitlab-evidence-dashboard.html`, autocontido e não bloqueante.
