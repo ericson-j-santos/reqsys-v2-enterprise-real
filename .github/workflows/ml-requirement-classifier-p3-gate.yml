@@ -39,8 +39,25 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Instalar dependência mínima de testes
-        run: python -m pip install --disable-pip-version-check pytest==9.0.3
+      - name: Instalar ferramentas mínimas de preflight
+        run: |
+          python -m pip install --disable-pip-version-check \
+            pytest==9.0.3 \
+            pytest-cov==7.0.0 \
+            ruff==0.16.4
+
+      - name: Preflight Ruff — bloquear lint e imports antes dos CIs pesados
+        run: |
+          ruff check \
+            backend/app/services/requisito_classifier.py \
+            backend/app/services/requisito_ml.py \
+            backend/app/services/requisito_ml_p3.py \
+            backend/tests/test_requisito_classifier.py \
+            backend/tests/test_requisito_ml.py \
+            backend/tests/test_requisito_ml_p3.py \
+            scripts/avaliar_classificador_requisitos_p3.py \
+            --select E,F,W,I \
+            --ignore E501
 
       - name: Proteger holdout após primeiro merge
         if: github.event_name == 'pull_request'
@@ -60,10 +77,16 @@ jobs:
             echo 'Holdout P3 ainda não existe na base; aceitando somente o primeiro pin versionado.'
           fi
 
-      - name: Validar P1, P2 e P3 sem dependências do backend web
+      - name: Validar P1, P2 e P3 com cobertura preventiva do P3
         working-directory: backend
         run: |
+          mkdir -p ../artifacts/ml-requirement-classifier-p3
           PYTHONPATH=. pytest --noconftest -q \
+            --cov=app.services.requisito_ml_p3 \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-report=json:../artifacts/ml-requirement-classifier-p3/coverage.json \
+            --cov-fail-under=95 \
             tests/test_requisito_classifier.py \
             tests/test_requisito_ml.py \
             tests/test_requisito_ml_p3.py
@@ -97,6 +120,7 @@ jobs:
           print(f"**Amostras observadas:** `{observados['total']}`")
           print(f"**Amostras humanas aprovadas:** `{observados['aprovados_para_treino']}`")
           print(f"**Jensen-Shannon drift smoke:** `{drift['js_divergence']:.4f}`")
+          print('**Cobertura preventiva do serviço P3:** `>=95%`')
           print()
           print('Canary/active permanecem bloqueados enquanto o gate humano mínimo não for atendido.')
           PY
