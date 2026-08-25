@@ -24,6 +24,11 @@ logger = logging.getLogger('reqsys.rag')
 ENGINE_MEMORIA = 'semantic-hash-embedding+memory-vector-store-v1'
 ENGINE_PERSISTIDO = 'semantic-hash-embedding+postgres-vector-store-v1'
 
+PROVIDER_HASH_LOCAL = 'hash-local-256'
+_METODOS_EMBEDDING_POR_PROVIDER = {
+    'openai': 'gerar_embeddings_openai',
+}
+
 _SYSTEM_PROMPT_LLM_RAG = (
     'Você é um assistente corporativo governado. Responda exclusivamente com base nas fontes '
     'fornecidas pelo usuário. Se as fontes não cobrirem a pergunta, diga explicitamente que não '
@@ -150,12 +155,69 @@ def _cosseno(a: list[float], b: list[float]) -> float:
     return sum(x * y for x, y in zip(a, b, strict=True))
 
 
+def resolver_provider_embedding_ativo() -> str:
+    """Provider de embedding configurado, ou PROVIDER_HASH_LOCAL se ausente/nao suportado."""
+    provider = (settings.reqsys_rag_embedding_provider or '').strip().lower()
+    if not provider:
+        return PROVIDER_HASH_LOCAL
+    if provider not in _METODOS_EMBEDDING_POR_PROVIDER or not settings.reqsys_rag_embedding_api_key:
+        logger.warning('rag_embedding_provider_indisponivel provider=%s', provider)
+        return PROVIDER_HASH_LOCAL
+    return provider
+
+
+def _embeddings_lote(textos: list[str], *, provider: str, gateway: LLMGateway | None = None) -> list[list[float]]:
+    """Embeda todos os textos com UM provider so - nunca mistura espacos vetoriais no mesmo lote."""
+    if not textos:
+        return []
+    if provider == PROVIDER_HASH_LOCAL:
+        return [_embedding_local(texto) for texto in textos]
+    metodo = _METODOS_EMBEDDING_POR_PROVIDER[provider]
+    gw = gateway or LLMGateway()
+    vetores = getattr(gw, metodo)(
+        api_key=settings.reqsys_rag_embedding_api_key,
+        model=settings.reqsys_rag_embedding_model or '',
+        textos=textos,
+    )
+    if len(vetores) != len(textos):
+        raise RuntimeError(f'provider {provider} retornou {len(vetores)} embeddings para {len(textos)} textos')
+    return vetores
+
+
+def _embeddings_lote_com_fallback(textos: list[str], *, gateway: LLMGateway | None = None) -> tuple[list[list[float]], str]:
+    """Como _embeddings_lote, mas cai para hash local no lote inteiro se o provider externo falhar.
+
+    Fallback e sempre por lote inteiro, nunca por item - misturar vetores de dois espacos
+    diferentes dentro do mesmo indice produziria scores de cosseno sem sentido.
+    """
+    provider = resolver_provider_embedding_ativo()
+    if provider == PROVIDER_HASH_LOCAL:
+        return _embeddings_lote(textos, provider=provider), provider
+    try:
+        return _embeddings_lote(textos, provider=provider, gateway=gateway), provider
+    except (RuntimeError, requests.RequestException, KeyError, IndexError, ValueError) as exc:
+        logger.warning('rag_embedding_externo_falhou provider=%s erro=%s', provider, exc)
+        return _embeddings_lote(textos, provider=PROVIDER_HASH_LOCAL), PROVIDER_HASH_LOCAL
+
+
 class VectorStoreMemoria:
-    def __init__(self, chunks: list[ChunkRAG]) -> None:
-        self._itens = [(chunk, _embedding_local(f'{chunk.titulo} {chunk.conteudo}')) for chunk in chunks]
+    def __init__(self, chunks: list[ChunkRAG], *, gateway: LLMGateway | None = None) -> None:
+        self._gateway = gateway
+        textos = [f'{chunk.titulo} {chunk.conteudo}' for chunk in chunks]
+        vetores, self._provider = _embeddings_lote_com_fallback(textos, gateway=gateway)
+        self._itens = list(zip(chunks, vetores, strict=True))
 
     def buscar(self, pergunta: str, top_k: int = 4) -> list[FonteRAG]:
-        consulta = _embedding_local(pergunta)
+        if not self._itens:
+            return []
+        try:
+            consulta = _embeddings_lote([pergunta], provider=self._provider, gateway=self._gateway)[0]
+        except (RuntimeError, requests.RequestException, KeyError, IndexError, ValueError) as exc:
+            # Os chunks ja estao no espaco vetorial de self._provider; cair para hash local
+            # aqui misturaria dois espacos incompativeis e geraria scores sem sentido, entao
+            # o mais seguro e nao inventar fontes.
+            logger.warning('rag_embedding_consulta_falhou provider=%s erro=%s', self._provider, exc)
+            return []
         resultados: list[FonteRAG] = []
         for chunk, vetor in self._itens:
             score = _cosseno(consulta, vetor)
@@ -169,16 +231,26 @@ def recuperar_fontes_semanticas(pergunta: str, documentos: list[DocumentoRAG], t
     return VectorStoreMemoria(criar_chunks(documentos)).buscar(pergunta, top_k=top_k)
 
 
-def indexar_chunks_persistentes(db: Session, documentos: list[DocumentoRAG], *, tamanho: int = 900, sobreposicao: int = 120) -> int:
+def indexar_chunks_persistentes(
+    db: Session,
+    documentos: list[DocumentoRAG],
+    *,
+    tamanho: int = 900,
+    sobreposicao: int = 120,
+    gateway: LLMGateway | None = None,
+) -> int:
     """Persiste chunks + embeddings em rag_chunk_embeddings (upsert por chunk_id)."""
     chunks = criar_chunks(documentos, tamanho=tamanho, sobreposicao=sobreposicao)
+    if not chunks:
+        return 0
+    textos = [f'{chunk.titulo} {chunk.conteudo}' for chunk in chunks]
+    vetores, provider = _embeddings_lote_com_fallback(textos, gateway=gateway)
     existentes = {
         item.chunk_id: item
         for item in db.execute(select(RagChunkEmbedding).where(RagChunkEmbedding.documento_id.in_({c.documento_id for c in chunks}))).scalars()
     }
     persistidos = 0
-    for chunk in chunks:
-        vetor = _embedding_local(f'{chunk.titulo} {chunk.conteudo}')
+    for chunk, vetor in zip(chunks, vetores, strict=True):
         item = existentes.get(chunk.id)
         if item is None:
             db.add(
@@ -191,6 +263,7 @@ def indexar_chunks_persistentes(db: Session, documentos: list[DocumentoRAG], *, 
                     indice=chunk.indice,
                     versao=chunk.versao,
                     embedding=vetor,
+                    embedding_provider=provider,
                 )
             )
         else:
@@ -199,15 +272,20 @@ def indexar_chunks_persistentes(db: Session, documentos: list[DocumentoRAG], *, 
             item.conteudo = chunk.conteudo
             item.versao = chunk.versao
             item.embedding = vetor
+            item.embedding_provider = provider
         persistidos += 1
     db.commit()
     return persistidos
 
 
-def recuperar_fontes_semanticas_persistidas(db: Session, pergunta: str, top_k: int = 4) -> list[FonteRAG]:
-    consulta = _embedding_local(pergunta)
+def recuperar_fontes_semanticas_persistidas(db: Session, pergunta: str, top_k: int = 4, *, gateway: LLMGateway | None = None) -> list[FonteRAG]:
+    # Se a chamada externa falhar aqui, cai para hash local e filtra so linhas indexadas com
+    # hash local - nunca compara a consulta contra embeddings de um provider diferente.
+    vetores, provider_usado = _embeddings_lote_com_fallback([pergunta], gateway=gateway)
+    consulta = vetores[0]
+    stmt = select(RagChunkEmbedding).where(RagChunkEmbedding.embedding_provider == provider_usado)
     resultados: list[FonteRAG] = []
-    for item in db.execute(select(RagChunkEmbedding)).scalars():
+    for item in db.execute(stmt).scalars():
         score = _cosseno(consulta, item.embedding)
         if score <= 0:
             continue
