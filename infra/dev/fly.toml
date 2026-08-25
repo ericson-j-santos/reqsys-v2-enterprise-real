@@ -14,6 +14,7 @@ kill_timeout = "5s"
   JWT_EXP_MINUTES = "60"
   CORS_ORIGINS = "https://reqsys-app-dev.fly.dev,https://tieridev.duckdns.org,http://localhost:5173,http://localhost:8081"
   SDD_SPECS_PATH = "/app/specs"
+  REQSYS_ML_REQUISITOS_MODO = "shadow"
 
 [[mounts]]
   source = "reqsys_data_dev"
