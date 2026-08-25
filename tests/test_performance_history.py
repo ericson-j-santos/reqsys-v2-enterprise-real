@@ -61,13 +61,14 @@ def _snapshot(
     }
 
 
-def _policy(minimum_samples: int = 5) -> dict:
+def _policy(minimum_samples: int = 5, block_single: bool = False) -> dict:
     return {
         "policy_version": "test",
         "history": {
             "retention_days": 45,
             "windows_days": [7, 30],
             "minimum_baseline_samples": minimum_samples,
+            "block_on_single_regression": block_single,
             "regression": {
                 "max_latency_increase_percent": 30,
                 "max_throughput_drop_percent": 30,
@@ -155,23 +156,37 @@ class PerformanceHistoryTests(unittest.TestCase):
         self.assertEqual(report["summary"]["status"], "insufficient_history")
         self.assertEqual(report["summary"]["regressions_total"], 0)
 
-    def test_report_blocks_regression_inside_absolute_budget_context(self) -> None:
+    def test_report_marks_single_regression_as_watch(self) -> None:
         history = [_snapshot(index, p95=100) for index in range(1, 6)]
         current = _snapshot(0, run_id="current", p95=140)
 
         report = build_report(
-            policy=_policy(minimum_samples=5),
+            policy=_policy(minimum_samples=5, block_single=False),
             history=history,
             current=current,
         )
 
-        self.assertEqual(report["summary"]["status"], "blocked")
+        self.assertEqual(report["summary"]["status"], "watch")
+        self.assertFalse(report["summary"]["block_on_single_regression"])
         self.assertTrue(
             any(
                 item["metric"] == "p95_ms" and item["delta_percent"] == 40.0
                 for item in report["regressions"]
             )
         )
+
+    def test_legacy_policy_can_still_block_single_regression(self) -> None:
+        history = [_snapshot(index, p95=100) for index in range(1, 6)]
+        current = _snapshot(0, run_id="current", p95=140)
+
+        report = build_report(
+            policy=_policy(minimum_samples=5, block_single=True),
+            history=history,
+            current=current,
+        )
+
+        self.assertEqual(report["summary"]["status"], "blocked")
+        self.assertTrue(report["summary"]["block_on_single_regression"])
 
 
 if __name__ == "__main__":
