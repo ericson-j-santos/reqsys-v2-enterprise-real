@@ -15,7 +15,7 @@ def test_rag_health_retorna_status_operacional(client):
     data = body['data']
     assert data['service'] == 'rag-governado'
     assert data['status'] == 'ok'
-    assert 'llamaIndexDisponivel' in data
+    assert data['motorSemantico'] == 'semantic-hash-embedding+memory-vector-store-v1'
     assert data['modo'] == 'governado-com-fontes-obrigatorias'
 
 

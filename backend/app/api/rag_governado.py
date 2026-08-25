@@ -7,7 +7,6 @@ from app.core.config import settings
 from app.core.envelope import ok
 from app.services.rag_governado import (
     carregar_documentos_do_diretorio,
-    llama_index_disponivel,
     normalizar_documentos,
     responder_rag_governado,
 )
@@ -62,7 +61,7 @@ def rag_health():
         {
             'service': 'rag-governado',
             'status': 'ok',
-            'llamaIndexDisponivel': llama_index_disponivel(),
+            'motorSemantico': 'semantic-hash-embedding+memory-vector-store-v1',
             'documentsPathConfigured': bool(getattr(settings, 'reqsys_rag_documents_path', '')),
             'modo': 'governado-com-fontes-obrigatorias',
         }
