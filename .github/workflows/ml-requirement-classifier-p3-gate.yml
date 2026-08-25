@@ -44,6 +44,7 @@ jobs:
           python -m pip install --disable-pip-version-check \
             pytest==9.0.3 \
             pytest-cov==7.0.0 \
+            pytest-asyncio==1.3.0 \
             ruff==0.16.4
 
       - name: Preflight Ruff — bloquear lint e imports antes dos CIs pesados
