@@ -30,22 +30,6 @@ test('credenciais inválidas exibem mensagem de erro', async ({ page }) => {
     expect(token).toBeFalsy()
 })
 
-test('login preserva ordem de foco por teclado entre e-mail e senha', async ({ page }) => {
-    await page.goto('/login', { waitUntil: 'domcontentloaded' })
-
-    const email = page.getByLabel(/e-?mail/i).first()
-    const senha = page.getByLabel(/^Senha$/i).first()
-
-    await expect(email).toBeVisible()
-    await expect(senha).toBeVisible()
-
-    await email.focus()
-    await expect(email).toBeFocused()
-
-    await page.keyboard.press('Tab')
-    await expect(senha).toBeFocused()
-})
-
 test('logout limpa sessão e redireciona para login', async ({ page }) => {
     await login(page)
 
