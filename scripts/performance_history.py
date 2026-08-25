@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 DEFAULT_ARTIFACT_NAME = "dynamic-performance-evidence-main"
 API_HIGHER_WORSE = ("p95_ms", "p99_ms")
 BROWSER_HIGHER_WORSE = (
@@ -402,7 +402,7 @@ def render_dashboard(report: dict[str, Any]) -> str:
     regressions = report["regressions"]
     summary = report["summary"]
     snapshots = report["snapshots"]
-    status = summary["status"]
+    status = summary.get("decision", summary["status"])
     status_class = "ok" if status == "passed" else "warn" if status in {"insufficient_history", "watch"} else "bad"
 
     endpoint_rows = []
@@ -471,7 +471,7 @@ def render_dashboard(report: dict[str, Any]) -> str:
 <h2>Endpoints</h2><table><thead><tr><th>Endpoint</th><th>p95 atual</th><th>p95 7d</th><th>Δ 7d</th><th>p95 30d</th><th>RPS</th><th>Erro</th><th>Tendência</th></tr></thead><tbody>{''.join(endpoint_rows)}</tbody></table>
 <h2>Runtime JavaScript</h2><table><thead><tr><th>Métrica</th><th>Atual</th><th>Mediana 7d</th><th>Δ 7d</th><th>Mediana 30d</th></tr></thead><tbody>{''.join(browser_rows)}</tbody></table>
 <h2>Regressões maduras</h2><table><thead><tr><th>Escopo</th><th>Alvo</th><th>Métrica</th><th>Janela</th><th>Atual</th><th>Baseline</th><th>Regressão</th></tr></thead><tbody>{''.join(regression_rows)}</tbody></table>
-<p><small>Baseline usa mediana e exclui a amostra atual. Regressão relativa isolada é watch quando block_on_single_regression=false; bloqueio sustentado é tratado pelo Performance SLO Error Budget Gate.</small></p></main></body></html>"""
+<p><small>Baseline usa mediana e exclui a amostra atual. Regressão relativa isolada é decision=watch quando block_on_single_regression=false; o status de máquina permanece passed para compatibilidade. Bloqueio sustentado é tratado pelo Performance SLO Error Budget Gate.</small></p></main></body></html>"""
 
 
 def build_report(
@@ -499,9 +499,11 @@ def build_report(
     mature = [int(key) for key, value in baselines.items() if value.get("mature")]
     block_single = bool(history_policy.get("block_on_single_regression", True))
     if regressions:
-        status = "blocked" if block_single else "watch"
+        decision = "blocked" if block_single else "watch"
+        status = "blocked" if block_single else "passed"
     else:
         status = "passed" if mature else "insufficient_history"
+        decision = status
     return {
         "schema_version": "1.0.0",
         "history_version": VERSION,
@@ -510,6 +512,7 @@ def build_report(
         "generated_at": iso_utc(datetime.now(UTC)),
         "summary": {
             "status": status,
+            "decision": decision,
             "samples_total": len(merged),
             "mature_windows": mature,
             "regressions_total": len(regressions),
