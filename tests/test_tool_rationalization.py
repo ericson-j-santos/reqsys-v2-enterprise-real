@@ -39,3 +39,17 @@ def test_item_canonico_deve_ser_mantido() -> None:
     errors = validate_inventory_data(data, REPO_ROOT)
 
     assert any("canônico deve ter decisão MANTER" in error for error in errors)
+
+
+def test_cada_categoria_declara_exatamente_um_canonico() -> None:
+    data = copy.deepcopy(_inventory())
+    data["decisions"] = [
+        item for item in data["decisions"] if item["id"] != "docs-ops-dashboard"
+    ]
+
+    errors = validate_inventory_data(data, REPO_ROOT)
+
+    assert any(
+        "canonical_targets.operations_dashboard exige exatamente um item canônico" in error
+        for error in errors
+    )
