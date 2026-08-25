@@ -10,9 +10,16 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.core.pii_masking import mascarar_pii
+from app.models.rag_chunk_embedding import RagChunkEmbedding
 
 logger = logging.getLogger('reqsys.rag')
+
+ENGINE_MEMORIA = 'semantic-hash-embedding+memory-vector-store-v1'
+ENGINE_PERSISTIDO = 'semantic-hash-embedding+postgres-vector-store-v1'
 
 
 @dataclass(frozen=True)
@@ -147,12 +154,53 @@ def recuperar_fontes_semanticas(pergunta: str, documentos: list[DocumentoRAG], t
     return VectorStoreMemoria(criar_chunks(documentos)).buscar(pergunta, top_k=top_k)
 
 
-def responder_rag_governado(pergunta: str, documentos: list[DocumentoRAG], *, top_k: int = 4, correlation_id: str | None = None) -> RespostaRAG:
-    correlation_id = correlation_id or gerar_correlation_id()
-    pergunta_mascarada = mascarar_pii(pergunta.strip())
-    fontes = recuperar_fontes_semanticas(pergunta_mascarada, documentos, top_k=top_k)
-    engine = 'semantic-hash-embedding+memory-vector-store-v1'
+def indexar_chunks_persistentes(db: Session, documentos: list[DocumentoRAG], *, tamanho: int = 900, sobreposicao: int = 120) -> int:
+    """Persiste chunks + embeddings em rag_chunk_embeddings (upsert por chunk_id)."""
+    chunks = criar_chunks(documentos, tamanho=tamanho, sobreposicao=sobreposicao)
+    existentes = {
+        item.chunk_id: item
+        for item in db.execute(select(RagChunkEmbedding).where(RagChunkEmbedding.documento_id.in_({c.documento_id for c in chunks}))).scalars()
+    }
+    persistidos = 0
+    for chunk in chunks:
+        vetor = _embedding_local(f'{chunk.titulo} {chunk.conteudo}')
+        item = existentes.get(chunk.id)
+        if item is None:
+            db.add(
+                RagChunkEmbedding(
+                    chunk_id=chunk.id,
+                    documento_id=chunk.documento_id,
+                    titulo=chunk.titulo,
+                    origem=chunk.origem,
+                    conteudo=chunk.conteudo,
+                    indice=chunk.indice,
+                    versao=chunk.versao,
+                    embedding=vetor,
+                )
+            )
+        else:
+            item.titulo = chunk.titulo
+            item.origem = chunk.origem
+            item.conteudo = chunk.conteudo
+            item.versao = chunk.versao
+            item.embedding = vetor
+        persistidos += 1
+    db.commit()
+    return persistidos
 
+
+def recuperar_fontes_semanticas_persistidas(db: Session, pergunta: str, top_k: int = 4) -> list[FonteRAG]:
+    consulta = _embedding_local(pergunta)
+    resultados: list[FonteRAG] = []
+    for item in db.execute(select(RagChunkEmbedding)).scalars():
+        score = _cosseno(consulta, item.embedding)
+        if score <= 0:
+            continue
+        resultados.append(FonteRAG(id=item.chunk_id, titulo=item.titulo, origem=item.origem, score=round(score, 4), trecho=item.conteudo[:520]))
+    return sorted(resultados, key=lambda fonte: fonte.score, reverse=True)[:top_k]
+
+
+def _montar_resposta(fontes: list[FonteRAG], *, correlation_id: str, engine: str) -> RespostaRAG:
     if not fontes:
         logger.info('rag_sem_evidencia correlation_id=%s engine=%s', correlation_id, engine)
         return RespostaRAG(resposta='Não há evidência suficiente nas fontes disponíveis para responder com segurança.', fontes=[], correlation_id=correlation_id, status_fluxo='SEM_EVIDENCIA_BLOQUEADO', engine=engine, avisos=['Resposta bloqueada por ausência de fontes recuperadas.', 'Inclua documentos no payload ou configure REQSYS_RAG_DOCUMENTS_PATH.'])
@@ -161,3 +209,17 @@ def responder_rag_governado(pergunta: str, documentos: list[DocumentoRAG], *, to
     resposta = f'Resposta baseada exclusivamente nas fontes recuperadas:\n{bullets}\n\nValidação: confirme as fontes antes de usar como decisão operacional definitiva.'
     logger.info('rag_com_fontes correlation_id=%s fontes=%s engine=%s', correlation_id, len(fontes), engine)
     return RespostaRAG(resposta=resposta, fontes=fontes, correlation_id=correlation_id, status_fluxo='COM_FONTES', engine=engine, avisos=['Modo governado: recuperação vetorial local, fonte obrigatória e mascaramento básico de PII.'])
+
+
+def responder_rag_governado(pergunta: str, documentos: list[DocumentoRAG], *, top_k: int = 4, correlation_id: str | None = None) -> RespostaRAG:
+    correlation_id = correlation_id or gerar_correlation_id()
+    pergunta_mascarada = mascarar_pii(pergunta.strip())
+    fontes = recuperar_fontes_semanticas(pergunta_mascarada, documentos, top_k=top_k)
+    return _montar_resposta(fontes, correlation_id=correlation_id, engine=ENGINE_MEMORIA)
+
+
+def responder_rag_governado_persistido(db: Session, pergunta: str, *, top_k: int = 4, correlation_id: str | None = None) -> RespostaRAG:
+    correlation_id = correlation_id or gerar_correlation_id()
+    pergunta_mascarada = mascarar_pii(pergunta.strip())
+    fontes = recuperar_fontes_semanticas_persistidas(db, pergunta_mascarada, top_k=top_k)
+    return _montar_resposta(fontes, correlation_id=correlation_id, engine=ENGINE_PERSISTIDO)
