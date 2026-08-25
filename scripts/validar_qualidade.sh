@@ -7,15 +7,18 @@ echo "[1/3] Testes backend"
   PYTHONPATH=. pytest -q
 )
 
-echo "[2/3] Build UI (sanidade de responsividade/layout em produção)"
+echo "[2/3] Build UI canônica"
 (
-  cd frontend-vuetify
-  npm run build
-)
-(
-  cd frontend-angular
+  cd frontend
   npm run build
 )
 
-echo "[3/3] E2E + acessibilidade (UI/UX básico)"
-npm run test:e2e
+echo "[3/3] E2E governado da UI canônica"
+(
+  cd frontend
+  npm run test:e2e -- \
+    tests/e2e/login-accessibility.spec.js \
+    tests/e2e/responsividade.spec.js \
+    tests/e2e/estatistica-detalhe.spec.js \
+    --reporter=line
+)
