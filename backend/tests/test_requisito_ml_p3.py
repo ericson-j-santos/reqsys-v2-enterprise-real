@@ -117,7 +117,23 @@ def test_runtime_shadow_calcula_modelo_sem_alterar_resposta():
     assert decisao.fallback_reason == 'SHADOW_ONLY'
 
 
-def test_runtime_canary_100_porcento_usa_modelo_com_selecao_deterministica():
+def test_runtime_canary_e_bloqueado_sem_amostras_reais_aprovadas():
+    politica = replace(carregar_politica_runtime(POLITICA), canary_percentual=100.0)
+    modelo = treinar_modelo_runtime(DATASET_P2)
+    decisao = classificar_runtime(
+        'Mensagens recebidas da fila devem ser convertidas para o contrato interno.',
+        correlation_id='p3-canary-blocked',
+        politica=politica,
+        modelo=modelo,
+        modo='canary',
+        amostras_reais_aprovadas=0,
+    )
+    assert decisao.engine == 'keyword-weighted-v1'
+    assert decisao.canary_selected is False
+    assert decisao.fallback_reason == 'REAL_SAMPLE_GATE_BLOCKED'
+
+
+def test_runtime_canary_100_porcento_usa_modelo_apos_gate_humano():
     politica = replace(carregar_politica_runtime(POLITICA), canary_percentual=100.0)
     modelo = treinar_modelo_runtime(DATASET_P2)
     decisao = classificar_runtime(
@@ -126,13 +142,14 @@ def test_runtime_canary_100_porcento_usa_modelo_com_selecao_deterministica():
         politica=politica,
         modelo=modelo,
         modo='canary',
+        amostras_reais_aprovadas=politica.minimo_amostras_reais_aprovadas_canary,
     )
     assert decisao.canary_selected is True
     assert decisao.engine == 'multinomial-nb-word-char-ngram-v1'
     assert decisao.fallback_reason is None
 
 
-def test_runtime_active_faz_fallback_por_baixa_confianca():
+def test_runtime_active_faz_fallback_por_baixa_confianca_apos_gate_humano():
     politica = carregar_politica_runtime(POLITICA)
     modelo = treinar_modelo_runtime(DATASET_P2)
     decisao = classificar_runtime(
@@ -141,6 +158,7 @@ def test_runtime_active_faz_fallback_por_baixa_confianca():
         politica=politica,
         modelo=modelo,
         modo='active',
+        amostras_reais_aprovadas=politica.minimo_amostras_reais_aprovadas_active,
     )
     assert decisao.engine == 'keyword-weighted-v1'
     assert decisao.fallback_reason == 'LOW_CONFIDENCE'
