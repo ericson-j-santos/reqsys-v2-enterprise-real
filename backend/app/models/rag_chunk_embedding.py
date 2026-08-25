@@ -16,4 +16,5 @@ class RagChunkEmbedding(Base):
     indice: Mapped[int] = mapped_column(Integer)
     versao: Mapped[str] = mapped_column(String(32), index=True)
     embedding: Mapped[list[float]] = mapped_column(JSON)
+    embedding_provider: Mapped[str] = mapped_column(String(64), default='hash-local-256', server_default='hash-local-256', index=True)
     criado_em: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())

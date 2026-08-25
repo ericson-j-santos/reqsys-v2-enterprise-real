@@ -1,13 +1,17 @@
 from app.core.config import settings
 from app.services.rag_governado import (
+    PROVIDER_HASH_LOCAL,
+    ChunkRAG,
     criar_chunks,
     gerar_resposta_llm,
     indexar_chunks_persistentes,
     normalizar_documentos,
     recuperar_fontes_semanticas,
     recuperar_fontes_semanticas_persistidas,
+    resolver_provider_embedding_ativo,
     responder_rag_governado,
     responder_rag_governado_persistido,
+    VectorStoreMemoria,
 )
 
 
@@ -149,6 +153,120 @@ def test_responder_rag_governado_usa_llm_quando_configurado(monkeypatch):
     assert resposta.status_fluxo == 'COM_FONTES'
     assert 'resposta em linguagem natural' in resposta.resposta
     assert resposta.engine == 'semantic-hash-embedding+memory-vector-store-v1+llm-openai'
+
+
+def test_resolver_provider_embedding_ativo_sem_configuracao_usa_local(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_provider', '')
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_api_key', '')
+    assert resolver_provider_embedding_ativo() == PROVIDER_HASH_LOCAL
+
+
+def test_resolver_provider_embedding_ativo_provider_nao_suportado_usa_local(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_provider', 'cohere')
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_api_key', 'chave-fake')
+    assert resolver_provider_embedding_ativo() == PROVIDER_HASH_LOCAL
+
+
+def test_resolver_provider_embedding_ativo_sem_api_key_usa_local(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_provider', 'openai')
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_api_key', '')
+    assert resolver_provider_embedding_ativo() == PROVIDER_HASH_LOCAL
+
+
+def test_resolver_provider_embedding_ativo_configurado_usa_externo(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_provider', 'openai')
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_api_key', 'chave-fake')
+    assert resolver_provider_embedding_ativo() == 'openai'
+
+
+class GatewayEmbeddingFake:
+    def __init__(self, vetores):
+        self._vetores = vetores
+        self.chamadas = 0
+
+    def gerar_embeddings_openai(self, *, api_key, model, textos):
+        self.chamadas += 1
+        assert api_key == 'chave-fake'
+        return [self._vetores[texto] for texto in textos]
+
+
+class GatewayEmbeddingQuebrado:
+    def gerar_embeddings_openai(self, **kwargs):
+        raise RuntimeError('falha simulada de rede')
+
+
+def test_vector_store_memoria_usa_provider_externo_configurado(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_provider', 'openai')
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_api_key', 'chave-fake')
+
+    chunk = ChunkRAG(id='c1', documento_id='d1', titulo='Doc', origem='a', conteudo='texto', indice=0, versao='v1')
+    gateway = GatewayEmbeddingFake({'Doc texto': [1.0, 0.0], 'pergunta': [1.0, 0.0]})
+
+    store = VectorStoreMemoria([chunk], gateway=gateway)
+    fontes = store.buscar('pergunta')
+
+    assert fontes
+    assert fontes[0].id == 'c1'
+    assert gateway.chamadas == 2
+
+
+def test_vector_store_memoria_cai_para_local_quando_provider_externo_falha_na_indexacao(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_provider', 'openai')
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_api_key', 'chave-fake')
+
+    chunk = ChunkRAG(id='c1', documento_id='d1', titulo='Governanca', origem='a', conteudo='politica de governanca corporativa', indice=0, versao='v1')
+    store = VectorStoreMemoria([chunk], gateway=GatewayEmbeddingQuebrado())
+
+    fontes = store.buscar('politica de governanca')
+
+    assert fontes
+    assert fontes[0].id == 'c1'
+
+
+def test_vector_store_memoria_sem_fontes_falha_na_consulta_nao_inventa_evidencia(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_provider', 'openai')
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_api_key', 'chave-fake')
+
+    chunk = ChunkRAG(id='c1', documento_id='d1', titulo='Doc', origem='a', conteudo='texto', indice=0, versao='v1')
+    gateway = GatewayEmbeddingFake({'Doc texto': [1.0, 0.0]})
+    store = VectorStoreMemoria([chunk], gateway=gateway)
+
+    class GatewayFalhaSoNaConsulta:
+        def gerar_embeddings_openai(self, *, api_key, model, textos):
+            raise RuntimeError('falha simulada na consulta')
+
+    store._gateway = GatewayFalhaSoNaConsulta()
+    assert store.buscar('pergunta qualquer') == []
+
+
+def test_indexar_e_recuperar_persistente_com_provider_externo(monkeypatch, db_session):
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_provider', 'openai')
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_api_key', 'chave-fake')
+
+    documentos = normalizar_documentos([{'id': 'ext-doc', 'titulo': 'Retencao Externa', 'conteudo': 'Politica de retencao de dados via provider externo.'}])
+    gateway = GatewayEmbeddingFake({
+        'Retencao Externa Politica de retencao de dados via provider externo.': [1.0, 0.0],
+        'Qual a politica de retencao externa?': [1.0, 0.0],
+    })
+
+    indexar_chunks_persistentes(db_session, documentos, gateway=gateway)
+    fontes = recuperar_fontes_semanticas_persistidas(db_session, 'Qual a politica de retencao externa?', gateway=gateway)
+
+    assert fontes
+    assert fontes[0].titulo == 'Retencao Externa'
+
+
+def test_recuperar_persistente_nao_mistura_providers_diferentes(monkeypatch, db_session):
+    documentos = normalizar_documentos([{'id': 'local-doc', 'titulo': 'Indexado Localmente', 'conteudo': 'Conteudo indexado com o embedding local padrao.'}])
+    indexar_chunks_persistentes(db_session, documentos)
+
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_provider', 'openai')
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_api_key', 'chave-fake')
+    gateway = GatewayEmbeddingFake({'Qual o conteudo indexado?': [1.0, 0.0]})
+
+    fontes = recuperar_fontes_semanticas_persistidas(db_session, 'Qual o conteudo indexado?', gateway=gateway)
+
+    assert fontes == []
 
 
 def test_responder_rag_governado_persistido_bloqueia_sem_evidencia(db_session):

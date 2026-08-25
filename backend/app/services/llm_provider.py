@@ -194,6 +194,22 @@ class LLMGateway:
         data = self._post_json('https://api.openai.com/v1/chat/completions', payload, headers=headers, timeout=timeout)
         return str(data['choices'][0]['message']['content'])
 
+    def gerar_embeddings_openai(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        textos: list[str],
+        timeout: int = 45,
+    ) -> list[list[float]]:
+        if not api_key:
+            raise RuntimeError('REQSYS_RAG_EMBEDDING_API_KEY ausente')
+        payload = {'model': model, 'input': textos}
+        headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
+        data = self._post_json('https://api.openai.com/v1/embeddings', payload, headers=headers, timeout=timeout)
+        itens = sorted(data['data'], key=lambda item: item['index'])
+        return [[float(valor) for valor in item['embedding']] for item in itens]
+
     def gerar_claude(
         self,
         *,
