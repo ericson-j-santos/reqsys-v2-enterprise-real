@@ -23,12 +23,21 @@ class ReqSysFreeTierBackupTests(unittest.TestCase):
     def inventory(self) -> dict[str, object]:
         return json.loads(Path("governance/backup/reqsys-backup-assets.json").read_text())
 
-    def test_inventory_is_valid_and_dev_is_only_enabled_asset(self) -> None:
+    def test_inventory_is_valid_for_dev_and_stg_rollout(self) -> None:
         inventory = self.inventory()
         self.assertEqual(validate_inventory(inventory), [])
         selected = select(inventory, "all", include_disabled=False)
-        self.assertEqual([asset["environment"] for asset in selected], ["dev"])
+        self.assertEqual([asset["environment"] for asset in selected], ["dev", "stg"])
+
+        stg = next(asset for asset in inventory["assets"] if asset["environment"] == "stg")
+        self.assertTrue(stg["enabled"])
+        self.assertEqual(stg["rollout_state"], "candidate_after_valid_dev_restore_evidence")
+        self.assertEqual(stg["rollout_evidence"]["decision"], "stg_rollout_candidate")
+        self.assertFalse(stg["rollout_evidence"]["production_allowed"])
+        self.assertTrue(str(stg["rollout_evidence"]["source_run_id"]).isdigit())
+
         prod = select(inventory, "prod", include_disabled=True)[0]
+        self.assertFalse(prod["enabled"])
         self.assertEqual(merged(inventory, prod)["database_path"], "/data/reqsys.db")
 
     def test_consistent_sqlite_backup_and_manifest(self) -> None:
