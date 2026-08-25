@@ -154,9 +154,10 @@ class PerformanceHistoryTests(unittest.TestCase):
         )
 
         self.assertEqual(report["summary"]["status"], "insufficient_history")
+        self.assertEqual(report["summary"]["decision"], "insufficient_history")
         self.assertEqual(report["summary"]["regressions_total"], 0)
 
-    def test_report_marks_single_regression_as_watch(self) -> None:
+    def test_report_marks_single_regression_as_advisory_watch(self) -> None:
         history = [_snapshot(index, p95=100) for index in range(1, 6)]
         current = _snapshot(0, run_id="current", p95=140)
 
@@ -166,7 +167,8 @@ class PerformanceHistoryTests(unittest.TestCase):
             current=current,
         )
 
-        self.assertEqual(report["summary"]["status"], "watch")
+        self.assertEqual(report["summary"]["status"], "passed")
+        self.assertEqual(report["summary"]["decision"], "watch")
         self.assertFalse(report["summary"]["block_on_single_regression"])
         self.assertTrue(
             any(
@@ -186,6 +188,7 @@ class PerformanceHistoryTests(unittest.TestCase):
         )
 
         self.assertEqual(report["summary"]["status"], "blocked")
+        self.assertEqual(report["summary"]["decision"], "blocked")
         self.assertTrue(report["summary"]["block_on_single_regression"])
 
 
