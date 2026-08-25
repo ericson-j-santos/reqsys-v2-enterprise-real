@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MATRIX_PATH = REPO_ROOT / "governance" / "tooling" / "e2e-consolidation-phase1.json"
+PHASE2A_PATH = REPO_ROOT / "governance" / "tooling" / "e2e-consolidation-phase2a.json"
 
 
 def _matrix() -> dict:
@@ -42,10 +43,16 @@ def test_arquivos_aposentados_nao_permanecem_no_repositorio() -> None:
         assert not (REPO_ROOT / path).exists(), f"Arquivo legado ainda ativo: {path}"
 
 
-def test_dependencias_legadas_restantes_estao_explicitas() -> None:
+def test_dependencias_restantes_da_fase1_foram_tratadas_na_fase2a() -> None:
     matrix = _matrix()
-    remaining = matrix["retirement"]["remaining_legacy_files"]
+    remaining = set(matrix["retirement"]["remaining_legacy_files"])
 
     assert matrix["summary"]["legacy_files_after"] == len(remaining)
+    assert PHASE2A_PATH.exists(), "Fase 2A deve registrar o destino das dependências remanescentes"
+
+    phase2a = json.loads(PHASE2A_PATH.read_text(encoding="utf-8"))
+    retired_later = set(phase2a["retired_legacy_specs"])
+
+    assert remaining <= retired_later
     for path in remaining:
-        assert (REPO_ROOT / path).exists(), f"Dependência legada declarada não existe: {path}"
+        assert not (REPO_ROOT / path).exists(), f"Spec legado ainda ativo após Fase 2A: {path}"
