@@ -10,15 +10,15 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from app.services.requisito_classifier import (
-    avaliar_classificador,
     CATEGORIAS,
+    avaliar_classificador,
     classificar_requisito,
 )
 from app.services.requisito_ml import (
-    carregar_dataset_ml,
-    ClassificadorRequisitoSupervisionado,
     MODELO_VERSAO,
+    ClassificadorRequisitoSupervisionado,
     RegistroTreinoML,
+    carregar_dataset_ml,
 )
 
 MODOS_RUNTIME = ('off', 'shadow', 'canary', 'active')
