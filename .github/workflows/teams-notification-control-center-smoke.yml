@@ -28,7 +28,7 @@ on:
       - backend/app/models/teams_notification_queue.py
       - backend/app/schemas/teams_notifications.py
       - backend/app/services/teams_notifications.py
-      - frontend-vuetify/src/services/notificacoes.js
+      - frontend/src/services/teamsGateway.js
       - scripts/validar_teams_notification_control_center_runtime.py
       - .github/workflows/teams-notification-control-center-smoke.yml
 
