@@ -25,8 +25,8 @@
       "scenario": "tab navega de E-mail para Senha",
       "classification": "MIGRAR",
       "migration_status": "CONCLUIDO",
-      "evidence": "Cobertura explícita de ordem de foco não existia na suíte canônica.",
-      "target": "frontend/tests/e2e/login.spec.js"
+      "evidence": "Cobertura explícita de ordem de foco isolada de backend e incluída no CI E2E Governado.",
+      "target": "frontend/tests/e2e/login-accessibility.spec.js"
     },
     {
       "source": "e2e/accessibility-vuetify.spec.ts",
