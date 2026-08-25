@@ -1,8 +1,10 @@
 name: Operational Observability Hub
 
-# workflow_run removido; schedule + dispatch + gh run list como fallback.
-
 on:
+  workflow_run:
+    workflows:
+      - Performance SLO Error Budget Gate
+    types: [completed]
   workflow_dispatch:
   schedule:
     - cron: "35 12 * * 1-5"
@@ -13,12 +15,15 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: operational-observability-hub-${{ github.ref }}
+  group: operational-observability-hub-${{ github.event.workflow_run.id || github.ref }}
   cancel-in-progress: false
 
 jobs:
   observability-hub:
     name: Consolidar observabilidade operacional
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'workflow_run' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -30,6 +35,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Validate Performance SLO observability adapter
+        run: |
+          python -m py_compile scripts/integrate_performance_slo_observability.py
+
+      - name: Collect Performance SLO evidence
+        uses: ./.github/actions/collect-performance-slo-evidence
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          source-run-id: ${{ github.event.workflow_run.id || '' }}
+          output-dir: artifacts/performance-slo-observability
 
       - name: Collect operational runs (when upstream artifact missing)
         if: github.event_name != 'workflow_run'
@@ -92,6 +109,16 @@ jobs:
             --workflow-run-id "${{ github.run_id }}" \
             --out-dir artifacts/operational-observability-hub
 
+      - name: Integrate Performance SLO into Observability Hub
+        run: |
+          python scripts/integrate_performance_slo_observability.py \
+            --performance-slo artifacts/performance-slo-observability/source/performance-slo-evidence.json \
+            --provenance artifacts/performance-slo-observability/provenance.json \
+            --hub-json artifacts/operational-observability-hub/operational-observability-hub.json \
+            --hub-markdown artifacts/operational-observability-hub/operational-observability-hub.md \
+            --dashboard-slo docs/ops-dashboard/data/slo-evidence.json \
+            --output artifacts/operational-observability-hub/performance-slo-observability.json
+
       - name: Generate hydrated correlation timeline
         run: |
           python tools/product_intelligence/generate_runtime_operational_correlation_timeline.py
@@ -118,6 +145,17 @@ jobs:
             --slo-evidence docs/ops-dashboard/data/slo-evidence.json \
             --multi-environment artifacts/operational-multi-environment/multi-environment-evidence.json
 
+      - name: Inject Performance SLO check into existing Ops Dashboard data
+        run: |
+          python scripts/integrate_performance_slo_observability.py \
+            --performance-slo artifacts/performance-slo-observability/source/performance-slo-evidence.json \
+            --provenance artifacts/performance-slo-observability/provenance.json \
+            --hub-json artifacts/operational-observability-hub/operational-observability-hub.json \
+            --hub-markdown artifacts/operational-observability-hub/operational-observability-hub.md \
+            --dashboard-health docs/ops-dashboard/data/health.json \
+            --dashboard-slo docs/ops-dashboard/data/slo-evidence.json \
+            --output artifacts/operational-observability-hub/performance-slo-observability.json
+
       - name: Resumo executivo
         if: always()
         run: |
@@ -132,11 +170,13 @@ jobs:
           name: operational-observability-hub
           path: |
             artifacts/operational-observability-hub/
+            artifacts/performance-slo-observability/
             artifacts/operational-multi-environment/
             artifacts/environment-drift-analyzer/
             artifacts/operational-slo-evidence/
             artifacts/operational-longitudinal-analytics/
             artifacts/operational-history-index/
             reports/github-runtime-analytics/runtime-operational-correlation-timeline.json
+            docs/ops-dashboard/data/health.json
             docs/ops-dashboard/data/slo-evidence.json
           retention-days: 30
