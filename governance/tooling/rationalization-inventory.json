@@ -37,7 +37,7 @@
         "O Playwright raiz não inicia mais frontend-vuetify nem mantém projeto dedicado.",
         "validar_qualidade.sh compila e testa somente frontend/.",
         "O trigger de smoke Teams foi migrado para frontend/src/services/teamsGateway.js.",
-        "O guardrail validate_legacy_frontend_references.py bloqueia reintrodução de dependências operacionais."
+        "O guardrail check_legacy_frontend_references.py bloqueia reintrodução de dependências operacionais."
       ],
       "blocking_dependencies": [],
       "exit_criteria": [
@@ -61,7 +61,7 @@
         "O Playwright raiz não inicia mais frontend-angular nem mantém projeto dedicado.",
         "validar_qualidade.sh compila e testa somente frontend/.",
         "Os specs Angular legados foram aposentados.",
-        "O guardrail validate_legacy_frontend_references.py bloqueia reintrodução de dependências operacionais."
+        "O guardrail check_legacy_frontend_references.py bloqueia reintrodução de dependências operacionais."
       ],
       "blocking_dependencies": [],
       "exit_criteria": [
