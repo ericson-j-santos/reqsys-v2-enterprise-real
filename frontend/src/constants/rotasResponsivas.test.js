@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ROTAS_RESPONSIVAS } from './rotasResponsivas'
 import { routes } from '../router'
 
-const ROTAS_PUBLICAS_NAO_OPERACIONAIS = new Set(['/:pathMatch(.*)*'])
+const ROTAS_PUBLICAS_NAO_OPERACIONAIS = new Set(['/showcase', '/:pathMatch(.*)*'])
 
 describe('rotasResponsivas', () => {
   it('define as rotas operacionais canônicas do catálogo', () => {
