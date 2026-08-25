@@ -1,0 +1,126 @@
+{
+  "schema_version": "1.0.0",
+  "as_of": "2026-08-25",
+  "canonical_targets": {
+    "frontend": "frontend",
+    "documentation": "docs-site",
+    "operations_dashboard": "docs/ops-dashboard"
+  },
+  "decisions": [
+    {
+      "id": "frontend",
+      "path": "frontend",
+      "kind": "frontend",
+      "decision": "MANTER",
+      "canonical": true,
+      "target": "frontend",
+      "risk": "low",
+      "evidence": [
+        "Possui fly.toml/fly.dev.toml/fly.staging.toml e Dockerfile.prod para DEV/STG/PROD.",
+        "Produção aponta para reqsys-app.fly.dev e API reqsys-api.fly.dev.",
+        "É a superfície onde o Showcase v1 e as evoluções recentes do produto são implementados."
+      ],
+      "blocking_dependencies": [],
+      "exit_criteria": [],
+      "next_action": "Tratar como frontend canônico e impedir novas capacidades funcionais nos frontends paralelos."
+    },
+    {
+      "id": "frontend-vuetify",
+      "path": "frontend-vuetify",
+      "kind": "frontend",
+      "decision": "CONSOLIDAR",
+      "canonical": false,
+      "target": "frontend",
+      "risk": "medium",
+      "evidence": [
+        "Usa Vue 3 + Vite + Vuetify, sobrepondo a stack do frontend canônico.",
+        "Ainda é iniciado pelo playwright.config.ts raiz em localhost:5174.",
+        "Mantém suíte E2E histórica com arquivos *vuetify.spec.ts."
+      ],
+      "blocking_dependencies": [
+        "playwright.config.ts:webServer frontend-vuetify",
+        "playwright.config.ts:project vuetify",
+        "e2e/*vuetify.spec.ts",
+        "scripts de qualidade que ainda referenciam frontend-vuetify"
+      ],
+      "exit_criteria": [
+        "Migrar cobertura E2E necessária para frontend/.",
+        "Remover projeto/webServer vuetify do Playwright raiz.",
+        "Eliminar referências em scripts/workflows de qualidade.",
+        "Confirmar build, testes e E2E verdes somente com frontend canônico.",
+        "Arquivar ou excluir o diretório em PR separada após zero dependências ativas."
+      ],
+      "next_action": "Congelar novas features e migrar primeiro a cobertura E2E útil para frontend/."
+    },
+    {
+      "id": "frontend-angular",
+      "path": "frontend-angular",
+      "kind": "frontend",
+      "decision": "CONSOLIDAR",
+      "canonical": false,
+      "target": "frontend",
+      "risk": "medium",
+      "evidence": [
+        "É uma implementação Angular 17 paralela com autenticação/RBAC próprios.",
+        "Ainda é iniciada pelo playwright.config.ts raiz em localhost:4200.",
+        "Mantém suíte E2E histórica com arquivos *angular.spec.ts."
+      ],
+      "blocking_dependencies": [
+        "playwright.config.ts:webServer frontend-angular",
+        "playwright.config.ts:project angular",
+        "e2e/*angular.spec.ts",
+        "scripts de qualidade que ainda referenciam frontend-angular"
+      ],
+      "exit_criteria": [
+        "Mapear casos E2E exclusivos do Angular e portar somente os que representam requisitos vigentes.",
+        "Remover projeto/webServer angular do Playwright raiz.",
+        "Eliminar referências em scripts/workflows de qualidade.",
+        "Confirmar que nenhuma rota ou requisito vigente existe apenas no Angular.",
+        "Arquivar ou excluir o diretório em PR separada após zero dependências ativas."
+      ],
+      "next_action": "Congelar novas features e comparar a cobertura funcional com frontend/ antes da retirada."
+    },
+    {
+      "id": "docs-site",
+      "path": "docs-site",
+      "kind": "documentation",
+      "decision": "MANTER",
+      "canonical": true,
+      "target": "docs-site",
+      "risk": "low",
+      "evidence": [
+        "mkdocs.yml define docs_dir=docs-site.",
+        "mkdocs.yml aponta o site para ericson-j-santos.github.io/reqsys-v2-enterprise-real/.",
+        "Contém documentação versionada de arquitetura, API, operação e governança."
+      ],
+      "blocking_dependencies": [],
+      "exit_criteria": [],
+      "next_action": "Manter como fonte canônica do MkDocs; reduzir duplicação progressiva com docs/ sem migração destrutiva."
+    },
+    {
+      "id": "ops-dashboard",
+      "path": "ops-dashboard",
+      "kind": "operations_dashboard",
+      "decision": "CONSOLIDAR",
+      "canonical": false,
+      "target": "docs/ops-dashboard",
+      "risk": "medium",
+      "evidence": [
+        "ops-dashboard/ contém apenas HTMLs estáticos específicos de movimento-email e teams-notification.",
+        "O runbook operacional define docs/ops-dashboard/index.html como dashboard canônico.",
+        "O workflow Ops Dashboard publica o artifact ops-dashboard-static a partir da implementação canônica em docs/ops-dashboard."
+      ],
+      "blocking_dependencies": [
+        "referências históricas a ops-dashboard/movimento-email",
+        "referências históricas a ops-dashboard/teams-notification"
+      ],
+      "exit_criteria": [
+        "Identificar consumidores ativos dos dois HTMLs legados.",
+        "Migrar links e conteúdo útil para docs/ops-dashboard ou para módulos funcionais do frontend canônico.",
+        "Validar que workflows, docs e runbooks não apontam mais para ops-dashboard/.",
+        "Excluir o diretório legado somente após zero referências operacionais."
+      ],
+      "next_action": "Consolidar os dois HTMLs legados no dashboard operacional canônico e eliminar links antigos."
+    }
+  ]
+}
