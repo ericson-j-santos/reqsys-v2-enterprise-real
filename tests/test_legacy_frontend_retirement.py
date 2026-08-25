@@ -1,0 +1,51 @@
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+VALIDATOR_PATH = REPO_ROOT / "scripts" / "validate_legacy_frontend_references.py"
+
+
+def _validator_module():
+    spec = importlib.util.spec_from_file_location("legacy_frontend_guard", VALIDATOR_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_zero_referencias_operacionais_a_frontends_legados() -> None:
+    validator = _validator_module()
+    assert validator.find_legacy_references(REPO_ROOT) == []
+
+
+def test_diretorios_legados_permanecem_para_fase_2b() -> None:
+    assert (REPO_ROOT / "frontend-angular").is_dir()
+    assert (REPO_ROOT / "frontend-vuetify").is_dir()
+
+
+def test_specs_de_login_legados_foram_aposentados() -> None:
+    assert not (REPO_ROOT / "e2e" / "login-angular.spec.ts").exists()
+    assert not (REPO_ROOT / "e2e" / "login-vuetify.spec.ts").exists()
+
+
+def test_playwright_raiz_aponta_para_suite_canonica() -> None:
+    content = (REPO_ROOT / "playwright.config.ts").read_text(encoding="utf-8")
+    assert "./frontend/tests/e2e" in content
+    assert "./frontend" in content
+    assert "frontend-canonico" in content
+
+
+def test_qualidade_builda_somente_frontend_canonico() -> None:
+    content = (REPO_ROOT / "scripts" / "validar_qualidade.sh").read_text(encoding="utf-8")
+    assert "cd frontend" in content
+    assert "login-accessibility.spec.js" in content
+
+
+def test_smoke_teams_observa_servico_canonico() -> None:
+    content = (
+        REPO_ROOT / ".github" / "workflows" / "teams-notification-control-center-smoke.yml"
+    ).read_text(encoding="utf-8")
+    assert "frontend/src/services/teamsGateway.js" in content
