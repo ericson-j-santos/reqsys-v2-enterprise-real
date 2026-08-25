@@ -1,6 +1,6 @@
 # Performance SLO, Error Budget e Degradação Sustentada
 
-**Versão:** 1.0.0  
+**Versão:** 1.0.1  
 **Escopo:** performance pública do ReqSys  
 **Política:** `config/runtime-performance-budgets.json`
 
@@ -45,16 +45,31 @@ Uma regressão relativa isolada não bloqueia mais por si só: o relatório hist
 
 O bloqueio por tendência ocorre quando a mesma dimensão permanece além do limite por **3 execuções consecutivas**, comparada à mediana das amostras anteriores da janela de referência de 7 dias, com pelo menos 5 amostras de referência.
 
+## Elegibilidade da evidência
+
+Nem toda conclusão de `Dynamic Performance Gate` contém medição live. O workflow também pode executar apenas os contratos quando o `ReqSys Fly Runtime P0` que o originou não é uma execução elegível de `main`.
+
+Antes de baixar qualquer artifact, o gate SLO consulta os jobs e artifacts da execução upstream:
+
+- `Measure live runtime performance = skipped`: execução `not_applicable`; encerra sem cálculo SLO e sem falso bloqueio;
+- `Measure live runtime performance = success`: `dynamic-performance-evidence-main` é obrigatório;
+- runtime live aprovado sem artifact, job ausente ou conclusão inesperada: falha fechada;
+- somente evidence não expirada e da própria execução upstream pode alimentar o SLO.
+
+Essa pré-validação impede que um caminho legitimamente não elegível seja tratado como falha de produção, sem permitir que uma execução elegível perca evidência silenciosamente.
+
 ## Decisão final
 
 | Situação | Decisão |
 |---|---|
 | Budget absoluto violado | bloqueia no Dynamic Performance Gate |
+| Caminho upstream sem medição live elegível | `not_applicable` |
 | Histórico ainda imaturo | não bloqueia por SLO relativo |
 | 1 regressão relativa | `watch` |
 | Error budget <= 25% restante | `watch` |
 | SLO abaixo do objetivo | `blocked` |
 | 3 degradações relativas consecutivas | `blocked` |
+| Runtime live aprovado sem artifact esperado | falha fechada |
 | Tudo conforme | `passed` |
 
 ## Fluxo
@@ -64,6 +79,10 @@ ReqSys runtime
    ↓
 Dynamic Performance Gate
    ↓
+preflight de elegibilidade
+   ├─ runtime skipped → not_applicable
+   └─ runtime success → artifact main obrigatório
+                         ↓
 runtime-performance.json + browser-performance.json
    ↓
 performance-history.json (7/30 dias)
@@ -75,7 +94,7 @@ performance-slo-evidence.json
 passed | watch | insufficient_history | blocked
 ```
 
-O workflow SLO é disparado após `Dynamic Performance Gate` em `main`, baixa o artifact `dynamic-performance-evidence-main`, calcula os SLOs, publica evidência por 45 dias e aplica fail-closed para ausência de evidência ou status inesperado.
+O workflow SLO é disparado após `Dynamic Performance Gate` em `main`, valida a elegibilidade da execução upstream, baixa o artifact `dynamic-performance-evidence-main` quando aplicável, calcula os SLOs, publica evidência por 45 dias e aplica fail-closed quando evidence obrigatória está ausente ou o estado é inesperado.
 
 ## Alinhamento com observabilidade operacional
 
@@ -91,4 +110,6 @@ Isso mantém compatibilidade conceitual com `generate_operational_slo_evidence.p
 - nenhuma mutação de produção é feita pelo avaliador;
 - correlation ID identifica a execução SLO;
 - evidência é persistida em artifact por 45 dias;
+- caminho não elegível é explicitamente `not_applicable`, nunca tratado como evidence válida;
+- runtime live aprovado exige artifact da mesma execução, sob pena de falha fechada;
 - parâmetros só devem ser recalibrados com histórico suficiente e justificativa registrada.
