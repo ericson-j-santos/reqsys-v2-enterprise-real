@@ -1,0 +1,116 @@
+name: ML Requirement Classifier P3 Gate
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/requisito_classifier.py'
+      - 'backend/app/services/requisito_ml.py'
+      - 'backend/app/services/requisito_ml_p3.py'
+      - 'backend/data/ml/requisitos_classificador_v1.jsonl'
+      - 'backend/data/ml/requisitos_holdout_p3_v1.jsonl'
+      - 'backend/data/ml/requisitos_observados_p3_v1.jsonl'
+      - 'backend/data/ml/politica_runtime_requisitos_p3_v1.json'
+      - 'backend/tests/test_requisito_classifier.py'
+      - 'backend/tests/test_requisito_ml.py'
+      - 'backend/tests/test_requisito_ml_p3.py'
+      - 'scripts/avaliar_classificador_requisitos_p3.py'
+      - '.github/workflows/ml-requirement-classifier-p3-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ml-requirement-classifier-p3-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-p3:
+    name: Validate immutable holdout, HITL gate and drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependência mínima de testes
+        run: python -m pip install --disable-pip-version-check pytest==9.0.3
+
+      - name: Proteger holdout após primeiro merge
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          HOLDOUT='backend/data/ml/requisitos_holdout_p3_v1.jsonl'
+          git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF" --depth=1
+          if git cat-file -e "origin/$BASE_REF:$HOLDOUT" 2>/dev/null; then
+            base_sha="$(git show "origin/$BASE_REF:$HOLDOUT" | sha256sum | awk '{print $1}')"
+            current_sha="$(sha256sum "$HOLDOUT" | awk '{print $1}')"
+            echo "base_holdout_sha256=$base_sha"
+            echo "current_holdout_sha256=$current_sha"
+            test "$base_sha" = "$current_sha"
+          else
+            echo 'Holdout P3 ainda não existe na base; aceitando somente o primeiro pin versionado.'
+          fi
+
+      - name: Validar P1, P2 e P3 sem dependências do backend web
+        working-directory: backend
+        run: |
+          PYTHONPATH=. pytest --noconftest -q \
+            tests/test_requisito_classifier.py \
+            tests/test_requisito_ml.py \
+            tests/test_requisito_ml_p3.py
+
+      - name: Gerar evidência de prontidão P3
+        run: |
+          python scripts/avaliar_classificador_requisitos_p3.py \
+            --output artifacts/ml-requirement-classifier-p3/report.json
+
+      - name: Resumo P3
+        if: always()
+        run: |
+          if [ -f artifacts/ml-requirement-classifier-p3/report.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          report = json.loads(
+              Path('artifacts/ml-requirement-classifier-p3/report.json').read_text(encoding='utf-8')
+          )
+          holdout = report['holdout']
+          observados = report['observados']
+          drift = report['drift_smoke_holdout']
+          print('# ML Requirement Classifier P3 Gate')
+          print()
+          print(f"**Readiness:** `{report['readiness']}`")
+          print(f"**Holdout SHA-256:** `{holdout['holdout_sha256']}`")
+          print(f"**Baseline macro F1:** `{holdout['baseline_macro_f1']:.4f}`")
+          print(f"**Modelo macro F1:** `{holdout['modelo_macro_f1']:.4f}`")
+          print(f"**Ganho macro F1:** `{holdout['ganho_macro_f1']:.4f}`")
+          print(f"**Amostras observadas:** `{observados['total']}`")
+          print(f"**Amostras humanas aprovadas:** `{observados['aprovados_para_treino']}`")
+          print(f"**Jensen-Shannon drift smoke:** `{drift['js_divergence']:.4f}`")
+          print()
+          print('Canary/active permanecem bloqueados enquanto o gate humano mínimo não for atendido.')
+          PY
+          else
+            echo '# ML Requirement Classifier P3 Gate' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Evidência não gerada; gate permaneceu fail-closed.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Publicar evidência P3
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-requirement-classifier-p3-evidence
+          path: artifacts/ml-requirement-classifier-p3/
+          if-no-files-found: error
+          retention-days: 30

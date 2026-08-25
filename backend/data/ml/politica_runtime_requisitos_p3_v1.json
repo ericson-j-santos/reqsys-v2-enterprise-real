@@ -1,0 +1,24 @@
+{
+  "versao": "runtime-requisitos-p3-v1",
+  "modelo_versao": "multinomial-nb-word-char-ngram-v1",
+  "holdout_versao": "requisitos-holdout-p3-v1",
+  "holdout_sha256": "46eb64b1708259f2ec6315f4dad5d958321dec42cc0c51a378300ad498a4a5a8",
+  "modo_padrao": "off",
+  "canary_percentual": 10.0,
+  "confianca_minima_modelo": 0.55,
+  "macro_f1_holdout_minimo": 0.80,
+  "ganho_f1_holdout_minimo": 0.10,
+  "js_divergence_alerta": 0.15,
+  "taxa_baixa_confianca_alerta": 0.25,
+  "minimo_amostras_reais_aprovadas_canary": 7,
+  "minimo_amostras_reais_aprovadas_active": 14,
+  "distribuicao_referencia": {
+    "FUNCIONAL": 0.1428571429,
+    "NAO_FUNCIONAL": 0.1428571429,
+    "SEGURANCA": 0.1428571429,
+    "INTEGRACAO": 0.1428571429,
+    "DADOS": 0.1428571429,
+    "UX": 0.1428571429,
+    "OPERACIONAL": 0.1428571429
+  }
+}
