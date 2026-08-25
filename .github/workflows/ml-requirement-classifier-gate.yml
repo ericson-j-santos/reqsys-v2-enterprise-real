@@ -38,7 +38,7 @@ jobs:
       - name: Validar contrato P1 e modelo supervisionado P2
         working-directory: backend
         run: |
-          PYTHONPATH=. pytest -q \
+          PYTHONPATH=. pytest --noconftest -q \
             tests/test_requisito_classifier.py \
             tests/test_requisito_ml.py
 
