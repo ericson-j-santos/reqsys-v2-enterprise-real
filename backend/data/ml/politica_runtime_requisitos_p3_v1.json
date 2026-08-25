@@ -10,6 +10,8 @@
   "ganho_f1_holdout_minimo": 0.10,
   "js_divergence_alerta": 0.15,
   "taxa_baixa_confianca_alerta": 0.25,
+  "minimo_amostras_reais_aprovadas_canary": 7,
+  "minimo_amostras_reais_aprovadas_active": 14,
   "distribuicao_referencia": {
     "FUNCIONAL": 0.1428571429,
     "NAO_FUNCIONAL": 0.1428571429,
