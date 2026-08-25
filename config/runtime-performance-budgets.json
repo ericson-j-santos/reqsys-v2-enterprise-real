@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
-  "policy_version": "2026-08-21.3",
-  "description": "Orçamentos de performance para endpoints públicos, runtime JavaScript e regressão histórica 7/30 dias do ReqSys. Valores só devem ser recalibrados com evidência histórica.",
+  "policy_version": "2026-08-25.4",
+  "description": "Orçamentos de performance, regressão histórica 7/30 dias, SLO/error budget e degradação sustentada do ReqSys. Valores só devem ser recalibrados com evidência histórica.",
   "defaults": {
     "samples": 20,
     "concurrency": 4,
@@ -18,10 +18,7 @@
   },
   "history": {
     "retention_days": 45,
-    "windows_days": [
-      7,
-      30
-    ],
+    "windows_days": [7, 30],
     "minimum_baseline_samples": 5,
     "artifact_name_main": "dynamic-performance-evidence-main",
     "regression": {
@@ -29,6 +26,22 @@
       "max_throughput_drop_percent": 30,
       "max_error_rate_increase_pp": 1,
       "max_browser_metric_increase_percent": 30
+    }
+  },
+  "performance_slo": {
+    "window_days": 7,
+    "minimum_samples": 5,
+    "error_budget_warning_remaining_percent": 25,
+    "targets": {
+      "api_latency_good_percent": 95,
+      "api_reliability_good_percent": 99,
+      "api_capacity_good_percent": 95,
+      "browser_runtime_good_percent": 95
+    },
+    "sustained_degradation": {
+      "required_consecutive": 3,
+      "reference_window_days": 7,
+      "minimum_reference_samples": 5
     }
   },
   "endpoints": [
