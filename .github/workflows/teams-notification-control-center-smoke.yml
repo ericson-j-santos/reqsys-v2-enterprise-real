@@ -104,7 +104,7 @@ jobs:
           )
         with:
           name: teams-control-center-smoke-${{ matrix.environment }}
-          path: teams-control-center-smoke-${ENVIRONMENT}.json
+          path: teams-control-center-smoke-${{ matrix.environment }}.json
           if-no-files-found: error
           retention-days: 30
 
