@@ -1,5 +1,7 @@
+from app.core.config import settings
 from app.services.rag_governado import (
     criar_chunks,
+    gerar_resposta_llm,
     indexar_chunks_persistentes,
     normalizar_documentos,
     recuperar_fontes_semanticas,
@@ -78,6 +80,75 @@ def test_indexar_chunks_persistentes_grava_e_e_idempotente(db_session):
     fontes = recuperar_fontes_semanticas_persistidas(db_session, 'Qual a politica de retencao de dados?')
     assert fontes
     assert fontes[0].titulo == 'Retencao'
+
+
+def test_gerar_resposta_llm_retorna_none_sem_credencial_configurada(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_llm_provider', '')
+    monkeypatch.setattr(settings, 'reqsys_rag_llm_api_key', '')
+
+    from app.services.rag_governado import FonteRAG
+
+    fontes = [FonteRAG(id='1', titulo='Doc', origem='a', score=0.9, trecho='trecho')]
+    assert gerar_resposta_llm('pergunta', fontes) is None
+
+
+def test_gerar_resposta_llm_provider_nao_suportado_retorna_none(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_llm_provider', 'provider-inexistente')
+    monkeypatch.setattr(settings, 'reqsys_rag_llm_api_key', 'chave-fake')
+
+    from app.services.rag_governado import FonteRAG
+
+    fontes = [FonteRAG(id='1', titulo='Doc', origem='a', score=0.9, trecho='trecho')]
+    assert gerar_resposta_llm('pergunta', fontes) is None
+
+
+def test_gerar_resposta_llm_chama_gateway_e_retorna_texto(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_llm_provider', 'openai')
+    monkeypatch.setattr(settings, 'reqsys_rag_llm_api_key', 'chave-fake')
+    monkeypatch.setattr(settings, 'reqsys_rag_llm_model', 'gpt-teste')
+
+    from app.services.rag_governado import FonteRAG
+
+    class GatewayFake:
+        def gerar_openai(self, *, api_key, model, prompt, system_prompt):
+            assert api_key == 'chave-fake'
+            assert model == 'gpt-teste'
+            assert 'pergunta' in prompt.lower()
+            return 'resposta gerada pelo modelo'
+
+    fontes = [FonteRAG(id='1', titulo='Doc', origem='a', score=0.9, trecho='trecho relevante')]
+    resultado = gerar_resposta_llm('Qual a pergunta?', fontes, gateway=GatewayFake())
+    assert resultado == 'resposta gerada pelo modelo'
+
+
+def test_gerar_resposta_llm_falha_na_chamada_retorna_none(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_llm_provider', 'openai')
+    monkeypatch.setattr(settings, 'reqsys_rag_llm_api_key', 'chave-fake')
+
+    from app.services.rag_governado import FonteRAG
+
+    class GatewayQuebrado:
+        def gerar_openai(self, **kwargs):
+            raise RuntimeError('falha simulada de rede')
+
+    fontes = [FonteRAG(id='1', titulo='Doc', origem='a', score=0.9, trecho='trecho')]
+    assert gerar_resposta_llm('pergunta', fontes, gateway=GatewayQuebrado()) is None
+
+
+def test_responder_rag_governado_usa_llm_quando_configurado(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_llm_provider', 'openai')
+    monkeypatch.setattr(settings, 'reqsys_rag_llm_api_key', 'chave-fake')
+
+    import app.services.rag_governado as modulo
+
+    monkeypatch.setattr(modulo, 'gerar_resposta_llm', lambda pergunta, fontes, **kw: 'resposta em linguagem natural')
+
+    documentos = normalizar_documentos([{'id': 'gov-002', 'titulo': 'Governanca RAG', 'conteudo': 'RAG corporativo deve responder com fontes e auditoria.', 'origem': 'teste'}])
+    resposta = responder_rag_governado('Como o RAG corporativo deve responder?', documentos, correlation_id='teste-llm-001')
+
+    assert resposta.status_fluxo == 'COM_FONTES'
+    assert 'resposta em linguagem natural' in resposta.resposta
+    assert resposta.engine == 'semantic-hash-embedding+memory-vector-store-v1+llm-openai'
 
 
 def test_responder_rag_governado_persistido_bloqueia_sem_evidencia(db_session):
