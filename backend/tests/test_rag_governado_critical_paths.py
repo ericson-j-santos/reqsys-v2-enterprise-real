@@ -5,10 +5,9 @@ from pathlib import Path
 from app.services.rag_governado import (
     carregar_documentos_do_diretorio,
     gerar_correlation_id,
-    llama_index_disponivel,
     mascarar_pii,
     normalizar_documentos,
-    recuperar_fontes_lexical,
+    recuperar_fontes_semanticas,
 )
 
 
@@ -47,7 +46,7 @@ def test_carregar_documentos_retorna_vazio_para_caminho_invalido():
     assert carregar_documentos_do_diretorio(str(Path("/caminho/inexistente"))) == []
 
 
-def test_recuperar_fontes_lexical_ranqueia_por_relevancia():
+def test_recuperar_fontes_semanticas_ranqueia_por_relevancia():
     from app.services.rag_governado import DocumentoRAG
 
     documentos = [
@@ -55,28 +54,27 @@ def test_recuperar_fontes_lexical_ranqueia_por_relevancia():
         DocumentoRAG(id="2", titulo="Outro", conteudo="conteudo irrelevante", origem="b"),
     ]
 
-    fontes = recuperar_fontes_lexical("Qual a politica de governanca?", documentos)
+    fontes = recuperar_fontes_semanticas("Qual a politica de governanca?", documentos)
 
     assert fontes
-    assert fontes[0].id == "1"
+    assert fontes[0].id.startswith("1:")
     assert fontes[0].score > 0
 
 
-def test_recuperar_fontes_lexical_sem_termos_retorna_vazio():
+def test_recuperar_fontes_semanticas_sem_termos_retorna_vazio():
     from app.services.rag_governado import DocumentoRAG
 
     documentos = [DocumentoRAG(id="1", titulo="Doc", conteudo="abc", origem="a")]
-    assert recuperar_fontes_lexical("??", documentos) == []
+    assert recuperar_fontes_semanticas("??", documentos) == []
 
 
-def test_trecho_relevante_usa_conteudo_curto_quando_sem_paragrafos():
-    from app.services.rag_governado import DocumentoRAG, recuperar_fontes_lexical
+def test_recuperar_fontes_semanticas_retorna_trecho_do_chunk():
+    from app.services.rag_governado import DocumentoRAG
 
     documentos = [DocumentoRAG(id="1", titulo="Doc", conteudo="texto", origem="a")]
-    fontes = recuperar_fontes_lexical("texto", documentos)
+    fontes = recuperar_fontes_semanticas("texto", documentos)
     assert fontes[0].trecho == "texto"
 
 
-def test_gerar_correlation_id_e_llama_index_flag():
+def test_gerar_correlation_id():
     assert gerar_correlation_id().startswith("rag-")
-    assert isinstance(llama_index_disponivel(), bool)
