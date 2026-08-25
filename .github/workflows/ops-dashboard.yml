@@ -1,6 +1,10 @@
 name: Ops Dashboard
 
 on:
+  workflow_run:
+    workflows:
+      - Performance SLO Error Budget Gate
+    types: [completed]
   workflow_dispatch:
   schedule:
     - cron: "5 13 * * 1-5"
@@ -10,12 +14,15 @@ permissions:
   actions: read
 
 concurrency:
-  group: ops-dashboard-${{ github.ref }}
+  group: ops-dashboard-${{ github.event.workflow_run.id || github.ref }}
   cancel-in-progress: false
 
 jobs:
   build-dashboard:
     name: Build ops dashboard artifact
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'workflow_run' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 8
 
@@ -28,11 +35,20 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Collect Performance SLO evidence
+        uses: ./.github/actions/collect-performance-slo-evidence
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          source-run-id: ${{ github.event.workflow_run.id || '' }}
+          output-dir: artifacts/performance-slo-observability
+
       - name: Validate dashboard generator
         shell: bash
         run: |
           set -euo pipefail
           python -m py_compile scripts/generate_ops_dashboard_data.py
+          python -m py_compile scripts/integrate_performance_slo_observability.py
           python -m py_compile scripts/build_runtime_executive_index.py
           python -m py_compile scripts/build_strategic_governance_index.py
           python -m py_compile scripts/validate_ops_dashboard_runtime_executive_panel.py
@@ -62,6 +78,7 @@ jobs:
           python -m py_compile scripts/validate_workflow_efficiency_visual_card.py
           python -m unittest tests/test_workflow_efficiency_visual_card.py
           python -m unittest tests/test_ops_dashboard_workflow_efficiency_integration.py
+          python -m unittest discover -s backend/tests -p "test_performance_slo_observability_integration.py" -v
 
       - name: Generate fallback dashboard data
         shell: bash
@@ -75,6 +92,17 @@ jobs:
             --public-runtime-fallback artifacts/runtime/public-runtime-validation.json \
             --public-runtime-evidence-index audit/runtime/public-runtime-evidence-index.json \
             --output docs/ops-dashboard/data/health.json
+
+      - name: Inject Performance SLO into existing Ops Dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/integrate_performance_slo_observability.py \
+            --performance-slo artifacts/performance-slo-observability/source/performance-slo-evidence.json \
+            --provenance artifacts/performance-slo-observability/provenance.json \
+            --dashboard-health docs/ops-dashboard/data/health.json \
+            --dashboard-slo docs/ops-dashboard/data/slo-evidence.json \
+            --output docs/ops-dashboard/data/performance-slo-observability.json
 
       - name: Hydrate conflict risk report
         shell: bash
@@ -237,6 +265,8 @@ jobs:
           test -f artifacts/ops-dashboard/index.html
           test -f artifacts/ops-dashboard/runtime-executive.html
           test -f artifacts/ops-dashboard/data/health.json
+          test -f artifacts/ops-dashboard/data/performance-slo-observability.json
+          test -f artifacts/ops-dashboard/data/slo-evidence.json
           test -f artifacts/ops-dashboard/data/runtime-executive-index.json
           test -f artifacts/ops-dashboard/data/strategic-governance-index.json
           test -f artifacts/ops-dashboard/data/conflict-risk-report.json
@@ -245,6 +275,18 @@ jobs:
           test -f artifacts/ops-dashboard/data/security-executive-summary.json
           test -f artifacts/executive-readiness-gate/executive-readiness-gate.json
           test "$(grep -c 'id=\"workflow-efficiency-visual-card\"' artifacts/ops-dashboard/index.html)" -eq 1
+          python -m json.tool artifacts/ops-dashboard/data/performance-slo-observability.json >/tmp/performance-slo-observability.validated.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          health = json.loads(Path('artifacts/ops-dashboard/data/health.json').read_text(encoding='utf-8'))
+          checks = [item for item in health.get('checks', []) if item.get('id') == 'performance_slo_error_budget']
+          if len(checks) != 1:
+              raise SystemExit(f'performance SLO check count invalido: {len(checks)}')
+          evidence = checks[0].get('evidence') or {}
+          if 'state' not in evidence or 'source_workflow_run_id' not in evidence:
+              raise SystemExit('performance SLO provenance ausente no dashboard')
+          PY
 
       - name: Validate ops dashboard contracts
         shell: bash
@@ -336,6 +378,8 @@ jobs:
             echo "Security executive summary publicado: security-executive-summary"
             echo "Executive readiness publicado: executive-readiness-gate"
             echo ""
+            echo "Performance SLO/Error Budget consolidado no health.json e slo-evidence.json do painel existente."
+            echo "Performance SLO provenance preservada em data/performance-slo-observability.json."
             echo "Runtime executive index publicado em data/runtime-executive-index.json."
             echo "Runtime executive panel validado em index.html."
             echo "Runtime executive page publicada em runtime-executive.html."

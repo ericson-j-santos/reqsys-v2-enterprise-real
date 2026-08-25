@@ -2,6 +2,21 @@
 name: ReqSys Fly Runtime P0
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "fly.toml"
+      - "Dockerfile.fly"
+      - "scripts/fly_boot.sh"
+      - "backend/**"
+      - "scripts/validate_fly_runtime_config.py"
+      - "scripts/validate_public_runtime.py"
+      - "scripts/runtime_public_validator.py"
+      - "scripts/dynamic_performance_gate.py"
+      - "scripts/performance_slo_error_budget.py"
+      - "scripts/integrate_performance_slo_observability.py"
+      - "config/runtime-performance-budgets.json"
+      - ".github/workflows/fly-runtime-p0.yml"
   pull_request:
     paths:
       - "fly.toml"
