@@ -7,7 +7,7 @@ on:
       - .github/workflows/teams-public-dashboard-smoke-contract.yml
       - docs/teams-certification-public-status.md
       - .github/workflows/teams-notification-dashboard.yml
-      - ops-dashboard/teams-notification/**
+      - docs/ops-dashboard/teams-notification/**
   workflow_dispatch:
 
 permissions:
