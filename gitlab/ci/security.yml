@@ -13,11 +13,6 @@ security_baseline_smoke:
 backend_sast_bandit:
   stage: security
   image: python:3.12-slim
-  rules:
-    - changes:
-        - backend/**/*
-        - gitlab/**/*
-        - .gitlab-ci.yml
   before_script:
     - python -m pip install --upgrade pip bandit
   script:

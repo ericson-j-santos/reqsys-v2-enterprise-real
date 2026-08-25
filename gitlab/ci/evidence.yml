@@ -27,9 +27,12 @@ gitlab_operational_evidence_gate:
   image: python:3.12-alpine
   needs:
     - job: backend_sast_bandit
+      optional: true
     - job: secret_detection_gitleaks
     - job: backend_dependency_scanning_pip_audit
+      optional: true
     - job: frontend_dependency_scanning_npm_audit
+      optional: true
     - job: container_scanning_trivy
     - job: deploy_staging_fly
       optional: true

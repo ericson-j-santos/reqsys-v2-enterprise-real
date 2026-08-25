@@ -30,11 +30,6 @@ secret_detection_gitleaks:
 backend_dependency_scanning_pip_audit:
   stage: security
   image: python:3.12-slim
-  rules:
-    - changes:
-        - backend/**/*
-        - gitlab/**/*
-        - .gitlab-ci.yml
   before_script:
     - python -m pip install --upgrade pip pip-audit
   script:
@@ -50,11 +45,6 @@ backend_dependency_scanning_pip_audit:
 frontend_dependency_scanning_npm_audit:
   stage: security
   image: node:20-slim
-  rules:
-    - changes:
-        - frontend/**/*
-        - gitlab/**/*
-        - .gitlab-ci.yml
   before_script:
     - cd frontend
     - npm ci
