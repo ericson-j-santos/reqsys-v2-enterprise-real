@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "[1/3] Testes backend"
+echo "[1/4] Guardrail de frontends legados"
+python scripts/validate_legacy_frontend_references.py
+
+echo "[2/4] Testes backend"
 (
   cd backend
   PYTHONPATH=. pytest -q
 )
 
-echo "[2/3] Build UI canônica"
+echo "[3/4] Build UI canônica"
 (
   cd frontend
   npm run build
 )
 
-echo "[3/3] E2E governado da UI canônica"
+echo "[4/4] E2E governado da UI canônica"
 (
   cd frontend
   npm run test:e2e -- \
