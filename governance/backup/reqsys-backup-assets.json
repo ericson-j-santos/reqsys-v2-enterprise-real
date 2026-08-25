@@ -37,10 +37,15 @@
       "github_environment": "staging",
       "fly_app": "reqsys-api-stg",
       "criticality": "high",
-      "enabled": false,
+      "enabled": true,
       "rpo_target_minutes": 720,
       "rto_target_seconds": 14400,
-      "rollout_state": "enable_after_dev_restore_evidence"
+      "rollout_state": "candidate_after_valid_dev_restore_evidence",
+      "rollout_evidence": {
+        "source_run_id": "32882218732",
+        "decision": "stg_rollout_candidate",
+        "production_allowed": false
+      }
     },
     {
       "id": "reqsys-prod-sqlite",
