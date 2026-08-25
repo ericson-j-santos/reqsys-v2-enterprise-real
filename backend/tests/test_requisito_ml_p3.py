@@ -149,8 +149,8 @@ def test_runtime_canary_100_porcento_usa_modelo_apos_gate_humano():
     assert decisao.fallback_reason is None
 
 
-def test_runtime_active_faz_fallback_por_baixa_confianca_apos_gate_humano():
-    politica = carregar_politica_runtime(POLITICA)
+def test_runtime_active_faz_fallback_quando_threshold_de_confianca_nao_e_atendido():
+    politica = replace(carregar_politica_runtime(POLITICA), confianca_minima_modelo=1.0)
     modelo = treinar_modelo_runtime(DATASET_P2)
     decisao = classificar_runtime(
         'xyz qwerty elemento desconhecido',
