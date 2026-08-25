@@ -28,49 +28,41 @@
       "id": "frontend-vuetify",
       "path": "frontend-vuetify",
       "kind": "frontend",
-      "decision": "DEPRECAR",
+      "decision": "REMOVIDO",
       "canonical": false,
       "target": "frontend",
       "risk": "low",
       "evidence": [
-        "A cobertura E2E útil foi consolidada em frontend/tests/e2e.",
-        "O Playwright raiz não inicia mais frontend-vuetify nem mantém projeto dedicado.",
+        "A cobertura E2E útil foi consolidada em frontend/tests/e2e na Fase 2A.",
+        "O Playwright raiz não inicia frontend-vuetify nem mantém projeto dedicado.",
         "validar_qualidade.sh compila e testa somente frontend/.",
-        "O trigger de smoke Teams foi migrado para frontend/src/services/teamsGateway.js.",
-        "O guardrail check_legacy_frontend_references.py bloqueia reintrodução de dependências operacionais."
+        "O trigger de smoke Teams usa frontend/src/services/teamsGateway.js.",
+        "A Fase 2A foi mergeada e permaneceu verde sem consumidores operacionais.",
+        "O diretório físico foi removido na Fase 2B pelo commit 170fdcc972ea395f71fd22ead3285f6229adfa6d."
       ],
       "blocking_dependencies": [],
-      "exit_criteria": [
-        "Confirmar CI completo verde da Fase 2A.",
-        "Confirmar ausência de consumidores operacionais fora das superfícies versionadas governadas.",
-        "Excluir o diretório físico somente em PR separada da Fase 2B.",
-        "Manter evidência de rollback via histórico Git."
-      ],
-      "next_action": "Executar Fase 2B de remoção física somente após a Fase 2A permanecer verde."
+      "exit_criteria": [],
+      "next_action": "Manter removido; se rollback for comprovadamente necessário, restaurar somente este diretório a partir do commit ca8905ad869d857084127356cba36bb4edc69a9e em branch de recuperação."
     },
     {
       "id": "frontend-angular",
       "path": "frontend-angular",
       "kind": "frontend",
-      "decision": "DEPRECAR",
+      "decision": "REMOVIDO",
       "canonical": false,
       "target": "frontend",
       "risk": "low",
       "evidence": [
-        "Os cenários vigentes de login já estão cobertos pela suíte canônica.",
-        "O Playwright raiz não inicia mais frontend-angular nem mantém projeto dedicado.",
+        "Os cenários vigentes de login foram consolidados na suíte canônica durante a Fase 2A.",
+        "O Playwright raiz não inicia frontend-angular nem mantém projeto dedicado.",
         "validar_qualidade.sh compila e testa somente frontend/.",
-        "Os specs Angular legados foram aposentados.",
-        "O guardrail check_legacy_frontend_references.py bloqueia reintrodução de dependências operacionais."
+        "Os specs Angular legados foram aposentados na Fase 2A.",
+        "A Fase 2A foi mergeada e permaneceu verde sem consumidores operacionais.",
+        "O diretório físico foi removido na Fase 2B pelo commit 170fdcc972ea395f71fd22ead3285f6229adfa6d."
       ],
       "blocking_dependencies": [],
-      "exit_criteria": [
-        "Confirmar CI completo verde da Fase 2A.",
-        "Confirmar ausência de consumidores operacionais fora das superfícies versionadas governadas.",
-        "Excluir o diretório físico somente em PR separada da Fase 2B.",
-        "Manter evidência de rollback via histórico Git."
-      ],
-      "next_action": "Executar Fase 2B de remoção física somente após a Fase 2A permanecer verde."
+      "exit_criteria": [],
+      "next_action": "Manter removido; se rollback for comprovadamente necessário, restaurar somente este diretório a partir do commit ca8905ad869d857084127356cba36bb4edc69a9e em branch de recuperação."
     },
     {
       "id": "docs-site",
