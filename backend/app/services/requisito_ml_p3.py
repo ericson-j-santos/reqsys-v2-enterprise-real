@@ -9,12 +9,16 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from app.services.requisito_classifier import CATEGORIAS, avaliar_classificador, classificar_requisito
+from app.services.requisito_classifier import (
+    avaliar_classificador,
+    CATEGORIAS,
+    classificar_requisito,
+)
 from app.services.requisito_ml import (
-    MODELO_VERSAO,
-    ClassificadorRequisitoSupervisionado,
-    RegistroTreinoML,
     carregar_dataset_ml,
+    ClassificadorRequisitoSupervisionado,
+    MODELO_VERSAO,
+    RegistroTreinoML,
 )
 
 MODOS_RUNTIME = ('off', 'shadow', 'canary', 'active')
