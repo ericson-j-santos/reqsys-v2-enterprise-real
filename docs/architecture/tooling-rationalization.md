@@ -16,6 +16,7 @@ A fonte estruturada desta decisão é `governance/tooling/rationalization-invent
 | `frontend-vuetify` | CONSOLIDAR | Legado ainda usado por E2E | `frontend` |
 | `frontend-angular` | CONSOLIDAR | Legado ainda usado por E2E | `frontend` |
 | `docs-site` | MANTER | Fonte canônica do MkDocs | `docs-site` |
+| `docs/ops-dashboard` | MANTER | Dashboard operacional canônico | `docs/ops-dashboard` |
 | `ops-dashboard` | CONSOLIDAR | HTMLs estáticos históricos | `docs/ops-dashboard` |
 
 ## Decisão arquitetural
@@ -60,7 +61,7 @@ A pasta `docs/` não deve ser removida por este inventário: ela contém runbook
 
 ## 4. Dashboard operacional
 
-O dashboard operacional canônico está em `docs/ops-dashboard/`, conforme o runbook `docs/runbooks/ops-dashboard.md` e o workflow `Ops Dashboard`.
+`docs/ops-dashboard/` é registrado explicitamente como a superfície canônica de dashboard operacional, conforme o runbook `docs/runbooks/ops-dashboard.md` e o workflow `Ops Dashboard`.
 
 O diretório raiz `ops-dashboard/` contém duas superfícies HTML históricas:
 
@@ -71,6 +72,8 @@ Esses arquivos devem ser consolidados no dashboard canônico ou substituídos po
 
 ## Guardrails
 
+- Cada categoria declarada em `canonical_targets` deve possuir exatamente um item canônico.
+- Todo item canônico deve permanecer em decisão `MANTER`.
 - Nenhuma superfície marcada `CONSOLIDAR` pode ser removida enquanto `blocking_dependencies` não estiver vazio.
 - Nenhuma nova feature deve ser criada em `frontend-angular/` ou `frontend-vuetify/`.
 - `frontend/` é o único destino de novas capacidades de UI de produto.
