@@ -15,6 +15,11 @@ kill_timeout = "5s"
   CORS_ORIGINS = "https://reqsys-app-dev.fly.dev,https://tieridev.duckdns.org,http://localhost:5173,http://localhost:8081"
   SDD_SPECS_PATH = "/app/specs"
   REQSYS_ML_REQUISITOS_MODO = "shadow"
+  DOCUMENTO_DEMANDA_OCR_ENABLED = "true"
+  DOCUMENTO_DEMANDA_OCR_LANG = "por"
+  DOCUMENTO_DEMANDA_OCR_DPI = "200"
+  DOCUMENTO_DEMANDA_OCR_TIMEOUT_SECONDS = "60"
+  DOCUMENTO_DEMANDA_OCR_MAX_PAGES = "25"
 
 [[mounts]]
   source = "reqsys_data_dev"
