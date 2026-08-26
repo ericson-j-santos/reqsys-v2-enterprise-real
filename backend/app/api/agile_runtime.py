@@ -58,7 +58,7 @@ def _codigo(prefixo: str) -> str:
 def _get_work_item(db: Session, work_item_id: int) -> AgileWorkItem:
     item = db.get(AgileWorkItem, work_item_id)
     if not item:
-        raise HTTPException(status_code=404, detail='Work item agile nao encontrado')
+        raise HTTPException(status_code=404, detail='Item de trabalho ágil não encontrado')
     return item
 
 

@@ -512,9 +512,9 @@ jobs:
               "/v1/teams-gateway/status",
               critical=True,
           )
-          if not (isinstance(status_data, dict) and status_data.get("schema_version") == "1.0.0"):
+          if not (isinstance(status_data, dict) and status_data.get("schema_version") == "1.1.0"):
               status_probe["ok"] = False
-              status_probe["error"] = status_probe["error"] or "schema_version esperado 1.0.0 nao encontrado"
+              status_probe["error"] = status_probe["error"] or "schema_version esperado 1.1.0 nao encontrado"
           probes.append(status_probe)
 
           build_probe, build_data = http_json(

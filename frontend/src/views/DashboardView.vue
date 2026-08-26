@@ -445,7 +445,7 @@ const painelDireito = computed(() => [
   {
     id: 'publicar-integracao',
     title: 'Publicar em ferramenta de entrega',
-    subtitle: 'Preparar envio para Planner, Redmine, GitHub ou workflow corporativo',
+    subtitle: 'Preparar envio para Planner, Redmine, GitHub ou fluxo de trabalho corporativo',
     rota: { path: '/painel-integracao' },
     testId: 'destino-publicar-integracao',
   },

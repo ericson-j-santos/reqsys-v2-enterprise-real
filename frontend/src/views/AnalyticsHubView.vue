@@ -5,7 +5,7 @@
         <p class="eyebrow">Trilha C · UX Operacional</p>
         <h1 id="titulo-analytics">Analytics Navegável</h1>
         <p class="muted">
-          Hub executivo com semáforo operacional, cards clicáveis e drill-down filtrado para monitoramento,
+          Hub executivo com semáforo operacional, cards clicáveis e detalhamento filtrado para monitoramento,
           estatísticas e runtime.
         </p>
       </div>
@@ -35,7 +35,7 @@
 
     <v-card class="panel mt-4" elevation="0">
       <v-card-title>Runtime operacional</v-card-title>
-      <v-card-subtitle>Cards schema-driven com drill-down para o analítico filtrado.</v-card-subtitle>
+      <v-card-subtitle>Cards orientados por schema com detalhamento para o analítico filtrado.</v-card-subtitle>
       <v-card-text>
         <v-row dense>
           <v-col v-for="card in runtimeCards" :key="card.id" cols="12" sm="6" md="4" xl="3">
@@ -44,7 +44,7 @@
               :value="formatarValor(card)"
               :semaforo="semaforoCard(card)"
               icon="mdi-chart-timeline-variant"
-              :hint="card.drilldown ? 'Drill-down conectado' : ''"
+              :hint="card.drilldown ? 'Detalhamento conectado' : ''"
               :test-id="`analytics-runtime-${card.id}`"
               @drilldown="irPara(card.rotaSpa)"
             />
@@ -204,7 +204,7 @@ const cardsResumo = computed(() => [
   {
     id: 'integracoes',
     label: 'Integrações',
-    value: 'Drill-down',
+    value: 'Detalhamento',
     semaforo: 'amarelo',
     icon: 'mdi-connection',
     hint: 'Falhas recentes em Planner e Teams',
@@ -212,11 +212,11 @@ const cardsResumo = computed(() => [
   },
   {
     id: 'dashboard',
-    label: 'Dashboard',
+    label: 'Painel',
     value: 'Métricas',
     semaforo: 'verde',
     icon: 'mdi-view-dashboard',
-    hint: 'Visão consolidada de requisitos e pipeline',
+    hint: 'Visão consolidada de requisitos e fluxo',
     rota: { path: '/' },
   },
 ])

@@ -39,7 +39,7 @@ export const AMBIENTES_OPERACIONAIS = [
     frontend: 'https://reqsys-app.fly.dev',
     backend: 'https://reqsys-api.fly.dev',
     duckdns: 'https://tieriprod.duckdns.org',
-    uso: 'Acesso final após deploy.',
+    uso: 'Acesso final após implantação.',
   },
 ]
 

@@ -64,4 +64,4 @@ def test_lista_pacotes_agile_por_correlation_id(client):
 def test_consulta_pacote_agile_inexistente_retorna_404(client):
     response = client.get('/v1/agents/orchestrator/agile/packages/agile-inexistente')
     assert response.status_code == 404
-    assert response.json()['detail'] == 'agile_package_not_found'
+    assert response.json()['detail'] == 'Pacote ágil não encontrado.'

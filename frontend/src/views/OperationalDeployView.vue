@@ -11,7 +11,7 @@
     </div>
 
     <v-alert type="info" variant="tonal" class="mb-4">
-      Em DEV, a política exige uma confirmação explícita. O ReqSys traduz a intenção para o workflow governado e registra a evidência da operação.
+      Em DEV, a política exige uma confirmação explícita. O ReqSys traduz a intenção para o fluxo de trabalho governado e registra a evidência da operação.
     </v-alert>
 
     <v-row>
@@ -22,7 +22,7 @@
           <v-card-text>
             <div class="text-body-2 mb-3">Ambiente: <strong>Desenvolvimento</strong></div>
             <div class="text-body-2 mb-3">Origem: <strong>main</strong></div>
-            <div class="text-body-2">Ação permitida nesta versão: <strong>Deploy</strong></div>
+            <div class="text-body-2">Ação permitida nesta versão: <strong>Publicação</strong></div>
           </v-card-text>
           <v-card-actions>
             <v-btn
@@ -56,7 +56,7 @@
 
     <v-dialog v-model="dialogo" max-width="560">
       <v-card>
-        <v-card-title>Confirmar deploy em DEV</v-card-title>
+        <v-card-title>Confirmar publicação em DEV</v-card-title>
         <v-card-text v-if="selecionada">
           <p class="mb-3">
             Você está solicitando a publicação de <strong>{{ selecionada.titulo }}</strong> em desenvolvimento.

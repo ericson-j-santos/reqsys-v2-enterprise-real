@@ -18,7 +18,7 @@
     <template v-else-if="detalhe?.indicador">
       <header class="detalhe-header">
         <div>
-          <p class="eyebrow">REQSYS#004 · Drill-down operacional</p>
+          <p class="eyebrow">REQSYS#004 · Detalhamento operacional</p>
           <h1 id="titulo-indicador">{{ detalhe.indicador.nome }}</h1>
           <p class="muted">{{ detalhe.indicador.descricao }}</p>
         </div>
@@ -93,15 +93,15 @@
             <v-card-text>
               <div v-if="detalhe.scoreEvidenciado !== null" class="score-evidenciado" data-testid="estatistica-score-evidenciado">
                 <strong>{{ detalhe.scoreEvidenciado }}%</strong>
-                <span>Atualizado exclusivamente por artifact runtime válido.</span>
+                <span>Atualizado exclusivamente por artefato runtime válido.</span>
               </div>
               <v-alert v-else type="warning" variant="tonal" data-testid="estatistica-score-pendente">
                 <strong>Score não atualizado.</strong>
-                O estado permanece evidenciado sem promoção até existir artifact runtime válido com score verificável.
+                O estado permanece evidenciado sem promoção até existir artefato runtime válido com score verificável.
               </v-alert>
 
               <dl v-if="detalhe.runtimeArtifactValido" class="metadata mt-3">
-                <div><dt>Artifact</dt><dd>runtime verificado</dd></div>
+                <div><dt>Artefato</dt><dd>runtime verificado</dd></div>
                 <div><dt>Status</dt><dd>{{ detalhe.scoreStatus }}</dd></div>
                 <div><dt>Run ID</dt><dd>{{ detalhe.runtimeArtifact.source_run_id || detalhe.runtimeArtifact.run_id }}</dd></div>
                 <div><dt>Ambiente</dt><dd>{{ detalhe.runtimeArtifact.environment || detalhe.runtimeArtifact.ambiente }}</dd></div>

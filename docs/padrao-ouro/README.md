@@ -94,7 +94,7 @@ Decisão arquitetural     → ADR_INDEX → criar ADR em docs/adr/
 Quebra silenciosa        → CONTRACT_CATALOG → validar schema/contrato
 Conflito entre branches  → LIVING_ARCHITECTURE_INDEX → boundaries/ownership
 Troubleshooting CI/ops   → RUNTIME_EVIDENCE_GRAPH → timeline + artifacts
-Onboarding agente/IA     → README (este) → living-architecture-index.json
+Integração do agente/IA  → README (este) → living-architecture-index.json
 ```
 
 
@@ -124,7 +124,7 @@ Use este protocolo quando o pedido for amplo (ex.: "foco padrão ouro") ou quand
 
 | Métrica | Ganho estimado |
 | --- | --- |
-| Velocidade de onboarding IA | +200% a +500% |
+| Velocidade de integração da IA | +200% a +500% |
 | Redução de conflitos de PR | -30% a -70% |
 | Redução de retrabalho | -25% a -60% |
 | Tempo de entendimento arquitetural | -50% a -80% |

@@ -16,14 +16,14 @@ O PR #768 corrigiu parcialmente os pontos levantados no chat anterior:
 ## Lacunas remanescentes
 
 1. Catálogo responsivo ainda não cobria `/home`, `/workspace` e `/ajuda`.
-2. Bloqueio por permissão redirecionava para `/` com query `forbidden`, mas não havia feedback visual explícito ao usuário.
+2. Bloqueio por permissão redirecionava para `/` com query `forbidden`, mas não havia retorno visual explícito ao usuário.
 3. Estilos globais ainda precisavam de reforço para mensagens flutuantes, overflow e consistência visual em telas menores.
 4. Faltava documentação objetiva conectando as fases do chat às evidências técnicas implementadas.
 
 ## Implementação deste incremento
 
 - Adicionado `RouteFeedback.vue` para exibir mensagem clara quando o acesso for bloqueado por permissão.
-- Integrado feedback global em `App.vue`, sem afetar a tela de login.
+- Integrado retorno visual global em `App.vue`, sem afetar a tela de login.
 - Atualizado `rotasResponsivas.js` para incluir `/home`, `/workspace` e `/ajuda`.
 - Reforçado teste do catálogo para garantir que as rotas operacionais do roteador estejam cobertas pelo catálogo responsivo.
 - Reforçado `styles.css` com acabamento global para alerta de rota, responsividade e quebra segura de conteúdo.
@@ -32,7 +32,7 @@ O PR #768 corrigiu parcialmente os pontos levantados no chat anterior:
 
 - Build do frontend deve permanecer verde.
 - Testes unitários devem permanecer verdes.
-- Usuário sem permissão deve receber feedback visual claro.
+- Usuário sem permissão deve receber retorno visual claro.
 - Rotas operacionais registradas no roteador devem estar cobertas pelo catálogo responsivo.
 - Nenhuma nova funcionalidade de negócio deve ser introduzida neste ciclo.
 

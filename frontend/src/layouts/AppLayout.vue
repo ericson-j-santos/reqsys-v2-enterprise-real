@@ -20,11 +20,11 @@
         <div class="brand"><span class="brand-dot">R</span> ReqSys Enterprise</div>
         <div class="muted mt-1 version-line" data-testid="app-version-label">
           {{ versionLabel }}
-          <v-tooltip activator="parent" location="bottom" text="Versao carregada no navegador e versao informada pela API. Ajuda a identificar cache ou deploy parcial." />
+          <v-tooltip activator="parent" location="bottom" text="Versao carregada no navegador e versao informada pela API. Ajuda a identificar cache ou publicação parcial." />
         </div>
         <v-chip v-if="hasVersionDrift" size="x-small" color="warning" variant="tonal" class="mt-1" prepend-icon="mdi-alert-outline" data-testid="app-version-drift-chip">
           Versoes divergentes
-          <v-tooltip activator="parent" location="bottom" text="O frontend e a API parecem estar em versoes diferentes. Atualize a pagina ou valide o deploy do ambiente." />
+          <v-tooltip activator="parent" location="bottom" text="O frontend e a API parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." />
         </v-chip>
         <AmbienteNavigator :environment-hint="environment" compact class="mt-2 d-inline-block" />
         <v-btn block variant="tonal" color="primary" class="theme-toggle mt-3" :prepend-icon="temaClaro ? 'mdi-weather-night' : 'mdi-white-balance-sunny'" :aria-label="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" @click="alternarTemaVisual">

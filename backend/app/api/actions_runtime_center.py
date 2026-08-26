@@ -101,7 +101,7 @@ def validar_deploy_dev(body: DeployDevRequest, user: dict = Depends(require_admi
 @router.post('/operational-deploy/execute')
 def executar_deploy_dev_api(body: DeployDevRequest, user: dict = Depends(require_admin)):
     if not body.confirmar:
-        raise HTTPException(status_code=409, detail='Confirmação explícita obrigatória para deploy em DEV.')
+        raise HTTPException(status_code=409, detail='Confirmação explícita obrigatória para implantação em DEV.')
     try:
         resultado = executar_deploy_dev(body.aplicacao)
     except ValueError as exc:

@@ -16,7 +16,7 @@ Concentrar cada incremento em uma melhoria pequena, verificável e conectada aos
 | P1 | Arquitetura viva | Índices, contratos e ownership atualizados junto do código | `README.md`, `LIVING_ARCHITECTURE_INDEX.md` ou JSON sincronizado |
 | P2 | Testes críticos | Cobertura focada nos fluxos de maior risco | `pytest`, `npm run build`, Playwright ou justificativa |
 | P3 | Evidência operacional | Artifacts, runbooks e dashboards navegáveis | Evidência em `docs/evidence/` ou artifact canônico |
-| P4 | Experiência do usuário | Telas recentes com feedback claro e responsivo | Screenshot, vídeo ou E2E responsivo quando aplicável |
+| P4 | Experiência do usuário | Telas recentes com retorno claro e responsivo | Screenshot, vídeo ou E2E responsivo quando aplicável |
 
 ## Loop operacional
 

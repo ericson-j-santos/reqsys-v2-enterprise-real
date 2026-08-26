@@ -53,7 +53,7 @@ Adotar uma estratégia operacional baseada em:
 - Menor tempo médio de PR.
 - Menor fila de CI.
 - Menos conflitos por branches longas.
-- Feedback mais rápido por área alterada.
+- Retorno mais rápido por área alterada.
 - Redução de retrabalho operacional.
 
 ## Riscos

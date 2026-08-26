@@ -11,7 +11,7 @@ Catálogo de Architecture Decision Records (ADRs) do ReqSys. Cada ADR segue o fo
 | Nova decisão transversal | Criar ADR em `docs/adr/ADR-NNN-titulo.md` |
 | Entender decisão existente | Consultar tabela abaixo por domínio |
 | Evitar refactor errado | Ler ADR do domínio antes de alterar |
-| Onboarding agente/IA | Ler ADRs fundacionais (0001–0006) primeiro |
+| Integração do agente/IA | Ler ADRs fundacionais (0001–0006) primeiro |
 | Coordenar geração ou revisão de código | Consultar ADRs e o catálogo em `docs/prompts/` |
 
 ## Formato padrão

@@ -99,7 +99,7 @@ Se o mesmo workflow rodar repetidamente para o mesmo SHA acima do limite, o rela
 | P2 | Operational Analytics UI | Cards clicáveis, timeline viva, drill-down |
 | P2 | Observabilidade unificada | Tracing ponta a ponta com correlação visual |
 
-Ver roadmap consolidado: `docs/OPERATIONAL_INCREMENTOS_ROADMAP.md`.
+Ver plano consolidado: `docs/OPERATIONAL_INCREMENTOS_ROADMAP.md`.
 
 ## 9. Critério de aceite
 

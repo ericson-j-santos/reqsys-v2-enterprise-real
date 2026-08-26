@@ -17,7 +17,7 @@
     </div>
 
     <div class="page-header">
-      <h1>◈ Pipeline de Requisitos</h1>
+      <h1>◈ Fluxo de Requisitos</h1>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;row-gap:6px">
         <v-btn-toggle v-model="nivelFiltro" mandatory density="compact" variant="outlined" color="amber">
           <v-tooltip text="Visão detalhada por step individual" location="top">
@@ -74,7 +74,7 @@
           <v-icon size="15" color="amber">mdi-timeline-check-outline</v-icon>
           Snapshot inicial aplicado a partir do status {{ statusOrigemLabel(statusOrigemDemanda) }}
         </div>
-        <v-tooltip text="Ao clicar em Executar Pipeline, o fluxo roda normalmente e recalcula os steps em tempo real" location="top">
+        <v-tooltip text="Ao clicar em Executar Fluxo, o fluxo roda normalmente e recalcula os steps em tempo real" location="top">
           <template #activator="{ props }">
             <v-chip v-bind="props" size="x-small" color="amber" variant="outlined">Snapshot ativo</v-chip>
           </template>
@@ -172,7 +172,7 @@
         <v-card style="background:var(--card)!important;border:1px solid var(--border)!important">
           <v-card-title class="py-3 px-4" style="font-size:15px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             Solicitação de Requisito
-            <v-tooltip text="Preencha todos os campos obrigatórios (*) e clique em Executar Pipeline" location="top">
+            <v-tooltip text="Preencha todos os campos obrigatórios (*) e clique em Executar Fluxo" location="top">
               <template #activator="{ props }">
                 <v-icon v-bind="props" size="18" color="grey">mdi-information-outline</v-icon>
               </template>
@@ -367,7 +367,7 @@
 
               <v-checkbox
                 v-model="form.impacto_regulatorio"
-                label="Impacto regulatório / compliance"
+                label="Impacto regulatório / conformidade"
                 density="compact"
                 color="amber"
                 hide-details
@@ -516,7 +516,7 @@
               @click="executarPipeline"
               prepend-icon="mdi-play"
             >
-              Executar Pipeline
+              Executar Fluxo
             </v-btn>
           </v-card-actions>
         </v-card>
@@ -550,7 +550,7 @@
           <!-- Idle state -->
           <div v-if="!resultado && !executando" class="empty-state">
             <v-icon size="48" color="grey">mdi-pipe</v-icon>
-            <div class="mt-2" style="color:var(--muted)">Preencha o formulário e execute o pipeline</div>
+            <div class="mt-2" style="color:var(--muted)">Preencha o formulário e execute o fluxo</div>
           </div>
 
           <!-- Log de execução -->
@@ -619,7 +619,7 @@
 
     <v-card v-if="historicoExecucoes.length" class="mt-4 pa-4" style="background:var(--card)!important;border:1px solid var(--border)!important">
       <div class="d-flex align-center flex-wrap gap-2 mb-3">
-        <strong>Analítico de execuções do pipeline</strong>
+        <strong>Analítico de execuções do fluxo</strong>
         <v-chip size="x-small" variant="tonal">{{ etapasHistoricoFiltradas.length }} etapas</v-chip>
         <v-spacer />
         <v-chip v-if="temFiltroHistoricoPipeline" size="x-small" color="amber" variant="tonal">Filtro ativo</v-chip>
@@ -842,7 +842,7 @@ const githubSelecionadasCount = computed(() => githubForm.selectedIssueNumbers.l
 const logCategorias = [
   { value: 'erro',      label: 'Erro',       color: 'red',    hint: 'Steps com falha ou status de erro' },
   { value: 'aviso',     label: 'Aviso',      color: 'orange', hint: 'Steps com atenção ou warnings' },
-  { value: 'pipeline',  label: 'Pipeline',   color: 'blue',   hint: 'Steps de publicação e integração' },
+  { value: 'pipeline',  label: 'Fluxo',   color: 'blue',   hint: 'Steps de publicação e integração' },
   { value: 'ok',        label: 'Concluídos', color: 'green',  hint: 'Steps finalizados com sucesso' },
 ]
 
@@ -943,7 +943,7 @@ onMounted(() => {
       })
       aplicarStatusInicialDemanda(data.status_demanda)
       rascunhoSalvo.value = true
-      toast.success(`Demanda carregada no Pipeline (status: ${data.status_demanda || 'recebido'})`)
+      toast.success(`Demanda carregada no Fluxo (status: ${data.status_demanda || 'recebido'})`)
     } catch {}
     sessionStorage.removeItem(PREFILL_KEY)
     return
@@ -1117,7 +1117,7 @@ async function executarPipeline() {
     }
     resultadoStatus.value = 'CONCLUÍDO'
     resultadoColor.value = 'success'
-    toast.success('Pipeline executado com sucesso!')
+    toast.success('Fluxo executado com sucesso!')
     localStorage.removeItem(DRAFT_KEY)
     rascunhoSalvo.value = false
   } catch (err) {
@@ -1433,7 +1433,7 @@ function formatarErroApi(err) {
     return err.message
   }
 
-  return 'Erro ao executar pipeline'
+  return 'Erro ao executar fluxo'
 }
 
 function delay(ms) {

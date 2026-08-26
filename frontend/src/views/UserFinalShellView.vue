@@ -29,7 +29,7 @@
           Nova demanda
         </v-btn>
         <v-btn variant="tonal" prepend-icon="mdi-view-dashboard-edit-outline" @click="goTo('/workspace')">
-          Abrir workspace
+          Abrir espaço de trabalho
         </v-btn>
       </div>
     </div>
@@ -191,7 +191,7 @@
           <v-card-title>Governança fora da jornada principal</v-card-title>
           <v-card-text>
             <p class="muted">
-              Workflows, CI, ambientes, build, correlation_id e evidências técnicas permanecem disponíveis,
+              Fluxos de trabalho, CI, ambientes, build, correlation_id e evidências técnicas permanecem disponíveis,
               mas não competem com a rotina do analista na tela principal.
             </p>
             <div class="footer-chips">
@@ -260,7 +260,7 @@ const workspaceSummary = ref({ total_requisitos: null, score_medio_prontidao: 0,
 const fallbackMetrics = [
   { id: 'prontas', value: '86%', label: 'prontidão funcional', description: 'Jornada principal orientada para trabalho real.', icon: 'mdi-account-check-outline', color: 'green', status: 'fallback' },
   { id: 'dados', value: '74%', label: 'qualidade dos dados', description: 'Campos críticos e rastreabilidade ainda exigem saneamento progressivo.', icon: 'mdi-database-check-outline', color: 'amber', status: 'fallback' },
-  { id: 'fluxo', value: '6 etapas', label: 'workflow de requisito', description: 'Fluxo canônico definido da entrada até a evidência.', icon: 'mdi-source-branch-sync', color: 'blue', status: 'guiado' },
+  { id: 'fluxo', value: '6 etapas', label: 'fluxo de trabalho do requisito', description: 'Fluxo canônico definido da entrada até a evidência.', icon: 'mdi-source-branch-sync', color: 'blue', status: 'guiado' },
   { id: 'pendencias', value: '34', label: 'pendências operacionais', description: 'Itens pendentes por baixa prontidão ou etapa incompleta.', icon: 'mdi-clipboard-alert-outline', color: 'amber', status: 'fallback' },
 ]
 
@@ -289,7 +289,7 @@ const workspaceSourceColor = computed(() => (workspaceStatus.value === 'api' ? '
 
 const shellNavItems = [
   { label: 'Início', route: '/home', icon: 'mdi-home-outline' },
-  { label: 'Workspace', route: '/workspace', icon: 'mdi-view-dashboard-edit-outline' },
+  { label: 'Espaço de trabalho', route: '/workspace', icon: 'mdi-view-dashboard-edit-outline' },
   { label: 'Analytics', route: '/analytics', icon: 'mdi-chart-box-outline' },
   { label: 'Ajuda', route: '/ajuda', icon: 'mdi-help-circle-outline' },
 ]
@@ -300,7 +300,7 @@ const sections = {
     description: 'Entrada objetiva para registrar demandas, refinar requisitos, acompanhar pendências e evidenciar decisões sem ruído técnico.',
   },
   '/workspace': {
-    title: 'Workspace operacional',
+    title: 'Espaço de trabalho operacional',
     description: 'Fila de trabalho para tratar demandas incompletas, requisitos em análise, aprovações e itens sem rastreabilidade.',
   },
   '/analytics': {
@@ -308,7 +308,7 @@ const sections = {
     description: 'Indicadores de prontidão, qualidade da informação, risco e valor gerado para apoiar decisão e priorização.',
   },
   '/ajuda': {
-    title: 'Onboarding do analista',
+    title: 'Ambientação do analista',
     description: 'Guia direto para usar o ReqSys: cadastrar demanda, refinar, aprovar, rastrear e exportar evidências.',
   },
 }

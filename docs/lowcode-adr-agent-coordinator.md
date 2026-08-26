@@ -16,7 +16,7 @@ A base canônica consultada é o índice de ADRs em:
 
 - `docs/padrao-ouro/ADR_INDEX.md`
 
-O índice define que o onboarding de agente/IA deve ler primeiro as ADRs fundacionais `ADR-0001` a `ADR-0006` e que decisões transversais exigem ADR registrada.
+O índice define que a integração do agente/IA deve ler primeiro as ADRs fundacionais `ADR-0001` a `ADR-0006` e que decisões transversais exigem ADR registrada.
 
 ## Endpoints
 

@@ -44,7 +44,7 @@ ENDPOINTS_INFO = {
     'dashboard_metricas': {
         'metodo': 'GET',
         'url': '/v1/dashboard/requisitos',
-        'descricao': 'Métricas do dashboard',
+        'descricao': 'Métricas do painel',
         'autenticacao': True,
         'exemplo_resposta': {'total': 10, 'em_analise': 2, 'aprovados': 5, 'pendentes': 3}
     },

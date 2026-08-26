@@ -197,7 +197,7 @@ def rotear_lote_orquestrador(
 def consultar_pacote_agil(package_id: str, db: Session = Depends(get_db)):
     pacote = get_package(db, package_id)
     if pacote is None:
-        raise HTTPException(status_code=404, detail='agile_package_not_found')
+        raise HTTPException(status_code=404, detail='Pacote ágil não encontrado.')
     return ok(pacote)
 
 
