@@ -91,7 +91,7 @@ describe('estatisticas', () => {
 
     const invalido = validarArtifactRuntime({ ...artifactRuntimeValido, evidence_source: 'synthetic', source_head_sha: 'curto' })
     expect(invalido.valido).toBe(false)
-    expect(invalido.motivos).toContain('Origem do artifact não é runtime.')
+    expect(invalido.motivos).toContain('Origem do artefato não é runtime.')
     expect(invalido.motivos).toContain('SHA runtime completo e verificável ausente.')
 
     const semAtestacao = { ...artifactRuntimeValido }

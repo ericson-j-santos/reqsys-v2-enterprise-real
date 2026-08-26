@@ -18,7 +18,7 @@ Implementa roteamento de CI por paths para reduzir tempo de espera em PRs pequen
 | Antes | Depois |
 |---|---|
 | CI completo mesmo em mudanças pequenas | CI proporcional à área alterada |
-| Branches longas esperando validação ampla | PRs menores com feedback mais rápido |
+| Branches longas esperando validação ampla | PRs menores com retorno mais rápido |
 | Pouca visibilidade do que rodou | resumo visual por área |
 | Maior risco de retrabalho | roteamento objetivo e auditável |
 

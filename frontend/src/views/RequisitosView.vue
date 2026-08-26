@@ -44,7 +44,7 @@
       <div class="filter-header">
         <div>
           <strong>Analítico de requisitos</strong>
-          <div class="muted filter-subtitle">Filtros aplicados por clique no dashboard ou seleção manual. Clique em uma linha para ver detalhes.</div>
+          <div class="muted filter-subtitle">Filtros aplicados por clique no painel ou seleção manual. Clique em uma linha para ver detalhes.</div>
         </div>
         <v-chip v-if="temFiltroAtivo" size="small" color="amber" variant="tonal">Filtro ativo</v-chip>
       </div>

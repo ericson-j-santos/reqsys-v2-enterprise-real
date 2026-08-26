@@ -54,7 +54,7 @@
             <v-select
               v-model="provider"
               :items="providers"
-              label="Provider"
+              label="Provedor"
               density="compact"
               data-testid="select-provider"
             />
@@ -63,7 +63,7 @@
               label="Contexto técnico"
               rows="2"
               auto-grow
-              placeholder="Repositório, branch, workflow, requisito..."
+              placeholder="Repositório, branch, fluxo de trabalho, requisito..."
               data-testid="input-contexto"
             />
             <v-textarea

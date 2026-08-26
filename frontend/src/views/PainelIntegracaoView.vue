@@ -226,7 +226,7 @@
           <div>
             <strong>Analítico de integrações</strong>
             <div class="text-caption text-medium-emphasis">
-              Filtros por clique nos cards, dashboard ou seleção manual. {{ itensFiltrados.length }} de {{ itens.length }} eventos.
+              Filtros por clique nos cards, painel ou seleção manual. {{ itensFiltrados.length }} de {{ itens.length }} eventos.
             </div>
           </div>
           <v-chip v-if="temFiltroAtivo" size="small" color="primary" variant="tonal">Filtro ativo</v-chip>

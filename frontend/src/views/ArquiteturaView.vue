@@ -215,7 +215,7 @@
                   <span class="comp-name">Frontend · E2E Playwright</span>
                   <v-chip size="x-small" color="success" variant="tonal">30 passing</v-chip>
                 </div>
-                <div class="muted" style="font-size:11px">login · dashboard · relatórios · requisitos · segredos</div>
+                <div class="muted" style="font-size:11px">login · painel · relatórios · requisitos · segredos</div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -275,7 +275,7 @@ npm run dev</pre>
           </v-col>
           <v-col cols="12" md="6">
             <v-card class="comp-card" elevation="0">
-              <v-card-title class="pa-3 pb-1" style="font-size:13px;font-weight:700">Deploy Fly.io</v-card-title>
+              <v-card-title class="pa-3 pb-1" style="font-size:13px;font-weight:700">Implantação Fly.io</v-card-title>
               <v-card-text class="pa-3 pt-1">
                 <pre class="code-block">.\scripts\fly-deploy.ps1 -Env prod
 # ou: -Env dev | -Env staging</pre>
@@ -378,7 +378,7 @@ npm run dev</pre>
           </div>
         </div>
         <div class="muted mb-6" style="font-size:11px;padding-left:4px">
-          Workflow de exportação cria PR automaticamente → merge dispara deploy em Build/Test → aprovação em main → Prod + GitHub Release
+          Fluxo de trabalho de exportação cria PR automaticamente → merge dispara implantação em Build/Test → aprovação em main → Prod + GitHub Release
         </div>
 
         <!-- AMBIENTES DATAVERSE -->
@@ -502,9 +502,9 @@ import { AMBIENTES_OPERACIONAIS } from '../constants/ambientesOperacionais'
 const aba = ref('web')
 
 const webViews = [
-  { nome: 'Dashboard',       rota: '/',                icone: 'mdi-view-dashboard',          cor: 'secondary', desc: 'KPIs consolidados, cards de métricas e pipeline operacional' },
+  { nome: 'Painel',          rota: '/',                icone: 'mdi-view-dashboard',          cor: 'secondary', desc: 'KPIs consolidados, cards de métricas e fluxo operacional' },
   { nome: 'Requisitos',      rota: '/requisitos',      icone: 'mdi-file-document-edit',      cor: 'primary',   desc: 'CRUD de requisitos com status, urgência, área e sistema' },
-  { nome: 'Pipeline',        rota: '/pipeline',        icone: 'mdi-pipe',                    cor: 'info',      desc: 'Fluxo Entrada → Normalização → Estruturação → Publicação' },
+  { nome: 'Fluxo',           rota: '/pipeline',        icone: 'mdi-pipe',                    cor: 'info',      desc: 'Fluxo Entrada → Normalização → Estruturação → Publicação' },
   { nome: 'Task Console',    rota: '/task-console',    icone: 'mdi-clipboard-check-outline', cor: 'accent',    desc: 'Revisar tarefas e preparar envio para o Planner' },
   { nome: 'Qualidade IA',    rota: '/qualidade-ia',    icone: 'mdi-brain',                   cor: 'deep-purple', desc: 'Score, tendência histórica e recomendações do módulo de IA' },
   { nome: 'Relatórios SSRS', rota: '/relatorios',      icone: 'mdi-file-chart-outline',      cor: 'success',   desc: 'Catálogo e status dos relatórios SSRS do servidor NOTERI' },
@@ -513,14 +513,14 @@ const webViews = [
   { nome: 'Specs SDD',       rota: '/specs',           icone: 'mdi-file-code-outline',       cor: 'deep-orange', desc: 'Especificações de features do my-first-spec-project (.sdd)' },
   { nome: 'Auditoria',       rota: '/auditoria',       icone: 'mdi-shield-search',           cor: 'error',     desc: 'Linha do tempo de eventos, correlation_id e governança' },
   { nome: 'Figma GitHub',    rota: '/figma-github',    icone: 'mdi-vector-square',           cor: 'pink',      desc: 'Sincronização governada Figma ↔ GitHub com retorno em tela e tabela analítica' },
-  { nome: 'Hub Low-Code',    rota: '/hub-lowcode',     icone: 'mdi-lightning-bolt-circle',   cor: 'teal',      desc: 'Pacotes IA, flows Power Automate, bot ReqSysAgent e pipeline GitHub ALM' },
+  { nome: 'Hub Low-Code',    rota: '/hub-lowcode',     icone: 'mdi-lightning-bolt-circle',   cor: 'teal',      desc: 'Pacotes IA, flows Power Automate, bot ReqSysAgent e fluxo GitHub ALM' },
   { nome: 'Monitoramento',   rota: '/monitoramento-operacional', icone: 'mdi-monitor-dashboard', cor: 'cyan', desc: 'Estado operacional de PRs, gates, integrações e pendências' },
 ]
 
 const backendModulos = [
   { nome: 'Autenticação',    prefixo: '/v1/auth',           endpoints: '1',  desc: 'Login por e-mail, JWT com papel (admin / analista)' },
   { nome: 'Sistema',         prefixo: '/v1/sistema',        endpoints: '5',  desc: 'Health check, versão, endpoints, segredos-status, cofre' },
-  { nome: 'Dashboard',       prefixo: '/v1/dashboard',      endpoints: '2',  desc: 'KPIs de requisitos e informações gerais' },
+  { nome: 'Painel',          prefixo: '/v1/dashboard',      endpoints: '2',  desc: 'KPIs de requisitos e informações gerais' },
   { nome: 'Requisitos',      prefixo: '/v1/requisitos',     endpoints: '3',  desc: 'CRUD, validação de payload e registro de solicitações' },
   { nome: 'Qualidade IA',    prefixo: '/v1/qualidade-ia',   endpoints: '5',  desc: 'Resumo, tendência, export CSV/PDF e snapshot manual' },
   { nome: 'Auditoria',       prefixo: '/v1/auditoria',      endpoints: '2',  desc: 'Eventos de auditoria e configuração de infra' },
@@ -594,8 +594,8 @@ const almPipeline = [
   { nome: 'Dev (tieri)', icone: 'mdi-pencil',          cor: 'primary', desc: 'Editar bot ou flow no Copilot Studio / Power Apps' },
   { nome: 'Export',      icone: 'mdi-export',          cor: 'info',    desc: 'pac solution export → unpack → PR automático' },
   { nome: 'Build',       icone: 'mdi-package-variant', cor: 'warning', desc: 'pack → import Build env → export managed' },
-  { nome: 'Test',        icone: 'mdi-test-tube',       cor: 'orange',  desc: 'Deploy automático em Test após merge do PR' },
-  { nome: 'Prod',        icone: 'mdi-rocket-launch',   cor: 'success', desc: 'Merge em main → deploy Prod + GitHub Release' },
+  { nome: 'Test',        icone: 'mdi-test-tube',       cor: 'orange',  desc: 'Implantação automática em Test após merge do PR' },
+  { nome: 'Prod',        icone: 'mdi-rocket-launch',   cor: 'success', desc: 'Merge em main → implantação em Prod + GitHub Release' },
 ]
 
 const dataverseEnvs = [
@@ -606,7 +606,7 @@ const dataverseEnvs = [
 ]
 
 const hubEndpoints = [
-  { rota: '/status',   desc: 'Resumo consolidado do hub (card no Dashboard ReqSys Web)' },
+  { rota: '/status',   desc: 'Resumo consolidado do hub (card no Painel ReqSys Web)' },
   { rota: '/pacotes',  desc: 'Catálogo IA da lista SharePoint IA_Catalogo_Projetos' },
   { rota: '/flows',    desc: '11 flows Dataverse + execuções do flow principal Planner' },
   { rota: '/github',   desc: 'Últimos 10 runs do GitHub Actions do repo ALM' },
@@ -624,7 +624,7 @@ const scripts = [
     desc: '5 testes E2E integrados. Use -CriarTarefaTeste para escrever no Planner',
   },
   {
-    nome: 'Dashboard em tempo real',
+    nome: 'Painel em tempo real',
     cmd:  '.\\scripts\\gerar-dashboard.ps1',
     desc: 'Gera dashboard.html com dados do flow, bot e tarefas Planner',
   },

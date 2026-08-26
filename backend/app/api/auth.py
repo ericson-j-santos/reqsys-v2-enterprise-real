@@ -170,7 +170,7 @@ def login_azure_code(body: AzureCodeInput, request: Request, db: Session = Depen
             request.client.host if request.client else '?',
             err,
         )
-        raise HTTPException(401, f'Token exchange falhou: {err}')
+        raise HTTPException(401, f'Falha na troca do token de acesso: {err}')
 
     tokens = resp.json()
     id_token_raw = tokens.get('id_token')

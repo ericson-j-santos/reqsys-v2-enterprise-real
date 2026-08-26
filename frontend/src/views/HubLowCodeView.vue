@@ -387,7 +387,7 @@
         density="compact"
         icon="mdi-pipe-disconnected"
       >
-        <strong>{{ falhasConsecutivas }} deploys consecutivos falhando.</strong>
+        <strong>{{ falhasConsecutivas }} implantações consecutivas falhando.</strong>
         Causa provável: connection reference <code>new_sharedplanner_e51d2</code> não configurada nos ambientes Test/Prod.
         Execute <code>.\scripts\07-obter-connection-ids.ps1</code> após criar uma conexão Planner em
         <a href="https://make.powerapps.com" target="_blank" class="text-error">make.powerapps.com</a>.

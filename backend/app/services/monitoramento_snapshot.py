@@ -147,7 +147,7 @@ def criar_snapshot_operacional(correlation_id: str) -> MonitoramentoOperacional:
         ItemMonitorado(
             tipo='frontend',
             referencia='REQSYS-OPER-002',
-            titulo='Dashboard para Analitico filtrado',
+            titulo='Painel Analítico com filtros',
             estado='verde',
             severidade='baixa',
             origem='reqsys-frontend',
@@ -165,7 +165,7 @@ def criar_snapshot_operacional(correlation_id: str) -> MonitoramentoOperacional:
         ItemMonitorado(
             tipo='pipeline',
             referencia='REQSYS-OPER-004',
-            titulo='Pipeline operacional e CI',
+            titulo='Esteira operacional e CI',
             estado=estado_ci,
             severidade='critica' if estado_ci == 'vermelho' else 'media',
             origem='github-actions' if sinal_ci.get('modo') == 'live' else 'github-actions-preview',

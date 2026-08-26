@@ -50,7 +50,7 @@ Output JSON conforme docs/contracts/agent-output.schema.json com agent="agent-go
 
 ## Foco
 
-- Compliance, padrões, maturidade
+- Conformidade, padrões, maturidade
 - Arquitetura viva e evidências operacionais
 
 ## Referências ReqSys

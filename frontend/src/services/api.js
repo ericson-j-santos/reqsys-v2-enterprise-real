@@ -46,7 +46,7 @@ export const journeyLoadingMessage = (config = {}) => {
   if (url.includes('/runtime')) return 'Atualizando informações do runtime…'
   if (url.includes('/monitoramento')) return 'Atualizando monitoramento operacional…'
   if (url.includes('/analytics')) return 'Atualizando indicadores analíticos…'
-  return 'Atualizando dashboard operacional…'
+  return 'Atualizando painel operacional…'
 }
 
 export const extractGovBIRows = (payload) => {

@@ -10,7 +10,7 @@
         />
       </v-card-text>
       <v-card-actions class="justify-end">
-        <v-btn variant="text" aria-label="Fechar orientação de dashboard sem dados" @click="close">Fechar</v-btn>
+        <v-btn variant="text" aria-label="Fechar orientação de painel sem dados" @click="close">Fechar</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

@@ -2,7 +2,7 @@
   <section class="page governance-page" data-testid="route-governanca">
     <div class="page-header governance-hero">
       <div>
-        <div class="eyebrow">Padrão Ouro Enterprise</div>
+        <div class="eyebrow">Padrão Ouro Corporativo</div>
         <h1>Governança, Qualidade e Arquitetura Viva</h1>
         <p class="muted">
           Portal navegável para transformar os padrões documentais do ReqSys em uma visão operacional de governança, CI/CD, segurança, observabilidade, analytics e IA auditável.
@@ -199,7 +199,7 @@ const gates = [
   { titulo: 'JWT frágil', desc: 'Produção bloqueada sem validação real de issuer, audience e claims.' },
   { titulo: 'Segredos expostos', desc: 'Produção bloqueada se logs ou código contiverem tokens, senhas, CPF, PII ou connection string.' },
   { titulo: 'IA sem fonte', desc: 'Consulta de IA/RAG deve ter fonte, confiança e fallback seguro.' },
-  { titulo: 'CI vermelho', desc: 'Merge e deploy bloqueados quando build, testes ou validações falharem.' },
+  { titulo: 'CI vermelho', desc: 'Merge e implantação bloqueados quando build, testes ou validações falharem.' },
 ]
 
 const observabilidade = [

@@ -8,7 +8,7 @@
         para voltar a uma tela estável e reduzir erro percebido no ambiente publicado.
       </p>
       <div class="not-found-actions">
-        <v-btn color="primary" to="/" prepend-icon="mdi-view-dashboard">Ir para o dashboard</v-btn>
+        <v-btn color="primary" to="/" prepend-icon="mdi-view-dashboard">Ir para o painel</v-btn>
         <v-btn variant="tonal" to="/monitoramento-operacional" prepend-icon="mdi-pulse">Monitoramento</v-btn>
         <v-btn variant="text" to="/login" prepend-icon="mdi-login">Login</v-btn>
       </div>

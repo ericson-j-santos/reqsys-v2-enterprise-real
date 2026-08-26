@@ -1,4 +1,4 @@
-# Roadmap de Incrementos Operacionais
+# Plano de Incrementos Operacionais
 
 Atualizado em: 2026-06-27  
 Estado: camada 1 (CI Intelligence Layer) em evolução ativa

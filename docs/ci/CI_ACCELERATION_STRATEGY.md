@@ -65,7 +65,7 @@ Diretrizes resumidas:
 - PRs backend pequenos deixam de aguardar Playwright.
 - PRs apenas de documentação deixam de executar suites desnecessárias.
 - PRs de workflow pequenos deixam de aguardar revisão profunda quando CI Fast é suficiente.
-- O tempo principal de feedback passa a depender do fast path.
+- O tempo principal de retorno passa a depender do fast path.
 - CodeRabbit passa a agregar valor em mudanças relevantes sem bloquear todo incremento trivial.
 
 ## Regras de governança

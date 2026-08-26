@@ -16,7 +16,7 @@ Data de referência: 2026-06-27
 | Validar evidências | [Evidence validation](#4-evidence-validation) |
 | Release governance | [Release governance](#5-release-governance) |
 | Criar analytics | [Criar analytics](#6-criar-analytics) |
-| Onboarding agente | [Onboarding agente/IA](#7-onboarding-agenteia) |
+| Integração do agente | [Integração do agente/IA](#7-integração-do-agenteia) |
 | Evidência visual de telas | [Evidência visual](#9-evidencia-visual-telas-recentes) |
 | Consolidar Padrão Ouro | [Foco Padrão Ouro](#10-foco-padrão-ouro) |
 
@@ -275,7 +275,7 @@ O arquivo de saída deve ser tratado como artifact local/CI; não versionar snap
 
 ---
 
-## 7. Onboarding agente/IA
+## 7. Integração do agente/IA
 
 **Objetivo:** Contexto reutilizável para agente executar incremento com precisão arquitetural.
 

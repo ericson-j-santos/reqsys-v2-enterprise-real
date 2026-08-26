@@ -38,7 +38,7 @@ export const NAV_TEMAS = [
       { to: '/qualidade-ia', icon: 'mdi-brain', title: 'Qualidade IA', tip: 'Score de completude, clareza e testabilidade dos requisitos.' },
       { to: '/recomendacoes-ia', icon: 'mdi-robot-outline', title: 'Recomendações IA', tip: 'Sugestões governadas para melhorar requisitos e histórias.' },
       { to: '/task-console', icon: 'mdi-clipboard-check-outline', title: 'Preparar tarefas', tip: 'Revisar tarefas antes de enviar para Planner ou ferramenta de entrega.' },
-      { to: '/pipeline', icon: 'mdi-pipe', title: 'Pipeline', tip: 'Fluxo operacional do requisito até aprovação e publicação.', subgroupId: 'pipeline' },
+      { to: '/pipeline', icon: 'mdi-pipe', title: 'Fluxo', tip: 'Fluxo operacional do requisito até aprovação e publicação.', subgroupId: 'pipeline' },
       { to: '/agile-runtime', icon: 'mdi-source-branch', title: 'Agile Runtime', tip: 'Work items com branch, PR e ambiente corretos.', subgroupId: 'pipeline' },
       { to: '/rastreabilidade', icon: 'mdi-vector-link', title: 'Rastreabilidade', tip: 'Matriz requisito → história → entrega → evidência.', subgroupId: 'publicacao' },
     ],
@@ -49,7 +49,7 @@ export const NAV_TEMAS = [
     topic: 'Gestão · qualidade · valor',
     icon: 'mdi-chart-timeline-variant',
     items: [
-      { to: '/analytics', icon: 'mdi-chart-timeline-variant', title: 'Analytics', tip: 'Indicadores executivos com drill-down.' },
+      { to: '/analytics', icon: 'mdi-chart-timeline-variant', title: 'Analytics', tip: 'Indicadores executivos com detalhamento.' },
       { to: '/estatisticas', icon: 'mdi-chart-box-outline', title: 'Estatísticas', tip: 'Indicadores auditáveis com fonte, fórmula e analítico.' },
       { to: '/financeiro', icon: 'mdi-cash-multiple', title: 'Financeiro', tip: 'Taxa CDI diária com cache interno e fonte no Banco Central.' },
       { to: '/relatorios', icon: 'mdi-file-chart-outline', title: 'Relatórios', tip: 'Catálogo e status de relatórios corporativos.' },

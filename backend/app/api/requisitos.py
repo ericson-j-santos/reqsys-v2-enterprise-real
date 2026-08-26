@@ -249,7 +249,7 @@ def _montar_workspace_operacional(requisitos: list[Requisito]) -> dict:
             {
                 'id': 'fluxo',
                 'value': '8 estados',
-                'label': 'workflow de requisito',
+                'label': 'fluxo de trabalho do requisito',
                 'description': 'Recebido, refinamento, aprovação, execução, validação, evidência e exportação.',
                 'icon': 'mdi-source-branch-sync',
                 'color': 'blue',

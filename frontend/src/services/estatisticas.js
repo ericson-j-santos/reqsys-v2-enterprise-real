@@ -153,8 +153,8 @@ export function validarArtifactRuntime(artifact) {
     || artifact?.attestation_verified === true
     || artifact?.verification_status === 'verified'
 
-  if (!artifact || typeof artifact !== 'object') motivos.push('Artifact runtime ausente.')
-  if (origem !== 'runtime') motivos.push('Origem do artifact não é runtime.')
+  if (!artifact || typeof artifact !== 'object') motivos.push('Artefato runtime ausente.')
+  if (origem !== 'runtime') motivos.push('Origem do artefato não é runtime.')
   if (!AMBIENTES_RUNTIME.has(ambiente)) motivos.push('Ambiente runtime inválido ou ausente.')
   if (!String(runId || '').trim()) motivos.push('Run ID verificável ausente.')
   if (!/^[a-f0-9]{40}$/i.test(String(headSha || ''))) motivos.push('SHA runtime completo e verificável ausente.')
@@ -257,7 +257,7 @@ function construirLinksOperacionais(indicador, correlationId, artifact) {
     { tipo: 'traces', titulo: 'Traces e monitoramento', url: `/monitoramento-operacional${query ? `?${query}` : ''}`, externo: false },
     {
       tipo: 'artifact',
-      titulo: artifactUrl ? 'Artifact runtime verificado' : 'Artifacts operacionais',
+      titulo: artifactUrl ? 'Artefato runtime verificado' : 'Artefatos operacionais',
       url: artifactUrl || `/analytics${query ? `?${query}` : ''}`,
       externo: Boolean(artifactUrl),
     },

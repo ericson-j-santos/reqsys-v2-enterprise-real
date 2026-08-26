@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">ReqSys Operacional · Trilha C</p>
         <h1 id="titulo-monitoramento">Monitoramento Operacional</h1>
-        <p>Runtime navegável com semáforo operacional, cards clicáveis, drill-down filtrado e layouts responsivos.</p>
+        <p>Runtime navegável com semáforo operacional, cards clicáveis, detalhamento filtrado e layouts responsivos.</p>
       </div>
       <div class="cabecalho-acoes">
         <SemaforoChip :value="estadoGeralExibido" size="large" />
@@ -114,12 +114,12 @@
       <v-card-title id="titulo-malha-operacional">Malha Operacional Unificada</v-card-title>
       <v-card-subtitle>
         Cadeia mesh hub → alert intelligence → event bus → signal consolidator
-        ({{ meshResumo.hydrated ? 'artifact hidratado' : 'aguardando CI' }}).
+        ({{ meshResumo.hydrated ? 'artefato hidratado' : 'aguardando CI' }}).
       </v-card-subtitle>
       <v-card-text>
         <v-alert v-if="!meshResumo.hydrated" type="warning" variant="tonal" class="mb-3" density="compact">
-          Artifact <code>unified-operational-signal.json</code> ainda não disponível localmente.
-          Execute o workflow <strong>Unified Operational Signal Consolidator</strong> no CI.
+          Artefato <code>unified-operational-signal.json</code> ainda não disponível localmente.
+          Execute o fluxo de trabalho <strong>Unified Operational Signal Consolidator</strong> no CI.
         </v-alert>
         <v-row dense>
           <v-col v-for="card in meshCards" :key="card.id" cols="12" sm="6" md="3">
@@ -231,7 +231,7 @@
           </v-col>
           <v-col cols="12" sm="6" md="3">
             <OperationalMetricCard
-              label="Artifact ingestion"
+              label="Ingestão de artefato"
               :value="trilhaDResumo.artifactIngestion"
               :semaforo="trilhaDResumo.artifactIngestion === 'enabled' ? 'verde' : 'amarelo'"
               :clickable="false"
@@ -239,7 +239,7 @@
           </v-col>
           <v-col cols="12" sm="6" md="3">
             <OperationalMetricCard
-              label="Artifact refresh"
+              label="Atualização de artefato"
               :value="trilhaDResumo.artifactIngestionRefresh"
               :semaforo="trilhaDResumo.artifactIngestionRefresh === 'enabled' ? 'verde' : 'amarelo'"
               :clickable="false"
