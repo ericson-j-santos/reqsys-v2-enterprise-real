@@ -100,6 +100,28 @@ jobs:
             exit 1
           fi
 
+      - name: Validar consolidação do gatilho STG
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=.github/workflows/stg-end-to-end-evidence.yml
+          legacy=.github/workflows/stg-end-to-end-post-merge-trigger.yml
+          test -f "$target"
+          test -f "$legacy"
+          grep -Eq '^  push:' "$target"
+          grep -Eq '^    branches: \[main\]' "$target"
+          grep -q 'environment-promotion-readiness-gate.yml' "$target"
+          grep -q 'stg-blocking-policy-authorization.yml' "$target"
+          grep -Eq '^  workflow_dispatch:' "$legacy"
+          if grep -Eq '^  (push|pull_request|workflow_run|schedule):' "$legacy"; then
+            echo "ERRO: workflow STG intermediário voltou a ter gatilho automático."
+            exit 1
+          fi
+          if grep -Eq 'gh (workflow run|api.+--method POST.+actions/workflows)' "$legacy"; then
+            echo "ERRO: workflow STG intermediário voltou a disparar outro Action."
+            exit 1
+          fi
+
       - name: Gerar mapa de dependências dos workflows
         shell: bash
         env:
