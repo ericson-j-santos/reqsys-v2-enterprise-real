@@ -221,11 +221,11 @@ jobs:
       - name: Criar ou atualizar status persistente
         shell: bash
         run: |
-          existing=$(gh issue list --state open --search '"${{ env.STATUS_TITLE }}" in:title' --json number,title --jq '.[] | select(.title == "${{ env.STATUS_TITLE }}") | .number' | head -n1)
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"${{ env.STATUS_TITLE }}" in:title' --json number,title --jq '.[] | select(.title == "${{ env.STATUS_TITLE }}") | .number' | head -n1)
           if [[ -n "$existing" ]]; then
-            gh issue edit "$existing" --body-file teams-certification-progress/status.md
+            gh issue edit "$existing" --repo "$GITHUB_REPOSITORY" --body-file teams-certification-progress/status.md
           else
-            gh issue create --title "${STATUS_TITLE}" --body-file teams-certification-progress/status.md --label governance
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "${STATUS_TITLE}" --body-file teams-certification-progress/status.md --label governance
           fi
 
       - name: Resumo
