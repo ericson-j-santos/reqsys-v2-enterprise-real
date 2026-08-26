@@ -16,6 +16,7 @@ from app.models.orchestrator import (  # noqa: F401
     AgileProjectPackage,
     OrchestratorRoutingEvent,
 )
+from app.models.planner_publish_attempt import PlannerPublishAttempt  # noqa: F401
 from app.models.power_automate_provisioning import (
     PowerAutomateProvisioningRegistry,  # noqa: F401
 )

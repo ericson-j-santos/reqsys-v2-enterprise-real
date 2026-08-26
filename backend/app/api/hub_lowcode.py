@@ -4,8 +4,10 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
+from app.core.service_tokens import require_admin_or_service_token
 from app.db import get_db
 from app.schemas.lowcode_solution import LowCodeSolutionGenerateRequest
+from app.schemas.planner_publish import PublishPlannerTaskRequest
 from app.services.hub_lowcode import (
     criar_chat_e_enviar_como_usuario,
     criar_chat_individual_teams,
@@ -31,6 +33,18 @@ from app.services.lowcode_adr_coordinator import (
     planejar_coordenacao_por_adr,
 )
 from app.services.lowcode_solution_factory import gerar_lowcode_solution
+from app.services.planner_publish import (
+    listar_tentativas as listar_tentativas_planner_publish,
+)
+from app.services.planner_publish import (
+    obter_status_tentativa as obter_status_tentativa_planner_publish,
+)
+from app.services.planner_publish import (
+    publicar_tarefa_planner_governada,
+)
+from app.services.planner_publish import (
+    reprocessar_tentativa as reprocessar_tentativa_planner_publish,
+)
 from app.services.power_automate_provisioning import (
     atualizar_status_provisionamento,
     despachar_workflow_provisionamento,
@@ -286,6 +300,73 @@ async def planner_publicar_tarefas(
 async def planner_descobrir(group_id: str = Query(..., description='ID do grupo M365')):
     """Lista planos Planner do grupo via Graph API."""
     return ok(await descobrir_planos_planner(group_id))
+
+
+# ---------------------------------------------------------------------------
+# Planner — contrato governado com idempotência (issue #32)
+#
+# Caminho aditivo e paralelo ao /planner/tasks acima (texto livre, sem
+# idempotência). Não substitui o endpoint legado.
+# ---------------------------------------------------------------------------
+
+require_planner_publish_auth = require_admin_or_service_token('planner_publish:enviar')
+
+
+@router.post('/planner/publish')
+async def planner_publish_governado(
+    payload: PublishPlannerTaskRequest,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+    _auth=Depends(require_planner_publish_auth),
+):
+    """Publica uma tarefa no Planner via contrato único e governado, com
+    idempotência por (sourceId + hash do payload). Retorna 'duplicado' em vez
+    de reenviar quando a mesma tarefa já foi publicada com sucesso."""
+    correlation_id = resolver_correlation_id(x_correlation_id, payload.correlation_id)
+    resultado = await publicar_tarefa_planner_governada(db, payload.model_dump(by_alias=False), correlation_id)
+    return ok(resultado, correlation_id)
+
+
+@router.get('/planner/publish/{attempt_id}')
+def planner_publish_status(
+    attempt_id: int,
+    db: Session = Depends(get_db),
+    _auth=Depends(require_planner_publish_auth),
+):
+    """Consulta o status de uma tentativa de publicação por id."""
+    item = obter_status_tentativa_planner_publish(db, attempt_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail='Tentativa não encontrada')
+    return ok(item)
+
+
+@router.get('/planner/publish')
+def planner_publish_listar(
+    db: Session = Depends(get_db),
+    source_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    _auth=Depends(require_planner_publish_auth),
+):
+    """Lista tentativas de publicação, filtráveis por sourceId/status."""
+    return ok({'items': listar_tentativas_planner_publish(db, source_id=source_id, status=status, limit=limit)})
+
+
+@router.post('/planner/publish/{attempt_id}/reprocessar')
+async def planner_publish_reprocessar(
+    attempt_id: int,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+    _auth=Depends(require_planner_publish_auth),
+):
+    """Reprocessa uma tentativa que falhou na integração (falhou_integracao),
+    respeitando o limite de tentativas e nunca reenviando uma já publicada."""
+    correlation_id = resolver_correlation_id(x_correlation_id, None)
+    try:
+        resultado = await reprocessar_tentativa_planner_publish(db, attempt_id, correlation_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    return ok(resultado, correlation_id)
 
 
 # ---------------------------------------------------------------------------
