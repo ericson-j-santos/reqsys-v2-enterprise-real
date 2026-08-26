@@ -91,7 +91,7 @@ def executar(*, sample_url: str, sample_source: str, run_id: str) -> dict[str, o
     )
     readiness.raise_for_status()
     readiness_data = readiness.json()['data']
-    if readiness_data.get('enabled') is not True or readiness_data.get('ready') is not True:
+    if readiness_data.get('enabled') is not True or readiness_data.get('ready_pdf') is not True:
         _falhar(f'CANARY_OCR_NOT_READY:{readiness_data}')
 
     with tempfile.TemporaryDirectory(prefix='reqsys_canary_ocr_') as diretorio:
@@ -158,7 +158,10 @@ def executar(*, sample_url: str, sample_source: str, run_id: str) -> dict[str, o
         },
         'readiness': {
             'enabled': readiness_data.get('enabled'),
-            'ready': readiness_data.get('ready'),
+            'ready': readiness_data.get('ready_pdf'),
+            'tesseract': readiness_data.get('tesseract'),
+            'pdftoppm': readiness_data.get('pdftoppm'),
+            'pdfinfo': readiness_data.get('pdfinfo'),
         },
         'analysis_id': primeira_data.get('id'),
         'status': primeira_data.get('status'),
