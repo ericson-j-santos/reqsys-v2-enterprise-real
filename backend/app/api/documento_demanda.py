@@ -20,7 +20,7 @@ from app.services.documento_demanda import (
     validar_upload,
 )
 
-router = APIRouter(prefix='/v1/demandas/documentos', tags=['Documentos da demanda'])
+router = APIRouter(prefix='/demandas/documentos', tags=['Documentos da demanda'])
 
 
 @router.post('/analisar')
