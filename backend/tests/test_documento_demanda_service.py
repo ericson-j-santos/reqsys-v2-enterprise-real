@@ -6,6 +6,7 @@ from app.services.documento_demanda import (
     MAX_UPLOAD_BYTES,
     calcular_sha256,
     classificar_candidatos,
+    classificar_candidatos_por_paginas,
     extrair_texto_basico,
     serializar_candidatos,
     validar_upload,
@@ -38,6 +39,19 @@ def test_classificacao_mantem_revisao_humana():
     assert len(candidatos) == 3
     assert all(item.requer_validacao_humana for item in candidatos)
     assert {item.tipo for item in candidatos} >= {'POSSIVEL_REQUISITO', 'POSSIVEL_REGRA_NEGOCIO'}
+
+
+def test_classificacao_ocr_preserva_pagina_e_limita_confianca_pela_leitura():
+    candidatos = classificar_candidatos_por_paginas(
+        [
+            (2, 'O sistema deve validar o documento.', 0.95),
+            (3, 'Somente o gestor pode aprovar a solicitação.', 0.62),
+        ]
+    )
+    assert [item.pagina for item in candidatos] == [2, 3]
+    assert candidatos[0].confianca == 0.7
+    assert candidatos[1].confianca == 0.62
+    assert all(item.requer_validacao_humana for item in candidatos)
 
 
 def test_documento_binario_nao_e_interpretado_sem_ocr():
