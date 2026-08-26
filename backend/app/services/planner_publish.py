@@ -73,6 +73,16 @@ def _serializar(attempt: PlannerPublishAttempt) -> dict[str, Any]:
         'correlation_id': attempt.correlation_id,
         'planner_task_id': attempt.planner_task_id,
         'erro': attempt.ultimo_erro or None,
+        'title': attempt.title,
+        'source_id': attempt.source_id,
+        'requester': attempt.requester,
+        'plan_id': attempt.plan_id,
+        'bucket_id': attempt.bucket_id,
+        'due_date': attempt.due_date,
+        'priority': attempt.priority,
+        'tentativas': attempt.tentativas,
+        'criado_em': attempt.criado_em.isoformat() if attempt.criado_em else None,
+        'atualizado_em': attempt.atualizado_em.isoformat() if attempt.atualizado_em else None,
     }
 
 
