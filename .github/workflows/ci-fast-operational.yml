@@ -41,6 +41,7 @@ jobs:
           python -m py_compile scripts/workflow_command_center.py
           python -m py_compile scripts/auto_rerun_governed.py
           python -m py_compile scripts/workflow_inventory_audit.py
+          python -m py_compile scripts/workflow_inventory_decision_gate.py
 
       - name: Executar testes rápidos operacionais
         shell: bash
@@ -53,6 +54,7 @@ jobs:
             tests/test_workflow_command_center.py \
             tests/test_auto_rerun_governed.py \
             tests/test_workflow_inventory_audit.py \
+            tests/test_workflow_inventory_decision_gate.py \
             -q
 
       - name: Validar workflow PR CI Watch
@@ -108,6 +110,14 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --runs-sample-pages 10 \
             --require-api
+
+      - name: Aplicar gate conservador às recomendações
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/workflow_inventory_decision_gate.py \
+            --input artifacts/workflow-inventory-audit/workflows.json \
+            --output-dir artifacts/workflow-inventory-audit
 
       - name: Publicar mapa de dependências
         if: always()
