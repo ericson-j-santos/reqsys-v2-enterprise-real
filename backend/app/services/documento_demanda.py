@@ -5,7 +5,6 @@ import json
 import re
 from dataclasses import dataclass
 
-
 TIPOS_SUPORTADOS = {
     'application/pdf',
     'text/plain',
