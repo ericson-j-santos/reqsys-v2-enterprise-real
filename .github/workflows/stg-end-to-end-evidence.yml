@@ -1,6 +1,8 @@
 name: STG End-to-End Evidence
 
 on:
+  schedule:
+    - cron: "17 */6 * * *"
   push:
     branches: [main]
     paths:
