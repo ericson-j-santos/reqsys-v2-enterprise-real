@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: fast-ci-operational-${{ github.event.pull_request.number || github.ref }}
@@ -21,7 +22,7 @@ jobs:
   operational-guardrails:
     name: Fast CI / operational guardrails
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
 
     steps:
       - name: Checkout
@@ -39,6 +40,7 @@ jobs:
           python -m py_compile scripts/pr_ci_watch.py
           python -m py_compile scripts/workflow_command_center.py
           python -m py_compile scripts/auto_rerun_governed.py
+          python -m py_compile scripts/workflow_inventory_audit.py
 
       - name: Executar testes rápidos operacionais
         shell: bash
@@ -50,6 +52,7 @@ jobs:
             tests/test_pr_ci_watch.py \
             tests/test_workflow_command_center.py \
             tests/test_auto_rerun_governed.py \
+            tests/test_workflow_inventory_audit.py \
             -q
 
       - name: Validar workflow PR CI Watch
@@ -71,13 +74,46 @@ jobs:
           grep -qi "workflow-command-center.html" scripts/workflow_command_center.py
           grep -qi "operational_score" scripts/workflow_command_center.py
 
-      - name: Validar Governed Auto-Rerun
+      - name: Validar operador consolidado
         shell: bash
         run: |
           set -euo pipefail
-          test -f .github/workflows/auto-rerun-governed.yml
+          test -f .github/workflows/actions-auto-operator.yml
+          test ! -f .github/workflows/auto-rerun-governed.yml
           test -f scripts/auto_rerun_governed.py
           test -f tests/test_auto_rerun_governed.py
+          grep -qi "auto_rerun_governed.py" .github/workflows/actions-auto-operator.yml
           grep -qi "MAX_RERUN_ATTEMPTS" scripts/auto_rerun_governed.py
           grep -qi "workflow_blocklisted" scripts/auto_rerun_governed.py
           grep -qi "rerun-failed-jobs" scripts/auto_rerun_governed.py
+
+      - name: Validar dispatcher somente manual
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/actions-dispatcher.yml
+          grep -qi "workflow_dispatch" .github/workflows/actions-dispatcher.yml
+          if grep -Eq '^  (push|pull_request):' .github/workflows/actions-dispatcher.yml; then
+            echo "ERRO: actions-dispatcher voltou a ter gatilho automático redundante."
+            exit 1
+          fi
+
+      - name: Gerar mapa de dependências dos workflows
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/workflow_inventory_audit.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --runs-sample-pages 10 \
+            --require-api
+
+      - name: Publicar mapa de dependências
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-inventory-audit
+          path: artifacts/workflow-inventory-audit
+          if-no-files-found: warn
+          retention-days: 30
