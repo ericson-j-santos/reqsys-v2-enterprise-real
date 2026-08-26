@@ -70,10 +70,19 @@ def classificar_candidatos(texto: str) -> list[CandidatoDemanda]:
     return candidatos
 
 
-def classificar_candidatos_por_paginas(paginas: list[tuple[int, str]]) -> list[CandidatoDemanda]:
+def classificar_candidatos_por_paginas(
+    paginas: list[tuple[int, str, float]],
+) -> list[CandidatoDemanda]:
     candidatos: list[CandidatoDemanda] = []
-    for pagina, texto in paginas:
-        candidatos.extend(replace(item, pagina=pagina) for item in classificar_candidatos(texto))
+    for pagina, texto, confianca_ocr in paginas:
+        for item in classificar_candidatos(texto):
+            candidatos.append(
+                replace(
+                    item,
+                    pagina=pagina,
+                    confianca=round(min(item.confianca, max(0.0, confianca_ocr)), 6),
+                )
+            )
     return candidatos
 
 
