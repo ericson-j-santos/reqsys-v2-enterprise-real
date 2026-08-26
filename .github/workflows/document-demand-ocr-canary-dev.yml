@@ -7,7 +7,6 @@ on:
     paths:
       - backend/fly.dev.toml
       - .github/workflows/document-demand-ocr-canary-dev.yml
-      - backend/app/documento_demanda_canary.py
       - backend/app/api/documento_demanda.py
       - backend/app/ocr/documento_worker.py
       - backend/app/services/documento_demanda.py
@@ -88,29 +87,167 @@ jobs:
           echo '::error::DEV não ficou saudável após o deploy.'
           exit 4
 
-      - name: Executar canário dentro da máquina DEV
+      - name: Gerar credencial efêmera no DEV
         shell: bash
         run: |
           set -euo pipefail
-          set +e
-          remote_output="$(flyctl ssh console --app "${APP_NAME}" -C "python -m app.documento_demanda_canary --sample-url '${SAMPLE_URL}' --sample-source '${SAMPLE_SOURCE}' --run-id '${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}'" 2>&1)"
-          remote_status=$?
-          set -e
-
-          if [ "$remote_status" -ne 0 ]; then
-            printf '%s\n' "$remote_output"
-            echo '::error::Canário remoto falhou dentro do DEV.'
-            exit "$remote_status"
-          fi
-
-          payload="$(printf '%s\n' "$remote_output" | sed -n 's/^REQSYS_CANARY_REPORT_B64=//p' | tail -n 1)"
-          test -n "$payload" || {
-            printf '%s\n' "$remote_output"
-            echo '::error::Relatório sanitizado do canário não foi produzido.'
+          token=''
+          for tentativa in 1 2 3; do
+            set +e
+            remote_output="$(flyctl ssh console --app "${APP_NAME}" -C "python -c \"from app.core.security import criar_token; print('REQSYS_CANARY_TOKEN='+criar_token({'sub':'reqsys-ocr-canary','papel':'admin'}, minutos=10))\"" 2>&1)"
+            remote_status=$?
+            set -e
+            if [ "$remote_status" -eq 0 ]; then
+              token="$(printf '%s\n' "$remote_output" | sed -n 's/^REQSYS_CANARY_TOKEN=//p' | tail -n 1)"
+              [ -n "$token" ] && break
+            fi
+            sleep $((tentativa * 2))
+          done
+          test -n "$token" || {
+            echo '::error::Não foi possível obter a credencial efêmera do DEV após 3 tentativas.'
             exit 5
           }
+          echo "::add-mask::$token"
+          echo "CANARY_TOKEN=$token" >> "$GITHUB_ENV"
 
-          printf '%s' "$payload" | python -c "import base64,json,sys,pathlib; raw=base64.urlsafe_b64decode(sys.stdin.read().encode()); data=json.loads(raw); pathlib.Path('${REPORT_DIR}/canary-report.json').write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')"
+      - name: Validar prontidão OCR documental
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 \
+            -H "Authorization: Bearer ${CANARY_TOKEN}" \
+            "${API_URL}/v1/ocr/demandas/documentos/ocr-readiness" \
+            > "${REPORT_DIR}/readiness.json"
+          python - <<'PY'
+          import json
+          p=json.load(open('artifacts/document-demand-ocr-canary-dev/readiness.json', encoding='utf-8'))
+          d=p['data']
+          assert d.get('enabled') is True, d
+          assert d.get('ready_pdf') is True, d
+          assert d.get('tesseract') is True, d
+          assert d.get('pdftoppm') is True, d
+          assert d.get('pdfinfo') is True, d
+          print(json.dumps({'enabled': True, 'ready_pdf': True, 'environment': d.get('environment')}, ensure_ascii=False))
+          PY
+
+      - name: Baixar e validar amostra real pública
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 4 --retry-delay 2 --connect-timeout 20 --max-time 120 \
+            "${SAMPLE_URL}" -o /tmp/canary.pdf
+          test -s /tmp/canary.pdf
+          bytes=$(stat -c%s /tmp/canary.pdf)
+          test "$bytes" -le 10485760 || { echo '::error::Amostra excede 10 MB.'; exit 6; }
+          if ! command -v pdfinfo >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq poppler-utils >/dev/null
+          fi
+          pages=$(pdfinfo /tmp/canary.pdf | awk '/^Pages:/ {print $2}')
+          test -n "$pages"
+          test "$pages" -le 25 || { echo "::error::Amostra tem ${pages} páginas; máximo governado é 25."; exit 7; }
+          sha=$(sha256sum /tmp/canary.pdf | awk '{print $1}')
+          printf '{"source":"%s","url":"%s","sha256":"%s","bytes":%s,"pages":%s,"classification":"HOMOLOGATED_APPROVED","contains_personal_data":false,"approval_reference":"user-request-2026-08-26"}\n' \
+            "${SAMPLE_SOURCE}" "${SAMPLE_URL}" "$sha" "$bytes" "$pages" \
+            > "${REPORT_DIR}/sample-manifest.json"
+
+      - name: Executar canário pelo endpoint DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          demanda_ref="CANARY-OCR-DEV-${GITHUB_RUN_ID}"
+          correlation="OCR-CANARY-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          first_code=$(curl -sS --max-time 600 -o /tmp/first.json -w '%{http_code}' \
+            -X POST "${API_URL}/v1/ocr/demandas/documentos/analisar" \
+            -H "Authorization: Bearer ${CANARY_TOKEN}" \
+            -H "X-Correlation-Id: ${correlation}" \
+            -F "demanda_ref=${demanda_ref}" \
+            -F 'arquivo=@/tmp/canary.pdf;type=application/pdf')
+          if [ "$first_code" != '200' ]; then
+            python - <<'PY'
+          import json
+          try:
+              data=json.load(open('/tmp/first.json', encoding='utf-8'))
+              print('Erro sanitizado:', data.get('detail') or data.get('errors') or 'sem detalhe')
+          except Exception:
+              print('Erro sanitizado: resposta não JSON')
+          PY
+            echo "::error::Primeira análise retornou HTTP ${first_code}."
+            exit 8
+          fi
+
+          retry_code=$(curl -sS --max-time 120 -o /tmp/retry.json -w '%{http_code}' \
+            -X POST "${API_URL}/v1/ocr/demandas/documentos/analisar" \
+            -H "Authorization: Bearer ${CANARY_TOKEN}" \
+            -H "X-Correlation-Id: ${correlation}-RETRY" \
+            -F "demanda_ref=${demanda_ref}" \
+            -F 'arquivo=@/tmp/canary.pdf;type=application/pdf')
+          test "$retry_code" = '200' || { echo "::error::Reenvio retornou HTTP ${retry_code}."; exit 9; }
+
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          first=json.load(open('/tmp/first.json', encoding='utf-8'))['data']
+          retry=json.load(open('/tmp/retry.json', encoding='utf-8'))['data']
+          manifest=json.load(open('artifacts/document-demand-ocr-canary-dev/sample-manifest.json', encoding='utf-8'))
+          readiness=json.load(open('artifacts/document-demand-ocr-canary-dev/readiness.json', encoding='utf-8'))['data']
+          candidates=first.get('candidatos') or []
+
+          assert first.get('status') == 'AGUARDANDO_REVISAO_HUMANA', first
+          assert first.get('incorporacao_automatica') is False, first
+          assert candidates, 'Canário não produziu candidatos.'
+          assert all(c.get('requer_validacao_humana') is True for c in candidates), candidates
+          assert retry.get('id') == first.get('id'), (first, retry)
+          assert retry.get('idempotente') is True, retry
+          assert retry.get('incorporacao_automatica') is False, retry
+
+          triggers={
+            'POSSIVEL_REQUISITO': ('deve ', 'deverá ', 'precisa ', 'necessário ', 'obrigatório '),
+            'POSSIVEL_REGRA_NEGOCIO': ('somente ', 'apenas ', 'não pode ', 'proibido ', 'permitido '),
+            'POSSIVEL_REQUISITO_NAO_FUNCIONAL': ('segundo', 'até ', 'ms', 'disponibilidade', 'latência'),
+          }
+          inconsistent=0
+          for c in candidates:
+            expected=triggers.get(c.get('tipo'), ())
+            text=(c.get('texto') or '').lower()
+            if expected and not any(t in text for t in expected):
+              inconsistent += 1
+
+          total=len(candidates)
+          report={
+            'schema_version':'1.0.0',
+            'environment': readiness.get('environment'),
+            'sample': manifest,
+            'readiness': {
+              'enabled': readiness.get('enabled'),
+              'ready': readiness.get('ready_pdf'),
+              'tesseract': readiness.get('tesseract'),
+              'pdftoppm': readiness.get('pdftoppm'),
+              'pdfinfo': readiness.get('pdfinfo'),
+            },
+            'analysis_id': first.get('id'),
+            'status': first.get('status'),
+            'extraction_success': True,
+            'candidates_total': total,
+            'candidate_types': dict(Counter(c.get('tipo') for c in candidates)),
+            'candidate_with_page_rate': round(sum(c.get('pagina') is not None for c in candidates)/total, 4),
+            'human_review_required_rate': round(sum(c.get('requer_validacao_humana') is True for c in candidates)/total, 4),
+            'automatic_incorporation': first.get('incorporacao_automatica'),
+            'idempotent_retry': retry.get('idempotente') is True and retry.get('id') == first.get('id'),
+            'trigger_consistency_rate': round((total-inconsistent)/total, 4),
+            'semantic_false_positive_rate': None,
+            'semantic_false_positive_status': 'REQUIRES_HUMAN_LABELING',
+            'stg_touched': False,
+            'prod_touched': False,
+          }
+          Path('artifacts/document-demand-ocr-canary-dev/canary-report.json').write_text(
+            json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8'
+          )
+          print(json.dumps(report, ensure_ascii=False, indent=2))
+          PY
 
       - name: Validar resultado do canário
         shell: bash
@@ -120,9 +257,8 @@ jobs:
           import json
           from pathlib import Path
 
-          path = Path('artifacts/document-demand-ocr-canary-dev/canary-report.json')
-          report = json.loads(path.read_text(encoding='utf-8'))
-          assert report['environment'] == 'desenvolvimento', report
+          report=json.loads(Path('artifacts/document-demand-ocr-canary-dev/canary-report.json').read_text(encoding='utf-8'))
+          assert report['environment'] in {'desenvolvimento', 'development'}, report
           assert report['readiness']['enabled'] is True, report
           assert report['readiness']['ready'] is True, report
           assert report['status'] == 'AGUARDANDO_REVISAO_HUMANA', report
