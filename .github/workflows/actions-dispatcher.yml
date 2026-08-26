@@ -11,32 +11,26 @@ on:
         description: "Modo de disparo: all ou essential"
         required: false
         default: "essential"
-  push:
-    branches: [main]
-  pull_request:
-    types: [closed]
-    branches: [main]
 
 permissions:
   actions: write
   contents: read
 
 concurrency:
-  group: actions-dispatcher-${{ github.ref }}
+  group: actions-dispatcher-${{ github.event.inputs.ref || 'main' }}
   cancel-in-progress: false
 
 jobs:
   dispatch:
-    name: Disparar workflows governados
+    name: Disparar workflows governados manualmente
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     steps:
       - name: Definir alvo e modo
         id: config
         shell: bash
         run: |
           set -euo pipefail
-          REF="${{ github.event.inputs.ref || github.ref_name || 'main' }}"
+          REF="${{ github.event.inputs.ref || 'main' }}"
           MODE="${{ github.event.inputs.mode || 'essential' }}"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
@@ -75,6 +69,8 @@ jobs:
           fi
 
           echo "## Actions Dispatcher" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Execução somente manual; gatilhos automáticos redundantes foram removidos." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Campo | Valor |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
