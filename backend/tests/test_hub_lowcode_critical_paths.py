@@ -3,12 +3,22 @@
 from datetime import date
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.api.hub_lowcode import require_planner_publish_auth
+from app.core.service_tokens import ServiceAuthContext
 from app.main import app
 from app.services.gemini import _UsageTracker
 
 client = TestClient(app)
+
+
+@pytest.fixture
+def planner_auth_override():
+    app.dependency_overrides[require_planner_publish_auth] = lambda: ServiceAuthContext(ator='admin@teste', via_token=False)
+    yield
+    app.dependency_overrides.pop(require_planner_publish_auth, None)
 
 
 def test_usage_tracker_snapshot_reseta_leitura_em_novo_dia():
@@ -59,7 +69,7 @@ def test_hub_lowcode_endpoints_de_listagem():
         assert res.json()["success"] is True
 
 
-def test_hub_lowcode_planner_webhook_config_e_historico():
+def test_hub_lowcode_planner_webhook_config_e_historico(planner_auth_override):
     with patch(
         "app.api.hub_lowcode.obter_planner_webhook_config",
         return_value={"configurado": True, "teams_configurado": False, "webhook_url": "https://example.com/hook"},
@@ -88,7 +98,7 @@ def test_hub_lowcode_planner_webhook_config_e_historico():
     assert res.json()["data"][0]["tipo"] == "planner"
 
 
-def test_hub_lowcode_publicar_tarefas_e_testar_teams():
+def test_hub_lowcode_publicar_tarefas_e_testar_teams(planner_auth_override):
     with patch(
         "app.api.hub_lowcode.publicar_tarefas_planner",
         AsyncMock(return_value={"ok": True, "criadas": 2}),

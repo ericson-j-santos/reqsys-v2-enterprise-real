@@ -260,7 +260,10 @@ def power_automate_flow_provisioning_registry_status(
 # Planner
 # ---------------------------------------------------------------------------
 
-@router.get('/planner/webhook-config')
+require_planner_publish_auth = require_admin_or_service_token('planner_publish:enviar')
+
+
+@router.get('/planner/webhook-config', dependencies=[Depends(require_planner_publish_auth)])
 def planner_webhook_config(db: Session = Depends(get_db)):
     """Retorna a configuração atual do webhook (sem expor a chave)."""
     cfg = obter_planner_webhook_config(db)
@@ -271,7 +274,7 @@ def planner_webhook_config(db: Session = Depends(get_db)):
     })
 
 
-@router.put('/planner/webhook-config')
+@router.put('/planner/webhook-config', dependencies=[Depends(require_planner_publish_auth)])
 def planner_webhook_config_update(
     db: Session = Depends(get_db),
     webhook_url: str | None = Body(default=None),
@@ -282,7 +285,7 @@ def planner_webhook_config_update(
     return ok(salvar_planner_webhook_config(db, webhook_url, webhook_key, teams_webhook_url))
 
 
-@router.post('/planner/tasks')
+@router.post('/planner/tasks', dependencies=[Depends(require_planner_publish_auth)])
 async def planner_publicar_tarefas(
     db: Session = Depends(get_db),
     tarefas_texto: str = Body(..., description='Linhas: Titulo|Resp|Data|Bucket|Prioridade|Desc'),
@@ -308,9 +311,6 @@ async def planner_descobrir(group_id: str = Query(..., description='ID do grupo 
 # Caminho aditivo e paralelo ao /planner/tasks acima (texto livre, sem
 # idempotência). Não substitui o endpoint legado.
 # ---------------------------------------------------------------------------
-
-require_planner_publish_auth = require_admin_or_service_token('planner_publish:enviar')
-
 
 @router.post('/planner/publish')
 async def planner_publish_governado(

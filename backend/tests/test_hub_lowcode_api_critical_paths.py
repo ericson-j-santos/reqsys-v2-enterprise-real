@@ -2,11 +2,25 @@
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.api.hub_lowcode import require_planner_publish_auth
+from app.core.service_tokens import ServiceAuthContext
 from app.main import app
 
 client = TestClient(app)
+
+
+def _fake_planner_auth_ctx():
+    return ServiceAuthContext(ator='admin@teste', via_token=False)
+
+
+@pytest.fixture
+def planner_auth_override():
+    app.dependency_overrides[require_planner_publish_auth] = _fake_planner_auth_ctx
+    yield
+    app.dependency_overrides.pop(require_planner_publish_auth, None)
 
 
 @patch('app.api.hub_lowcode.status_consolidado', new_callable=AsyncMock)
@@ -82,7 +96,7 @@ def test_lowcode_solution_generate_canvas_endpoint():
 
 
 @patch('app.api.hub_lowcode.obter_planner_webhook_config')
-def test_hub_planner_webhook_config_endpoint(mock_obter):
+def test_hub_planner_webhook_config_endpoint(mock_obter, planner_auth_override):
     mock_obter.return_value = {
         'configurado': False,
         'teams_configurado': False,
@@ -92,6 +106,11 @@ def test_hub_planner_webhook_config_endpoint(mock_obter):
     response = client.get('/v1/hub-lowcode/planner/webhook-config')
     assert response.status_code == 200
     assert response.json()['data']['configurado'] is False
+
+
+def test_hub_planner_webhook_config_sem_auth_retorna_401_ou_403():
+    response = client.get('/v1/hub-lowcode/planner/webhook-config')
+    assert response.status_code in (401, 403)
 
 
 @patch('app.api.hub_lowcode.listar_historico_integracoes')

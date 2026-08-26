@@ -85,16 +85,24 @@ async def _enviar_ao_webhook(db: Session, attempt: PlannerPublishAttempt) -> Non
         attempt.ultimo_erro = 'POWERAUTOMATE_PLANNER_WEBHOOK_URL não configurado'
         return
 
+    # O flow do Power Automate por trás desse webhook é o mesmo usado pelo
+    # endpoint legado de texto livre (publicar_tarefas_planner) — entende
+    # `tarefas_texto` no formato Titulo|Responsavel|Data|Bucket|Prioridade|Descricao,
+    # não o contrato estruturado novo. Traduzimos aqui em vez de exigir um flow
+    # novo só pra este caminho governado.
+    tarefas_texto = '|'.join([
+        attempt.title,
+        attempt.requester,
+        attempt.due_date,
+        attempt.bucket_id,
+        attempt.priority,
+        attempt.description,
+    ])
+    teams_webhook_url = cfg.get('teams_webhook_url') or ''
     payload = {
-        'planId': attempt.plan_id,
-        'bucketId': attempt.bucket_id,
-        'title': attempt.title,
-        'description': attempt.description,
-        'dueDate': attempt.due_date,
-        'priority': attempt.priority,
-        'requester': attempt.requester,
-        'sourceId': attempt.source_id,
-        'correlationId': attempt.correlation_id,
+        'tarefas_texto': tarefas_texto,
+        'autor': attempt.requester,
+        'teams_webhook_url': teams_webhook_url,
     }
     headers: dict[str, str] = {'Content-Type': 'application/json'}
     webhook_key = cfg.get('webhook_key') or ''
@@ -103,6 +111,9 @@ async def _enviar_ao_webhook(db: Session, attempt: PlannerPublishAttempt) -> Non
 
     try:
         resposta = await _postar_webhook_planner(webhook_url, payload, headers)
+        criadas = resposta.get('criadas', 0)
+        if not criadas:
+            raise ValueError(f'Flow não confirmou criação da tarefa (criadas={criadas!r})')
         attempt.status = STATUS_PUBLICADO
         attempt.planner_task_id = str(resposta.get('task_id') or resposta.get('id') or '') or None
         attempt.ultimo_erro = ''
