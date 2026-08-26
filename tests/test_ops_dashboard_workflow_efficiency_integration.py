@@ -17,7 +17,7 @@ class OpsDashboardWorkflowEfficiencyIntegrationTests(unittest.TestCase):
             "python scripts/validate_workflow_efficiency_visual_card.py",
             "python3 scripts/validate_workflow_efficiency_visual_card.py",
             'test -f artifacts/ops-dashboard/data/runtime-executive-index.json',
-            'test "$(grep -c \'id=\"workflow-efficiency-visual-card\"\' artifacts/ops-dashboard/index.html)" -eq 1',
+            'test "$(grep -c \'id=\\"workflow-efficiency-visual-card\\"\' artifacts/ops-dashboard/index.html)" -eq 1',
         )
 
         for fragment in required_fragments:
