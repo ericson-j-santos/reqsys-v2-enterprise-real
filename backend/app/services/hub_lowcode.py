@@ -288,6 +288,16 @@ def salvar_planner_webhook_config(
 # Publicar tarefas no Planner via PA flow
 # ---------------------------------------------------------------------------
 
+async def _postar_webhook_planner(url: str, payload: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
+    """POST cru ao webhook do Power Automate do Planner. Levanta `httpx.HTTPStatusError`
+    em resposta não-2xx e qualquer outra exceção de rede/parsing sem tratar — quem chama
+    decide como logar/persistir o erro."""
+    async with httpx.AsyncClient(timeout=60) as c:
+        resp = await c.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+
+
 async def publicar_tarefas_planner(
     db: Session,
     tarefas_texto: str,
@@ -320,10 +330,7 @@ async def publicar_tarefas_planner(
         headers['x-webhook-key'] = webhook_key
 
     try:
-        async with httpx.AsyncClient(timeout=60) as c:
-            resp = await c.post(webhook_url, json=payload, headers=headers)
-            resp.raise_for_status()
-            resposta = resp.json()
+        resposta = await _postar_webhook_planner(webhook_url, payload, headers)
 
         criadas = resposta.get('criadas', 0)
         teams_notificado = resposta.get('teams_notificado', False)

@@ -6,6 +6,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-08-26
+
+### Adicionado (Planner · contrato governado + idempotência, issue #32)
+
+- Novo caminho aditivo e paralelo ao `POST /v1/hub-lowcode/planner/tasks` existente (texto livre, sem idempotência, permanece intocado): `backend/app/services/planner_publish.py` + modelo `PlannerPublishAttempt` (`backend/app/models/planner_publish_attempt.py`) — publica uma tarefa por chamada via contrato único `PublishPlannerTaskRequest`/`PublishPlannerTaskResponse` (`backend/app/schemas/planner_publish.py`), com idempotência garantida por constraint UNIQUE em `idempotency_key = sha256(f"{source_id}|{sha256(payload_ordenado)}")` — reenviar a mesma tarefa retorna `status: "duplicado"` sem criar uma segunda tarefa no Planner.
+- Status padronizado por tentativa: `enfileirado`/`publicado`/`duplicado`/`falhou_validacao`/`falhou_integracao`; falhas de validação (ex. `priority` fora do conjunto aceito) não persistem tentativa, só log.
+- 4 rotas novas em `backend/app/api/hub_lowcode.py`: `POST /v1/hub-lowcode/planner/publish`, `GET /v1/hub-lowcode/planner/publish/{id}`, `GET /v1/hub-lowcode/planner/publish` (lista, filtrável por `source_id`/`status`), `POST /v1/hub-lowcode/planner/publish/{id}/reprocessar` — todas protegidas por `require_admin_or_service_token('planner_publish:enviar')` (o endpoint legado de texto livre continua sem auth, gap pré-existente fora de escopo aqui).
+- Reprocessamento seguro: só permitido para tentativas em `falhou_integracao`, rejeita (`409`) tentativas já `publicado`/`duplicado` e acima de `MAX_TENTATIVAS_REPROCESSO=5`; nunca reenvia uma tarefa já criada no Planner.
+- Mascaramento de segredo (`x-webhook-key`/`Bearer`) em qualquer erro persistido, e auditoria via `registrar_evento` (ADR-003) em toda publicação/reprocessamento.
+- Migração `backend/alembic/versions/7a1c9e4b2d6f_planner_publish_attempts.py` (tabela `planner_publish_attempts`).
+- Testes: `backend/tests/test_planner_publish_service.py` (11 casos: sucesso, duplicidade, payload distinto, webhook não configurado, erro HTTP mascarado, validação, reprocessamento e seus limites) e `backend/tests/test_planner_publish_api.py` (8 casos: contrato, auth, 404, 409).
+- Fora de escopo deste incremento (ver issue #32): UI de status no frontend, alinhamento com `reqsys-powerplatform-alm`/`reqsys-java-platform` (repos não presentes neste workspace), reprocessamento automático agendado.
+
+---
+
 ## [Unreleased] - 2026-07-23
 
 ### Adicionado (Redmine Sync Queue · fecha o loop do fluxo PA-001-CreateRedmineIssue)
