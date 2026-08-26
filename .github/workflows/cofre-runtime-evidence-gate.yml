@@ -151,6 +151,12 @@ jobs:
           azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           evidence-path: ${{ env.ARTIFACT_DIR }}/credential-resolution.json
 
+      - name: Reinstalar dependência criptográfica mínima
+        # resolve-managed-credential fixa python-version 3.12 internamente, o que
+        # substitui o Python 3.11 ativado acima para o resto do job e descarta o
+        # cryptography instalado no site-packages do 3.11.
+        run: python -m pip install --disable-pip-version-check "cryptography>=44,<46"
+
       - name: Reiniciar runtime de forma controlada
         env:
           FLY_APP: ${{ needs.validate-inputs.outputs.fly_app }}

@@ -6,7 +6,7 @@ Data de referência: 2026-06-26
 
 O próximo salto estratégico do ReqSys é consolidar uma plataforma DevOps corporativa governada, evoluindo os elementos já existentes de CI, quality gates, rastreabilidade, arquitetura viva, analytics operacional, ambientes segregados e automações com IA para um ecossistema integrado, previsível, auditável, autoexplicável e escalável.
 
-A direção canônica recomendada é transformar o ReqSys em uma **AI-Driven DevOps Governance Platform**, combinando engenharia de requisitos, runtime governance, analytics, observabilidade, arquitetura viva, pipeline inteligente e IA operacional.
+A direção canônica recomendada é transformar o ReqSys em uma **AI-Driven DevOps Governance Platform**, combinando engenharia de requisitos, runtime governance, analytics, observabilidade, arquitetura viva, esteira inteligente e IA operacional.
 
 ## 2. Diagnóstico estratégico
 
@@ -14,14 +14,14 @@ A direção canônica recomendada é transformar o ReqSys em uma **AI-Driven Dev
 
 | Dimensão | Evidências de maturidade |
 | --- | --- |
-| Engenharia | Arquitetura incremental, governança, CI, pensamento enterprise e rastreabilidade. |
+| Engenharia | Arquitetura incremental, governança, CI, pensamento corporativo e rastreabilidade. |
 | Operação | Fluxo orientado por PR, Git como fonte da verdade, evidências, ambientes e validação contínua. |
 | Cultura técnica | Mentalidade de plataforma, automação, padronização e visão sistêmica. |
 
 ### Gaps prioritários
 
-1. **DevOps ainda reativo**: há execução manual assistida, monitoramento parcial e correção por inspeção; o alvo é auto-observabilidade, pipelines inteligentes, governance-as-code, policy-as-code e auto-remediação controlada.
-2. **Platform Engineering incipiente**: falta uma camada explícita de plataforma com templates, políticas, ambientes, release management, analytics, agentes IA e portal de desenvolvedor.
+1. **DevOps ainda reativo**: há execução manual assistida, monitoramento parcial e correção por inspeção; o alvo é auto-observabilidade, esteiras inteligentes, governance-as-code, policy-as-code e auto-remediação controlada.
+2. **Platform Engineering incipiente**: falta uma camada explícita de plataforma com templates, políticas, ambientes, gestão de releases, analytics, agentes IA e portal de desenvolvedor.
 3. **DevSecOps não consolidado**: lint, testes e cobertura precisam evoluir para SAST, DAST, SBOM, secret scanning, dependency governance, runtime security e supply-chain security.
 
 ## 3. Modelo de maturidade DevOps recomendado
@@ -91,7 +91,7 @@ reqsys-platform/
 └── developer-portal/
 ```
 
-## 5. Roadmap evolutivo
+## 5. Plano evolutivo
 
 ### Fase 1 — Fundação governada
 
@@ -99,9 +99,9 @@ reqsys-platform/
 
 Entregas recomendadas:
 
-- pipelines reutilizáveis;
-- templates de workflow;
-- workflow central;
+- esteiras reutilizáveis;
+- modelos de fluxo de trabalho;
+- fluxo de trabalho central;
 - release padrão;
 - rollback documentado;
 - cobertura mínima;
@@ -129,11 +129,11 @@ Entregas recomendadas:
 - branch protection;
 - signed commits;
 - policy-as-code;
-- OPA/Gatekeeper para políticas de runtime e deploy.
+- OPA/Gatekeeper para políticas de runtime e implantação.
 
 ### Fase 3 — Observabilidade
 
-**Objetivo:** tornar o sistema explicável em build, deploy e runtime.
+**Objetivo:** tornar o sistema explicável em build, implantação e runtime.
 
 Entregas recomendadas:
 
@@ -142,7 +142,7 @@ Entregas recomendadas:
 - métricas;
 - logs estruturados;
 - propagação obrigatória de `correlation_id`;
-- dashboards vivos;
+- painéis vivos;
 - métricas DORA;
 - SLO, SLA e SLI;
 - MTTR, lead time, deployment frequency e change failure rate.
@@ -154,12 +154,12 @@ Entregas recomendadas:
 Entregas recomendadas:
 
 - scaffolding automático;
-- templates enterprise;
+- modelos corporativos;
 - ambientes provisionáveis;
 - catálogo de serviços;
 - portal interno;
 - arquitetura viva navegável;
-- contratos versionados de qualidade, segurança e deploy.
+- contratos versionados de qualidade, segurança e implantação.
 
 ### Fase 5 — IA operacional
 
@@ -229,7 +229,7 @@ Production
 | Lead Time | Reduzir sem enfraquecer gates. |
 | Deployment Frequency | Aumentar com mudanças pequenas e reversíveis. |
 | MTTR | Reduzir com observabilidade, runbooks e automação. |
-| Change Failure Rate | Reduzir com qualidade, segurança e deploy progressivo. |
+| Change Failure Rate | Reduzir com qualidade, segurança e implantação progressiva. |
 
 ## 9. DevOps Control Center como próximo incremento estratégico
 
@@ -258,12 +258,12 @@ O incremento P0 recomendado é um **DevOps Control Center** com visão integrada
 ## 11. Antipadrões a evitar
 
 1. CI gigante e monolítica.
-2. Deploy manual frequente.
+2. Implantação manual frequente.
 3. Logs sem correlação.
 4. Ambientes inconsistentes.
 5. Segurança apenas no final.
-6. Dashboards estáticos.
-7. Pipeline sem evidência.
+6. Painéis estáticos.
+7. Esteira sem evidência.
 8. Mistura indevida entre governança e runtime.
 
 ## 12. Sequência canônica recomendada
@@ -283,11 +283,11 @@ CI Governado
 | Objetivo | Tempo estimado |
 | --- | --- |
 | Base governada | 2–4 semanas |
-| Observabilidade enterprise | 1–2 meses |
+| Observabilidade corporativa | 1–2 meses |
 | DevSecOps completo | 2–3 meses |
 | Platform Engineering inicial | 3–6 meses |
 | Padrão ouro operacional | 6–12 meses |
 
 ## 14. Resultado esperado
 
-A consolidação deste plano deve produzir engenharia contínua governada, pipelines auditáveis, arquitetura viva, operação explicável, observabilidade enterprise, DevSecOps real, analytics operacional, IA assistindo runtime, menor MTTR, maior previsibilidade e menor risco operacional.
+A consolidação deste plano deve produzir engenharia contínua governada, esteiras auditáveis, arquitetura viva, operação explicável, observabilidade corporativa, DevSecOps real, analytics operacional, IA assistindo runtime, menor MTTR, maior previsibilidade e menor risco operacional.

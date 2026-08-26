@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Padronizar como stakeholders e integrantes do squad fornecem informações ao ReqSys antes da geração de requisitos. O formulário não deve pedir uma solução pronta como primeira pergunta; ele deve capturar problema, objetivo, contexto, regras, critérios de aceite, dependências e rastreabilidade.
+Padronizar como partes interessadas e integrantes da equipe fornecem informações ao ReqSys antes da geração de requisitos. O formulário não deve pedir uma solução pronta como primeira pergunta; ele deve capturar problema, objetivo, contexto, regras, critérios de aceite, dependências e rastreabilidade.
 
 ## Decisão de canal
 
@@ -80,7 +80,7 @@ O ReqSys armazena apenas o hash da chave na auditoria.
 ## Fluxo alvo
 
 ```text
-STAKEHOLDER / SQUAD
+PARTE INTERESSADA / EQUIPE
         |
         v
 FORMULÁRIO ESTRUTURADO

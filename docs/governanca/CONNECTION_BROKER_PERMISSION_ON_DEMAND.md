@@ -109,7 +109,7 @@ A autorização do conector expirou. Reconecte o conector para que eu possa reto
 | Integração | Health-check por conector. |
 | E2E | Solicitar permissão, autorizar e retomar ação. |
 | Segurança | Garantir ausência de token/secret em logs. |
-| Produção | Bloquear deploy se capability crítica estiver sem configuração. |
+| Produção | Bloquear implantação se capability crítica estiver sem configuração. |
 
 ---
 

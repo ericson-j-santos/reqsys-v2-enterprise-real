@@ -48,7 +48,7 @@ Este índice consolida os documentos canônicos do ReqSys para orientar humanos,
 ## Fluxo canônico
 
 ```text
-visão estratégica → engenharia de requisitos → processos → arquitetura → ADRs → backlog → roadmap → qualidade → DevOps → observabilidade → riscos → documentação → produção
+visão estratégica → engenharia de requisitos → processos → arquitetura → ADRs → backlog → plano de evolução → qualidade → DevOps → observabilidade → riscos → documentação → produção
 ```
 
 ## Fluxo operacional de PR

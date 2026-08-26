@@ -16,7 +16,7 @@ Toda evolução deve considerar, no mínimo:
 - Engenharia de requisitos com itens atômicos, testáveis e rastreáveis.
 - Modelagem de processos e fluxos ponta a ponta.
 - Arquitetura documentada por ADRs.
-- Backlog priorizado, roadmap e releases rastreáveis.
+- Backlog priorizado, plano de evolução e releases rastreáveis.
 - Testes unitários, integração, contrato, segurança, acessibilidade e responsividade.
 - CI/CD com quality gates e ambientes segregados.
 - Observabilidade, auditoria, logs estruturados e `correlation_id`.
