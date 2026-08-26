@@ -34,7 +34,11 @@ from app.services.documento_demanda import (
     serializar_candidatos,
     validar_upload,
 )
-from app.services.runtime_core import RuntimeEventBus, RuntimeEventEnvelope, RuntimeEventStatus
+from app.services.runtime_core import (
+    RuntimeEventBus,
+    RuntimeEventEnvelope,
+    RuntimeEventStatus,
+)
 
 router = APIRouter(prefix='/demandas/documentos', tags=['Documentos da demanda'])
 _TRUE_VALUES = {'1', 'true', 'yes', 'on'}
