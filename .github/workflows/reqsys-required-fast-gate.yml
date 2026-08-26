@@ -66,7 +66,27 @@ jobs:
             echo "Nenhum Python alterado para py_compile."
             exit 0
           fi
-          python -m py_compile "${python_files[@]}"
+
+          existing_python_files=()
+          removed_python_files=()
+          for file in "${python_files[@]}"; do
+            if [ -f "$file" ]; then
+              existing_python_files+=("$file")
+            else
+              removed_python_files+=("$file")
+            fi
+          done
+
+          if [ "${#removed_python_files[@]}" -gt 0 ]; then
+            printf 'Ignorando Python removido no diff: %s\n' "${removed_python_files[@]}"
+          fi
+
+          if [ "${#existing_python_files[@]}" -eq 0 ]; then
+            echo "Nenhum arquivo Python existente para py_compile."
+            exit 0
+          fi
+
+          python -m py_compile "${existing_python_files[@]}"
 
       - name: Validate critical workflow syntax surface
         run: |
