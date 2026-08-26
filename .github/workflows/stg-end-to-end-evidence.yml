@@ -1,6 +1,7 @@
 name: STG End-to-End Evidence
 
 on:
+  # Atualiza a evidência canônica diretamente, sem watcher intermediário.
   schedule:
     - cron: "17 */6 * * *"
   push:
