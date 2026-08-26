@@ -2,7 +2,7 @@ name: Actions Auto Operator
 
 on:
   schedule:
-    - cron: "0 */2 * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       mode:
@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   auto-operator:
-    name: Verificar e executar Actions allowlisted
+    name: Classificar e reexecutar falhas transitórias allowlisted
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -42,7 +42,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Executar operador governado
+      - name: Executar operador governado consolidado
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -59,7 +59,7 @@ jobs:
           if [[ "${MODE}" == "execute" ]]; then
             args+=(--execute)
           fi
-          python scripts/actions_auto_operator.py "${args[@]}"
+          python scripts/auto_rerun_governed.py "${args[@]}"
 
       - name: Publicar artifact de auditoria
         if: always()
