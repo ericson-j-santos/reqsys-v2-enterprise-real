@@ -1,6 +1,20 @@
 name: STG End-to-End Evidence
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/stg-end-to-end-evidence.yml"
+      - ".github/workflows/environment-promotion-readiness-gate.yml"
+      - ".github/workflows/environment-promotion-history.yml"
+      - ".github/workflows/stg-enforcement-approval.yml"
+      - ".github/workflows/stg-blocking-policy-authorization.yml"
+      - "scripts/evaluate_environment_promotion_gate.py"
+      - "scripts/update_environment_promotion_history.py"
+      - "scripts/build_stg_enforcement_approval.py"
+      - "scripts/validate_stg_policy_approval.py"
+      - "docs/contracts/environment-promotion-policy-v1.json"
+      - "docs/contracts/stg-blocking-change-authorization.json"
   workflow_dispatch:
   workflow_run:
     workflows: ["STG Blocking Policy Authorization"]
