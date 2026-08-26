@@ -2,6 +2,9 @@
 *.http
 http-client.env.json
 
+# Tokens de leitura escopados do Cofre (scripts/cofre_human_token.py)
+.cofre/
+
 # Python
 __pycache__/
 *.py[cod]
