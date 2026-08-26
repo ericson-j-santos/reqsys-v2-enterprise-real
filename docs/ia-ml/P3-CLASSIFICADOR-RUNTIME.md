@@ -13,17 +13,19 @@ O P3 introduz quatro controles independentes:
 
 ## Estado inicial seguro
 
-A política `runtime-requisitos-p3-v1` inicia com:
+A política `runtime-requisitos-p3-v1.1` mantém:
 
 - `modo_padrao=off`;
 - `canary_percentual=10`;
+- `active_habilitado=false`;
 - confiança mínima do modelo `0.55`;
 - mínimo de 7 amostras reais aprovadas para `canary`;
 - mínimo de 14 amostras reais aprovadas para `active`;
+- mínimo de 1 amostra real aprovada em cada uma das 7 categorias para `active`;
 - nenhuma promoção automática para canary/active;
 - `production_touched=false`.
 
-Enquanto o corpus observado permanecer sem revisão humana suficiente, o sistema pode no máximo operar em `shadow` por decisão explícita. O resultado funcional continua vindo do baseline P1.
+Após a revisão humana registrada na issue #1323, o corpus possui 16 amostras atômicas aprovadas, 1 registro não atômico rejeitado e cobertura das 7 categorias. Isso permite ao gate declarar prontidão para `canary`, mas não ativa esse modo: o adaptador da API continua aceitando somente `off` e `shadow`, e o resultado funcional continua vindo do baseline P1.
 
 ## Holdout imutável
 
@@ -48,7 +50,7 @@ Arquivo:
 
 `backend/data/ml/requisitos_observados_p3_v1.jsonl`
 
-A primeira amostra foi extraída de títulos de issues reais do próprio ReqSys. Esses registros são apenas observações de domínio e **não são ground truth**.
+As amostras foram extraídas de issues reais do próprio ReqSys. `categoria_sugerida` é somente uma hipótese; apenas `categoria_revisada` com `revisor_ref` rastreável constitui decisão humana aceita pelo gate.
 
 Cada registro possui:
 
@@ -63,9 +65,18 @@ Estados permitidos:
 
 - `PENDENTE_HUMANA` — proibido para treino e incapaz de liberar canary;
 - `APROVADO` — exige categoria revisada e referência do revisor;
-- `REJEITADO` — permanece como evidência, mas não entra no treino.
+- `REJEITADO` — exige referência humana, permanece como evidência e não entra no treino.
 
 O loader falha fechado se detectar e-mail, CPF, CNPJ ou telefone no texto observado.
+Somente registros `APROVADO` são incorporados ao treino do runtime; pendências e rejeições ficam fora do modelo.
+
+### Revisão da issue #1323
+
+- 13 registros originais aprovados;
+- 3 recategorizações humanas: issues #1103, #729 e #958;
+- registro original da issue #1288 rejeitado por não atomicidade e dividido em duas amostras (`SEGURANCA` e `DADOS`);
+- 1 amostra `FUNCIONAL` adicionada a partir da issue #1115;
+- total versionado: 17 registros, sendo 16 aprovados e 1 rejeitado.
 
 ## Blueprint da revisão humana
 
@@ -104,12 +115,17 @@ Critério de conclusão da revisão: nenhum item aprovado sem categoria revisada
 - padrão inicial: 10% das correlações;
 - baixa confiança retorna automaticamente ao baseline;
 - ausência do gate humano retorna `REAL_SAMPLE_GATE_BLOCKED`.
+- a prontidão do CI não conecta nem habilita canary na API;
+- o primeiro canary real deve ser integrado somente em DEV, com contagem derivada do corpus validado e telemetria de eventos reais.
 
 ### `active`
 
 - exige no mínimo 14 amostras reais aprovadas;
+- exige cobertura mínima das sete categorias;
+- exige `active_habilitado=true`, atualmente fixado em `false`;
 - ainda respeita confiança mínima e fallback para baseline;
-- não deve ser habilitado apenas por alteração de variável sem evidência do gate e avaliação de drift.
+- deve permanecer bloqueado até existir evidência de shadow/canary sobre eventos reais;
+- quando autorizado em ciclo posterior, deve ser exercitado somente em STG; produção permanece `off` e deve falhar fechada para qualquer outro modo.
 
 ## Drift
 
@@ -126,6 +142,8 @@ Alertas iniciais:
 - `LOW_CONFIDENCE_RATE` quando taxa de baixa confiança >= `0.25`.
 
 Um alerta deve impedir avanço de rollout até revisão da causa. Não ajustar o limiar apenas para remover o alerta.
+
+O relatório do gate calcula um smoke de drift sobre o holdout controlado. Esse valor não representa tráfego real e, sozinho, nunca habilita `active`. Divergência e baixa confiança reais precisam ser medidas em DEV antes de qualquer promoção posterior.
 
 ## Fail-safe
 
@@ -146,7 +164,7 @@ O gate valida:
 - política de PII e revisão humana;
 - qualidade no holdout;
 - smoke de drift;
-- prontidão máxima permitida pelo número de amostras humanas aprovadas;
+- prontidão permitida pela qualidade, revisão humana, cobertura por categoria e trava explícita de `active`;
 - artifact `ml-requirement-classifier-p3-evidence`.
 
 Estados de prontidão possíveis:
@@ -157,3 +175,4 @@ Estados de prontidão possíveis:
 - `APROVADO_PARA_ACTIVE`.
 
 O estado de prontidão é evidência de engenharia; não executa deploy nem altera automaticamente o modo do runtime.
+Com `active_habilitado=false`, o máximo esperado após a revisão da #1323 é `APROVADO_PARA_CANARY`.

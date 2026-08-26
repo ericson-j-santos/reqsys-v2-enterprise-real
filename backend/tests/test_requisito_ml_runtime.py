@@ -35,7 +35,8 @@ def test_runtime_shadow_calcula_modelo_sem_alterar_baseline(monkeypatch):
 def test_runtime_shadow_contabiliza_aprovacoes_humanas_reais(monkeypatch):
     monkeypatch.setenv('REQSYS_ML_REQUISITOS_MODO', 'shadow')
     contexto = runtime._carregar_contexto()
-    assert contexto.amostras_aprovadas == 0
+    assert contexto.amostras_aprovadas == 16
+    assert contexto.modelo.exportar_estado()['total_documentos'] == 72
 
 
 def test_runtime_nao_permite_canary_por_variavel_de_ambiente(monkeypatch):

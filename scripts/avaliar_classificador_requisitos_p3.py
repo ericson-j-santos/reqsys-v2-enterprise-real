@@ -12,6 +12,7 @@ BACKEND = ROOT / 'backend'
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
+from app.services.requisito_classifier import CATEGORIAS  # noqa: E402
 from app.services.requisito_ml_p3 import (  # noqa: E402
     EventoClassificacaoML,
     amostras_aprovadas_para_treino,
@@ -63,7 +64,7 @@ def main() -> int:
     observados = carregar_amostras_observadas(args.observados)
     aprovadas = amostras_aprovadas_para_treino(observados)
 
-    modelo = treinar_modelo_runtime(args.dataset_p2)
+    modelo = treinar_modelo_runtime(args.dataset_p2, aprovadas)
     resultado_holdout = avaliar_holdout(
         modelo,
         holdout,
@@ -85,9 +86,24 @@ def main() -> int:
 
     revisoes = Counter(item.revisao_status for item in observados)
     quantidade_aprovadas = len(aprovadas)
+    aprovadas_por_categoria = Counter(item.categoria for item in aprovadas)
+    categorias_sem_cobertura_active = [
+        categoria
+        for categoria in CATEGORIAS
+        if aprovadas_por_categoria[categoria]
+        < politica.minimo_amostras_reais_por_categoria_active
+    ]
+    criterios_active = {
+        'habilitado_por_politica': politica.active_habilitado,
+        'minimo_amostras_aprovadas': (
+            quantidade_aprovadas >= politica.minimo_amostras_reais_aprovadas_active
+        ),
+        'cobertura_minima_por_categoria': not categorias_sem_cobertura_active,
+        'drift_smoke_sem_alertas': not drift_smoke.alertas,
+    }
     if resultado_holdout.status != 'APROVADO':
         readiness = 'BLOQUEADO_QUALIDADE'
-    elif quantidade_aprovadas >= politica.minimo_amostras_reais_aprovadas_active and not drift_smoke.alertas:
+    elif all(criterios_active.values()):
         readiness = 'APROVADO_PARA_ACTIVE'
     elif quantidade_aprovadas >= politica.minimo_amostras_reais_aprovadas_canary and not drift_smoke.alertas:
         readiness = 'APROVADO_PARA_CANARY'
@@ -95,7 +111,7 @@ def main() -> int:
         readiness = 'APROVADO_PARA_SHADOW'
 
     report = {
-        'schema_version': '1.0.0',
+        'schema_version': '1.1.0',
         'readiness': readiness,
         'politica_versao': politica.versao,
         'modelo_versao': politica.modelo_versao,
@@ -104,14 +120,30 @@ def main() -> int:
             'total': len(observados),
             'status': dict(revisoes),
             'aprovados_para_treino': quantidade_aprovadas,
+            'aprovados_por_categoria': {
+                categoria: aprovadas_por_categoria[categoria]
+                for categoria in CATEGORIAS
+            },
             'minimo_canary': politica.minimo_amostras_reais_aprovadas_canary,
             'minimo_active': politica.minimo_amostras_reais_aprovadas_active,
-            'nota': 'Amostras PENDENTE_HUMANA nunca entram no treino nem liberam canary.',
+            'minimo_por_categoria_active': (
+                politica.minimo_amostras_reais_por_categoria_active
+            ),
+            'categorias_sem_cobertura_active': categorias_sem_cobertura_active,
+            'nota': 'Somente amostras APROVADO entram no treino e contam para os gates.',
         },
         'drift_smoke_holdout': drift_smoke.como_dict(),
+        'active_gate': {
+            'criterios': criterios_active,
+            'nota': (
+                'Active exige habilitação explícita e evidência de runtime real; '
+                'o drift acima é apenas smoke sobre holdout controlado.'
+            ),
+        },
         'runtime': {
             'modo_padrao': politica.modo_padrao,
             'canary_percentual': politica.canary_percentual,
+            'active_habilitado': politica.active_habilitado,
             'confianca_minima_modelo': politica.confianca_minima_modelo,
             'production_touched': False,
         },
@@ -127,6 +159,8 @@ def main() -> int:
     print(f"ganho_macro_f1={resultado_holdout.ganho_macro_f1:.4f}")
     print(f"observados_total={len(observados)}")
     print(f"observados_aprovados={quantidade_aprovadas}")
+    print(f"active_habilitado={str(politica.active_habilitado).lower()}")
+    print(f"categorias_sem_cobertura_active={','.join(categorias_sem_cobertura_active) or 'nenhuma'}")
     print(f"drift_js={drift_smoke.js_divergence:.4f}")
     print(f"evidencia={args.output}")
 

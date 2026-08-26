@@ -62,6 +62,7 @@ class PoliticaRuntimeML:
     holdout_sha256: str
     modo_padrao: str
     canary_percentual: float
+    active_habilitado: bool
     confianca_minima_modelo: float
     macro_f1_holdout_minimo: float
     ganho_f1_holdout_minimo: float
@@ -69,6 +70,7 @@ class PoliticaRuntimeML:
     taxa_baixa_confianca_alerta: float
     minimo_amostras_reais_aprovadas_canary: int
     minimo_amostras_reais_aprovadas_active: int
+    minimo_amostras_reais_por_categoria_active: int
     distribuicao_referencia: dict[str, float]
 
 
@@ -136,6 +138,9 @@ def _normalizar_distribuicao(distribuicao: dict[str, float]) -> dict[str, float]
 
 def carregar_politica_runtime(caminho: Path) -> PoliticaRuntimeML:
     item = json.loads(caminho.read_text(encoding='utf-8'))
+    active_habilitado = item.get('active_habilitado')
+    if not isinstance(active_habilitado, bool):
+        raise ValueError('active_habilitado deve ser booleano')
     politica = PoliticaRuntimeML(
         versao=str(item['versao']),
         modelo_versao=str(item['modelo_versao']),
@@ -143,6 +148,7 @@ def carregar_politica_runtime(caminho: Path) -> PoliticaRuntimeML:
         holdout_sha256=str(item['holdout_sha256']),
         modo_padrao=str(item['modo_padrao']).lower(),
         canary_percentual=float(item['canary_percentual']),
+        active_habilitado=active_habilitado,
         confianca_minima_modelo=float(item['confianca_minima_modelo']),
         macro_f1_holdout_minimo=float(item['macro_f1_holdout_minimo']),
         ganho_f1_holdout_minimo=float(item['ganho_f1_holdout_minimo']),
@@ -150,6 +156,9 @@ def carregar_politica_runtime(caminho: Path) -> PoliticaRuntimeML:
         taxa_baixa_confianca_alerta=float(item['taxa_baixa_confianca_alerta']),
         minimo_amostras_reais_aprovadas_canary=int(item['minimo_amostras_reais_aprovadas_canary']),
         minimo_amostras_reais_aprovadas_active=int(item['minimo_amostras_reais_aprovadas_active']),
+        minimo_amostras_reais_por_categoria_active=int(
+            item['minimo_amostras_reais_por_categoria_active']
+        ),
         distribuicao_referencia=_normalizar_distribuicao(item['distribuicao_referencia']),
     )
     if politica.modelo_versao != MODELO_VERSAO:
@@ -176,6 +185,8 @@ def carregar_politica_runtime(caminho: Path) -> PoliticaRuntimeML:
         raise ValueError('mínimo de amostras reais para canary deve ser maior que zero')
     if politica.minimo_amostras_reais_aprovadas_active < politica.minimo_amostras_reais_aprovadas_canary:
         raise ValueError('mínimo de amostras reais para active deve ser >= canary')
+    if politica.minimo_amostras_reais_por_categoria_active < 1:
+        raise ValueError('mínimo de amostras reais por categoria para active deve ser maior que zero')
     return politica
 
 
@@ -263,9 +274,13 @@ def carregar_amostras_observadas(caminho: Path) -> list[RegistroObservadoML]:
             raise ValueError(f'revisao_status inválido: {registro.revisao_status}')
         if not registro.anonimizado or _contem_pii(registro.texto):
             raise ValueError(f'amostra não anonimizada ou com PII detectável: {registro.id}')
+        if registro.revisao_status != 'PENDENTE_HUMANA' and not registro.revisor_ref:
+            raise ValueError(f'amostra revisada sem referência humana: {registro.id}')
         if registro.revisao_status == 'APROVADO':
-            if registro.categoria_revisada not in CATEGORIAS or not registro.revisor_ref:
+            if registro.categoria_revisada not in CATEGORIAS:
                 raise ValueError(f'amostra aprovada sem revisão completa: {registro.id}')
+        if registro.revisao_status == 'REJEITADO' and registro.categoria_revisada is not None:
+            raise ValueError(f'amostra rejeitada não deve possuir categoria revisada: {registro.id}')
         ids.add(registro.id)
         registros.append(registro)
     return registros
@@ -279,11 +294,19 @@ def amostras_aprovadas_para_treino(registros: Iterable[RegistroObservadoML]) -> 
     ]
 
 
-def treinar_modelo_runtime(dataset_p2: Path) -> ClassificadorRequisitoSupervisionado:
+def treinar_modelo_runtime(
+    dataset_p2: Path,
+    amostras_reais_aprovadas: Iterable[RegistroTreinoML] = (),
+) -> ClassificadorRequisitoSupervisionado:
     registros, _ = carregar_dataset_ml(dataset_p2)
-    treino = [item for item in registros if item.split == 'treino']
+    treino = [
+        RegistroTreinoML(texto=item.texto, categoria=item.categoria)
+        for item in registros
+        if item.split == 'treino'
+    ]
+    treino.extend(amostras_reais_aprovadas)
     return ClassificadorRequisitoSupervisionado().treinar(
-        RegistroTreinoML(texto=item.texto, categoria=item.categoria) for item in treino
+        treino
     )
 
 
@@ -345,6 +368,20 @@ def classificar_runtime(
         raise ValueError('amostras_reais_aprovadas não pode ser negativo')
 
     baseline = classificar_requisito(texto)
+    if modo_efetivo == 'active' and not politica.active_habilitado:
+        return DecisaoRuntimeML(
+            categoria=baseline.categoria,
+            confianca=baseline.confianca,
+            engine=baseline.baseline,
+            modo=modo_efetivo,
+            correlation_id=correlation_id,
+            modelo_categoria=None,
+            modelo_confianca=None,
+            baseline_categoria=baseline.categoria,
+            canary_selected=False,
+            fallback_reason='ACTIVE_POLICY_BLOCKED',
+            evidencias=baseline.evidencias,
+        )
     if modo_efetivo in {'canary', 'active'}:
         minimo = (
             politica.minimo_amostras_reais_aprovadas_canary

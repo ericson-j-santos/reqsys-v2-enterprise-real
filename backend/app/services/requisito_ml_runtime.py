@@ -10,6 +10,7 @@ from app.services.requisito_ml import ClassificadorRequisitoSupervisionado
 from app.services.requisito_ml_p3 import (
     DecisaoRuntimeML,
     PoliticaRuntimeML,
+    amostras_aprovadas_para_treino,
     carregar_amostras_observadas,
     carregar_politica_runtime,
     classificar_runtime,
@@ -40,13 +41,12 @@ def _carregar_contexto() -> ContextoRuntimeRequisitoML:
     politica = carregar_politica_runtime(_POLITICA)
     validar_holdout_imutavel(_HOLDOUT, politica)
     observados = carregar_amostras_observadas(_OBSERVADOS)
-    modelo = treinar_modelo_runtime(_DATASET_P2)
+    aprovadas = amostras_aprovadas_para_treino(observados)
+    modelo = treinar_modelo_runtime(_DATASET_P2, aprovadas)
     return ContextoRuntimeRequisitoML(
         politica=politica,
         modelo=modelo,
-        amostras_aprovadas=sum(
-            1 for item in observados if item.revisao_status == 'APROVADO'
-        ),
+        amostras_aprovadas=len(aprovadas),
     )
 
 
