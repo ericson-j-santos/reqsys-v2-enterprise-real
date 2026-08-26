@@ -72,6 +72,26 @@ def _cabecalhos(token: str, correlation_id: str | None = None) -> dict[str, str]
     return headers
 
 
+def _validar_resposta_api(resposta: requests.Response, etapa: str) -> dict[str, object]:
+    if resposta.ok:
+        return resposta.json()['data']
+    try:
+        corpo = resposta.json()
+        detalhe = corpo.get('detail') if isinstance(corpo, dict) else None
+    except ValueError:
+        detalhe = None
+    if isinstance(detalhe, dict):
+        seguro = {
+            chave: detalhe.get(chave)
+            for chave in ('code', 'status', 'attempts', 'correlation_id')
+            if detalhe.get(chave) is not None
+        }
+    else:
+        seguro = {'detail': str(detalhe or 'sem_detalhe')[:160]}
+    _falhar(f'CANARY_{etapa}_FAILED:{resposta.status_code}:{json.dumps(seguro, ensure_ascii=False)}')
+    return {}
+
+
 def _validar_ambiente() -> None:
     if settings.normalized_environment not in {'desenvolvimento', 'testes'}:
         _falhar(f'CANARY_ENVIRONMENT_FORBIDDEN:{settings.normalized_environment}')
@@ -89,8 +109,7 @@ def executar(*, sample_url: str, sample_source: str, run_id: str) -> dict[str, o
         headers=_cabecalhos(token),
         timeout=30,
     )
-    readiness.raise_for_status()
-    readiness_data = readiness.json()['data']
+    readiness_data = _validar_resposta_api(readiness, 'READINESS')
     if readiness_data.get('enabled') is not True or readiness_data.get('ready_pdf') is not True:
         _falhar(f'CANARY_OCR_NOT_READY:{readiness_data}')
 
@@ -109,8 +128,7 @@ def executar(*, sample_url: str, sample_source: str, run_id: str) -> dict[str, o
                 files={'arquivo': ('sample.pdf', arquivo, 'application/pdf')},
                 timeout=600,
             )
-        primeira.raise_for_status()
-        primeira_data = primeira.json()['data']
+        primeira_data = _validar_resposta_api(primeira, 'ANALYZE')
 
         with caminho.open('rb') as arquivo:
             repeticao = requests.post(
@@ -120,8 +138,7 @@ def executar(*, sample_url: str, sample_source: str, run_id: str) -> dict[str, o
                 files={'arquivo': ('sample.pdf', arquivo, 'application/pdf')},
                 timeout=600,
             )
-        repeticao.raise_for_status()
-        repeticao_data = repeticao.json()['data']
+        repeticao_data = _validar_resposta_api(repeticao, 'RETRY')
 
     candidatos = primeira_data.get('candidatos') or []
     if primeira_data.get('status') != 'AGUARDANDO_REVISAO_HUMANA':
