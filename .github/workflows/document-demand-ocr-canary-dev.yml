@@ -7,6 +7,7 @@ on:
     paths:
       - backend/fly.dev.toml
       - .github/workflows/document-demand-ocr-canary-dev.yml
+      - backend/app/documento_demanda_canary.py
       - backend/app/api/documento_demanda.py
       - backend/app/ocr/documento_worker.py
       - backend/app/services/documento_demanda.py
@@ -65,9 +66,7 @@ jobs:
           echo "FLY_API_TOKEN=$value" >> "$GITHUB_ENV"
 
       - name: Instalar flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@master
-        with:
-          version: latest
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
       - name: Implantar backend somente em DEV
         shell: bash
@@ -89,130 +88,50 @@ jobs:
           echo '::error::DEV não ficou saudável após o deploy.'
           exit 4
 
-      - name: Autenticar canário no DEV
+      - name: Executar canário dentro da máquina DEV
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS -X POST "${API_URL}/v1/auth/login" \
-            -H 'Content-Type: application/json' \
-            -d '{}' > /tmp/login.json
-          token="$(python - <<'PY'
+          set +e
+          remote_output="$(flyctl ssh console --app "${APP_NAME}" -C "python -m app.documento_demanda_canary --sample-url '${SAMPLE_URL}' --sample-source '${SAMPLE_SOURCE}' --run-id '${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}'" 2>&1)"
+          remote_status=$?
+          set -e
+
+          if [ "$remote_status" -ne 0 ]; then
+            printf '%s\n' "$remote_output"
+            echo '::error::Canário remoto falhou dentro do DEV.'
+            exit "$remote_status"
+          fi
+
+          payload="$(printf '%s\n' "$remote_output" | sed -n 's/^REQSYS_CANARY_REPORT_B64=//p' | tail -n 1)"
+          test -n "$payload" || {
+            printf '%s\n' "$remote_output"
+            echo '::error::Relatório sanitizado do canário não foi produzido.'
+            exit 5
+          }
+
+          printf '%s' "$payload" | python -c "import base64,json,sys,pathlib; raw=base64.urlsafe_b64decode(sys.stdin.read().encode()); data=json.loads(raw); pathlib.Path('${REPORT_DIR}/canary-report.json').write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')"
+
+      - name: Validar resultado do canário
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
           import json
-          data=json.load(open('/tmp/login.json', encoding='utf-8'))
-          print(data['data']['access_token'])
-          PY
-          )"
-          test -n "$token"
-          echo "::add-mask::$token"
-          echo "CANARY_TOKEN=$token" >> "$GITHUB_ENV"
-
-      - name: Validar prontidão OCR documental
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsS "${API_URL}/v1/ocr/demandas/documentos/ocr-readiness" \
-            -H "Authorization: Bearer ${CANARY_TOKEN}" > "${REPORT_DIR}/readiness.json"
-          python - <<'PY'
-          import json, sys
-          p=json.load(open('artifacts/document-demand-ocr-canary-dev/readiness.json', encoding='utf-8'))
-          d=p['data']
-          assert d['enabled'] is True, d
-          assert d.get('ready') is True, d
-          print(json.dumps({'enabled': d['enabled'], 'ready': d.get('ready'), 'environment': d.get('environment')}, ensure_ascii=False))
-          PY
-
-      - name: Baixar amostra real pública controlada
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fL --retry 4 --retry-delay 3 --connect-timeout 20 --max-time 120 \
-            "${SAMPLE_URL}" -o /tmp/canary.pdf
-          test -s /tmp/canary.pdf
-          bytes=$(stat -c%s /tmp/canary.pdf)
-          test "$bytes" -le 10485760 || { echo '::error::Amostra excede 10 MB.'; exit 5; }
-          sha256sum /tmp/canary.pdf | awk '{print $1}' > /tmp/sample.sha256
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq poppler-utils >/dev/null
-          pages=$(pdfinfo /tmp/canary.pdf | awk '/^Pages:/ {print $2}')
-          test -n "$pages"
-          test "$pages" -le 25 || { echo "::error::Amostra tem ${pages} páginas; máximo governado é 25."; exit 6; }
-          printf '{"source":"%s","url":"%s","sha256":"%s","bytes":%s,"pages":%s,"classification":"HOMOLOGATED_APPROVED","contains_personal_data":false,"approval_reference":"user-request-2026-08-26"}\n' \
-            "${SAMPLE_SOURCE}" "${SAMPLE_URL}" "$(cat /tmp/sample.sha256)" "$bytes" "$pages" \
-            > "${REPORT_DIR}/sample-manifest.json"
-
-      - name: Executar canário real e reenvio idempotente
-        shell: bash
-        run: |
-          set -euo pipefail
-          demanda_ref="CANARY-OCR-DEV-${GITHUB_RUN_ID}"
-          correlation="OCR-CANARY-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          curl -fsS -X POST "${API_URL}/v1/ocr/demandas/documentos/analisar" \
-            -H "Authorization: Bearer ${CANARY_TOKEN}" \
-            -H "X-Correlation-Id: ${correlation}" \
-            -F "demanda_ref=${demanda_ref}" \
-            -F 'arquivo=@/tmp/canary.pdf;type=application/pdf' \
-            > /tmp/first.json
-          curl -fsS -X POST "${API_URL}/v1/ocr/demandas/documentos/analisar" \
-            -H "Authorization: Bearer ${CANARY_TOKEN}" \
-            -H "X-Correlation-Id: ${correlation}-RETRY" \
-            -F "demanda_ref=${demanda_ref}" \
-            -F 'arquivo=@/tmp/canary.pdf;type=application/pdf' \
-            > /tmp/retry.json
-
-          python - <<'PY'
-          import json, re
-          from collections import Counter
           from pathlib import Path
 
-          first=json.load(open('/tmp/first.json', encoding='utf-8'))
-          retry=json.load(open('/tmp/retry.json', encoding='utf-8'))
-          manifest=json.load(open('artifacts/document-demand-ocr-canary-dev/sample-manifest.json', encoding='utf-8'))
-          d=first['data']; r=retry['data']
-          candidates=d.get('candidatos') or []
-          assert d['status']=='AGUARDANDO_REVISAO_HUMANA', d
-          assert d['incorporacao_automatica'] is False, d
-          assert candidates, 'Canário não produziu candidatos.'
-          assert all(c.get('requer_validacao_humana') is True for c in candidates), candidates
-          assert r['id']==d['id'], (d, r)
-          assert r['idempotente'] is True, r
-          assert r['incorporacao_automatica'] is False, r
-
-          triggers={
-            'POSSIVEL_REQUISITO': ('deve ', 'deverá ', 'precisa ', 'necessário ', 'obrigatório '),
-            'POSSIVEL_REGRA_NEGOCIO': ('somente ', 'apenas ', 'não pode ', 'proibido ', 'permitido '),
-            'POSSIVEL_REQUISITO_NAO_FUNCIONAL': ('segundo', 'até ', 'ms', 'disponibilidade', 'latência'),
-          }
-          inconsistent=[]
-          for c in candidates:
-            text=(c.get('texto') or '').lower()
-            expected=triggers.get(c.get('tipo'), ())
-            if expected and not any(t in text for t in expected):
-              inconsistent.append(c.get('tipo'))
-
-          total=len(candidates)
-          report={
-            'schema_version':'1.0.0',
-            'environment':'development',
-            'sample': manifest,
-            'analysis_id': d['id'],
-            'sha256': d['sha256'],
-            'status': d['status'],
-            'extraction_success': True,
-            'candidates_total': total,
-            'candidate_types': dict(Counter(c['tipo'] for c in candidates)),
-            'candidate_with_page_rate': round(sum(c.get('pagina') is not None for c in candidates)/total, 4),
-            'human_review_required_rate': round(sum(c.get('requer_validacao_humana') is True for c in candidates)/total, 4),
-            'automatic_incorporation': d['incorporacao_automatica'],
-            'idempotent_retry': r['idempotente'] and r['id']==d['id'],
-            'trigger_consistency_rate': round((total-len(inconsistent))/total, 4),
-            'semantic_false_positive_rate': None,
-            'semantic_false_positive_status': 'REQUIRES_HUMAN_LABELING',
-            'stg_touched': False,
-            'prod_touched': False,
-          }
-          Path('artifacts/document-demand-ocr-canary-dev/canary-report.json').write_text(
-            json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8'
-          )
+          path = Path('artifacts/document-demand-ocr-canary-dev/canary-report.json')
+          report = json.loads(path.read_text(encoding='utf-8'))
+          assert report['environment'] == 'desenvolvimento', report
+          assert report['readiness']['enabled'] is True, report
+          assert report['readiness']['ready'] is True, report
+          assert report['status'] == 'AGUARDANDO_REVISAO_HUMANA', report
+          assert report['extraction_success'] is True, report
+          assert report['candidates_total'] > 0, report
+          assert report['human_review_required_rate'] == 1.0, report
+          assert report['automatic_incorporation'] is False, report
+          assert report['idempotent_retry'] is True, report
+          assert report['stg_touched'] is False and report['prod_touched'] is False, report
           print(json.dumps(report, ensure_ascii=False, indent=2))
           PY
 
@@ -226,15 +145,18 @@ jobs:
             echo '# Canário OCR documental — DEV'
             echo
             echo "- Run: ${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}"
-            echo '- Ambiente: development'
             echo '- STG tocado: não'
             echo '- PROD tocado: não'
             if [ -f "${REPORT_DIR}/canary-report.json" ]; then
               python - <<'PY'
           import json
           p=json.load(open('artifacts/document-demand-ocr-canary-dev/canary-report.json', encoding='utf-8'))
+          print(f"- Ambiente: {p['environment']}")
           print(f"- Status: {p['status']}")
+          print(f"- Páginas: {p['sample']['pages']}")
+          print(f"- SHA-256: {p['sample']['sha256']}")
           print(f"- Candidatos: {p['candidates_total']}")
+          print(f"- Candidatos com página: {p['candidate_with_page_rate']:.0%}")
           print(f"- Revisão humana: {p['human_review_required_rate']:.0%}")
           print(f"- Reenvio idempotente: {'sim' if p['idempotent_retry'] else 'não'}")
           print(f"- Consistência dos gatilhos: {p['trigger_consistency_rate']:.0%}")
