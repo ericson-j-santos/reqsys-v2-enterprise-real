@@ -1,3 +1,7 @@
+# REST Client scratch files (podem conter tokens/JWTs em variaveis locais)
+*.http
+http-client.env.json
+
 # Python
 __pycache__/
 *.py[cod]
