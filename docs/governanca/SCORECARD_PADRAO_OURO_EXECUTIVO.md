@@ -18,7 +18,7 @@ Este scorecard complementa o `scripts/prod_readiness_audit.py` e não substitui 
 | Artifact | Finalidade |
 |---|---|
 | `artifacts/prod-readiness-audit.json` | Entrada primária gerada pela auditoria de produção. |
-| `artifacts/padrao-ouro-scorecard.json` | Saída estruturada para dashboards, CI e auditoria. |
+| `artifacts/padrao-ouro-scorecard.json` | Saída estruturada para painéis, CI e auditoria. |
 | `artifacts/padrao-ouro-scorecard.md` | Leitura executiva com semáforo, score, risco e próxima ação. |
 
 ## Execução recomendada
@@ -34,7 +34,7 @@ python scripts/padrao_ouro_scorecard.py \
   --markdown-output artifacts/padrao-ouro-scorecard.md
 ```
 
-Modo bloqueante para pipeline governado:
+Modo bloqueante para esteira governada:
 
 ```bash
 python scripts/padrao_ouro_scorecard.py --strict
@@ -69,8 +69,8 @@ O ReqSys só deve ser tratado como padrão ouro real quando todos os pontos abai
 
 1. `security`, `auth_azure`, `runtime`, `secrets` e `governance` com score >= 95%.
 2. Nenhum domínio obrigatório em `blocked`, `action_required` ou `manual` sem evidência aceita.
-3. CI verde e artifacts anexados ao fluxo de PR/deploy.
-4. Smoke público validado depois do deploy.
+3. CI verde e artifacts anexados ao fluxo de PR/implantação.
+4. Smoke público validado depois da implantação.
 5. Rollback documentado e aprovado.
 6. Logs sem PII, senha, token ou connection string.
 7. Evidência humana registrada quando a automação não puder comprovar o controle.
@@ -82,7 +82,7 @@ O scorecard foi implementado como script puro e somente-leitura para manter baix
 
 - execução local por engenharia;
 - CI/CD como quality gate;
-- geração de artifact para dashboard executivo.
+- geração de artifact para painel executivo.
 
 A decisão evita consultar secrets, bases produtivas ou serviços administrativos diretamente. O scorecard consome o artifact de auditoria já produzido e transforma controles em maturidade executiva.
 

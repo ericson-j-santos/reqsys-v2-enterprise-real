@@ -22,7 +22,7 @@ Guia operacional canônico para agentes, automações e assistentes que atuam ne
 | `e2e/` e `frontend/tests/e2e/` | Testes Playwright e validações responsivas. |
 | `.github/workflows/` | CI, quality gates e validações agendadas/manuais. |
 | `docs/` | Decisões, runbooks, evidências e documentação operacional. |
-| `scripts/` | Automação local, publicação, validação e tarefas auxiliares. Subdiretório `scripts/governance/` para gates de governança enterprise. Equivalentes Windows PowerShell em `scripts/*.ps1`. |
+| `scripts/` | Automação local, publicação, validação e tarefas auxiliares. Subdiretório `scripts/governance/` para gates de governança corporativa. Equivalentes Windows PowerShell em `scripts/*.ps1`. |
 | `artifacts/` | Saída de artifacts CI/evidência (JSON, dashboards, snapshots). |
 | `audit/` | Relatórios de auditoria e evidence consolidada. |
 | `infra/` | Configuração de infraestrutura: nginx, codex-local (Ollama/Qdrant), ambientes Fly.io. Manifesto canônico de ambientes em `infra/fly-environments.json`. Subdiretórios por ambiente (`dev/`, `hml/`, `prod/`) e reverse-proxy. |
@@ -229,7 +229,7 @@ python scripts/prod_readiness_audit.py
 # Verifica endpoints Fly.io, segredos obrigatórios, gates. Output: artifacts/prod-readiness-audit.json
 ```
 
-### Guardrails enterprise CI
+### Guardrails corporativos de CI
 
 ```bash
 python scripts/ci_enterprise_guardrails.py
@@ -551,13 +551,13 @@ Produção deve ser bloqueada se qualquer condição abaixo ocorrer:
 - Auditoria sem `correlation_id`.
 - Endpoint administrativo de conector exposto sem autorização adequada.
 
-## Deploy de hotfix e ambientes
+## Publicação de hotfix e ambientes
 
 - Quando houver mudanças locais fora do escopo do hotfix, publicar a partir de uma árvore limpa contendo somente os arquivos do ajuste aprovado.
 - Para mudanças de frontend/autenticação, validar localmente com `npm run build` e teste unitário ou regressivo focado antes de publicar.
 - Promover ambientes em ordem: `dev` primeiro, depois `staging`, depois `prod`.
 - Após cada publicação, validar o endpoint afetado no ambiente publicado antes de seguir para o próximo.
-- Não publicar produção quando o deploy puder carregar alterações locais não revisadas ou não relacionadas.
+- Não publicar produção quando a publicação puder carregar alterações locais não revisadas ou não relacionadas.
 
 ## Padrão de PR
 
