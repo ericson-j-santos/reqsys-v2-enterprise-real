@@ -210,7 +210,7 @@ async def analisar_documento_demanda(
         return ok(_payload_registro(existente, idempotente=True), existente.correlation_id)
 
     texto = extrair_texto_basico(content_type, conteudo)
-    status = 'AGUARDANDO_OCR' if content_type in TIPOS_OCR_DOCUMENTO else 'AGUARDANDO_REVISAO_HUMANA'
+    status = 'AGUARDANDO_OCR' if not texto else 'AGUARDANDO_REVISAO_HUMANA'
     candidatos = classificar_candidatos(texto) if texto else []
     registro = DocumentoDemandaAnalise(
         demanda_ref=demanda_ref,
