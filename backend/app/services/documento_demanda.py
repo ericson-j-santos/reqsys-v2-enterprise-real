@@ -3,17 +3,21 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+
+TIPOS_OCR_DOCUMENTO = {
+    'application/pdf',
+    'image/png',
+    'image/jpeg',
+}
 
 TIPOS_SUPORTADOS = {
-    'application/pdf',
+    *TIPOS_OCR_DOCUMENTO,
     'text/plain',
     'text/csv',
     'application/json',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'image/png',
-    'image/jpeg',
 }
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -25,6 +29,7 @@ class CandidatoDemanda:
     texto: str
     confianca: float
     requer_validacao_humana: bool = True
+    pagina: int | None = None
 
 
 def validar_upload(*, nome_arquivo: str, content_type: str, conteudo: bytes) -> None:
@@ -62,6 +67,13 @@ def classificar_candidatos(texto: str) -> list[CandidatoDemanda]:
         else:
             continue
         candidatos.append(CandidatoDemanda(tipo=tipo, texto=sentenca[:2000], confianca=0.70))
+    return candidatos
+
+
+def classificar_candidatos_por_paginas(paginas: list[tuple[int, str]]) -> list[CandidatoDemanda]:
+    candidatos: list[CandidatoDemanda] = []
+    for pagina, texto in paginas:
+        candidatos.extend(replace(item, pagina=pagina) for item in classificar_candidatos(texto))
     return candidatos
 
 
