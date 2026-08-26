@@ -281,6 +281,18 @@ def _make_capture_handler(environment: str, base_url_override: str | None, allow
             self._cors_headers()
             self.end_headers()
 
+        def do_GET(self) -> None:  # noqa: N802
+            # Visitar a URL direto no navegador (em vez de clicar no bookmarklet) cai
+            # aqui — sem isso o BaseHTTPRequestHandler devolveria um 501 cru e confuso.
+            self._reply_json(200, {
+                "ok": True,
+                "listener": "ativo",
+                "mensagem": (
+                    "Este listener só aceita POST vindo do bookmarklet (fetch), não visita direta. "
+                    "Clique no favorito criado por 'listen' com a aba do ReqSys logada."
+                ),
+            })
+
         def do_POST(self) -> None:  # noqa: N802
             if self.path != "/capture":
                 self._reply_json(404, {"ok": False, "erro": "rota desconhecida"})
