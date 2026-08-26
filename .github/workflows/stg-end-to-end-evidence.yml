@@ -61,7 +61,10 @@ jobs:
             fi
 
             gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" \
-              --jq --arg name "$artifact" '[.artifacts[] | select(.name == $name and .expired == false)][0] // {}' \
+              > ".tmp/stg-e2e/${key}-artifacts.json"
+            jq --arg name "$artifact" \
+              '[.artifacts[] | select(.name == $name and .expired == false)][0] // {}' \
+              ".tmp/stg-e2e/${key}-artifacts.json" \
               > ".tmp/stg-e2e/${key}-artifact.json"
 
             artifact_id="$(jq -r '.id // empty' ".tmp/stg-e2e/${key}-artifact.json")"
