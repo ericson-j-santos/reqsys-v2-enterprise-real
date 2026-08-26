@@ -1,0 +1,253 @@
+name: Document Demand OCR Canary DEV
+
+on:
+  push:
+    branches:
+      - ops/document-demand-ocr-canary-dev
+    paths:
+      - backend/fly.dev.toml
+      - .github/workflows/document-demand-ocr-canary-dev.yml
+      - backend/app/api/documento_demanda.py
+      - backend/app/ocr/documento_worker.py
+      - backend/app/services/documento_demanda.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  APP_NAME: reqsys-api-dev
+  API_URL: https://reqsys-api-dev.fly.dev
+  REPORT_DIR: artifacts/document-demand-ocr-canary-dev
+  SAMPLE_URL: https://www.caixa.gov.br/Downloads/cadastro-nis/Instrucoes_Layout_Padrao_Empresa.pdf
+  SAMPLE_SOURCE: CAIXA-Instrucoes-Layout-Padrao-Empresa
+
+jobs:
+  canary:
+    name: Ativar DEV, implantar e executar canário OCR documental
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar isolamento DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(grep -c 'DOCUMENTO_DEMANDA_OCR_ENABLED = \"true\"' backend/fly.dev.toml)" -eq 1
+          if grep -R -n 'DOCUMENTO_DEMANDA_OCR_ENABLED = "true"' backend/fly.staging.toml backend/fly.toml 2>/dev/null; then
+            echo '::error::OCR documental não pode ser habilitado em STG/PROD neste incremento.'
+            exit 2
+          fi
+          mkdir -p "${REPORT_DIR}"
+
+      - name: Autenticar Azure por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND }}
+          tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolver token Fly do cofre
+        shell: bash
+        run: |
+          set -euo pipefail
+          value="$(az keyvault secret show \
+            --vault-name "${{ vars.REQSYS_KEY_VAULT_NAME }}" \
+            --name reqsys-fly-control-plane-org-token \
+            --query value -o tsv)"
+          test -n "$value" || { echo '::error::Token Fly ausente no Key Vault.'; exit 3; }
+          echo "::add-mask::$value"
+          echo "FLY_API_TOKEN=$value" >> "$GITHUB_ENV"
+
+      - name: Instalar flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+
+      - name: Implantar backend somente em DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd backend && flyctl deploy --config fly.dev.toml --app "${APP_NAME}" --remote-only)
+
+      - name: Aguardar saúde do DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 10 "${API_URL}/health" > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 5
+          done
+          echo '::error::DEV não ficou saudável após o deploy.'
+          exit 4
+
+      - name: Autenticar canário no DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST "${API_URL}/v1/auth/login" \
+            -H 'Content-Type: application/json' \
+            -d '{}' > /tmp/login.json
+          token="$(python - <<'PY'
+          import json
+          data=json.load(open('/tmp/login.json', encoding='utf-8'))
+          print(data['data']['access_token'])
+          PY
+          )"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "CANARY_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Validar prontidão OCR documental
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "${API_URL}/v1/ocr/demandas/documentos/ocr-readiness" \
+            -H "Authorization: Bearer ${CANARY_TOKEN}" > "${REPORT_DIR}/readiness.json"
+          python - <<'PY'
+          import json, sys
+          p=json.load(open('artifacts/document-demand-ocr-canary-dev/readiness.json', encoding='utf-8'))
+          d=p['data']
+          assert d['enabled'] is True, d
+          assert d.get('ready') is True, d
+          print(json.dumps({'enabled': d['enabled'], 'ready': d.get('ready'), 'environment': d.get('environment')}, ensure_ascii=False))
+          PY
+
+      - name: Baixar amostra real pública controlada
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 4 --retry-delay 3 --connect-timeout 20 --max-time 120 \
+            "${SAMPLE_URL}" -o /tmp/canary.pdf
+          test -s /tmp/canary.pdf
+          bytes=$(stat -c%s /tmp/canary.pdf)
+          test "$bytes" -le 10485760 || { echo '::error::Amostra excede 10 MB.'; exit 5; }
+          sha256sum /tmp/canary.pdf | awk '{print $1}' > /tmp/sample.sha256
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils >/dev/null
+          pages=$(pdfinfo /tmp/canary.pdf | awk '/^Pages:/ {print $2}')
+          test -n "$pages"
+          test "$pages" -le 25 || { echo "::error::Amostra tem ${pages} páginas; máximo governado é 25."; exit 6; }
+          printf '{"source":"%s","url":"%s","sha256":"%s","bytes":%s,"pages":%s,"classification":"HOMOLOGATED_APPROVED","contains_personal_data":false,"approval_reference":"user-request-2026-08-26"}\n' \
+            "${SAMPLE_SOURCE}" "${SAMPLE_URL}" "$(cat /tmp/sample.sha256)" "$bytes" "$pages" \
+            > "${REPORT_DIR}/sample-manifest.json"
+
+      - name: Executar canário real e reenvio idempotente
+        shell: bash
+        run: |
+          set -euo pipefail
+          demanda_ref="CANARY-OCR-DEV-${GITHUB_RUN_ID}"
+          correlation="OCR-CANARY-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          curl -fsS -X POST "${API_URL}/v1/ocr/demandas/documentos/analisar" \
+            -H "Authorization: Bearer ${CANARY_TOKEN}" \
+            -H "X-Correlation-Id: ${correlation}" \
+            -F "demanda_ref=${demanda_ref}" \
+            -F 'arquivo=@/tmp/canary.pdf;type=application/pdf' \
+            > /tmp/first.json
+          curl -fsS -X POST "${API_URL}/v1/ocr/demandas/documentos/analisar" \
+            -H "Authorization: Bearer ${CANARY_TOKEN}" \
+            -H "X-Correlation-Id: ${correlation}-RETRY" \
+            -F "demanda_ref=${demanda_ref}" \
+            -F 'arquivo=@/tmp/canary.pdf;type=application/pdf' \
+            > /tmp/retry.json
+
+          python - <<'PY'
+          import json, re
+          from collections import Counter
+          from pathlib import Path
+
+          first=json.load(open('/tmp/first.json', encoding='utf-8'))
+          retry=json.load(open('/tmp/retry.json', encoding='utf-8'))
+          manifest=json.load(open('artifacts/document-demand-ocr-canary-dev/sample-manifest.json', encoding='utf-8'))
+          d=first['data']; r=retry['data']
+          candidates=d.get('candidatos') or []
+          assert d['status']=='AGUARDANDO_REVISAO_HUMANA', d
+          assert d['incorporacao_automatica'] is False, d
+          assert candidates, 'Canário não produziu candidatos.'
+          assert all(c.get('requer_validacao_humana') is True for c in candidates), candidates
+          assert r['id']==d['id'], (d, r)
+          assert r['idempotente'] is True, r
+          assert r['incorporacao_automatica'] is False, r
+
+          triggers={
+            'POSSIVEL_REQUISITO': ('deve ', 'deverá ', 'precisa ', 'necessário ', 'obrigatório '),
+            'POSSIVEL_REGRA_NEGOCIO': ('somente ', 'apenas ', 'não pode ', 'proibido ', 'permitido '),
+            'POSSIVEL_REQUISITO_NAO_FUNCIONAL': ('segundo', 'até ', 'ms', 'disponibilidade', 'latência'),
+          }
+          inconsistent=[]
+          for c in candidates:
+            text=(c.get('texto') or '').lower()
+            expected=triggers.get(c.get('tipo'), ())
+            if expected and not any(t in text for t in expected):
+              inconsistent.append(c.get('tipo'))
+
+          total=len(candidates)
+          report={
+            'schema_version':'1.0.0',
+            'environment':'development',
+            'sample': manifest,
+            'analysis_id': d['id'],
+            'sha256': d['sha256'],
+            'status': d['status'],
+            'extraction_success': True,
+            'candidates_total': total,
+            'candidate_types': dict(Counter(c['tipo'] for c in candidates)),
+            'candidate_with_page_rate': round(sum(c.get('pagina') is not None for c in candidates)/total, 4),
+            'human_review_required_rate': round(sum(c.get('requer_validacao_humana') is True for c in candidates)/total, 4),
+            'automatic_incorporation': d['incorporacao_automatica'],
+            'idempotent_retry': r['idempotente'] and r['id']==d['id'],
+            'trigger_consistency_rate': round((total-len(inconsistent))/total, 4),
+            'semantic_false_positive_rate': None,
+            'semantic_false_positive_status': 'REQUIRES_HUMAN_LABELING',
+            'stg_touched': False,
+            'prod_touched': False,
+          }
+          Path('artifacts/document-demand-ocr-canary-dev/canary-report.json').write_text(
+            json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8'
+          )
+          print(json.dumps(report, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Publicar resumo
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${REPORT_DIR}"
+          {
+            echo '# Canário OCR documental — DEV'
+            echo
+            echo "- Run: ${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}"
+            echo '- Ambiente: development'
+            echo '- STG tocado: não'
+            echo '- PROD tocado: não'
+            if [ -f "${REPORT_DIR}/canary-report.json" ]; then
+              python - <<'PY'
+          import json
+          p=json.load(open('artifacts/document-demand-ocr-canary-dev/canary-report.json', encoding='utf-8'))
+          print(f"- Status: {p['status']}")
+          print(f"- Candidatos: {p['candidates_total']}")
+          print(f"- Revisão humana: {p['human_review_required_rate']:.0%}")
+          print(f"- Reenvio idempotente: {'sim' if p['idempotent_retry'] else 'não'}")
+          print(f"- Consistência dos gatilhos: {p['trigger_consistency_rate']:.0%}")
+          print('- Falso positivo semântico: requer rotulagem humana; não inferido automaticamente.')
+          PY
+            fi
+          } | tee "${REPORT_DIR}/summary.md"
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: document-demand-ocr-canary-dev
+          path: artifacts/document-demand-ocr-canary-dev
+          if-no-files-found: error
+          retention-days: 30
