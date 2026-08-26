@@ -55,7 +55,7 @@ def _payload(**overrides):
 def _mock_webhook_ok(mock_client_cls, resposta=None):
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
-    mock_resp.json.return_value = resposta or {'task_id': 'planner-task-1'}
+    mock_resp.json.return_value = resposta or {'criadas': 1, 'task_id': 'planner-task-1'}
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -80,6 +80,43 @@ def test_publicar_tarefa_sucesso_primeira_vez(mock_client_cls):
 
         chave, _ = svc.calcular_idempotency_key(_payload(source_id=f'requisito:{_RUN_ID}-sucesso-1'))
         assert resultado['idempotency_key'] == chave
+    finally:
+        db.close()
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_publicar_tarefa_envia_no_formato_do_flow_legado(mock_client_cls):
+    db = SessionLocal()
+    try:
+        hub_svc.salvar_planner_webhook_config(db, webhook_url='https://example.com/planner-hook')
+        mock_client = _mock_webhook_ok(mock_client_cls)
+
+        payload = _payload(
+            source_id=f'requisito:{_RUN_ID}-formato-legado-1',
+            title='Titulo X', due_date='2026-10-01', bucket_id='bucket-Y', priority='baixa', description='Desc Z',
+        )
+        resultado = _run(svc.publicar_tarefa_planner_governada(db, payload, 'corr-formato'))
+        assert resultado['status'] == svc.STATUS_PUBLICADO
+
+        enviado = mock_client.post.await_args.kwargs['json']
+        assert enviado['tarefas_texto'] == 'Titulo X|tester@example.com|2026-10-01|bucket-Y|baixa|Desc Z'
+        assert enviado['autor'] == 'tester@example.com'
+    finally:
+        db.close()
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_publicar_tarefa_flow_sem_criadas_marca_falhou_integracao(mock_client_cls):
+    db = SessionLocal()
+    try:
+        hub_svc.salvar_planner_webhook_config(db, webhook_url='https://example.com/planner-hook')
+        _mock_webhook_ok(mock_client_cls, resposta={'criadas': 0})
+
+        resultado = _run(svc.publicar_tarefa_planner_governada(
+            db, _payload(source_id=f'requisito:{_RUN_ID}-sem-criadas-1'), 'corr-sem-criadas'
+        ))
+
+        assert resultado['status'] == svc.STATUS_FALHOU_INTEGRACAO
     finally:
         db.close()
 
