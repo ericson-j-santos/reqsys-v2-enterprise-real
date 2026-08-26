@@ -100,12 +100,42 @@ def test_modelo_p2_supera_baseline_no_holdout_p3():
     assert resultado.como_dict()['status'] == 'APROVADO'
 
 
-def test_amostras_reais_observadas_ficam_fora_do_treino_sem_revisao_humana():
+def test_amostras_reais_observadas_refletem_revisao_humana_da_issue_1323():
     registros = carregar_amostras_observadas(OBSERVADOS)
-    assert len(registros) == 14
+    aprovadas = amostras_aprovadas_para_treino(registros)
+
+    assert len(registros) == 17
     assert all(item.anonimizado for item in registros)
-    assert all(item.revisao_status == 'PENDENTE_HUMANA' for item in registros)
-    assert amostras_aprovadas_para_treino(registros) == []
+    assert sum(item.revisao_status == 'APROVADO' for item in registros) == 16
+    assert sum(item.revisao_status == 'REJEITADO' for item in registros) == 1
+    assert len(aprovadas) == 16
+    assert {item.categoria for item in aprovadas} == set(CATEGORIAS)
+
+    rejeitada = next(item for item in registros if item.revisao_status == 'REJEITADO')
+    assert rejeitada.id == 'P3-OBS-ISSUE-1288'
+    assert rejeitada.categoria_revisada is None
+    assert rejeitada.revisor_ref is not None
+
+
+def test_amostras_reais_aprovadas_entram_no_treino_do_runtime():
+    aprovadas = amostras_aprovadas_para_treino(
+        carregar_amostras_observadas(OBSERVADOS)
+    )
+    estado_base = treinar_modelo_runtime(DATASET_P2).exportar_estado()
+    estado_revisado = treinar_modelo_runtime(DATASET_P2, aprovadas).exportar_estado()
+
+    assert estado_revisado['total_documentos'] == (
+        estado_base['total_documentos'] + len(aprovadas)
+    )
+    suporte_aprovado = {
+        categoria: sum(item.categoria == categoria for item in aprovadas)
+        for categoria in CATEGORIAS
+    }
+    assert estado_revisado['documentos_por_categoria'] == {
+        categoria: estado_base['documentos_por_categoria'][categoria]
+        + suporte_aprovado[categoria]
+        for categoria in CATEGORIAS
+    }
 
 
 def test_amostra_aprovada_so_entra_no_treino_com_revisao_completa(tmp_path):
@@ -142,6 +172,7 @@ def test_amostra_com_pii_detectavel_e_bloqueada(tmp_path):
         ({'holdout_sha256': 'invalido'}, 'holdout_sha256 inválido'),
         ({'modo_padrao': 'invalido'}, 'modo_padrao inválido'),
         ({'canary_percentual': 101}, 'canary_percentual'),
+        ({'active_habilitado': 'false'}, 'active_habilitado'),
         ({'confianca_minima_modelo': 1.1}, 'confianca_minima_modelo'),
         ({'macro_f1_holdout_minimo': 1.1}, 'macro_f1_holdout_minimo'),
         ({'ganho_f1_holdout_minimo': -0.1}, 'ganho_f1_holdout_minimo'),
@@ -155,6 +186,7 @@ def test_amostra_com_pii_detectavel_e_bloqueada(tmp_path):
             },
             'active',
         ),
+        ({'minimo_amostras_reais_por_categoria_active': 0}, 'por categoria'),
         (
             {'distribuicao_referencia': {'CATEGORIA_DESCONHECIDA': 1}},
             'categorias desconhecidas',
@@ -222,7 +254,20 @@ def test_holdout_bloqueia_arquivo_vazio_e_cobertura_incompleta(tmp_path):
         ({'anonimizado': False}, 'não anonimizada'),
         (
             {'revisao_status': 'APROVADO', 'categoria_revisada': 'UX'},
+            'referência humana',
+        ),
+        (
+            {'revisao_status': 'APROVADO', 'revisor_ref': 'revisor-interno'},
             'revisão completa',
+        ),
+        ({'revisao_status': 'REJEITADO'}, 'referência humana'),
+        (
+            {
+                'revisao_status': 'REJEITADO',
+                'categoria_revisada': 'UX',
+                'revisor_ref': 'revisor-interno',
+            },
+            'não deve possuir categoria revisada',
         ),
     ],
 )
@@ -289,12 +334,27 @@ def test_runtime_canary_e_bloqueado_sem_amostras_reais_aprovadas():
     assert decisao.fallback_reason == 'REAL_SAMPLE_GATE_BLOCKED'
 
 
-def test_runtime_active_e_bloqueado_sem_minimo_de_amostras_reais():
+def test_runtime_active_e_bloqueado_por_politica_mesmo_com_amostras_reais():
     politica = carregar_politica_runtime(POLITICA)
     modelo = treinar_modelo_runtime(DATASET_P2)
     decisao = classificar_runtime(
         'A API deve integrar com o serviço externo.',
         correlation_id='p3-active-blocked',
+        politica=politica,
+        modelo=modelo,
+        modo='active',
+        amostras_reais_aprovadas=politica.minimo_amostras_reais_aprovadas_active,
+    )
+    assert decisao.engine == 'keyword-weighted-v1'
+    assert decisao.fallback_reason == 'ACTIVE_POLICY_BLOCKED'
+
+
+def test_runtime_active_e_bloqueado_sem_minimo_de_amostras_reais():
+    politica = replace(carregar_politica_runtime(POLITICA), active_habilitado=True)
+    modelo = treinar_modelo_runtime(DATASET_P2)
+    decisao = classificar_runtime(
+        'A API deve integrar com o serviço externo.',
+        correlation_id='p3-active-sample-gate-blocked',
         politica=politica,
         modelo=modelo,
         modo='active',
@@ -336,7 +396,11 @@ def test_runtime_canary_zero_porcento_preserva_baseline_apos_gate_humano():
 
 
 def test_runtime_active_usa_modelo_quando_gates_estao_satisfeitos():
-    politica = replace(carregar_politica_runtime(POLITICA), confianca_minima_modelo=0.0)
+    politica = replace(
+        carregar_politica_runtime(POLITICA),
+        active_habilitado=True,
+        confianca_minima_modelo=0.0,
+    )
     modelo = treinar_modelo_runtime(DATASET_P2)
     decisao = classificar_runtime(
         'O acesso deve exigir autenticação MFA e auditoria.',
@@ -352,7 +416,11 @@ def test_runtime_active_usa_modelo_quando_gates_estao_satisfeitos():
 
 
 def test_runtime_active_faz_fallback_quando_threshold_de_confianca_nao_e_atendido():
-    politica = replace(carregar_politica_runtime(POLITICA), confianca_minima_modelo=1.0)
+    politica = replace(
+        carregar_politica_runtime(POLITICA),
+        active_habilitado=True,
+        confianca_minima_modelo=1.0,
+    )
     modelo = treinar_modelo_runtime(DATASET_P2)
     decisao = classificar_runtime(
         'xyz qwerty elemento desconhecido',
