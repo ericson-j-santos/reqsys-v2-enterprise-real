@@ -53,10 +53,18 @@
       "github_environment": "production",
       "fly_app": "reqsys-api",
       "criticality": "critical",
-      "enabled": false,
+      "enabled": true,
       "rpo_target_minutes": 360,
       "rto_target_seconds": 14400,
-      "rollout_state": "enable_after_stg_restore_evidence_and_approval"
+      "rollout_state": "approved_after_valid_stg_restore_evidence",
+      "rollout_evidence": {
+        "source_run_id": "32943213180",
+        "source_artifact_digest": "sha256:af7e485b790408d181cfb2234ea90a7a6c0fbc16d70a4e08e3d9d8532e7a677a",
+        "source_environment": "stg",
+        "decision": "prod_rollout_candidate_requires_approval",
+        "human_approval_mode": "workflow_dispatch_APROVO-PROD",
+        "production_allowed": true
+      }
     }
   ]
 }
