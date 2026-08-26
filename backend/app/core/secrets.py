@@ -14,6 +14,17 @@ except ImportError:
     keyring = None
     _KEYRING_OK = False
 
+if _KEYRING_OK:
+    try:
+        from app.core.keyring_backend import FileEncryptedKeyring
+        keyring.set_keyring(FileEncryptedKeyring())
+    except Exception:
+        # Container sem D-Bus/Secret Service e sem backend de arquivo configurável
+        # cai aqui; funções abaixo já tratam exceções do keyring como "indisponível".
+        logging.getLogger(__name__).warning(
+            'Falha ao configurar backend de keyring baseado em arquivo; Cofre pode ficar indisponível'
+        )
+
 try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     _CRYPTO_OK = True
