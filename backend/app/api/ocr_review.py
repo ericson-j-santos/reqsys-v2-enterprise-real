@@ -12,6 +12,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from app.api.documento_demanda import router as documento_demanda_router
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.security import require_admin
@@ -29,6 +30,7 @@ from app.services.runtime_core import (
 )
 
 router = APIRouter(prefix='/v1/ocr', tags=['OCR Governado'])
+router.include_router(documento_demanda_router)
 
 
 class OcrJobRequest(BaseModel):
