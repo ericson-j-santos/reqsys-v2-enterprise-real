@@ -21,8 +21,8 @@ env:
   APP_NAME: reqsys-api-dev
   API_URL: https://reqsys-api-dev.fly.dev
   REPORT_DIR: artifacts/document-demand-ocr-canary-dev
-  SAMPLE_URL: https://www.caixa.gov.br/Downloads/cadastro-nis/Instrucoes_Layout_Padrao_Empresa.pdf
-  SAMPLE_SOURCE: CAIXA-Instrucoes-Layout-Padrao-Empresa
+  SAMPLE_URL: https://www.gov.br/anvisa/pt-br/centraisdeconteudo/publicacoes/certificacao-e-fiscalizacao/compilado-procedimentos-SNVS/0019-pop-o-snvs-019/pop-o-snvs-019-rev-1-elaboracao-de-relatorio-gases-medicinais-atualiz.pdf/@@download/file
+  SAMPLE_SOURCE: ANVISA-POP-O-SNVS-019-REV-1
 
 jobs:
   canary:
