@@ -49,8 +49,12 @@ def _resolver_token(db: Session, token_bruto: str) -> ServiceToken | None:
     )
     if registro is None:
         return None
-    if registro.expires_at is not None and registro.expires_at <= datetime.now(timezone.utc):
-        return None
+    expires_at = registro.expires_at
+    if expires_at is not None:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at <= datetime.now(timezone.utc):
+            return None
     return registro
 
 
