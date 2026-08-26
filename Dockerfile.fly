@@ -12,6 +12,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        poppler-utils \
+        tesseract-ocr \
+        tesseract-ocr-por \
         unixodbc \
         unixodbc-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -20,6 +23,7 @@ COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY backend/app /app/app
+COPY backend/ocr_evidencia /app/ocr_evidencia
 COPY backend/diagram_generator_portable /app/diagram_generator_portable
 COPY governance/notifications/teams-recipient-policies.json /app/governance/notifications/teams-recipient-policies.json
 COPY config/external-sources-registry.json /config/external-sources-registry.json
