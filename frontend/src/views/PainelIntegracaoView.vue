@@ -219,6 +219,95 @@
       </v-col>
     </v-row>
 
+    <!-- Publicações governadas do Planner (issue #32) -->
+    <v-card class="mb-4" variant="outlined" data-testid="planner-publish-governado-card">
+      <v-card-text class="pa-3">
+        <div class="filter-header mb-2">
+          <div>
+            <strong>Publicações governadas do Planner</strong>
+            <div class="text-caption text-medium-emphasis">
+              Contrato único com idempotência (issue #32) — separado do histórico de texto livre abaixo.
+            </div>
+          </div>
+          <v-btn
+            variant="outlined"
+            size="small"
+            prepend-icon="mdi-refresh"
+            :loading="carregandoGovernadas"
+            @click="carregarPublicacoesGovernadas"
+          >
+            Atualizar
+          </v-btn>
+        </div>
+
+        <v-row dense class="mb-2">
+          <v-col cols="12" sm="6" md="3">
+            <v-select
+              v-model="filtroGovernado.status"
+              :items="statusGovernadoOptions"
+              item-title="label"
+              item-value="value"
+              label="Status"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              @update:model-value="carregarPublicacoesGovernadas"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field
+              v-model="filtroGovernado.source_id"
+              label="Source ID"
+              density="compact"
+              variant="outlined"
+              hide-details
+              clearable
+              prepend-inner-icon="mdi-identifier"
+              @update:model-value="carregarPublicacoesGovernadas"
+            />
+          </v-col>
+        </v-row>
+
+        <v-data-table
+          :headers="headersGovernado"
+          :items="publicacoesGovernadas"
+          :loading="carregandoGovernadas"
+          density="compact"
+          no-data-text="Nenhuma publicação governada encontrada."
+        >
+          <!-- eslint-disable-next-line vue/valid-v-slot -->
+          <template #item.criado_em="{ item }">
+            <span class="text-caption">{{ formatarData(item.criado_em) }}</span>
+          </template>
+          <!-- eslint-disable-next-line vue/valid-v-slot -->
+          <template #item.status="{ item }">
+            <v-chip size="x-small" :color="corStatusGovernado(item.status)" variant="tonal">
+              {{ item.status }}
+            </v-chip>
+          </template>
+          <!-- eslint-disable-next-line vue/valid-v-slot -->
+          <template #item.title="{ item }">
+            <span :title="item.erro || ''">{{ item.title }}</span>
+          </template>
+          <!-- eslint-disable-next-line vue/valid-v-slot -->
+          <template #item.acoes="{ item }">
+            <v-btn
+              v-if="item.status === 'falhou_integracao'"
+              size="x-small"
+              variant="tonal"
+              color="warning"
+              prepend-icon="mdi-refresh"
+              :loading="reprocessando[item.attempt_id]"
+              @click="reprocessarTentativaGovernada(item.attempt_id)"
+            >
+              Reprocessar
+            </v-btn>
+          </template>
+        </v-data-table>
+      </v-card-text>
+    </v-card>
+
     <!-- Filtros analíticos -->
     <v-card class="mb-4 filter-card" variant="outlined">
       <v-card-text class="pa-3">
@@ -471,6 +560,41 @@ const headers = [
   { title: '', key: 'acoes', width: '50px', sortable: false },
 ]
 
+const publicacoesGovernadas = ref([])
+const carregandoGovernadas = ref(false)
+const reprocessando = ref({})
+const filtroGovernado = reactive({ status: null, source_id: '' })
+
+const statusGovernadoOptions = [
+  { label: 'Enfileirado', value: 'enfileirado' },
+  { label: 'Publicado', value: 'publicado' },
+  { label: 'Duplicado', value: 'duplicado' },
+  { label: 'Falhou validação', value: 'falhou_validacao' },
+  { label: 'Falhou integração', value: 'falhou_integracao' },
+]
+
+const headersGovernado = [
+  { title: 'ID', key: 'attempt_id', width: '60px' },
+  { title: 'Data', key: 'criado_em', width: '150px' },
+  { title: 'Status', key: 'status', width: '130px' },
+  { title: 'Título', key: 'title' },
+  { title: 'Source ID', key: 'source_id', width: '160px' },
+  { title: 'Solicitante', key: 'requester', width: '160px' },
+  { title: 'Tentativas', key: 'tentativas', width: '90px', align: 'center' },
+  { title: '', key: 'acoes', width: '140px', sortable: false },
+]
+
+function corStatusGovernado(status) {
+  const cores = {
+    publicado: 'success',
+    duplicado: 'info',
+    falhou_validacao: 'warning',
+    falhou_integracao: 'error',
+    enfileirado: 'primary',
+  }
+  return cores[status] || 'grey'
+}
+
 const itensFiltrados = computed(() => filtrarIntegracoes(itens.value, filtros))
 const temFiltroAtivo = computed(() => possuiFiltroAtivo(filtros))
 
@@ -628,6 +752,48 @@ async function testarTeams() {
   }
 }
 
+async function carregarPublicacoesGovernadas() {
+  carregandoGovernadas.value = true
+  try {
+    const params = new URLSearchParams()
+    if (filtroGovernado.status) params.set('status', filtroGovernado.status)
+    if (filtroGovernado.source_id) params.set('source_id', filtroGovernado.source_id)
+    params.set('limit', '100')
+    const resp = await api.get(`/v1/hub-lowcode/planner/publish?${params.toString()}`)
+    publicacoesGovernadas.value = resp.data?.data?.items || []
+  } catch (e) {
+    snackbar.value = {
+      aberto: true,
+      msg: 'Erro ao carregar publicações governadas: ' + (e?.response?.data?.detail || e.message),
+      cor: 'error',
+    }
+  } finally {
+    carregandoGovernadas.value = false
+  }
+}
+
+async function reprocessarTentativaGovernada(attemptId) {
+  reprocessando.value = { ...reprocessando.value, [attemptId]: true }
+  try {
+    const resp = await api.post(`/v1/hub-lowcode/planner/publish/${attemptId}/reprocessar`)
+    const status = resp.data?.data?.status
+    snackbar.value = {
+      aberto: true,
+      msg: status === 'publicado' ? 'Tarefa publicada com sucesso no reprocessamento.' : `Reprocessado — status: ${status}`,
+      cor: status === 'publicado' ? 'success' : 'warning',
+    }
+    await carregarPublicacoesGovernadas()
+  } catch (e) {
+    snackbar.value = {
+      aberto: true,
+      msg: 'Erro ao reprocessar: ' + (e?.response?.data?.detail || e.message),
+      cor: 'error',
+    }
+  } finally {
+    reprocessando.value = { ...reprocessando.value, [attemptId]: false }
+  }
+}
+
 async function carregarChatsGraph() {
   carregandoChats.value = true
   try {
@@ -675,6 +841,7 @@ async function carregar() {
 onMounted(async () => {
   await carregarConfig()
   await carregar()
+  await carregarPublicacoesGovernadas()
 })
 </script>
 
