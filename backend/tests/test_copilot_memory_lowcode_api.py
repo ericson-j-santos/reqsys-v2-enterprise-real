@@ -30,11 +30,29 @@ def test_lowcode_package_sem_auth_retorna_401_ou_403():
     assert response.status_code in (401, 403)
 
 
-def test_lowcode_package_minimo_retorna_zip_transportavel(auth_override):
+def test_lowcode_package_padrao_restrito_nao_exige_dataverse_admin_ou_api(auth_override):
+    response = client.post(
+        '/v1/hub-lowcode/copilot-memory/lowcode/package',
+        json={},
+    )
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['profile'] == 'copilot_memory_corporativo_restrito'
+    assert data['package']['zip_base64']
+    assert data['governance']['requires_custom_memory_api'] is False
+    assert data['governance']['requires_dataverse'] is False
+    assert data['governance']['requires_powerapps_admin'] is False
+    assert data['dataverse']['tables'] == []
+    assert data['apps']['canvas_app'] == {}
+    assert data['custom_connector'] == {}
+
+
+def test_lowcode_package_com_api_retorna_sem_powerapp_e_dataverse(auth_override):
     response = client.post(
         '/v1/hub-lowcode/copilot-memory/lowcode/package',
         json={
-            'profile': 'copilot_memory_minimal',
+            'profile': 'copilot_memory_corporativo_com_api',
             'solution_name': 'CopilotMemoryCorp',
             'display_name': 'Copilot Memory Corp',
             'target_environment': 'dev',
@@ -43,10 +61,10 @@ def test_lowcode_package_minimo_retorna_zip_transportavel(auth_override):
 
     assert response.status_code == 200
     data = response.json()['data']
-    assert data['profile'] == 'copilot_memory_minimal'
-    assert data['package']['zip_base64']
-    assert data['governance']['no_custom_reqsys_api_required'] is True
+    assert data['profile'] == 'copilot_memory_corporativo_com_api'
+    assert data['governance']['requires_custom_memory_api'] is True
     assert data['dataverse']['tables'] == []
+    assert data['apps']['canvas_app'] == {}
 
 
 def test_lowcode_package_enterprise_retorna_powerapp_e_dataverse(auth_override):
