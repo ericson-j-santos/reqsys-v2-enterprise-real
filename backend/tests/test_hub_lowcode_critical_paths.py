@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.hub_lowcode import require_planner_publish_auth
+from app.core.security import get_current_user
 from app.core.service_tokens import ServiceAuthContext
 from app.main import app
 from app.services.gemini import _UsageTracker
@@ -17,8 +18,10 @@ client = TestClient(app)
 @pytest.fixture
 def planner_auth_override():
     app.dependency_overrides[require_planner_publish_auth] = lambda: ServiceAuthContext(ator='admin@teste', via_token=False)
+    app.dependency_overrides[get_current_user] = lambda: {'sub': 'admin@teste', 'papel': 'admin'}
     yield
     app.dependency_overrides.pop(require_planner_publish_auth, None)
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 def test_usage_tracker_snapshot_reseta_leitura_em_novo_dia():
