@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
+from app.core.security import get_current_user
 from app.core.service_tokens import require_admin_or_service_token
 from app.db import get_db
 from app.schemas.lowcode_solution import LowCodeSolutionGenerateRequest
@@ -263,9 +264,13 @@ def power_automate_flow_provisioning_registry_status(
 require_planner_publish_auth = require_admin_or_service_token('planner_publish:enviar')
 
 
-@router.get('/planner/webhook-config', dependencies=[Depends(require_planner_publish_auth)])
+@router.get('/planner/webhook-config', dependencies=[Depends(get_current_user)])
 def planner_webhook_config(db: Session = Depends(get_db)):
-    """Retorna a configuração atual do webhook (sem expor a chave)."""
+    """Retorna a configuração atual do webhook (sem expor a chave).
+
+    Leitura liberada a qualquer usuário autenticado (o Painel de Integrações é
+    acessível a todos os papéis com `dashboard:read`) — apenas a escrita
+    (PUT abaixo) exige admin/service-token, já que grava a URL/chave real."""
     cfg = obter_planner_webhook_config(db)
     return ok({
         'configurado': cfg['configurado'],
@@ -331,9 +336,10 @@ async def planner_publish_governado(
 def planner_publish_status(
     attempt_id: int,
     db: Session = Depends(get_db),
-    _auth=Depends(require_planner_publish_auth),
+    _auth=Depends(get_current_user),
 ):
-    """Consulta o status de uma tentativa de publicação por id."""
+    """Consulta o status de uma tentativa de publicação por id (leitura —
+    qualquer usuário autenticado; publicar/reprocessar continuam admin-only)."""
     item = obter_status_tentativa_planner_publish(db, attempt_id)
     if item is None:
         raise HTTPException(status_code=404, detail='Tentativa não encontrada')
@@ -346,9 +352,11 @@ def planner_publish_listar(
     source_id: str | None = Query(default=None),
     status: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
-    _auth=Depends(require_planner_publish_auth),
+    _auth=Depends(get_current_user),
 ):
-    """Lista tentativas de publicação, filtráveis por sourceId/status."""
+    """Lista tentativas de publicação, filtráveis por sourceId/status (leitura
+    — qualquer usuário autenticado; usado pela tela de status do Painel de
+    Integrações)."""
     return ok({'items': listar_tentativas_planner_publish(db, source_id=source_id, status=status, limit=limit)})
 
 

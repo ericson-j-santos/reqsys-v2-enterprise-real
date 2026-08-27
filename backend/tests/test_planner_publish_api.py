@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.hub_lowcode import require_planner_publish_auth
+from app.core.security import get_current_user
 from app.core.service_tokens import ServiceAuthContext
 from app.main import app
 
@@ -16,11 +17,17 @@ def _fake_ctx():
     return ServiceAuthContext(ator='admin@teste', via_token=False)
 
 
+def _fake_user():
+    return {'sub': 'admin@teste', 'papel': 'admin'}
+
+
 @pytest.fixture
 def auth_override():
     app.dependency_overrides[require_planner_publish_auth] = _fake_ctx
+    app.dependency_overrides[get_current_user] = _fake_user
     yield
     app.dependency_overrides.pop(require_planner_publish_auth, None)
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 def _payload(**overrides):
@@ -90,6 +97,32 @@ def test_publish_listar(mock_listar, auth_override):
     response = client.get('/v1/hub-lowcode/planner/publish?source_id=requisito:1234')
     assert response.status_code == 200
     assert len(response.json()['data']['items']) == 1
+
+
+def test_publish_listar_sem_auth_retorna_401():
+    response = client.get('/v1/hub-lowcode/planner/publish')
+    assert response.status_code == 401
+
+
+@patch('app.api.hub_lowcode.listar_tentativas_planner_publish')
+def test_publish_listar_usuario_nao_admin_le_normalmente(mock_listar):
+    """Leitura (issue #32 status screen) deve funcionar para qualquer usuário
+    logado — não só admin — já que o Painel de Integrações é acessível a todos
+    os papéis com `dashboard:read`. Só publicar/reprocessar exige admin."""
+    app.dependency_overrides[get_current_user] = lambda: {'sub': 'analista@teste', 'papel': 'analista'}
+    try:
+        mock_listar.return_value = []
+        response = client.get('/v1/hub-lowcode/planner/publish')
+        assert response.status_code == 200
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_publish_reprocessar_sem_auth_retorna_401_ou_403():
+    """Reprocessar continua exigindo admin/service-token mesmo com o relax da
+    leitura acima — é uma ação de escrita (reenvio ao Planner)."""
+    response = client.post('/v1/hub-lowcode/planner/publish/1/reprocessar')
+    assert response.status_code in (401, 403)
 
 
 @patch('app.api.hub_lowcode.reprocessar_tentativa_planner_publish', new_callable=AsyncMock)

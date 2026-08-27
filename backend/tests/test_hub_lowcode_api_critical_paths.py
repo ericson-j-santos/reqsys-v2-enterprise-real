@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.hub_lowcode import require_planner_publish_auth
+from app.core.security import get_current_user
 from app.core.service_tokens import ServiceAuthContext
 from app.main import app
 
@@ -19,8 +20,10 @@ def _fake_planner_auth_ctx():
 @pytest.fixture
 def planner_auth_override():
     app.dependency_overrides[require_planner_publish_auth] = _fake_planner_auth_ctx
+    app.dependency_overrides[get_current_user] = lambda: {'sub': 'admin@teste', 'papel': 'admin'}
     yield
     app.dependency_overrides.pop(require_planner_publish_auth, None)
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @patch('app.api.hub_lowcode.status_consolidado', new_callable=AsyncMock)
