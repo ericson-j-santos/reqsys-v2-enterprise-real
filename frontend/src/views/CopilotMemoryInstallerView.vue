@@ -242,7 +242,7 @@ const prontoParaValidar = computed(() => Boolean(
   arquivo.value?.id && arquivo.value?.drive_id && plannerConnection.value?.id && excelConnection.value?.id &&
   status.value.alm_configurado,
 ))
-const prontoParaImplantar = computed(() => prontoParaValidar.value && confirmado.value && validacao.value)
+const prontoParaImplantar = computed(() => Boolean(prontoParaValidar.value && confirmado.value && validacao.value))
 
 function autoSelecionar(lista, alvo) {
   if (lista.length === 1) alvo.value = lista[0]
@@ -299,8 +299,9 @@ async function criarPlanilha() {
   erro.value = ''
   try {
     arquivo.value = await criarPlanilhaInstalacao(grupo.value.id)
+    const criadoId = arquivo.value?.id
     await carregarArquivos()
-    arquivo.value = arquivos.value.find((item) => item.id === arquivo.value?.id) || arquivo.value
+    arquivo.value = arquivos.value.find((item) => item.id === criadoId) || arquivo.value
   } catch (e) {
     erro.value = `${mensagemErroInstalacao(e)} Use o pacote de contingência se a política do tenant bloquear a criação automática.`
   } finally {
@@ -336,8 +337,8 @@ function payload() {
     excel_source: arquivo.value.excel_source || `groups/${grupo.value.id}`,
     excel_drive: arquivo.value.drive_id,
     excel_file: arquivo.value.id,
-    planner_connection_id: plannerConnection.value.recurso_id || plannerConnection.value.id,
-    excel_connection_id: excelConnection.value.recurso_id || excelConnection.value.id,
+    planner_connection_id: plannerConnection.value.id,
+    excel_connection_id: excelConnection.value.id,
     target_environment: 'dev',
   }
 }
