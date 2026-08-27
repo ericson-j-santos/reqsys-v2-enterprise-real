@@ -3,3 +3,11 @@
 # para evitar recorrencia do incidente de 2026-08-02 (fly_boot.sh crashando
 # em producao apos merge de sessao Windows sem normalizacao).
 *.sh text eol=lf
+
+# Datasets de ML com SHA-256 fixado em politica_runtime_requisitos_p3_v1.json
+# (holdout imutavel do P3). Um checkout Windows com core.autocrlf=true
+# converte LF->CRLF nesses arquivos e muda o SHA-256, quebrando a checagem de
+# imutabilidade (validar_holdout_imutavel) mesmo sem nenhuma mudanca de
+# conteudo. Forca LF independente do OS de quem faz checkout.
+backend/data/ml/*.jsonl text eol=lf
+backend/data/ml/*.json text eol=lf

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import stat
 import sys
 from pathlib import Path
@@ -76,7 +77,12 @@ def test_transient_state_is_encrypted_and_private(tmp_path: Path):
     assert b"secret-value" not in raw
     assert b"token-value" not in raw
     assert module._decrypt_state(state_path, state_key) == sensitive
-    assert stat.S_IMODE(state_path.stat().st_mode) == 0o600
+    if os.name == 'posix':
+        # os.open(..., mode=0o600) só é honrado em SOs POSIX — o Windows não
+        # tem bits de permissão Unix reais (create_all cria o arquivo com
+        # 0o666 independente do mode pedido). CI roda em ubuntu-latest, onde
+        # essa restrição é real; aqui só checamos onde faz sentido checar.
+        assert stat.S_IMODE(state_path.stat().st_mode) == 0o600
 
 
 def test_invalid_state_key_is_rejected(tmp_path: Path):
