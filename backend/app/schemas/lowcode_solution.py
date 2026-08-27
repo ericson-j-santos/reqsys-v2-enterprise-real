@@ -5,12 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 LowCodeModule = Literal['dataverse', 'powerapps', 'powerautomate', 'copilot', 'security']
-LowCodeSolutionProfile = Literal[
-    'standard',
-    'teams_notification_v2',
-    'copilot_memory_minimal',
-    'copilot_memory_enterprise',
-]
+LowCodeSolutionProfile = Literal['standard', 'teams_notification_v2']
 
 
 class LowCodeSolutionGenerateRequest(BaseModel):
