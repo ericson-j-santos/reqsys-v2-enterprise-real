@@ -7,6 +7,7 @@ from app.core.service_tokens import require_admin_or_service_token
 from app.db import get_db
 from app.schemas.copilot_memory import (
     CopilotMemoryBatchSyncRequest,
+    CopilotMemoryLowCodePackageRequest,
     PlannerSyncAckRequest,
 )
 from app.services.copilot_memory import (
@@ -17,10 +18,23 @@ from app.services.copilot_memory import (
     resumo_memoria,
     sincronizar_lote,
 )
+from app.services.copilot_memory_lowcode_factory import (
+    gerar_copilot_memory_lowcode_solution,
+)
 
 router = APIRouter(prefix='/copilot-memory', tags=['Hub Low-Code & IA - Memória Copilot'])
 
 require_copilot_memory_auth = require_admin_or_service_token('copilot_memory:sincronizar')
+
+
+@router.post('/lowcode/package')
+def copilot_memory_lowcode_package(
+    payload: CopilotMemoryLowCodePackageRequest,
+    _auth=Depends(require_copilot_memory_auth),
+):
+    """Gera pacote low-code transportável, sem executar escrita no tenant."""
+    solution = gerar_copilot_memory_lowcode_solution(payload)
+    return ok(solution, solution['correlation_id'])
 
 
 @router.post('/sync')
