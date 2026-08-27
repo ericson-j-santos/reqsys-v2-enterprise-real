@@ -6,6 +6,7 @@ import json
 import uuid
 from copy import deepcopy
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -78,7 +79,7 @@ async def listar_planos_instalacao(group_id: str) -> dict[str, Any]:
         token = await _token('https://graph.microsoft.com/.default')
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get(
-                f'{_GRAPH_BASE}/groups/{group_id.strip()}/planner/plans',
+                f"{_GRAPH_BASE}/groups/{quote(group_id.strip(), safe='')}/planner/plans",
                 headers={'Authorization': f'Bearer {token}'},
             )
             response.raise_for_status()
@@ -98,11 +99,14 @@ async def listar_arquivos_excel_grupo(group_id: str) -> dict[str, Any]:
         token = await _token('https://graph.microsoft.com/.default')
         headers = {'Authorization': f'Bearer {token}'}
         async with httpx.AsyncClient(timeout=20) as client:
-            drive_response = await client.get(f'{_GRAPH_BASE}/groups/{group_id.strip()}/drive', headers=headers)
+            drive_response = await client.get(
+                f"{_GRAPH_BASE}/groups/{quote(group_id.strip(), safe='')}/drive",
+                headers=headers,
+            )
             drive_response.raise_for_status()
             drive = drive_response.json()
             files_response = await client.get(
-                f'{_GRAPH_BASE}/groups/{group_id.strip()}/drive/root/children',
+                f"{_GRAPH_BASE}/groups/{quote(group_id.strip(), safe='')}/drive/root/children",
                 headers=headers,
                 params={'$select': 'id,name,webUrl,file,parentReference'},
             )
@@ -137,14 +141,14 @@ async def criar_planilha_excel_grupo(group_id: str, nome: str = 'CopilotMemory.x
     headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}
     async with httpx.AsyncClient(timeout=60) as client:
         response = await client.put(
-            f'{_GRAPH_BASE}/groups/{group_id.strip()}/drive/root:/{safe_name}:/content',
+            f"{_GRAPH_BASE}/groups/{quote(group_id.strip(), safe='')}/drive/root:/{quote(safe_name, safe='')}:/content",
             headers=headers,
             content=xlsx,
         )
         response.raise_for_status()
         item = response.json()
         drive_response = await client.get(
-            f'{_GRAPH_BASE}/groups/{group_id.strip()}/drive',
+            f"{_GRAPH_BASE}/groups/{quote(group_id.strip(), safe='')}/drive",
             headers={'Authorization': f'Bearer {token}'},
         )
         drive_response.raise_for_status()
@@ -164,7 +168,7 @@ async def listar_conexoes_instalacao(environment_id: str) -> dict[str, Any]:
         token = await _token('https://api.powerplatform.com/.default')
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get(
-                f'{_POWER_PLATFORM_BASE}/connectivity/environments/{environment_id.strip()}/connections',
+                f"{_POWER_PLATFORM_BASE}/connectivity/environments/{quote(environment_id.strip(), safe='')}/connections",
                 headers={'Authorization': f'Bearer {token}'},
                 params={'api-version': '2024-10-01'},
             )
