@@ -18,8 +18,8 @@ from app.services.copilot_memory import (
     resumo_memoria,
     sincronizar_lote,
 )
-from app.services.copilot_memory_lowcode_factory import (
-    gerar_copilot_memory_lowcode_solution,
+from app.services.copilot_memory_simple_factory import (
+    gerar_copilot_memory_simple_solution,
 )
 
 router = APIRouter(prefix='/copilot-memory', tags=['Hub Low-Code & IA - Memória Copilot'])
@@ -32,8 +32,8 @@ def copilot_memory_lowcode_package(
     payload: CopilotMemoryLowCodePackageRequest,
     _auth=Depends(require_copilot_memory_auth),
 ):
-    """Gera pacote low-code transportável, sem executar escrita no tenant."""
-    solution = gerar_copilot_memory_lowcode_solution(payload)
+    """Gera um único pacote corporativo; não executa escrita no tenant."""
+    solution = gerar_copilot_memory_simple_solution(payload)
     return ok(solution, solution['correlation_id'])
 
 
