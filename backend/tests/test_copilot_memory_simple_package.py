@@ -4,6 +4,7 @@ import json
 import zipfile
 
 from app.schemas.copilot_memory import CopilotMemoryLowCodePackageRequest
+from app.services.copilot_memory_lowcode_factory import PACKAGE_NAME
 from app.services.copilot_memory_simple_factory import (
     gerar_copilot_memory_simple_solution,
 )
@@ -27,6 +28,17 @@ def test_planilha_pronta_tem_as_tres_tabelas_corporativas():
         'tbHistoricoCopilot',
     ]
     assert zipfile.is_zipfile(io.BytesIO(xlsx))
+
+
+def test_planilha_pronta_declara_cellstyles_para_evitar_reparo_no_excel():
+    pacote = gerar_pacote_pronto()
+    xlsx = pacote['files']['CopilotMemory.xlsx']
+
+    with zipfile.ZipFile(io.BytesIO(xlsx)) as archive:
+        styles = archive.read('xl/styles.xml').decode('utf-8')
+
+    assert '<cellStyles' in styles
+    assert 'name="Normal"' in styles
 
 
 def test_autoteste_do_pacote_pronto_fica_aprovado():
@@ -56,7 +68,7 @@ def test_gerador_padrao_entrega_um_unico_zip_pronto_para_extrair():
     assert zipfile.is_zipfile(io.BytesIO(raw))
     with zipfile.ZipFile(io.BytesIO(raw)) as archive:
         names = set(archive.namelist())
-        root = 'copilot-memory-lowcode/'
+        root = f'{PACKAGE_NAME}/'
         assert root + 'INICIAR_AQUI.html' in names
         assert root + 'CopilotMemory.xlsx' in names
         assert root + 'AUTOTESTE.json' in names
