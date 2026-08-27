@@ -1,134 +1,49 @@
-"""Memória persistente do Copilot e sincronização governada Planner/Excel.
+"""Adaptador ReqSys para o núcleo portátil Copilot Memory.
 
-O ReqSys é a fonte da memória e do histórico. O Planner continua sendo a fonte
-operacional das tarefas e o Excel/SharePoint é uma projeção tabular para
-consulta pelo Copilot Notebook.
-
-Prevenção de loop:
-- conteúdo é versionado por SHA-256 e origem não entra no hash;
-- Planner confirma o hash aplicado sem gerar uma nova versão;
-- Excel só gera comando para Planner com `atualizar_planner=true`;
-- comando só é emitido quando o hash desejado difere do último hash confirmado;
-- alteração concorrente no Planner durante comando pendente vira `conflito`.
+O núcleo (`copilot_memory_core`) contém somente regras determinísticas. Este
+módulo mantém as responsabilidades específicas do ReqSys: SQLAlchemy,
+histórico persistido, consultas e serialização da API.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from copilot_memory_core import (
+    CAMPOS_CONTEUDO,
+    STATUS_CONFLITO,
+    STATUS_ERRO,
+    STATUS_NAO_SOLICITADO,
+    STATUS_PENDENTE,
+    aplicar_decisao_planner,
+    avaliar_planner_durante_pendencia,
+    content_hash,
+    gerar_memory_id,
+    montar_snapshot,
+    planner_hash,
+    texto,
+)
 from app.models.copilot_memory import CopilotMemoryHistory, CopilotMemoryRecord
 
-STATUS_NAO_SOLICITADO = 'nao_solicitado'
-STATUS_PENDENTE = 'pendente'
-STATUS_SINCRONIZADO = 'sincronizado'
-STATUS_ERRO = 'erro'
-STATUS_CONFLITO = 'conflito'
 
-_CAMPOS_MEMORIA = (
-    'assunto',
-    'contexto',
-    'estado_atual',
-    'decisao',
-    'pendencia',
-    'proximo_passo',
-    'fonte_url',
-    'data_fonte',
-    'validade',
-)
-_CAMPOS_PLANNER = (
-    'planner_titulo',
-    'planner_status',
-    'planner_percentual',
-    'planner_prazo',
-)
-_CAMPOS_CONTEUDO = ('planner_task_id',) + _CAMPOS_MEMORIA + _CAMPOS_PLANNER
-
-
-def _texto(valor: Any) -> str:
-    return str(valor or '').strip()
-
-
-def _hash_json(valor: dict[str, Any]) -> str:
-    bruto = json.dumps(valor, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
-    return hashlib.sha256(bruto.encode('utf-8')).hexdigest()
-
-
-def _gerar_memory_id(planner_task_id: str) -> str:
-    digest = hashlib.sha256(planner_task_id.encode('utf-8')).hexdigest()[:24]
-    return f'planner-{digest}'
-
-
-def _planner_hash(snapshot: dict[str, Any]) -> str:
-    return _hash_json({campo: snapshot.get(campo, '') for campo in _CAMPOS_PLANNER})
-
-
-def _content_hash(snapshot: dict[str, Any]) -> str:
-    return _hash_json({campo: snapshot.get(campo, '') for campo in _CAMPOS_CONTEUDO})
-
-
-def _base_snapshot(record: CopilotMemoryRecord | None) -> dict[str, Any]:
+def _base_snapshot(record: CopilotMemoryRecord | None) -> dict[str, Any] | None:
     if record is None:
-        return {
-            'planner_task_id': None,
-            'assunto': '',
-            'contexto': '',
-            'estado_atual': '',
-            'decisao': '',
-            'pendencia': '',
-            'proximo_passo': '',
-            'fonte_url': '',
-            'data_fonte': '',
-            'validade': 'ativa',
-            'planner_titulo': '',
-            'planner_status': '',
-            'planner_percentual': 0,
-            'planner_prazo': '',
-        }
-    return {campo: getattr(record, campo) for campo in _CAMPOS_CONTEUDO}
-
-
-def _montar_snapshot(payload: dict[str, Any], record: CopilotMemoryRecord | None) -> dict[str, Any]:
-    snapshot = _base_snapshot(record)
-
-    if payload.get('planner_task_id') is not None:
-        snapshot['planner_task_id'] = _texto(payload['planner_task_id']) or None
-
-    for campo in _CAMPOS_MEMORIA:
-        if payload.get(campo) is not None:
-            snapshot[campo] = _texto(payload[campo])
-
-    for campo in _CAMPOS_PLANNER:
-        if payload.get(campo) is None:
-            continue
-        if campo == 'planner_percentual':
-            snapshot[campo] = int(payload[campo])
-        else:
-            snapshot[campo] = _texto(payload[campo])
-
-    if not snapshot['assunto'] and snapshot['planner_titulo']:
-        snapshot['assunto'] = snapshot['planner_titulo']
-
-    return snapshot
-
-
-def _snapshot_planner_recebido(payload: dict[str, Any]) -> dict[str, Any] | None:
-    """Retorna hash remoto somente quando o flow enviou o estado Planner completo."""
-    if any(payload.get(campo) is None for campo in _CAMPOS_PLANNER):
         return None
-    return {
-        'planner_titulo': _texto(payload['planner_titulo']),
-        'planner_status': _texto(payload['planner_status']),
-        'planner_percentual': int(payload['planner_percentual']),
-        'planner_prazo': _texto(payload['planner_prazo']),
-    }
+    return {campo: getattr(record, campo) for campo in CAMPOS_CONTEUDO}
 
 
 def _aplicar_snapshot(record: CopilotMemoryRecord, snapshot: dict[str, Any]) -> None:
-    for campo in _CAMPOS_CONTEUDO:
+    for campo in CAMPOS_CONTEUDO:
         setattr(record, campo, snapshot[campo])
+
+
+def _aplicar_estado_planner(record: CopilotMemoryRecord, decisao: dict[str, Any]) -> None:
+    record.planner_applied_hash = decisao['planner_applied_hash']
+    record.atualizar_planner = decisao['atualizar_planner']
+    record.planner_sync_status = decisao['planner_sync_status']
+    record.ultimo_erro = decisao['ultimo_erro']
 
 
 def _serializar(record: CopilotMemoryRecord, *, changed: bool | None = None) -> dict[str, Any]:
@@ -198,24 +113,18 @@ def _localizar_record(
 
 
 def sincronizar_item(db: Session, payload: dict[str, Any], correlation_id: str) -> dict[str, Any]:
-    origem = _texto(payload.get('origem') or 'reqsys').lower()
-    planner_task_id = _texto(payload.get('planner_task_id')) or None
-    memory_id_recebido = _texto(payload.get('memory_id')) or None
+    origem = texto(payload.get('origem') or 'reqsys').lower()
+    planner_task_id = texto(payload.get('planner_task_id')) or None
+    memory_id_recebido = texto(payload.get('memory_id')) or None
     record = _localizar_record(db, memory_id_recebido, planner_task_id)
 
-    memory_id = record.memory_id if record else (memory_id_recebido or _gerar_memory_id(planner_task_id or ''))
+    memory_id = record.memory_id if record else (memory_id_recebido or gerar_memory_id(planner_task_id or ''))
     if not memory_id:
         raise ValueError('memoryId ou plannerTaskId é obrigatório')
 
-    # Um Planner ainda refletindo o estado antigo não pode apagar uma alteração
-    # Excel -> Planner que está aguardando aplicação. Alteração remota diferente
-    # do último estado confirmado vira conflito explícito e fail-closed.
     if record and origem == 'planner' and record.planner_sync_status == STATUS_PENDENTE:
-        planner_recebido = _snapshot_planner_recebido(payload)
-        if planner_recebido is None:
-            raise ValueError('origem=planner exige estado completo: título, status, percentual e prazo')
-        remoto_hash = _hash_json(planner_recebido)
-        if remoto_hash == record.planner_applied_hash:
+        avaliacao = avaliar_planner_durante_pendencia(payload, record.planner_applied_hash)
+        if avaliacao == 'eco':
             record.ultima_origem = origem
             record.correlation_id = correlation_id
             db.add(record)
@@ -232,31 +141,25 @@ def sincronizar_item(db: Session, payload: dict[str, Any], correlation_id: str) 
         db.refresh(record)
         return _serializar(record, changed=False)
 
-    snapshot = _montar_snapshot(payload, record)
-    novo_content_hash = _content_hash(snapshot)
-    novo_planner_hash = _planner_hash(snapshot)
+    snapshot = montar_snapshot(payload, _base_snapshot(record))
+    novo_content_hash = content_hash(snapshot)
+    novo_planner_hash = planner_hash(snapshot)
     solicitar_planner = bool(payload.get('atualizar_planner'))
 
     if record and record.content_hash == novo_content_hash:
         record.ultima_origem = origem
         record.correlation_id = correlation_id
 
-        if origem == 'planner':
-            record.planner_applied_hash = novo_planner_hash
-            record.atualizar_planner = False
-            record.planner_sync_status = STATUS_SINCRONIZADO
-            record.ultimo_erro = ''
-        elif solicitar_planner:
-            if not record.planner_task_id:
-                raise ValueError('plannerTaskId é obrigatório para atualizar o Planner')
-            if novo_planner_hash != record.planner_applied_hash:
-                record.atualizar_planner = True
-                record.planner_sync_status = STATUS_PENDENTE
-                record.ultimo_erro = ''
-            else:
-                record.atualizar_planner = False
-                record.planner_sync_status = STATUS_SINCRONIZADO
-                record.ultimo_erro = ''
+        if origem == 'planner' or solicitar_planner:
+            decisao = aplicar_decisao_planner(
+                origem=origem,
+                solicitar_planner=solicitar_planner,
+                planner_task_id=record.planner_task_id,
+                novo_planner_hash=novo_planner_hash,
+                planner_applied_hash=record.planner_applied_hash,
+                status_atual=record.planner_sync_status,
+            )
+            _aplicar_estado_planner(record, decisao)
 
         db.add(record)
         db.commit()
@@ -281,22 +184,16 @@ def sincronizar_item(db: Session, payload: dict[str, Any], correlation_id: str) 
         record.ultima_origem = origem
         record.correlation_id = correlation_id
 
-    if origem == 'planner':
-        record.planner_applied_hash = novo_planner_hash
-        record.atualizar_planner = False
-        record.planner_sync_status = STATUS_SINCRONIZADO
-        record.ultimo_erro = ''
-    elif solicitar_planner:
-        if not record.planner_task_id:
-            raise ValueError('plannerTaskId é obrigatório para atualizar o Planner')
-        if novo_planner_hash != record.planner_applied_hash:
-            record.atualizar_planner = True
-            record.planner_sync_status = STATUS_PENDENTE
-            record.ultimo_erro = ''
-        else:
-            record.atualizar_planner = False
-            record.planner_sync_status = STATUS_SINCRONIZADO
-            record.ultimo_erro = ''
+    if origem == 'planner' or solicitar_planner:
+        decisao = aplicar_decisao_planner(
+            origem=origem,
+            solicitar_planner=solicitar_planner,
+            planner_task_id=record.planner_task_id,
+            novo_planner_hash=novo_planner_hash,
+            planner_applied_hash=record.planner_applied_hash,
+            status_atual=record.planner_sync_status,
+        )
+        _aplicar_estado_planner(record, decisao)
     elif not record.planner_sync_status:
         record.planner_sync_status = STATUS_NAO_SOLICITADO
 
@@ -356,7 +253,7 @@ def listar_comandos_planner(db: Session, limit: int = 100) -> list[dict[str, Any
             'plannerStatus': record.planner_status,
             'plannerPercentual': record.planner_percentual,
             'plannerPrazo': record.planner_prazo,
-            'desiredHash': _planner_hash(_base_snapshot(record)),
+            'desiredHash': planner_hash(_base_snapshot(record) or {}),
             'correlationId': record.correlation_id,
         }
         for record in records
@@ -377,17 +274,17 @@ def confirmar_comando_planner(
         raise ValueError(f'Memória {memory_id} não encontrada')
 
     if planner_task_id:
-        record.planner_task_id = _texto(planner_task_id)
+        record.planner_task_id = texto(planner_task_id)
 
     if sucesso:
-        record.planner_applied_hash = _planner_hash(_base_snapshot(record))
+        record.planner_applied_hash = planner_hash(_base_snapshot(record) or {})
         record.atualizar_planner = False
-        record.planner_sync_status = STATUS_SINCRONIZADO
+        record.planner_sync_status = 'sincronizado'
         record.ultimo_erro = ''
     else:
         record.atualizar_planner = True
         record.planner_sync_status = STATUS_ERRO
-        record.ultimo_erro = _texto(erro)[:500] or 'Power Automate não confirmou atualização do Planner'
+        record.ultimo_erro = texto(erro)[:500] or 'Power Automate não confirmou atualização do Planner'
 
     record.ultima_origem = 'reqsys'
     record.correlation_id = correlation_id
