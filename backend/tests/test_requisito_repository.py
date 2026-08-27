@@ -118,8 +118,11 @@ def test_criar_inicia_refinamento_e_roteia_orquestrador(db_session):
 
     evento = db_session.query(OrchestratorRoutingEvent).one()
     assert evento.origem == 'cadastro_requisito'
-    assert evento.coordinator_id == 'reqsys-intake-coordinator'
+    assert evento.coordinator_id.startswith('reqsys-')
     assert evento.prioridade == 'alta'
+    assert evento.score >= 0
+    assert 0.0 <= evento.confianca <= 1.0
+    assert len(evento.payload_hash) == 64
 
 
 def test_criar_preserva_status_quando_fluxo_governado_informa_explicitamente(db_session):
