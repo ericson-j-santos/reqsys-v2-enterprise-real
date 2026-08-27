@@ -8,11 +8,14 @@ import app.api.requisitos_runtime_transition  # noqa: F401
 # preservar o ponto unico de inclusao utilizado pelo app.main.
 # O coordenador ADR/PDR é anexado ao Hub Low-Code para preservar o prefixo
 # público existente sem duplicar include_router no app.main.
+# A memória persistente do Copilot é anexada ao Hub Low-Code para reutilizar
+# autenticação, governança e superfície de integração Power Platform existentes.
 # O centro de notificações é anexado ao Teams Gateway para manter uma única
 # superfície operacional de mensageria e evitar novo acoplamento no app.main.
 # A coleta governada é anexada à API de requisitos para preservar o contrato
 # público existente e permitir uso por ReqSys, Forms, Power Apps e Power Automate.
 from app.api import (  # noqa: E402
+    copilot_memory,
     diagram_version_governance,
     diagramas,
     gestao_ti,
@@ -26,6 +29,7 @@ from app.api import (  # noqa: E402
 
 diagramas.router.include_router(diagram_version_governance.router)
 hub_lowcode.router.include_router(prompt_development_coordinator.router)
+hub_lowcode.router.include_router(copilot_memory.router)
 teams_gateway.router.include_router(notificacoes.router)
 requisitos.api_router.include_router(levantamento_requisitos.router)
 
