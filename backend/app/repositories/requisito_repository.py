@@ -20,7 +20,10 @@ from sqlalchemy.orm import Session
 
 from app.core.correlation import obter_correlation_id
 from app.models.requisito import Requisito
-from app.services.reqsys_orchestrator import OrchestratorDemand, classificar_e_persistir_demanda
+from app.services.reqsys_orchestrator import (
+    OrchestratorDemand,
+    classificar_e_persistir_demanda,
+)
 from app.services.requisito_ml_runtime import avaliar_requisito_observacional
 
 logger = logging.getLogger('reqsys.requisito_repository')
