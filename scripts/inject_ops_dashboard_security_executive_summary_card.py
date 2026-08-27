@@ -152,27 +152,32 @@ def insert_once(content: str, marker: str, payload: str, anchor: str, *, before:
 
 def main() -> int:
     html = DASHBOARD.read_text(encoding="utf-8")
-    html = insert_once(html, SECTION_MARKER, SECTION, "\n    <section class=\"card\" id=\"runtime-executive-post-deploy-card\">")
-    html = insert_once(html, SCRIPT_MARKER, SCRIPT, "\n    async function renderRuntimeExecutivePostDeploy() {")
+    html = insert_once(
+        html,
+        SECTION_MARKER,
+        SECTION,
+        "\n    <section class=\"card\">\n      <h2>Runtime público — readiness Fly/DuckDNS</h2>",
+    )
+    html = insert_once(html, SCRIPT_MARKER, SCRIPT, "\n    async function renderMergeIntelligence() {")
     html = insert_once(
         html,
         "await renderSecurityExecutiveSummary();",
         "      await renderSecurityExecutiveSummary();\n",
-        "      await renderRuntimeExecutivePostDeploy();\n",
+        "      await renderRuntimeExecutiveIndex();\n",
         before=True,
     )
     html = insert_once(
         html,
         "Segurança — Scanners",
         "        <a class=\"link-btn\" href=\"#security-executive-summary-card\">Segurança — Scanners</a>\n",
-        "        <a class=\"link-btn\" href=\"#runtime-executive-post-deploy-card\">Runtime Executive — Post-Deploy</a>\n",
+        "        <a class=\"link-btn\" href=\"#trilha-d-history-card\">Trilha D — Histórico</a>\n",
         before=True,
     )
     html = insert_once(
         html,
         "addLink(quick, 'Segurança — Scanners'",
         "      addLink(quick, 'Segurança — Scanners', '#security-executive-summary-card');\n",
-        "      addLink(quick, 'Runtime Executive — Post-Deploy', '#runtime-executive-post-deploy-card');\n",
+        "      addLink(quick, `Trilha D — score ${trilhaScore}`, '#trilha-d-history-card');\n",
         before=True,
     )
     DASHBOARD.write_text(html, encoding="utf-8")
