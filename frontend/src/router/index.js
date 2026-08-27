@@ -15,6 +15,7 @@ import AgileRuntimeView from '../views/AgileRuntimeView.vue'
 import ArquiteturaView from '../views/ArquiteturaView.vue'
 import GovernancaEnterpriseView from '../views/GovernancaEnterpriseView.vue'
 import HubLowCodeView from '../views/HubLowCodeView.vue'
+import CopilotMemoryInstallerView from '../views/CopilotMemoryInstallerView.vue'
 import GovBIView from '../views/GovBIView.vue'
 import CodexView from '../views/CodexView.vue'
 import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
@@ -62,6 +63,12 @@ export const routes = [
   { path: '/agile-runtime', component: AgileRuntimeView, meta: { recurso: 'dashboard:read' } },
   { path: '/specs', component: SpecsView, meta: { recurso: 'dashboard:read' } },
   { path: '/hub-lowcode', component: HubLowCodeView, meta: { recurso: 'dashboard:read' } },
+  {
+    path: '/hub-lowcode/copilot-memory/instalar',
+    name: 'copilot-memory-instalar',
+    component: CopilotMemoryInstallerView,
+    meta: { recurso: 'auditoria:read' },
+  },
   { path: '/painel-integracao', component: PainelIntegracaoView, meta: { recurso: 'dashboard:read' } },
   { path: '/figma-github', component: FigmaGithubView, meta: { recurso: 'dashboard:read' } },
   { path: '/estatisticas', component: EstatisticasView, meta: { recurso: 'dashboard:read' } },
