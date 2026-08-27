@@ -15,73 +15,108 @@
       </v-btn>
     </v-app-bar>
 
-    <v-navigation-drawer v-model="drawer" :permanent="!mobile" :temporary="mobile" width="312" class="req-drawer">
-      <div class="pa-5 pb-3 req-brand-block">
-        <div class="brand"><span class="brand-dot">R</span> ReqSys Enterprise</div>
-        <div class="muted mt-1 version-line" data-testid="app-version-label">
-          {{ versionLabel }}
-          <v-tooltip activator="parent" location="bottom" text="Versao carregada no navegador e versao informada pela API. Ajuda a identificar cache ou publicação parcial." />
+    <v-navigation-drawer
+      v-model="drawer"
+      :permanent="!mobile"
+      :temporary="mobile"
+      :rail="!mobile && sidebarColapsado"
+      rail-width="72"
+      width="312"
+      class="req-drawer"
+    >
+      <div class="pa-5 pb-3 req-brand-block" :class="{ 'req-brand-block--rail': sidebarRecolhidoVisivel }">
+        <div class="req-brand-row">
+          <div class="brand">
+            <span class="brand-dot">R</span>
+            <span v-if="!sidebarRecolhidoVisivel">ReqSys Enterprise</span>
+          </div>
+          <v-btn
+            v-if="!mobile"
+            icon
+            size="small"
+            variant="text"
+            class="sidebar-toggle-btn"
+            :aria-label="sidebarColapsado ? 'Expandir menu lateral' : 'Recolher menu lateral'"
+            data-testid="sidebar-toggle"
+            @click="alternarSidebar"
+          >
+            <v-icon :icon="sidebarColapsado ? 'mdi-chevron-double-right' : 'mdi-chevron-double-left'" size="20" />
+            <v-tooltip activator="parent" location="right" :text="sidebarColapsado ? 'Expandir menu lateral' : 'Recolher menu lateral'" />
+          </v-btn>
         </div>
-        <v-chip v-if="hasVersionDrift" size="x-small" color="warning" variant="tonal" class="mt-1" prepend-icon="mdi-alert-outline" data-testid="app-version-drift-chip">
-          Versoes divergentes
-          <v-tooltip activator="parent" location="bottom" text="O frontend e a API parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." />
-        </v-chip>
-        <AmbienteNavigator :environment-hint="environment" compact class="mt-2 d-inline-block" />
-        <v-btn block variant="tonal" color="primary" class="theme-toggle mt-3" :prepend-icon="temaClaro ? 'mdi-weather-night' : 'mdi-white-balance-sunny'" :aria-label="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" @click="alternarTemaVisual">
-          {{ temaClaro ? 'Tema escuro' : 'Tema claro' }}
-          <v-tooltip activator="parent" location="right" :text="temaClaro ? 'Volta para a interface escura, indicada para baixa luminosidade e uso prolongado.' : 'Muda para a interface clara, indicada para leitura em ambientes iluminados.'" />
+        <template v-if="!sidebarRecolhidoVisivel">
+          <div class="muted mt-1 version-line" data-testid="app-version-label">
+            {{ versionLabel }}
+            <v-tooltip activator="parent" location="bottom" text="Versao carregada no navegador e versao informada pela API. Ajuda a identificar cache ou publicação parcial." />
+          </div>
+          <v-chip v-if="hasVersionDrift" size="x-small" color="warning" variant="tonal" class="mt-1" prepend-icon="mdi-alert-outline" data-testid="app-version-drift-chip">
+            Versoes divergentes
+            <v-tooltip activator="parent" location="bottom" text="O frontend e a API parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." />
+          </v-chip>
+          <AmbienteNavigator :environment-hint="environment" compact class="mt-2 d-inline-block" />
+          <v-btn block variant="tonal" color="primary" class="theme-toggle mt-3" :prepend-icon="temaClaro ? 'mdi-weather-night' : 'mdi-white-balance-sunny'" :aria-label="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" @click="alternarTemaVisual">
+            {{ temaClaro ? 'Tema escuro' : 'Tema claro' }}
+            <v-tooltip activator="parent" location="right" :text="temaClaro ? 'Volta para a interface escura, indicada para baixa luminosidade e uso prolongado.' : 'Muda para a interface clara, indicada para leitura em ambientes iluminados.'" />
+          </v-btn>
+        </template>
+        <v-btn v-else icon size="small" variant="tonal" color="primary" class="theme-toggle-rail mt-3" :aria-label="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" @click="alternarTemaVisual">
+          <v-icon :icon="temaClaro ? 'mdi-weather-night' : 'mdi-white-balance-sunny'" size="18" />
+          <v-tooltip activator="parent" location="right" :text="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" />
         </v-btn>
       </div>
       <v-divider />
 
-      <v-list v-model:opened="temasAbertos" density="compact" nav class="pt-2 req-nav-list" aria-label="Navegacao por temas expansiveis">
+      <v-list v-model:opened="temasAbertos" density="compact" nav class="pt-2 req-nav-list" :class="{ 'req-nav-list--rail': sidebarRecolhidoVisivel }" aria-label="Navegacao por temas expansiveis">
         <v-list-group v-for="tema in NAV_TEMAS" :key="tema.id" :value="tema.id">
           <template #activator="{ props }">
             <v-list-item v-bind="props" :prepend-icon="tema.icon" class="nav-theme-item" :class="{ 'nav-theme-item--active': tema.id === temaAtivo }" :data-testid="`nav-tema-${tema.id}`" @click="selecionarTema(tema.id)">
               <v-list-item-title>{{ tema.title }}</v-list-item-title>
-              <v-list-item-subtitle>{{ tema.topic }}</v-list-item-subtitle>
+              <v-list-item-subtitle v-if="!sidebarRecolhidoVisivel">{{ tema.topic }}</v-list-item-subtitle>
               <v-tooltip activator="parent" location="right" :text="tooltipTema(tema)" />
               <template #append>
-                <span v-if="badgeTema(tema.id).count > 0" class="nav-tema-badge" :class="`nav-tema-badge--${badgeTema(tema.id).level}`" :data-testid="`nav-badge-${tema.id}`" :title="`${badgeTema(tema.id).count} pendencia(s)`">
+                <span v-if="!sidebarRecolhidoVisivel && badgeTema(tema.id).count > 0" class="nav-tema-badge" :class="`nav-tema-badge--${badgeTema(tema.id).level}`" :data-testid="`nav-badge-${tema.id}`" :title="`${badgeTema(tema.id).count} pendencia(s)`">
                   {{ badgeLabel(badgeTema(tema.id).count) }}
                   <v-tooltip activator="parent" location="right" :text="tooltipBadge(tema.id)" />
                 </span>
+                <span v-else-if="sidebarRecolhidoVisivel && badgeTema(tema.id).count > 0" class="nav-tema-badge-dot" :class="`nav-tema-badge--${badgeTema(tema.id).level}`" :data-testid="`nav-badge-${tema.id}`" />
               </template>
             </v-list-item>
           </template>
 
-          <div v-if="temaTemSubgrupos(tema.id)" class="nav-subgroup-stack">
-            <div v-for="sub in tema.subgroups" :key="sub.id" class="nav-subgroup" :data-testid="`nav-subgrupo-${sub.id}`">
-              <button class="nav-subgroup-header" :class="{ 'nav-subgroup-header--active': tema.id === temaAtivo && sub.id === subgrupoAtivo }" type="button" @click="selecionarSubgrupo(tema.id, sub.id)">
-                <span>{{ sub.title }}</span>
-                <small>{{ sub.topic }}</small>
-                <v-tooltip activator="parent" location="right" :text="tooltipSubgrupo(sub)" />
-              </button>
-              <v-tooltip v-for="item in itensDoSubgrupo(tema.id, sub.id)" :key="item.to" :text="item.tip" location="right">
-                <template #activator="{ props }">
-                  <v-list-item v-bind="props" :to="item.to" :prepend-icon="item.icon" :title="item.title" class="nav-item nav-item--nested" :data-testid="`nav-item-${navItemTestId(item.to)}`" @click="mobile && (drawer = false)" />
-                </template>
-              </v-tooltip>
+          <template v-if="!sidebarRecolhidoVisivel">
+            <div v-if="temaTemSubgrupos(tema.id)" class="nav-subgroup-stack">
+              <div v-for="sub in tema.subgroups" :key="sub.id" class="nav-subgroup" :data-testid="`nav-subgrupo-${sub.id}`">
+                <button class="nav-subgroup-header" :class="{ 'nav-subgroup-header--active': tema.id === temaAtivo && sub.id === subgrupoAtivo }" type="button" @click="selecionarSubgrupo(tema.id, sub.id)">
+                  <span>{{ sub.title }}</span>
+                  <small>{{ sub.topic }}</small>
+                  <v-tooltip activator="parent" location="right" :text="tooltipSubgrupo(sub)" />
+                </button>
+                <v-tooltip v-for="item in itensDoSubgrupo(tema.id, sub.id)" :key="item.to" :text="item.tip" location="right">
+                  <template #activator="{ props }">
+                    <v-list-item v-bind="props" :to="item.to" :prepend-icon="item.icon" :title="item.title" class="nav-item nav-item--nested" :data-testid="`nav-item-${navItemTestId(item.to)}`" @click="mobile && (drawer = false)" />
+                  </template>
+                </v-tooltip>
+              </div>
             </div>
-          </div>
 
-          <v-tooltip v-for="item in tema.items" v-else :key="item.to" :text="item.tip" location="right">
-            <template #activator="{ props }">
-              <v-list-item v-bind="props" :to="item.to" :prepend-icon="item.icon" :title="item.title" class="nav-item nav-item--nested" :data-testid="`nav-item-${navItemTestId(item.to)}`" @click="mobile && (drawer = false)" />
-            </template>
-          </v-tooltip>
+            <v-tooltip v-for="item in tema.items" v-else :key="item.to" :text="item.tip" location="right">
+              <template #activator="{ props }">
+                <v-list-item v-bind="props" :to="item.to" :prepend-icon="item.icon" :title="item.title" class="nav-item nav-item--nested" :data-testid="`nav-item-${navItemTestId(item.to)}`" @click="mobile && (drawer = false)" />
+              </template>
+            </v-tooltip>
+          </template>
         </v-list-group>
       </v-list>
 
       <template #append>
         <v-divider />
-        <div v-if="auth.usuario" class="user-info">
+        <div v-if="auth.usuario" class="user-info" :class="{ 'user-info--rail': sidebarRecolhidoVisivel }">
           <v-avatar size="30" color="amber" aria-hidden="true"><span class="user-initials">{{ initials(auth.usuario) }}</span></v-avatar>
-          <div class="overflow-hidden">
+          <div v-if="!sidebarRecolhidoVisivel" class="overflow-hidden">
             <div class="user-name">{{ auth.usuario.nome || auth.usuario.email }}</div>
             <div class="muted user-role">{{ auth.usuario.papel }}</div>
           </div>
-          <v-tooltip activator="parent" location="top" text="Usuario autenticado e papel ativo nesta sessao." />
+          <v-tooltip activator="parent" location="top" :text="sidebarRecolhidoVisivel ? `${auth.usuario.nome || auth.usuario.email} (${auth.usuario.papel})` : 'Usuario autenticado e papel ativo nesta sessao.'" />
         </div>
         <v-list density="compact" class="pb-2">
           <v-list-item prepend-icon="mdi-logout" title="Sair" class="nav-item logout-item" @click="sair">
@@ -105,7 +140,7 @@ import { useAuthStore } from '../stores/auth'
 import { api } from '../services/api'
 import AmbienteNavigator from '../components/AmbienteNavigator.vue'
 import { carregarDadosPendenciasNav } from '../composables/navPendencias'
-import { lerSubgrupoRequisitosPersistido, lerTemaPersistido, salvarSubgrupoRequisitosPersistido, salvarTemaPersistido } from '../composables/navTemaPersist'
+import { lerSidebarColapsadoPersistido, lerSubgrupoRequisitosPersistido, lerTemaPersistido, salvarSidebarColapsadoPersistido, salvarSubgrupoRequisitosPersistido, salvarTemaPersistido } from '../composables/navTemaPersist'
 import { NAV_TEMAS, itensDoSubgrupo, subgrupoIdPorRota, temaIdPorRota, temaPorId, temaTemSubgrupos } from '../constants/navCatalog'
 import { useAppVersion } from '../composables/useAppVersion'
 
@@ -116,6 +151,8 @@ const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const drawer = ref(!mobile.value)
+const sidebarColapsado = ref(lerSidebarColapsadoPersistido())
+const sidebarRecolhidoVisivel = computed(() => sidebarColapsado.value && !mobile.value)
 const environment = ref(import.meta.env.VITE_APP_ENVIRONMENT || '')
 const pendenciasPorTema = ref({})
 const navegacaoInicializada = ref(false)
@@ -180,8 +217,15 @@ function tooltipBadge(temaId) {
   return `${badge.count} pendencia(s) ${gravidade} calculadas a partir dos dados operacionais do ReqSys.`
 }
 function tooltipSubgrupo(sub) { return `${sub.title}: ${sub.topic}. Use este agrupamento para entender a etapa do fluxo antes de abrir uma tela especifica.` }
-function selecionarTema(temaId) { temaAtivo.value = temaId }
+function selecionarTema(temaId) {
+  temaAtivo.value = temaId
+  if (sidebarColapsado.value && !mobile.value) alternarSidebar()
+}
 function selecionarSubgrupo(temaId, subgrupoId) { temaAtivo.value = temaId; subgrupoAtivo.value = subgrupoId }
+function alternarSidebar() {
+  sidebarColapsado.value = !sidebarColapsado.value
+  salvarSidebarColapsadoPersistido(sidebarColapsado.value)
+}
 function alternarTemaVisual() {
   const proximo = temaClaro.value ? 'figmaPadraoOuro' : 'reqsysClaro'
   theme.global.name.value = proximo
@@ -197,12 +241,18 @@ function sair() { auth.sair(); router.push('/login') }
 .brand-dot--sm { width: 22px; height: 22px; font-size: 11px; }
 .figma-pill--compact { padding: 4px 10px; font-size: 11px; }
 .req-brand-block { min-width: 0; }
+.req-brand-block--rail { padding-left: 12px !important; padding-right: 12px !important; display: flex; flex-direction: column; align-items: center; }
+.req-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; width: 100%; }
+.req-brand-block--rail .req-brand-row { flex-direction: column; gap: 8px; }
+.sidebar-toggle-btn { flex-shrink: 0; }
 .version-line { font-size: 11px; letter-spacing: 0.02em; }
 .theme-toggle { justify-content: flex-start; }
+.theme-toggle-rail { margin-inline: auto; }
 .nav-tema-badge { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; font-size: 9px; font-weight: 800; line-height: 16px; text-align: center; color: #111; }
 .nav-tema-badge--amarelo { background: var(--amber); }
 .nav-tema-badge--vermelho { background: var(--red); color: #fff; }
-.nav-theme-item { border-radius: 10px; margin: 2px 6px; border: 1px solid transparent; }
+.nav-tema-badge-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 999px; }
+.nav-theme-item { border-radius: 10px; margin: 2px 6px; border: 1px solid transparent; position: relative; }
 .nav-theme-item--active { border-color: rgba(243, 146, 0, 0.38); background: rgba(243, 146, 0, 0.1); }
 .nav-subgroup-stack { padding: 2px 8px 8px 20px; }
 .nav-subgroup { border-left: 1px solid var(--line); padding-left: 8px; margin-left: 2px; }
@@ -210,11 +260,13 @@ function sair() { auth.sair(); router.push('/login') }
 .nav-subgroup-header span { font-size: 12px; font-weight: 800; }
 .nav-subgroup-header small { color: var(--muted); font-size: 11px; line-height: 1.25; }
 .nav-subgroup-header--active, .nav-subgroup-header:hover { background: rgba(56, 189, 248, 0.1); }
-.req-nav-list { max-height: calc(100vh - 260px); overflow-y: auto; padding-inline: 4px; }
+.req-nav-list { max-height: calc(100vh - 260px); overflow-y: auto; overflow-x: hidden; padding-inline: 4px; }
+.req-nav-list--rail { max-height: calc(100vh - 150px); }
 .nav-item { border-radius: 8px; margin-bottom: 2px; }
 .nav-item--nested { margin-left: 4px; }
 .logout-item { color: var(--error) !important; }
 .user-info { display: flex; align-items: center; gap: 10px; padding: 12px 16px; min-width: 0; }
+.user-info--rail { padding: 12px 8px; justify-content: center; }
 .user-initials { font-size: 12px; font-weight: 700; color: #111; }
 .user-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .user-role { font-size: 11px; }
