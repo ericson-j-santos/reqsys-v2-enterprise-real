@@ -1,5 +1,6 @@
 """Testes do RequisitoRepository — porta de acesso a dados consolidada (ADR-001)."""
 
+from app.models.orchestrator import OrchestratorRoutingEvent
 from app.models.requisito import Requisito
 from app.repositories.requisito_repository import RequisitoRepository
 
@@ -99,12 +100,12 @@ def test_buscar_com_filtro_texto(db_session):
     assert len(repo.buscar_com_filtro_texto(None)) == 2
 
 
-def test_criar_persiste_e_retorna_com_id(db_session):
+def test_criar_inicia_refinamento_e_roteia_orquestrador(db_session):
     repo = RequisitoRepository(db_session)
     requisito = repo.criar(
         'REQ-REPO-015',
         titulo='Novo requisito',
-        descricao='desc',
+        descricao='Descricao inicial ainda sem criterios de aceite suficientes.',
         urgencia='alta',
         area='TI',
         sistema='ReqSys',
@@ -112,4 +113,27 @@ def test_criar_persiste_e_retorna_com_id(db_session):
     )
 
     assert requisito.id is not None
-    assert repo.buscar_por_codigo('REQ-REPO-015').titulo == 'Novo requisito'
+    assert requisito.status == 'refinamento'
+    assert repo.buscar_por_codigo('REQ-REPO-015').status == 'refinamento'
+
+    evento = db_session.query(OrchestratorRoutingEvent).one()
+    assert evento.origem == 'cadastro_requisito'
+    assert evento.coordinator_id == 'reqsys-intake-coordinator'
+    assert evento.prioridade == 'alta'
+
+
+def test_criar_preserva_status_quando_fluxo_governado_informa_explicitamente(db_session):
+    repo = RequisitoRepository(db_session)
+    requisito = repo.criar(
+        'REQ-REPO-016',
+        titulo='Requisito já governado',
+        descricao='Entrada originada por fluxo que controla explicitamente a máquina de estados.',
+        urgencia='media',
+        area='TI',
+        sistema='ReqSys',
+        solicitante='tester',
+        status='recebido',
+    )
+
+    assert requisito.status == 'recebido'
+    assert db_session.query(OrchestratorRoutingEvent).count() == 0
