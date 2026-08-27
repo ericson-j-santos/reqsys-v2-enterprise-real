@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import tempfile
@@ -17,6 +16,12 @@ from app.core.envelope import ok
 from app.core.security import require_admin
 from app.db import get_db
 from app.models.documento_demanda import DocumentoDemandaAnalise
+from app.ocr.documento_storage import (
+    DocumentoProtegidoInvalido,
+    proteger_candidatos_documento,
+    proteger_texto_documento,
+    revelar_candidatos_documento,
+)
 from app.ocr.documento_worker import (
     EVENTO_OCR_DOCUMENTO_DEMANDA_SOLICITADO,
     DocumentoDemandaOcrWorker,
@@ -25,6 +30,7 @@ from app.ocr.documento_worker import (
     ocr_documento_readiness,
     registrar_documento_demanda_ocr_worker,
 )
+from app.ocr.storage import OcrDataProtector, ocr_store_readiness
 from app.services.documento_demanda import (
     TIPOS_OCR_DOCUMENTO,
     calcular_sha256,
@@ -64,16 +70,70 @@ def _novo_motor_ocr_documento() -> TesseractDocumento:
     )
 
 
+def _novo_protetor_documento() -> OcrDataProtector:
+    return OcrDataProtector()
+
+
+def _erro_storage(correlation_id: str, code: str = 'OCR_SECURE_STORAGE_UNAVAILABLE') -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail={
+            'code': code,
+            'correlation_id': correlation_id,
+        },
+    )
+
+
+def _protetor_obrigatorio(correlation_id: str) -> OcrDataProtector:
+    try:
+        return _novo_protetor_documento()
+    except RuntimeError:
+        raise _erro_storage(correlation_id) from None
+
+
+def _candidatos_registro(registro: DocumentoDemandaAnalise) -> list[dict[str, object]]:
+    blob = registro.candidatos_json or '[]'
+    if blob == '[]':
+        return []
+    protector = _protetor_obrigatorio(registro.correlation_id)
+    try:
+        return revelar_candidatos_documento(protector, blob, sha256=registro.sha256)
+    except DocumentoProtegidoInvalido:
+        raise _erro_storage(registro.correlation_id, 'OCR_SECURE_STORAGE_INVALID') from None
+
+
 def _payload_registro(registro: DocumentoDemandaAnalise, *, idempotente: bool) -> dict[str, object]:
     return {
         'id': registro.id,
         'demanda_ref': registro.demanda_ref,
         'sha256': registro.sha256,
         'status': registro.status,
-        'candidatos': json.loads(registro.candidatos_json or '[]'),
+        'candidatos': _candidatos_registro(registro),
         'idempotente': idempotente,
         'incorporacao_automatica': False,
     }
+
+
+def _persistir_conteudo_protegido(
+    registro: DocumentoDemandaAnalise,
+    *,
+    protector: OcrDataProtector,
+    texto: str,
+    candidatos_json: str,
+) -> None:
+    try:
+        registro.texto_extraido = proteger_texto_documento(
+            protector,
+            texto,
+            sha256=registro.sha256,
+        )
+        registro.candidatos_json = proteger_candidatos_documento(
+            protector,
+            candidatos_json,
+            sha256=registro.sha256,
+        )
+    except (RuntimeError, ValueError):
+        raise _erro_storage(registro.correlation_id, 'OCR_SECURE_STORAGE_FAILED') from None
 
 
 def _processar_ocr_documento(
@@ -81,6 +141,14 @@ def _processar_ocr_documento(
     conteudo: bytes,
     db: Session,
 ) -> None:
+    try:
+        protector = _novo_protetor_documento()
+    except RuntimeError:
+        registro.status = 'ERRO_OCR'
+        registro.erro = 'OCR_SECURE_STORAGE_UNAVAILABLE'
+        db.commit()
+        raise _erro_storage(registro.correlation_id) from None
+
     registro.status = 'PROCESSANDO_OCR'
     registro.erro = ''
     db.commit()
@@ -145,8 +213,12 @@ def _processar_ocr_documento(
         candidatos = classificar_candidatos_por_paginas(
             [(pagina.pagina, pagina.texto, pagina.confianca) for pagina in resultado.paginas]
         )
-        registro.texto_extraido = resultado.texto
-        registro.candidatos_json = serializar_candidatos(candidatos)
+        _persistir_conteudo_protegido(
+            registro,
+            protector=protector,
+            texto=resultado.texto,
+            candidatos_json=serializar_candidatos(candidatos),
+        )
         registro.status = 'AGUARDANDO_REVISAO_HUMANA'
         registro.erro = ''
         db.commit()
@@ -172,11 +244,18 @@ def _processar_ocr_documento(
 @router.get('/ocr-readiness')
 def obter_prontidao_ocr_documento(user: dict = Depends(require_admin)):
     del user
+    runtime = ocr_documento_readiness()
+    storage = ocr_store_readiness()
     return ok(
         {
             'enabled': _ocr_documento_habilitado(),
             'environment': settings.normalized_environment,
-            **ocr_documento_readiness(),
+            **runtime,
+            'secure_storage_ready': bool(storage.get('ready')),
+            'storage_encryption': storage.get('encryption'),
+            'storage_key_version': storage.get('key_version'),
+            'plaintext_storage_allowed': False,
+            'ready': bool(runtime.get('ready_pdf') and storage.get('ready')),
         }
     )
 
@@ -223,9 +302,18 @@ async def analisar_documento_demanda(
         sha256=sha256,
         correlation_id=correlation_id,
         status=status,
-        texto_extraido=texto,
-        candidatos_json=serializar_candidatos(candidatos),
+        texto_extraido='',
+        candidatos_json='[]',
     )
+    if texto:
+        protector = _protetor_obrigatorio(correlation_id)
+        _persistir_conteudo_protegido(
+            registro,
+            protector=protector,
+            texto=texto,
+            candidatos_json=serializar_candidatos(candidatos),
+        )
+
     db.add(registro)
     try:
         db.commit()
@@ -270,7 +358,7 @@ def obter_analise_documento(
             'content_type': registro.content_type,
             'sha256': registro.sha256,
             'status': registro.status,
-            'candidatos': json.loads(registro.candidatos_json or '[]'),
+            'candidatos': _candidatos_registro(registro),
             'incorporacao_automatica': False,
         },
         registro.correlation_id,
