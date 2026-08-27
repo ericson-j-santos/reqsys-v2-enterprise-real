@@ -1,11 +1,14 @@
 import asyncio
 
+import pytest
+
 from app.core.config import settings
 from app.services.copilot_memory_install_assistant import (
     _compactar_bundle,
     despachar_implantacao,
     montar_bundle_implantacao,
 )
+from app.services.copilot_memory_install_safety import validar_destino_assistente
 
 
 def _payload(confirmar=False):
@@ -65,3 +68,54 @@ def test_implantacao_sem_executor_configurado_falha_fechado(monkeypatch):
         'status': 'pending_configuration',
         'erro': 'GITHUB_PAT nao configurado no ReqSys',
     }
+
+
+def test_destino_dev_e_revalidado_na_fonte_oficial(monkeypatch):
+    async def ambientes():
+        return {
+            'ambientes': [
+                {
+                    'id': 'env-dev-001',
+                    'nome': 'Desenvolvimento',
+                    'url': 'https://org-dev.crm2.dynamics.com',
+                    'tipo': 'Sandbox',
+                }
+            ],
+            'erro': None,
+        }
+
+    monkeypatch.setattr(
+        'app.services.copilot_memory_install_safety.listar_ambientes_instalacao',
+        ambientes,
+    )
+
+    ambiente = asyncio.run(
+        validar_destino_assistente('env-dev-001', 'https://org-dev.crm2.dynamics.com')
+    )
+
+    assert ambiente['tipo'] == 'Sandbox'
+
+
+def test_destino_producao_e_bloqueado(monkeypatch):
+    async def ambientes():
+        return {
+            'ambientes': [
+                {
+                    'id': 'env-prod-001',
+                    'nome': 'Produção',
+                    'url': 'https://org-prod.crm2.dynamics.com',
+                    'tipo': 'Production',
+                }
+            ],
+            'erro': None,
+        }
+
+    monkeypatch.setattr(
+        'app.services.copilot_memory_install_safety.listar_ambientes_instalacao',
+        ambientes,
+    )
+
+    with pytest.raises(ValueError, match='nao permite implantacao direta em producao'):
+        asyncio.run(
+            validar_destino_assistente('env-prod-001', 'https://org-prod.crm2.dynamics.com')
+        )
