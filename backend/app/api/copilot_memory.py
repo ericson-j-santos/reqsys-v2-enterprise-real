@@ -28,6 +28,7 @@ from app.services.copilot_memory_install_assistant import (
     listar_planos_instalacao,
     status_assistente_instalacao,
 )
+from app.services.copilot_memory_install_safety import validar_destino_assistente
 from app.services.copilot_memory_simple_factory import (
     gerar_copilot_memory_simple_solution,
 )
@@ -95,8 +96,9 @@ async def copilot_memory_install_deploy(
     payload: CopilotMemoryInstallRequest,
     _auth=Depends(require_copilot_memory_auth),
 ):
-    """Despacha implantação governada das três definições completas via ALM/PAC CLI."""
+    """Valida o destino e despacha as três definições completas via ALM/PAC CLI."""
     try:
+        await validar_destino_assistente(payload.environment_id, payload.environment_url)
         result = await despachar_implantacao(payload.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
