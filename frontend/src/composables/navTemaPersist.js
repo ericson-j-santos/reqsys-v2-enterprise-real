@@ -1,5 +1,6 @@
 const STORAGE_TEMA = 'reqsys_nav_tema'
 const STORAGE_SUBGRUPO = 'reqsys_nav_subgrupo_requisitos'
+const STORAGE_SIDEBAR_COLAPSADO = 'reqsys_sidebar_colapsado'
 
 export function lerTemaPersistido() {
   try {
@@ -28,6 +29,22 @@ export function lerSubgrupoRequisitosPersistido() {
 export function salvarSubgrupoRequisitosPersistido(subgrupoId) {
   try {
     if (subgrupoId) sessionStorage.setItem(STORAGE_SUBGRUPO, subgrupoId)
+  } catch {
+    /* silencioso */
+  }
+}
+
+export function lerSidebarColapsadoPersistido() {
+  try {
+    return localStorage.getItem(STORAGE_SIDEBAR_COLAPSADO) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function salvarSidebarColapsadoPersistido(colapsado) {
+  try {
+    localStorage.setItem(STORAGE_SIDEBAR_COLAPSADO, colapsado ? '1' : '0')
   } catch {
     /* silencioso */
   }
