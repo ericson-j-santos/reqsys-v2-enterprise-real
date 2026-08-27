@@ -6,7 +6,6 @@ import json
 import uuid
 from copy import deepcopy
 from typing import Any
-from urllib.parse import quote
 
 import httpx
 
@@ -21,10 +20,22 @@ _POWER_PLATFORM_BASE = 'https://api.powerplatform.com'
 _GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
 _ALM_WORKFLOW = 'power-automate-flow-provisioning-p0.yml'
 _DEFAULT_ALM_REPO = 'ericson-j-santos/reqsys-powerplatform-alm'
+_DEFAULT_EXCEL_NAME = 'CopilotMemory.xlsx'
 
 
 def _credenciais_microsoft_configuradas() -> bool:
     return bool(settings.azure_tenant_id and settings.azure_client_id and settings.azure_client_secret)
+
+
+def _segmento_id_seguro(value: str, label: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f'{label} obrigatorio')
+    parts = normalized.split('-')
+    for part in parts:
+        if not part or not part.isalnum():
+            raise ValueError(f'{label} invalido')
+    return '-'.join(parts)
 
 
 async def _token(scope: str) -> str:
@@ -76,10 +87,11 @@ async def listar_planos_instalacao(group_id: str) -> dict[str, Any]:
     if not group_id.strip():
         return {'configurado': _credenciais_microsoft_configuradas(), 'planos': [], 'erro': 'Group ID obrigatorio'}
     try:
+        safe_group_id = _segmento_id_seguro(group_id, 'Group ID')
         token = await _token('https://graph.microsoft.com/.default')
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get(
-                f"{_GRAPH_BASE}/groups/{quote(group_id.strip(), safe='')}/planner/plans",
+                f'{_GRAPH_BASE}/groups/{safe_group_id}/planner/plans',
                 headers={'Authorization': f'Bearer {token}'},
             )
             response.raise_for_status()
@@ -96,17 +108,18 @@ async def listar_arquivos_excel_grupo(group_id: str) -> dict[str, Any]:
     if not group_id.strip():
         return {'configurado': _credenciais_microsoft_configuradas(), 'arquivos': [], 'erro': 'Group ID obrigatorio'}
     try:
+        safe_group_id = _segmento_id_seguro(group_id, 'Group ID')
         token = await _token('https://graph.microsoft.com/.default')
         headers = {'Authorization': f'Bearer {token}'}
         async with httpx.AsyncClient(timeout=20) as client:
             drive_response = await client.get(
-                f"{_GRAPH_BASE}/groups/{quote(group_id.strip(), safe='')}/drive",
+                f'{_GRAPH_BASE}/groups/{safe_group_id}/drive',
                 headers=headers,
             )
             drive_response.raise_for_status()
             drive = drive_response.json()
             files_response = await client.get(
-                f"{_GRAPH_BASE}/groups/{quote(group_id.strip(), safe='')}/drive/root/children",
+                f'{_GRAPH_BASE}/groups/{safe_group_id}/drive/root/children',
                 headers=headers,
                 params={'$select': 'id,name,webUrl,file,parentReference'},
             )
@@ -122,7 +135,7 @@ async def listar_arquivos_excel_grupo(group_id: str) -> dict[str, Any]:
                     'nome': name,
                     'web_url': item.get('webUrl') or '',
                     'drive_id': drive.get('id') or item.get('parentReference', {}).get('driveId') or '',
-                    'excel_source': f'groups/{group_id.strip()}',
+                    'excel_source': f'groups/{safe_group_id}',
                 }
             )
         return {'configurado': True, 'arquivos': arquivos, 'erro': None}
@@ -130,25 +143,25 @@ async def listar_arquivos_excel_grupo(group_id: str) -> dict[str, Any]:
         return {'configurado': True, 'arquivos': [], 'erro': str(exc)}
 
 
-async def criar_planilha_excel_grupo(group_id: str, nome: str = 'CopilotMemory.xlsx') -> dict[str, Any]:
-    if not group_id.strip():
-        raise ValueError('Group ID obrigatorio')
-    safe_name = (nome or 'CopilotMemory.xlsx').strip()
-    if not safe_name.lower().endswith('.xlsx'):
-        raise ValueError('O arquivo deve terminar com .xlsx')
+async def criar_planilha_excel_grupo(group_id: str, nome: str = _DEFAULT_EXCEL_NAME) -> dict[str, Any]:
+    safe_group_id = _segmento_id_seguro(group_id, 'Group ID')
+    requested_name = (nome or _DEFAULT_EXCEL_NAME).strip()
+    if requested_name != _DEFAULT_EXCEL_NAME:
+        raise ValueError(f'O arquivo deve se chamar {_DEFAULT_EXCEL_NAME}')
+    safe_name = _DEFAULT_EXCEL_NAME
     token = await _token('https://graph.microsoft.com/.default')
     xlsx = gerar_planilha_xlsx()
     headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}
     async with httpx.AsyncClient(timeout=60) as client:
         response = await client.put(
-            f"{_GRAPH_BASE}/groups/{quote(group_id.strip(), safe='')}/drive/root:/{quote(safe_name, safe='')}:/content",
+            f'{_GRAPH_BASE}/groups/{safe_group_id}/drive/root:/{safe_name}:/content',
             headers=headers,
             content=xlsx,
         )
         response.raise_for_status()
         item = response.json()
         drive_response = await client.get(
-            f"{_GRAPH_BASE}/groups/{quote(group_id.strip(), safe='')}/drive",
+            f'{_GRAPH_BASE}/groups/{safe_group_id}/drive',
             headers={'Authorization': f'Bearer {token}'},
         )
         drive_response.raise_for_status()
@@ -157,7 +170,7 @@ async def criar_planilha_excel_grupo(group_id: str, nome: str = 'CopilotMemory.x
         'nome': item.get('name') or safe_name,
         'web_url': item.get('webUrl') or '',
         'drive_id': drive_response.json().get('id') or '',
-        'excel_source': f'groups/{group_id.strip()}',
+        'excel_source': f'groups/{safe_group_id}',
     }
 
 
@@ -165,10 +178,11 @@ async def listar_conexoes_instalacao(environment_id: str) -> dict[str, Any]:
     if not environment_id.strip():
         return {'configurado': _credenciais_microsoft_configuradas(), 'planner': [], 'excel': [], 'erro': 'Ambiente obrigatorio'}
     try:
+        safe_environment_id = _segmento_id_seguro(environment_id, 'Ambiente')
         token = await _token('https://api.powerplatform.com/.default')
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get(
-                f"{_POWER_PLATFORM_BASE}/connectivity/environments/{quote(environment_id.strip(), safe='')}/connections",
+                f'{_POWER_PLATFORM_BASE}/connectivity/environments/{safe_environment_id}/connections',
                 headers={'Authorization': f'Bearer {token}'},
                 params={'api-version': '2024-10-01'},
             )
