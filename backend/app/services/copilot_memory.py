@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.models.copilot_memory import CopilotMemoryHistory, CopilotMemoryRecord
 from copilot_memory_core import (
     CAMPOS_CONTEUDO,
     STATUS_CONFLITO,
@@ -26,7 +27,6 @@ from copilot_memory_core import (
     planner_hash,
     texto,
 )
-from app.models.copilot_memory import CopilotMemoryHistory, CopilotMemoryRecord
 
 
 def _base_snapshot(record: CopilotMemoryRecord | None) -> dict[str, Any] | None:
