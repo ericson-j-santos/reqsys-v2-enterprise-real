@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 OrigemMemoria = Literal['planner', 'excel', 'reqsys', 'copilot', 'pesquisa']
+CopilotMemoryLowCodeProfile = Literal['copilot_memory_minimal', 'copilot_memory_enterprise']
 
 
 class CopilotMemoryItemRequest(BaseModel):
@@ -55,3 +56,16 @@ class PlannerSyncAckRequest(BaseModel):
     sucesso: bool
     planner_task_id: str | None = Field(default=None, max_length=200, alias='plannerTaskId')
     erro: str | None = Field(default=None, max_length=500)
+
+
+class CopilotMemoryLowCodePackageRequest(BaseModel):
+    profile: CopilotMemoryLowCodeProfile = 'copilot_memory_minimal'
+    solution_name: str = Field(default='CopilotMemoryEnterprise', min_length=3, max_length=80)
+    display_name: str = Field(default='Copilot Memory Enterprise', min_length=3, max_length=120)
+    description: str = Field(
+        default='Pacote corporativo transportável para memória persistente com Planner, Excel/SharePoint e Copilot.',
+        max_length=1000,
+    )
+    target_environment: str = Field(default='dev', min_length=2, max_length=40)
+    owner_prefix: str = Field(default='memory', min_length=2, max_length=20)
+    dry_run: bool = True
