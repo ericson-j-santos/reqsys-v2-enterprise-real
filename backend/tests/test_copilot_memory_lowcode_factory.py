@@ -8,10 +8,19 @@ from app.services.copilot_memory_lowcode_factory import (
 )
 
 
-def _arquivos_zip(solution):
+def _abrir_zip(solution):
     raw = base64.b64decode(solution['package']['zip_base64'])
-    with zipfile.ZipFile(io.BytesIO(raw), 'r') as archive:
+    return zipfile.ZipFile(io.BytesIO(raw), 'r')
+
+
+def _arquivos_zip(solution):
+    with _abrir_zip(solution) as archive:
         return set(archive.namelist())
+
+
+def _conteudo_zip(solution):
+    with _abrir_zip(solution) as archive:
+        return b'\n'.join(archive.read(nome) for nome in archive.namelist())
 
 
 def test_perfil_minimo_e_portatil_e_sem_dataverse_obrigatorio():
@@ -62,12 +71,12 @@ def test_pacote_nao_embute_token_ou_url_real():
     solution = gerar_copilot_memory_lowcode_solution(
         CopilotMemoryLowCodePackageRequest(profile='copilot_memory_minimal')
     )
-    bruto = base64.b64decode(solution['package']['zip_base64'])
+    conteudo = _conteudo_zip(solution)
 
-    assert b'COPILOT_MEMORY_SERVICE_TOKEN' in bruto
-    assert b'POWERPLATFORM_CLIENT_SECRET' not in bruto
-    assert b'Bearer ' not in bruto
-    assert b'X-Service-Token' in bruto
+    assert b'COPILOT_MEMORY_SERVICE_TOKEN' in conteudo
+    assert b'POWERPLATFORM_CLIENT_SECRET' not in conteudo
+    assert b'Bearer ' not in conteudo
+    assert b'X-Service-Token' in conteudo
 
 
 def test_flows_possuem_idempotencia_e_politica_de_conflito():
