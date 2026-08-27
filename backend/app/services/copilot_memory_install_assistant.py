@@ -10,7 +10,10 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from copilot_memory_powerautomate_complete import gerar_fluxos_completos, validar_definicao
+from copilot_memory_powerautomate_complete import (
+    gerar_fluxos_completos,
+    validar_definicao,
+)
 from copilot_memory_simple_package import gerar_planilha_xlsx
 
 _POWER_PLATFORM_BASE = 'https://api.powerplatform.com'
