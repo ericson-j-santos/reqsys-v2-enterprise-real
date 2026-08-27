@@ -1,3 +1,4 @@
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
