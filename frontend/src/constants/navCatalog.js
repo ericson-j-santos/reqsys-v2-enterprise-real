@@ -64,6 +64,7 @@ export const NAV_TEMAS = [
     items: [
       { to: '/painel-integracao', icon: 'mdi-view-dashboard-outline', title: 'Integrações', tip: 'Planner, Teams, GitHub e histórico de eventos.' },
       { to: '/hub-lowcode', icon: 'mdi-lightning-bolt-circle', title: 'Hub Low-Code', tip: 'Power Automate, Power Apps, bot ReqSysAgent e ALM.' },
+      { to: '/hub-lowcode/copilot-memory/instalar', icon: 'mdi-memory', title: 'Instalar Copilot Memory', tip: 'Instalar a memória do Copilot escolhendo ambiente, Planner, planilha e conexões.' },
       { to: '/figma-github', icon: 'mdi-vector-square', title: 'Figma GitHub', tip: 'Sincronização Figma ↔ GitHub com retorno em tela.' },
     ],
   },

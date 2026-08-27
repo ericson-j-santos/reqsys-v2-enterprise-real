@@ -74,3 +74,18 @@ class CopilotMemoryLowCodePackageRequest(BaseModel):
     target_environment: str = Field(default='dev', min_length=2, max_length=40)
     owner_prefix: str = Field(default='memory', min_length=2, max_length=20)
     dry_run: bool = True
+
+
+class CopilotMemoryInstallRequest(BaseModel):
+    environment_id: str = Field(..., min_length=2, max_length=120)
+    environment_url: str = Field(..., min_length=8, max_length=500)
+    group_id: str = Field(..., min_length=5, max_length=120)
+    plan_id: str = Field(..., min_length=5, max_length=200)
+    excel_source: str = Field(..., min_length=2, max_length=500)
+    excel_drive: str = Field(..., min_length=2, max_length=300)
+    excel_file: str = Field(..., min_length=2, max_length=500)
+    planner_connection_id: str = Field(..., min_length=2, max_length=500)
+    excel_connection_id: str = Field(..., min_length=2, max_length=500)
+    target_environment: str = Field(default='dev', min_length=2, max_length=40)
+    confirmar: bool = False
+    correlation_id: str | None = Field(default=None, max_length=80)
