@@ -4,7 +4,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-
 OrigemMemoria = Literal['planner', 'excel', 'reqsys', 'copilot', 'pesquisa']
 
 
