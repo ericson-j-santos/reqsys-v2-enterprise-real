@@ -17,6 +17,7 @@ from copilot_memory_core import (
     STATUS_ERRO,
     STATUS_NAO_SOLICITADO,
     STATUS_PENDENTE,
+    STATUS_SINCRONIZADO,
     aplicar_decisao_planner,
     avaliar_planner_durante_pendencia,
     content_hash,
@@ -279,7 +280,7 @@ def confirmar_comando_planner(
     if sucesso:
         record.planner_applied_hash = planner_hash(_base_snapshot(record) or {})
         record.atualizar_planner = False
-        record.planner_sync_status = 'sincronizado'
+        record.planner_sync_status = STATUS_SINCRONIZADO
         record.ultimo_erro = ''
     else:
         record.atualizar_planner = True
