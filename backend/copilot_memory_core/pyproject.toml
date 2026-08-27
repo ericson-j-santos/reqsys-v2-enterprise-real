@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "copilot-memory-core"
+version = "1.0.0"
+description = "Nucleo portatil de memoria persistente e sincronizacao Planner/Excel/Copilot"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools]
+packages = ["copilot_memory_core"]
+package-dir = {"copilot_memory_core" = "."}
