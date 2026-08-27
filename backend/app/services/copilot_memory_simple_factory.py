@@ -7,6 +7,7 @@ from io import BytesIO
 from typing import Any
 
 from app.services.copilot_memory_lowcode_factory import (
+    PACKAGE_NAME,
     PROFILE_RESTRITO,
     gerar_copilot_memory_lowcode_solution,
 )
@@ -32,7 +33,7 @@ def gerar_copilot_memory_simple_solution(request: Any) -> dict[str, Any]:
 
     old_zip = base64.b64decode(solution['package']['zip_base64'])
     output = BytesIO()
-    root = 'copilot-memory-lowcode/'
+    root = f'{PACKAGE_NAME}/'
 
     with zipfile.ZipFile(BytesIO(old_zip), 'r') as source, zipfile.ZipFile(
         output,
