@@ -5,7 +5,10 @@ from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.service_tokens import require_admin_or_service_token
 from app.db import get_db
-from app.schemas.copilot_memory import CopilotMemoryBatchSyncRequest, PlannerSyncAckRequest
+from app.schemas.copilot_memory import (
+    CopilotMemoryBatchSyncRequest,
+    PlannerSyncAckRequest,
+)
 from app.services.copilot_memory import (
     confirmar_comando_planner,
     listar_comandos_planner,
