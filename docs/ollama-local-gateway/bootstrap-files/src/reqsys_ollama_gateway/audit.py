@@ -8,7 +8,7 @@ from typing import Any
 logger = logging.getLogger('reqsys.ollama_gateway.audit')
 
 _PII_PATTERNS = [
-    re.compile(r'(senha|password|api[_-]?key)\s*[:=]', re.I),
+    re.compile(r'(senha|password|api[_-]?key)\s*[:=]', re.IGNORECASE),
     re.compile(r'\b\d{3}\.\d{3}\.\d{3}-\d{2}\b'),
 ]
 

@@ -71,9 +71,11 @@ def test_chamar_gemini(mock_post, monkeypatch):
     monkeypatch.setattr(svc.settings, 'gemini_api_key', 'AIza-test')
     monkeypatch.setattr(svc.settings, 'gemini_model', 'gemini-test')
     assert svc.chamar_gemini('prompt') == 'gemini ok'
+    url = mock_post.call_args.args[0]
     payload = mock_post.call_args.args[1]
     headers = mock_post.call_args.kwargs.get('headers') or mock_post.call_args[1].get('headers')
-    assert payload['model'] == 'gemini-test'
+    assert url == 'https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent'
+    assert payload['contents'] == [{'parts': [{'text': 'prompt'}]}]
     assert headers['x-goog-api-key'] == 'AIza-test'
 
 

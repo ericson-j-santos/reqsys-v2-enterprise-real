@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, HTTPException, status
@@ -44,7 +44,7 @@ def health(x_correlation_id: str | None = Header(default=None)) -> dict[str, obj
         'env': settings.env,
         'auth_required': settings.auth_required,
         'correlation_id': correlation_id,
-        'generated_at_utc': datetime.now(timezone.utc).isoformat(),
+        'generated_at_utc': datetime.now(UTC).isoformat(),
     }
 
 
@@ -70,7 +70,7 @@ def chat(
     try:
         client = OllamaClient(settings)
         resposta, latencia_ollama = client.generate(body.model, body.prompt)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         auditar('chat_erro', {'correlation_id': correlation_id, 'erro': str(exc)[:200]})
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Falha ao consultar Ollama') from exc
 
