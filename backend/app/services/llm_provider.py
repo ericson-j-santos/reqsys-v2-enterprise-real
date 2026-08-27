@@ -278,15 +278,14 @@ class LLMGateway:
         if not api_key:
             raise RuntimeError('GEMINI_API_KEY ausente')
         payload: dict[str, Any] = {
-            'model': model,
-            'input': prompt,
-            'generation_config': {'temperature': 0.1},
+            'contents': [{'parts': [{'text': prompt}]}],
+            'generationConfig': {'temperature': 0.1},
         }
         if system_prompt:
-            payload['system_instruction'] = system_prompt
+            payload['systemInstruction'] = {'parts': [{'text': system_prompt}]}
         headers = {'x-goog-api-key': api_key, 'Content-Type': 'application/json'}
         data = self._post_json(
-            'https://generativelanguage.googleapis.com/v1beta/interactions',
+            f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
             payload,
             headers=headers,
             timeout=timeout,

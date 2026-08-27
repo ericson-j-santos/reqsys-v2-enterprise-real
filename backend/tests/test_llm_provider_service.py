@@ -72,9 +72,9 @@ def test_gateway_gemini_monta_payload_padrao():
     )
 
     assert texto == 'gemini ok'
-    assert chamadas[0][0] == 'https://generativelanguage.googleapis.com/v1beta/interactions'
-    assert chamadas[0][1]['model'] == 'gemini-test'
-    assert chamadas[0][1]['system_instruction'] == 'sistema'
+    assert chamadas[0][0] == 'https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent'
+    assert chamadas[0][1]['contents'] == [{'parts': [{'text': 'prompt'}]}]
+    assert chamadas[0][1]['systemInstruction'] == {'parts': [{'text': 'sistema'}]}
     assert chamadas[0][2]['x-goog-api-key'] == 'AIza-test'
 
 

@@ -96,9 +96,11 @@ def test_gerar_erro_inesperado(mock_post):
 def test_gerar_sucesso_registra_uso(mock_post):
     texto = gemini_svc._gerar('key', 'gemini-2.0-flash', 'prompt')
     assert texto == 'resposta ok'
+    url = mock_post.call_args.args[0]
     payload = mock_post.call_args.args[1]
     headers = mock_post.call_args.kwargs['headers']
-    assert payload['model'] == 'gemini-2.0-flash'
+    assert url == 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+    assert payload['contents'] == [{'parts': [{'text': 'prompt'}]}]
     assert headers['x-goog-api-key'] == 'key'
 
 

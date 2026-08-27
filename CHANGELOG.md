@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-08-27
+
+### Corrigido (GovBI IA · endpoint Gemini incorreto quebrava o provider primário)
+
+- `LLMGateway.gerar_gemini` (`backend/app/services/llm_provider.py`) chamava `POST https://generativelanguage.googleapis.com/v1beta/interactions` — endpoint inexistente na API real do Gemini — com payload `{model, input, generation_config}`. Toda chamada ao Gemini falhava com `404 Not Found`, era classificada (incorretamente) como "modelo indisponível" e o sistema caía sempre para o fallback Groq, mascarando o problema. Confirmado ao vivo via `POST /v1/ia/govbi/probes` em `reqsys-api-dev`/`reqsys-api.fly.dev` e traceback em `fly logs`.
+- Corrigido para o contrato real `generateContent`: `POST /v1beta/models/{model}:generateContent` com payload `{contents: [{parts: [{text}]}], generationConfig, systemInstruction}`. `extrair_resposta_gemini` já esperava esse formato de resposta (`candidates[].content.parts[].text`) — só a montagem da requisição estava errada.
+- `tests/test_llm_provider_service.py::test_gateway_gemini_monta_payload_padrao` antes afirmava a URL/payload quebrados (por isso o bug não foi pego pela suíte de testes, que só mocka a chamada HTTP); atualizado para validar o contrato correto.
+- **Gap remanescente, fora do que código pode corrigir:** com o Gemini corrigido, o probe passou a expor uma falha real e distinta no Groq (`403 Forbidden` em `api.groq.com`) — indica `GROQ_API_KEY` inválida/revogada ou sem permissão para o modelo `llama-3.3-70b-versatile` nos ambientes `reqsys-api-dev`/`reqsys-api` (Fly secrets). Requer verificação/rotação da chave no console Groq por um humano; não há evidência de bug de código nesse lado.
+
+---
+
 ## [Unreleased] - 2026-08-26
 
 ### Adicionado (Planner · contrato governado + idempotência, issue #32)
