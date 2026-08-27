@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Iterable
@@ -154,7 +155,11 @@ def _normalizar_texto(valor: str) -> str:
 
 
 def _score_rule(texto: str, rule: CoordinatorRule) -> int:
-    return sum(1 for palavra in rule.palavras_chave if palavra in texto)
+    return sum(
+        1
+        for palavra in rule.palavras_chave
+        if re.search(rf'(?<!\w){re.escape(palavra)}(?!\w)', texto)
+    )
 
 
 def _prioridade(score: int, demanda: OrchestratorDemand) -> str:
