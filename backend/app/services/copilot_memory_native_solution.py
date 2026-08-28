@@ -9,7 +9,6 @@ from typing import Any
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
-
 SOLUTION_UNIQUE_NAME = 'CopilotMemoryInstaller'
 SOLUTION_VERSION = '1.2.0.0'
 PLANNER_CONNECTION_LOGICAL_NAME = 'reqsys_sharedplanner_copilotmemory'
@@ -259,7 +258,7 @@ def validar_solution_power_platform_importavel(payload: bytes) -> dict[str, Any]
                 errors.append(f'{path}: definition ausente')
             refs = properties.get('connectionReferences') or {}
             for key, ref in refs.items():
-                logical = ((ref.get('connection') or {}).get('connectionReferenceLogicalName'))
+                logical = (ref.get('connection') or {}).get('connectionReferenceLogicalName')
                 if key not in _CONNECTIONS or logical != _CONNECTIONS[key]['logical_name']:
                     errors.append(f'{path}: referencia de conexao invalida para {key}')
 
