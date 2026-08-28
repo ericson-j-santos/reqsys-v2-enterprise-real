@@ -5,6 +5,13 @@ import zipfile
 
 from app.schemas.copilot_memory import CopilotMemoryLowCodePackageRequest
 from app.services.copilot_memory_lowcode_factory import PACKAGE_NAME
+from app.services.copilot_memory_native_solution import (
+    EXCEL_CONNECTION_LOGICAL_NAME,
+    PLANNER_CONNECTION_LOGICAL_NAME,
+    SOLUTION_UNIQUE_NAME,
+    gerar_solution_power_platform_importavel,
+    validar_solution_power_platform_importavel,
+)
 from app.services.copilot_memory_simple_factory import (
     gerar_copilot_memory_simple_solution,
 )
@@ -90,7 +97,42 @@ def test_fluxos_completos_usam_operacoes_estaveis_e_protecao_de_conflito():
     assert 'ERRO' in texto
 
 
-def test_gerador_padrao_entrega_um_unico_zip_com_fluxos_completos():
+def test_solution_nativa_tem_formato_importavel_e_tres_fluxos_desligados():
+    payload = gerar_solution_power_platform_importavel(gerar_fluxos_completos())
+    validation = validar_solution_power_platform_importavel(payload)
+
+    assert validation['ok'] is True
+    assert validation['flows'] == 3
+    assert validation['connections'] == 2
+    assert validation['solution_name'] == SOLUTION_UNIQUE_NAME
+
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        names = set(archive.namelist())
+        assert '[Content_Types].xml' in names
+        assert 'solution.xml' in names
+        assert 'customizations.xml' in names
+        workflows = sorted(name for name in names if name.startswith('Workflows/'))
+        assert len(workflows) == 3
+
+        customizations = archive.read('customizations.xml').decode('utf-8')
+        assert customizations.count('<Workflow WorkflowId=') == 3
+        assert '<StateCode>0</StateCode>' in customizations
+        assert '<StatusCode>1</StatusCode>' in customizations
+        assert PLANNER_CONNECTION_LOGICAL_NAME in customizations
+        assert EXCEL_CONNECTION_LOGICAL_NAME in customizations
+
+        solution_xml = archive.read('solution.xml').decode('utf-8')
+        assert solution_xml.count('<RootComponent type="29"') == 3
+        assert '<Managed>0</Managed>' in solution_xml
+
+        for path in workflows:
+            wrapper = json.loads(archive.read(path))
+            assert wrapper['schemaVersion'] == '1.0.0.0'
+            assert wrapper['properties']['definition']
+            assert wrapper['properties']['connectionReferences']
+
+
+def test_gerador_padrao_entrega_um_unico_zip_com_solution_importavel():
     request = CopilotMemoryLowCodePackageRequest()
     solution = gerar_copilot_memory_simple_solution(request)
 
@@ -107,6 +149,17 @@ def test_gerador_padrao_entrega_um_unico_zip_com_fluxos_completos():
     assert simple['autoteste']['status'] == 'APROVADO'
     assert all(not errors for errors in simple['flow_validation'].values())
     assert len(simple['complete_flow_definitions']) == 3
+    assert simple['direct_import_supported'] is True
+    assert simple['native_solution'] == 'CopilotMemoryInstaller.zip'
+    assert simple['native_solution_validation']['ok'] is True
+    assert simple['flows_imported_disabled'] is True
+    assert simple['post_import_configuration'] == [
+        'PLANNER_GROUP_ID',
+        'PLANNER_PLAN_ID',
+        'EXCEL_SOURCE',
+        'EXCEL_DRIVE',
+        'EXCEL_FILE',
+    ]
     assert solution['package']['zip_filename'] == 'CopilotMemoryCorporativo-Pronto.zip'
     assert solution['package']['sha256']
 
@@ -116,6 +169,8 @@ def test_gerador_padrao_entrega_um_unico_zip_com_fluxos_completos():
         names = set(archive.namelist())
         root = f'{PACKAGE_NAME}/'
         assert root + 'FLUXOS_COMPLETOS.html' in names
+        assert root + 'IMPORTAR_DIRETO_NO_POWER_AUTOMATE.html' in names
+        assert root + 'CopilotMemoryInstaller.zip' in names
         assert root + 'INICIAR_AQUI.html' in names
         assert root + 'CopilotMemory.xlsx' in names
         assert root + 'AUTOTESTE.json' in names
@@ -140,6 +195,9 @@ def test_gerador_padrao_entrega_um_unico_zip_com_fluxos_completos():
         assert autotest['status'] == 'APROVADO'
         workbook = archive.read(root + 'CopilotMemory.xlsx')
         assert validar_planilha_xlsx(workbook)['ok'] is True
+
+        native = archive.read(root + 'CopilotMemoryInstaller.zip')
+        assert validar_solution_power_platform_importavel(native)['ok'] is True
 
 
 def test_perfil_com_api_preserva_pacote_anterior_sem_forcar_modo_simples():
