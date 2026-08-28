@@ -5,6 +5,7 @@ on:
     paths:
       - docs/runbooks/teams-notification-service.md
       - .github/workflows/teams-*.yml
+      - .github/workflows/deploy-reqsys-pages-composite.yml
       - tools/geradores/teams_graph_gateway_autocontido.py
       - docs/ops-dashboard/teams-notification/**
   workflow_dispatch:
@@ -32,6 +33,7 @@ jobs:
             '.github/workflows/teams-notification-slo.yml'
             '.github/workflows/teams-notification-dashboard.yml'
             '.github/workflows/teams-dashboard-availability-monitor.yml'
+            '.github/workflows/deploy-reqsys-pages-composite.yml'
             'tools/geradores/teams_graph_gateway_autocontido.py'
             'docs/ops-dashboard/teams-notification/index.html'
             'docs/runbooks/teams-notification-service.md'
@@ -62,13 +64,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          producer='.github/workflows/teams-notification-dashboard.yml'
+          publisher='.github/workflows/deploy-reqsys-pages-composite.yml'
+
           python -m py_compile tools/geradores/teams_graph_gateway_autocontido.py
           python tools/geradores/teams_graph_gateway_autocontido.py self-test
           grep -Fq 'TEAMS_WEBHOOK_URL' .github/workflows/teams-commit-notification.yml
           grep -Fq 'schedule:' .github/workflows/teams-commit-notification.yml
           grep -Fq 'upload-artifact' .github/workflows/teams-notification-observability.yml
           grep -Fq 'SLO_TARGET' .github/workflows/teams-notification-slo.yml
-          grep -Fq 'deploy-pages' .github/workflows/teams-notification-dashboard.yml
+
+          # Contrato Pages: Teams produz o artefato; somente o composto publica.
+          grep -Fq 'actions/upload-artifact@v4' "$producer"
+          grep -Fq 'teams-dashboard-site' "$producer"
+          ! grep -Fq 'deploy-pages@v4' "$producer"
+          grep -Fq 'workflow_run:' "$publisher"
+          grep -Fq 'teams-dashboard-site' "$publisher"
+          grep -Fq 'deploy-pages@v4' "$publisher"
+
           grep -Fq 'MAX_DATA_AGE_HOURS' .github/workflows/teams-dashboard-availability-monitor.yml
           ! grep -R --include='*.json' --include='*.html' -E 'https://[^ ]*(webhook|logic\.azure|powerautomate)' docs/ops-dashboard/teams-notification
 
@@ -80,5 +93,6 @@ jobs:
             echo '- Runbook: OK'
             echo '- Gateway: OK'
             echo '- Segurança: OK'
+            echo '- Pages: produtor e publicador único validados'
             echo '- Resultado: padrão operacional validado'
           } >> "$GITHUB_STEP_SUMMARY"
