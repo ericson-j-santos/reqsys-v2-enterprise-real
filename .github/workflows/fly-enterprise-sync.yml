@@ -309,11 +309,12 @@ jobs:
         run: |
           python scripts/validate_public_runtime.py --base-url "${{ steps.env.outputs.api_url }}" --include-optional-evidence --output "public-runtime-validation-${{ matrix.target_environment }}.json"
       - name: Validar publicação sincronizada
-        continue-on-error: true
         run: |
-          python scripts/validate_publication_sync.py --environment "${{ matrix.target_environment }}" --expected-sha "${{ github.sha }}" --timeout 25 --output "publication-sync-${{ matrix.target_environment }}.json" || true
+          set -euo pipefail
+          python scripts/validate_publication_sync.py --environment "${{ matrix.target_environment }}" --expected-sha "${{ github.sha }}" --timeout 25 --output "publication-sync-${{ matrix.target_environment }}.json"
           if ! python -c "import json; d=json.load(open('publication-sync-${{ matrix.target_environment }}.json')); exit(0 if d.get('ok') else 1)"; then
-            echo "::warning::Publication sync com drift — deploy concluído; verificar build_sha no runtime"
+            echo "::error::Publication sync com drift — o SHA publicado não corresponde ao deploy solicitado"
+            exit 1
           fi
       - name: Validar login do ambiente
         if: always()
@@ -396,6 +397,30 @@ jobs:
             echo "| Sync ambientes | ${SYNC_RESULT:-skipped} |"
             echo "| Smoke read-only | ${SMOKE_RESULT:-skipped} |"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Garantir resultado coerente com a solicitação
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DEPLOY_REQUESTED: ${{ github.event.inputs.deploy || 'false' }}
+          SHOULD_DEPLOY: ${{ needs.plan-environments.outputs.should_deploy }}
+          PLAN_RESULT: ${{ needs.plan-environments.result }}
+          SYNC_RESULT: ${{ needs.sync-environment.result }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "workflow_dispatch" ] || [ "$DEPLOY_REQUESTED" != "true" ]; then
+            exit 0
+          fi
+          if [ "$PLAN_RESULT" != "success" ]; then
+            echo "::error::Deploy solicitado, mas o planejamento terminou como '$PLAN_RESULT'."
+            exit 1
+          fi
+          if [ "$SHOULD_DEPLOY" != "true" ]; then
+            echo "::error::Deploy solicitado, mas o plano não autorizou a sincronização. Motivo: ${{ needs.plan-environments.outputs.skip_reason || 'não informado' }}"
+            exit 1
+          fi
+          if [ "$SYNC_RESULT" != "success" ]; then
+            echo "::error::Deploy solicitado, mas o job Sync terminou como '${SYNC_RESULT:-skipped}'."
+            exit 1
+          fi
       - uses: actions/checkout@v4
         if: needs.plan-environments.outputs.should_deploy == 'true'
       - uses: actions/setup-python@v5

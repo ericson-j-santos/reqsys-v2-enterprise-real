@@ -41,13 +41,26 @@ def test_dev_hml_and_read_only_paths_are_preserved():
     assert "Verificar drift dev/hml (read-only)" in workflow
 
 
-def test_secrets_and_deploy_remain_after_authorized_plan():
+def test_managed_credentials_and_deploy_remain_after_authorized_plan():
     workflow = text()
     plan = workflow.index("\n  plan-environments:\n")
     sync = workflow.index("\n  sync-environment:\n")
-    secret = workflow.index("secrets.FLY_API_TOKEN", sync)
-    deploy = workflow.index("flyctl deploy", sync)
-    assert plan < sync < secret < deploy
+    api_credential = workflow.index("- name: Resolver credencial Fly da API", sync)
+    api_deploy = workflow.index("- name: Deploy API Fly app", api_credential)
+    frontend_credential = workflow.index(
+        "- name: Resolver credencial Fly do frontend", api_deploy
+    )
+    frontend_deploy = workflow.index(
+        "- name: Deploy frontend Fly app", frontend_credential
+    )
+
+    assert "uses: ./.github/actions/resolve-managed-credential" in workflow[
+        api_credential:api_deploy
+    ]
+    assert "uses: ./.github/actions/resolve-managed-credential" in workflow[
+        frontend_credential:frontend_deploy
+    ]
+    assert plan < sync < api_credential < api_deploy < frontend_credential < frontend_deploy
 
 
 def test_summary_exposes_production_gate_result():
