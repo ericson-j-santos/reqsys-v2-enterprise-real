@@ -27,6 +27,9 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY app /app/app
 COPY ocr_evidencia /app/ocr_evidencia
 COPY diagram_generator_portable /app/diagram_generator_portable
+COPY copilot_memory_core /app/copilot_memory_core
+COPY copilot_memory_powerautomate_complete.py /app/copilot_memory_powerautomate_complete.py
+COPY copilot_memory_simple_package.py /app/copilot_memory_simple_package.py
 COPY fly_boot.sh /app/fly_boot.sh
 
 RUN sed -i 's/\r$//' /app/fly_boot.sh \
