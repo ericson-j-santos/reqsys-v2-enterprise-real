@@ -12,6 +12,7 @@ vez de montar a query eles mesmos.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable
 
 from sqlalchemy import func, or_
@@ -19,7 +20,13 @@ from sqlalchemy.orm import Session
 
 from app.core.correlation import obter_correlation_id
 from app.models.requisito import Requisito
+from app.services.reqsys_orchestrator import (
+    OrchestratorDemand,
+    classificar_e_persistir_demanda,
+)
 from app.services.requisito_ml_runtime import avaliar_requisito_observacional
+
+logger = logging.getLogger('reqsys.requisito_repository')
 
 
 class RequisitoRepository:
@@ -96,11 +103,62 @@ class RequisitoRepository:
             )
         return query.limit(limit).all()
 
+    def _iniciar_refinamento_automatico(self, requisito: Requisito) -> None:
+        """Transforma `recebido` em estado transitório e roteia o item para refinamento.
+
+        A transição de estado é persistida antes do roteamento. Assim, uma falha
+        eventual do orquestrador não devolve o requisito ao limbo em `recebido`;
+        o item permanece visível em `refinamento` e a falha de roteamento é
+        registrada em log para remediação sem perda da demanda.
+        """
+        correlation_id = obter_correlation_id()
+
+        requisito.status = 'refinamento'
+        self._db.add(requisito)
+        self._db.commit()
+        self._db.refresh(requisito)
+
+        try:
+            rota = classificar_e_persistir_demanda(
+                self._db,
+                OrchestratorDemand(
+                    titulo=requisito.titulo,
+                    descricao=requisito.descricao or '',
+                    origem='cadastro_requisito',
+                    prioridade_informada=requisito.urgencia,
+                    correlation_id=correlation_id,
+                ),
+            )
+        except Exception:
+            self._db.rollback()
+            logger.exception(
+                'requisito_refinamento_roteamento_falhou codigo=%s correlation_id=%s estado_preservado=refinamento',
+                requisito.codigo,
+                correlation_id or 'sem-correlation-id',
+            )
+            return
+
+        logger.info(
+            'requisito_refinamento_iniciado codigo=%s coordinator_id=%s routing_event_id=%s correlation_id=%s',
+            requisito.codigo,
+            rota['coordinator']['id'],
+            rota.get('routing_event_id'),
+            correlation_id or 'sem-correlation-id',
+        )
+
     def criar(self, codigo: str, **campos) -> Requisito:
+        status_informado_explicitamente = 'status' in campos
         requisito = Requisito(codigo=codigo, **campos)
         self._db.add(requisito)
         self._db.commit()
         self._db.refresh(requisito)
+
+        # Entradas simples (UI e Power Automate) não informam status: nesses casos
+        # `recebido` existe apenas como marco transitório e o refinamento começa
+        # automaticamente. Fluxos governados que informam status explicitamente
+        # mantêm a semântica já definida pelo chamador.
+        if not status_informado_explicitamente:
+            self._iniciar_refinamento_automatico(requisito)
 
         texto_observacional = '\n'.join(
             valor.strip()
