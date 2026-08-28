@@ -6,7 +6,6 @@ import uuid
 import zipfile
 from io import BytesIO
 from typing import Any
-from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
 SOLUTION_UNIQUE_NAME = 'CopilotMemoryInstaller'
@@ -230,19 +229,23 @@ def validar_solution_power_platform_importavel(payload: bytes) -> dict[str, Any]
 
         if not missing:
             try:
-                solution_root = ET.fromstring(archive.read('solution.xml'))
-                custom_root = ET.fromstring(archive.read('customizations.xml'))
-            except ET.ParseError as exc:
-                errors.append(f'XML invalido: {exc}')
+                solution_text = archive.read('solution.xml').decode('utf-8')
+                custom_text = archive.read('customizations.xml').decode('utf-8')
+            except UnicodeDecodeError as exc:
+                errors.append(f'XML nao esta em UTF-8 valido: {exc}')
             else:
-                root_components = solution_root.findall('.//RootComponent[@type="29"]')
-                if len(root_components) != 3:
-                    errors.append(f'esperados 3 RootComponents de fluxo; encontrados {len(root_components)}')
-                workflows = custom_root.findall('.//Workflows/Workflow')
-                if len(workflows) != 3:
-                    errors.append(f'esperados 3 Workflows no customizations; encontrados {len(workflows)}')
-                connections = custom_root.findall('.//connectionreferences/connectionreference')
-                logical_names = {item.attrib.get('connectionreferencelogicalname') for item in connections}
+                root_components = solution_text.count('<RootComponent type="29"')
+                if root_components != 3:
+                    errors.append(f'esperados 3 RootComponents de fluxo; encontrados {root_components}')
+                workflows = custom_text.count('<Workflow WorkflowId=')
+                if workflows != 3:
+                    errors.append(f'esperados 3 Workflows no customizations; encontrados {workflows}')
+                logical_names = set(
+                    re.findall(
+                        r'<connectionreference connectionreferencelogicalname="([A-Za-z0-9_]+)"',
+                        custom_text,
+                    )
+                )
                 expected = {PLANNER_CONNECTION_LOGICAL_NAME, EXCEL_CONNECTION_LOGICAL_NAME}
                 if logical_names != expected:
                     errors.append('referencias de conexao Planner/Excel incompletas')
