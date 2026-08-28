@@ -168,7 +168,14 @@ jobs:
     name: Sync (${{ matrix.target_environment }})
     runs-on: ubuntu-latest
     needs: [validate-manifest, plan-environments]
-    if: needs.plan-environments.outputs.should_deploy == 'true'
+    # `plan-environments` usa always() porque gates não aplicáveis ficam skipped.
+    # Sem always() aqui, o GitHub propaga esse skipped pela cadeia e ignora o
+    # deploy mesmo quando o plano produziu should_deploy=true.
+    if: >-
+      always() &&
+      needs.validate-manifest.result == 'success' &&
+      needs.plan-environments.result == 'success' &&
+      needs.plan-environments.outputs.should_deploy == 'true'
     strategy:
       fail-fast: false
       max-parallel: 1
