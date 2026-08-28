@@ -27,7 +27,13 @@ jobs:
         run: |
           set -euo pipefail
           canonical='.github/workflows/deploy-reqsys-pages-composite.yml'
-          mapfile -t publishers < <(grep -RIl --include='*.yml' --include='*.yaml' 'actions/deploy-pages@' .github/workflows | sort)
+          guard='.github/workflows/pages-single-writer-guard.yml'
+
+          mapfile -t publishers < <(
+            grep -RIl --include='*.yml' --include='*.yaml' 'actions/deploy-pages@' .github/workflows \
+              | grep -vFx "$guard" \
+              | sort
+          )
 
           printf 'Publicadores encontrados (%s):\n' "${#publishers[@]}"
           printf ' - %s\n' "${publishers[@]:-nenhum}"
@@ -43,7 +49,8 @@ jobs:
           fi
 
           if grep -RIl --include='*.yml' --include='*.yaml' 'pages:[[:space:]]*write' .github/workflows \
-            | grep -vFx "$canonical"; then
+            | grep -vFx "$canonical" \
+            | grep -vFx "$guard"; then
             echo 'Workflow não canônico possui permissão pages: write.' >&2
             exit 1
           fi
