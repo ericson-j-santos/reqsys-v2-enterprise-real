@@ -30,15 +30,16 @@ def test_api_and_frontend_are_independent_parallel_jobs() -> None:
     assert "deploy-api" not in frontend
 
 
-def test_api_waits_for_real_health_while_frontend_remains_immediate() -> None:
+def test_dev_deploy_does_not_block_on_fly_machine_control_plane() -> None:
     workflow = text()
     api = workflow.split("\n  deploy-api:\n", 1)[1].split("\n  deploy-frontend:\n", 1)[0]
     frontend = workflow.split("\n  deploy-frontend:\n", 1)[1].split("\n  smoke:\n", 1)[0]
 
     assert "flyctl secrets set ALLOW_DEMO_LOGIN=true --stage" in api
-    assert "--strategy rolling" in api
-    assert "--wait-timeout 3m" in api
-    assert "--strategy immediate" not in api
+    assert "health público abaixo é o gate autoritativo" in api
+    assert "--strategy immediate" in api
+    assert "--strategy rolling" not in api
+    assert "--wait-timeout 2m" in api
     assert "--strategy immediate" in frontend
     assert "--wait-timeout 2m" in frontend
     assert "--deploy-retries 2" in api
@@ -52,7 +53,7 @@ def test_dev_deploy_removes_known_fixed_waits_and_duplicate_restart() -> None:
     assert "sleep 60" not in workflow
 
 
-def test_smoke_waits_for_api_readiness_without_fixed_delay() -> None:
+def test_smoke_public_health_is_authoritative_readiness_gate() -> None:
     workflow = text()
     smoke = workflow.split("\n  smoke:\n", 1)[1].split("\n  summary:\n", 1)[0]
 
@@ -62,6 +63,7 @@ def test_smoke_waits_for_api_readiness_without_fixed_delay() -> None:
     assert "urlopen(request, timeout=5)" in smoke
     assert "time.sleep(min(2, restante))" in smoke
     assert "API DEV não ficou pronta em até 150s" in smoke
+    assert "raise SystemExit(1)" in smoke
 
 
 def test_smoke_waits_for_both_deploys_and_checks_installer_route() -> None:

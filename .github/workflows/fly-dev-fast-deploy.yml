@@ -125,14 +125,16 @@ jobs:
         run: |
           set -euo pipefail
           config="${FLY_CONFIG#backend/}"
+          # O health público abaixo é o gate autoritativo em DEV. A estratégia
+          # immediate evita bloquear por timeout da API de controle Machines do Fly.
           flyctl deploy \
             --remote-only \
             --config "$config" \
             --app "$FLY_APP" \
             --build-arg "GITHUB_SHA=${{ github.sha }}" \
-            --strategy rolling \
+            --strategy immediate \
             --deploy-retries 2 \
-            --wait-timeout 3m \
+            --wait-timeout 2m \
             --now
       - uses: actions/upload-artifact@v4
         if: always()
