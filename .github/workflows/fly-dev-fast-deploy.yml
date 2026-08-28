@@ -130,9 +130,9 @@ jobs:
             --config "$config" \
             --app "$FLY_APP" \
             --build-arg "GITHUB_SHA=${{ github.sha }}" \
-            --strategy immediate \
+            --strategy rolling \
             --deploy-retries 2 \
-            --wait-timeout 2m \
+            --wait-timeout 3m \
             --now
       - uses: actions/upload-artifact@v4
         if: always()
