@@ -130,9 +130,9 @@ jobs:
             --config "$config" \
             --app "$FLY_APP" \
             --build-arg "GITHUB_SHA=${{ github.sha }}" \
-            --strategy immediate \
+            --strategy rolling \
             --deploy-retries 2 \
-            --wait-timeout 2m \
+            --wait-timeout 3m \
             --now
       - uses: actions/upload-artifact@v4
         if: always()
@@ -194,12 +194,50 @@ jobs:
       needs.preflight.outputs.should_deploy == 'true' &&
       needs.deploy-api.result == 'success' &&
       needs.deploy-frontend.result == 'success'
-    timeout-minutes: 4
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Aguardar API pública ficar pronta
+        env:
+          API_URL: ${{ needs.preflight.outputs.api_url }}
+        run: |
+          python - <<'PY'
+          import os
+          import time
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          url = os.environ["API_URL"].rstrip("/") + "/health"
+          deadline = time.monotonic() + 150
+          tentativa = 0
+          ultimo_erro = "sem tentativa"
+
+          while time.monotonic() < deadline:
+              tentativa += 1
+              try:
+                  request = Request(
+                      url,
+                      headers={"Accept": "application/json", "User-Agent": "reqsys-dev-fast-readiness/1.0"},
+                  )
+                  with urlopen(request, timeout=5) as response:
+                      if 200 <= int(response.status) < 300:
+                          print(f"API DEV pronta na tentativa {tentativa}: HTTP {response.status}")
+                          raise SystemExit(0)
+                      ultimo_erro = f"HTTP {response.status}"
+              except (HTTPError, URLError, TimeoutError, OSError) as exc:
+                  ultimo_erro = f"{type(exc).__name__}: {exc}"
+
+              restante = deadline - time.monotonic()
+              if restante <= 0:
+                  break
+              time.sleep(min(2, restante))
+
+          print(f"::error::API DEV não ficou pronta em até 150s: {ultimo_erro}")
+          raise SystemExit(1)
+          PY
       - name: Validar runtime, sincronização e rota do assistente em paralelo
         env:
           API_URL: ${{ needs.preflight.outputs.api_url }}
@@ -209,6 +247,7 @@ jobs:
 
           python scripts/validate_public_runtime.py \
             --base-url "$API_URL" \
+            --environment dev \
             --include-optional-evidence \
             --output public-runtime-validation-dev.json &
           runtime_pid=$!

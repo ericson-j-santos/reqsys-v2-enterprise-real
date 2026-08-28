@@ -30,15 +30,38 @@ def test_api_and_frontend_are_independent_parallel_jobs() -> None:
     assert "deploy-api" not in frontend
 
 
-def test_dev_deploy_removes_known_waits_and_duplicate_restart() -> None:
+def test_api_waits_for_real_health_while_frontend_remains_immediate() -> None:
+    workflow = text()
+    api = workflow.split("\n  deploy-api:\n", 1)[1].split("\n  deploy-frontend:\n", 1)[0]
+    frontend = workflow.split("\n  deploy-frontend:\n", 1)[1].split("\n  smoke:\n", 1)[0]
+
+    assert "flyctl secrets set ALLOW_DEMO_LOGIN=true --stage" in api
+    assert "--strategy rolling" in api
+    assert "--wait-timeout 3m" in api
+    assert "--strategy immediate" not in api
+    assert "--strategy immediate" in frontend
+    assert "--wait-timeout 2m" in frontend
+    assert "--deploy-retries 2" in api
+    assert "--deploy-retries 2" in frontend
+
+
+def test_dev_deploy_removes_known_fixed_waits_and_duplicate_restart() -> None:
     workflow = text()
 
-    assert "flyctl secrets set ALLOW_DEMO_LOGIN=true --stage" in workflow
-    assert "--strategy immediate" in workflow
-    assert "--deploy-retries 2" in workflow
-    assert "--wait-timeout 2m" in workflow
     assert "sleep 10" not in workflow
     assert "sleep 60" not in workflow
+
+
+def test_smoke_waits_for_api_readiness_without_fixed_delay() -> None:
+    workflow = text()
+    smoke = workflow.split("\n  smoke:\n", 1)[1].split("\n  summary:\n", 1)[0]
+
+    assert "Aguardar API pública ficar pronta" in smoke
+    assert 'url = os.environ["API_URL"].rstrip("/") + "/health"' in smoke
+    assert "deadline = time.monotonic() + 150" in smoke
+    assert "urlopen(request, timeout=5)" in smoke
+    assert "time.sleep(min(2, restante))" in smoke
+    assert "API DEV não ficou pronta em até 150s" in smoke
 
 
 def test_smoke_waits_for_both_deploys_and_checks_installer_route() -> None:
@@ -50,6 +73,7 @@ def test_smoke_waits_for_both_deploys_and_checks_installer_route() -> None:
     assert "needs.deploy-frontend.result == 'success'" in smoke
     assert "/hub-lowcode/copilot-memory/instalar" in smoke
     assert "validate_public_runtime.py" in smoke
+    assert "--environment dev" in smoke
     assert "validate_publication_sync.py" in smoke
 
 
