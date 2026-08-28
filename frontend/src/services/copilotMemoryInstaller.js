@@ -41,9 +41,8 @@ export async function gerarPacoteCopilotMemory() {
   return unwrap(await api.post(`${BASE}/lowcode/package`, {}))
 }
 
-export function baixarPacoteGerado(solution) {
-  const encoded = solution?.package?.zip_base64
-  if (!encoded) throw new Error('Pacote não foi retornado pelo ReqSys.')
+function baixarBase64(encoded, filename) {
+  if (!encoded) throw new Error('Arquivo não foi retornado pelo ReqSys.')
   const binary = atob(encoded)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
@@ -51,11 +50,25 @@ export function baixarPacoteGerado(solution) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = solution?.package?.zip_filename || 'CopilotMemoryCorporativo-Pronto.zip'
+  link.download = filename
   document.body.appendChild(link)
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
+}
+
+export function baixarPacoteGerado(solution) {
+  baixarBase64(
+    solution?.package?.zip_base64,
+    solution?.package?.zip_filename || 'CopilotMemoryCorporativo-Pronto.zip',
+  )
+}
+
+export function baixarSolucaoNativa(solution) {
+  baixarBase64(
+    solution?.package?.native_solution_base64,
+    solution?.package?.native_solution_filename || 'CopilotMemoryInstaller.zip',
+  )
 }
 
 export function mensagemErroInstalacao(error) {
