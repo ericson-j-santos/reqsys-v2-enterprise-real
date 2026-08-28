@@ -1,5 +1,8 @@
 """Testes do RequisitoRepository — porta de acesso a dados consolidada (ADR-001)."""
 
+import logging
+
+import app.repositories.requisito_repository as requisito_repository_module
 from app.models.orchestrator import OrchestratorRoutingEvent
 from app.models.requisito import Requisito
 from app.repositories.requisito_repository import RequisitoRepository
@@ -125,10 +128,42 @@ def test_criar_inicia_refinamento_e_roteia_orquestrador(db_session):
     assert len(evento.payload_hash) == 64
 
 
-def test_criar_preserva_status_quando_fluxo_governado_informa_explicitamente(db_session):
+def test_criar_preserva_refinamento_quando_roteamento_falha(
+    db_session,
+    monkeypatch,
+    caplog,
+):
+    def _falhar_roteamento(*_args, **_kwargs):
+        raise RuntimeError('falha simulada do roteador')
+
+    monkeypatch.setattr(
+        requisito_repository_module,
+        'classificar_e_persistir_demanda',
+        _falhar_roteamento,
+    )
+    caplog.set_level(logging.ERROR, logger='reqsys.requisito_repository')
+
     repo = RequisitoRepository(db_session)
     requisito = repo.criar(
         'REQ-REPO-016',
+        titulo='Requisito resiliente',
+        descricao='Entrada que deve permanecer em refinamento se o roteador falhar.',
+        urgencia='alta',
+        area='TI',
+        sistema='ReqSys',
+        solicitante='tester',
+    )
+
+    assert requisito.status == 'refinamento'
+    assert repo.buscar_por_codigo('REQ-REPO-016').status == 'refinamento'
+    assert db_session.query(OrchestratorRoutingEvent).count() == 0
+    assert 'requisito_refinamento_roteamento_falhou' in caplog.text
+
+
+def test_criar_preserva_status_quando_fluxo_governado_informa_explicitamente(db_session):
+    repo = RequisitoRepository(db_session)
+    requisito = repo.criar(
+        'REQ-REPO-017',
         titulo='Requisito já governado',
         descricao='Entrada originada por fluxo que controla explicitamente a máquina de estados.',
         urgencia='media',
@@ -139,4 +174,37 @@ def test_criar_preserva_status_quando_fluxo_governado_informa_explicitamente(db_
     )
 
     assert requisito.status == 'recebido'
+    assert db_session.query(OrchestratorRoutingEvent).count() == 0
+
+
+def test_criar_sem_texto_observacional_nao_dispara_avaliacao(
+    db_session,
+    monkeypatch,
+):
+    avaliacao_chamada = False
+
+    def _registrar_avaliacao(*_args, **_kwargs):
+        nonlocal avaliacao_chamada
+        avaliacao_chamada = True
+
+    monkeypatch.setattr(
+        requisito_repository_module,
+        'avaliar_requisito_observacional',
+        _registrar_avaliacao,
+    )
+
+    repo = RequisitoRepository(db_session)
+    requisito = repo.criar(
+        'REQ-REPO-018',
+        titulo=' ',
+        descricao=' ',
+        urgencia='media',
+        area='TI',
+        sistema='ReqSys',
+        solicitante='tester',
+        status='recebido',
+    )
+
+    assert requisito.status == 'recebido'
+    assert avaliacao_chamada is False
     assert db_session.query(OrchestratorRoutingEvent).count() == 0
