@@ -30,13 +30,24 @@ def test_api_and_frontend_are_independent_parallel_jobs() -> None:
     assert "deploy-api" not in frontend
 
 
-def test_dev_deploy_removes_known_waits_and_duplicate_restart() -> None:
+def test_api_waits_for_real_health_while_frontend_remains_immediate() -> None:
+    workflow = text()
+    api = workflow.split("\n  deploy-api:\n", 1)[1].split("\n  deploy-frontend:\n", 1)[0]
+    frontend = workflow.split("\n  deploy-frontend:\n", 1)[1].split("\n  smoke:\n", 1)[0]
+
+    assert "flyctl secrets set ALLOW_DEMO_LOGIN=true --stage" in api
+    assert "--strategy rolling" in api
+    assert "--wait-timeout 3m" in api
+    assert "--strategy immediate" not in api
+    assert "--strategy immediate" in frontend
+    assert "--wait-timeout 2m" in frontend
+    assert "--deploy-retries 2" in api
+    assert "--deploy-retries 2" in frontend
+
+
+def test_dev_deploy_removes_known_fixed_waits_and_duplicate_restart() -> None:
     workflow = text()
 
-    assert "flyctl secrets set ALLOW_DEMO_LOGIN=true --stage" in workflow
-    assert "--strategy immediate" in workflow
-    assert "--deploy-retries 2" in workflow
-    assert "--wait-timeout 2m" in workflow
     assert "sleep 10" not in workflow
     assert "sleep 60" not in workflow
 
