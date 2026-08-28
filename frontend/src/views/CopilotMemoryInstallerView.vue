@@ -38,6 +38,10 @@
                 ? 'Conexão corporativa do ReqSys disponível.'
                 : 'O ReqSys ainda não possui uma identidade Microsoft autorizada neste ambiente.' }}
             </v-alert>
+            <v-alert v-if="!status.microsoft_configurado" type="info" variant="tonal" density="compact" class="mb-3">
+              A instalação automática depende dessa autorização. A contingência continua disponível e agora inclui
+              <strong>CopilotMemoryInstaller.zip</strong> para importação direta em Soluções do Power Automate.
+            </v-alert>
             <v-select
               v-model="ambiente"
               :items="status.ambientes || []"
@@ -186,8 +190,11 @@
               <v-list-item title="Executor ALM" :subtitle="status.alm_configurado ? 'Disponível' : 'Pendente'" />
             </v-list>
             <v-divider class="my-3" />
+            <v-alert type="success" variant="tonal" density="compact" class="mb-3">
+              A contingência independe da configuração automática do Microsoft 365 no ReqSys e contém uma solução pronta para importação manual.
+            </v-alert>
             <v-btn block variant="text" prepend-icon="mdi-download" :loading="baixando" @click="baixarContingencia">
-              Baixar pacote de contingência
+              Baixar contingência + solução importável
             </v-btn>
           </v-card-text>
         </v-card>
