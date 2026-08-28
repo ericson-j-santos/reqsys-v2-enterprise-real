@@ -36,7 +36,10 @@
             >
               {{ status.microsoft_configurado
                 ? 'Conexão corporativa do ReqSys disponível.'
-                : 'O ReqSys ainda não possui uma identidade Microsoft autorizada neste ambiente.' }}
+                : 'A instalação automática ainda não possui uma identidade Microsoft autorizada neste ambiente.' }}
+            </v-alert>
+            <v-alert v-if="!status.microsoft_configurado" type="info" variant="tonal" density="compact" class="mb-3">
+              A contingência continua disponível: baixe a solução nativa e importe em Power Automate → Soluções → Importar.
             </v-alert>
             <v-select
               v-model="ambiente"
@@ -176,7 +179,7 @@
           <v-card-title>Resumo</v-card-title>
           <v-card-text>
             <v-list density="compact">
-              <v-list-item title="Microsoft 365" :subtitle="status.microsoft_configurado ? 'Disponível' : 'Pendente'" />
+              <v-list-item title="Microsoft 365" :subtitle="status.microsoft_configurado ? 'Disponível' : 'Pendente para instalação automática'" />
               <v-list-item title="Ambiente" :subtitle="ambiente?.nome || 'Não escolhido'" />
               <v-list-item title="Grupo" :subtitle="grupo?.nome || 'Não escolhido'" />
               <v-list-item title="Planner" :subtitle="plano?.titulo || 'Não escolhido'" />
@@ -186,8 +189,14 @@
               <v-list-item title="Executor ALM" :subtitle="status.alm_configurado ? 'Disponível' : 'Pendente'" />
             </v-list>
             <v-divider class="my-3" />
-            <v-btn block variant="text" prepend-icon="mdi-download" :loading="baixando" @click="baixarContingencia">
-              Baixar pacote de contingência
+            <v-alert type="info" variant="tonal" density="compact" class="mb-3">
+              Caminho manual independente da configuração acima: importe <strong>CopilotMemoryInstaller.zip</strong> em Soluções.
+            </v-alert>
+            <v-btn block color="primary" variant="tonal" prepend-icon="mdi-package-variant" :loading="baixandoSolucao" @click="baixarSolucaoManual">
+              Baixar solução para importar
+            </v-btn>
+            <v-btn block class="mt-2" variant="text" prepend-icon="mdi-download" :loading="baixando" @click="baixarContingencia">
+              Baixar contingência completa
             </v-btn>
           </v-card-text>
         </v-card>
@@ -204,6 +213,7 @@
 import { computed, onMounted, ref } from 'vue'
 import {
   baixarPacoteGerado,
+  baixarSolucaoNativa,
   carregarStatusInstalacao,
   criarPlanilhaInstalacao,
   gerarPacoteCopilotMemory,
@@ -236,6 +246,7 @@ const carregandoConexoes = ref(false)
 const validando = ref(false)
 const implantando = ref(false)
 const baixando = ref(false)
+const baixandoSolucao = ref(false)
 
 const prontoParaValidar = computed(() => Boolean(
   ambiente.value?.id && ambiente.value?.url && grupo.value?.id && plano.value?.id &&
@@ -367,6 +378,18 @@ async function implantar() {
     erro.value = mensagemErroInstalacao(e)
   } finally {
     implantando.value = false
+  }
+}
+
+async function baixarSolucaoManual() {
+  baixandoSolucao.value = true
+  erro.value = ''
+  try {
+    baixarSolucaoNativa(await gerarPacoteCopilotMemory())
+  } catch (e) {
+    erro.value = mensagemErroInstalacao(e)
+  } finally {
+    baixandoSolucao.value = false
   }
 }
 
