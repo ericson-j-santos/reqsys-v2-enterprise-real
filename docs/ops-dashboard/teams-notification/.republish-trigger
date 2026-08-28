@@ -1,0 +1,5 @@
+ReqSys public dashboard republish trigger.
+
+Reason: restore the canonical GitHub Pages publication after the public smoke detected missing dashboard markers and 404 responses for data.json and certification-status.json on 2026-08-28.
+
+This file intentionally lives under the path watched by teams-notification-dashboard.yml so the normal governed publication flow is executed on merge.
