@@ -41,6 +41,18 @@ def test_dev_deploy_removes_known_waits_and_duplicate_restart() -> None:
     assert "sleep 60" not in workflow
 
 
+def test_smoke_waits_for_api_readiness_without_fixed_delay() -> None:
+    workflow = text()
+    smoke = workflow.split("\n  smoke:\n", 1)[1].split("\n  summary:\n", 1)[0]
+
+    assert "Aguardar API pública ficar pronta" in smoke
+    assert 'url = os.environ["API_URL"].rstrip("/") + "/health"' in smoke
+    assert "deadline = time.monotonic() + 150" in smoke
+    assert "urlopen(request, timeout=5)" in smoke
+    assert "time.sleep(min(2, restante))" in smoke
+    assert "API DEV não ficou pronta em até 150s" in smoke
+
+
 def test_smoke_waits_for_both_deploys_and_checks_installer_route() -> None:
     workflow = text()
     smoke = workflow.split("\n  smoke:\n", 1)[1].split("\n  summary:\n", 1)[0]
@@ -50,6 +62,7 @@ def test_smoke_waits_for_both_deploys_and_checks_installer_route() -> None:
     assert "needs.deploy-frontend.result == 'success'" in smoke
     assert "/hub-lowcode/copilot-memory/instalar" in smoke
     assert "validate_public_runtime.py" in smoke
+    assert "--environment dev" in smoke
     assert "validate_publication_sync.py" in smoke
 
 
