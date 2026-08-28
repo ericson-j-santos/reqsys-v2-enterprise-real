@@ -28,7 +28,7 @@ gitlab_governance_provision_dry_run:
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
-  allow_failure: false
+  allow_failure: true
 
 gitlab_governance_provision_apply:
   stage: governance
@@ -44,7 +44,7 @@ gitlab_governance_provision_apply:
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
-  allow_failure: false
+  allow_failure: true
 
 # Routes open issues labelled ia:* to their domain branch (see
 # gitlab/docs/GITLAB_OPERATING_MODEL.md). Manual, protected and idempotent,
@@ -65,7 +65,7 @@ gitlab_route_issues_dry_run:
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
-  allow_failure: false
+  allow_failure: true
 
 gitlab_route_issues_apply:
   stage: governance
@@ -81,4 +81,4 @@ gitlab_route_issues_apply:
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
-  allow_failure: false
+  allow_failure: true
