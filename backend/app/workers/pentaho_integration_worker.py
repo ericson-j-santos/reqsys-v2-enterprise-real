@@ -3,7 +3,6 @@ import logging
 import os
 import signal
 import threading
-import time
 
 import app.models  # noqa: F401
 from app.db import Base, SessionLocal, engine
