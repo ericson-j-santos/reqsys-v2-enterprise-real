@@ -69,6 +69,31 @@ async function elevarPermissoesAdministrativas(page) {
 
 async function horizontalOverflowEvidence(page) {
   return page.evaluate(() => {
+    const descreverElemento = (element, containerRect) => {
+      const rect = element.getBoundingClientRect()
+      const style = window.getComputedStyle(element)
+      const texto = String(element.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80)
+      const classes = typeof element.className === 'string'
+        ? element.className.split(/\s+/).filter(Boolean).slice(0, 5).join('.')
+        : ''
+
+      return {
+        tag: element.tagName.toLowerCase(),
+        id: element.id || null,
+        testId: element.getAttribute('data-testid'),
+        classes: classes || null,
+        texto: texto || null,
+        left: Math.floor(rect.left),
+        right: Math.ceil(rect.right),
+        width: Math.ceil(rect.width),
+        scrollWidth: Math.ceil(element.scrollWidth),
+        clientWidth: Math.ceil(element.clientWidth),
+        excessoDireita: Math.max(0, Math.ceil(rect.right - containerRect.right)),
+        excessoEsquerda: Math.max(0, Math.ceil(containerRect.left - rect.left)),
+        overflowX: style.overflowX,
+      }
+    }
+
     const targets = [
       ['documento', document.documentElement],
       ['body', document.body],
@@ -77,11 +102,29 @@ async function horizontalOverflowEvidence(page) {
     ].filter(([, element]) => element)
 
     return targets
-      .map(([name, element]) => ({
-        name,
-        scrollWidth: Math.ceil(element.scrollWidth),
-        clientWidth: Math.ceil(element.clientWidth),
-      }))
+      .map(([name, element]) => {
+        const item = {
+          name,
+          scrollWidth: Math.ceil(element.scrollWidth),
+          clientWidth: Math.ceil(element.clientWidth),
+        }
+        if (item.scrollWidth <= item.clientWidth + 2) return item
+
+        const containerRect = element.getBoundingClientRect()
+        item.ofensores = [...element.querySelectorAll('*')]
+          .filter((child) => {
+            const rect = child.getBoundingClientRect()
+            return rect.width > 0 && (
+              rect.right > containerRect.right + 2 ||
+              rect.left < containerRect.left - 2
+            )
+          })
+          .map((child) => descreverElemento(child, containerRect))
+          .sort((a, b) => Math.max(b.excessoDireita, b.excessoEsquerda) - Math.max(a.excessoDireita, a.excessoEsquerda))
+          .slice(0, 8)
+
+        return item
+      })
       .filter((item) => item.scrollWidth > item.clientWidth + 2)
   })
 }
