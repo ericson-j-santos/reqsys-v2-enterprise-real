@@ -113,7 +113,7 @@ def patch_ops_dashboard(path: Path) -> None:
     if MARKER not in text:
         text = inject_once(text, "    <section class=\"card\">\n      <h2>Runtime público", OPS_SECTION + "\n", "ops section")
     if "function renderExecutiveReadinessVisual(payload)" not in text:
-        text = inject_once(text, "    function renderMergeIntelligence()", OPS_FUNCTION + "\n", "ops function")
+        text = inject_once(text, "    async function renderMergeIntelligence()", OPS_FUNCTION + "\n", "ops function")
     if "renderExecutiveReadinessVisual(payload);" not in text:
         text = text.replace("      const payload = response.data || fallback;\n      const cards = payload.cards || fallback.cards;", "      const payload = response.data || fallback;\n      renderExecutiveReadinessVisual(payload);\n      const cards = payload.cards || fallback.cards;", 1)
     path.write_text(text, encoding="utf-8")
