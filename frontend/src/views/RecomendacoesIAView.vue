@@ -140,7 +140,7 @@
                 <v-select v-model="outcomeForm.foi_aplicada" :items="booleanOptions" label="Aplicada?" />
                 <v-text-field v-model="outcomeForm.versao_aplicada" label="Versão aplicada" />
                 <v-select v-model="outcomeForm.outcome_positivo" :items="nullableBooleanOptions" label="Outcome positivo?" />
-                <v-text-field v-model.number="outcomeForm.score_pos_correcao" type="number" min="0" max="1" step="0.01" label="Score pós-correção" />
+                <v-text-field v-model.number="outcomeForm.score_pos_correcao" type="number" min="0" max="1" step="0.01" label="Índice pós-correção" />
                 <v-textarea v-model="outcomeForm.observacao" label="Observação" rows="2" />
                 <v-btn block color="primary" :loading="savingOutcome" @click="saveOutcome">Registrar outcome</v-btn>
               </v-card-text>

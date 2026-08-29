@@ -43,7 +43,7 @@ export const isJourneyRequest = (config = {}) => {
 export const journeyLoadingMessage = (config = {}) => {
   const url = String(config.url || '')
   if (url.includes('/govbi')) return 'GovBI IA está processando sua solicitação…'
-  if (url.includes('/runtime')) return 'Atualizando informações do execução…'
+  if (url.includes('/runtime')) return 'Atualizando informações da execução…'
   if (url.includes('/monitoramento')) return 'Atualizando monitoramento operacional…'
   if (url.includes('/analytics')) return 'Atualizando indicadores analíticos…'
   return 'Atualizando painel operacional…'

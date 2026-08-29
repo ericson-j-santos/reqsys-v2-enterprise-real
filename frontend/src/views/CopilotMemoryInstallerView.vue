@@ -187,7 +187,7 @@
               <v-list-item title="Planilha" :subtitle="arquivo?.nome || 'Não escolhida'" />
               <v-list-item title="Planner conectado" :subtitle="plannerConnection ? 'Sim' : 'Não'" />
               <v-list-item title="Excel conectado" :subtitle="excelConnection ? 'Sim' : 'Não'" />
-              <v-list-item title="Executor ALM" :subtitle="status.alm_configurado ? 'Disponível' : 'Pendente'" />
+              <v-list-item title="Administração do ciclo de entrega" :subtitle="status.alm_configurado ? 'Disponível' : 'Pendente'" />
             </v-list>
             <v-divider class="my-3" />
             <v-alert type="success" variant="tonal" density="compact" class="mb-3">
