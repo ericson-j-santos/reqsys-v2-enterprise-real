@@ -72,9 +72,13 @@ async function horizontalOverflowEvidence(page) {
     const descreverElemento = (element, containerRect) => {
       const rect = element.getBoundingClientRect()
       const style = window.getComputedStyle(element)
+      const parent = element.parentElement
       const texto = String(element.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80)
       const classes = typeof element.className === 'string'
         ? element.className.split(/\s+/).filter(Boolean).slice(0, 5).join('.')
+        : ''
+      const classesPai = parent && typeof parent.className === 'string'
+        ? parent.className.split(/\s+/).filter(Boolean).slice(0, 5).join('.')
         : ''
 
       return {
@@ -82,6 +86,7 @@ async function horizontalOverflowEvidence(page) {
         id: element.id || null,
         testId: element.getAttribute('data-testid'),
         classes: classes || null,
+        pai: parent ? `${parent.tagName.toLowerCase()}${classesPai ? `.${classesPai}` : ''}` : null,
         texto: texto || null,
         left: Math.floor(rect.left),
         right: Math.ceil(rect.right),
@@ -89,7 +94,10 @@ async function horizontalOverflowEvidence(page) {
         scrollWidth: Math.ceil(element.scrollWidth),
         clientWidth: Math.ceil(element.clientWidth),
         excessoDireita: Math.max(0, Math.ceil(rect.right - containerRect.right)),
-        excessoEsquerda: Math.max(0, Math.ceil(containerRect.left - rect.left)),
+        margemDireita: style.marginRight,
+        paddingDireita: style.paddingRight,
+        position: style.position,
+        transform: style.transform === 'none' ? null : style.transform,
         overflowX: style.overflowX,
       }
     }
@@ -111,17 +119,14 @@ async function horizontalOverflowEvidence(page) {
         if (item.scrollWidth <= item.clientWidth + 2) return item
 
         const containerRect = element.getBoundingClientRect()
-        item.ofensores = [...element.querySelectorAll('*')]
+        item.ofensoresDireita = [...element.querySelectorAll('*')]
           .filter((child) => {
             const rect = child.getBoundingClientRect()
-            return rect.width > 0 && (
-              rect.right > containerRect.right + 2 ||
-              rect.left < containerRect.left - 2
-            )
+            return rect.width > 0 && rect.right > containerRect.right + 2
           })
           .map((child) => descreverElemento(child, containerRect))
-          .sort((a, b) => Math.max(b.excessoDireita, b.excessoEsquerda) - Math.max(a.excessoDireita, a.excessoEsquerda))
-          .slice(0, 8)
+          .sort((a, b) => b.excessoDireita - a.excessoDireita)
+          .slice(0, 12)
 
         return item
       })
