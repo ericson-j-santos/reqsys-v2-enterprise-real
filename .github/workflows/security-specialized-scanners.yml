@@ -260,7 +260,7 @@ jobs:
         id: analyze
         uses: github/codeql-action/analyze@v4
         with:
-          category: "language:${{ matrix.language }}"
+          category: "/language:${{ matrix.language }}"
           output: "artifacts/security-scanners/codeql/${{ matrix.language }}/raw"
           post-processed-sarif-path: "artifacts/security-scanners/codeql/${{ matrix.language }}/processed"
           upload: always
@@ -297,7 +297,7 @@ jobs:
             echo "| Resultado da análise | \`${ANALYZE_OUTCOME:-unknown}\` |"
             echo "| SARIF preservado | \`${sarif_count}\` arquivo(s) |"
             echo "| SARIF processado pelo GitHub | \`${SARIF_ID:-não informado}\` |"
-            echo "| Categoria | \`language:${{ matrix.language }}\` |"
+            echo "| Categoria | \`/language:${{ matrix.language }}\` |"
             echo
             echo "[Abrir Code Scanning](https://github.com/${{ github.repository }}/security/code-scanning)"
           } >> "$GITHUB_STEP_SUMMARY"
