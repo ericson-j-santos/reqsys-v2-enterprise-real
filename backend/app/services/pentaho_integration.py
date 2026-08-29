@@ -1,10 +1,11 @@
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi import HTTPException
+from sqlalchemy import and_, func, or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,15 +26,27 @@ def _agora() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _max_registros() -> int:
-    valor = os.getenv('REQSYS_PENTAHO_MAX_REGISTROS', '10000')
+def _inteiro_configurado(nome: str, padrao: int, minimo: int = 1) -> int:
+    valor = os.getenv(nome, str(padrao))
     try:
-        limite = int(valor)
+        numero = int(valor)
     except ValueError as exc:
-        raise RuntimeError('REQSYS_PENTAHO_MAX_REGISTROS deve ser inteiro') from exc
-    if limite < 1:
-        raise RuntimeError('REQSYS_PENTAHO_MAX_REGISTROS deve ser maior que zero')
-    return limite
+        raise RuntimeError(f'{nome} deve ser inteiro') from exc
+    if numero < minimo:
+        raise RuntimeError(f'{nome} deve ser maior ou igual a {minimo}')
+    return numero
+
+
+def _max_registros() -> int:
+    return _inteiro_configurado('REQSYS_PENTAHO_MAX_REGISTROS', 10000)
+
+
+def _timeout_processamento_segundos() -> int:
+    return _inteiro_configurado('REQSYS_PENTAHO_PROCESSING_TIMEOUT_SECONDS', 300, minimo=10)
+
+
+def _max_tentativas() -> int:
+    return _inteiro_configurado('REQSYS_PENTAHO_MAX_TENTATIVAS', 5)
 
 
 def _serializar_payload(payload: PentahoLoteEntrada) -> str:
@@ -164,14 +177,32 @@ def serializar_status(lote: PentahoIntegrationBatch) -> dict:
     }
 
 
-def _processar_lote(db: Session, lote: PentahoIntegrationBatch) -> None:
-    lote.status = STATUS_PROCESSANDO
-    lote.tentativas = (lote.tentativas or 0) + 1
-    lote.erro_codigo = None
-    lote.erro_mensagem = None
-    db.add(lote)
-    db.commit()
+def reivindicar_lote(db: Session, lote_id: str) -> PentahoIntegrationBatch | None:
+    """Move PENDENTE -> PROCESSANDO de forma atômica.
 
+    O UPDATE condicionado ao estado garante que API e consumidor independente
+    possam disputar o mesmo lote sem executar o trabalho duas vezes.
+    """
+    agora = _agora()
+    resultado = db.execute(
+        update(PentahoIntegrationBatch)
+        .where(
+            PentahoIntegrationBatch.lote_id == lote_id,
+            PentahoIntegrationBatch.status == STATUS_PENDENTE,
+        )
+        .values(
+            status=STATUS_PROCESSANDO,
+            tentativas=func.coalesce(PentahoIntegrationBatch.tentativas, 0) + 1,
+            atualizado_em=agora,
+        )
+    )
+    db.commit()
+    if resultado.rowcount != 1:
+        return None
+    return db.query(PentahoIntegrationBatch).filter(PentahoIntegrationBatch.lote_id == lote_id).first()
+
+
+def _executar_lote_reivindicado(db: Session, lote: PentahoIntegrationBatch) -> None:
     try:
         payload = json.loads(lote.payload_json)
         registros = payload.get('registros')
@@ -189,7 +220,10 @@ def _processar_lote(db: Session, lote: PentahoIntegrationBatch) -> None:
         lote.registros_aceitos = aceitos
         lote.registros_rejeitados = rejeitados
         lote.status = STATUS_CONCLUIDO
-        lote.processado_em = _agora()
+        lote.erro_codigo = None
+        lote.erro_mensagem = None
+        lote.atualizado_em = _agora()
+        lote.processado_em = lote.atualizado_em
         db.add(lote)
         db.commit()
     except Exception as exc:
@@ -200,7 +234,8 @@ def _processar_lote(db: Session, lote: PentahoIntegrationBatch) -> None:
         lote.status = STATUS_QUARENTENA
         lote.erro_codigo = 'FALHA_PROCESSAMENTO_ADAPTADOR'
         lote.erro_mensagem = str(exc)[:2000]
-        lote.processado_em = _agora()
+        lote.atualizado_em = _agora()
+        lote.processado_em = lote.atualizado_em
         db.add(lote)
         db.commit()
         logger.exception(
@@ -209,18 +244,127 @@ def _processar_lote(db: Session, lote: PentahoIntegrationBatch) -> None:
         )
 
 
+def processar_lote_por_id(db: Session, lote_id: str) -> bool:
+    lote = reivindicar_lote(db, lote_id)
+    if lote is None:
+        return False
+    _executar_lote_reivindicado(db, lote)
+    return True
+
+
 def processar_lote_assincrono(lote_id: str) -> None:
+    """Atalho imediato da API; usa a mesma reivindicação do consumidor durável."""
     db = SessionLocal()
     try:
-        lote = db.query(PentahoIntegrationBatch).filter(PentahoIntegrationBatch.lote_id == lote_id).first()
-        if lote is None:
-            logger.error('Lote Pentaho não encontrado pelo consumidor', extra={'lote_id': lote_id})
-            return
-        if lote.status != STATUS_PENDENTE:
-            return
-        _processar_lote(db, lote)
+        processar_lote_por_id(db, lote_id)
     finally:
         db.close()
+
+
+def processar_proximo_lote(db: Session, limite_busca: int = 20) -> str | None:
+    candidatos = (
+        db.query(PentahoIntegrationBatch.lote_id)
+        .filter(PentahoIntegrationBatch.status == STATUS_PENDENTE)
+        .order_by(PentahoIntegrationBatch.criado_em.asc(), PentahoIntegrationBatch.id.asc())
+        .limit(max(1, min(limite_busca, 100)))
+        .all()
+    )
+    for (lote_id,) in candidatos:
+        if processar_lote_por_id(db, lote_id):
+            return lote_id
+    return None
+
+
+def recuperar_lotes_abandonados(
+    db: Session,
+    *,
+    agora: datetime | None = None,
+    timeout_segundos: int | None = None,
+    max_tentativas: int | None = None,
+) -> dict[str, int]:
+    """Recupera PROCESSANDO sem atualização dentro da janela de segurança.
+
+    Até o limite de tentativas o lote volta para PENDENTE. Ao atingir o limite,
+    ele é encerrado em QUARENTENA para evitar repetição infinita após falhas de
+    processo ou reinicializações sucessivas.
+    """
+    instante = agora or _agora()
+    timeout = timeout_segundos if timeout_segundos is not None else _timeout_processamento_segundos()
+    limite_tentativas = max_tentativas if max_tentativas is not None else _max_tentativas()
+    if timeout < 1:
+        raise ValueError('timeout_segundos deve ser maior que zero')
+    if limite_tentativas < 1:
+        raise ValueError('max_tentativas deve ser maior que zero')
+
+    limite = instante - timedelta(seconds=timeout)
+    condicao_abandono = or_(
+        PentahoIntegrationBatch.atualizado_em < limite,
+        and_(
+            PentahoIntegrationBatch.atualizado_em.is_(None),
+            PentahoIntegrationBatch.criado_em < limite,
+        ),
+    )
+    abandonados = (
+        db.query(PentahoIntegrationBatch)
+        .filter(
+            PentahoIntegrationBatch.status == STATUS_PROCESSANDO,
+            condicao_abandono,
+        )
+        .order_by(PentahoIntegrationBatch.id.asc())
+        .all()
+    )
+
+    recuperados = 0
+    enviados_quarentena = 0
+    for lote in abandonados:
+        tentativas = lote.tentativas or 0
+        if tentativas >= limite_tentativas:
+            valores = {
+                'status': STATUS_QUARENTENA,
+                'erro_codigo': 'LIMITE_TENTATIVAS_RECUPERACAO',
+                'erro_mensagem': 'Lote interrompido repetidamente e direcionado à quarentena',
+                'atualizado_em': instante,
+                'processado_em': instante,
+            }
+        else:
+            valores = {
+                'status': STATUS_PENDENTE,
+                'erro_codigo': 'RECUPERADO_APOS_INTERRUPCAO',
+                'erro_mensagem': 'Lote retornou à fila após processamento interrompido',
+                'atualizado_em': instante,
+                'processado_em': None,
+            }
+
+        resultado = db.execute(
+            update(PentahoIntegrationBatch)
+            .where(
+                PentahoIntegrationBatch.id == lote.id,
+                PentahoIntegrationBatch.status == STATUS_PROCESSANDO,
+                condicao_abandono,
+            )
+            .values(**valores)
+        )
+        if resultado.rowcount != 1:
+            continue
+
+        if valores['status'] == STATUS_QUARENTENA:
+            enviados_quarentena += 1
+        else:
+            recuperados += 1
+        logger.warning(
+            'lote_pentaho_recuperado lote_id=%s correlation_id=%s novo_status=%s tentativas=%s',
+            lote.lote_id,
+            lote.correlation_id,
+            valores['status'],
+            tentativas,
+        )
+
+    db.commit()
+    return {
+        'recuperados': recuperados,
+        'quarentena': enviados_quarentena,
+        'avaliados': len(abandonados),
+    }
 
 
 def preparar_reprocessamento(db: Session, lote_id: str) -> PentahoIntegrationBatch:
@@ -231,6 +375,7 @@ def preparar_reprocessamento(db: Session, lote_id: str) -> PentahoIntegrationBat
     lote.erro_codigo = None
     lote.erro_mensagem = None
     lote.processado_em = None
+    lote.atualizado_em = _agora()
     db.add(lote)
     db.commit()
     db.refresh(lote)
