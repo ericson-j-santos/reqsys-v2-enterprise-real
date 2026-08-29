@@ -49,24 +49,6 @@ const VIEWPORTS_PARETO = [
   { name: 'tablet', width: 768, height: 1024 },
 ]
 
-const PERMISSOES_ADMIN_RESPONSIVIDADE = [
-  'teams-recipient-policies:admin',
-  'operational-deploy:admin',
-  'security-sessions:admin',
-  'ocr-review:admin',
-]
-
-async function elevarPermissoesAdministrativas(page) {
-  await page.evaluate((permissoesExtras) => {
-    const raw = localStorage.getItem('reqsys_usuario')
-    if (!raw) throw new Error('Sessão demo não encontrada para teste responsivo.')
-    const usuario = JSON.parse(raw)
-    usuario.permissoes = [...new Set([...(usuario.permissoes || []), ...permissoesExtras])]
-    localStorage.setItem('reqsys_usuario', JSON.stringify(usuario))
-  }, PERMISSOES_ADMIN_RESPONSIVIDADE)
-  await page.reload()
-}
-
 async function horizontalOverflowEvidence(page) {
   return page.evaluate(() => {
     const descreverElemento = (element, containerRect) => {
@@ -177,7 +159,6 @@ test.describe(`responsividade padrão ouro — ${ROTAS_RESPONSIVAS.length} rotas
       await expectSemOverflowHorizontal(page)
 
       await loginDemo(page)
-      await elevarPermissoesAdministrativas(page)
 
       for (const rota of ROTAS_AUTENTICADAS) {
         await test.step(`${viewport.name}: ${rota.path}`, async () => {
@@ -194,7 +175,6 @@ test.describe(`responsividade padrão ouro — ${ROTAS_RESPONSIVAS.length} rotas
       test.setTimeout(90_000)
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await loginDemo(page)
-      await elevarPermissoesAdministrativas(page)
 
       for (const rota of ROTAS_PARETO) {
         await test.step(`${viewport.name}: ${rota.path}`, async () => {
