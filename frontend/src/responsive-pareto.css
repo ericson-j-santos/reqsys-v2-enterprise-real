@@ -1,0 +1,73 @@
+/*
+ * Correções Pareto de responsividade.
+ * Mantém as regras de adaptação concentradas nos pontos compartilhados para evitar
+ * correções página a página e reduzir regressões em novas telas.
+ */
+
+.req-appbar .v-toolbar__content {
+  min-width: 0;
+  gap: 2px;
+}
+
+.req-appbar .brand-sm,
+.req-appbar .req-role-chip {
+  min-width: 0;
+}
+
+.req-appbar .brand-sm {
+  flex-shrink: 1;
+  white-space: nowrap;
+}
+
+.req-appbar .req-role-chip {
+  flex-shrink: 1;
+  overflow: hidden;
+}
+
+/* Tabelas densas continuam utilizáveis sem deslocar a aplicação inteira. */
+.responsive-table-shell,
+.table-card,
+.v-table__wrapper {
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Diálogos nunca devem ultrapassar o viewport útil em telas estreitas. */
+.v-dialog > .v-overlay__content {
+  max-width: calc(100vw - 24px) !important;
+  max-height: calc(100dvh - 24px) !important;
+}
+
+@media (max-width: 600px) {
+  /* Alvo mínimo confortável para toque em ações primárias e botões de ícone. */
+  .v-btn {
+    min-height: 44px;
+  }
+
+  .v-btn.v-btn--icon {
+    min-width: 44px;
+  }
+
+  .v-dialog > .v-overlay__content > .v-card {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 400px) {
+  /* O papel permanece disponível no menu do usuário; removê-lo da barra evita
+     colisão entre marca, ambiente e ações em 320–390 px. */
+  .req-appbar .req-role-chip {
+    display: none !important;
+  }
+
+  .req-appbar .brand-sm {
+    font-size: 14px;
+    gap: 4px;
+  }
+
+  .req-appbar .ml-2 {
+    margin-left: 4px !important;
+  }
+}
