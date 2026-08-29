@@ -369,7 +369,7 @@ const activeIntents = computed(() => {
   ]
 
   if (status) {
-    intents.push({ id: 'filtered-context', label: `filtro: ${status}`, icon: 'mdi-filter-outline', color: 'amber' })
+    intents.push({ id: 'filtered-context', label: 'filtro: ' + status, icon: 'mdi-filter-outline', color: 'amber' })
   }
 
   return intents
