@@ -22,11 +22,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validar publicador canônico
+      - name: Validar publicador canônico e cadeia do smoke
         shell: bash
         run: |
           set -euo pipefail
           canonical='.github/workflows/deploy-reqsys-pages-composite.yml'
+          smoke='.github/workflows/teams-public-dashboard-smoke.yml'
           guard='.github/workflows/pages-single-writer-guard.yml'
 
           mapfile -t publishers < <(
@@ -55,4 +56,20 @@ jobs:
             exit 1
           fi
 
+          if ! grep -Fq 'workflow_run:' "$smoke"; then
+            echo 'Smoke público deve depender da conclusão do publicador canônico.' >&2
+            exit 1
+          fi
+
+          if ! grep -Fq '      - Deploy ReqSys Pages Composite' "$smoke"; then
+            echo 'Smoke público não está encadeado ao Deploy ReqSys Pages Composite.' >&2
+            exit 1
+          fi
+
+          if grep -Eq '^[[:space:]]{2}push:' "$smoke"; then
+            echo 'Smoke público não pode disparar diretamente por push; isso recria corrida com GitHub Pages.' >&2
+            exit 1
+          fi
+
           echo "Proprietário único validado: $canonical"
+          echo 'Cadeia validada: Teams Notification Dashboard -> Deploy ReqSys Pages Composite -> Teams Public Dashboard Smoke'
