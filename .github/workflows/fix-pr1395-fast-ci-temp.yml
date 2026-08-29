@@ -51,6 +51,7 @@ jobs:
               'frontend/src/views/UserFinalShellView.vue': [
                   ('/api/requisitos/área de trabalho', '/api/requisitos/workspace'),
                   ('${situação}', '${status}'),
+                  ('label: `filtro: ${status}`', "label: 'filtro: ' + status"),
               ],
           }
 
