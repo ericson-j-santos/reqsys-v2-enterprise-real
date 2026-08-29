@@ -5,10 +5,10 @@
 export const ROTAS_RESPONSIVAS = [
   { path: '/login', testId: 'route-login', titulo: 'Login' },
   { path: '/', testId: 'route-dashboard', titulo: 'Dashboard' },
-  { path: '/home', testId: 'route-home', titulo: 'Home' },
-  { path: '/workspace', testId: 'route-workspace', titulo: 'Workspace' },
+  { path: '/home', testId: 'user-final-shell', titulo: 'Home' },
+  { path: '/workspace', testId: 'user-final-shell', titulo: 'Workspace' },
   { path: '/analytics', testId: 'route-analytics', titulo: 'Analytics' },
-  { path: '/ajuda', testId: 'route-ajuda', titulo: 'Ajuda' },
+  { path: '/ajuda', testId: 'user-final-shell', titulo: 'Ajuda' },
   { path: '/requisitos', testId: 'route-requisitos', titulo: 'Requisitos' },
   { path: '/rastreabilidade', testId: 'route-rastreabilidade', titulo: 'Rastreabilidade' },
   { path: '/auditoria', testId: 'route-auditoria', titulo: 'Auditoria' },
