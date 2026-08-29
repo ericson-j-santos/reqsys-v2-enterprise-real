@@ -1,14 +1,14 @@
 <template>
   <section class="page" data-testid="route-codex">
     <PageHeader
-      title="Codex Governado"
-      subtitle="Análise de código com Gemini, LLM local, Groq/Llama ou mock, com JWT, rate limit, auditoria e correlation_id."
+      title="Codex com controles"
+      subtitle="Análise de código com Gemini, modelo de IA local, Groq/Llama ou simulação, com autenticação por token, limite de requisições, auditoria e identificador de correlação."
       :chip="statusLabel"
       :chip-color="statusColor"
-      chip-tooltip="Status do serviço Codex governado"
+      chip-tooltip="Situação do serviço Codex"
     >
       <template #actions>
-        <v-tooltip text="Verifica conectividade com o backend Codex" location="top">
+        <v-tooltip text="Verifica a conexão com o serviço Codex" location="top">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -23,7 +23,7 @@
             </v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Abre o Codex Online (GitHub Pages)" location="top">
+        <v-tooltip text="Abre o Codex publicado no GitHub Pages" location="top">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -34,7 +34,7 @@
               target="_blank"
               rel="noopener"
             >
-              Online
+              Abrir página pública
             </v-btn>
           </template>
         </v-tooltip>
@@ -48,12 +48,14 @@
     <v-row>
       <v-col cols="12" md="7">
         <v-card class="table-card">
-          <v-card-title class="py-3 px-4">Análise governada</v-card-title>
+          <v-card-title class="py-3 px-4">Análise controlada</v-card-title>
           <v-divider />
           <v-card-text>
             <v-select
               v-model="provider"
               :items="providers"
+              item-title="title"
+              item-value="value"
               label="Provedor"
               density="compact"
               data-testid="select-provider"
@@ -63,12 +65,12 @@
               label="Contexto técnico"
               rows="2"
               auto-grow
-              placeholder="Repositório, branch, fluxo de trabalho, requisito..."
+              placeholder="Repositório, versão de código, fluxo de trabalho, requisito..."
               data-testid="input-contexto"
             />
             <v-textarea
               v-model="entrada"
-              label="Código, log ou requisito"
+              label="Código, registro ou requisito"
               rows="5"
               auto-grow
               placeholder="Cole conteúdo sem credenciais ou dados pessoais..."
@@ -90,7 +92,7 @@
                 data-testid="btn-payload"
                 @click="gerarPayload"
               >
-                Payload ReqSys
+                Gerar conteúdo da requisição
               </v-btn>
             </div>
           </v-card-text>
@@ -99,13 +101,13 @@
 
       <v-col cols="12" md="5">
         <v-card class="table-card h-100">
-          <v-card-title class="py-3 px-4">Guard rails</v-card-title>
+          <v-card-title class="py-3 px-4">Proteções</v-card-title>
           <v-divider />
           <v-card-text>
             <v-skeleton-loader v-if="carregandoStatus && !status" type="list-item@4" />
             <v-list v-else density="compact">
               <v-list-item
-                v-for="item in guardRails"
+                v-for="item in protecoesVisiveis"
                 :key="item"
                 prepend-icon="mdi-shield-check"
               >
@@ -113,7 +115,7 @@
               </v-list-item>
             </v-list>
             <v-alert type="info" variant="tonal" density="compact" class="mt-3">
-              VS Code local: use Continue + Ollama.
+              No VS Code local, use Continue com Ollama.
               Veja <code>docs/runbooks/codex-vscode-local-inicio-rapido.md</code>.
             </v-alert>
           </v-card-text>
@@ -136,7 +138,15 @@ import { computed, onMounted, ref } from 'vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../services/api'
 
-const providers = ['mock', 'ollama', 'ollama_gateway', 'openai', 'claude', 'groq', 'gemini']
+const providers = [
+  { title: 'Simulação', value: 'mock' },
+  { title: 'Ollama', value: 'ollama' },
+  { title: 'Ollama Gateway', value: 'ollama_gateway' },
+  { title: 'OpenAI', value: 'openai' },
+  { title: 'Claude', value: 'claude' },
+  { title: 'Groq', value: 'groq' },
+  { title: 'Gemini', value: 'gemini' },
+]
 const provider = ref('mock')
 const contexto = ref('')
 const entrada = ref('')
@@ -150,7 +160,19 @@ const guardRails = computed(() => status.value?.guard_rails || [
   'jwt', 'rate_limit', 'auditoria', 'bloqueio_conteudo_sensivel', 'correlation_id',
 ])
 
-const statusLabel = computed(() => (status.value ? 'Online' : 'Verificando'))
+const rotulosProtecao = {
+  jwt: 'Autenticação por token',
+  rate_limit: 'Limite de requisições',
+  auditoria: 'Auditoria',
+  bloqueio_conteudo_sensivel: 'Bloqueio de conteúdo sensível',
+  correlation_id: 'Identificador de correlação',
+}
+
+const protecoesVisiveis = computed(() => guardRails.value.map((item) =>
+  rotulosProtecao[item] || String(item).replaceAll('_', ' '),
+))
+
+const statusLabel = computed(() => (status.value ? 'Disponível' : 'Verificando'))
 const statusColor = computed(() => (status.value ? 'success' : 'warning'))
 
 function cid() {
