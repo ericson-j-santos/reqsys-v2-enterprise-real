@@ -15,7 +15,7 @@
         "test:linguagem-simples": "node --test scripts/validate-user-facing-language.test.mjs",
         "export:figma-tokens": "node scripts/export-figma-tokens.mjs",
         "check:figma-token-drift": "npm run export:figma-tokens && git diff --exit-code -- artifacts/figma-tokens",
-        "quality:design-system": "npm run validate-design-tokens && npm run check:figma-token-drift && npm run build",
+        "quality:design-system": "npm run validate:design-tokens && npm run check:figma-token-drift && npm run build",
         "quality:linguagem-simples": "npm run test:linguagem-simples && npm run validate:linguagem-simples"
     },
     "dependencies": {
