@@ -3,7 +3,7 @@ import { estadoParaSemaforo } from '../utils/filtrosMonitoramento'
 
 export async function carregarRuntimeDashboard() {
   const resposta = await fetch('/api/runtime/dashboard', { headers: { Accept: 'application/json' } })
-  if (!resposta.ok) throw new Error('Falha ao carregar runtime dashboard')
+  if (!resposta.ok) throw new Error('Falha ao carregar execução painel')
   const payload = await resposta.json()
   const data = payload.data || null
   if (!data) return null

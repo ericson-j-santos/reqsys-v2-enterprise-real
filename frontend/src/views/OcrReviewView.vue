@@ -91,7 +91,7 @@
           <v-progress-linear v-if="carregandoDetalhe" indeterminate class="mb-4" />
           <template v-else-if="detalhe">
             <v-alert type="warning" variant="tonal" class="mb-4">
-              Esta área revela PII somente para decisão humana autenticada. Não copie o conteúdo para logs, issues, PRs ou artifacts públicos.
+              Esta área revela dados pessoais somente para decisão humana autenticada. Não copie o conteúdo para logs, issues, Solicitações de integração ou artifacts públicos.
             </v-alert>
             <v-row class="mb-2">
               <v-col cols="12" md="6"><small class="text-medium-emphasis">Job</small><div><code>{{ detalhe.job_id }}</code></div></v-col>

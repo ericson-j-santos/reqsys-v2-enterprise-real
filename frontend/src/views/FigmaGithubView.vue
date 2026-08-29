@@ -10,7 +10,7 @@
       </div>
       <div class="acoes-cabecalho">
         <button type="button" :disabled="carregandoStatus" @click="carregarStatus">
-          {{ carregandoStatus ? 'Atualizando...' : 'Atualizar status' }}
+          {{ carregandoStatus ? 'Atualizando...' : 'Atualizar situação' }}
         </button>
       </div>
     </section>
@@ -41,7 +41,7 @@
       <div>
         <h2 id="titulo-sincronizacao">Sincronização governada</h2>
         <p>
-          Informe a chave do arquivo Figma e o repositório GitHub. Quando omitidos, o backend usa as configurações
+          Informe a chave do arquivo Figma e o repositório GitHub. Quando omitidos, o serviço usa as configurações
           padrão seguras, caso estejam habilitadas no ambiente.
         </p>
         <p v-if="!config.has_default_file_key" class="aviso-config" role="note">
@@ -115,7 +115,7 @@
         <div><dt>File key</dt><dd>{{ resultadoSync.file_key || '-' }}</dd></div>
         <div><dt>Repositório</dt><dd>{{ resultadoSync.repo || '-' }}</dd></div>
         <div><dt>Modo</dt><dd>{{ resultadoSync.mode || '-' }}</dd></div>
-        <div><dt>Status</dt><dd>{{ resultadoSync.status || 'processado' }}</dd></div>
+        <div><dt>Situação</dt><dd>{{ resultadoSync.status || 'processado' }}</dd></div>
       </dl>
       <pre class="json-retorno">{{ JSON.stringify(resultadoSync, null, 2) }}</pre>
     </section>
@@ -124,10 +124,10 @@
       <div class="linha-painel">
         <div>
           <h2 id="titulo-analitico">Analítico de vínculos</h2>
-          <p>Status retornado pelo backend para rastrear Figma, GitHub, conflitos e última sincronização.</p>
+          <p>Situação retornado pelo serviço para rastrear Figma, GitHub, conflitos e última sincronização.</p>
         </div>
         <label class="filtro">
-          Status
+          Situação
           <select v-model="filtroStatus">
             <option value="">Todos</option>
             <option v-for="status in statusDisponiveis" :key="status" :value="status">{{ status }}</option>
@@ -145,7 +145,7 @@
               <th>Repositório</th>
               <th>Issue</th>
               <th>Tipo</th>
-              <th>Status</th>
+              <th>Situação</th>
               <th>Conflito</th>
               <th>Última sync</th>
             </tr>
@@ -271,7 +271,7 @@ async function carregarStatus() {
     itens.value = payload.data?.items || []
     ultimaAcao.value = new Date().toLocaleString('pt-BR')
   } catch (e) {
-    erro.value = e?.response?.data?.detail || e?.message || 'Erro inesperado ao carregar status Figma/GitHub'
+    erro.value = e?.response?.data?.detail || e?.message || 'Erro inesperado ao carregar situação Figma/GitHub'
   } finally {
     carregandoStatus.value = false
   }

@@ -89,20 +89,20 @@
 
         <v-col cols="12" lg="6">
           <v-card class="panel fill-height" elevation="0">
-            <v-card-title>Score governado</v-card-title>
+            <v-card-title>Nota controlada</v-card-title>
             <v-card-text>
               <div v-if="detalhe.scoreEvidenciado !== null" class="score-evidenciado" data-testid="estatistica-score-evidenciado">
                 <strong>{{ detalhe.scoreEvidenciado }}%</strong>
-                <span>Atualizado exclusivamente por artefato runtime válido.</span>
+                <span>Atualizado exclusivamente por artefato execução válido.</span>
               </div>
               <v-alert v-else type="warning" variant="tonal" data-testid="estatistica-score-pendente">
-                <strong>Score não atualizado.</strong>
-                O estado permanece evidenciado sem promoção até existir artefato runtime válido com score verificável.
+                <strong>Nota não atualizada.</strong>
+                O estado permanece evidenciado sem promoção até existir artefato execução válido com nota verificável.
               </v-alert>
 
               <dl v-if="detalhe.runtimeArtifactValido" class="metadata mt-3">
-                <div><dt>Artefato</dt><dd>runtime verificado</dd></div>
-                <div><dt>Status</dt><dd>{{ detalhe.scoreStatus }}</dd></div>
+                <div><dt>Artefato</dt><dd>execução verificado</dd></div>
+                <div><dt>Situação</dt><dd>{{ detalhe.scoreStatus }}</dd></div>
                 <div><dt>Run ID</dt><dd>{{ detalhe.runtimeArtifact.source_run_id || detalhe.runtimeArtifact.run_id }}</dd></div>
                 <div><dt>Ambiente</dt><dd>{{ detalhe.runtimeArtifact.environment || detalhe.runtimeArtifact.ambiente }}</dd></div>
               </dl>

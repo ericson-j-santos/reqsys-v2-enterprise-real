@@ -5,11 +5,11 @@
         <div class="eyebrow">Padrão Ouro Corporativo</div>
         <h1>Governança, Qualidade e Arquitetura Viva</h1>
         <p class="muted">
-          Portal navegável para transformar os padrões documentais do ReqSys em uma visão operacional de governança, CI/CD, segurança, observabilidade, analytics e IA auditável.
+          Portal navegável para transformar os padrões documentais do ReqSys em uma visão operacional de governança, integração e publicação automáticas, segurança, observabilidade, indicadores e IA auditável.
         </p>
       </div>
       <div class="hero-actions">
-        <v-chip color="success" variant="tonal" size="small">Publicado no frontend</v-chip>
+        <v-chip color="success" variant="tonal" size="small">Publicado no aplicação</v-chip>
         <v-chip color="info" variant="tonal" size="small">Rota /governanca</v-chip>
       </div>
     </div>
@@ -28,9 +28,9 @@
 
     <v-tabs v-model="aba" color="accent" bg-color="transparent" density="compact" class="mb-5">
       <v-tab value="ciclo">Ciclo</v-tab>
-      <v-tab value="gates">Gates</v-tab>
+      <v-tab value="gates">Verificações obrigatórias</v-tab>
       <v-tab value="observabilidade">Observabilidade</v-tab>
-      <v-tab value="analytics">Analytics</v-tab>
+      <v-tab value="analytics">Indicadores</v-tab>
       <v-tab value="ia">IA Auditável</v-tab>
       <v-tab value="ambientes">Ambientes</v-tab>
     </v-tabs>
@@ -120,7 +120,7 @@
           <v-card-text>
             <v-table density="compact" class="governance-table">
               <thead>
-                <tr><th>Ambiente</th><th>Frontend</th><th>Backend</th><th>Uso</th></tr>
+                <tr><th>Ambiente</th><th>Aplicação</th><th>Serviço</th><th>Uso</th></tr>
               </thead>
               <tbody>
                 <tr
@@ -186,27 +186,27 @@ function abrirAmbiente(id) {
 
 const kpis = [
   { titulo: 'Baseline', valor: '100%', desc: 'Governança padrão ouro documentada e navegável.' },
-  { titulo: 'Gates', valor: '11', desc: 'Condições bloqueantes para produção.' },
-  { titulo: 'Rastreio', valor: 'E2E', desc: 'Requisito → PR → CI → produção → monitoramento.' },
-  { titulo: 'Publicação', valor: '/governanca', desc: 'Rota dedicada no frontend ReqSys.' },
+  { titulo: 'Verificações obrigatórias', valor: '11', desc: 'Condições bloqueantes para produção.' },
+  { titulo: 'Rastreio', valor: 'E2E', desc: 'Requisito → Solicitação de integração → verificações automáticas → produção → monitoramento.' },
+  { titulo: 'Publicação', valor: '/governanca', desc: 'Rota dedicada no aplicação ReqSys.' },
 ]
 
-const ciclo = ['Planejar', 'Versionar', 'Implementar', 'Testar', 'Validar CI', 'Revisar', 'Publicar', 'Monitorar', 'Documentar', 'Evoluir']
+const ciclo = ['Planejar', 'Versionar', 'Implementar', 'Testar', 'Validar verificações automáticas', 'Revisar', 'Publicar', 'Monitorar', 'Documentar', 'Evoluir']
 
 const gates = [
   { titulo: 'Auth desligada', desc: 'Produção bloqueada se autenticação estiver desativada ou relaxada.' },
   { titulo: 'CORS inseguro', desc: 'Produção bloqueada se CORS aceitar origem ampla com wildcard.' },
   { titulo: 'JWT frágil', desc: 'Produção bloqueada sem validação real de issuer, audience e claims.' },
-  { titulo: 'Segredos expostos', desc: 'Produção bloqueada se logs ou código contiverem tokens, senhas, CPF, PII ou connection string.' },
+  { titulo: 'Segredos expostos', desc: 'Produção bloqueada se logs ou código contiverem tokens, senhas, CPF, dados pessoais ou connection string.' },
   { titulo: 'IA sem fonte', desc: 'Consulta de IA/RAG deve ter fonte, confiança e fallback seguro.' },
-  { titulo: 'CI vermelho', desc: 'Merge e implantação bloqueados quando build, testes ou validações falharem.' },
+  { titulo: 'verificações automáticas em falha', desc: 'Integração de alterações e implantação bloqueados quando build, testes ou validações falharem.' },
 ]
 
 const observabilidade = [
-  { capacidade: 'Logs JSON', padrao: 'Estruturados e sem PII', uso: 'Auditoria, suporte e análise de incidentes.' },
+  { capacidade: 'Logs JSON', padrao: 'Estruturados e sem dados pessoais', uso: 'Auditoria, suporte e análise de incidentes.' },
   { capacidade: 'correlation_id', padrao: 'Obrigatório por request', uso: 'Rastrear fluxo ponta a ponta.' },
   { capacidade: 'Métricas', padrao: 'Latência, erro, throughput, integrações', uso: 'Painéis e alertas operacionais.' },
-  { capacidade: 'Tracing', padrao: 'OpenTelemetry como evolução', uso: 'Fluxo runtime e arquitetura viva.' },
+  { capacidade: 'Tracing', padrao: 'OpenTelemetry como evolução', uso: 'Fluxo execução e arquitetura viva.' },
 ]
 
 const analytics = ['Indicador', 'Gráfico', 'Analítico filtrado', 'Detalhe', 'Log correlacionado', 'Ação operacional']

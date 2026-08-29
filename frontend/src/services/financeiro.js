@@ -9,14 +9,14 @@ export async function carregarCdiAtual() {
       return {
         modoOffline: false,
         cdi: null,
-        mensagem: 'Taxa CDI ainda não foi carregada no cache interno. Solicite um refresh a um administrador.',
+        mensagem: 'Taxa CDI ainda não foi carregada no armazenamento temporário interno. Solicite um refresh a um administrador.',
       }
     }
     console.warn('Falha ao carregar /v1/financeiro/cdi/latest; modo offline ativado.', erro)
     return {
       modoOffline: true,
       cdi: null,
-      mensagem: 'API /v1/financeiro indisponível. A taxa CDI não será exibida até a conexão ser restabelecida.',
+      mensagem: 'serviço /v1/financeiro indisponível. A taxa CDI não será exibida até a conexão ser restabelecida.',
     }
   }
 }

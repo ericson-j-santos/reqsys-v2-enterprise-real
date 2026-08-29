@@ -361,7 +361,7 @@ const coletaIndicadores = computed(() => [
     id: 'primeira-submissao',
     label: 'Aprovadas na 1ª submissão',
     value: percentual(coletaMetricas.value.taxa_aprovacao_primeira_submissao_percentual),
-    hint: 'Coletas que atingiram o gate mínimo já na primeira avaliação',
+    hint: 'Coletas que atingiram o verificação obrigatória mínimo já na primeira avaliação',
   },
   {
     id: 'pontuacao-media',
@@ -373,7 +373,7 @@ const coletaIndicadores = computed(() => [
     id: 'refinamento',
     label: 'Em refinamento',
     value: coletaMetricas.value.em_refinamento ?? 0,
-    hint: 'Coletas ainda abaixo do gate e sem requisito gerado',
+    hint: 'Coletas ainda abaixo do verificação obrigatória e sem requisito gerado',
   },
   {
     id: 'tempo-refinamento',
@@ -422,7 +422,7 @@ const pipelineSteps = [
   {
     id: 'rastreio',
     titulo: 'Rastrear entrega',
-    descricao: 'Conectar requisito, história, PR, evidência e publicação.',
+    descricao: 'Conectar requisito, história, Solicitação de integração, evidência e publicação.',
     rota: { path: '/rastreabilidade' },
   },
 ]
@@ -431,7 +431,7 @@ const painelDireito = computed(() => [
   {
     id: 'novo-requisito',
     title: 'Cadastrar nova demanda',
-    subtitle: 'Comece pela necessidade de negócio e passe pelo gate de qualidade da coleta',
+    subtitle: 'Comece pela necessidade de negócio e passe pelo verificação obrigatória de qualidade da coleta',
     rota: { path: '/requisitos/coleta' },
     testId: 'destino-novo-requisito',
   },

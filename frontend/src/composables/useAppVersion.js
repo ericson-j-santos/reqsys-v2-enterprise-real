@@ -34,7 +34,7 @@ export function useAppVersion({ fetchOnMount = true } = {}) {
   const versionLabel = computed(() => {
     if (!apiVersion.value) return `v${FRONTEND_VERSION}`
     if (versionsAligned.value) return `v${FRONTEND_VERSION}`
-    return `FE v${FRONTEND_VERSION} · API v${apiVersion.value}`
+    return `FE v${FRONTEND_VERSION} · serviço v${apiVersion.value}`
   })
 
   async function loadFromBuildInfo() {

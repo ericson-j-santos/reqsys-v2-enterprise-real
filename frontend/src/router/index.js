@@ -44,7 +44,7 @@ export const routes = [
     alias: '/demo',
     name: 'showcase',
     component: ShowcaseView,
-    meta: { public: true, standalone: true, title: 'ReqSys Showcase' },
+    meta: { public: true, standalone: true, title: 'Demonstração ReqSys' },
   },
   { path: '/', component: DashboardView, meta: { recurso: 'dashboard:read' } },
   { path: '/home', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },

@@ -248,7 +248,7 @@ const ia = reactive({ carregando: false, erro: '', justificativa: '', urgenciaSu
 const headers = [
   { title: 'Código', key: 'codigo' },
   { title: 'Título', key: 'titulo' },
-  { title: 'Status', key: 'status' },
+  { title: 'Situação', key: 'status' },
   { title: 'Urgência', key: 'urgencia' },
   { title: 'Área', key: 'area' },
 ]

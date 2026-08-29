@@ -130,7 +130,7 @@ export async function acquireTeamsGraphToken() {
   if (!msal) throw new Error('Azure AD nao configurado no servidor')
 
   const account = msal.getAllAccounts()[0]
-  if (!account) throw new Error('Nenhuma conta Microsoft logada — faça login novamente')
+  if (!account) throw new Error('Nenhuma conta Microsoft logada — faça acesso novamente')
 
   const request = { scopes: TEAMS_GRAPH_SCOPES, account }
   try {

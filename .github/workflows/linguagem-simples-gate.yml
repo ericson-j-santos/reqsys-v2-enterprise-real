@@ -1,0 +1,45 @@
+name: Linguagem simples PT-BR
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/**'
+      - 'frontend/scripts/validate-user-facing-language.mjs'
+      - 'frontend/scripts/validate-user-facing-language.test.mjs'
+      - '.github/workflows/linguagem-simples-gate.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/src/**'
+      - 'frontend/scripts/validate-user-facing-language.mjs'
+      - 'frontend/scripts/validate-user-facing-language.test.mjs'
+      - '.github/workflows/linguagem-simples-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linguagem-simples-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validar-linguagem:
+    name: Validar linguagem da interface
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Testar verificador
+        run: node --test frontend/scripts/validate-user-facing-language.test.mjs
+
+      - name: Validar textos apresentados ao usuário
+        run: node frontend/scripts/validate-user-facing-language.mjs

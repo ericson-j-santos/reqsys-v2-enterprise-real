@@ -22,7 +22,7 @@ const SEMAFORO_MAP = {
   avancado: { key: 'verde', label: 'Avançado', color: 'green', icon: 'mdi-circle' },
   nao_medido: { key: 'amarelo', label: 'Não medido', color: 'amber', icon: 'mdi-circle' },
   implemented: { key: 'verde', label: 'Implementado', color: 'green', icon: 'mdi-circle' },
-  dry_run: { key: 'amarelo', label: 'Dry-run', color: 'amber', icon: 'mdi-circle' },
+  dry_run: { key: 'amarelo', label: 'Simulação', color: 'amber', icon: 'mdi-circle' },
   green: { key: 'verde', label: 'Verde', color: 'green', icon: 'mdi-circle' },
   passed: { key: 'verde', label: 'Aprovado', color: 'green', icon: 'mdi-circle' },
   improving: { key: 'verde', label: 'Melhorando', color: 'green', icon: 'mdi-circle' },

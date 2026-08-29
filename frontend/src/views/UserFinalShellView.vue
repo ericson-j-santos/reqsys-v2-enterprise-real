@@ -100,7 +100,7 @@
         <v-card class="state-card" data-testid="user-final-action-queue">
           <v-card-title>Fila de trabalho do analista</v-card-title>
           <v-card-subtitle v-if="workspaceSummary.total_requisitos !== null" data-testid="user-final-workspace-summary">
-            {{ workspaceSummary.total_requisitos }} requisitos · score médio {{ workspaceSummary.score_medio_prontidao }}% · {{ workspaceSummary.pendencias_operacionais }} pendências
+            {{ workspaceSummary.total_requisitos }} requisitos · nota média {{ workspaceSummary.score_medio_prontidao }}% · {{ workspaceSummary.pendencias_operacionais }} pendências
           </v-card-subtitle>
           <v-card-text>
             <div class="work-queue">
@@ -134,7 +134,7 @@
               />
             </v-list>
             <v-alert v-if="workspaceError" type="warning" variant="tonal" density="compact" class="mt-2" data-testid="user-final-workspace-error">
-              API indisponível. Mantido fallback seguro para não bloquear a jornada.
+              serviço indisponível. Mantido fallback seguro para não bloquear a jornada.
             </v-alert>
           </v-card-text>
         </v-card>
@@ -191,12 +191,12 @@
           <v-card-title>Governança fora da jornada principal</v-card-title>
           <v-card-text>
             <p class="muted">
-              Fluxos de trabalho, CI, ambientes, build, correlation_id e evidências técnicas permanecem disponíveis,
+              Fluxos de trabalho, verificações automáticas, ambientes, build, correlation_id e evidências técnicas permanecem disponíveis,
               mas não competem com a rotina do analista na tela principal.
             </p>
             <div class="footer-chips">
               <v-chip size="small" color="green" variant="tonal" prepend-icon="mdi-shield-check-outline">auditável</v-chip>
-              <v-chip size="small" color="blue" variant="tonal" prepend-icon="mdi-source-branch">CI/CD isolado</v-chip>
+              <v-chip size="small" color="blue" variant="tonal" prepend-icon="mdi-source-branch">integração e publicação automáticas isolado</v-chip>
               <v-chip size="small" color="amber" variant="tonal" prepend-icon="mdi-eye-outline">evidência sob demanda</v-chip>
             </div>
           </v-card-text>
@@ -275,9 +275,9 @@ const realUseMetrics = ref([...fallbackMetrics])
 const actionQueue = ref([...fallbackActionQueue])
 
 const versionSummary = computed(() => {
-  if (!apiVersion.value) return `Versão frontend v${frontendVersion}`
-  if (versionsAligned.value) return `Versão v${frontendVersion} (frontend e API alinhadas)`
-  return `Versão frontend v${frontendVersion} · API v${apiVersion.value}`
+  if (!apiVersion.value) return `Versão aplicação v${frontendVersion}`
+  if (versionsAligned.value) return `Versão v${frontendVersion} (aplicação e serviço alinhadas)`
+  return `Versão aplicação v${frontendVersion} · serviço v${apiVersion.value}`
 })
 
 const workspaceStatusLabel = computed(() => {
@@ -290,7 +290,7 @@ const workspaceSourceColor = computed(() => (workspaceStatus.value === 'api' ? '
 const shellNavItems = [
   { label: 'Início', route: '/home', icon: 'mdi-home-outline' },
   { label: 'Espaço de trabalho', route: '/workspace', icon: 'mdi-view-dashboard-edit-outline' },
-  { label: 'Analytics', route: '/analytics', icon: 'mdi-chart-box-outline' },
+  { label: 'Indicadores', route: '/analytics', icon: 'mdi-chart-box-outline' },
   { label: 'Ajuda', route: '/ajuda', icon: 'mdi-help-circle-outline' },
 ]
 
@@ -304,7 +304,7 @@ const sections = {
     description: 'Fila de trabalho para tratar demandas incompletas, requisitos em análise, aprovações e itens sem rastreabilidade.',
   },
   '/analytics': {
-    title: 'Analytics executivo',
+    title: 'Indicadores executivo',
     description: 'Indicadores de prontidão, qualidade da informação, risco e valor gerado para apoiar decisão e priorização.',
   },
   '/ajuda': {
@@ -324,14 +324,14 @@ const environment = computed(() => {
 const operationalCards = [
   { id: 'requisitos', title: 'Requisitos', description: 'Criar, consultar e acompanhar demandas com foco em clareza, aceite e rastreabilidade.', icon: 'mdi-file-document-edit-outline', status: 'Ação principal', statusColor: 'green', route: '/requisitos', actionLabel: 'Abrir requisitos' },
   { id: 'pendencias', title: 'Pendências operacionais', description: 'Tratar itens sem dono, sem aceite, com baixa qualidade ou bloqueados por aprovação.', icon: 'mdi-clipboard-alert-outline', status: 'Fila diária', statusColor: 'amber', route: '/workspace?status=pendente', actionLabel: 'Abrir fila' },
-  { id: 'governanca', title: 'Evidências e governança', description: 'Consultar gates, trilhas e observabilidade apenas quando a decisão exigir comprovação.', icon: 'mdi-shield-check-outline', status: 'Sob demanda', statusColor: 'blue', route: '/governanca', actionLabel: 'Ver evidência' },
+  { id: 'governanca', title: 'Evidências e governança', description: 'Consultar verificações obrigatórias, trilhas e observabilidade apenas quando a decisão exigir comprovação.', icon: 'mdi-shield-check-outline', status: 'Sob demanda', statusColor: 'blue', route: '/governanca', actionLabel: 'Ver evidência' },
 ]
 
 const dataQualityStates = [
   { id: 'entrada', label: 'Entrada mínima obrigatória', message: 'Título, área, objetivo, impacto, solicitante e urgência devem ser claros antes do refinamento.', icon: 'mdi-form-textbox', color: 'green' },
   { id: 'bdd', label: 'Critérios testáveis', message: 'Cada história deve ter aceite verificável e, quando aplicável, cenário BDD.', icon: 'mdi-test-tube', color: 'blue' },
-  { id: 'rastreabilidade', label: 'Rastreabilidade completa', message: 'Origem, decisão, responsável, status e evidência precisam acompanhar a demanda.', icon: 'mdi-link-variant', color: 'amber' },
-  { id: 'limpeza', label: 'Menos tópicos dispersos', message: 'Conteúdos técnicos, ambientes e CI deixam de ocupar a jornada principal do usuário.', icon: 'mdi-filter-remove-outline', color: 'green' },
+  { id: 'rastreabilidade', label: 'Rastreabilidade completa', message: 'Origem, decisão, responsável, situação e evidência precisam acompanhar a demanda.', icon: 'mdi-link-variant', color: 'amber' },
+  { id: 'limpeza', label: 'Menos tópicos dispersos', message: 'Conteúdos técnicos, ambientes e verificações automáticas deixam de ocupar a jornada principal do usuário.', icon: 'mdi-filter-remove-outline', color: 'green' },
 ]
 
 const baseNextSteps = [
@@ -369,7 +369,7 @@ const activeIntents = computed(() => {
   ]
 
   if (status) {
-    intents.push({ id: 'filtered-context', label: `filtro: ${status}`, icon: 'mdi-filter-outline', color: 'amber' })
+    intents.push({ id: 'filtered-context', label: `filtro: ${situação}`, icon: 'mdi-filter-outline', color: 'amber' })
   }
 
   return intents
@@ -435,7 +435,7 @@ async function carregarWorkspaceOperacional() {
 
   try {
     const query = buildWorkspaceQuery()
-    const endpoint = `${getApiBaseUrl()}/api/requisitos/workspace${query ? `?${query}` : ''}`
+    const endpoint = `${getApiBaseUrl()}/api/requisitos/área de trabalho${query ? `?${query}` : ''}`
     const response = await fetch(endpoint, {
       headers: {
         Accept: 'application/json',

@@ -1,7 +1,7 @@
 ﻿<template>
   <section class="page" data-testid="route-segredos-status">
     <PageHeader
-      title="Status de Segredos"
+      title="Situação de Segredos"
       subtitle="Diagnóstico da origem dos segredos do backend, sem exposição de valores."
       :chip="statusChipText"
       :chip-color="statusChipColor"
