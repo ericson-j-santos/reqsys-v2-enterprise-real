@@ -22,7 +22,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: production-gate-coverage-inventory
+  group: production-gate-coverage-inventory-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
