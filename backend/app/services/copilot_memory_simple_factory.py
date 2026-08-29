@@ -8,6 +8,7 @@ from io import BytesIO
 from typing import Any
 
 from app.services.copilot_memory_lowcode_factory import (
+    FACTORY_PROFILE_VERSION,
     PACKAGE_NAME,
     PROFILE_RESTRITO,
     gerar_copilot_memory_lowcode_solution,
@@ -18,6 +19,7 @@ from app.services.copilot_memory_native_solution import (
     gerar_solution_power_platform_importavel,
     validar_solution_power_platform_importavel,
 )
+from app.services.minimum_controlled_version_artifact import inject_version_manifest
 from copilot_memory_powerautomate_complete import (
     connection_references_template,
     deployment_index,
@@ -29,6 +31,27 @@ from copilot_memory_simple_package import gerar_pacote_pronto
 
 def _conteudo_bytes(content: bytes | str) -> bytes:
     return content if isinstance(content, bytes) else content.encode('utf-8')
+
+
+def _adicionar_manifesto_controlado_por_versao(solution: dict[str, Any]) -> dict[str, Any]:
+    zip_base64, evidence = inject_version_manifest(
+        solution['package']['zip_base64'],
+        package_name=PACKAGE_NAME,
+        version=FACTORY_PROFILE_VERSION,
+    )
+    solution['package']['zip_base64'] = zip_base64
+    solution['package']['minimum_controlled_version_manifest'] = evidence
+    package_files = solution['package'].setdefault('files', [])
+    if not any(item.get('path') == evidence['path'] for item in package_files):
+        package_files.append({'path': evidence['path'], 'size': evidence['size']})
+        package_files.sort(key=lambda item: item['path'])
+    solution['governance']['minimum_controlled_version_manifest'] = {
+        'path': evidence['path'],
+        'version': evidence['version'],
+        'sha256': evidence['sha256'],
+        'release_allowed': True,
+    }
+    return solution
 
 
 def _guia_fluxos_completos() -> str:
@@ -73,10 +96,12 @@ def _guia_importacao_direta() -> str:
 
 def gerar_copilot_memory_simple_solution(request: Any) -> dict[str, Any]:
     """Gera um ZIP com planilha, definicoes e solution Power Platform importavel."""
+    solution = _adicionar_manifesto_controlado_por_versao(
+        gerar_copilot_memory_lowcode_solution(request)
+    )
     if request.profile != PROFILE_RESTRITO:
-        return gerar_copilot_memory_lowcode_solution(request)
+        return solution
 
-    solution = gerar_copilot_memory_lowcode_solution(request)
     ready = gerar_pacote_pronto()
     complete_flows = gerar_fluxos_completos()
     validation = {
@@ -123,6 +148,14 @@ def gerar_copilot_memory_simple_solution(request: Any) -> dict[str, Any]:
     output = BytesIO()
     root = f'{PACKAGE_NAME}/'
     all_hashes = list(ready['hashes'])
+    manifest_evidence = solution['package']['minimum_controlled_version_manifest']
+    all_hashes.append(
+        {
+            'path': manifest_evidence['path'],
+            'sha256': manifest_evidence['sha256'],
+            'size': manifest_evidence['size'],
+        }
+    )
 
     with zipfile.ZipFile(BytesIO(old_zip), 'r') as source, zipfile.ZipFile(
         output,
