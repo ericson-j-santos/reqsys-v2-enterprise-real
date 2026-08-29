@@ -6,7 +6,10 @@ import threading
 
 import app.models  # noqa: F401
 from app.db import Base, SessionLocal, engine
-from app.services.pentaho_integration import processar_proximo_lote, recuperar_lotes_abandonados
+from app.services.pentaho_integration import (
+    processar_proximo_lote,
+    recuperar_lotes_abandonados,
+)
 
 logger = logging.getLogger('reqsys.pentaho.worker')
 _parar = threading.Event()
