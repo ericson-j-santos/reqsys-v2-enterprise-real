@@ -135,3 +135,15 @@ def test_inventory_ignores_non_mutating_non_production_workflow(tmp_path):
     inventory = build_inventory(workflows)
     assert inventory["summary"]["production_related_workflows"] == 0
     assert inventory["delivery_blocker"] is False
+
+
+def test_repository_has_no_unprotected_production_mutation_paths():
+    workflows = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+    inventory = build_inventory(workflows)
+    unprotected = [item["path"] for item in inventory["unprotected_workflows"]]
+    assert unprotected == [], (
+        "Caminhos de mutação em produção sem proteção governada: "
+        + ", ".join(unprotected)
+    )
+    assert inventory["delivery_blocker"] is False
+    assert inventory["automatic_enforcement_ready"] is True
