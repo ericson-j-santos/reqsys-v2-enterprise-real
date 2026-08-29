@@ -8,6 +8,10 @@ const usuarioAdmin = {
     'rastreabilidade:read',
     'auditoria:read',
     'relatorios:read',
+    'teams-recipient-policies:admin',
+    'operational-deploy:admin',
+    'security-sessions:admin',
+    'ocr-review:admin',
   ],
 }
 
