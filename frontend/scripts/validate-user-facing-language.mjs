@@ -168,16 +168,30 @@ function collectJavascriptCandidates(content) {
 
 function collectVueJavascriptCandidates(content) {
   const result = []
-  const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/giu
-  let scriptMatch
+  const lowerContent = content.toLowerCase()
+  let cursor = 0
 
-  while ((scriptMatch = scriptRegex.exec(content))) {
-    const script = scriptMatch[1]
-    const scriptOffset = scriptMatch.index + scriptMatch[0].indexOf(script)
+  while (cursor < content.length) {
+    const scriptStart = lowerContent.indexOf('<script', cursor)
+    if (scriptStart < 0) break
+
+    const openEnd = content.indexOf('>', scriptStart + 7)
+    if (openEnd < 0) break
+
+    const closeStart = lowerContent.indexOf('</script', openEnd + 1)
+    if (closeStart < 0) break
+
+    const closeEnd = content.indexOf('>', closeStart + 8)
+    if (closeEnd < 0) break
+
+    const scriptOffset = openEnd + 1
+    const script = content.slice(scriptOffset, closeStart)
     const lineOffset = lineFromOffset(content, scriptOffset) - 1
     for (const candidate of collectJavascriptCandidates(script)) {
       result.push({ ...candidate, line: candidate.line + lineOffset })
     }
+
+    cursor = closeEnd + 1
   }
 
   return result
