@@ -82,6 +82,10 @@ jobs:
           grep -Fq 'teams-dashboard-site' "$publisher"
           grep -Fq 'deploy-pages@v4' "$publisher"
 
+          # Contrato de concorrência: novos disparos aguardam; não cancelam o produtor ativo.
+          grep -Fq 'group: teams-notification-dashboard' "$producer"
+          grep -Fq 'cancel-in-progress: false' "$producer"
+
           grep -Fq 'MAX_DATA_AGE_HOURS' .github/workflows/teams-dashboard-availability-monitor.yml
           ! grep -R --include='*.json' --include='*.html' -E 'https://[^ ]*(webhook|logic\.azure|powerautomate)' docs/ops-dashboard/teams-notification
 
@@ -94,5 +98,6 @@ jobs:
             echo '- Gateway: OK'
             echo '- Segurança: OK'
             echo '- Pages: produtor e publicador único validados'
+            echo '- Concorrência: fila sem cancelamento do produtor ativo'
             echo '- Resultado: padrão operacional validado'
           } >> "$GITHUB_STEP_SUMMARY"
