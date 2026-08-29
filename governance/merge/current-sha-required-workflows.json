@@ -7,7 +7,8 @@
     "Security Specialized Scanners",
     "PR Quality Review",
     "ReqSys Required Fast Gate",
-    "Test Quality Gate — Padrão Ouro"
+    "Test Quality Gate — Padrão Ouro",
+    "Minimum Controlled Version Gate"
   ],
   "allowed_conclusions": [
     "success",
