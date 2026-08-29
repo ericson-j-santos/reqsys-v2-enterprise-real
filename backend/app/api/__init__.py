@@ -4,19 +4,8 @@ import app.api.copilot_studio  # noqa: F401
 import app.api.requisitos_runtime_inspection  # noqa: F401
 import app.api.requisitos_runtime_transition  # noqa: F401
 
-# O router de governanca e anexado ao router existente de diagramas para
-# preservar o ponto unico de inclusao utilizado pelo app.main.
-# O coordenador ADR/PDR é anexado ao Hub Low-Code para preservar o prefixo
-# público existente sem duplicar include_router no app.main.
-# A memória persistente do Copilot é anexada ao Hub Low-Code para reutilizar
-# autenticação, governança e superfície de integração Power Platform existentes.
-# O assistente de instalação compartilha a mesma superfície e autenticação.
-# O centro de notificações é anexado ao Teams Gateway para manter uma única
-# superfície operacional de mensageria e evitar novo acoplamento no app.main.
-# As ações GitHub acionadas pelo Teams compartilham o mesmo gateway e ficam
-# isoladas por escopo service-to-service e lista explícita de operações.
-# A coleta governada é anexada à API de requisitos para preservar o contrato
-# público existente e permitir uso por ReqSys, Forms, Power Apps e Power Automate.
+# Routers especializados são anexados a superfícies já incluídas pelo app.main
+# para preservar os pontos canônicos de composição da aplicação.
 from app.api import (  # noqa: E402
     copilot_memory,
     copilot_memory_install_discovery,
@@ -25,7 +14,9 @@ from app.api import (  # noqa: E402
     gestao_ti,
     hub_lowcode,
     levantamento_requisitos,
+    monitoramento_operacional,
     notificacoes,
+    pentaho_integration,
     prompt_development_coordinator,
     requisitos,
     teams_gateway,
@@ -42,3 +33,7 @@ requisitos.api_router.include_router(levantamento_requisitos.router)
 
 # A camada canônica é anexada aos requisitos para preservar o app.main.
 requisitos.api_router.include_router(gestao_ti.router)
+
+# Integrações Pentaho reutilizam a superfície canônica de monitoramento sem
+# introduzir um segundo ponto de composição no app.main.
+monitoramento_operacional.router.include_router(pentaho_integration.router)
