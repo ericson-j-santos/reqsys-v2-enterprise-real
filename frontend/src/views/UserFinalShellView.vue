@@ -361,15 +361,15 @@ const contextualNextSteps = {
 const nextSteps = computed(() => contextualNextSteps[route.path] || baseNextSteps)
 
 const activeIntents = computed(() => {
-  const status = route.query.status ? String(route.query.status) : null
+  const situacaoSelecionada = route.query.status ? String(route.query.status) : null
   const intents = [
     { id: 'low-cognitive-load', label: 'baixo esforço cognitivo', icon: 'mdi-brain', color: 'blue' },
     { id: 'real-use', label: 'uso real primeiro', icon: 'mdi-account-check-outline', color: 'green' },
     { id: 'auditable', label: 'auditável sem poluir a jornada', icon: 'mdi-shield-check-outline', color: 'green' },
   ]
 
-  if (status) {
-    intents.push({ id: 'filtered-context', label: `filtro: ${status}`, icon: 'mdi-filter-outline', color: 'amber' })
+  if (situacaoSelecionada) {
+    intents.push({ id: 'filtered-context', label: `filtro: ${situacaoSelecionada}`, icon: 'mdi-filter-outline', color: 'amber' })
   }
 
   return intents
