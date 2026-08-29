@@ -323,7 +323,7 @@
             :items="statusHistoricoOptions"
             item-title="label"
             item-value="value"
-            label="Status"
+            label="Situação"
             density="compact"
             variant="outlined"
             hide-details

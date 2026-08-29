@@ -94,7 +94,7 @@
                 :items="statusTaskOptions"
                 item-title="label"
                 item-value="value"
-                label="Status"
+                label="Situação"
                 density="compact"
                 variant="outlined"
                 hide-details
@@ -312,7 +312,7 @@
               :items="statusEnvioOptions"
               item-title="label"
               item-value="value"
-              label="Status envio"
+              label="Situação do envio"
               density="compact"
               variant="outlined"
               hide-details

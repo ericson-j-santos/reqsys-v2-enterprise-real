@@ -18,7 +18,7 @@
       </template>
     </PageHeader>
 
-    <PageHeader title="Pipeline" subtitle="..." chip="Demo" chip-color="blue" chip-tooltip="Dados simulados" />
+    <PageHeader title="Fluxo" subtitle="..." chip="Demo" chip-color="blue" chip-tooltip="Dados simulados" />
 -->
 <template>
   <div class="page-header">
