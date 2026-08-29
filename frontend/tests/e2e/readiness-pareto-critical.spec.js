@@ -49,21 +49,21 @@ test('console de merge valida PR e solicita merge assíncrono sem executar GitHu
     })
   })
 
+  const pagina = page.getByTestId('route-github-merge')
   await page.goto('/admin/github-merge')
-  await expect(page.getByTestId('route-github-merge')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Console de Merge Governado' })).toBeVisible()
+  await expect(pagina).toBeVisible()
 
-  await page.getByLabel('Número da PR').fill('1392')
-  await page.getByRole('button', { name: 'Validar PR' }).click()
+  await pagina.getByLabel('Número da Solicitação de integração').fill('1392')
+  await pagina.getByRole('button', { name: 'Validar Solicitação de integração' }).click()
 
-  await expect(page.getByText('PR de validação E2E')).toBeVisible()
-  await expect(page.getByText('3/3')).toBeVisible()
-  await expect(page.getByText('abc123e2e')).toBeVisible()
+  await expect(pagina.getByText('PR de validação E2E')).toBeVisible()
+  await expect(pagina.getByText('3/3')).toBeVisible()
+  await expect(pagina.getByText('abc123e2e')).toBeVisible()
 
-  await page.getByLabel(/Confirmo o repositório, a PR, o destino e o SHA/i).check()
-  await page.getByRole('button', { name: 'Solicitar merge assíncrono' }).click()
+  await pagina.getByLabel(/Confirmo o repositório, a Solicitação de integração, o destino e o SHA/i).check()
+  await pagina.getByRole('button', { name: 'Solicitar integração de alterações assíncrono' }).click()
 
-  await expect(page.getByRole('status')).toContainText('Solicitação aceita')
+  await expect(pagina.getByRole('status')).toContainText('Solicitação aceita')
   expect(requisicoesMerge).toHaveLength(1)
   expect(requisicoesMerge[0]).toMatchObject({
     repositorio: 'ericson-j-santos/reqsys-v2-enterprise-real',
@@ -129,15 +129,16 @@ test('políticas Teams executam dry-run das duas políticas sem fallback', async
     })
   })
 
+  const pagina = page.getByTestId('route-teams-recipient-policies')
   await page.goto('/admin/teams-recipient-policies')
-  await expect(page.getByTestId('route-teams-recipient-policies')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Políticas de destinatários Teams' })).toBeVisible()
+  await expect(pagina).toBeVisible()
+  await expect(pagina.getByRole('heading', { name: 'Políticas de destinatários Teams' })).toBeVisible()
   await expect(page.getByTestId('teams-graph-identity-status')).toContainText('Ativa')
 
-  await page.getByRole('button', { name: 'Executar dry-run das duas políticas' }).click()
+  await pagina.getByRole('button', { name: 'Executar dry-run das duas políticas' }).click()
 
-  await expect(page.getByText(/2\/2 políticas READY\. Candidato/)).toBeVisible()
-  await expect(page.getByRole('status')).toContainText('2/2 políticas READY')
+  await expect(pagina.getByText(/2\/2 políticas READY\. Candidato/)).toBeVisible()
+  await expect(pagina.getByRole('status')).toContainText('2/2 políticas READY')
   expect(probes).toHaveLength(2)
   expect(probes.map((item) => item.politica).sort()).toEqual(['hitl-approvers', 'reqsys-operations'])
   for (const probe of probes) {
@@ -193,15 +194,16 @@ test('Agile Runtime carrega launchpad e cria branch por API controlada', async (
     await responderJson(route, { data: { criada: true, branch: 'feat/req-e2e-007' } })
   })
 
+  const pagina = page.getByTestId('route-agile-runtime')
   await page.goto('/agile-runtime')
-  await expect(page.getByTestId('route-agile-runtime')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'GitHub Launchpad' })).toBeVisible()
-  await expect(page.getByText('REQ-E2E-007').first()).toBeVisible()
-  await expect(page.getByText('feat/req-e2e-007').first()).toBeVisible()
+  await expect(pagina).toBeVisible()
+  await expect(pagina.getByRole('heading', { name: 'Integração com GitHub' })).toBeVisible()
+  await expect(pagina.getByText('REQ-E2E-007').first()).toBeVisible()
+  await expect(pagina.getByText('feat/req-e2e-007').first()).toBeVisible()
 
-  await page.getByRole('button', { name: 'Criar branch (API)' }).click()
+  await pagina.getByRole('button', { name: 'Criar versão de código pelo serviço' }).click()
 
-  await expect(page.getByRole('status')).toContainText('Branch criada via GitHub API')
+  await expect(pagina.getByRole('status')).toContainText('Versão de código criada pelo GitHub.')
   expect(criacoes).toEqual([{
     ambiente: 'dev',
     criar_se_ausente: true,
