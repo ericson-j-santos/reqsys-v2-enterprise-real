@@ -1,0 +1,51 @@
+name: Linguagem simples - correção única
+
+on:
+  push:
+    branches:
+      - feat/linguagem-simples-ptbr-padrao-ouro
+    paths:
+      - 'frontend/scripts/fix-user-facing-language.mjs'
+      - '.github/workflows/linguagem-simples-fix-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  corrigir-uma-vez:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Obter ramificação
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Aplicar correção controlada
+        run: node frontend/scripts/fix-user-facing-language.mjs
+
+      - name: Testar verificador
+        run: node --test frontend/scripts/validate-user-facing-language.test.mjs
+
+      - name: Medir ocorrências restantes
+        continue-on-error: true
+        run: node frontend/scripts/validate-user-facing-language.mjs
+
+      - name: Validar integridade textual
+        run: git diff --check
+
+      - name: Remover fluxo temporário e registrar correções
+        shell: bash
+        run: |
+          git rm .github/workflows/linguagem-simples-fix-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src .github/workflows/linguagem-simples-fix-once.yml
+          git commit -m 'fix(ux): conclui correção automática de linguagem'
+          git push origin HEAD:${GITHUB_REF_NAME}
