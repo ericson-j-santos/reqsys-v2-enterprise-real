@@ -55,8 +55,7 @@
   }
 
   /* v-row usa margens negativas para formar gutters. No painel de integrações,
-     linhas densas aninhadas somavam 4px além do viewport de 320px. Mantemos o
-     gutter pelos v-col e neutralizamos apenas a margem externa da tela afetada. */
+     linhas densas aninhadas não podem ampliar a largura da página. */
   .painel-page,
   .painel-page > * {
     min-width: 0;
@@ -75,6 +74,23 @@
 
   .painel-page .v-row > .v-col {
     min-width: 0;
+  }
+
+  /* O corpo da tabela já possui rolagem própria, mas o rodapé fica fora do wrapper
+     e pode impor largura mínima em 320 px. A rolagem fica contida no componente e
+     o rodapé pode quebrar linha, sem mascarar overflow no conteúdo principal. */
+  .painel-page .v-data-table {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .painel-page .v-data-table-footer {
+    min-width: 0;
+    flex-wrap: wrap;
+    row-gap: 8px;
   }
 }
 
