@@ -166,10 +166,27 @@ function collectJavascriptCandidates(content) {
   ]
 }
 
+function collectVueJavascriptCandidates(content) {
+  const result = []
+  const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/giu
+  let scriptMatch
+
+  while ((scriptMatch = scriptRegex.exec(content))) {
+    const script = scriptMatch[1]
+    const scriptOffset = scriptMatch.index + scriptMatch[0].indexOf(script)
+    const lineOffset = lineFromOffset(content, scriptOffset) - 1
+    for (const candidate of collectJavascriptCandidates(script)) {
+      result.push({ ...candidate, line: candidate.line + lineOffset })
+    }
+  }
+
+  return result
+}
+
 export function findViolationsInFile(filePath, content) {
   const extension = path.extname(filePath).toLowerCase()
   const candidates = extension === '.vue'
-    ? [...collectTemplateCandidates(content), ...collectJavascriptCandidates(content)]
+    ? [...collectTemplateCandidates(content), ...collectVueJavascriptCandidates(content)]
     : collectJavascriptCandidates(content)
 
   const violations = []
