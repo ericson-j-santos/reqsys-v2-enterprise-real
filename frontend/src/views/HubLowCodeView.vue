@@ -142,7 +142,7 @@
           <v-col cols="12" md="8">
             <v-text-field
               v-model="planner.webhookUrl"
-              label="HTTP POST URL do trigger"
+              label="Endereço para envio HTTP"
               placeholder="https://prod-xx.logic.azure.com/..."
               variant="outlined"
               density="compact"

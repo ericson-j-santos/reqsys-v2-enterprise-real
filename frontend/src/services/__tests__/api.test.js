@@ -70,7 +70,7 @@ describe('services/api — interceptor de request', () => {
 
   it('gera mensagens específicas por jornada', () => {
     expect(journeyLoadingMessage({ url: '/govbi/perguntas' })).toContain('GovBI IA')
-    expect(journeyLoadingMessage({ url: '/runtime/health' })).toContain('runtime')
+    expect(journeyLoadingMessage({ url: '/runtime/health' })).toContain('execução')
     expect(journeyLoadingMessage({ url: '/analytics/resumo' })).toContain('analíticos')
   })
 

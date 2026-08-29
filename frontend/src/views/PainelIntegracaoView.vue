@@ -247,7 +247,7 @@
               :items="statusGovernadoOptions"
               item-title="label"
               item-value="value"
-              label="Status"
+              label="Situação"
               density="compact"
               variant="outlined"
               hide-details
@@ -342,7 +342,7 @@
               :items="statusOptions"
               item-title="label"
               item-value="value"
-              label="Status"
+              label="Situação"
               density="compact"
               variant="outlined"
               hide-details
@@ -483,7 +483,7 @@
         <v-card-text>
           <v-list density="compact">
             <v-list-item subtitle="Tipo" :title="itemSelecionado.tipo" />
-            <v-list-item subtitle="Status" :title="itemSelecionado.status" />
+            <v-list-item subtitle="Situação" :title="situacaoItemSelecionado" />
             <v-list-item subtitle="Título" :title="itemSelecionado.titulo || '—'" />
             <v-list-item subtitle="Autor" :title="itemSelecionado.autor || '—'" />
             <v-list-item subtitle="Tarefas" :title="String(itemSelecionado.total || 0)" />
@@ -525,6 +525,7 @@ const flowBotUso = ref({})
 const carregando = ref(false)
 const dialogAberto = ref(false)
 const itemSelecionado = ref(null)
+const situacaoItemSelecionado = computed(() => itemSelecionado.value?.status || '—')
 const snackbar = ref({ aberto: false, msg: '', cor: 'error' })
 
 const configAberto = ref(undefined)
