@@ -13,6 +13,8 @@ import app.api.requisitos_runtime_transition  # noqa: F401
 # O assistente de instalação compartilha a mesma superfície e autenticação.
 # O centro de notificações é anexado ao Teams Gateway para manter uma única
 # superfície operacional de mensageria e evitar novo acoplamento no app.main.
+# As ações GitHub acionadas pelo Teams compartilham o mesmo gateway e ficam
+# isoladas por escopo service-to-service e lista explícita de operações.
 # A coleta governada é anexada à API de requisitos para preservar o contrato
 # público existente e permitir uso por ReqSys, Forms, Power Apps e Power Automate.
 from app.api import (  # noqa: E402
@@ -27,6 +29,7 @@ from app.api import (  # noqa: E402
     prompt_development_coordinator,
     requisitos,
     teams_gateway,
+    teams_github_actions,
 )
 
 diagramas.router.include_router(diagram_version_governance.router)
@@ -34,6 +37,7 @@ hub_lowcode.router.include_router(prompt_development_coordinator.router)
 hub_lowcode.router.include_router(copilot_memory.router)
 hub_lowcode.router.include_router(copilot_memory_install_discovery.router)
 teams_gateway.router.include_router(notificacoes.router)
+teams_gateway.router.include_router(teams_github_actions.router)
 requisitos.api_router.include_router(levantamento_requisitos.router)
 
 # A camada canônica é anexada aos requisitos para preservar o app.main.
