@@ -36,6 +36,36 @@ def _max_registros() -> int:
     return limite
 
 
+def _serializar_payload(payload: PentahoLoteEntrada) -> str:
+    return json.dumps(
+        payload.model_dump(),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(',', ':'),
+    )
+
+
+def _validar_reuso_idempotencia(existente: PentahoIntegrationBatch, payload_json: str) -> None:
+    try:
+        payload_existente = json.dumps(
+            json.loads(existente.payload_json),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(',', ':'),
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=409,
+            detail='Lote existente possui conteúdo inválido para validação de idempotência',
+        ) from exc
+
+    if payload_existente != payload_json:
+        raise HTTPException(
+            status_code=409,
+            detail='Idempotency-Key já utilizada com conteúdo diferente',
+        )
+
+
 def validar_entrada(payload: PentahoLoteEntrada, idempotency_key: str, correlation_id: str) -> None:
     if payload.versaoEntrada not in VERSOES_SUPORTADAS:
         raise HTTPException(
@@ -57,6 +87,7 @@ def criar_ou_obter_lote(
     correlation_id: str,
 ) -> tuple[PentahoIntegrationBatch, bool]:
     validar_entrada(payload, idempotency_key, correlation_id)
+    payload_json = _serializar_payload(payload)
 
     existente = (
         db.query(PentahoIntegrationBatch)
@@ -64,6 +95,7 @@ def criar_ou_obter_lote(
         .first()
     )
     if existente is not None:
+        _validar_reuso_idempotencia(existente, payload_json)
         return existente, True
 
     lote = PentahoIntegrationBatch(
@@ -75,7 +107,7 @@ def criar_ou_obter_lote(
         processo=payload.processo,
         versao_entrada=payload.versaoEntrada,
         data_referencia=payload.dataReferencia,
-        payload_json=json.dumps(payload.model_dump(), ensure_ascii=False, separators=(',', ':')),
+        payload_json=payload_json,
         status=STATUS_PENDENTE,
         registros_recebidos=len(payload.registros),
         registros_aceitos=0,
@@ -96,6 +128,7 @@ def criar_ou_obter_lote(
             .first()
         )
         if existente is not None:
+            _validar_reuso_idempotencia(existente, payload_json)
             return existente, True
         raise
 
