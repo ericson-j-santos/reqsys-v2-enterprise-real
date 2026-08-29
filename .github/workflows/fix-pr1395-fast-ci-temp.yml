@@ -42,6 +42,8 @@ jobs:
               ],
               'frontend/src/services/__tests__/estatisticas.test.js': [
                   ("expect(invalido.motivos).toContain('Origem do artefato não é runtime.')", "expect(invalido.motivos).toContain('Origem do artefato não é execução.')"),
+                  ("expect(invalido.motivos).toContain('SHA runtime completo e verificável ausente.')", "expect(invalido.motivos).toContain('SHA execução completo e verificável ausente.')"),
+                  ("expect(resultadoSemAtestacao.motivos).toContain('Atestação runtime positiva e verificável ausente.')", "expect(resultadoSemAtestacao.motivos).toContain('Atestação execução positiva e verificável ausente.')"),
               ],
               'frontend/src/composables/__tests__/useAppVersion.test.js': [
                   (' · API v9.9.9', ' · serviço v9.9.9'),
