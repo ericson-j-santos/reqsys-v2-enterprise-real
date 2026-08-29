@@ -3,9 +3,9 @@
     <!-- Header -->
     <div class="page-header">
       <div>
-        <div class="text-h5 font-weight-bold mb-1">Hub Low-Code & IA</div>
+        <div class="text-h5 font-weight-bold mb-1">Central de automações & IA</div>
         <div class="text-body-2 text-medium-emphasis">
-          Pacotes de contexto IA, flows Power Automate, bot ReqSysAgent e pipelines GitHub ALM.
+          Pacotes de contexto IA, flows Power Automate, bot ReqSysAgent e pipelines ciclo de entrega no GitHub.
         </div>
         <div v-if="ambienteAtual.url_acesso" class="text-caption text-medium-emphasis mt-1">
           Ambiente: <strong>{{ ambienteAtual.ambiente }}</strong> Â· Acesso:
@@ -42,7 +42,7 @@
           Envio ao Planner ativo via {{ webhook.origem }}: <code>{{ webhook.url_mascarada }}</code>
         </v-alert>
         <v-alert v-else type="info" variant="tonal" density="compact" class="mb-4">
-          Escolha o ambiente Power Platform, descubra o flow de Planner e salve a URL do trigger HTTP nesta tela.
+          Escolha o ambiente Power Platform, descubra o flow de Planner e salve a endereço do trigger HTTP nesta tela.
         </v-alert>
 
         <v-row dense align="end">

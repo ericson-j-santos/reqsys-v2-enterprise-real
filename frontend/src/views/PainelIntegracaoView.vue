@@ -29,13 +29,13 @@
           <v-row dense class="mt-1">
             <v-col cols="12">
               <div class="text-caption text-medium-emphasis mb-3">
-                Para notificações no Teams, crie um webhook via <strong>Teams → canal → (...) → Workflows → "Postar em um canal quando uma solicitação de webhook é recebida"</strong>, depois cole a URL abaixo.
+                Para notificações no Teams, crie um webhook via <strong>Teams → canal → (...) → Workflows → "Postar em um canal quando uma solicitação de webhook é recebida"</strong>, depois cole a endereço abaixo.
               </div>
             </v-col>
             <v-col cols="12" md="8">
               <v-text-field
                 v-model="configForm.teams_webhook_url"
-                label="URL do Webhook Teams (Workflows)"
+                label="endereço do Webhook Teams (Workflows)"
                 density="compact"
                 variant="outlined"
                 hide-details="auto"
@@ -76,7 +76,7 @@
         <v-expansion-panel-title>
           <div class="d-flex align-center gap-2">
             <v-icon size="small" class="mr-2">mdi-message-text-outline</v-icon>
-            <span>Enviar mensagem Teams (Graph API)</span>
+            <span>Enviar mensagem Teams (Microsoft Graph)</span>
           </div>
         </v-expansion-panel-title>
         <v-expansion-panel-text>
@@ -552,7 +552,7 @@ const statusOptions = [
 const headers = [
   { title: 'Data', key: 'criado_em', width: '150px' },
   { title: 'Origem', key: 'tipo', width: '100px' },
-  { title: 'Status', key: 'status', width: '90px' },
+  { title: 'Situação', key: 'status', width: '90px' },
   { title: 'Título', key: 'titulo' },
   { title: 'Autor', key: 'autor', width: '120px' },
   { title: 'Correlation ID', key: 'correlation_id', width: '140px' },
@@ -576,7 +576,7 @@ const statusGovernadoOptions = [
 const headersGovernado = [
   { title: 'ID', key: 'attempt_id', width: '60px' },
   { title: 'Data', key: 'criado_em', width: '150px' },
-  { title: 'Status', key: 'status', width: '130px' },
+  { title: 'Situação', key: 'status', width: '130px' },
   { title: 'Título', key: 'title' },
   { title: 'Source ID', key: 'source_id', width: '160px' },
   { title: 'Solicitante', key: 'requester', width: '160px' },
@@ -655,7 +655,7 @@ const cardsResumo = computed(() => [
   },
   {
     id: 'ultimo',
-    titulo: 'Último Status',
+    titulo: 'Último Situação',
     valor: ultimoStatus.value || '—',
     subtitulo: ultimoEm.value || 'Sem eventos',
     cor: ultimoStatus.value === 'erro' ? 'error' : ultimoStatus.value === 'sucesso' ? 'success' : 'grey',
@@ -779,7 +779,7 @@ async function reprocessarTentativaGovernada(attemptId) {
     const status = resp.data?.data?.status
     snackbar.value = {
       aberto: true,
-      msg: status === 'publicado' ? 'Tarefa publicada com sucesso no reprocessamento.' : `Reprocessado — status: ${status}`,
+      msg: status === 'publicado' ? 'Tarefa publicada com sucesso no reprocessamento.' : `Reprocessado — situação: ${situação}`,
       cor: status === 'publicado' ? 'success' : 'warning',
     }
     await carregarPublicacoesGovernadas()

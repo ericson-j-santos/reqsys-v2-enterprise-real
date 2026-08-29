@@ -4,18 +4,18 @@
     <!-- Cabeçalho -->
     <div class="page-header">
       <div>
-        <h1>Specs SDD</h1>
-        <p class="muted">Especificações de features · my-first-spec-project</p>
+        <h1>Especificações da solução</h1>
+        <p class="muted">Especificações de funcionalidades · my-first-spec-project</p>
       </div>
       <v-btn color="amber" variant="tonal" prepend-icon="mdi-plus" @click="dialogNova = true">
-        Nova Feature
+        Nova Funcionalidade
       </v-btn>
     </div>
 
     <!-- Loading / erro de config -->
     <v-alert v-if="erroConfig" type="warning" variant="tonal" class="mb-4">
       <strong>SDD_SPECS_PATH não configurado.</strong>
-      Adicione ao <code>.env</code> do backend:
+      Adicione ao <code>.env</code> do serviço:
       <code>SDD_SPECS_PATH=../../my-first-spec-project/.sdd</code>
     </v-alert>
 
@@ -26,7 +26,7 @@
       <v-card class="specs-sidebar" elevation="0">
         <v-card-title class="sidebar-title">
           <v-icon size="16" class="mr-1">mdi-folder-multiple-outline</v-icon>
-          Features
+          Funcionalidades
           <v-chip size="x-small" color="amber" variant="tonal" class="ml-auto">
             {{ specs.length }}
           </v-chip>
@@ -334,7 +334,7 @@ async function selecionarFeature(slug) {
     const arqs = Object.keys(data.data?.arquivos || {})
     tabAtiva.value = arqs[0] || null
   } catch {
-    mostrarSnack('Erro ao carregar feature', 'error')
+    mostrarSnack('Erro ao carregar funcionalidade', 'error')
   }
 }
 
@@ -391,12 +391,12 @@ async function criarFeature() {
       templates: nova.value.modo === 'template' ? nova.value.templates : [],
     }
     await api.post('/v1/specs', payload)
-    mostrarSnack(`Feature "${nova.value.slug}" criada`)
+    mostrarSnack(`Funcionalidade "${nova.value.slug}" criada`)
     fecharDialogNova()
     await carregarSpecs()
     selecionarFeature(nova.value.slug)
   } catch (e) {
-    const msg = e?.response?.data?.errors?.[0]?.message || 'Erro ao criar feature'
+    const msg = e?.response?.data?.errors?.[0]?.message || 'Erro ao criar funcionalidade'
     mostrarSnack(msg, 'error')
   } finally {
     criando.value = false

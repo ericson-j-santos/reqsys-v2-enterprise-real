@@ -30,8 +30,8 @@ export const indicadoresExemploValidacao = [
       confiabilidade: 'alta',
       versaoConector: 'backend-v2',
     },
-    evidencias: ['endpoint backend /v1/estatisticas'],
-    pendencias: ['API indisponível no momento da carga'],
+    evidencias: ['endpoint serviço /v1/estatisticas'],
+    pendencias: ['serviço indisponível no momento da carga'],
   },
   {
     id: 'requisitos-com-bdd',
@@ -53,31 +53,31 @@ export const indicadoresExemploValidacao = [
       confiabilidade: 'alta',
       versaoConector: 'backend-v2',
     },
-    evidencias: ['marcadores BDD avaliados no backend'],
-    pendencias: ['API indisponível no momento da carga'],
+    evidencias: ['marcadores BDD avaliados no serviço'],
+    pendencias: ['serviço indisponível no momento da carga'],
   },
   {
     id: 'guard-rails-producao',
     nome: 'Guard rails de produção',
-    descricao: 'Validação de gates produtivos versionados.',
+    descricao: 'Validação de verificações obrigatórias produtivos versionados.',
     categoria: 'Segurança',
     valorAtual: 0,
     unidade: '%',
     tendencia: 'indefinida',
     estadoAtual: 'nao_medido',
     estadoAlvo: 'avancado',
-    formula: 'gates versionados e testes de production gates presentes',
+    formula: 'verificações obrigatórias versionados e testes de production verificações obrigatórias presentes',
     fonte: {
       id: 'reqsys-security-gates',
       tipo: 'interna',
-      nome: 'Production Security Gates',
+      nome: 'Production Security Verificações obrigatórias',
       origem: 'backend:settings.validate_production_gates',
       coletadoEm: new Date().toISOString(),
       confiabilidade: 'alta',
       versaoConector: 'backend-v2',
     },
     evidencias: ['Settings.validate_production_gates'],
-    pendencias: ['API indisponível no momento da carga'],
+    pendencias: ['serviço indisponível no momento da carga'],
   },
   {
     id: 'fontes-externas-validas',
@@ -101,7 +101,7 @@ export const indicadoresExemploValidacao = [
       versaoConector: 'registry-v1',
     },
     evidencias: ['contrato de fonte externa definido'],
-    pendencias: ['API indisponível no momento da carga'],
+    pendencias: ['serviço indisponível no momento da carga'],
   },
 ]
 
@@ -153,13 +153,13 @@ export function validarArtifactRuntime(artifact) {
     || artifact?.attestation_verified === true
     || artifact?.verification_status === 'verified'
 
-  if (!artifact || typeof artifact !== 'object') motivos.push('Artefato runtime ausente.')
-  if (origem !== 'runtime') motivos.push('Origem do artefato não é runtime.')
-  if (!AMBIENTES_RUNTIME.has(ambiente)) motivos.push('Ambiente runtime inválido ou ausente.')
+  if (!artifact || typeof artifact !== 'object') motivos.push('Artefato execução ausente.')
+  if (origem !== 'runtime') motivos.push('Origem do artefato não é execução.')
+  if (!AMBIENTES_RUNTIME.has(ambiente)) motivos.push('Ambiente execução inválido ou ausente.')
   if (!String(runId || '').trim()) motivos.push('Run ID verificável ausente.')
-  if (!/^[a-f0-9]{40}$/i.test(String(headSha || ''))) motivos.push('SHA runtime completo e verificável ausente.')
-  if (!observadoEm || Number.isNaN(new Date(observadoEm).getTime())) motivos.push('Timestamp runtime válido ausente.')
-  if (!atestacaoVerificada) motivos.push('Atestação runtime positiva e verificável ausente.')
+  if (!/^[a-f0-9]{40}$/i.test(String(headSha || ''))) motivos.push('SHA execução completo e verificável ausente.')
+  if (!observadoEm || Number.isNaN(new Date(observadoEm).getTime())) motivos.push('Timestamp execução válido ausente.')
+  if (!atestacaoVerificada) motivos.push('Atestação execução positiva e verificável ausente.')
 
   return {
     valido: motivos.length === 0,
@@ -257,7 +257,7 @@ function construirLinksOperacionais(indicador, correlationId, artifact) {
     { tipo: 'traces', titulo: 'Traces e monitoramento', url: `/monitoramento-operacional${query ? `?${query}` : ''}`, externo: false },
     {
       tipo: 'artifact',
-      titulo: artifactUrl ? 'Artefato runtime verificado' : 'Artefatos operacionais',
+      titulo: artifactUrl ? 'Artefato execução verificado' : 'Artefatos operacionais',
       url: artifactUrl || `/analytics${query ? `?${query}` : ''}`,
       externo: Boolean(artifactUrl),
     },
@@ -288,7 +288,7 @@ export async function carregarEstatisticas() {
     correlationId: null,
     coletadoEm: null,
     ambiente: null,
-    mensagem: 'API /v1/estatisticas indisponível. Os indicadores analíticos não serão exibidos até a conexão ser restabelecida.',
+    mensagem: 'serviço /v1/estatisticas indisponível. Os indicadores analíticos não serão exibidos até a conexão ser restabelecida.',
   }
 }
 

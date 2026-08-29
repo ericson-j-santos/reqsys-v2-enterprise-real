@@ -1,14 +1,14 @@
 /**
- * Catálogo de navegação por tema/tópico de negócio.
+ * Catálogo de navegação por tema e tópico de negócio.
  *
- * Diretriz UX real:
- * - as primeiras áreas devem apoiar o trabalho diário do analista/PO;
+ * Diretriz de experiência:
+ * - as primeiras áreas devem apoiar o trabalho diário do analista e do responsável pelo produto;
  * - recursos técnicos ficam em Administração, Governança ou Arquitetura;
- * - o usuário final não deve precisar entender CI, runtime ou infraestrutura para cadastrar e acompanhar uma demanda.
+ * - o usuário final não deve precisar conhecer termos internos de integração, execução ou infraestrutura para cadastrar e acompanhar uma demanda.
  *
- * Compatibilidade com main:
- * - preserva rotas adicionadas depois da criação do PR: Financeiro, Orquestrador IA e Coordenação ADRs;
- * - mantém subgrupos canônicos para resolver rotas duplicadas sem quebrar testes e jornada real.
+ * Compatibilidade com a linha principal:
+ * - preserva rotas e identificadores internos para não quebrar contratos;
+ * - altera apenas os textos apresentados às pessoas.
  */
 export const NAV_TEMAS = [
   {
@@ -19,7 +19,7 @@ export const NAV_TEMAS = [
     items: [
       { to: '/', icon: 'mdi-view-dashboard', title: 'Painel do dia', tip: 'Resumo objetivo das pendências, qualidade e próximos passos.' },
       { to: '/requisitos', icon: 'mdi-file-document-edit', title: 'Demandas e requisitos', tip: 'Cadastrar, revisar e acompanhar requisitos de negócio.' },
-      { to: '/pipeline', icon: 'mdi-pipe', title: 'Fluxo de aprovação', tip: 'Acompanhar a demanda da entrada até aprovação/publicação.' },
+      { to: '/pipeline', icon: 'mdi-pipe', title: 'Fluxo de aprovação', tip: 'Acompanhar a demanda da entrada até a aprovação e publicação.' },
       { to: '/rastreabilidade', icon: 'mdi-vector-link', title: 'Rastreabilidade', tip: 'Ver origem, história, decisão, entrega e evidências.' },
     ],
   },
@@ -35,11 +35,11 @@ export const NAV_TEMAS = [
     ],
     items: [
       { to: '/requisitos', icon: 'mdi-file-document-edit', title: 'Requisitos', tip: 'Cadastro, listagem e acompanhamento dos requisitos.', subgroupId: 'entrada' },
-      { to: '/qualidade-ia', icon: 'mdi-brain', title: 'Qualidade IA', tip: 'Score de completude, clareza e testabilidade dos requisitos.' },
-      { to: '/recomendacoes-ia', icon: 'mdi-robot-outline', title: 'Recomendações IA', tip: 'Sugestões governadas para melhorar requisitos e histórias.' },
-      { to: '/task-console', icon: 'mdi-clipboard-check-outline', title: 'Preparar tarefas', tip: 'Revisar tarefas antes de enviar para Planner ou ferramenta de entrega.' },
-      { to: '/pipeline', icon: 'mdi-pipe', title: 'Fluxo', tip: 'Fluxo operacional do requisito até aprovação e publicação.', subgroupId: 'pipeline' },
-      { to: '/agile-runtime', icon: 'mdi-source-branch', title: 'Agile Runtime', tip: 'Work items com branch, PR e ambiente corretos.', subgroupId: 'pipeline' },
+      { to: '/qualidade-ia', icon: 'mdi-brain', title: 'Qualidade IA', tip: 'Nota de completude, clareza e possibilidade de validação dos requisitos.' },
+      { to: '/recomendacoes-ia', icon: 'mdi-robot-outline', title: 'Recomendações IA', tip: 'Sugestões controladas para melhorar requisitos e histórias.' },
+      { to: '/task-console', icon: 'mdi-clipboard-check-outline', title: 'Preparar tarefas', tip: 'Revisar tarefas antes de enviar para Planner ou outra ferramenta de entrega.' },
+      { to: '/pipeline', icon: 'mdi-pipe', title: 'Fluxo', tip: 'Fluxo do requisito até a aprovação e publicação.', subgroupId: 'pipeline' },
+      { to: '/agile-runtime', icon: 'mdi-source-branch', title: 'Acompanhamento da entrega', tip: 'Itens de trabalho com versão de código, solicitação de integração e ambiente corretos.', subgroupId: 'pipeline' },
       { to: '/rastreabilidade', icon: 'mdi-vector-link', title: 'Rastreabilidade', tip: 'Matriz requisito → história → entrega → evidência.', subgroupId: 'publicacao' },
     ],
   },
@@ -49,11 +49,11 @@ export const NAV_TEMAS = [
     topic: 'Gestão · qualidade · valor',
     icon: 'mdi-chart-timeline-variant',
     items: [
-      { to: '/analytics', icon: 'mdi-chart-timeline-variant', title: 'Analytics', tip: 'Indicadores executivos com detalhamento.' },
-      { to: '/estatisticas', icon: 'mdi-chart-box-outline', title: 'Estatísticas', tip: 'Indicadores auditáveis com fonte, fórmula e analítico.' },
-      { to: '/financeiro', icon: 'mdi-cash-multiple', title: 'Financeiro', tip: 'Taxa CDI diária com cache interno e fonte no Banco Central.' },
-      { to: '/relatorios', icon: 'mdi-file-chart-outline', title: 'Relatórios', tip: 'Catálogo e status de relatórios corporativos.' },
-      { to: '/govbi-ia', icon: 'mdi-database-search', title: 'GovBI IA', tip: 'Consultas analíticas em linguagem natural governada.' },
+      { to: '/analytics', icon: 'mdi-chart-timeline-variant', title: 'Indicadores', tip: 'Indicadores executivos com detalhamento.' },
+      { to: '/estatisticas', icon: 'mdi-chart-box-outline', title: 'Estatísticas', tip: 'Indicadores verificáveis com fonte, fórmula e detalhamento.' },
+      { to: '/financeiro', icon: 'mdi-cash-multiple', title: 'Financeiro', tip: 'Taxa CDI diária com armazenamento temporário interno e fonte no Banco Central.' },
+      { to: '/relatorios', icon: 'mdi-file-chart-outline', title: 'Relatórios', tip: 'Catálogo e situação dos relatórios corporativos.' },
+      { to: '/govbi-ia', icon: 'mdi-database-search', title: 'GovBI IA', tip: 'Consultas analíticas em linguagem natural com controles do ReqSys.' },
     ],
   },
   {
@@ -63,9 +63,9 @@ export const NAV_TEMAS = [
     icon: 'mdi-connection',
     items: [
       { to: '/painel-integracao', icon: 'mdi-view-dashboard-outline', title: 'Integrações', tip: 'Planner, Teams, GitHub e histórico de eventos.' },
-      { to: '/hub-lowcode', icon: 'mdi-lightning-bolt-circle', title: 'Hub Low-Code', tip: 'Power Automate, Power Apps, bot ReqSysAgent e ALM.' },
-      { to: '/hub-lowcode/copilot-memory/instalar', icon: 'mdi-memory', title: 'Instalar Copilot Memory', tip: 'Instalar a memória do Copilot escolhendo ambiente, Planner, planilha e conexões.' },
-      { to: '/figma-github', icon: 'mdi-vector-square', title: 'Figma GitHub', tip: 'Sincronização Figma ↔ GitHub com retorno em tela.' },
+      { to: '/hub-lowcode', icon: 'mdi-lightning-bolt-circle', title: 'Central de automações', tip: 'Power Automate, Power Apps, ReqSysAgent e administração do ciclo de entrega.' },
+      { to: '/hub-lowcode/copilot-memory/instalar', icon: 'mdi-memory', title: 'Instalar memória do Copilot', tip: 'Instalar a memória do Copilot escolhendo ambiente, Planner, planilha e conexões.' },
+      { to: '/figma-github', icon: 'mdi-vector-square', title: 'Figma e GitHub', tip: 'Sincronização entre Figma e GitHub com retorno em tela.' },
     ],
   },
   {
@@ -74,17 +74,17 @@ export const NAV_TEMAS = [
     topic: 'Operação técnica · governança',
     icon: 'mdi-shield-check-outline',
     items: [
-      { to: '/monitoramento-operacional', icon: 'mdi-monitor-dashboard', title: 'Monitoramento', tip: 'Estado técnico de integrações, gates, runtime e pendências operacionais.' },
-      { to: '/auditoria', icon: 'mdi-shield-search', title: 'Auditoria', tip: 'Linha do tempo de eventos e governança operacional.' },
-      { to: '/segredos-status', icon: 'mdi-key-chain-variant', title: 'Segredos', tip: 'Diagnóstico da origem dos segredos do backend.' },
-      { to: '/specs', icon: 'mdi-file-code-outline', title: 'Specs SDD', tip: 'Especificações técnicas e contratos de features.' },
-      { to: '/governanca', icon: 'mdi-shield-check-outline', title: 'Governança', tip: 'Gates, CI/CD, observabilidade, políticas e evidências.' },
-      { to: '/codex', icon: 'mdi-code-braces', title: 'Codex', tip: 'Análise de código com LLM local ou mock, governada pelo ReqSys.' },
-      { to: '/admin/ocr-review', icon: 'mdi-text-box-search-outline', title: 'Revisão OCR', tip: 'Revisar resultados OCR abaixo do limiar AUTO com PII criptografada e decisão auditável.' },
-      { to: '/admin/operational-deploy', icon: 'mdi-rocket-launch-outline', title: 'Central operacional', tip: 'Publicar backend e frontend em DEV com confirmação governada, evidência e sem expor credenciais.' },
-      { to: '/admin/session-management', icon: 'mdi-account-lock-outline', title: 'Sessões', tip: 'Atualizar permissões e invalidar sessões humanas de forma governada.' },
-      { to: '/admin/github-merge', icon: 'mdi-source-merge', title: 'Merge GitHub', tip: 'Executar e acompanhar merge assíncrono governado de PRs empilhadas.' },
-      { to: '/admin/teams-recipient-policies', icon: 'mdi-account-group-outline', title: 'Políticas Teams', tip: 'Administrar aprovadores e operadores Teams com readiness em dry-run e identidades mascaradas.' },
+      { to: '/monitoramento-operacional', icon: 'mdi-monitor-dashboard', title: 'Monitoramento', tip: 'Situação técnica das integrações, verificações obrigatórias, execução e pendências operacionais.' },
+      { to: '/auditoria', icon: 'mdi-shield-search', title: 'Auditoria', tip: 'Linha do tempo de eventos e controles operacionais.' },
+      { to: '/segredos-status', icon: 'mdi-key-chain-variant', title: 'Segredos', tip: 'Diagnóstico da origem dos segredos do serviço.' },
+      { to: '/specs', icon: 'mdi-file-code-outline', title: 'Especificações', tip: 'Especificações técnicas e contratos das funcionalidades.' },
+      { to: '/governanca', icon: 'mdi-shield-check-outline', title: 'Governança', tip: 'Verificações obrigatórias, automação de integração e publicação, monitoramento, políticas e evidências.' },
+      { to: '/codex', icon: 'mdi-code-braces', title: 'Codex', tip: 'Análise de código com modelo de IA local ou simulação, controlada pelo ReqSys.' },
+      { to: '/admin/ocr-review', icon: 'mdi-text-box-search-outline', title: 'Revisão de leitura de documentos', tip: 'Revisar resultados de leitura automática abaixo do limite definido, com dados pessoais protegidos e decisão verificável.' },
+      { to: '/admin/operational-deploy', icon: 'mdi-rocket-launch-outline', title: 'Central operacional', tip: 'Publicar serviço e aplicação no ambiente de desenvolvimento com confirmação, evidência e sem expor credenciais.' },
+      { to: '/admin/session-management', icon: 'mdi-account-lock-outline', title: 'Sessões', tip: 'Atualizar permissões e invalidar sessões humanas com controle e registro.' },
+      { to: '/admin/github-merge', icon: 'mdi-source-merge', title: 'Integração GitHub', tip: 'Executar e acompanhar a integração controlada de alterações empilhadas.' },
+      { to: '/admin/teams-recipient-policies', icon: 'mdi-account-group-outline', title: 'Políticas Teams', tip: 'Administrar aprovadores e operadores Teams com verificação de prontidão em simulação e identidades mascaradas.' },
       { to: '/orquestrador-ia', icon: 'mdi-sitemap-outline', title: 'Orquestrador IA', tip: 'Classifica demandas por tema e aciona o coordenador de IA correspondente.' },
     ],
   },
@@ -94,8 +94,8 @@ export const NAV_TEMAS = [
     topic: 'Mapa · ecossistema',
     icon: 'mdi-sitemap',
     items: [
-      { to: '/arquitetura', icon: 'mdi-sitemap', title: 'Mapa da Solução', tip: 'Visão completa dos componentes Web, backend, integrações e Low-Code.' },
-      { to: '/coordenacao-adr', icon: 'mdi-book-open-variant', title: 'Coordenação ADRs', tip: 'Coordenação geral que classifica demandas pelos 12 ADRs e aponta violações de gate.' },
+      { to: '/arquitetura', icon: 'mdi-sitemap', title: 'Mapa da solução', tip: 'Visão completa da aplicação, serviços, integrações e automações.' },
+      { to: '/coordenacao-adr', icon: 'mdi-book-open-variant', title: 'Coordenação de decisões de arquitetura', tip: 'Coordenação geral que classifica demandas pelas decisões de arquitetura e aponta violações das verificações obrigatórias.' },
     ],
   },
 ]

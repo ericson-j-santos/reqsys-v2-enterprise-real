@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">ReqSys Operacional · Trilha C</p>
         <h1 id="titulo-monitoramento">Monitoramento Operacional</h1>
-        <p>Runtime navegável com semáforo operacional, cards clicáveis, detalhamento filtrado e layouts responsivos.</p>
+        <p>Execução navegável com semáforo operacional, cards clicáveis, detalhamento filtrado e layouts responsivos.</p>
       </div>
       <div class="cabecalho-acoes">
         <SemaforoChip :value="estadoGeralExibido" size="large" />
@@ -24,7 +24,7 @@
       role="status"
       data-testid="monitoramento-modo-preview"
     >
-      <strong>Preview estático parcial</strong> — {{ coletaDetalhes.mensagem || 'Alguns sinais operacionais ainda não estão conectados (ex.: CI GitHub).' }}
+      <strong>Preview estático parcial</strong> — {{ coletaDetalhes.mensagem || 'Alguns sinais operacionais ainda não estão conectados (ex.: verificações automáticas GitHub).' }}
     </v-alert>
 
     <v-row dense>
@@ -41,11 +41,11 @@
     </v-row>
 
     <v-card class="painel runtime mt-4" elevation="0" :data-section="secaoAtiva === 'runtime' ? 'active' : undefined">
-      <v-card-title id="titulo-runtime">Runtime Operacional Navegável</v-card-title>
-      <v-card-subtitle>Health map, readiness gate e topologia de workflow expostos pelo backend runtime.</v-card-subtitle>
+      <v-card-title id="titulo-runtime">Execução operacional navegável</v-card-title>
+      <v-card-subtitle>Health map, prontidão verificação obrigatória e topologia de workflow expostos pelo serviço execução.</v-card-subtitle>
       <v-card-text>
         <div class="subcabecalho mb-3">
-          <span class="correlation">Runtime: {{ runtimeDashboard?.correlation_id || 'carregando' }}</span>
+          <span class="correlation">Execução: {{ runtimeDashboard?.correlation_id || 'carregando' }}</span>
         </div>
 
         <v-row dense>
@@ -655,7 +655,7 @@ const opcoesEstado = [
 const opcoesSecao = [
   { title: 'Itens monitorados', value: 'itens' },
   { title: 'Conectores', value: 'conectores' },
-  { title: 'Runtime', value: 'runtime' },
+  { title: 'Execução', value: 'runtime' },
   { title: 'Métricas', value: 'metrics' },
   { title: 'Timeline', value: 'timeline' },
   { title: 'Governança', value: 'governanca' },
@@ -663,7 +663,7 @@ const opcoesSecao = [
   { title: 'Trilha D', value: 'trilha-d' },
   { title: 'Monitoramento Trilha D', value: 'trilha-d-monitoring' },
   { title: 'Monitoramento Trilha D — Histórico', value: 'trilha-d-monitoring-history' },
-  { title: 'Merge readiness — Histórico', value: 'merge-readiness-history' },
+  { title: 'Prontidão para integração — Histórico', value: 'merge-readiness-history' },
 ]
 
 const filtrosAtivos = computed(() => normalizarFiltrosMonitoramento({

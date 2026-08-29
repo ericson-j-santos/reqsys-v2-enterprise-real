@@ -3,10 +3,10 @@
     <div class="analytics-header">
       <div>
         <p class="eyebrow">Trilha C · UX Operacional</p>
-        <h1 id="titulo-analytics">Analytics Navegável</h1>
+        <h1 id="titulo-analytics">Indicadores Navegável</h1>
         <p class="muted">
           Hub executivo com semáforo operacional, cards clicáveis e detalhamento filtrado para monitoramento,
-          estatísticas e runtime.
+          estatísticas e execução.
         </p>
       </div>
       <div class="header-actions">
@@ -34,7 +34,7 @@
     </v-row>
 
     <v-card class="panel mt-4" elevation="0">
-      <v-card-title>Runtime operacional</v-card-title>
+      <v-card-title>Execução operacional</v-card-title>
       <v-card-subtitle>Cards orientados por schema com detalhamento para o analítico filtrado.</v-card-subtitle>
       <v-card-text>
         <v-row dense>
@@ -57,10 +57,10 @@
       <v-col cols="12" lg="7">
         <v-card class="panel" elevation="0">
           <v-card-title>Malha operacional unificada</v-card-title>
-          <v-card-subtitle>P1 — consumo de unified-operational-signal.json via /api/runtime/dashboard</v-card-subtitle>
+          <v-card-subtitle>P1 — consumo de unified-operational-signal.json via /api/execução/painel</v-card-subtitle>
           <v-card-text>
             <v-alert v-if="!meshResumo.hydrated" type="info" variant="tonal" density="compact" class="mb-3">
-              Malha parcial — aguardando artifact do Signal Consolidator no CI.
+              Malha parcial — aguardando artifact do Signal Consolidator no verificações automáticas.
             </v-alert>
             <v-row dense>
               <v-col v-for="card in meshCards" :key="card.id" cols="12" sm="6">
@@ -262,7 +262,7 @@ async function carregarTudo() {
     ])
     runtimeDashboard.value = dashboard
   } catch (e) {
-    erro.value = e?.message || 'Erro ao carregar analytics operacional'
+    erro.value = e?.message || 'Erro ao carregar indicadores operacional'
   } finally {
     carregando.value = false
   }

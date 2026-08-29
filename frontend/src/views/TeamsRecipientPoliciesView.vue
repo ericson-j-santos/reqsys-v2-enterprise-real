@@ -284,8 +284,8 @@ const corStatusIdentidade = computed(() => {
 
 const readinessGeral = computed(() => {
   const resultados = politicas.map((p) => readiness[p.id]).filter(Boolean)
-  if (!resultados.length) return { tipo: 'info', texto: 'Readiness ainda não executada nesta sessão.' }
-  if (resultados.length < politicas.length) return { tipo: 'warning', texto: 'Readiness parcial. Execute a validação completa das duas políticas.' }
+  if (!resultados.length) return { tipo: 'info', texto: 'Prontidão ainda não executada nesta sessão.' }
+  if (resultados.length < politicas.length) return { tipo: 'warning', texto: 'Prontidão parcial. Execute a validação completa das duas políticas.' }
   const prontos = resultados.filter((item) => item.pronto).length
   if (prontos === politicas.length) {
     return { tipo: 'success', texto: `2/2 políticas READY. Candidato a retirar o fallback legado após a governança prevista.` }
@@ -393,7 +393,7 @@ async function salvar() {
       await criarDestinatario(payload)
     }
     dialogoEdicao.value = false
-    mensagem.value = 'Cadastro atualizado com sucesso. Execute novamente a readiness antes de alterar qualquer fallback.'
+    mensagem.value = 'Cadastro atualizado com sucesso. Execute novamente a prontidão antes de alterar qualquer fallback.'
     Object.keys(readiness).forEach((key) => delete readiness[key])
     await carregar()
   } catch (error) {
@@ -409,7 +409,7 @@ async function alternarAtivo(item) {
     await atualizarDestinatario(item.id, { ativo: !item.ativo })
     Object.keys(readiness).forEach((key) => delete readiness[key])
     await carregar()
-    mensagem.value = item.ativo ? 'Membro desativado.' : 'Membro ativado. Execute a readiness novamente.'
+    mensagem.value = item.ativo ? 'Membro desativado.' : 'Membro ativado. Execute a prontidão novamente.'
   } catch (error) {
     erro.value = detalheErroPolitica(error)
   }
@@ -430,7 +430,7 @@ async function remover() {
     itemRemocao.value = null
     Object.keys(readiness).forEach((key) => delete readiness[key])
     await carregar()
-    mensagem.value = 'Membro removido. A readiness foi invalidada e precisa ser executada novamente.'
+    mensagem.value = 'Membro removido. A prontidão foi invalidada e precisa ser executada novamente.'
   } catch (error) {
     erro.value = detalheErroPolitica(error)
   } finally {
@@ -446,8 +446,8 @@ async function executarReadinessCompleta() {
     resultados.forEach((resultado) => { readiness[resultado.politica] = resultado })
     const prontos = resultados.filter((item) => item.pronto).length
     mensagem.value = prontos === politicas.length
-      ? 'Readiness concluída: 2/2 políticas READY, sem fallback explícito.'
-      : `Readiness concluída: ${prontos}/${politicas.length} políticas READY.`
+      ? 'Prontidão concluída: 2/2 políticas READY, sem fallback explícito.'
+      : `Prontidão concluída: ${prontos}/${politicas.length} políticas READY.`
   } catch (error) {
     erro.value = detalheErroPolitica(error)
   } finally {

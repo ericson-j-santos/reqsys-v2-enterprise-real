@@ -800,7 +800,7 @@ const statusEtapaOptions = [
 const historicoPipelineHeaders = [
   { title: 'Data', key: 'executadoEm', width: '130px' },
   { title: 'Etapa', key: 'label' },
-  { title: 'Status', key: 'status', width: '90px' },
+  { title: 'Situação', key: 'status', width: '90px' },
   { title: 'Duração', key: 'duration', width: '90px' },
   { title: 'Responsável', key: 'solicitante', width: '120px' },
   { title: 'Correlation ID', key: 'correlationId', width: '130px' },
@@ -840,7 +840,7 @@ const githubLabelsArray = computed(() => {
 const githubSelecionadasCount = computed(() => githubForm.selectedIssueNumbers.length)
 
 const logCategorias = [
-  { value: 'erro',      label: 'Erro',       color: 'red',    hint: 'Steps com falha ou status de erro' },
+  { value: 'erro',      label: 'Erro',       color: 'red',    hint: 'Steps com falha ou situação de erro' },
   { value: 'aviso',     label: 'Aviso',      color: 'orange', hint: 'Steps com atenção ou warnings' },
   { value: 'pipeline',  label: 'Fluxo',   color: 'blue',   hint: 'Steps de publicação e integração' },
   { value: 'ok',        label: 'Concluídos', color: 'green',  hint: 'Steps finalizados com sucesso' },
@@ -943,7 +943,7 @@ onMounted(() => {
       })
       aplicarStatusInicialDemanda(data.status_demanda)
       rascunhoSalvo.value = true
-      toast.success(`Demanda carregada no Fluxo (status: ${data.status_demanda || 'recebido'})`)
+      toast.success(`Demanda carregada no Fluxo (situação: ${data.status_demanda || 'recebido'})`)
     } catch {}
     sessionStorage.removeItem(PREFILL_KEY)
     return
@@ -999,7 +999,7 @@ function aplicarStatusInicialDemanda(statusDemanda) {
     resetSteps()
     steps.forEach((s, idx) => {
       s.status = status
-      s.log = `Status inicial importado da demanda: ${status}`
+      s.log = `Situação inicial importado da demanda: ${situação}`
       currentStep.value = idx
     })
     snapshotAplicado.value = true
@@ -1027,7 +1027,7 @@ function aplicarStatusInicialDemanda(statusDemanda) {
   resetSteps()
   steps.forEach((s, idx) => {
     s.status = statusPorStep[idx]
-    s.log = `Snapshot inicial da demanda (${status})`
+    s.log = `Snapshot inicial da demanda (${situação})`
     if (statusPorStep[idx] === 'running' || statusPorStep[idx] === 'error') {
       currentStep.value = idx
     }
@@ -1086,7 +1086,7 @@ function toggleLegendaStatus(status) {
     return
   }
   aplicarStatusInicialDemanda(status)
-  toast.info(`Preview aplicado: ${statusOrigemLabel(status)}`)
+  toast.info(`Preview aplicado: ${statusOrigemLabel(situação)}`)
 }
 
 async function copiarCorrelation() {
@@ -1290,7 +1290,7 @@ async function executarDemo() {
     { log: 'Solicitação criada: SOL-1746000001 · normalização aplicada', dur: 380 },
     { log: 'Semântica válida · nenhum termo ambíguo · 2 RFs inferidas (RF-AUTH, RF-RELAT)', dur: 510, status: 'ok' },
     { log: 'Estruturado · 2 RFs · 3 RNFs · 4 regras de negócio · 5 critérios de aceite', dur: 720 },
-    { log: 'Story #42 criado · 4 subtarefas (Frontend, Backend, Dados, QA) · redmine-deveri.local/issues/42', dur: 640 },
+    { log: 'Story #42 criado · 4 subtarefas (Aplicação, Serviço, Dados, QA) · redmine-deveri.local/issues/42', dur: 640 },
   ]
 
   for (let i = 0; i < demoPipeline.length; i++) {
@@ -1426,7 +1426,7 @@ function formatarErroApi(err) {
   }
 
   if (typeof detail === 'string' && detail.trim()) {
-    return `Erro ${status || ''}: ${detail}`.trim()
+    return `Erro ${situação || ''}: ${detail}`.trim()
   }
 
   if (err?.message) {

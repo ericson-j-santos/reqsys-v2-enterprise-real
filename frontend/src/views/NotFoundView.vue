@@ -10,7 +10,7 @@
       <div class="not-found-actions">
         <v-btn color="primary" to="/" prepend-icon="mdi-view-dashboard">Ir para o painel</v-btn>
         <v-btn variant="tonal" to="/monitoramento-operacional" prepend-icon="mdi-pulse">Monitoramento</v-btn>
-        <v-btn variant="text" to="/login" prepend-icon="mdi-login">Login</v-btn>
+        <v-btn variant="text" to="/login" prepend-icon="mdi-login">Acesso</v-btn>
       </div>
     </v-card>
   </main>
