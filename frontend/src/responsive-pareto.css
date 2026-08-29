@@ -92,6 +92,15 @@
     flex-wrap: wrap;
     row-gap: 8px;
   }
+
+  /* Vuetify anima a barra indeterminada deslocando segmentos largos para fora da
+     caixa visual. Em 320 px esses segmentos aumentavam o scrollWidth do conteúdo
+     principal em 4 px. A animação permanece ativa, mas fica recortada ao componente. */
+  .painel-page .v-progress-linear {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
 }
 
 @media (max-width: 400px) {
