@@ -73,7 +73,7 @@ describe('useAppVersion', () => {
 
     expect(wrapper.vm.versionsAligned).toBe(false)
     expect(wrapper.vm.hasVersionDrift).toBe(true)
-    expect(wrapper.vm.versionLabel).toBe(`FE v${FRONTEND_VERSION} · API v9.9.9`)
+    expect(wrapper.vm.versionLabel).toBe(`FE v${FRONTEND_VERSION} · serviço v9.9.9`)
   })
 
   it('faz fallback para /runtime/version quando build-info falha', async () => {
