@@ -1,0 +1,53 @@
+name: Linguagem simples - correção PR 1391
+
+on:
+  push:
+    branches:
+      - agent/frontend-responsive-pareto-20260828
+    paths:
+      - 'frontend/src/**'
+      - 'frontend/scripts/fix-user-facing-language.mjs'
+      - '.github/workflows/linguagem-simples-autofix-pr1391-temp.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: linguagem-simples-autofix-pr1391
+  cancel-in-progress: true
+
+jobs:
+  corrigir:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Obter ramificação
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Aplicar correção controlada
+        run: node frontend/scripts/fix-user-facing-language.mjs
+
+      - name: Validar textos
+        run: node frontend/scripts/validate-user-facing-language.mjs
+
+      - name: Registrar correções
+        shell: bash
+        run: |
+          if git diff --quiet -- frontend/src; then
+            echo 'Nenhuma correção adicional necessária.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src
+          git commit -m 'fix(ux): concluir correções residuais de linguagem simples'
+          git push origin HEAD:${GITHUB_REF_NAME}
