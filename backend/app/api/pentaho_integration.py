@@ -3,7 +3,11 @@ from sqlalchemy.orm import Session
 
 from app.core.service_tokens import ServiceAuthContext, require_admin_or_service_token
 from app.db import get_db
-from app.schemas.pentaho_integration import PentahoLoteEntrada, PentahoLoteResposta, PentahoLoteStatus
+from app.schemas.pentaho_integration import (
+    PentahoLoteEntrada,
+    PentahoLoteResposta,
+    PentahoLoteStatus,
+)
 from app.services.pentaho_integration import (
     criar_ou_obter_lote,
     obter_dashboard,
