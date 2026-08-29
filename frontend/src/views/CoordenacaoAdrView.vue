@@ -1,9 +1,10 @@
 <template>
   <CoordenacaoDashboard
+    data-testid="route-coordenacao-adr"
     base-path="/v1/agents/adr-orchestrator"
     variante="adr"
-    titulo="Coordenação Geral de ADRs"
-    subtitulo="Cada ADR (001 a 012) tem um coordenador especialista; a coordenação geral classifica a demanda, aponta ADRs relacionados e detecta violações de gate em tempo real."
+    titulo="Coordenação Geral de Decisões de Arquitetura"
+    subtitulo="Cada decisão de arquitetura (001 a 012) tem um coordenador especialista; a coordenação geral classifica a demanda, aponta decisões relacionadas e detecta violações de validação em tempo real."
   />
 </template>
 
