@@ -1,0 +1,32 @@
+name: PR No-Loss Closure Guard
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-no-loss-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  proteger-conteudo-nao-integrado:
+    if: github.event.pull_request.merged == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Obter main confiável
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validar evidência de continuidade
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/pr_no_loss_guard.py
