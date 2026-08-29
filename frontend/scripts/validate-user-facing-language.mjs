@@ -45,9 +45,10 @@ export const FORBIDDEN_TERMS = [
   { id: 'prod', pattern: /\bPROD\b/gu, suggestion: 'produção' },
 ]
 
+const USER_FACING_NAME = '(?:erro|error|mensagem|message|aviso|alerta|sucesso|descricao|description|titulo|title|rotulo|label|placeholder)'
 const USER_FACING_JS_PROPERTY = /\b(?:title|titulo|tip|topic|rotulo|label|message|mensagem|placeholder|description|descricao)\s*:\s*(['"`])([\s\S]*?)\1/g
-const USER_FACING_ASSIGNMENT = /\b(?:erro|error|mensagem|message|aviso|alerta|sucesso|descricao|description|titulo|title|rotulo|label|placeholder)(?:\.value)?\s*=\s*(['"`])([\s\S]*?)\1/g
-const FALLBACK_LITERAL = /\|\|\s*(['"`])([\s\S]*?)\1/g
+const USER_FACING_ASSIGNMENT = new RegExp(`\\b${USER_FACING_NAME}(?:\\.value)?\\s*=\\s*(['"\`])([\\s\\S]*?)\\1`, 'g')
+const USER_FACING_FALLBACK = new RegExp(`\\b${USER_FACING_NAME}(?:\\.value)?\\s*=\\s*[^\\n;]*?\\|\\|\\s*(['"\`])([^\\n]*?)\\1`, 'g')
 const SELECTED_HTML_ATTR = /\b(?:aria-label|title|placeholder)\s*=\s*(['"])(.*?)\1/giu
 const QUOTED_LITERAL = /(['"`])((?:\\.|(?!\1)[\s\S])*?)\1/g
 
@@ -67,7 +68,12 @@ function isRelevantCandidate(value) {
   if (!text) return false
   if (/^(?:https?:\/\/|\/|\.\/|\.\.\/)/i.test(text)) return false
   if (/^[a-z0-9_.:/-]+$/i.test(text) && !/\s/.test(text) && text === text.toLowerCase()) return false
+  if (/^[a-z0-9_.:/-]*\$\{[^}]+\}[a-z0-9_.:/-]*$/i.test(text)) return false
   return /[A-Za-zÀ-ÿ]/u.test(text)
+}
+
+function maskPreservingLines(text, regex) {
+  return text.replace(regex, (block) => block.replace(/[^\n]/g, ' '))
 }
 
 export function findForbiddenTerms(text) {
@@ -89,10 +95,15 @@ function collectTemplateCandidates(content) {
 
   const template = templateMatch[1]
   const templateOffset = templateMatch.index + templateMatch[0].indexOf(template)
+  const withoutExecutableBlocks = maskPreservingLines(
+    template,
+    /<(?:code|pre)\b[^>]*>[\s\S]*?<\/(?:code|pre)>/giu,
+  )
+  const withoutComments = maskPreservingLines(withoutExecutableBlocks, /<!--[\s\S]*?-->/g)
 
   let attrMatch
   SELECTED_HTML_ATTR.lastIndex = 0
-  while ((attrMatch = SELECTED_HTML_ATTR.exec(template))) {
+  while ((attrMatch = SELECTED_HTML_ATTR.exec(withoutComments))) {
     result.push({
       text: attrMatch[2],
       line: lineFromOffset(content, templateOffset + attrMatch.index),
@@ -100,7 +111,6 @@ function collectTemplateCandidates(content) {
     })
   }
 
-  const withoutComments = template.replace(/<!--[\s\S]*?-->/g, ' ')
   const textNodeRegex = />([^<]+)</g
   let textMatch
   while ((textMatch = textNodeRegex.exec(withoutComments))) {
@@ -152,7 +162,7 @@ function collectJavascriptCandidates(content) {
   return [
     ...collectRegexCandidates(content, USER_FACING_JS_PROPERTY, 'propriedade de interface'),
     ...collectRegexCandidates(content, USER_FACING_ASSIGNMENT, 'mensagem de interface'),
-    ...collectRegexCandidates(content, FALLBACK_LITERAL, 'mensagem alternativa de interface'),
+    ...collectRegexCandidates(content, USER_FACING_FALLBACK, 'mensagem alternativa de interface'),
   ]
 }
 
