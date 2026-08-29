@@ -76,6 +76,32 @@
     min-width: 0;
   }
 
+  /* O título do painel expansível do Vuetify reserva espaço para o ícone de seta.
+     Em 320 px o ícone avançava 4 px além da área útil. Mantemos o ícone e o alvo
+     clicável, limitando o conjunto à largura real do painel. */
+  .painel-page .v-expansion-panels,
+  .painel-page .v-expansion-panel,
+  .painel-page .v-expansion-panel-title {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .painel-page .v-expansion-panel-title {
+    width: 100%;
+    padding-right: 16px;
+  }
+
+  .painel-page .v-expansion-panel-title > :first-child {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .painel-page .v-expansion-panel-title__icon {
+    flex: 0 0 auto;
+    margin-inline-start: 8px;
+  }
+
   /* A tabela mantém sua largura necessária e rolagem interna, enquanto o wrapper
      deixa de participar do cálculo de largura do conteúdo principal. */
   .painel-page .v-data-table {
