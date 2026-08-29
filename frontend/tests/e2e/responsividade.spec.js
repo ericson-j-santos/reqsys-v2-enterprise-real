@@ -102,6 +102,21 @@ async function horizontalOverflowEvidence(page) {
       }
     }
 
+    const overflowEstaContido = (child, target, targetRect) => {
+      let ancestor = child.parentElement
+      while (ancestor && ancestor !== target) {
+        const style = window.getComputedStyle(ancestor)
+        const overflowX = style.overflowX
+        if (['auto', 'scroll', 'hidden', 'clip'].includes(overflowX)) {
+          const rect = ancestor.getBoundingClientRect()
+          const dentroDoTarget = rect.left >= targetRect.left - 2 && rect.right <= targetRect.right + 2
+          if (dentroDoTarget) return true
+        }
+        ancestor = ancestor.parentElement
+      }
+      return false
+    }
+
     const targets = [
       ['documento', document.documentElement],
       ['body', document.body],
@@ -122,7 +137,9 @@ async function horizontalOverflowEvidence(page) {
         item.ofensoresDireita = [...element.querySelectorAll('*')]
           .filter((child) => {
             const rect = child.getBoundingClientRect()
-            return rect.width > 0 && rect.right > containerRect.right + 2
+            return rect.width > 0 &&
+              rect.right > containerRect.right + 2 &&
+              !overflowEstaContido(child, element, containerRect)
           })
           .map((child) => descreverElemento(child, containerRect))
           .sort((a, b) => b.excessoDireita - a.excessoDireita)
