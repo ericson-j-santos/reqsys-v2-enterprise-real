@@ -369,7 +369,7 @@ const activeIntents = computed(() => {
   ]
 
   if (status) {
-    intents.push({ id: 'filtered-context', label: `filtro: ${situação}`, icon: 'mdi-filter-outline', color: 'amber' })
+    intents.push({ id: 'filtered-context', label: `filtro: ${status}`, icon: 'mdi-filter-outline', color: 'amber' })
   }
 
   return intents
@@ -435,7 +435,7 @@ async function carregarWorkspaceOperacional() {
 
   try {
     const query = buildWorkspaceQuery()
-    const endpoint = `${getApiBaseUrl()}/api/requisitos/área de trabalho${query ? `?${query}` : ''}`
+    const endpoint = `${getApiBaseUrl()}/api/requisitos/workspace${query ? `?${query}` : ''}`
     const response = await fetch(endpoint, {
       headers: {
         Accept: 'application/json',
