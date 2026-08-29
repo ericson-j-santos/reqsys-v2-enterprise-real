@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0.0",
+  "scan_interval_minutes": 15,
+  "max_rerun_attempts": 2,
+  "age_thresholds_minutes": {
+    "stalled": 30,
+    "priority": 120,
+    "alert": 480,
+    "critical": 1440
+  },
+  "transient_conclusions": ["cancelled", "timed_out", "stale"],
+  "rerun_allowlist": [
+    "CI — ReqSys v2 Enterprise",
+    "CI Enterprise Fast",
+    "Main Smoke CI",
+    "Main Operational Health",
+    "Fast CI - Operational Guardrails"
+  ],
+  "never_auto_remediate_keywords": [
+    "security",
+    "segurança",
+    "governance",
+    "governança",
+    "audit",
+    "compliance",
+    "migration",
+    "migração",
+    "database",
+    "banco"
+  ],
+  "labels": {
+    "failed": "ci:falhou",
+    "handling": "ci:em-tratamento",
+    "recovered": "ci:recuperado",
+    "human": "ci:intervencao-necessaria",
+    "transient": "ci:falha-transitoria",
+    "stalled": "ci:parado"
+  }
+}
