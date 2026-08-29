@@ -1,5 +1,6 @@
 <template>
   <CoordenacaoDashboard
+    data-testid="route-coordenacao-adr"
     base-path="/v1/agents/adr-orchestrator"
     variante="adr"
     titulo="Coordenação Geral de Decisões de Arquitetura"

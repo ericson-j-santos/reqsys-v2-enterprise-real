@@ -1,0 +1,149 @@
+/*
+ * Correções Pareto de responsividade.
+ * Mantém as regras de adaptação concentradas nos pontos compartilhados para evitar
+ * correções página a página e reduzir regressões em novas telas.
+ */
+
+.req-appbar .v-toolbar__content {
+  min-width: 0;
+  gap: 2px;
+}
+
+.req-appbar .brand-sm,
+.req-appbar .req-role-chip {
+  min-width: 0;
+}
+
+.req-appbar .brand-sm {
+  flex-shrink: 1;
+  white-space: nowrap;
+}
+
+.req-appbar .req-role-chip {
+  flex-shrink: 1;
+  overflow: hidden;
+}
+
+/* Tabelas densas continuam utilizáveis sem deslocar a aplicação inteira. */
+.responsive-table-shell,
+.table-card,
+.v-table__wrapper {
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Diálogos nunca devem ultrapassar o viewport útil em telas estreitas. */
+.v-dialog > .v-overlay__content {
+  max-width: calc(100vw - 24px) !important;
+  max-height: calc(100dvh - 24px) !important;
+}
+
+@media (max-width: 600px) {
+  /* Alvo mínimo confortável para toque em ações primárias e botões de ícone. */
+  .v-btn {
+    min-height: 44px;
+  }
+
+  .v-btn.v-btn--icon {
+    min-width: 44px;
+  }
+
+  .v-dialog > .v-overlay__content > .v-card {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+
+  /* v-row usa margens negativas para formar gutters. No painel de integrações,
+     linhas densas aninhadas não podem ampliar a largura da página. */
+  .painel-page,
+  .painel-page > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .painel-page {
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .painel-page .v-row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .painel-page .v-row > .v-col {
+    min-width: 0;
+  }
+
+  /* O conteúdo do título precisa ceder espaço ao ícone de seta em 320 px.
+     O ícone permanece totalmente visível e qualquer sobra de subpixel fica
+     confinada ao próprio cabeçalho, sem ampliar o conteúdo principal. */
+  .painel-page .v-expansion-panels,
+  .painel-page .v-expansion-panel,
+  .painel-page .v-expansion-panel-title {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .painel-page .v-expansion-panel-title {
+    width: 100%;
+    overflow-x: clip;
+  }
+
+  .painel-page .v-expansion-panel-title > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .painel-page .v-expansion-panel-title__icon {
+    flex: 0 0 auto;
+    position: relative;
+    inset-inline-end: 16px;
+    margin-inline-start: 8px;
+  }
+
+  /* A tabela mantém sua largura necessária e rolagem interna, enquanto o wrapper
+     deixa de participar do cálculo de largura do conteúdo principal. */
+  .painel-page .v-data-table {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .painel-page .v-table__wrapper {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    contain: inline-size;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .painel-page .v-data-table-footer {
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+}
+
+@media (max-width: 400px) {
+  /* O papel permanece disponível no menu do usuário; removê-lo da barra evita
+     colisão entre marca, ambiente e ações em 320–390 px. */
+  .req-appbar .req-role-chip {
+    display: none !important;
+  }
+
+  .req-appbar .brand-sm {
+    font-size: 14px;
+    gap: 4px;
+  }
+
+  .req-appbar .ml-2 {
+    margin-left: 4px !important;
+  }
+}

@@ -8,10 +8,10 @@
 export const ROTAS_RESPONSIVAS = [
   { path: '/login', testId: 'route-login', titulo: 'Entrar' },
   { path: '/', testId: 'route-dashboard', titulo: 'Painel' },
-  { path: '/home', testId: 'route-home', titulo: 'Início' },
-  { path: '/workspace', testId: 'route-workspace', titulo: 'Área de trabalho' },
+  { path: '/home', testId: 'user-final-shell', titulo: 'Início' },
+  { path: '/workspace', testId: 'user-final-shell', titulo: 'Área de trabalho' },
   { path: '/analytics', testId: 'route-analytics', titulo: 'Indicadores' },
-  { path: '/ajuda', testId: 'route-ajuda', titulo: 'Ajuda' },
+  { path: '/ajuda', testId: 'user-final-shell', titulo: 'Ajuda' },
   { path: '/requisitos', testId: 'route-requisitos', titulo: 'Requisitos' },
   { path: '/rastreabilidade', testId: 'route-rastreabilidade', titulo: 'Rastreabilidade' },
   { path: '/auditoria', testId: 'route-auditoria', titulo: 'Auditoria' },
