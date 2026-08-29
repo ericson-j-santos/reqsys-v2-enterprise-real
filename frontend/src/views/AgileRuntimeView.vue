@@ -2,9 +2,9 @@
   <section class="page agile-runtime-page" data-testid="route-agile-runtime">
     <header class="cabecalho">
       <div>
-        <p class="eyebrow">ReqSys · Agile Runtime</p>
-        <h1>GitHub Launchpad</h1>
-        <p>Abra work items no GitHub com branch e ambiente corretos, sem sair do ReqSys.</p>
+        <p class="eyebrow">ReqSys · Acompanhamento da entrega</p>
+        <h1>Integração com GitHub</h1>
+        <p>Abra itens de trabalho no GitHub com a versão de código e o ambiente corretos, sem sair do ReqSys.</p>
       </div>
       <button type="button" :disabled="carregando" @click="carregarWorkItems">
         {{ carregando ? 'Atualizando...' : 'Atualizar' }}
@@ -13,10 +13,10 @@
 
     <p v-if="erro" class="alerta erro" role="alert">{{ erro }}</p>
 
-    <section class="layout" aria-label="Work items e launchpad GitHub">
+    <section class="layout" aria-label="Itens de trabalho e ações do GitHub">
       <article class="painel lista">
-        <h2>Work items</h2>
-        <p v-if="!workItems.length && !carregando" class="vazio">Nenhum work item cadastrado.</p>
+        <h2>Itens de trabalho</h2>
+        <p v-if="!workItems.length && !carregando" class="vazio">Nenhum item de trabalho cadastrado.</p>
         <ul v-else class="itens">
           <li v-for="item in workItems" :key="item.id">
             <button
@@ -27,7 +27,7 @@
             >
               <strong>{{ item.codigo }}</strong>
               <span>{{ item.titulo }}</span>
-              <small>{{ item.status }} · {{ item.branch || 'branch pendente' }}</small>
+              <small>{{ rotuloSituacao(item.status) }} · {{ item.branch || 'versão de código pendente' }}</small>
             </button>
           </li>
         </ul>
@@ -37,7 +37,7 @@
         <h2>{{ selecionado.codigo }}</h2>
         <p>{{ selecionado.titulo }}</p>
 
-        <div class="ambientes" role="tablist" aria-label="Ambiente alvo">
+        <div class="ambientes" role="tablist" aria-label="Ambiente de destino">
           <button
             v-for="amb in ambientes"
             :key="amb.valor"
@@ -51,11 +51,11 @@
           </button>
         </div>
 
-        <p v-if="carregandoLaunchpad" class="status">Carregando launchpad...</p>
+        <p v-if="carregandoLaunchpad" class="status">Carregando ações do GitHub...</p>
         <template v-else-if="launchpad">
           <dl class="meta">
-            <div><dt>Branch</dt><dd><code>{{ launchpad.branch_trabalho }}</code></dd></div>
-            <div><dt>Base</dt><dd><code>{{ launchpad.branch_base }}</code></dd></div>
+            <div><dt>Versão de código</dt><dd><code>{{ launchpad.branch_trabalho }}</code></dd></div>
+            <div><dt>Origem</dt><dd><code>{{ launchpad.branch_base }}</code></dd></div>
             <div><dt>Repositório</dt><dd><code>{{ launchpad.repositorio }}</code></dd></div>
             <div v-if="launchpad.requisito_codigo"><dt>Requisito</dt><dd>{{ launchpad.requisito_codigo }}</dd></div>
           </dl>
@@ -67,71 +67,71 @@
               :href="launchpad.links.branch"
               target="_blank"
               rel="noopener noreferrer"
-            >Abrir branch</a>
+            >Abrir versão de código</a>
             <a
               v-if="pode('criar_branch_github')"
               class="acao"
               :href="launchpad.links.criar_branch"
               target="_blank"
               rel="noopener noreferrer"
-            >Criar branch</a>
+            >Criar versão de código</a>
             <a
               v-if="pode('abrir_pr')"
               class="acao"
               :href="launchpad.links.novo_pr"
               target="_blank"
               rel="noopener noreferrer"
-            >Abrir PR</a>
+            >Abrir solicitação de integração</a>
             <a
               v-if="pode('ver_actions')"
               class="acao"
               :href="launchpad.links.actions"
               target="_blank"
               rel="noopener noreferrer"
-            >Ver CI</a>
+            >Ver verificações automáticas</a>
             <a
               v-if="pode('abrir_app') && launchpad.links.app_ambiente"
               class="acao"
               :href="launchpad.links.app_ambiente"
               target="_blank"
               rel="noopener noreferrer"
-            >Abrir app</a>
+            >Abrir aplicação</a>
             <a
               v-if="launchpad.links.change_request"
               class="acao secundaria"
               :href="launchpad.links.change_request"
               target="_blank"
               rel="noopener noreferrer"
-            >PR vinculado</a>
+            >Solicitação vinculada</a>
             <button
               v-if="pode('criar_branch_api')"
               type="button"
               class="acao botao"
               :disabled="criandoBranch"
               @click="criarBranchApi"
-            >{{ criandoBranch ? 'Criando...' : 'Criar branch (API)' }}</button>
+            >{{ criandoBranch ? 'Criando...' : 'Criar versão de código pelo serviço' }}</button>
           </div>
 
           <form class="trace-form" @submit.prevent="salvarRastreabilidade">
             <label>
-              URL do PR (change_url)
-              <input v-model="changeUrl" type="url" placeholder="https://github.com/org/repo/pull/123" />
+              Endereço da solicitação de integração
+              <input v-model="changeUrl" type="url" placeholder="https://github.com/organizacao/repositorio/pull/123" />
             </label>
             <button type="submit" :disabled="salvandoTrace">Salvar rastreabilidade</button>
           </form>
 
           <p v-if="mensagem" class="nota sucesso" role="status">{{ mensagem }}</p>
           <p v-if="launchpad.increment_gate && !launchpad.increment_gate.permitido" class="nota alerta-gate">
-            Increment gate: {{ launchpad.increment_gate.detalhe }}
+            Verificação obrigatória: {{ launchpad.increment_gate.detalhe }}
           </p>
-          <p v-if="launchpad.branch_existe === true" class="nota">Branch já existe no repositório.</p>
+          <p v-if="launchpad.branch_existe === true" class="nota">A versão de código já existe no repositório.</p>
           <p v-if="launchpad.somente_leitura" class="nota">Ambiente produtivo: somente leitura.</p>
           <p class="nota mono">{{ launchpad.mensagem_commit_sugerida }}</p>
         </template>
       </article>
 
       <article v-else class="painel vazio-detalhe">
-        <p>Selecione um work item para abrir o launchpad GitHub.</p>
+        <p>Selecione um item de trabalho para abrir as ações do GitHub.</p>
       </article>
     </section>
   </section>
@@ -142,10 +142,30 @@ import { onMounted, ref } from 'vue'
 import { api } from '../services/api'
 
 const ambientes = [
-  { valor: 'dev', rotulo: 'Dev' },
-  { valor: 'homolog', rotulo: 'Homolog' },
-  { valor: 'prod', rotulo: 'Prod' },
+  { valor: 'dev', rotulo: 'Desenvolvimento' },
+  { valor: 'homolog', rotulo: 'Homologação' },
+  { valor: 'prod', rotulo: 'Produção' },
 ]
+
+const situacoes = {
+  pending: 'Pendente',
+  open: 'Aberto',
+  ready: 'Pronto',
+  in_progress: 'Em andamento',
+  active: 'Ativo',
+  done: 'Concluído',
+  completed: 'Concluído',
+  failed: 'Falhou',
+  error: 'Erro',
+  blocked: 'Bloqueado',
+  cancelled: 'Cancelado',
+  canceled: 'Cancelado',
+  approved: 'Aprovado',
+  rejected: 'Rejeitado',
+  draft: 'Em preparação',
+  merged: 'Integrado',
+  closed: 'Encerrado',
+}
 
 const workItems = ref([])
 const selecionado = ref(null)
@@ -158,6 +178,12 @@ const salvandoTrace = ref(false)
 const erro = ref('')
 const mensagem = ref('')
 const changeUrl = ref('')
+
+function rotuloSituacao(valor) {
+  if (!valor) return 'Situação não informada'
+  const chave = String(valor).trim().toLowerCase().replace(/[ -]+/g, '_')
+  return situacoes[chave] || String(valor).replace(/[_-]+/g, ' ')
+}
 
 function pode(acao) {
   return launchpad.value?.acoes_disponiveis?.includes(acao)
@@ -173,7 +199,7 @@ async function carregarWorkItems() {
       await selecionarItem(workItems.value[0])
     }
   } catch (error) {
-    erro.value = error.response?.data?.detail || 'Erro ao carregar work items.'
+    erro.value = error.response?.data?.detail || 'Erro ao carregar itens de trabalho.'
   } finally {
     carregando.value = false
   }
@@ -192,7 +218,7 @@ async function carregarLaunchpad() {
     changeUrl.value = launchpad.value?.links?.change_request || selecionado.value?.change_url || ''
   } catch (error) {
     launchpad.value = null
-    erro.value = error.response?.data?.detail || 'Erro ao carregar launchpad GitHub.'
+    erro.value = error.response?.data?.detail || 'Erro ao carregar as ações do GitHub.'
   } finally {
     carregandoLaunchpad.value = false
   }
@@ -220,13 +246,13 @@ async function criarBranchApi() {
       { ambiente: ambiente.value, criar_se_ausente: true, aplicar_branch_no_item: true },
     )
     const payload = data.data ?? data
-    mensagem.value = payload.criada ? 'Branch criada via GitHub API.' : 'Branch já existia; rastreabilidade atualizada.'
+    mensagem.value = payload.criada ? 'Versão de código criada pelo GitHub.' : 'A versão de código já existia; rastreabilidade atualizada.'
     await carregarWorkItems()
     const atualizado = workItems.value.find((item) => item.id === selecionado.value.id)
     if (atualizado) selecionado.value = atualizado
     await carregarLaunchpad()
   } catch (error) {
-    erro.value = error.response?.data?.detail || 'Erro ao criar branch via API.'
+    erro.value = error.response?.data?.detail || 'Erro ao criar a versão de código.'
   } finally {
     criandoBranch.value = false
   }
