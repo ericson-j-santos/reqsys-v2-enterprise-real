@@ -6,9 +6,9 @@ on:
       - Teams Notification Dashboard
     types:
       - completed
-  workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -20,21 +20,26 @@ concurrency:
 jobs:
   deploy:
     name: Publicar Pages canônico sem colisão
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    env:
-      PUBLIC_ROOT: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real
     steps:
       - name: Checkout da main publicada
         uses: actions/checkout@v4
         with:
           ref: main
+
+      - name: Baixar artefato do produtor Teams
+        uses: actions/download-artifact@v4
+        with:
+          name: teams-dashboard-site
+          path: teams-dashboard-site
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Setup Python para documentação
         uses: actions/setup-python@v5
@@ -55,36 +60,17 @@ jobs:
           rm -rf site
           mkdir -p site/showcase site/codex-local-online
 
-          cp docs/ops-dashboard/teams-notification/index.html site/index.html
+          test -s teams-dashboard-site/index.html
+          test -s teams-dashboard-site/data.json
+          test -s teams-dashboard-site/certification-status.json
+
+          cp teams-dashboard-site/index.html site/index.html
+          cp teams-dashboard-site/data.json site/data.json
+          cp teams-dashboard-site/certification-status.json site/certification-status.json
           cp -a docs/public-showcase/reqsys-linkedin/. site/showcase/
           cp -a tools/codex-local-online/. site/codex-local-online/
           mkdocs build --strict --site-dir site/docs
           : > site/.nojekyll
-
-          fetch_fresh_json() {
-            local name="$1"
-            local target="site/$name"
-            local tmp="${target}.tmp"
-
-            for attempt in $(seq 1 12); do
-              if curl --fail --silent --show-error \
-                --retry 2 --retry-delay 2 \
-                "${PUBLIC_ROOT}/${name}?run=${GITHUB_RUN_ID}&attempt=${attempt}" \
-                -o "$tmp" \
-                && python -m json.tool "$tmp" >/dev/null; then
-                mv "$tmp" "$target"
-                return 0
-              fi
-              rm -f "$tmp"
-              sleep 5
-            done
-
-            echo "Falha ao capturar ${name} válido após propagação do dashboard Teams." >&2
-            return 1
-          }
-
-          fetch_fresh_json data.json
-          fetch_fresh_json certification-status.json
 
       - name: Validar contrato público consolidado
         shell: bash
@@ -155,5 +141,5 @@ jobs:
             echo '- `/showcase/`: showcase público ReqSys'
             echo '- `/docs/`: documentação MkDocs'
             echo '- `/codex-local-online/`: interface Codex Local Online'
-            echo '- Publicadores concorrentes: desabilitados; este workflow é o proprietário canônico do Pages.'
+            echo '- Proprietário único: `.github/workflows/deploy-reqsys-pages-composite.yml`.'
           } >> "$GITHUB_STEP_SUMMARY"

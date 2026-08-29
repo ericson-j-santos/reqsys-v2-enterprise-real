@@ -1,6 +1,7 @@
 deploy_staging_fly:
   stage: deploy
   image: alpine:3.20
+  resource_group: reqsys-staging-fly
   environment:
     name: staging
     url: https://staging.example.com

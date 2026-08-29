@@ -1,0 +1,58 @@
+name: Pages Single Writer Guard
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validar proprietário único do Pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar publicador canônico
+        shell: bash
+        run: |
+          set -euo pipefail
+          canonical='.github/workflows/deploy-reqsys-pages-composite.yml'
+          guard='.github/workflows/pages-single-writer-guard.yml'
+
+          mapfile -t publishers < <(
+            grep -RIl --include='*.yml' --include='*.yaml' 'actions/deploy-pages@' .github/workflows \
+              | grep -vFx "$guard" \
+              | sort
+          )
+
+          printf 'Publicadores encontrados (%s):\n' "${#publishers[@]}"
+          printf ' - %s\n' "${publishers[@]:-nenhum}"
+
+          if [[ ${#publishers[@]} -ne 1 ]]; then
+            echo "Esperado exatamente 1 publicador GitHub Pages; encontrados ${#publishers[@]}." >&2
+            exit 1
+          fi
+
+          if [[ "${publishers[0]}" != "$canonical" ]]; then
+            echo "Publicador inesperado: ${publishers[0]}. Canônico: $canonical." >&2
+            exit 1
+          fi
+
+          if grep -RIl --include='*.yml' --include='*.yaml' 'pages:[[:space:]]*write' .github/workflows \
+            | grep -vFx "$canonical" \
+            | grep -vFx "$guard"; then
+            echo 'Workflow não canônico possui permissão pages: write.' >&2
+            exit 1
+          fi
+
+          echo "Proprietário único validado: $canonical"

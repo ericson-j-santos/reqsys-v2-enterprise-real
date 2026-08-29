@@ -18,8 +18,6 @@ permissions:
   actions: read
   contents: read
   issues: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: teams-notification-dashboard
@@ -266,22 +264,10 @@ jobs:
           grep -Fq 'evidence_sha256' site/certification-status.json
           ! grep -R "TEAMS_WEBHOOK_URL\|AZURE_CLIENT_SECRET" site/
 
-      - name: Configurar Pages
-        uses: actions/configure-pages@v5
-
-      - name: Empacotar página
-        uses: actions/upload-pages-artifact@v3
+      - name: Publicar artefato para o publicador canônico
+        uses: actions/upload-artifact@v4
         with:
+          name: teams-dashboard-site
           path: site
-
-  deploy:
-    name: Publicar dashboard
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Publicar no GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          if-no-files-found: error
+          retention-days: 1
