@@ -55,6 +55,20 @@ test('continua validando mensagens reais dentro do script Vue', () => {
   )
 })
 
+test('aceita fechamento script com espaço sem deixar conteúdo escapar da análise', () => {
+  const source = `<template><h1>Fluxo operacional</h1></template>
+  <script setup>
+  const mensagem = 'Status do dashboard'
+  </script >
+  const mensagem = 'Pipeline fora do script'`
+
+  const violations = findViolationsInFile('/tmp/ScriptComEspaco.vue', source)
+  assert.deepEqual(
+    violations.map((item) => item.term),
+    ['dashboard', 'status'],
+  )
+})
+
 test('valida propriedades de interface sem bloquear rotas internas', () => {
   const source = `export const itens = [
     { path: '/agile-runtime', titulo: 'Acompanhamento da entrega' },
