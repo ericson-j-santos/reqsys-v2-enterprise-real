@@ -41,7 +41,7 @@ async function boot() {
       window.history.replaceState({}, document.title, '/')
     }
   } catch (e) {
-    const msg = e.response?.data?.detail || e.message || 'Falha no login Microsoft'
+    const msg = e.response?.data?.detail || e.message || 'Falha no acesso Microsoft'
     sessionStorage.setItem('azure_login_error', msg)
     window.history.replaceState({}, document.title, '/login')
   }

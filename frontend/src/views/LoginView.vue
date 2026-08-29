@@ -5,7 +5,7 @@
         <span class="login-brand"><span class="brand-dot">R</span> ReqSys Enterprise</span>
         <span class="figma-pill figma-pill--compact">RBAC</span>
       </v-card-title>
-      <v-card-subtitle class="login-card-subtitle">Login corporativo - Tieri659</v-card-subtitle>
+      <v-card-subtitle class="login-card-subtitle">Acesso corporativo - Tieri659</v-card-subtitle>
 
       <v-card-text>
         <v-btn
@@ -139,7 +139,7 @@ const route = useRoute()
 const camposAusentes = computed(() => azureConfig.value?.missing_fields || [])
 const redirectEsperado = computed(() => azureConfig.value?.expected_redirect_uri || '')
 const mensagemDiagnosticoAuth = computed(() => {
-  return azureConfig.value?.operator_action || 'Verifique a configuracao do Azure AD no backend.'
+  return azureConfig.value?.operator_action || 'Verifique a configuracao do Azure AD no serviço.'
 })
 
 onMounted(async () => {
@@ -167,7 +167,7 @@ async function entrarMicrosoft() {
   try {
     await loginMicrosoftRedirect()
   } catch (e) {
-    erro.value = e.response?.data?.detail || e.message || 'Falha no login Microsoft'
+    erro.value = e.response?.data?.detail || e.message || 'Falha no acesso Microsoft'
     carregandoAzure.value = false
   }
 }
@@ -180,7 +180,7 @@ async function entrarDemo() {
     const destino = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
     router.push(destino.startsWith('/login') ? '/' : destino)
   } catch (e) {
-    erro.value = e.response?.data?.detail || 'Falha no login demo'
+    erro.value = e.response?.data?.detail || 'Falha no acesso demo'
   } finally {
     carregandoDemo.value = false
   }
@@ -193,7 +193,7 @@ async function entrarCertificado() {
     await auth.loginCertificado()
     router.push('/')
   } catch (e) {
-    erro.value = e.response?.data?.detail || e.message || 'Falha no login com certificado digital'
+    erro.value = e.response?.data?.detail || e.message || 'Falha no acesso com certificado digital'
   } finally {
     carregandoCertificado.value = false
   }

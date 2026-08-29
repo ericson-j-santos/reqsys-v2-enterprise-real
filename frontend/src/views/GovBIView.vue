@@ -479,7 +479,7 @@ const funcionamentoResumo = ref({
 const funcionamentoHeaders = [
   { title: 'Teste', key: 'nome' },
   { title: 'Categoria', key: 'categoria', width: '110px' },
-  { title: 'Status', key: 'ok', width: '90px' },
+  { title: 'Situação', key: 'ok', width: '90px' },
   { title: 'Detalhe', key: 'detalhe' },
 ]
 
@@ -498,7 +498,7 @@ const statusHistoricoOptions = [
   { label: 'Erro', value: 'ERRO' },
 ]
 const fonteHistoricoOptions = [
-  { label: 'Backend', value: 'backend' },
+  { label: 'Serviço', value: 'backend' },
   { label: 'Fallback', value: 'fallback' },
   { label: 'Proxy', value: 'proxy' },
 ]
@@ -509,7 +509,7 @@ const fallbackHistoricoOptions = [
 const historicoHeaders = [
   { title: 'Data', key: 'consultadoEm', width: '140px' },
   { title: 'Pergunta', key: 'pergunta' },
-  { title: 'Status', key: 'statusFluxo', width: '130px' },
+  { title: 'Situação', key: 'statusFluxo', width: '130px' },
   { title: 'Fonte', key: 'fonte', width: '90px' },
   { title: 'Latência', key: 'latenciaMs', width: '90px' },
   { title: 'Fallback', key: 'fallback', width: '90px' },
@@ -663,7 +663,7 @@ async function perguntar() {
     diagnosticoOperacional.value = {
       tipo: 'warning',
       titulo: 'GovBI IA em modo degradado local',
-      mensagem: `O proxy backend não respondeu. Exibido plano governado local. Detalhe: ${detalhe}`,
+      mensagem: `O proxy serviço não respondeu. Exibido plano governado local. Detalhe: ${detalhe}`,
     }
     erro.value = ''
     registrarConsultaHistorico({
@@ -736,14 +736,14 @@ function montarDiagnosticoSucesso(respostaNormalizada) {
     return {
       tipo: 'warning',
       titulo: 'GovBI IA em modo degradado governado',
-      mensagem: 'O backend ReqSys respondeu, mas o serviço GovBI externo ficou indisponível ou fora do contrato.',
+      mensagem: 'O serviço ReqSys respondeu, mas o serviço GovBI externo ficou indisponível ou fora do contrato.',
     }
   }
 
   return {
     tipo: 'success',
     titulo: 'Consulta GovBI processada',
-    mensagem: 'O backend ReqSys processou a consulta GovBI dentro do contrato esperado.',
+    mensagem: 'O serviço ReqSys processou a consulta GovBI dentro do contrato esperado.',
   }
 }
 
@@ -778,7 +778,7 @@ function gerarRespostaFallback(perguntaOriginal, detalheErro) {
     avisos: [
       'GovBI IA indisponível ou fora do contrato esperado.',
       'Resultado abaixo é um plano analítico governado local, sem execução contra base real.',
-      'Use o Correlation ID para rastrear a ocorrência e validar o backend ReqSys/Fly.',
+      'Use o Correlation ID para rastrear a ocorrência e validar o serviço ReqSys/Fly.',
     ],
     nivelSensibilidade: 'BAIXA',
     statusFluxo: 'MODO_DEGRADADO',
@@ -802,7 +802,7 @@ function gerarRespostaFallback(perguntaOriginal, detalheErro) {
         },
         {
           item: 'Próxima ação',
-          valor: 'Validar endpoint /govbi/perguntas, proxy Vite e logs do backend.',
+          valor: 'Validar endpoint /govbi/perguntas, proxy Vite e logs do serviço.',
           status: 'ACAO_OPERACIONAL',
         },
       ],
@@ -821,9 +821,9 @@ function extrairDetalheErro(e) {
   const mensagemServidor = data?.message || data?.error || data?.detail
   const mensagem = mensagemServidor || e.message || 'erro desconhecido'
 
-  if (status) return `HTTP ${status}${statusText ? ` ${statusText}` : ''} - ${mensagem}`
+  if (status) return `HTTP ${situação}${statusText ? ` ${statusText}` : ''} - ${mensagem}`
   if (e.code === 'ECONNABORTED') return `timeout após ${GOVBI_TIMEOUT_MS}ms`
-  if (e.request) return `sem resposta do backend - ${mensagem}`
+  if (e.request) return `sem resposta do serviço - ${mensagem}`
   return mensagem
 }
 

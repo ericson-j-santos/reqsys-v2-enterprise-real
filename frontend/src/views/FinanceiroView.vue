@@ -6,7 +6,7 @@
         <h1 id="titulo-financeiro">CDI</h1>
         <p class="muted">
           Provedor interno e gratuito da taxa CDI diária, com o Banco Central (série SGS 12) como fonte
-          primária e cache local governado. A autorização e auditoria da fonte estão registradas em
+          primária e armazenamento temporário local governado. A autorização e auditoria da fonte estão registradas em
           <code>config/external-sources-registry.json</code> (fonte <code>bcb-sgs-cdi</code>).
         </p>
       </div>
@@ -100,7 +100,7 @@
       </v-col>
       <v-col cols="12" sm="6" lg="3">
         <OperationalMetricCard
-          label="Cache"
+          label="Armazenamento temporário"
           :value="cdi.stale ? 'Desatualizado' : 'Atualizado'"
           :semaforo="cdi.stale ? 'amarelo' : 'verde'"
           icon="mdi-database-clock-outline"
@@ -118,7 +118,7 @@
           <div><dt>Confiabilidade</dt><dd>alta</dd></div>
           <div><dt>Coletado em</dt><dd>{{ formatarData(cdi.fetched_at) }}</dd></div>
           <div><dt>Tipo</dt><dd>externa · pública</dd></div>
-          <div class="full"><dt>URL da fonte</dt><dd><a :href="cdi.source_url" target="_blank" rel="noopener">{{ cdi.source_url }}</a></dd></div>
+          <div class="full"><dt>endereço da fonte</dt><dd><a :href="cdi.source_url" target="_blank" rel="noopener">{{ cdi.source_url }}</a></dd></div>
           <div class="full">
             <dt>Fórmula</dt>
             <dd>Taxa diária extraída diretamente da série SGS 12 do Banco Central (sem cálculo adicional); percentual convertido para decimal dividindo por 100.</dd>

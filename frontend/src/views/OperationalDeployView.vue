@@ -11,7 +11,7 @@
     </div>
 
     <v-alert type="info" variant="tonal" class="mb-4">
-      Em DEV, a política exige uma confirmação explícita. O ReqSys traduz a intenção para o fluxo de trabalho governado e registra a evidência da operação.
+      Em desenvolvimento, a política exige uma confirmação explícita. O ReqSys traduz a intenção para o fluxo de trabalho governado e registra a evidência da operação.
     </v-alert>
 
     <v-row>
@@ -32,7 +32,7 @@
               :disabled="Boolean(ocupado)"
               @click="abrirConfirmacao(item)"
             >
-              Publicar {{ item.id === 'backend' ? 'backend' : 'frontend' }} em DEV
+              Publicar {{ item.id === 'serviço' ? 'serviço' : 'aplicação' }} em desenvolvimento
             </v-btn>
           </v-card-actions>
         </v-card>
@@ -45,7 +45,7 @@
       <v-card-title>Operação solicitada</v-card-title>
       <v-card-text>
         <v-list density="compact">
-          <v-list-item title="Status" :subtitle="resultado.status" />
+          <v-list-item title="Situação" :subtitle="resultado.status" />
           <v-list-item title="Aplicação" :subtitle="resultado.app_name" />
           <v-list-item title="Ambiente" :subtitle="resultado.ambiente" />
           <v-list-item title="Correlation ID" :subtitle="resultado.correlation_id" />
@@ -56,7 +56,7 @@
 
     <v-dialog v-model="dialogo" max-width="560">
       <v-card>
-        <v-card-title>Confirmar publicação em DEV</v-card-title>
+        <v-card-title>Confirmar publicação em desenvolvimento</v-card-title>
         <v-card-text v-if="selecionada">
           <p class="mb-3">
             Você está solicitando a publicação de <strong>{{ selecionada.titulo }}</strong> em desenvolvimento.

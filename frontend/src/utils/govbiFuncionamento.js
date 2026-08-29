@@ -48,9 +48,9 @@ export function executarTestesLocaisGovbi() {
   const amostras = [consultaExemplo, consultaDegradada]
 
   return [
-    assertTest('filtros-status', 'Normalização de status válido', () => {
+    assertTest('filtros-status', 'Normalização de situação válido', () => {
       const filtros = normalizarFiltrosGovbi({ status: 'MODO_DEGRADADO' })
-      if (filtros.status !== 'MODO_DEGRADADO') throw new Error('Status não normalizado')
+      if (filtros.status !== 'MODO_DEGRADADO') throw new Error('Situação não normalizado')
       return 'MODO_DEGRADADO'
     }),
     assertTest('filtros-fonte-invalida', 'Rejeição de fonte inválida', () => {
@@ -160,7 +160,7 @@ export async function executarTestesApiGovbi(client) {
     const ok = Boolean(payload?.completo) && Number(payload?.percentual) === 100
     resultados.push(criarResultado(
       'api-funcionamento',
-      'Auto-teste backend GovBI',
+      'Auto-teste serviço GovBI',
       ok,
       ok ? `${payload.aprovados}/${payload.total} (100%)` : `${payload?.aprovados ?? 0}/${payload?.total ?? 0}`,
       'api',
@@ -168,7 +168,7 @@ export async function executarTestesApiGovbi(client) {
   } catch (error) {
     resultados.push(criarResultado(
       'api-funcionamento',
-      'Auto-teste backend GovBI',
+      'Auto-teste serviço GovBI',
       false,
       error?.message || 'Endpoint indisponível',
       'api',

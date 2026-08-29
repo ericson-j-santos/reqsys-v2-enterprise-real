@@ -468,7 +468,7 @@ const headers = [
   { title: 'Bucket', key: 'bucket', width: 150 },
   { title: 'Prioridade', key: 'prioridade', width: 130 },
   { title: 'Prazo', key: 'prazo', width: 130 },
-  { title: 'Status', key: 'status', width: 130 },
+  { title: 'Situação', key: 'status', width: 130 },
   { title: '', key: 'acoes', width: 72, sortable: false },
 ]
 
@@ -489,7 +489,7 @@ const statusEnvioOptions = [
 ]
 const envioHeaders = [
   { title: 'Data', key: 'enviadoEm', width: '140px' },
-  { title: 'Status', key: 'status', width: '100px' },
+  { title: 'Situação', key: 'status', width: '100px' },
   { title: 'Total', key: 'total', width: '70px' },
   { title: 'Flow', key: 'flow' },
   { title: 'Correlation ID', key: 'correlationId', width: '150px' },
@@ -808,7 +808,7 @@ function feedbackErro(msg) {
 function formatarFalhaPlanner(resultado) {
   const partes = [resultado.mensagem || 'Flow Planner nao configurado; nenhuma tarefa foi marcada como criada.']
   const resposta = resultado.resposta_flow || {}
-  if (resposta.status_code) partes.push(`Status Power Automate: ${resposta.status_code}.`)
+  if (resposta.status_code) partes.push(`Situação Power Automate: ${resposta.status_code}.`)
   if (resposta.body) partes.push(`Detalhe: ${String(resposta.body).slice(0, 260)}`)
   return partes.join(' ')
 }

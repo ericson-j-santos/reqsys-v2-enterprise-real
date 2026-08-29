@@ -4,7 +4,7 @@
       <div>
         <h1>Matriz de Rastreabilidade</h1>
         <p class="muted trace-subtitle">
-          Vínculo entre requisito, work item agile e entrega Git detectada por webhooks ou registro manual.
+          Vínculo entre requisito, item de trabalho agile e entrega Git detectada por webhooks ou registro manual.
         </p>
       </div>
       <div class="header-actions">
@@ -36,7 +36,7 @@
             <th>Planner</th>
             <th>Entrega</th>
             <th>Ambiente</th>
-            <th>Status</th>
+            <th>Situação</th>
           </tr>
         </thead>
         <tbody>
@@ -65,7 +65,7 @@
                 :href="r.change_url"
                 target="_blank"
                 rel="noopener noreferrer"
-              >PR vinculado</a>
+              >Solicitação de integração vinculado</a>
               <code v-else>{{ r.entrega }}</code>
             </td>
             <td>{{ r.ambiente }}</td>

@@ -19,7 +19,7 @@
               data-testid="btn-status-codex"
               @click="carregarStatus"
             >
-              Status
+              Situação
             </v-btn>
           </template>
         </v-tooltip>
@@ -164,7 +164,7 @@ async function carregarStatus() {
     const { data } = await api.get('/v1/codex/status')
     status.value = data.data
   } catch (e) {
-    erro.value = e?.response?.data?.detail?.motivo || e?.message || 'Falha ao carregar status'
+    erro.value = e?.response?.data?.detail?.motivo || e?.message || 'Falha ao carregar situação'
     status.value = null
   } finally {
     carregandoStatus.value = false

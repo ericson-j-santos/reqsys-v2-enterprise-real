@@ -2,7 +2,7 @@
   <section class="estatisticas-page" data-testid="route-estatisticas" aria-labelledby="titulo-estatisticas">
     <div class="estatisticas-header">
       <div>
-        <p class="eyebrow">ReqSys · Analytics próprio</p>
+        <p class="eyebrow">ReqSys · Indicadores próprio</p>
         <h1 id="titulo-estatisticas">Estatísticas</h1>
         <p class="muted">
           Painel de estatísticas internas evidenciadas e informações externas auditáveis, com fonte, fórmula,

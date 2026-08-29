@@ -99,17 +99,17 @@
                 <SemaforoChip :value="semaforoResultado" size="small" />
               </div>
               <div class="resultado-card__meta">
-                <v-chip size="small">Score {{ resultado.score }}</v-chip>
+                <v-chip size="small">Nota {{ resultado.score }}</v-chip>
                 <v-chip size="small">Confiança {{ Math.round(resultado.confianca * 100) }}%</v-chip>
                 <v-chip size="small">Prioridade {{ resultado.prioridade }}</v-chip>
                 <v-chip v-if="resultado.status" size="small">{{ resultado.status === 'proposed' ? 'Proposto' : 'Aceito' }}</v-chip>
                 <v-chip v-if="resultado.nivelAutonomia" size="small">Autonomia {{ resultado.nivelAutonomia }}</v-chip>
               </div>
               <v-alert v-if="resultado.violacoes.length" type="error" variant="tonal" class="mt-2" density="compact">
-                <strong>Violação(ões) de gate detectada(s):</strong> {{ resultado.violacoes.join(', ') }}
+                <strong>Violação(ões) de verificação obrigatória detectada(s):</strong> {{ resultado.violacoes.join(', ') }}
               </v-alert>
               <div v-if="resultado.relacionados.length" class="mt-2">
-                <span class="muted">ADRs relacionados:</span>
+                <span class="muted">Decisões de arquitetura relacionadas:</span>
                 <v-chip v-for="rel in resultado.relacionados" :key="rel" size="x-small" variant="tonal" class="ml-1">{{ rel }}</v-chip>
               </div>
               <p class="mt-2"><strong>Próximo passo:</strong> {{ resultado.proximoPasso }}</p>
@@ -236,10 +236,10 @@ const VARIANTES = {
 const RISCO_LABELS = {
   prioridade_alta: 'Prioridade alta',
   baixa_confianca: 'Baixa confiança',
-  alto_score: 'Score alto',
+  alto_score: 'Nota alta',
   nivel_critico: 'Nível crítico',
   nivel_alto: 'Nível alto',
-  com_violacao_de_gate: 'Com violação de gate',
+  com_violacao_de_gate: 'Com violação de verificação obrigatória',
 }
 
 function rotuloRisco(chave) {
@@ -283,7 +283,7 @@ const semaforoResultado = computed(() => {
 
 const cardsResumo = computed(() => [
   { id: 'eventos', label: 'Eventos classificados', value: resumo.value.total_eventos ?? 0, semaforo: 'verde', icon: 'mdi-counter' },
-  { id: 'score', label: 'Score médio', value: resumo.value.score_medio ?? 0, semaforo: 'verde', icon: 'mdi-chart-arc' },
+  { id: 'score', label: 'Nota média', value: resumo.value.score_medio ?? 0, semaforo: 'verde', icon: 'mdi-chart-arc' },
   { id: 'confianca', label: 'Confiança média', value: `${Math.round((resumo.value.confianca_media ?? 0) * 100)}%`, semaforo: (resumo.value.confianca_media ?? 0) >= 0.7 ? 'verde' : 'amarelo', icon: 'mdi-shield-check-outline' },
   { id: 'risco', label: 'Sinais de risco', value: Object.values(risco.value).reduce((soma, valor) => soma + valor, 0), semaforo: Object.values(risco.value).some((v) => v > 0) ? 'vermelho' : 'verde', icon: 'mdi-alert-outline' },
 ])

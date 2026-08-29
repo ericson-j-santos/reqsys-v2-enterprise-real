@@ -62,7 +62,7 @@
                   <v-chip size="small">Área {{ selectedIncident.modulo }}</v-chip>
                   <v-chip size="small">Sistema {{ selectedIncident.funcionalidade }}</v-chip>
                   <v-chip size="small" color="warning" variant="flat">Urgência {{ selectedIncident.severidade }}</v-chip>
-                  <v-chip size="small" color="primary" variant="flat">Score {{ selectedIncident.score_atual }}</v-chip>
+                  <v-chip size="small" color="primary" variant="flat">Nota {{ selectedIncident.score_atual }}</v-chip>
                 </div>
               </v-card-text>
             </v-card>

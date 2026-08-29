@@ -5,7 +5,7 @@
         <div class="brand-mark">R</div>
         <div>
           <strong>ReqSys</strong>
-          <span>Showcase v1</span>
+          <span>Demonstração v1</span>
         </div>
       </div>
       <div class="header-actions">
@@ -181,14 +181,14 @@
         <v-chip v-for="control in technicalControls" :key="control" size="small" variant="tonal" color="blue">{{ control }}</v-chip>
       </div>
       <p>
-        No showcase os efeitos são simulados. Em runtime real, os mesmos conceitos devem ser sustentados por fila/buffer,
+        No demonstração os efeitos são simulados. Em execução real, os mesmos conceitos devem ser sustentados por fila/buffer,
         backpressure, idempotência, retentativas controladas, DLQ/quarentena, observabilidade e autorização por ambiente.
       </p>
     </section>
 
     <footer class="showcase-footer">
-      <span>ReqSys Showcase v1 · ambiente isolado · dados sintéticos</span>
-      <span>Nenhuma ação desta tela altera DEV, STG ou PROD.</span>
+      <span>ReqSys Demonstração v1 · ambiente isolado · dados sintéticos</span>
+      <span>Nenhuma ação desta tela altera desenvolvimento, homologação ou produção.</span>
     </footer>
   </main>
 </template>
@@ -260,7 +260,7 @@ const scenarios = [
     evidence: [
       { label: 'Contrato de entrada', value: 'estrutura válida' },
       { label: 'Regra REQ-DEMO-07', value: 'campo justificativa obrigatório' },
-      { label: 'Gate funcional', value: 'bloqueado · sem publicação na fila' },
+      { label: 'Verificação obrigatória funcional', value: 'bloqueado · sem publicação na fila' },
       { label: 'Próxima ação', value: 'completar justificativa e reenviar' },
       { label: 'Trilha de auditoria', value: 'causa e decisão preservadas' },
     ],
@@ -279,14 +279,14 @@ const scenarios = [
     steps: [
       { id: 'documento', title: 'Documento', detail: 'PDF sintético recebido' },
       { id: 'ocr', title: 'OCR', detail: 'campos extraídos com confiança' },
-      { id: 'validacao', title: 'Validação', detail: 'regras e score avaliados' },
+      { id: 'validacao', title: 'Validação', detail: 'regras e nota avaliados' },
       { id: 'revisao', title: 'Revisão', detail: 'campo limítrofe confirmado' },
       { id: 'evidencia', title: 'Evidência', detail: 'resultado estruturado auditado' },
     ],
     evidence: [
       { label: 'Documento', value: 'documento-demo-001.pdf · sintético' },
       { label: 'OCR', value: 'Exact Match 94% · CER demonstrativo 1,8%' },
-      { label: 'Confidence gate', value: '1 campo encaminhado à revisão' },
+      { label: 'Confidence verificação obrigatória', value: '1 campo encaminhado à revisão' },
       { label: 'Revisão humana', value: 'campo confirmado · sem dado real' },
       { label: 'Saída estruturada', value: 'JSON validado e rastreável' },
     ],
@@ -304,7 +304,7 @@ const scenarios = [
     description: 'A integração simulada falha. A demanda permanece protegida, recebe retentativas controladas e termina em quarentena sem contaminar o restante do fluxo.',
     steps: [
       { id: 'fila', title: 'Fila', detail: 'demanda preservada no buffer' },
-      { id: 'falha', title: 'Falha externa', detail: 'API simulada retorna indisponibilidade' },
+      { id: 'falha', title: 'Falha externa', detail: 'serviço simulada retorna indisponibilidade' },
       { id: 'retry', title: 'Retry', detail: 'retentativas com backoff controlado' },
       { id: 'isolamento', title: 'Isolamento', detail: 'circuit breaker evita efeito cascata' },
       { id: 'dlq', title: 'DLQ', detail: 'item vai para quarentena auditável' },
@@ -338,9 +338,9 @@ const scenarios = [
     evidence: [
       { label: 'Classificação', value: 'ação sensível · aprovação obrigatória' },
       { label: 'Diff de decisão', value: 'antes/depois apresentado ao aprovador' },
-      { label: 'Gate humano', value: 'aguardando decisão explícita' },
+      { label: 'Verificação obrigatória humano', value: 'aguardando decisão explícita' },
       { label: 'Aprovação demo', value: 'ator fictício · timestamp sintético' },
-      { label: 'Aplicação', value: 'execução liberada após o gate' },
+      { label: 'Aplicação', value: 'execução liberada após o verificação obrigatória' },
     ],
     proofs: ['O sistema não inventa pertencimento ou autorização.', 'A decisão humana ocorre no ponto de maior valor.', 'Antes e depois permanecem auditáveis.'],
     resultType: 'success',
