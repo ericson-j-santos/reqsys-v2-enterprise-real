@@ -4,13 +4,11 @@ on:
   schedule:
     - cron: "25 * * * *"
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/teams-public-dashboard-smoke.yml
-      - .github/workflows/teams-notification-dashboard.yml
-      - docs/ops-dashboard/teams-notification/**
+  workflow_run:
+    workflows:
+      - Deploy ReqSys Pages Composite
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -22,6 +20,7 @@ concurrency:
 jobs:
   smoke:
     name: Validar dashboard e evidências públicas
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
