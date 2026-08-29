@@ -51,7 +51,7 @@ A versão inicial aceita `versaoEntrada = 1`. O limite padrão é 10.000 registr
 
 ## Idempotência
 
-A coluna `idempotency_key` possui restrição única no banco. Reenvios com a mesma chave retornam o mesmo `loteId` com `duplicado=true`, inclusive sob concorrência.
+A coluna `idempotency_key` possui restrição única no banco. Reenvios com a mesma chave e o mesmo conteúdo retornam o mesmo `loteId` com `duplicado=true`, inclusive sob concorrência. Se a mesma chave for reutilizada com conteúdo diferente, o ReqSys rejeita a solicitação com HTTP `409 Conflict`, evitando associar duas cargas distintas ao mesmo lote.
 
 Uma chave recomendada é o SHA-256 de:
 
@@ -118,6 +118,7 @@ Fluxo recomendado no job/transformação:
 
 - autenticação de serviço escopada por `pentaho:integracao`;
 - deduplicação no banco, não apenas em memória;
+- reutilização divergente de chave de idempotência bloqueada com `409`;
 - payload não incluído em mensagens de log de erro;
 - correlação ponta a ponta;
 - limite configurável de registros;
