@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -43,70 +44,70 @@ def make_run(*, name="CI Enterprise Fast", conclusion="failure", attempt=1, upda
     )
 
 
-def test_transient_allowlisted_is_rerun_candidate():
-    state, action, reason, age = module.classify(make_run(conclusion="timed_out"), POLICY, now=NOW)
-    assert state == "CORRECAO_AUTOMATICA"
-    assert action == "rerun_failed_jobs"
-    assert reason == "transient_allowlisted"
-    assert age == 60
+class RemediationClassificationTests(unittest.TestCase):
+    def test_transient_allowlisted_is_rerun_candidate(self):
+        state, action, reason, age = module.classify(make_run(conclusion="timed_out"), POLICY, now=NOW)
+        self.assertEqual("CORRECAO_AUTOMATICA", state)
+        self.assertEqual("rerun_failed_jobs", action)
+        self.assertEqual("transient_allowlisted", reason)
+        self.assertEqual(60, age)
+
+    def test_deterministic_failure_requires_intervention(self):
+        state, action, reason, _ = module.classify(make_run(conclusion="failure"), POLICY, now=NOW)
+        self.assertEqual("INTERVENCAO_NECESSARIA", state)
+        self.assertEqual("escalate", action)
+        self.assertEqual("deterministic_or_unknown", reason)
+
+    def test_high_risk_workflow_is_never_auto_remediated(self):
+        state, action, reason, _ = module.classify(
+            make_run(name="Security Deep Scan", conclusion="timed_out"), POLICY, now=NOW
+        )
+        self.assertEqual("INTERVENCAO_NECESSARIA", state)
+        self.assertEqual("escalate", action)
+        self.assertEqual("workflow_high_risk", reason)
+
+    def test_attempt_limit_prevents_loop(self):
+        state, action, reason, _ = module.classify(
+            make_run(conclusion="timed_out", attempt=2), POLICY, now=NOW
+        )
+        self.assertEqual("INTERVENCAO_NECESSARIA", state)
+        self.assertEqual("escalate", action)
+        self.assertEqual("max_attempts_reached", reason)
+
+    def test_latest_by_workflow_keeps_newest_execution(self):
+        old = make_run(updated="2026-08-29T10:00:00Z")
+        new = WorkflowRun(
+            id=11,
+            name=old.name,
+            conclusion="success",
+            run_attempt=1,
+            html_url="https://github.com/example/repo/actions/runs/11",
+            updated_at="2026-08-29T11:30:00Z",
+        )
+        result = module.latest_by_workflow([old, new])
+        self.assertEqual(1, len(result))
+        self.assertEqual(11, result[0].id)
+
+    def test_labels_mark_stalled_and_human_intervention(self):
+        decision = module.RemediationDecision(
+            pr_number=1,
+            pr_url="https://github.com/example/repo/pull/1",
+            head_sha="abc",
+            workflow_name="CI Enterprise Fast",
+            run_id=10,
+            run_url="https://github.com/example/repo/actions/runs/10",
+            conclusion="failure",
+            age_minutes=31,
+            state="INTERVENCAO_NECESSARIA",
+            action="escalate",
+            reason="deterministic_or_unknown",
+            rerun_executed=False,
+        )
+        labels = module.desired_labels([decision], POLICY)
+        self.assertIn("ci:falhou", labels)
+        self.assertIn("ci:intervencao-necessaria", labels)
+        self.assertIn("ci:parado", labels)
 
 
-def test_deterministic_failure_requires_intervention():
-    state, action, reason, _ = module.classify(make_run(conclusion="failure"), POLICY, now=NOW)
-    assert state == "INTERVENCAO_NECESSARIA"
-    assert action == "escalate"
-    assert reason == "deterministic_or_unknown"
-
-
-def test_high_risk_workflow_is_never_auto_remediated():
-    state, action, reason, _ = module.classify(
-        make_run(name="Security Deep Scan", conclusion="timed_out"), POLICY, now=NOW
-    )
-    assert state == "INTERVENCAO_NECESSARIA"
-    assert action == "escalate"
-    assert reason == "workflow_high_risk"
-
-
-def test_attempt_limit_prevents_loop():
-    state, action, reason, _ = module.classify(
-        make_run(conclusion="timed_out", attempt=2), POLICY, now=NOW
-    )
-    assert state == "INTERVENCAO_NECESSARIA"
-    assert action == "escalate"
-    assert reason == "max_attempts_reached"
-
-
-def test_latest_by_workflow_keeps_newest_execution():
-    old = make_run(updated="2026-08-29T10:00:00Z")
-    new = WorkflowRun(
-        id=11,
-        name=old.name,
-        conclusion="success",
-        run_attempt=1,
-        html_url="https://github.com/example/repo/actions/runs/11",
-        updated_at="2026-08-29T11:30:00Z",
-    )
-    result = module.latest_by_workflow([old, new])
-    assert len(result) == 1
-    assert result[0].id == 11
-
-
-def test_labels_mark_stalled_and_human_intervention():
-    decision = module.RemediationDecision(
-        pr_number=1,
-        pr_url="https://github.com/example/repo/pull/1",
-        head_sha="abc",
-        workflow_name="CI Enterprise Fast",
-        run_id=10,
-        run_url="https://github.com/example/repo/actions/runs/10",
-        conclusion="failure",
-        age_minutes=31,
-        state="INTERVENCAO_NECESSARIA",
-        action="escalate",
-        reason="deterministic_or_unknown",
-        rerun_executed=False,
-    )
-    labels = module.desired_labels([decision], POLICY)
-    assert "ci:falhou" in labels
-    assert "ci:intervencao-necessaria" in labels
-    assert "ci:parado" in labels
+if __name__ == "__main__":
+    unittest.main()
