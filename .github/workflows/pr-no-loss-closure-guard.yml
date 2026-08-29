@@ -1,6 +1,11 @@
 name: PR No-Loss Closure Guard
 
 on:
+  pull_request:
+    paths:
+      - '.github/scripts/pr_no_loss_guard.py'
+      - '.github/scripts/test_pr_no_loss_guard.py'
+      - '.github/workflows/pr-no-loss-closure-guard.yml'
   pull_request_target:
     types: [closed]
 
@@ -10,12 +15,23 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr-no-loss-${{ github.event.pull_request.number }}
+  group: pr-no-loss-${{ github.event.pull_request.number }}-${{ github.event_name }}
   cancel-in-progress: false
 
 jobs:
+  testar-regra:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Obter alterações da PR
+        uses: actions/checkout@v4
+      - name: Executar testes unitários
+        working-directory: .github/scripts
+        run: python -m unittest -v test_pr_no_loss_guard.py
+
   proteger-conteudo-nao-integrado:
-    if: github.event.pull_request.merged == false
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.merged == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
