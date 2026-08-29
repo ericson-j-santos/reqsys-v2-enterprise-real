@@ -1,5 +1,6 @@
 <template>
   <CoordenacaoDashboard
+    data-testid="route-orquestrador-ia"
     base-path="/v1/agents/orchestrator"
     variante="tematico"
     titulo="Orquestrador IA por Tema"
