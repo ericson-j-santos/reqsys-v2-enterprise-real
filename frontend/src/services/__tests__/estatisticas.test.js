@@ -91,14 +91,14 @@ describe('estatisticas', () => {
 
     const invalido = validarArtifactRuntime({ ...artifactRuntimeValido, evidence_source: 'synthetic', source_head_sha: 'curto' })
     expect(invalido.valido).toBe(false)
-    expect(invalido.motivos).toContain('Origem do artefato não é runtime.')
-    expect(invalido.motivos).toContain('SHA runtime completo e verificável ausente.')
+    expect(invalido.motivos).toContain('Origem do artefato não é execução.')
+    expect(invalido.motivos).toContain('SHA execução completo e verificável ausente.')
 
     const semAtestacao = { ...artifactRuntimeValido }
     delete semAtestacao.attestation_verified
     const resultadoSemAtestacao = validarArtifactRuntime(semAtestacao)
     expect(resultadoSemAtestacao.valido).toBe(false)
-    expect(resultadoSemAtestacao.motivos).toContain('Atestação runtime positiva e verificável ausente.')
+    expect(resultadoSemAtestacao.motivos).toContain('Atestação execução positiva e verificável ausente.')
   })
 
   it('aceita contrato runtime com verification_status positivo e generated_at', () => {
