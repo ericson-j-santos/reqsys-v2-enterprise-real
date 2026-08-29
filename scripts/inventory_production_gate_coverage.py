@@ -37,11 +37,26 @@ PROTECTION_MARKERS = (
     "evaluate_environment_promotion_gate.py",
     "environment-promotion-readiness-gate.yml",
 )
+STRUCTURAL_PROTECTION_REQUIREMENTS = (
+    "environment: production",
+    "needs.evaluate-stg.outputs.prod_allowed == 'true'",
+    "inputs.approve_prod == 'APROVO-PROD'",
+    "prod_rollout_candidate_requires_approval",
+    "gh pr create",
+)
+STRUCTURAL_PROTECTION_MARKER = "production_environment+stg_evidence+human_approval+pr_only"
 EXCLUDED_SELF = "production-gate-coverage-inventory.yml"
 
 
 def matching_patterns(patterns: tuple[re.Pattern[str], ...], text: str) -> list[str]:
     return sorted(pattern.pattern for pattern in patterns if pattern.search(text))
+
+
+def detect_protection_markers(text: str) -> list[str]:
+    markers = [marker for marker in PROTECTION_MARKERS if marker in text]
+    if all(requirement in text for requirement in STRUCTURAL_PROTECTION_REQUIREMENTS):
+        markers.append(STRUCTURAL_PROTECTION_MARKER)
+    return sorted(markers)
 
 
 def inspect_workflow(path: Path, root: Path) -> dict[str, Any] | None:
@@ -73,7 +88,7 @@ def inspect_workflow(path: Path, root: Path) -> dict[str, Any] | None:
     else:
         classification = "production_observation_only"
 
-    protection_markers = sorted(marker for marker in PROTECTION_MARKERS if marker in text)
+    protection_markers = detect_protection_markers(text)
     gate_required = classification in {
         "confirmed_production_mutation",
         "ambiguous_mutation_requires_review",
@@ -124,7 +139,7 @@ def build_inventory(workflow_dir: Path) -> dict[str, Any]:
     ]
 
     return {
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "contract": "reqsys-production-gate-coverage-inventory",
         "generated_at": datetime.now(UTC).isoformat(),
         "mode": "advisory_until_all_mutation_paths_are_migrated",
