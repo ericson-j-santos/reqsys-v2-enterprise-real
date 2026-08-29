@@ -10,6 +10,8 @@
         "test:coverage": "vitest run --coverage",
         "test:e2e": "playwright test",
         "test:e2e:stable": "node scripts/run-e2e-safe.js --reporter=line",
+        "test:readiness": "node --test scripts/frontend-readiness-gate.test.mjs",
+        "readiness:frontend": "node scripts/frontend-readiness-gate.mjs",
         "validate:design-tokens": "node scripts/validate-design-tokens.mjs",
         "validate:linguagem-simples": "node scripts/validate-user-facing-language.mjs",
         "test:linguagem-simples": "node --test scripts/validate-user-facing-language.test.mjs",
