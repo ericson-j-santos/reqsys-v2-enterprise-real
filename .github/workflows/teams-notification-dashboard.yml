@@ -21,7 +21,7 @@ permissions:
 
 concurrency:
   group: teams-notification-dashboard
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
