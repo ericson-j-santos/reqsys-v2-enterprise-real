@@ -48,13 +48,12 @@ def _config(monkeypatch, *, enabled: bool = True) -> None:
     monkeypatch.setattr(service.settings, 'github_pat', 'token-de-teste')
 
 
-def test_cartao_bot_expoe_somente_acoes_governadas():
+def test_cartao_expoe_somente_acoes_governadas_do_flow_bot():
     card = construir_cartao(
         TeamsGithubActionsCardRequest(
             titulo='Falha no CI',
             descricao='Escolha a verificacao.',
             ref='feature/teste',
-            interaction_mode='bot',
             github_url='https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions',
         ),
         'corr-123',
@@ -63,24 +62,20 @@ def test_cartao_bot_expoe_somente_acoes_governadas():
     action_set = card['body'][-1]
     actions = action_set['actions']
     assert card['version'] == '1.4'
-    assert actions[0]['type'] == 'Action.Execute'
-    assert actions[0]['verb'] == 'reqsys.github.actions.dispatch'
+    assert actions[0]['type'] == 'Action.Submit'
     assert actions[0]['data'] == {
         'reqsys_action': 'github_actions_dispatch',
         'mode': 'essential',
         'ref': 'feature/teste',
         'correlation_id': 'corr-123',
     }
-    assert actions[0]['fallback']['type'] == 'Action.Submit'
+    assert actions[1]['type'] == 'Action.Submit'
     assert actions[1]['data']['mode'] == 'all'
     assert actions[2]['type'] == 'Action.OpenUrl'
 
 
-def test_cartao_flow_usa_action_submit():
-    card = construir_cartao(
-        TeamsGithubActionsCardRequest(ref='main', interaction_mode='flow'),
-        'corr-flow',
-    )
+def test_cartao_sem_url_nao_expoe_navegacao_externa():
+    card = construir_cartao(TeamsGithubActionsCardRequest(ref='main'), 'corr-flow')
     actions = card['body'][-1]['actions']
     assert [action['type'] for action in actions] == ['Action.Submit', 'Action.Submit']
     assert {action['data']['mode'] for action in actions} == {'essential', 'all'}
