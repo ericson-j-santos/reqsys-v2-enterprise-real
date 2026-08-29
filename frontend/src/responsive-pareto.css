@@ -76,9 +76,9 @@
     min-width: 0;
   }
 
-  /* O título do painel expansível do Vuetify reserva espaço para o ícone de seta.
-     Em 320 px o ícone avançava 4 px além da área útil. Mantemos o ícone e o alvo
-     clicável, reservando espaço interno suficiente à direita. */
+  /* O conteúdo do título precisa ceder espaço ao ícone de seta em 320 px.
+     O ícone permanece totalmente visível e qualquer sobra de subpixel fica
+     confinada ao próprio cabeçalho, sem ampliar o conteúdo principal. */
   .painel-page .v-expansion-panels,
   .painel-page .v-expansion-panel,
   .painel-page .v-expansion-panel-title {
@@ -89,16 +89,19 @@
 
   .painel-page .v-expansion-panel-title {
     width: 100%;
-    padding-right: 32px;
+    overflow-x: clip;
   }
 
   .painel-page .v-expansion-panel-title > :first-child {
+    flex: 1 1 auto;
     min-width: 0;
     flex-wrap: wrap;
   }
 
   .painel-page .v-expansion-panel-title__icon {
     flex: 0 0 auto;
+    position: relative;
+    inset-inline-end: 16px;
     margin-inline-start: 8px;
   }
 
