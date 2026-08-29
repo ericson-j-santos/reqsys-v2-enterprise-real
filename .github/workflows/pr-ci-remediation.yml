@@ -1,0 +1,78 @@
+name: PR CI Remediation
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Modo do ciclo"
+        required: true
+        default: "execute"
+        type: choice
+        options:
+          - audit
+          - execute
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-ci-remediation
+  cancel-in-progress: false
+
+jobs:
+  remediation:
+    name: Detectar, tratar e escalar CIs vermelhos
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar política e testes do motor
+        run: |
+          set -euo pipefail
+          python -m json.tool .github/ci-remediation.json >/dev/null
+          python -m pytest -q tests/test_pr_ci_remediation.py
+
+      - name: Executar ciclo governado
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODE: ${{ github.event.inputs.mode || 'execute' }}
+        run: |
+          set -euo pipefail
+          args=(
+            --repo "${GITHUB_REPOSITORY}"
+            --policy .github/ci-remediation.json
+            --output-dir artifacts/pr-ci-remediation
+          )
+          if [[ "${MODE}" == "execute" ]]; then
+            args+=(--execute)
+          fi
+          python scripts/ci/pr_ci_remediation.py "${args[@]}"
+
+      - name: Publicar resumo
+        if: always()
+        run: |
+          if [[ -f artifacts/pr-ci-remediation/summary.md ]]; then
+            cat artifacts/pr-ci-remediation/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-ci-remediation-evidence
+          path: artifacts/pr-ci-remediation/
+          if-no-files-found: error
+          retention-days: 30
