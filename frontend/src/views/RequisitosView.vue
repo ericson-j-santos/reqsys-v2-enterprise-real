@@ -53,7 +53,7 @@
         <v-col cols="12" sm="6" md="3">
           <v-select
             v-model="filtros.status"
-            label="Status"
+            label="Situação"
             variant="outlined"
             density="compact"
             clearable
