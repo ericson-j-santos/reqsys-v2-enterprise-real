@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import json
 import re
@@ -47,10 +48,13 @@ def build_minimum_controlled_manifest(version: str) -> dict[str, Any]:
         "maturity": "MINIMUM_CONTROLLED",
         "controls": {name: "PASS" for name in REQUIRED_CONTROLS},
         "contextual_controls": {
-            "idempotency": "PASS",
+            "idempotency": {
+                "status": "NOT_APPLICABLE",
+                "justification": "emissão local sem mutação remota; a versão não sobrescreve manifesto existente",
+            },
             "retry": {
                 "status": "NOT_APPLICABLE",
-                "justification": "geração local determinística sem chamada remota",
+                "justification": "geração local sem chamada remota ou política de retentativa",
             },
             "queue": {
                 "status": "NOT_APPLICABLE",
@@ -93,7 +97,7 @@ def inject_version_manifest(
 
     try:
         source_raw = base64.b64decode(zip_base64, validate=True)
-    except (ValueError, TypeError) as exc:
+    except (binascii.Error, ValueError, TypeError) as exc:
         raise ValueError("zip_base64 inválido") from exc
 
     source_buffer = BytesIO(source_raw)
