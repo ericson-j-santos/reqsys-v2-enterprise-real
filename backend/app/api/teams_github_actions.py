@@ -35,7 +35,6 @@ class TeamsGithubActionsCardRequest(BaseModel):
     titulo: str = Field(default='ReqSys — ação disponível', min_length=1, max_length=200)
     descricao: str = Field(default='Execute as verificações sem sair do Teams.', min_length=1, max_length=2000)
     ref: str = Field(default='main', min_length=1, max_length=200)
-    interaction_mode: Literal['bot', 'flow'] = 'bot'
     github_url: str | None = Field(default=None, max_length=1000)
 
     @field_validator('titulo', 'descricao', 'ref', 'github_url', mode='before')
@@ -52,29 +51,15 @@ def _acao_cartao(
     mode: Literal['essential', 'all'],
     ref: str,
     correlation_id: str,
-    interaction_mode: Literal['bot', 'flow'],
 ) -> dict:
-    data = {
-        'reqsys_action': 'github_actions_dispatch',
-        'mode': mode,
-        'ref': ref,
-        'correlation_id': correlation_id,
-    }
-    if interaction_mode == 'flow':
-        return {
-            'type': 'Action.Submit',
-            'title': titulo,
-            'data': data,
-        }
     return {
-        'type': 'Action.Execute',
+        'type': 'Action.Submit',
         'title': titulo,
-        'verb': 'reqsys.github.actions.dispatch',
-        'data': data,
-        'fallback': {
-            'type': 'Action.Submit',
-            'title': titulo,
-            'data': data,
+        'data': {
+            'reqsys_action': 'github_actions_dispatch',
+            'mode': mode,
+            'ref': ref,
+            'correlation_id': correlation_id,
         },
     }
 
@@ -86,14 +71,12 @@ def construir_cartao(payload: TeamsGithubActionsCardRequest, correlation_id: str
             mode='essential',
             ref=payload.ref,
             correlation_id=correlation_id,
-            interaction_mode=payload.interaction_mode,
         ),
         _acao_cartao(
             titulo='Executar verificações completas',
             mode='all',
             ref=payload.ref,
             correlation_id=correlation_id,
-            interaction_mode=payload.interaction_mode,
         ),
     ]
     if payload.github_url:
@@ -142,7 +125,7 @@ def teams_github_actions_card(
     _ctx: ServiceAuthContext = Depends(require_github_actions_auth),
     x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
 ):
-    """Gera o Adaptive Card para Bot Framework ou Power Automate."""
+    """Gera o Adaptive Card compatível com o Flow bot atual."""
     correlation_id = resolver_correlation_id(x_correlation_id, None)
     return ok({'adaptive_card': construir_cartao(payload, correlation_id)}, correlation_id)
 
