@@ -40,11 +40,11 @@ export const FORBIDDEN_TERMS = [
   { id: 'artifact', pattern: /\bartifacts?\b/giu, suggestion: 'artefato' },
   { id: 'fallback', pattern: /\bfallback\b/giu, suggestion: 'alternativa / contingência' },
   { id: 'trigger', pattern: /\btriggers?\b/giu, suggestion: 'disparo' },
-  { id: 'health', pattern: /\bhealth\b/giu, suggestion: 'saúde / estado operacional' },
+  { id: 'health', pattern: /\bhealth\b/giu, suggestion: 'estado operacional' },
   { id: 'card', pattern: /\bcards?\b/giu, suggestion: 'cartão' },
   { id: 'release', pattern: /\breleases?\b/giu, suggestion: 'publicação / versão liberada' },
   { id: 'logs', pattern: /\blogs?\b/giu, suggestion: 'registros' },
-  { id: 'endpoint', pattern: /\bendpoints?\b/giu, suggestion: 'endereço / ponto de integração' },
+  { id: 'endpoint', pattern: /\bendpoints?\b/giu, suggestion: 'ponto de integração' },
   { id: 'payload', pattern: /\bpayloads?\b/giu, suggestion: 'conteúdo da requisição' },
   { id: 'retry', pattern: /\bretr(?:y|ies)\b/giu, suggestion: 'nova tentativa' },
   { id: 'batch', pattern: /\bbatches?\b/giu, suggestion: 'lote' },
@@ -56,12 +56,18 @@ export const FORBIDDEN_TERMS = [
   { id: 'preview', pattern: /\bpreview\b/giu, suggestion: 'prévia' },
   { id: 'queue', pattern: /\bqueues?\b/giu, suggestion: 'fila' },
   { id: 'worker', pattern: /\bworkers?\b/giu, suggestion: 'processador' },
+  { id: 'guard-rail', pattern: /\bguard\s*rails?\b/giu, suggestion: 'proteção / regra de proteção' },
+  { id: 'rate-limit', pattern: /\brate\s*limit(?:ing)?\b/giu, suggestion: 'limite de requisições' },
+  { id: 'correlation-id', pattern: /\bcorrelation[_ -]?id\b/giu, suggestion: 'identificador de correlação' },
+  { id: 'online', pattern: /\bonline\b/giu, suggestion: 'disponível / conectado' },
+  { id: 'offline', pattern: /\boffline\b/giu, suggestion: 'indisponível / desconectado' },
   { id: 'ci-cd', pattern: /\bCI\s*\/\s*CD\b/gu, suggestion: 'integração e publicação automáticas' },
   { id: 'ci', pattern: /\bCI\b/gu, suggestion: 'verificações automáticas' },
   { id: 'pr', pattern: /\bPRs?\b/gu, suggestion: 'solicitação de integração' },
   { id: 'api', pattern: /\bAPI\b/gu, suggestion: 'serviço / integração' },
   { id: 'url', pattern: /\bURL\b/gu, suggestion: 'endereço' },
   { id: 'llm', pattern: /\bLLM\b/gu, suggestion: 'modelo de IA' },
+  { id: 'jwt', pattern: /\bJWT\b/gu, suggestion: 'token de acesso' },
   { id: 'pii', pattern: /\bPII\b/gu, suggestion: 'dados pessoais' },
   { id: 'sdd', pattern: /\bSDD\b/gu, suggestion: 'especificação da solução' },
   { id: 'alm', pattern: /\bALM\b/gu, suggestion: 'administração do ciclo de entrega' },
@@ -75,11 +81,24 @@ const USER_FACING_NAME = '(?:erro|error|mensagem|message|aviso|alerta|sucesso|de
 const USER_FACING_JS_PROPERTY = /\b(?:title|titulo|tip|topic|rotulo|label|message|mensagem|placeholder|description|descricao)\s*:\s*(['"`])([\s\S]*?)\1/g
 const USER_FACING_ASSIGNMENT = new RegExp(`\\b${USER_FACING_NAME}(?:\\.value)?\\s*=\\s*(['"\`])([\\s\\S]*?)\\1`, 'g')
 const USER_FACING_FALLBACK = new RegExp(`\\b${USER_FACING_NAME}(?:\\.value)?\\s*=\\s*[^\\n;]*?\\|\\|\\s*(['"\`])([^\\n]*?)\\1`, 'g')
-const SELECTED_HTML_ATTR = /\b(?:aria-label|title|placeholder)\s*=\s*(['"])(.*?)\1/giu
+const VISIBLE_HTML_ATTR = /\b(?:aria-label|title|subtitle|placeholder|label|text|hint|chip-tooltip|empty-text|no-data-text|alt|caption)\s*=\s*(['"])(.*?)\1/giu
 const QUOTED_LITERAL = /(['"`])((?:\\.|(?!\1)[\s\S])*?)\1/g
 
-function lineFromOffset(text, offset) { return text.slice(0, offset).split('\n').length }
-function normalizeCandidate(value) { return String(value).replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim() }
+function lineFromOffset(text, offset) {
+  return text.slice(0, offset).split('\n').length
+}
+
+function normalizeCandidate(value) {
+  return String(value).replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function maskPreservingLines(text, regex) {
+  return text.replace(regex, (block) => block.replace(/[^\n]/g, ' '))
+}
+
+function maskMachineTokens(text) {
+  return text.replace(/\b[a-z0-9]+(?:[-_.:/][a-z0-9]+){2,}\b/g, ' ')
+}
 
 function isRelevantCandidate(value) {
   const text = normalizeCandidate(value)
@@ -91,8 +110,44 @@ function isRelevantCandidate(value) {
   return /[A-Za-zÀ-ÿ]/u.test(text)
 }
 
-function maskMachineTokens(text) { return text.replace(/\b[a-z0-9]+(?:[-_.:/][a-z0-9]+){2,}\b/g, ' ') }
-function maskPreservingLines(text, regex) { return text.replace(regex, (block) => block.replace(/[^\n]/g, ' ')) }
+function isLikelyHumanScriptLiteral(value) {
+  const text = normalizeCandidate(value)
+  if (!isRelevantCandidate(text)) return false
+  if (/^[A-Z0-9_]+$/u.test(text)) return false
+  if (/^[a-z][a-z0-9_-]*$/u.test(text)) return false
+  return /\s|[À-ÿ]|[.!?,;:()]/u.test(text) || /^[A-Z][a-zÀ-ÿ]+$/u.test(text)
+}
+
+function findRootBlock(content, tagName) {
+  const withoutComments = maskPreservingLines(content, /<!--[\s\S]*?-->/g)
+  const tagRegex = new RegExp(`<\\/?${tagName}\\b[^>]*>`, 'giu')
+  let depth = 0
+  let openStart = -1
+  let innerStart = -1
+  let match
+  while ((match = tagRegex.exec(withoutComments))) {
+    const closing = match[0].startsWith('</')
+    if (!closing) {
+      if (depth === 0) {
+        openStart = match.index
+        innerStart = tagRegex.lastIndex
+      }
+      depth += 1
+      continue
+    }
+    if (depth === 0) continue
+    depth -= 1
+    if (depth === 0) {
+      return {
+        openStart,
+        innerStart,
+        innerEnd: match.index,
+        closeEnd: tagRegex.lastIndex,
+      }
+    }
+  }
+  return null
+}
 
 export function findForbiddenTerms(text) {
   const normalized = maskMachineTokens(normalizeCandidate(text))
@@ -106,30 +161,36 @@ export function findForbiddenTerms(text) {
 
 function collectTemplateCandidates(content) {
   const result = []
-  const templateMatch = /<template\b[^>]*>([\s\S]*?)<\/template>/i.exec(content)
-  if (!templateMatch) return result
-  const template = templateMatch[1]
-  const templateOffset = templateMatch.index + templateMatch[0].indexOf(template)
+  const block = findRootBlock(content, 'template')
+  if (!block) return result
+
+  const template = content.slice(block.innerStart, block.innerEnd)
   const withoutExecutableBlocks = maskPreservingLines(template, /<(?:code|pre)\b[^>]*>[\s\S]*?<\/(?:code|pre)>/giu)
   const withoutComments = maskPreservingLines(withoutExecutableBlocks, /<!--[\s\S]*?-->/g)
 
   let attrMatch
-  SELECTED_HTML_ATTR.lastIndex = 0
-  while ((attrMatch = SELECTED_HTML_ATTR.exec(withoutComments))) result.push({ text: attrMatch[2], line: lineFromOffset(content, templateOffset + attrMatch.index), origin: 'atributo visível' })
+  VISIBLE_HTML_ATTR.lastIndex = 0
+  while ((attrMatch = VISIBLE_HTML_ATTR.exec(withoutComments))) {
+    result.push({ text: attrMatch[2], line: lineFromOffset(content, block.innerStart + attrMatch.index), origin: 'atributo visível' })
+  }
 
   const textNodeRegex = />([^<]+)</g
   let textMatch
   while ((textMatch = textNodeRegex.exec(withoutComments))) {
     const raw = textMatch[1]
     const interpolationFree = raw.replace(/{{[\s\S]*?}}/g, ' ')
-    if (isRelevantCandidate(interpolationFree)) result.push({ text: interpolationFree, line: lineFromOffset(content, templateOffset + textMatch.index), origin: 'texto da tela' })
+    if (isRelevantCandidate(interpolationFree)) {
+      result.push({ text: interpolationFree, line: lineFromOffset(content, block.innerStart + textMatch.index), origin: 'texto da tela' })
+    }
+
     const interpolationRegex = /{{([\s\S]*?)}}/g
     let interpolationMatch
     while ((interpolationMatch = interpolationRegex.exec(raw))) {
       QUOTED_LITERAL.lastIndex = 0
       let literalMatch
       while ((literalMatch = QUOTED_LITERAL.exec(interpolationMatch[1]))) {
-        if (isRelevantCandidate(literalMatch[2])) result.push({ text: literalMatch[2], line: lineFromOffset(content, templateOffset + textMatch.index), origin: 'texto condicional da tela' })
+        if (!isRelevantCandidate(literalMatch[2])) continue
+        result.push({ text: literalMatch[2], line: lineFromOffset(content, block.innerStart + textMatch.index), origin: 'texto condicional da tela' })
       }
     }
   }
@@ -141,7 +202,19 @@ function collectRegexCandidates(content, regex, origin) {
   regex.lastIndex = 0
   let match
   while ((match = regex.exec(content))) {
-    if (isRelevantCandidate(match[2])) result.push({ text: match[2], line: lineFromOffset(content, match.index), origin })
+    if (!isRelevantCandidate(match[2])) continue
+    result.push({ text: match[2], line: lineFromOffset(content, match.index), origin })
+  }
+  return result
+}
+
+function collectHumanScriptLiterals(content) {
+  const result = []
+  QUOTED_LITERAL.lastIndex = 0
+  let match
+  while ((match = QUOTED_LITERAL.exec(content))) {
+    if (!isLikelyHumanScriptLiteral(match[2])) continue
+    result.push({ text: match[2], line: lineFromOffset(content, match.index), origin: 'texto literal da interface' })
   }
   return result
 }
@@ -151,12 +224,26 @@ function collectJavascriptCandidates(content) {
     ...collectRegexCandidates(content, USER_FACING_JS_PROPERTY, 'propriedade de interface'),
     ...collectRegexCandidates(content, USER_FACING_ASSIGNMENT, 'mensagem de interface'),
     ...collectRegexCandidates(content, USER_FACING_FALLBACK, 'mensagem alternativa de interface'),
+    ...collectHumanScriptLiterals(content),
   ]
+}
+
+function collectVueScriptCandidates(content) {
+  const block = findRootBlock(content, 'script')
+  if (!block) return []
+  const script = content.slice(block.innerStart, block.innerEnd)
+  return collectJavascriptCandidates(script).map((candidate) => ({
+    ...candidate,
+    line: candidate.line + lineFromOffset(content, block.innerStart) - 1,
+  }))
 }
 
 export function findViolationsInFile(filePath, content) {
   const extension = path.extname(filePath).toLowerCase()
-  const candidates = extension === '.vue' ? [...collectTemplateCandidates(content), ...collectJavascriptCandidates(content)] : collectJavascriptCandidates(content)
+  const candidates = extension === '.vue'
+    ? [...collectTemplateCandidates(content), ...collectVueScriptCandidates(content)]
+    : collectJavascriptCandidates(content)
+
   const violations = []
   const seen = new Set()
   for (const candidate of candidates) {
@@ -164,7 +251,14 @@ export function findViolationsInFile(filePath, content) {
       const key = `${candidate.line}:${hit.id}:${normalizeCandidate(candidate.text)}`
       if (seen.has(key)) continue
       seen.add(key)
-      violations.push({ filePath, line: candidate.line, origin: candidate.origin, text: normalizeCandidate(candidate.text), term: hit.id, suggestion: hit.suggestion })
+      violations.push({
+        filePath,
+        line: candidate.line,
+        origin: candidate.origin,
+        text: normalizeCandidate(candidate.text),
+        term: hit.id,
+        suggestion: hit.suggestion,
+      })
     }
   }
   return violations
@@ -188,7 +282,9 @@ function walk(directory) {
 
 export function validateRepository(sourceRoot = SOURCE_ROOT) {
   const violations = []
-  for (const filePath of walk(sourceRoot)) violations.push(...findViolationsInFile(filePath, fs.readFileSync(filePath, 'utf8')))
+  for (const filePath of walk(sourceRoot)) {
+    violations.push(...findViolationsInFile(filePath, fs.readFileSync(filePath, 'utf8')))
+  }
   return violations
 }
 
@@ -198,6 +294,7 @@ function runCli() {
     console.log('Linguagem simples: aprovado. Nenhum termo proibido foi encontrado nos textos estáticos e mensagens conhecidas da interface.')
     return
   }
+
   console.error(`Linguagem simples: ${violations.length} ocorrência(s) proibida(s) encontrada(s).`)
   for (const violation of violations) {
     const relative = path.relative(path.resolve(FRONTEND_ROOT, '..'), violation.filePath)
