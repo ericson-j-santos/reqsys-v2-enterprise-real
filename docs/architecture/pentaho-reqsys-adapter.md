@@ -59,7 +59,7 @@ Uma chave recomendada é o SHA-256 de:
 
 O token de serviço e qualquer segredo devem ser fornecidos por variável/gerenciador de credenciais do ambiente; nunca devem ser gravados no `.ktr`, `.kjb` ou repositório.
 
-## Fila e estados
+## Fila, consumidor e estados
 
 A tabela `pentaho_integration_batches` é a fila durável do adaptador.
 
@@ -71,7 +71,48 @@ Fluxo de falha:
 
 `PENDENTE → PROCESSANDO → QUARENTENA`
 
+A passagem `PENDENTE → PROCESSANDO` é feita por atualização atômica condicionada ao estado. Assim, o processamento imediato disparado pela API e o consumidor independente podem encontrar o mesmo lote sem executá-lo duas vezes: apenas um processo consegue reivindicá-lo.
+
+O consumidor independente é executado por:
+
+```bash
+python -m app.workers.pentaho_integration_worker
+```
+
+Para diagnóstico ou execução única:
+
+```bash
+python -m app.workers.pentaho_integration_worker --once
+```
+
+No Fly.io atual, API e consumidor são processos separados dentro da mesma máquina. Essa escolha é intencional porque a produção ainda utiliza SQLite em volume persistente; criar grupos de processo em máquinas Fly distintas separaria o acesso ao volume. Quando o banco for migrado para PostgreSQL ou SQL Server compartilhado, o consumidor poderá ser movido para uma máquina própria sem alterar o contrato da fila.
+
 `CONCLUIDO` neste adaptador significa que o transporte, persistência e validação estrutural foram concluídos. Regras de domínio continuam pertencendo aos consumidores do ReqSys.
+
+## Recuperação após interrupção
+
+O consumidor verifica lotes em `PROCESSANDO` cuja última atualização ultrapassou a janela configurada. Esses lotes são considerados abandonados, como em reinicialização da máquina ou término inesperado do processo.
+
+Comportamento:
+
+1. lote interrompido abaixo do limite de tentativas volta para `PENDENTE`;
+2. a próxima reivindicação incrementa `tentativas` e volta a processá-lo;
+3. lote interrompido repetidamente até o limite vai para `QUARENTENA`;
+4. o `correlationId` e a chave de idempotência permanecem inalterados;
+5. a recuperação é registrada em log sem conteúdo sensível do payload.
+
+Configurações:
+
+| Variável | Padrão | Finalidade |
+| --- | ---: | --- |
+| `REQSYS_PENTAHO_WORKER_ENABLED` | `true` | habilita o consumidor supervisionado no runtime Fly |
+| `REQSYS_PENTAHO_WORKER_POLL_SECONDS` | `1` | intervalo entre buscas por lotes pendentes |
+| `REQSYS_PENTAHO_WORKER_WATCHDOG_SECONDS` | `2` | intervalo de supervisão e reinício do processo consumidor |
+| `REQSYS_PENTAHO_PROCESSING_TIMEOUT_SECONDS` | `300` | tempo para considerar `PROCESSANDO` abandonado |
+| `REQSYS_PENTAHO_MAX_TENTATIVAS` | `5` | limite antes de enviar interrupções repetidas para quarentena |
+| `REQSYS_PENTAHO_MAX_REGISTROS` | `10000` | limite estrutural de registros por lote |
+
+O `scripts/fly_boot.sh` supervisiona o consumidor. Se ele encerrar enquanto a API continuar ativa, o processo é iniciado novamente. Se a máquina inteira reiniciar, a fila permanece no volume e o consumidor recupera os lotes abandonados na próxima inicialização.
 
 ## Consulta do lote
 
@@ -114,11 +155,15 @@ Fluxo recomendado no job/transformação:
 7. consultar `GET /api/integracoes/pentaho/lotes/{loteId}` quando o processo precisar aguardar o resultado;
 8. não reenviar com nova chave após timeout sem antes consultar o lote original.
 
-## Controles de segurança
+## Controles de segurança e resiliência
 
 - autenticação de serviço escopada por `pentaho:integracao`;
 - deduplicação no banco, não apenas em memória;
 - reutilização divergente de chave de idempotência bloqueada com `409`;
+- reivindicação atômica para impedir consumo concorrente duplicado;
+- recuperação de processamento interrompido;
+- limite de tentativas com quarentena;
+- consumidor supervisionado e reiniciado automaticamente;
 - payload não incluído em mensagens de log de erro;
 - correlação ponta a ponta;
 - limite configurável de registros;
@@ -127,4 +172,4 @@ Fluxo recomendado no job/transformação:
 
 ## Critério de conclusão
 
-O incremento está concluído quando os testes de contrato, idempotência, quarentena, reprocessamento e painel estiverem verdes no CI e a branch estiver sem conflito com `main`.
+O incremento está concluído quando os testes de contrato, idempotência, reivindicação atômica, recuperação de lote abandonado, limite de tentativas, quarentena, reprocessamento e painel estiverem verdes no CI e a branch estiver sem conflito com `main`.
