@@ -23,9 +23,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Test minimum controlled version policy
+      - name: Test minimum controlled version policy and artifact emitter
         run: |
           python -m pip install --disable-pip-version-check pytest
-          python -m pytest -q tests/test_minimum_controlled_version.py
+          python -m pytest -q \
+            tests/test_minimum_controlled_version.py \
+            tests/test_generated_minimum_controlled_manifest_contract.py
       - name: Validate repository manifest
         run: python scripts/validate_minimum_controlled_version.py governance/minimum-controlled-version.json
