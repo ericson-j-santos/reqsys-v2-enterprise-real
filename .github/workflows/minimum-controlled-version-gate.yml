@@ -3,20 +3,8 @@ name: Minimum Controlled Version Gate
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "governance/minimum-controlled-version.schema.json"
-      - "governance/minimum-controlled-version.json"
-      - "scripts/validate_minimum_controlled_version.py"
-      - "tests/test_minimum_controlled_version.py"
-      - ".github/workflows/minimum-controlled-version-gate.yml"
   push:
     branches: [main]
-    paths:
-      - "governance/minimum-controlled-version.schema.json"
-      - "governance/minimum-controlled-version.json"
-      - "scripts/validate_minimum_controlled_version.py"
-      - "tests/test_minimum_controlled_version.py"
-      - ".github/workflows/minimum-controlled-version-gate.yml"
   workflow_dispatch:
 
 permissions:
@@ -39,12 +27,5 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check pytest
           python -m pytest -q tests/test_minimum_controlled_version.py
-      - name: Validate repository manifest when present
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -f governance/minimum-controlled-version.json ]]; then
-            python scripts/validate_minimum_controlled_version.py governance/minimum-controlled-version.json
-          else
-            echo "No repository release manifest present; policy tests passed."
-          fi
+      - name: Validate repository manifest
+        run: python scripts/validate_minimum_controlled_version.py governance/minimum-controlled-version.json
