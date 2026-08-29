@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m json.tool .github/ci-remediation.json >/dev/null
-          python -m pytest -q tests/test_pr_ci_remediation.py
+          python -m unittest -v tests/test_pr_ci_remediation.py
 
       - name: Executar ciclo governado
         env:
