@@ -1,0 +1,64 @@
+name: Frontend Readiness Gate
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-readiness-gate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-readiness-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  readiness:
+    name: Frontend readiness matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Test readiness gate contract
+        working-directory: frontend
+        run: npm run test:readiness
+
+      - name: Generate frontend readiness matrix
+        id: readiness
+        working-directory: frontend
+        run: |
+          set +e
+          npm run readiness:frontend
+          code=$?
+          cat artifacts/frontend-readiness/frontend-readiness.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+
+      - name: Upload readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-readiness-${{ github.run_id }}
+          path: frontend/artifacts/frontend-readiness/
+          if-no-files-found: error
+          retention-days: 30
