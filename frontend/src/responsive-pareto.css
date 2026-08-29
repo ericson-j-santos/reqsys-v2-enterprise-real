@@ -53,6 +53,13 @@
     max-height: calc(100dvh - 24px);
     overflow-y: auto;
   }
+
+  /* v-row usa margens negativas para formar gutters. No painel de integrações,
+     linhas densas aninhadas somavam 4px além do viewport de 320px. Mantemos o
+     gutter pelos v-col e neutralizamos apenas a margem externa da tela afetada. */
+  .painel-page .v-row {
+    margin-inline: 0;
+  }
 }
 
 @media (max-width: 400px) {
