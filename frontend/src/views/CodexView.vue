@@ -63,7 +63,7 @@
               label="Contexto técnico"
               rows="2"
               auto-grow
-              placeholder="Repositório, branch, fluxo de trabalho, requisito..."
+              placeholder="Repositório, versão de código, fluxo de trabalho, requisito..."
               data-testid="input-contexto"
             />
             <v-textarea
