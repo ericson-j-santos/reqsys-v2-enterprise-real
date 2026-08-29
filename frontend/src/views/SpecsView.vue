@@ -5,7 +5,7 @@
     <div class="page-header">
       <div>
         <h1>Especificações da solução</h1>
-        <p class="muted">Especificações de funcionalidades · my-first-spec-project</p>
+        <p class="muted">Especificações de funcionalidades · meu-primeiro-projeto</p>
       </div>
       <v-btn color="amber" variant="tonal" prepend-icon="mdi-plus" @click="dialogNova = true">
         Nova Funcionalidade
@@ -175,7 +175,7 @@
 
           <v-text-field
             v-model="nova.titulo"
-            label="Título da feature *"
+            label="Título da funcionalidade *"
             placeholder="ex: Autenticação de Usuários"
             variant="outlined"
             density="compact"

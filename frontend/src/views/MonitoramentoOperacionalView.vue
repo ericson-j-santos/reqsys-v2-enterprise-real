@@ -94,7 +94,7 @@
           </v-list-item>
         </v-list>
 
-        <div class="analitico mt-4" aria-label="Correlation analytics">
+        <div class="analitico mt-4" aria-label="Análise de correlação">
           <v-table density="compact">
             <thead><tr><th>Artefato</th><th>Correlation ID</th><th>Cadeia operacional</th><th>Incidentes correlacionados</th></tr></thead>
             <tbody>
@@ -156,10 +156,10 @@
       <v-card-text>
         <v-row dense>
           <v-col cols="12" sm="6" md="3">
-            <OperationalMetricCard label="Score de governança" :value="governanceResumo.score" semaforo="verde" :clickable="false" />
+            <OperationalMetricCard label="Índice de governança" :value="governanceResumo.score" semaforo="verde" :clickable="false" />
           </v-col>
           <v-col cols="12" sm="6" md="3">
-            <OperationalMetricCard label="Status geral" :value="governanceResumo.status" :semaforo="governanceResumo.status" :clickable="false" />
+            <OperationalMetricCard label="Situação geral" :value="governanceResumo.status" :semaforo="governanceResumo.status" :clickable="false" />
           </v-col>
           <v-col cols="12" sm="6" md="3">
             <OperationalMetricCard label="Capacidades prontas" :value="governanceResumo.dashboardReady" semaforo="verde" :clickable="false" />
@@ -218,7 +218,7 @@
       <v-card-text>
         <v-row>
           <v-col cols="12" sm="6" md="3">
-            <OperationalMetricCard label="Score atual" :value="trilhaDResumo.score" :semaforo="trilhaDResumo.state" :clickable="false" />
+            <OperationalMetricCard label="Índice atual" :value="trilhaDResumo.score" :semaforo="trilhaDResumo.state" :clickable="false" />
           </v-col>
           <v-col cols="12" sm="6" md="3">
             <OperationalMetricCard label="Estado" :value="trilhaDResumo.state" :semaforo="trilhaDResumo.state" :clickable="false" />
@@ -486,7 +486,7 @@
           </v-col>
           <v-col cols="12" sm="6" md="3">
             <OperationalMetricCard
-              label="Merge estabilizado"
+              label="Integração de alterações estabilizada"
               :value="mergeReadinessHistoryResumo.mergeReadinessStabilized"
               :semaforo="mergeReadinessHistoryResumo.mergeReadinessStabilized === 'sim' ? 'verde' : 'amarelo'"
               :clickable="false"
@@ -504,7 +504,7 @@
         >
           Histórico merge-readiness habilitado via gate operacional.
         </v-alert>
-        <v-table density="compact" class="mt-4" aria-label="Histórico merge readiness">
+        <v-table density="compact" class="mt-4" aria-label="Histórico de prontidão da integração de alterações">
           <thead>
             <tr>
               <th>Timestamp</th>
