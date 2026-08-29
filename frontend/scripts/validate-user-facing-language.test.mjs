@@ -7,6 +7,11 @@ test('detecta termos proibidos em texto visível', () => {
   assert.deepEqual(hits.map((item) => item.id), ['runtime', 'dashboard', 'status'])
 })
 
+test('detecta anglicismos corporativos e operacionais', () => {
+  const hits = findForbiddenTerms('Workflow de deploy com feedback, roadmap e compliance')
+  assert.deepEqual(hits.map((item) => item.id), ['deploy', 'workflow', 'feedback', 'roadmap', 'compliance'])
+})
+
 test('não bloqueia nomes próprios permitidos', () => {
   const hits = findForbiddenTerms('GitHub, Teams, Planner, Power Automate, Power Apps, Figma e Copilot')
   assert.equal(hits.length, 0)
@@ -22,10 +27,17 @@ test('ignora identificadores técnicos e encontra texto de tela', () => {
   </template>`
 
   const violations = findViolationsInFile('/tmp/Exemplo.vue', source)
-  assert.deepEqual(
-    violations.map((item) => item.term),
-    ['dashboard', 'branch'],
-  )
+  assert.deepEqual(violations.map((item) => item.term), ['dashboard', 'branch'])
+})
+
+test('ignora blocos de comandos executáveis', () => {
+  const source = `<template><section><pre>cd backend && npm run build</pre><code>git checkout branch</code><p>Painel aprovado</p></section></template>`
+  assert.equal(findViolationsInFile('/tmp/Comandos.vue', source).length, 0)
+})
+
+test('ignora caminhos de membro e identificadores compostos', () => {
+  assert.equal(findForbiddenTerms('itemSelecionado.status').length, 0)
+  assert.equal(findForbiddenTerms('Especificações de funcionalidades · my-first-spec-project').length, 0)
 })
 
 test('valida propriedades de interface sem bloquear rotas internas', () => {
