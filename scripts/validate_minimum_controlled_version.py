@@ -52,13 +52,17 @@ def validate_manifest(data: dict[str, Any]) -> list[str]:
         errors.append("contextual_controls deve ser objeto")
         contextual = {}
     for name, value in contextual.items():
-        if value in {"PASS", "FAIL"}:
+        if isinstance(value, str) and value in {"PASS", "FAIL"}:
             continue
-        if not isinstance(value, dict) or value.get("status") != "NOT_APPLICABLE" or len(str(value.get("justification") or "").strip()) < 3:
+        if (
+            not isinstance(value, dict)
+            or value.get("status") != "NOT_APPLICABLE"
+            or len(str(value.get("justification") or "").strip()) < 3
+        ):
             errors.append(f"controle contextual inválido: {name}")
 
     all_required_pass = all(controls.get(name) == "PASS" for name in REQUIRED_CONTROLS)
-    no_contextual_fail = all(value != "FAIL" for value in contextual.values())
+    no_contextual_fail = all(not (isinstance(value, str) and value == "FAIL") for value in contextual.values())
     expected_release_allowed = all_required_pass and no_contextual_fail
     release_allowed = data.get("release_allowed")
     if not isinstance(release_allowed, bool):
