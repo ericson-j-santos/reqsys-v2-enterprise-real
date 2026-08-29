@@ -11,7 +11,7 @@ export const FORBIDDEN_TERMS = [
   { id: 'dashboard', pattern: /\bdashboard\b/giu, suggestion: 'painel' },
   { id: 'work-item', pattern: /\bwork\s+items?\b/giu, suggestion: 'item de trabalho' },
   { id: 'launchpad', pattern: /\blaunchpad\b/giu, suggestion: 'ações / central de ações' },
-  { id: 'branch', pattern: /\bbranches?\b/giu, suggestion: 'versão de código / ramificação' },
+  { id: 'branch', pattern: /\bbranch(?:es)?\b/giu, suggestion: 'versão de código / ramificação' },
   { id: 'merge', pattern: /\bmerge\b/giu, suggestion: 'integração de alterações' },
   { id: 'dry-run', pattern: /\bdry[- ]run\b/giu, suggestion: 'simulação' },
   { id: 'readiness', pattern: /\breadiness\b/giu, suggestion: 'prontidão' },
@@ -46,6 +46,8 @@ export const FORBIDDEN_TERMS = [
 ]
 
 const USER_FACING_JS_PROPERTY = /\b(?:title|titulo|tip|topic|rotulo|label|message|mensagem|placeholder|description|descricao)\s*:\s*(['"`])([\s\S]*?)\1/g
+const USER_FACING_ASSIGNMENT = /\b(?:erro|error|mensagem|message|aviso|alerta|sucesso|descricao|description|titulo|title|rotulo|label|placeholder)(?:\.value)?\s*=\s*(['"`])([\s\S]*?)\1/g
+const FALLBACK_LITERAL = /\|\|\s*(['"`])([\s\S]*?)\1/g
 const SELECTED_HTML_ATTR = /\b(?:aria-label|title|placeholder)\s*=\s*(['"])(.*?)\1/giu
 const QUOTED_LITERAL = /(['"`])((?:\\.|(?!\1)[\s\S])*?)\1/g
 
@@ -131,31 +133,43 @@ function collectTemplateCandidates(content) {
   return result
 }
 
-function collectJavascriptCandidates(content) {
+function collectRegexCandidates(content, regex, origin) {
   const result = []
-  USER_FACING_JS_PROPERTY.lastIndex = 0
+  regex.lastIndex = 0
   let match
-  while ((match = USER_FACING_JS_PROPERTY.exec(content))) {
+  while ((match = regex.exec(content))) {
     if (!isRelevantCandidate(match[2])) continue
     result.push({
       text: match[2],
       line: lineFromOffset(content, match.index),
-      origin: 'propriedade de interface',
+      origin,
     })
   }
   return result
 }
 
+function collectJavascriptCandidates(content) {
+  return [
+    ...collectRegexCandidates(content, USER_FACING_JS_PROPERTY, 'propriedade de interface'),
+    ...collectRegexCandidates(content, USER_FACING_ASSIGNMENT, 'mensagem de interface'),
+    ...collectRegexCandidates(content, FALLBACK_LITERAL, 'mensagem alternativa de interface'),
+  ]
+}
+
 export function findViolationsInFile(filePath, content) {
   const extension = path.extname(filePath).toLowerCase()
   const candidates = extension === '.vue'
-    ? collectTemplateCandidates(content)
+    ? [...collectTemplateCandidates(content), ...collectJavascriptCandidates(content)]
     : collectJavascriptCandidates(content)
 
   const violations = []
+  const seen = new Set()
   for (const candidate of candidates) {
     const hits = findForbiddenTerms(candidate.text)
     for (const hit of hits) {
+      const key = `${candidate.line}:${hit.id}:${normalizeCandidate(candidate.text)}`
+      if (seen.has(key)) continue
+      seen.add(key)
       violations.push({
         filePath,
         line: candidate.line,
@@ -197,7 +211,7 @@ export function validateRepository(sourceRoot = SOURCE_ROOT) {
 function runCli() {
   const violations = validateRepository()
   if (!violations.length) {
-    console.log('Linguagem simples: aprovado. Nenhum termo proibido foi encontrado em textos estáticos da interface.')
+    console.log('Linguagem simples: aprovado. Nenhum termo proibido foi encontrado nos textos estáticos e mensagens conhecidas da interface.')
     return
   }
 
