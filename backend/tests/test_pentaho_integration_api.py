@@ -41,13 +41,28 @@ def test_recebe_processa_e_consulta_lote(client, auth_headers):
 def test_idempotency_key_nao_cria_lote_duplicado(client, auth_headers):
     chave = f'idem-{uuid4()}'
     headers = _headers(auth_headers, chave=chave)
-    primeiro = client.post('/api/integracoes/pentaho/lotes', json=_payload(), headers=headers)
-    segundo = client.post('/api/integracoes/pentaho/lotes', json=_payload(), headers=headers)
+    payload = _payload()
+    primeiro = client.post('/api/integracoes/pentaho/lotes', json=payload, headers=headers)
+    segundo = client.post('/api/integracoes/pentaho/lotes', json=payload, headers=headers)
 
     assert primeiro.status_code == 202
     assert segundo.status_code == 202
     assert segundo.json()['duplicado'] is True
     assert segundo.json()['loteId'] == primeiro.json()['loteId']
+
+
+def test_idempotency_key_reutilizada_com_conteudo_diferente_retorna_conflito(client, auth_headers):
+    chave = f'idem-{uuid4()}'
+    headers = _headers(auth_headers, chave=chave)
+    primeiro = _payload(registros=[{'produto': 10001}])
+    segundo = {**primeiro, 'registros': [{'produto': 20002}]}
+
+    resposta_inicial = client.post('/api/integracoes/pentaho/lotes', json=primeiro, headers=headers)
+    conflito = client.post('/api/integracoes/pentaho/lotes', json=segundo, headers=headers)
+
+    assert resposta_inicial.status_code == 202
+    assert conflito.status_code == 409
+    assert conflito.json()['detail'] == 'Idempotency-Key já utilizada com conteúdo diferente'
 
 
 def test_lote_sem_registro_util_vai_para_quarentena_e_pode_reprocessar(client, auth_headers):
