@@ -11,7 +11,10 @@ on:
       - Governança Padrão Ouro
       - PR Conflict Guard
       - Branch Protection Audit
+      - Governed Merge Queue
     types: [completed]
+  schedule:
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       pr_number:
@@ -28,141 +31,47 @@ on:
         default: false
         type: boolean
 
-permissions:
-  contents: read
-  actions: read
-  pull-requests: read
-  issues: write
+permissions: {}
 
 concurrency:
-  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.workflow_run.head_sha || github.event.inputs.pr_number || github.run_id }}
+  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.workflow_run.head_sha || github.event.inputs.pr_number || github.event_name || github.run_id }}
   cancel-in-progress: false
 
 jobs:
-  pr-ci-watch:
+  watch-pr:
     name: PR CI Watch seguro
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
+    permissions:
+      contents: read
+      actions: read
     env:
       REPORT_DIR: artifacts/pr-ci-watch
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolver contexto
-        id: ctx
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mkdir -p "${REPORT_DIR}"
-
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "reason=pull_request" >> "$GITHUB_OUTPUT"
-            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
-            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
-            echo "comment=false" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "reason=workflow_dispatch" >> "$GITHUB_OUTPUT"
-            echo "pr_number=${{ github.event.inputs.pr_number }}" >> "$GITHUB_OUTPUT"
-            echo "sha=${{ github.event.inputs.sha }}" >> "$GITHUB_OUTPUT"
-            echo "comment=${{ github.event.inputs.comment }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
-            WR_CONCLUSION="${{ github.event.workflow_run.conclusion }}"
-            if [ "${WR_CONCLUSION}" = "cancelled" ]; then
-              echo "enabled=false" >> "$GITHUB_OUTPUT"
-              echo "reason=workflow_run_cancelled_upstream" >> "$GITHUB_OUTPUT"
-              echo "pr_number=0" >> "$GITHUB_OUTPUT"
-              echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
-              echo "comment=false" >> "$GITHUB_OUTPUT"
-              cat > "${REPORT_DIR}/pr-ci-watch.json" << JSON
-          {
-            "status": "skipped",
-            "reason": "workflow_run_cancelled_upstream",
-            "workflow_run_id": "${{ github.event.workflow_run.id }}",
-            "workflow_name": "${{ github.event.workflow_run.name }}",
-            "conclusion": "cancelled"
-          }
-          JSON
-              exit 0
-            fi
-            PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
-            SHA="${{ github.event.workflow_run.head_sha }}"
-
-            if [ -z "${PR_NUMBER}" ] || [ "${PR_NUMBER}" = "null" ]; then
-              echo "enabled=false" >> "$GITHUB_OUTPUT"
-              echo "reason=workflow_run_without_pull_request" >> "$GITHUB_OUTPUT"
-              echo "pr_number=0" >> "$GITHUB_OUTPUT"
-              echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
-              echo "comment=false" >> "$GITHUB_OUTPUT"
-              cat > "${REPORT_DIR}/pr-ci-watch.json" << JSON
-          {
-            "status": "skipped",
-            "reason": "workflow_run_without_pull_request",
-            "workflow_run_id": "${{ github.event.workflow_run.id }}",
-            "workflow_name": "${{ github.event.workflow_run.name }}",
-            "sha": "${SHA}"
-          }
-          JSON
-              cat > "${REPORT_DIR}/pr-ci-watch.md" << MD
-          # PR CI Watch
-
-          | Campo | Valor |
-          |---|---|
-          | Status | \`skipped\` |
-          | Motivo | \`workflow_run_without_pull_request\` |
-          | Workflow | \`${{ github.event.workflow_run.name }}\` |
-          | SHA | \`${SHA}\` |
-
-          Execução ignorada de forma segura porque o \`workflow_run\` não está associado a um PR.
-          MD
-            else
-              echo "enabled=true" >> "$GITHUB_OUTPUT"
-              echo "reason=workflow_run_with_pull_request" >> "$GITHUB_OUTPUT"
-              echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
-              echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
-              echo "comment=false" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "reason=unsupported_event" >> "$GITHUB_OUTPUT"
-            echo "pr_number=0" >> "$GITHUB_OUTPUT"
-            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-            echo "comment=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Setup Python
-        if: steps.ctx.outputs.enabled == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Executar PR CI Watch
-        if: steps.ctx.outputs.enabled == 'true'
+      - name: Avaliar prontidão do PR
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-
-          COMMENT_FLAG=""
-          if [ "${{ steps.ctx.outputs.comment }}" = "true" ]; then
-            COMMENT_FLAG="--comment"
-          fi
-
           python scripts/pr_ci_watch.py \
             --repo "${GITHUB_REPOSITORY}" \
-            --pr-number "${{ steps.ctx.outputs.pr_number }}" \
-            --sha "${{ steps.ctx.outputs.sha }}" \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --sha "${{ github.event.pull_request.head.sha }}" \
             --report-dir "${REPORT_DIR}" \
             --exclude-run-id "${GITHUB_RUN_ID}" \
-            ${COMMENT_FLAG}
+            --fail-on-unhealthy
 
-      - name: Publicar artifact
+      - name: Publicar evidência
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -170,3 +79,186 @@ jobs:
           path: artifacts/pr-ci-watch
           if-no-files-found: error
           retention-days: 15
+
+  manual-watch:
+    name: PR CI Watch manual
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    env:
+      REPORT_DIR: artifacts/pr-ci-watch
+    steps:
+      - name: Checkout confiável
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Avaliar PR informado
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          COMMENT_FLAG=""
+          if [ "${{ github.event.inputs.comment }}" = "true" ]; then
+            COMMENT_FLAG="--comment"
+          fi
+
+          python scripts/pr_ci_watch.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pr-number "${{ github.event.inputs.pr_number }}" \
+            --sha "${{ github.event.inputs.sha }}" \
+            --report-dir "${REPORT_DIR}" \
+            --exclude-run-id "${GITHUB_RUN_ID}" \
+            --fail-on-unhealthy \
+            ${COMMENT_FLAG}
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-ci-watch-report
+          path: artifacts/pr-ci-watch
+          if-no-files-found: error
+          retention-days: 15
+
+  remediate-workflow-run:
+    name: PR CI Remediation
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+      issues: write
+      pull-requests: read
+    env:
+      REPORT_DIR: artifacts/pr-ci-watch
+    steps:
+      - name: Checkout confiável
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Resolver contexto do PR
+        id: context
+        shell: bash
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
+          SHA="${{ github.event.workflow_run.head_sha }}"
+
+          if [ -z "${PR_NUMBER}" ] || [ "${PR_NUMBER}" = "null" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "reason=workflow_run_without_pull_request" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "reason=workflow_run_with_pull_request" >> "$GITHUB_OUTPUT"
+            echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Python
+        if: steps.context.outputs.enabled == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Diagnosticar, tratar e revalidar
+        if: steps.context.outputs.enabled == 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python scripts/pr_ci_watch.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pr-number "${{ steps.context.outputs.pr_number }}" \
+            --sha "${{ steps.context.outputs.sha }}" \
+            --report-dir "${REPORT_DIR}" \
+            --exclude-run-id "${GITHUB_RUN_ID}" \
+            --trigger-run-id "${{ github.event.workflow_run.id }}" \
+            --auto-remediate \
+            --comment \
+            --fail-on-unhealthy
+
+      - name: Registrar execução ignorada com segurança
+        if: steps.context.outputs.enabled != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${REPORT_DIR}"
+          cat > "${REPORT_DIR}/pr-ci-watch.json" <<JSON
+          {
+            "status": "skipped",
+            "reason": "${{ steps.context.outputs.reason }}",
+            "workflow_run_id": "${{ github.event.workflow_run.id }}",
+            "workflow_name": "${{ github.event.workflow_run.name }}",
+            "sha": "${{ github.event.workflow_run.head_sha }}"
+          }
+          JSON
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-ci-remediation-report
+          path: artifacts/pr-ci-watch
+          if-no-files-found: error
+          retention-days: 30
+
+  sweep-open-prs:
+    name: PR CI Sweep horário
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
+      issues: write
+      pull-requests: read
+    env:
+      REPORT_DIR: artifacts/pr-ci-watch
+    steps:
+      - name: Checkout confiável
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Varrer PRs abertos e tratar falhas seguras
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python scripts/pr_ci_watch.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --report-dir "${REPORT_DIR}" \
+            --exclude-run-id "${GITHUB_RUN_ID}" \
+            --sweep-open-prs \
+            --auto-remediate \
+            --comment \
+            --fail-on-unhealthy
+
+      - name: Publicar evidência consolidada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-ci-sweep-report
+          path: artifacts/pr-ci-watch
+          if-no-files-found: error
+          retention-days: 30
