@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from uuid import uuid4
 
 from app.models.pentaho_integration_batch import PentahoIntegrationBatch
@@ -102,3 +103,34 @@ def test_interrupcoes_repetidas_vão_para_quarentena(db_session):
     persistido = db_session.query(PentahoIntegrationBatch).filter_by(lote_id=lote.lote_id).one()
     assert persistido.status == STATUS_QUARENTENA
     assert persistido.erro_codigo == 'LIMITE_TENTATIVAS_RECUPERACAO'
+
+
+def test_recuperacao_ignora_lote_alterado_em_disputa_concorrente(db_session, monkeypatch):
+    lote = _criar_lote(db_session)
+    agora = datetime.now(timezone.utc)
+    lote.status = STATUS_PROCESSANDO
+    lote.tentativas = 1
+    lote.atualizado_em = agora - timedelta(minutes=10)
+    db_session.add(lote)
+    db_session.commit()
+
+    executar_original = db_session.execute
+
+    def executar_simulando_disputa(statement, *args, **kwargs):
+        if getattr(statement, 'is_update', False):
+            return SimpleNamespace(rowcount=0)
+        return executar_original(statement, *args, **kwargs)
+
+    monkeypatch.setattr(db_session, 'execute', executar_simulando_disputa)
+
+    recuperacao = recuperar_lotes_abandonados(
+        db_session,
+        agora=agora,
+        timeout_segundos=300,
+        max_tentativas=5,
+    )
+
+    assert recuperacao == {'recuperados': 0, 'quarentena': 0, 'avaliados': 1}
+    persistido = db_session.query(PentahoIntegrationBatch).filter_by(lote_id=lote.lote_id).one()
+    assert persistido.status == STATUS_PROCESSANDO
+    assert persistido.tentativas == 1
