@@ -38,7 +38,6 @@ jobs:
           from __future__ import annotations
 
           import json
-          import math
           import os
           import subprocess
           import textwrap
@@ -65,9 +64,8 @@ jobs:
               )
               if result.returncode != 0:
                   raise SystemExit(result.stderr or f"Falha ao consultar {filename}")
-              pages = json.loads(result.stdout)
               items: list[dict] = []
-              for payload in pages:
+              for payload in json.loads(result.stdout):
                   items.extend(
                       run for run in payload.get("workflow_runs", [])
                       if run.get("status") == "completed"
@@ -75,15 +73,17 @@ jobs:
               items.sort(key=lambda item: item["created_at"])
               return items
 
+          def created_at(item: dict) -> datetime:
+              return datetime.fromisoformat(item["created_at"].replace("Z", "+00:00"))
+
+          def window(items: list[dict], days: int) -> list[dict]:
+              cutoff = now - timedelta(days=days)
+              return [item for item in items if created_at(item) >= cutoff]
+
           def metrics(items: list[dict], minimum: int) -> dict:
               total = len(items)
               successes = sum(item.get("conclusion") == "success" for item in items)
               rate = round((successes / total * 100.0), 2) if total else 0.0
-              first = None
-              observed_days = 0.0
-              if items:
-                  first = datetime.fromisoformat(items[0]["created_at"].replace("Z", "+00:00"))
-                  observed_days = max(0.0, (now - first).total_seconds() / 86400)
               return {
                   "total": total,
                   "successes": successes,
@@ -92,75 +92,114 @@ jobs:
                   "minimum": minimum,
                   "remaining": max(0, minimum - total),
                   "sample_percent": round(min(100.0, total / minimum * 100.0), 2),
-                  "first_run_at": first.isoformat() if first else None,
-                  "observed_days": round(observed_days, 2),
+                  "first_run_at": items[0]["created_at"] if items else None,
+                  "last_run_at": items[-1]["created_at"] if items else None,
               }
 
-          delivery = metrics(runs(os.environ["DELIVERY_WORKFLOW"]), min_delivery)
-          monitor = metrics(runs(os.environ["MONITOR_WORKFLOW"]), min_monitor)
-          observed_days = min(delivery["observed_days"], monitor["observed_days"])
-          provisional_remaining_days = max(0.0, provisional_days - observed_days)
-          definitive_remaining_days = max(0.0, definitive_days - observed_days)
-          sample_ready = delivery["remaining"] == 0 and monitor["remaining"] == 0
-          quality_ready = (
-              delivery["success_rate_percent"] >= target
-              and monitor["success_rate_percent"] >= target
+          delivery_all = runs(os.environ["DELIVERY_WORKFLOW"])
+          monitor_all = runs(os.environ["MONITOR_WORKFLOW"])
+
+          delivery_7d = metrics(window(delivery_all, provisional_days), min_delivery)
+          monitor_7d = metrics(window(monitor_all, provisional_days), min_monitor)
+          delivery_30d = metrics(window(delivery_all, definitive_days), min_delivery)
+          monitor_30d = metrics(window(monitor_all, definitive_days), min_monitor)
+          delivery_history = metrics(delivery_all, min_delivery)
+          monitor_history = metrics(monitor_all, min_monitor)
+
+          def history_days(items: list[dict]) -> float:
+              if not items:
+                  return 0.0
+              return max(0.0, (now - created_at(items[0])).total_seconds() / 86400)
+
+          observed_days = min(history_days(delivery_all), history_days(monitor_all))
+          provisional_time_ready = observed_days >= provisional_days
+          definitive_time_ready = observed_days >= definitive_days
+          provisional_sample_ready = delivery_7d["remaining"] == 0 and monitor_7d["remaining"] == 0
+          definitive_sample_ready = delivery_30d["remaining"] == 0 and monitor_30d["remaining"] == 0
+          provisional_quality_ready = (
+              delivery_7d["success_rate_percent"] >= target
+              and monitor_7d["success_rate_percent"] >= target
+          )
+          definitive_quality_ready = (
+              delivery_30d["success_rate_percent"] >= target
+              and monitor_30d["success_rate_percent"] >= target
           )
 
-          if observed_days >= definitive_days and sample_ready and quality_ready:
+          if definitive_time_ready and definitive_sample_ready and definitive_quality_ready:
               state = "gold_certified"
               next_state = "manutenção contínua"
               eta = now
-          elif observed_days >= provisional_days and sample_ready and quality_ready:
+              active_delivery = delivery_30d
+              active_monitor = monitor_30d
+              active_window_days = definitive_days
+          elif provisional_time_ready and provisional_sample_ready and provisional_quality_ready:
               state = "provisional_gold"
               next_state = "gold_certified"
-              eta = now + timedelta(days=definitive_remaining_days)
-          elif sample_ready and not quality_ready:
+              eta = now + timedelta(days=max(0.0, definitive_days - observed_days))
+              active_delivery = delivery_7d
+              active_monitor = monitor_7d
+              active_window_days = provisional_days
+          elif provisional_time_ready and provisional_sample_ready and not provisional_quality_ready:
               state = "quality_blocked"
-              next_state = "recuperar SLO para 99%"
+              next_state = "recuperar SLO móvel para 99%"
               eta = None
+              active_delivery = delivery_7d
+              active_monitor = monitor_7d
+              active_window_days = provisional_days
           else:
               state = "observation"
               next_state = "provisional_gold"
-              eta = now + timedelta(days=provisional_remaining_days)
+              eta = now + timedelta(days=max(0.0, provisional_days - observed_days))
+              active_delivery = delivery_7d
+              active_monitor = monitor_7d
+              active_window_days = provisional_days
 
           temporal_percent = round(min(100.0, observed_days / provisional_days * 100.0), 2)
           overall_percent = round(min(
-              delivery["sample_percent"],
-              monitor["sample_percent"],
+              active_delivery["sample_percent"],
+              active_monitor["sample_percent"],
               temporal_percent,
-              delivery["success_rate_percent"] if delivery["total"] else 0.0,
-              monitor["success_rate_percent"] if monitor["total"] else 0.0,
+              active_delivery["success_rate_percent"] if active_delivery["total"] else 0.0,
+              active_monitor["success_rate_percent"] if active_monitor["total"] else 0.0,
           ), 2)
 
           blockers: list[str] = []
-          if delivery["remaining"]:
-              blockers.append(f"faltam {delivery['remaining']} entregas")
-          if monitor["remaining"]:
-              blockers.append(f"faltam {monitor['remaining']} monitores")
-          if provisional_remaining_days > 0:
-              blockers.append(f"faltam {provisional_remaining_days:.2f} dias para a janela provisória")
-          if delivery["total"] and delivery["success_rate_percent"] < target:
-              blockers.append(f"SLO de entrega em {delivery['success_rate_percent']:.2f}%")
-          if monitor["total"] and monitor["success_rate_percent"] < target:
-              blockers.append(f"SLO do monitor em {monitor['success_rate_percent']:.2f}%")
+          if not provisional_time_ready:
+              blockers.append(f"faltam {max(0.0, provisional_days - observed_days):.2f} dias de histórico operacional")
+          if delivery_7d["remaining"]:
+              blockers.append(f"faltam {delivery_7d['remaining']} entregas na janela de 7 dias")
+          if monitor_7d["remaining"]:
+              blockers.append(f"faltam {monitor_7d['remaining']} monitores na janela de 7 dias")
+          if delivery_7d["total"] and delivery_7d["success_rate_percent"] < target:
+              blockers.append(f"SLO de entrega em 7 dias: {delivery_7d['success_rate_percent']:.2f}%")
+          if monitor_7d["total"] and monitor_7d["success_rate_percent"] < target:
+              blockers.append(f"SLO do monitor em 7 dias: {monitor_7d['success_rate_percent']:.2f}%")
+          if state == "provisional_gold":
+              if delivery_30d["remaining"]:
+                  blockers.append(f"faltam {delivery_30d['remaining']} entregas na janela de 30 dias")
+              if monitor_30d["remaining"]:
+                  blockers.append(f"faltam {monitor_30d['remaining']} monitores na janela de 30 dias")
+              if delivery_30d["total"] and delivery_30d["success_rate_percent"] < target:
+                  blockers.append(f"SLO de entrega em 30 dias: {delivery_30d['success_rate_percent']:.2f}%")
+              if monitor_30d["total"] and monitor_30d["success_rate_percent"] < target:
+                  blockers.append(f"SLO do monitor em 30 dias: {monitor_30d['success_rate_percent']:.2f}%")
 
           report = {
-              "schema_version": "1.0.0",
+              "schema_version": "2.0.0",
               "service": "github-teams-notification",
               "generated_at": now.isoformat(),
               "state": state,
               "next_state": next_state,
               "overall_progress_percent": overall_percent,
               "target_percent": target,
-              "observed_days": round(observed_days, 2),
+              "active_window_days": active_window_days,
+              "history_observed_days": round(observed_days, 2),
               "provisional_window_days": provisional_days,
               "definitive_window_days": definitive_days,
-              "provisional_remaining_days": round(provisional_remaining_days, 2),
-              "definitive_remaining_days": round(definitive_remaining_days, 2),
               "estimated_next_state_at": eta.isoformat() if eta else None,
-              "delivery": delivery,
-              "availability_monitor": monitor,
+              "rolling_7d": {"delivery": delivery_7d, "availability_monitor": monitor_7d},
+              "rolling_30d": {"delivery": delivery_30d, "availability_monitor": monitor_30d},
+              "historical": {"delivery": delivery_history, "availability_monitor": monitor_history},
               "blockers": blockers,
               "run_url": f"{os.environ['GITHUB_SERVER_URL']}/{repository}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
           }
@@ -172,7 +211,7 @@ jobs:
               encoding="utf-8",
           )
 
-          eta_text = eta.strftime("%d/%m/%Y %H:%M UTC") if eta else "indeterminada até recuperação do SLO"
+          eta_text = eta.strftime("%d/%m/%Y %H:%M UTC") if eta else "indeterminada até recuperação do SLO móvel"
           blockers_text = "\n".join(f"- {item}" for item in blockers) or "- nenhum bloqueio atual"
           body = textwrap.dedent(f"""\
               ## Progresso da certificação GitHub → Teams
@@ -180,15 +219,17 @@ jobs:
               **Estado atual:** `{state}`  
               **Próximo estado:** `{next_state}`  
               **Progresso consolidado:** **{overall_percent:.2f}%**  
+              **Janela usada no estado:** **{active_window_days} dias**  
               **Atualizado em:** {now.strftime('%d/%m/%Y %H:%M UTC')}  
               **Previsão do próximo estado:** {eta_text}
 
-              | Dimensão | Atual | Meta | Progresso | SLO |
-              |---|---:|---:|---:|---:|
-              | Entregas Teams | {delivery['total']} | {min_delivery} | {delivery['sample_percent']:.2f}% | {delivery['success_rate_percent']:.2f}% |
-              | Monitor do dashboard | {monitor['total']} | {min_monitor} | {monitor['sample_percent']:.2f}% | {monitor['success_rate_percent']:.2f}% |
-              | Janela provisória | {observed_days:.2f} dias | {provisional_days} dias | {temporal_percent:.2f}% | — |
-              | Janela definitiva | {observed_days:.2f} dias | {definitive_days} dias | {min(100.0, observed_days / definitive_days * 100.0):.2f}% | — |
+              | Dimensão | 7 dias | 30 dias | Histórico |
+              |---|---:|---:|---:|
+              | Entregas — execuções | {delivery_7d['total']} | {delivery_30d['total']} | {delivery_history['total']} |
+              | Entregas — SLO | {delivery_7d['success_rate_percent']:.2f}% | {delivery_30d['success_rate_percent']:.2f}% | {delivery_history['success_rate_percent']:.2f}% |
+              | Monitor — execuções | {monitor_7d['total']} | {monitor_30d['total']} | {monitor_history['total']} |
+              | Monitor — SLO | {monitor_7d['success_rate_percent']:.2f}% | {monitor_30d['success_rate_percent']:.2f}% | {monitor_history['success_rate_percent']:.2f}% |
+              | Tempo operacional | — | — | {observed_days:.2f} dias |
 
               ### Bloqueios atuais
 
@@ -197,9 +238,9 @@ jobs:
               ### Evidência
 
               - Execução: {report['run_url']}
-              - Critério provisório: 7 dias, 20 entregas, 20 monitores e SLO ≥ 99%
-              - Critério definitivo: 30 dias, amostras mínimas e SLO ≥ 99%
-              - Fonte: histórico dos workflows canônicos do GitHub Actions
+              - Critério provisório: histórico ≥ 7 dias, 20 entregas e 20 monitores nos últimos 7 dias, SLO ≥ 99%
+              - Critério definitivo: histórico ≥ 30 dias, 20 entregas e 20 monitores nos últimos 30 dias, SLO ≥ 99%
+              - Histórico total: apenas informativo; falhas antigas fora da janela não bloqueiam a certificação atual
 
               > Esta issue é atualizada automaticamente e funciona como painel operacional persistente.
               """)
