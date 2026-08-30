@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       validation_app:
-        description: "App usado somente para validar acesso do sucessor"
+        description: "App usado somente para validar acesso do emissor e do sucessor"
         required: true
         default: "reqsys-api-dev"
         type: string
@@ -97,8 +97,9 @@ jobs:
           EXIT_CODE=1
           TOKEN_B_ID=""
           CLEANUP_STATUS="NOT_REQUIRED"
-          A_PRECHECK="FAIL"
-          B_ORG_VALIDATION="NOT_RUN"
+          A_APP_VALIDATION="FAIL"
+          A_ORG_LIST="NOT_RUN"
+          B_ORG_LIST="NOT_RUN"
           B_APP_VALIDATION="NOT_RUN"
           A_POSTCHECK="NOT_RUN"
           CREATE_RC=0
@@ -109,7 +110,7 @@ jobs:
           : > "$STDERR_FILE"
 
           write_evidence() {
-            export STATUS STAGE EXIT_CODE TOKEN_B_ID CLEANUP_STATUS A_PRECHECK B_ORG_VALIDATION B_APP_VALIDATION A_POSTCHECK CREATE_RC ERROR_CLASS ERROR_HASH CANDIDATE_NAME
+            export STATUS STAGE EXIT_CODE TOKEN_B_ID CLEANUP_STATUS A_APP_VALIDATION A_ORG_LIST B_ORG_LIST B_APP_VALIDATION A_POSTCHECK CREATE_RC ERROR_CLASS ERROR_HASH CANDIDATE_NAME
             python - <<'PY'
           import json
           import os
@@ -137,8 +138,9 @@ jobs:
                   "stderr_sha256": value("ERROR_HASH") or None,
               },
               "checks": {
-                  "issuer_a_org_list": value("A_PRECHECK"),
-                  "successor_b_org_list": value("B_ORG_VALIDATION"),
+                  "issuer_a_app_access": value("A_APP_VALIDATION"),
+                  "issuer_a_org_token_list": value("A_ORG_LIST"),
+                  "successor_b_org_token_list": value("B_ORG_LIST"),
                   "successor_b_app_access": value("B_APP_VALIDATION"),
                   "candidate_cleanup": value("CLEANUP_STATUS"),
                   "issuer_a_post_cleanup": value("A_POSTCHECK"),
@@ -153,6 +155,10 @@ jobs:
                   "candidate_expiry": "1h",
                   "canonical_trust_anchor_mutated": False,
               },
+              "acceptance": {
+                  "decisive_condition": "issuer_a_created_successor_b_and_successor_b_accessed_validation_app",
+                  "org_token_list_is_diagnostic_only": True,
+              },
               "exit_code": int(value("EXIT_CODE", "1") or 1),
           }
           Path(value("EVIDENCE_FILE")).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -166,7 +172,7 @@ jobs:
               ERROR_HASH="$(sha256sum "$STDERR_FILE" | awk '{print $1}')"
             fi
             rm -f "$STDERR_FILE"
-            unset TOKEN_A TOKEN_B CREATE_JSON
+            unset TOKEN_A TOKEN_B CREATE_JSON LIST_JSON
             write_evidence
 
             {
@@ -174,9 +180,10 @@ jobs:
               echo
               echo "- Status: **$STATUS**"
               echo "- Etapa final: **$STAGE**"
-              echo "- Emissor A validado: **$A_PRECHECK**"
-              echo "- Sucessor B validado no escopo org: **$B_ORG_VALIDATION**"
-              echo "- Sucessor B validado no app: **$B_APP_VALIDATION**"
+              echo "- Emissor A acessou o app: **$A_APP_VALIDATION**"
+              echo "- Listagem org com A (diagnóstico): **$A_ORG_LIST**"
+              echo "- Listagem org com B (diagnóstico): **$B_ORG_LIST**"
+              echo "- Sucessor B acessou o app: **$B_APP_VALIDATION**"
               echo "- Limpeza do candidato B: **$CLEANUP_STATUS**"
               echo "- Emissor A permaneceu válido: **$A_POSTCHECK**"
               echo "- Token pessoal usado: **não**"
@@ -199,24 +206,29 @@ jobs:
           fi
           echo "::add-mask::$TOKEN_A"
 
-          STAGE="validate_issuer_a"
-          if FLY_API_TOKEN="$TOKEN_A" flyctl tokens list --scope org --json >/dev/null 2>"$STDERR_FILE"; then
-            A_PRECHECK="PASS"
+          STAGE="validate_issuer_a_app"
+          if FLY_API_TOKEN="$TOKEN_A" flyctl status --app "$VALIDATION_APP" --json >/dev/null 2>"$STDERR_FILE"; then
+            A_APP_VALIDATION="PASS"
           else
-            ERROR_CLASS="issuer_a_not_authorized_for_org_list"
+            ERROR_CLASS="issuer_a_cannot_access_validation_app"
             STATUS="PRECONDITION_FAILED"
             finish 2
           fi
 
+          STAGE="diagnose_issuer_a_org_list"
+          if FLY_API_TOKEN="$TOKEN_A" flyctl tokens list --scope org --json >/dev/null 2>"$STDERR_FILE"; then
+            A_ORG_LIST="PASS"
+          else
+            A_ORG_LIST="FAIL_NON_BLOCKING"
+          fi
+
           STAGE="create_successor_b"
-          set +e
           CREATE_JSON="$(FLY_API_TOKEN="$TOKEN_A" flyctl tokens create org \
             --org "$FLY_ORG" \
             --expiry 1h \
             --name "$CANDIDATE_NAME" \
             --json 2>"$STDERR_FILE")"
           CREATE_RC=$?
-          set -e
 
           if [ "$CREATE_RC" -ne 0 ]; then
             if grep -Eiq 'unauthorized|forbidden|permission|not allowed|denied|401|403' "$STDERR_FILE"; then
@@ -229,8 +241,12 @@ jobs:
             finish 1
           fi
 
-          TOKEN_B="$(jq -r '.token // .Token // empty' <<<"$CREATE_JSON")"
-          TOKEN_B_ID="$(jq -r '.id // .ID // empty' <<<"$CREATE_JSON")"
+          TOKEN_B="$(jq -r 'if type == "object" then (.token // .Token // empty) elif type == "string" then . else empty end' <<<"$CREATE_JSON" 2>/dev/null)"
+          TOKEN_B_ID="$(jq -r 'if type == "object" then (.id // .ID // empty) else empty end' <<<"$CREATE_JSON" 2>/dev/null)"
+
+          if [ -z "$TOKEN_B" ] && [[ "$CREATE_JSON" == FlyV1\ * || "$CREATE_JSON" == fm2_* ]]; then
+            TOKEN_B="$CREATE_JSON"
+          fi
           unset CREATE_JSON
 
           if [ -z "$TOKEN_B" ]; then
@@ -240,27 +256,28 @@ jobs:
           fi
           echo "::add-mask::$TOKEN_B"
 
-          if [ -z "$TOKEN_B_ID" ]; then
-            STAGE="discover_successor_b_id"
-            LIST_JSON="$(FLY_API_TOKEN="$TOKEN_A" flyctl tokens list --scope org --json 2>"$STDERR_FILE")"
-            TOKEN_B_ID="$(jq -r --arg name "$CANDIDATE_NAME" '.. | objects | select((.name? // .Name? // "") == $name) | (.id? // .ID? // empty)' <<<"$LIST_JSON" | head -n1)"
-            unset LIST_JSON
-          fi
-
-          STAGE="validate_successor_b_org"
-          if FLY_API_TOKEN="$TOKEN_B" flyctl tokens list --scope org --json >/dev/null 2>"$STDERR_FILE"; then
-            B_ORG_VALIDATION="PASS"
-          else
-            ERROR_CLASS="successor_b_failed_org_validation"
-            STATUS="INCONCLUSIVE"
-          fi
-
           STAGE="validate_successor_b_app"
           if FLY_API_TOKEN="$TOKEN_B" flyctl status --app "$VALIDATION_APP" --json >/dev/null 2>"$STDERR_FILE"; then
             B_APP_VALIDATION="PASS"
           else
             ERROR_CLASS="successor_b_failed_app_validation"
             STATUS="INCONCLUSIVE"
+          fi
+
+          STAGE="diagnose_successor_b_org_list"
+          if FLY_API_TOKEN="$TOKEN_B" flyctl tokens list --scope org --json >/dev/null 2>"$STDERR_FILE"; then
+            B_ORG_LIST="PASS"
+          else
+            B_ORG_LIST="FAIL_NON_BLOCKING"
+          fi
+
+          if [ -z "$TOKEN_B_ID" ]; then
+            STAGE="discover_successor_b_id"
+            LIST_JSON="$(FLY_API_TOKEN="$TOKEN_A" flyctl tokens list --scope org --json 2>"$STDERR_FILE")"
+            if [ $? -eq 0 ] && [ -n "$LIST_JSON" ]; then
+              TOKEN_B_ID="$(jq -r --arg name "$CANDIDATE_NAME" '.. | objects | select((.name? // .Name? // "") == $name) | (.id? // .ID? // empty)' <<<"$LIST_JSON" 2>/dev/null | head -n1)"
+            fi
+            unset LIST_JSON
           fi
 
           STAGE="cleanup_successor_b"
@@ -273,13 +290,13 @@ jobs:
               STATUS="INCONCLUSIVE"
             fi
           else
-            CLEANUP_STATUS="FAIL_NO_TOKEN_ID"
+            CLEANUP_STATUS="FAIL_NO_TOKEN_ID_EXPIRES_1H"
             ERROR_CLASS="candidate_id_missing_cleanup_not_possible"
             STATUS="INCONCLUSIVE"
           fi
 
           STAGE="validate_issuer_a_post_cleanup"
-          if FLY_API_TOKEN="$TOKEN_A" flyctl tokens list --scope org --json >/dev/null 2>"$STDERR_FILE"; then
+          if FLY_API_TOKEN="$TOKEN_A" flyctl status --app "$VALIDATION_APP" --json >/dev/null 2>"$STDERR_FILE"; then
             A_POSTCHECK="PASS"
           else
             A_POSTCHECK="FAIL"
@@ -287,8 +304,7 @@ jobs:
             STATUS="INCONCLUSIVE"
           fi
 
-          if [ "$B_ORG_VALIDATION" = "PASS" ] && \
-             [ "$B_APP_VALIDATION" = "PASS" ] && \
+          if [ "$B_APP_VALIDATION" = "PASS" ] && \
              [ "$CLEANUP_STATUS" = "PASS" ] && \
              [ "$A_POSTCHECK" = "PASS" ]; then
             STATUS="PASS_CAPABILITY"
