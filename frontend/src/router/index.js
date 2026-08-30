@@ -20,6 +20,7 @@ import GovBIView from '../views/GovBIView.vue'
 import CodexView from '../views/CodexView.vue'
 import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
 import MonitoramentoOperacionalView from '../views/MonitoramentoOperacionalView.vue'
+import PentahoIntegracoesView from '../views/PentahoIntegracoesView.vue'
 import FigmaGithubView from '../views/FigmaGithubView.vue'
 import EstatisticasView from '../views/EstatisticasView.vue'
 import EstatisticaDetalheView from '../views/EstatisticaDetalheView.vue'
@@ -82,6 +83,7 @@ export const routes = [
   { path: '/arquitetura', component: ArquiteturaView, meta: { recurso: 'dashboard:read' } },
   { path: '/governanca', component: GovernancaEnterpriseView, meta: { recurso: 'dashboard:read' } },
   { path: '/monitoramento-operacional', component: MonitoramentoOperacionalView, meta: { recurso: 'dashboard:read' } },
+  { path: '/integracoes/pentaho', component: PentahoIntegracoesView, meta: { recurso: 'dashboard:read' } },
   { path: '/govbi-ia', alias: '/govbi', component: GovBIView, meta: { recurso: 'dashboard:read' } },
   { path: '/codex', component: CodexView, meta: { recurso: 'dashboard:read' } },
   { path: '/orquestrador-ia', component: OrquestradorIAView, meta: { recurso: 'dashboard:read' } },

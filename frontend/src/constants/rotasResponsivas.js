@@ -1,5 +1,5 @@
 /**
- * Rotas canônicas do incremento padrão ouro de responsividade (36 telas operacionais).
+ * Rotas canônicas do incremento padrão ouro de responsividade (37 telas operacionais).
  * Referência: docs/varreduras/REQSYS_VARREDURA_PADRAO_OURO_2026-06-20.md
  *
  * Os caminhos e identificadores técnicos permanecem estáveis; apenas os títulos apresentados
@@ -26,6 +26,7 @@ export const ROTAS_RESPONSIVAS = [
   { path: '/hub-lowcode', testId: 'route-hub-lowcode', titulo: 'Central de automações' },
   { path: '/hub-lowcode/copilot-memory/instalar', testId: 'route-copilot-memory-installer', titulo: 'Instalar memória do Copilot' },
   { path: '/painel-integracao', testId: 'route-painel-integracao', titulo: 'Painel de integração' },
+  { path: '/integracoes/pentaho', testId: 'route-integracoes-pentaho', titulo: 'Integrações Pentaho' },
   { path: '/arquitetura', testId: 'route-arquitetura', titulo: 'Arquitetura' },
   { path: '/govbi-ia', testId: 'route-govbi-ia', titulo: 'GovBI IA' },
   { path: '/codex', testId: 'route-codex', titulo: 'Codex controlado' },

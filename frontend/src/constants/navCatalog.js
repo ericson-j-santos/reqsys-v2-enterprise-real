@@ -63,6 +63,7 @@ export const NAV_TEMAS = [
     icon: 'mdi-connection',
     items: [
       { to: '/painel-integracao', icon: 'mdi-view-dashboard-outline', title: 'Integrações', tip: 'Planner, Teams, GitHub e histórico de eventos.' },
+      { to: '/integracoes/pentaho', icon: 'mdi-database-sync-outline', title: 'Pentaho', tip: 'Acompanhar lotes, processamento, quarentena e reprocessamento das cargas Pentaho.' },
       { to: '/hub-lowcode', icon: 'mdi-lightning-bolt-circle', title: 'Central de automações', tip: 'Power Automate, Power Apps, ReqSysAgent e administração do ciclo de entrega.' },
       { to: '/hub-lowcode/copilot-memory/instalar', icon: 'mdi-memory', title: 'Instalar memória do Copilot', tip: 'Instalar a memória do Copilot escolhendo ambiente, Planner, planilha e conexões.' },
       { to: '/figma-github', icon: 'mdi-vector-square', title: 'Figma e GitHub', tip: 'Sincronização entre Figma e GitHub com retorno em tela.' },
