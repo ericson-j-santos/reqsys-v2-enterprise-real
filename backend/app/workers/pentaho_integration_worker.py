@@ -4,8 +4,8 @@ import os
 import signal
 import threading
 
-import app.models  # noqa: F401
 from app.db import Base, SessionLocal, engine
+from app.models.pentaho_integration_batch import PentahoIntegrationBatch
 from app.services.pentaho_integration import (
     processar_proximo_lote,
     recuperar_lotes_abandonados,
@@ -50,7 +50,7 @@ def executar_ciclo() -> dict[str, object]:
 
 
 def executar(*, uma_vez: bool = False) -> int:
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine, tables=[PentahoIntegrationBatch.__table__])
     intervalo = _segundos_env('REQSYS_PENTAHO_WORKER_POLL_SECONDS', 1.0, 0.1)
     logger.info('pentaho_worker_started poll_seconds=%s once=%s', intervalo, uma_vez)
 
