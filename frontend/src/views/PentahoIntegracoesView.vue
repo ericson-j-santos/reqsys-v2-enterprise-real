@@ -1,5 +1,5 @@
 <template>
-  <section class="pentaho-integracoes pa-4">
+  <section class="pentaho-integracoes pa-4" data-testid="route-integracoes-pentaho">
     <div class="d-flex flex-wrap align-center justify-space-between ga-3 mb-4">
       <div>
         <h1 class="text-h4">Integrações &gt; Pentaho</h1>
