@@ -343,6 +343,7 @@ def recuperar_lotes_abandonados(
                 condicao_abandono,
             )
             .values(**valores)
+            .execution_options(synchronize_session=False)
         )
         if resultado.rowcount != 1:
             continue
