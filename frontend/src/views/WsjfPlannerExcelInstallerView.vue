@@ -4,7 +4,7 @@
       <div>
         <h1 class="text-h5 font-weight-bold">Instalar Planner → Excel WSJF</h1>
         <p class="text-body-2 text-medium-emphasis mb-0">
-          Escolha o ambiente DEV, o Planner e o arquivo WSJF.xlsx. O ReqSys resolve os identificadores e instala um único fluxo.
+          Escolha o ambiente de desenvolvimento, o Planner e o arquivo WSJF.xlsx. O ReqSys resolve os identificadores e instala um único fluxo.
         </p>
       </div>
       <v-chip :color="prontoParaValidar ? 'success' : 'warning'" variant="tonal">
@@ -27,28 +27,17 @@
         <v-card variant="outlined" class="mb-4">
           <v-card-title class="d-flex align-center ga-2">
             <v-avatar size="28" color="primary">1</v-avatar>
-            Ambiente DEV
+            Ambiente de desenvolvimento
           </v-card-title>
           <v-card-text>
-            <v-alert
-              :type="status.microsoft_configurado ? 'success' : 'warning'"
-              variant="tonal"
-              density="compact"
-              class="mb-3"
-            >
+            <v-alert :type="status.microsoft_configurado ? 'success' : 'warning'" variant="tonal" density="compact" class="mb-3">
               {{ status.microsoft_configurado
                 ? 'Identidade Microsoft do ReqSys disponível para descoberta.'
                 : 'O ReqSys ainda não possui identidade Microsoft configurada neste ambiente.' }}
             </v-alert>
 
-            <v-alert
-              v-if="status.microsoft_configurado && carregado && !ambientesDev.length"
-              type="warning"
-              variant="tonal"
-              density="compact"
-              class="mb-3"
-            >
-              Nenhum ambiente identificado como DEV foi encontrado. A tela não libera STG ou produção.
+            <v-alert v-if="status.microsoft_configurado && carregado && !ambientesDev.length" type="warning" variant="tonal" density="compact" class="mb-3">
+              Nenhum ambiente de desenvolvimento foi encontrado. A tela não libera homologação ou produção.
             </v-alert>
 
             <v-select
@@ -56,7 +45,7 @@
               :items="ambientesDev"
               item-title="nome"
               return-object
-              label="Ambiente Power Platform DEV"
+              label="Ambiente Power Platform de desenvolvimento"
               variant="outlined"
               :disabled="!status.microsoft_configurado"
               @update:model-value="carregarConexoes"
@@ -131,14 +120,7 @@
               <v-btn variant="outlined" prepend-icon="mdi-refresh" :disabled="!grupo" :loading="carregandoGrupo" @click="carregarGrupo">
                 Atualizar
               </v-btn>
-              <v-btn
-                v-if="arquivo?.web_url"
-                variant="text"
-                prepend-icon="mdi-open-in-new"
-                :href="arquivo.web_url"
-                target="_blank"
-                rel="noopener"
-              >
+              <v-btn v-if="arquivo?.web_url" variant="text" prepend-icon="mdi-open-in-new" :href="arquivo.web_url" target="_blank" rel="noopener">
                 Abrir WSJF.xlsx
               </v-btn>
             </div>
@@ -151,38 +133,16 @@
             Conexões Microsoft
           </v-card-title>
           <v-card-text>
-            <v-alert
-              v-if="ambiente && (!conexoes.planner.length || !conexoes.excel.length)"
-              type="warning"
-              variant="tonal"
-              density="compact"
-              class="mb-3"
-            >
+            <v-alert v-if="ambiente && (!conexoes.planner.length || !conexoes.excel.length)" type="warning" variant="tonal" density="compact" class="mb-3">
               Falta autorizar {{ !conexoes.planner.length ? 'Planner' : '' }}{{ !conexoes.planner.length && !conexoes.excel.length ? ' e ' : '' }}{{ !conexoes.excel.length ? 'Excel Online (Business)' : '' }} no Power Automate deste ambiente.
             </v-alert>
 
             <v-row dense>
               <v-col cols="12" md="6">
-                <v-select
-                  v-model="plannerConnection"
-                  :items="conexoes.planner"
-                  item-title="nome"
-                  return-object
-                  label="Planner"
-                  variant="outlined"
-                  @update:model-value="invalidarValidacao"
-                />
+                <v-select v-model="plannerConnection" :items="conexoes.planner" item-title="nome" return-object label="Planner" variant="outlined" @update:model-value="invalidarValidacao" />
               </v-col>
               <v-col cols="12" md="6">
-                <v-select
-                  v-model="excelConnection"
-                  :items="conexoes.excel"
-                  item-title="nome"
-                  return-object
-                  label="Excel Online (Business)"
-                  variant="outlined"
-                  @update:model-value="invalidarValidacao"
-                />
+                <v-select v-model="excelConnection" :items="conexoes.excel" item-title="nome" return-object label="Excel Online (Business)" variant="outlined" @update:model-value="invalidarValidacao" />
               </v-col>
             </v-row>
 
@@ -211,19 +171,11 @@
               Validação aprovada: perfil <strong>{{ validacao.profile }}</strong>, {{ validacao.flows?.length || 0 }} fluxo e tabela <strong>{{ validacao.excel?.table || contrato.excel_table || 'tbDemandas' }}</strong>.
             </v-alert>
 
-            <v-checkbox
-              v-model="confirmado"
-              label="Confirmo a instalação deste fluxo somente no ambiente DEV"
-              :disabled="!validacao"
-            />
+            <v-checkbox v-model="confirmado" label="Confirmo a instalação deste fluxo somente no ambiente de desenvolvimento" :disabled="!validacao" />
 
             <div class="d-flex flex-wrap ga-2">
-              <v-btn variant="outlined" :disabled="!prontoParaValidar" :loading="validando" @click="validar">
-                Validar
-              </v-btn>
-              <v-btn color="primary" prepend-icon="mdi-rocket-launch" :disabled="!prontoParaInstalar" :loading="implantando" @click="instalar">
-                Instalar fluxo
-              </v-btn>
+              <v-btn variant="outlined" :disabled="!prontoParaValidar" :loading="validando" @click="validar">Validar</v-btn>
+              <v-btn color="primary" prepend-icon="mdi-rocket-launch" :disabled="!prontoParaInstalar" :loading="implantando" @click="instalar">Instalar fluxo</v-btn>
             </div>
           </v-card-text>
         </v-card>
@@ -243,13 +195,9 @@
               <v-list-item title="Conexão Excel" :subtitle="excelConnection ? 'Conectada' : 'Pendente'" />
               <v-list-item title="Fluxos" subtitle="1 — Planner → Excel" />
             </v-list>
-
             <v-divider class="my-3" />
-
             <v-alert :type="status.alm_configurado ? 'success' : 'warning'" variant="tonal" density="compact">
-              {{ status.alm_configurado
-                ? 'Executor de instalação disponível.'
-                : 'Executor de instalação ainda não está configurado no ReqSys.' }}
+              {{ status.alm_configurado ? 'Executor de instalação disponível.' : 'Executor de instalação ainda não está configurado no ReqSys.' }}
             </v-alert>
           </v-card-text>
         </v-card>
@@ -257,15 +205,7 @@
         <v-card variant="outlined">
           <v-card-title>O que será preservado</v-card-title>
           <v-card-text>
-            <v-chip
-              v-for="campo in camposLocais"
-              :key="campo"
-              size="small"
-              variant="tonal"
-              class="mr-2 mb-2"
-            >
-              {{ campo }}
-            </v-chip>
+            <v-chip v-for="campo in camposLocais" :key="campo" size="small" variant="tonal" class="mr-2 mb-2">{{ campo }}</v-chip>
             <p class="text-body-2 text-medium-emphasis mb-0">
               Alterações do Planner atualizam os campos sincronizados, mas não substituem estes campos preenchidos diretamente no Excel.
             </p>
@@ -325,11 +265,9 @@ const camposLocais = computed(() => contrato.value.local_fields_preserved || [
 ])
 
 const prontoParaValidar = computed(() => Boolean(
-  ambiente.value?.id && ambiente.value?.url &&
-  grupo.value?.id && plano.value?.id &&
-  arquivo.value?.id && arquivo.value?.drive_id &&
-  plannerConnection.value?.id && excelConnection.value?.id &&
-  status.value.alm_configurado,
+  ambiente.value?.id && ambiente.value?.url && grupo.value?.id && plano.value?.id &&
+  arquivo.value?.id && arquivo.value?.drive_id && plannerConnection.value?.id &&
+  excelConnection.value?.id && status.value.alm_configurado,
 ))
 
 const prontoParaInstalar = computed(() => Boolean(
@@ -437,7 +375,7 @@ async function validar() {
   try {
     const resposta = await validarWsjfPlannerExcel(payload())
     if (resposta.profile !== 'wsjf_planner_excel_simples' || resposta.flows?.length !== 1) {
-      throw new Error('O ReqSys retornou um contrato diferente do perfil WSJF simples esperado.')
+      throw new Error('O ReqSys retornou uma configuração diferente da instalação WSJF simples esperada.')
     }
     validacao.value = resposta
   } catch (e) {
