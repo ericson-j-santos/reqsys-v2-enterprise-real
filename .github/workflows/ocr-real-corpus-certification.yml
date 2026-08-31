@@ -1,0 +1,56 @@
+name: OCR Real Corpus Certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_path:
+        description: Caminho absoluto do manifesto externo aprovado no runner controlado
+        required: true
+        type: string
+      corpus_root:
+        description: Caminho absoluto do corpus externo anonimizado/homologado
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ocr-real-corpus-certification
+  cancel-in-progress: false
+
+jobs:
+  certify-real-corpus:
+    runs-on: [self-hosted, ocr-real-corpus]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validar pré-requisitos locais
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "${{ inputs.manifest_path }}"
+          test -d "${{ inputs.corpus_root }}"
+          command -v tesseract >/dev/null
+          command -v pdftoppm >/dev/null
+          command -v pdfinfo >/dev/null
+          tesseract --list-langs | grep -qx 'por'
+      - name: Certificar corpus real anonimizado
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ocr_real_corpus_certify.py \
+            --manifest "${{ inputs.manifest_path }}" \
+            --corpus-root "${{ inputs.corpus_root }}" \
+            --output artifacts/ocr-real-corpus-certification.json
+      - name: Publicar somente evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-real-corpus-certification
+          path: artifacts/ocr-real-corpus-certification.json
+          if-no-files-found: error
+          retention-days: 30
