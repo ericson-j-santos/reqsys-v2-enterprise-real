@@ -1,0 +1,15 @@
+title = "Política Gitleaks do ReqSys"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Valores sintéticos usados para validar mascaramento e configuração de CI"
+targetRules = ["generic-api-key"]
+regexTarget = "match"
+regexes = [
+  '''ci-placeholder-secret-min-32-chars-long''',
+  '''abc123segredo''',
+  '''SEGREDO-UNICO-NAO-DEVE-VAZAR-9f8e7d''',
+  '''OUTRO-MARCADOR-SECRETO-XYZ123''',
+]
