@@ -3,13 +3,6 @@ name: BACEN Production Formal Gate
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "scripts/validate_bacen_production_gate.py"
-      - "tests/test_bacen_production_gate.py"
-      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
-      - "governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml"
-      - ".github/workflows/bacen-production-formal-gate.yml"
-      - "governance/merge/current-sha-required-workflows.json"
   push:
     branches: [main]
     paths:
