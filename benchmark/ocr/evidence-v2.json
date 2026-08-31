@@ -1,0 +1,103 @@
+{
+  "schema_version": "2.0.0",
+  "corpus_version": "ocr-evidence-v2-synthetic-2026-08",
+  "purpose": "governed-synthetic-evidence-gate",
+  "contains_personal_data": false,
+  "automatic_incorporation_allowed": false,
+  "cases": [
+    {
+      "case_id": "searchable-pdf",
+      "scenario": "PDF pesquisável",
+      "kind": "searchable_pdf",
+      "expected_tokens": ["REQUISITO", "DEVE", "CADASTRAR"],
+      "min_pages": 1,
+      "expect_ocr_success": true,
+      "expect_human_review": true
+    },
+    {
+      "case_id": "scanned-pdf",
+      "scenario": "PDF totalmente digitalizado",
+      "kind": "scanned_pdf",
+      "expected_tokens": ["DOCUMENTO", "DIGITALIZADO", "DEVERA"],
+      "min_pages": 1,
+      "expect_ocr_success": true,
+      "expect_human_review": true
+    },
+    {
+      "case_id": "multi-document-pdf",
+      "scenario": "PDF contendo várias imagens/documentos",
+      "kind": "multi_document_pdf",
+      "expected_tokens": ["CONTRATO", "COMPROVANTE"],
+      "min_pages": 2,
+      "expect_ocr_success": true,
+      "expect_human_review": true
+    },
+    {
+      "case_id": "rotated-document",
+      "scenario": "Documento inclinado/rotacionado",
+      "kind": "rotated_image",
+      "expected_tokens": ["DOCUMENTO", "ROTACIONADO"],
+      "min_pages": 1,
+      "expect_ocr_success": true,
+      "expect_human_review": true
+    },
+    {
+      "case_id": "low-resolution",
+      "scenario": "Baixa resolução",
+      "kind": "low_resolution_image",
+      "expected_tokens": ["BAIXA", "RESOLUCAO"],
+      "min_pages": 1,
+      "expect_ocr_success": true,
+      "expect_human_review": true
+    },
+    {
+      "case_id": "mobile-photo",
+      "scenario": "Foto de celular",
+      "kind": "mobile_photo_image",
+      "expected_tokens": ["FOTO", "CELULAR"],
+      "min_pages": 1,
+      "expect_ocr_success": true,
+      "expect_human_review": true
+    },
+    {
+      "case_id": "identity-proof-bundle",
+      "scenario": "CPF, RG/CIN, CNH e comprovantes",
+      "kind": "identity_proof_bundle",
+      "expected_tokens": ["CPF", "RG", "CIN", "CNH", "COMPROVANTE"],
+      "min_pages": 4,
+      "expect_ocr_success": true,
+      "expect_human_review": true,
+      "synthetic_identifiers_only": true
+    },
+    {
+      "case_id": "blank-page",
+      "scenario": "Página sem conteúdo útil",
+      "kind": "blank_page",
+      "expected_tokens": [],
+      "min_pages": 1,
+      "expect_ocr_success": false,
+      "expected_failure": "NO_USABLE_TEXT",
+      "expect_human_review": false
+    },
+    {
+      "case_id": "unknown-document",
+      "scenario": "Documento desconhecido",
+      "kind": "unknown_document",
+      "expected_tokens": ["DOCUMENTO", "DESCONHECIDO"],
+      "min_pages": 1,
+      "expect_ocr_success": true,
+      "expect_human_review": true,
+      "expect_no_candidates": true
+    },
+    {
+      "case_id": "ambiguous-ocr",
+      "scenario": "Campos ambíguos ou OCR incorreto",
+      "kind": "ambiguous_ocr",
+      "expected_tokens": ["DADO", "AMBIGUO"],
+      "min_pages": 1,
+      "expect_ocr_success": true,
+      "expect_human_review": true,
+      "must_not_auto_accept": true
+    }
+  ]
+}
