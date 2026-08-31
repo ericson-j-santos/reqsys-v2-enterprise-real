@@ -1,15 +1,50 @@
+import asyncio
 import json
 
 import pytest
 
+from app.api.wsjf_planner_excel import wsjf_planner_excel_contract
+from app.core.config import settings
+from app.services import wsjf_planner_excel_provisioning as provisioning
 from app.services.wsjf_planner_excel_provisioning import (
     LOCAL_FIELDS,
     PROFILE,
     TABLE,
+    despachar,
     gerar_definicao,
     montar_bundle,
     validar_definicao,
 )
+
+
+class FakeResponse:
+    def __init__(self, status_code=204, text=''):
+        self.status_code = status_code
+        self.text = text
+
+
+class FakeAsyncClient:
+    response = FakeResponse()
+    calls = []
+
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def post(self, url, **kwargs):
+        self.__class__.calls.append((url, kwargs))
+        return self.__class__.response
+
+    @classmethod
+    def reset(cls, status_code=204, text=''):
+        cls.response = FakeResponse(status_code=status_code, text=text)
+        cls.calls = []
 
 
 def _payload(**overrides):
@@ -82,3 +117,63 @@ def test_atualizacao_preserva_campos_locais_excel():
 def test_perfil_falha_fechado_fora_de_dev():
     with pytest.raises(ValueError, match='restrito a DEV'):
         montar_bundle(_payload(target_environment='prod'))
+
+
+def test_contract_expoe_invariantes_do_mvp():
+    result = wsjf_planner_excel_contract(_auth=object())
+    data = result['data']
+
+    assert data['profile'] == PROFILE
+    assert data['excel_table'] == TABLE
+    assert data['writes_back_to_planner'] is False
+    assert set(data['local_fields_preserved']) == LOCAL_FIELDS
+
+
+def test_despachar_sem_confirmacao_apenas_valida():
+    result = asyncio.run(despachar(_payload(confirmar=False)))
+
+    assert result['dispatched'] is False
+    assert result['status'] == 'validado_sem_implantar'
+    assert result['bundle']['profile'] == PROFILE
+
+
+def test_despachar_confirmado_falha_fechado_sem_token(monkeypatch):
+    monkeypatch.setattr(settings, 'github_pat', '')
+
+    result = asyncio.run(despachar(_payload(confirmar=True)))
+
+    assert result['dispatched'] is False
+    assert result['status'] == 'pending_configuration'
+    assert 'GITHUB_PAT' in result['erro']
+
+
+def test_despachar_confirmado_envia_workflow_sem_ativar(monkeypatch):
+    monkeypatch.setattr(settings, 'github_pat', 'token-teste')
+    monkeypatch.setattr(settings, 'github_alm_repo', 'ericson-j-santos/reqsys-powerplatform-alm')
+    FakeAsyncClient.reset(status_code=204)
+    monkeypatch.setattr(provisioning.httpx, 'AsyncClient', FakeAsyncClient)
+
+    result = asyncio.run(despachar(_payload(confirmar=True)))
+
+    assert result['dispatched'] is True
+    assert result['status'] == 'implantacao_solicitada'
+    assert len(FakeAsyncClient.calls) == 1
+    url, kwargs = FakeAsyncClient.calls[0]
+    assert url.endswith('/actions/workflows/wsjf-planner-excel-provisioning.yml/dispatches')
+    assert kwargs['json']['inputs']['activate_after_import'] == 'false'
+    assert kwargs['json']['inputs']['dry_run'] == 'false'
+    assert kwargs['headers']['Authorization'] == 'Bearer token-teste'
+
+
+def test_despachar_propaga_erro_http_sanitizado(monkeypatch):
+    monkeypatch.setattr(settings, 'github_pat', 'token-teste')
+    monkeypatch.setattr(settings, 'github_alm_repo', 'ericson-j-santos/reqsys-powerplatform-alm')
+    FakeAsyncClient.reset(status_code=422, text='payload invalido')
+    monkeypatch.setattr(provisioning.httpx, 'AsyncClient', FakeAsyncClient)
+
+    result = asyncio.run(despachar(_payload(confirmar=True)))
+
+    assert result['dispatched'] is False
+    assert result['status'] == 'erro_dispatch'
+    assert result['status_code'] == 422
+    assert result['erro'] == 'payload invalido'
