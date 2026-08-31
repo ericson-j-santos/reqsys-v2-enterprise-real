@@ -21,12 +21,14 @@ from app.api import (  # noqa: E402
     requisitos,
     teams_gateway,
     teams_github_actions,
+    wsjf_planner_excel,
 )
 
 diagramas.router.include_router(diagram_version_governance.router)
 hub_lowcode.router.include_router(prompt_development_coordinator.router)
 hub_lowcode.router.include_router(copilot_memory.router)
 hub_lowcode.router.include_router(copilot_memory_install_discovery.router)
+hub_lowcode.router.include_router(wsjf_planner_excel.router)
 teams_gateway.router.include_router(notificacoes.router)
 teams_gateway.router.include_router(teams_github_actions.router)
 requisitos.api_router.include_router(levantamento_requisitos.router)
