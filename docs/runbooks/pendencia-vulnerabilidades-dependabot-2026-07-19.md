@@ -1,7 +1,8 @@
 # Pendência — Vulnerabilidades de dependências (Dependabot, 2026-07-19)
 
 Status: **PARCIALMENTE RESOLVIDO** — correções seguras aplicadas; 2 itens
-ficam pendentes por exigirem migração major.
+ficam pendentes por exigirem migração major. Revalidado em 31/08/2026 pela
+pipeline GitLab `2804025088`.
 
 Contexto: GitHub reportou 97 alertas do Dependabot no branch padrão
 (`main`). O token usado neste repositório não tem permissão de leitura de
@@ -16,17 +17,24 @@ varredura foi feita localmente por ecossistema com `pip-audit`, `npm audit` e
 | --- | --- | --- | --- |
 | `requirements-docs.txt` | `pymdown-extensions==10.16` (2 CVEs) | `==10.21.3` | bump direto |
 | `runtime/requirements.txt` | `pytest>=8.2.0,<9.0.0` (CVE, upper bound excluía o fix) | `>=9.0.3,<10.0.0` | ampliar range |
-| `examples/monitorador_apis_python/requirements.txt` | `aiohttp==3.9.5` (30+ CVEs), `fastapi==0.111.0`→`starlette` 0.37.2 vulnerável (transitivo), `pytest==8.2.2` | `aiohttp==3.14.1`, `fastapi==0.137.2` (puxa `starlette>=1.3.1`), `pytest==9.0.3`, `pytest-asyncio==1.3.0`, `pytest-cov==7.0.0` (bump necessário por conflito de resolução com o novo pytest) | bump direto |
+| `examples/monitorador_apis_python/requirements.txt` | `aiohttp==3.9.5` (CVE-2025-69223 e CVE-2026-69244 na varredura de 31/08) | `aiohttp==3.14.3` | bump direto |
+| `backend/requirements.txt` | `python-multipart==0.0.20` (CVE-2026-24486, CVE-2026-42561 e CVE-2026-53539) | `python-multipart==0.0.30` | bump direto |
 | `backend-dotnet/tests/.../ReqSys.Api.Tests.csproj` | `System.Text.Json` transitivo em 8.0.0 (2 CVEs High) via `Microsoft.AspNetCore.Mvc.Testing` | pin direto `System.Text.Json 8.0.6` | `dotnet test`: 9/9 passou |
 | `frontend-vuetify` | 10 vulns (2 crit/4 high/4 mod) | 6 restantes (ver abaixo) | `npm audit fix` (sem `--force`) — `brace-expansion`, `form-data`, `js-cookie`, `ws` corrigidos; só `package-lock.json` mudou |
 | `frontend-angular` | 58 vulns (2 crit/32 high/20 mod/4 low) | 50 restantes (ver abaixo) | `npm audit fix` (sem `--force`) eliminou as 2 críticas (`shell-quote`, `websocket-driver`) sem tocar `package.json` |
 
-`backend/requirements.txt`, `backend/requirements-audit.txt`,
-`backend/requirements-rag.txt`, `frontend/package.json` (Vue) e o
+`backend/requirements-audit.txt`, `backend/requirements-rag.txt`,
+`frontend/package.json` (Vue) e o
 `package.json` da raiz: **já estavam limpos**, nenhuma ação necessária.
 `backend-dotnet/src/ReqSys.Api/ReqSys.Api.csproj`: já estava limpo.
 
-Todos os testes automatizados relevantes rodaram depois das correções:
+A revalidação de 31/08/2026 encontrou divergência entre este registro e os
+manifests: os bumps de `aiohttp` e `python-multipart` ainda não estavam na
+`main`. As versões acima refletem o hotfix efetivamente aplicado. As demais
+atualizações anteriormente citadas para o exemplo Python permanecem fora
+deste hotfix e devem ser tratadas somente com teste de compatibilidade próprio.
+
+Na correção de julho, todos os testes automatizados relevantes rodaram:
 `pytest` no `backend` (1362 passed — 3 falhas pré-existentes e não
 relacionadas, ver nota abaixo), `dotnet test` no `backend-dotnet` (9/9),
 `vitest` no `frontend-vuetify` (79/79).
