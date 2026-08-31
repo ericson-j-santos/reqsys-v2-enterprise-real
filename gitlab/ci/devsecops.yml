@@ -14,11 +14,11 @@ gitlab_devsecops_baseline:
 secret_detection_gitleaks:
   stage: security
   image:
-    name: zricethezav/gitleaks:latest
+    name: zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
     entrypoint: [""]
   script:
     - mkdir -p audit
-    - gitleaks detect --source . --no-git --redact
+    - gitleaks detect --source . --no-git --redact --config .gitleaks.toml
         --report-format json --report-path audit/gitlab-secret-detection-report.json
         --exit-code 1
   artifacts:
@@ -61,12 +61,12 @@ frontend_dependency_scanning_npm_audit:
 container_scanning_trivy:
   stage: security
   image:
-    name: aquasec/trivy:latest
+    name: aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
     entrypoint: [""]
   script:
     - mkdir -p audit
-    - trivy fs --exit-code 0 --severity HIGH,CRITICAL --format json --output audit/gitlab-trivy-report.json backend frontend
-    - trivy fs --exit-code 0 --severity HIGH,CRITICAL backend frontend
+    - trivy fs --exit-code 0 --severity HIGH,CRITICAL --format json --output audit/gitlab-trivy-report.json .
+    - trivy fs --exit-code 0 --severity HIGH,CRITICAL .
   artifacts:
     when: always
     expire_in: 30 days
