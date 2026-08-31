@@ -73,3 +73,28 @@ jobs:
           name: ocr-benchmark
           path: artifacts/ocr-benchmark.json
           if-no-files-found: error
+  evidence-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar runtime do Evidence Gate v2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-por imagemagick poppler-utils fonts-dejavu-core
+          python -m pip install --disable-pip-version-check reportlab==5.0.1
+      - name: Executar os 10 cenários documentais governados
+        run: |
+          python scripts/ocr_evidence_gate_v2.py \
+            --output artifacts/ocr-evidence-v2.json \
+            --workdir artifacts/ocr-evidence-v2-work
+      - name: Publicar evidência sem texto OCR bruto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-evidence-v2
+          path: artifacts/ocr-evidence-v2.json
+          if-no-files-found: error
