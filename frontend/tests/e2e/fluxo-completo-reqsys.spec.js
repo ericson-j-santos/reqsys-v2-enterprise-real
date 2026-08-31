@@ -91,7 +91,7 @@ test('fluxo completo: recebe, valida, estrutura e publica requisito preservando 
 
   await expect(page.getByText('Fluxo executado com sucesso!')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByText('REQ-E2E-501')).toBeVisible()
-  await expect(page.getByText('SOL-E2E-501')).toBeVisible()
+  await expect(page.getByText('SOL-E2E-501', { exact: true })).toBeVisible()
   await expect(page.getByText(/issues\/9901/)).toBeVisible()
 
   expect(chamadas.map(({ etapa }) => etapa)).toEqual([
