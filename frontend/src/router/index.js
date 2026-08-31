@@ -16,6 +16,7 @@ import ArquiteturaView from '../views/ArquiteturaView.vue'
 import GovernancaEnterpriseView from '../views/GovernancaEnterpriseView.vue'
 import HubLowCodeView from '../views/HubLowCodeView.vue'
 import CopilotMemoryInstallerView from '../views/CopilotMemoryInstallerView.vue'
+import WsjfPlannerExcelInstallerView from '../views/WsjfPlannerExcelInstallerView.vue'
 import GovBIView from '../views/GovBIView.vue'
 import CodexView from '../views/CodexView.vue'
 import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
@@ -68,6 +69,12 @@ export const routes = [
     path: '/hub-lowcode/copilot-memory/instalar',
     name: 'copilot-memory-instalar',
     component: CopilotMemoryInstallerView,
+    meta: { recurso: 'auditoria:read' },
+  },
+  {
+    path: '/hub-lowcode/wsjf/planner-excel/instalar',
+    name: 'wsjf-planner-excel-instalar',
+    component: WsjfPlannerExcelInstallerView,
     meta: { recurso: 'auditoria:read' },
   },
   { path: '/painel-integracao', component: PainelIntegracaoView, meta: { recurso: 'dashboard:read' } },
