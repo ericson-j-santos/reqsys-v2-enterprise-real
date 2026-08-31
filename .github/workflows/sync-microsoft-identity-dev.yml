@@ -1,0 +1,95 @@
+name: Sincronizar identidade Microsoft DEV
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/sync-microsoft-identity-dev.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sync-microsoft-identity-dev
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sincronizar identidade Microsoft no ReqSys DEV
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Resolver credencial Fly da API DEV
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-dev-deploy
+          consumer: github-actions:fly-dev
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/microsoft-identity-dev-fly-credential.json
+
+      - name: Validar segredos de origem sem expor valores
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in POWER_PLATFORM_TENANT_ID POWER_PLATFORM_CLIENT_ID POWER_PLATFORM_CLIENT_SECRET; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Segredo obrigatório ausente: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Sincronizar identidade Microsoft no runtime DEV
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          flyctl secrets set \
+            AZURE_TENANT_ID="$POWER_PLATFORM_TENANT_ID" \
+            AZURE_CLIENT_ID="$POWER_PLATFORM_CLIENT_ID" \
+            AZURE_CLIENT_SECRET="$POWER_PLATFORM_CLIENT_SECRET" \
+            -a reqsys-api-dev
+
+      - name: Aguardar API DEV saudável
+        run: |
+          set -euo pipefail
+          for tentativa in $(seq 1 45); do
+            if curl --fail --silent --show-error --max-time 5 https://reqsys-api-dev.fly.dev/health >/dev/null; then
+              echo "API DEV saudável após sincronização."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::API DEV não voltou saudável após sincronização da identidade Microsoft."
+          exit 1
+
+      - name: Confirmar presença das variáveis no runtime sem revelar segredos
+        run: |
+          set -euo pipefail
+          output="$(flyctl ssh console -a reqsys-api-dev -C \"python -c 'import os; keys=[\\\"AZURE_TENANT_ID\\\",\\\"AZURE_CLIENT_ID\\\",\\\"AZURE_CLIENT_SECRET\\\"]; print(\\\"configured\\\" if all(os.getenv(k) for k in keys) else \\\"missing\\\")'\")"
+          echo "$output"
+          echo "$output" | grep -q 'configured'
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: microsoft-identity-dev-sync
+          path: audit/microsoft-identity-dev-fly-credential.json
+          if-no-files-found: warn
