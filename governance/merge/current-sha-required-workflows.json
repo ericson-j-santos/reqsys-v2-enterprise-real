@@ -22,6 +22,7 @@
   "production_touched": false,
   "optional_when_not_registered": [
     "PR Quality Review",
-    "Test Quality Gate — Padrão Ouro"
+    "Test Quality Gate — Padrão Ouro",
+    "BACEN Production Formal Gate"
   ]
 }
