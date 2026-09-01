@@ -1,3 +1,5 @@
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -23,6 +25,16 @@ class OpsDashboardWorkflowEfficiencyIntegrationTests(unittest.TestCase):
         for fragment in required_fragments:
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, content)
+
+    def test_direct_workflow_execution_resolves_imports(self):
+        result = subprocess.run(
+            [sys.executable, "scripts/inject_workflow_efficiency_visual_card.py", "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Injeta cards Workflow Efficiency", result.stdout)
 
     def test_injection_happens_before_artifact_packaging(self):
         content = WORKFLOW.read_text(encoding="utf-8")
