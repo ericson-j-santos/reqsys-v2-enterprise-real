@@ -1,0 +1,38 @@
+{
+  "versao": "1.0.0",
+  "status": "APROVADO",
+  "checks": [
+    {
+      "nome": "planilha_xlsx_com_3_tabelas",
+      "ok": true,
+      "detalhe": {
+        "ok": true,
+        "erros": [],
+        "tabelas": [
+          "tbMemoriaCopilot",
+          "tbAtualizacoesPlanner",
+          "tbHistoricoCopilot"
+        ]
+      }
+    },
+    {
+      "nome": "tres_fluxos",
+      "ok": true,
+      "detalhe": [
+        "powerautomate/01_flow_planner_to_excel_memory.json",
+        "powerautomate/02_flow_excel_to_planner_restrito.json",
+        "powerautomate/03_flow_memory_health_restrito.json"
+      ]
+    },
+    {
+      "nome": "sem_dependencias_tecnicas_bloqueadas",
+      "ok": true,
+      "detalhe": []
+    },
+    {
+      "nome": "arquivos_essenciais",
+      "ok": true,
+      "detalhe": []
+    }
+  ]
+}

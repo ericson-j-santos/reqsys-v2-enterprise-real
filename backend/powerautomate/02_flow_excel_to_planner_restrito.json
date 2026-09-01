@@ -1,0 +1,19 @@
+{
+  "id": "flow_excel_to_planner_restrito",
+  "nome": "Copilot Memory Restrito - Excel para Planner",
+  "gatilho": "Recorrencia a cada 15 minutos",
+  "conexoes": [
+    "Excel Online (Business)",
+    "SharePoint",
+    "Planner"
+  ],
+  "acoes": [
+    "Ler tbAtualizacoesPlanner e filtrar AtualizarPlanner=SIM.",
+    "Reler a tarefa atual do Planner antes de escrever.",
+    "Comparar assinatura atual com PlannerAppliedSignature.",
+    "Se divergir, marcar CONFLITO e nao atualizar o Planner.",
+    "Se igual, atualizar somente campos autorizados.",
+    "Atualizar assinatura, limpar AtualizarPlanner e registrar historico."
+  ],
+  "regra": "Conflito bloqueia escrita; nunca aplicar ultimo-vence."
+}

@@ -1,0 +1,32 @@
+FLUXO 1: Copilot Memory Restrito - Planner para Excel
+Crie um fluxo agendado no Power Automate. Recorrencia a cada 15 minutos. Use somente: Planner, Excel Online (Business), SharePoint.
+Acoes obrigatorias:
+- Listar tarefas do plano configurado.
+- Normalizar PlannerTaskId, titulo, status, percentual e prazo.
+- Montar PlannerSignature deterministica.
+- Localizar tbMemoriaCopilot por PlannerTaskId.
+- Inserir se ausente sem sobrescrever campos de memoria humana.
+- Se houver comando pendente e assinatura divergente, marcar CONFLITO.
+- Em mudanca valida, incrementar Versao e acrescentar tbHistoricoCopilot.
+Regra: PlannerTaskId + PlannerSignature; nunca marcar AtualizarPlanner=SIM.
+
+
+FLUXO 2: Copilot Memory Restrito - Excel para Planner
+Crie um fluxo agendado no Power Automate. Recorrencia a cada 15 minutos. Use somente: Excel Online (Business), SharePoint, Planner.
+Acoes obrigatorias:
+- Ler tbAtualizacoesPlanner e filtrar AtualizarPlanner=SIM.
+- Reler a tarefa atual do Planner antes de escrever.
+- Comparar assinatura atual com PlannerAppliedSignature.
+- Se divergir, marcar CONFLITO e nao atualizar o Planner.
+- Se igual, atualizar somente campos autorizados.
+- Atualizar assinatura, limpar AtualizarPlanner e registrar historico.
+Regra: Conflito bloqueia escrita; nunca aplicar ultimo-vence.
+
+
+FLUXO 3: Copilot Memory Restrito - Saude
+Crie um fluxo agendado no Power Automate. Recorrencia a cada 60 minutos. Use somente: Excel Online (Business), SharePoint.
+Acoes obrigatorias:
+- Contar registros com PlannerSyncStatus=CONFLITO ou ERRO.
+- Registrar CorrelationId da execucao no historico.
+- Falhar de forma visivel quando houver conflito ou erro acima do limite.
+Regra: Somente leitura/registro; nunca altera tarefa do Planner.

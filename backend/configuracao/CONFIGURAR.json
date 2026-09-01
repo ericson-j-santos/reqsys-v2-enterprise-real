@@ -1,0 +1,21 @@
+{
+  "versao": "1.0.0",
+  "perfil": "copilot_memory_corporativo_restrito",
+  "preencher": {
+    "PLANNER_PLAN_ID": "PNloCgoZgU-en-wvbWv24GUAGSlw",
+    "SHAREPOINT_OU_ONEDRIVE": "C:/Users/erics/OneDrive/CopilotMemory.xlsx",
+    "SYNC_INTERVAL_MINUTES": 15
+  },
+  "dependencias": [
+    "Planner",
+    "Excel Online (Business)",
+    "SharePoint ou OneDrive",
+    "Power Automate"
+  ],
+  "nao_requer": [
+    "Dataverse",
+    "Power Apps",
+    "API personalizada",
+    "SQL Server"
+  ]
+}

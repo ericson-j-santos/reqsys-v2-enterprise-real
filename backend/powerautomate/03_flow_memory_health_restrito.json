@@ -1,0 +1,15 @@
+{
+  "id": "flow_memory_health_restrito",
+  "nome": "Copilot Memory Restrito - Saude",
+  "gatilho": "Recorrencia a cada 60 minutos",
+  "conexoes": [
+    "Excel Online (Business)",
+    "SharePoint"
+  ],
+  "acoes": [
+    "Contar registros com PlannerSyncStatus=CONFLITO ou ERRO.",
+    "Registrar CorrelationId da execucao no historico.",
+    "Falhar de forma visivel quando houver conflito ou erro acima do limite."
+  ],
+  "regra": "Somente leitura/registro; nunca altera tarefa do Planner."
+}

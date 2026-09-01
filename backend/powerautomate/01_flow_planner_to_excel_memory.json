@@ -1,0 +1,20 @@
+{
+  "id": "flow_planner_to_excel_memory",
+  "nome": "Copilot Memory Restrito - Planner para Excel",
+  "gatilho": "Recorrencia a cada 15 minutos",
+  "conexoes": [
+    "Planner",
+    "Excel Online (Business)",
+    "SharePoint"
+  ],
+  "acoes": [
+    "Listar tarefas do plano configurado.",
+    "Normalizar PlannerTaskId, titulo, status, percentual e prazo.",
+    "Montar PlannerSignature deterministica.",
+    "Localizar tbMemoriaCopilot por PlannerTaskId.",
+    "Inserir se ausente sem sobrescrever campos de memoria humana.",
+    "Se houver comando pendente e assinatura divergente, marcar CONFLITO.",
+    "Em mudanca valida, incrementar Versao e acrescentar tbHistoricoCopilot."
+  ],
+  "regra": "PlannerTaskId + PlannerSignature; nunca marcar AtualizarPlanner=SIM."
+}
