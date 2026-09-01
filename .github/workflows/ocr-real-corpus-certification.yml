@@ -5,8 +5,10 @@ on:
   pull_request:
     paths:
       - 'scripts/ocr_real_corpus_certify.py'
+      - 'scripts/ocr_real_corpus_prepare.py'
       - 'scripts/ocr_real_corpus_policy.py'
       - 'backend/ocr_tests/test_real_corpus_certify.py'
+      - 'backend/ocr_tests/test_real_corpus_prepare.py'
       - 'docs/architecture/ocr-real-corpus-certification-v1.md'
       - '.github/workflows/ocr-real-corpus-certification.yml'
 
@@ -22,10 +24,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validar sintaxe do certificador e política
-        run: python -m py_compile scripts/ocr_real_corpus_certify.py scripts/ocr_real_corpus_policy.py
+      - name: Validar sintaxe do certificador, preparador e política
+        run: python -m py_compile scripts/ocr_real_corpus_certify.py scripts/ocr_real_corpus_prepare.py scripts/ocr_real_corpus_policy.py
       - name: Executar testes do contrato de corpus real
         working-directory: backend
         run: |
           python -m pip install --disable-pip-version-check pytest==9.0.3
-          pytest -q ocr_tests/test_real_corpus_certify.py
+          pytest -q ocr_tests/test_real_corpus_certify.py ocr_tests/test_real_corpus_prepare.py
