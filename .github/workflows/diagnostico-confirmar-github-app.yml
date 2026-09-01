@@ -1,0 +1,41 @@
+name: Diagnostico - Confirmar GitHub App reqsys-stack-rebase
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  confirmar:
+    name: Gerar token e criar/remover branch descartavel
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Gerar token temporario da GitHub App
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+
+      - name: Criar branch descartavel com o token da App
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/heads/diag/app-token-ok-${{ github.run_id }}" \
+            -f sha="$BASE_SHA"
+          echo "Branch descartavel criada com sucesso usando o token da App."
+
+      - name: Remover branch descartavel
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/diag/app-token-ok-${{ github.run_id }}" || true
