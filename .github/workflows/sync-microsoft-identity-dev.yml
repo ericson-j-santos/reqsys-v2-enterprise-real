@@ -83,7 +83,7 @@ jobs:
       - name: Confirmar presença das variáveis no runtime sem revelar segredos
         run: |
           set -euo pipefail
-          output="$(flyctl ssh console -a reqsys-api-dev -C \"python -c 'import os; keys=[\\\"AZURE_TENANT_ID\\\",\\\"AZURE_CLIENT_ID\\\",\\\"AZURE_CLIENT_SECRET\\\"]; print(\\\"configured\\\" if all(os.getenv(k) for k in keys) else \\\"missing\\\")'\")"
+          output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import os; keys=[\"AZURE_TENANT_ID\",\"AZURE_CLIENT_ID\",\"AZURE_CLIENT_SECRET\"]; print(\"configured\" if all(os.getenv(k) for k in keys) else \"missing\")'")"
           echo "$output"
           echo "$output" | grep -q 'configured'
 
