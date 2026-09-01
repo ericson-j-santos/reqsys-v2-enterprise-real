@@ -23,6 +23,8 @@ Acesse `http://127.0.0.1:5173/codex` (login demo com e-mail).
 
 ## VS Code + Continue
 
+Sim — existe extensão de IA gratuita no VS Code. Neste repositório, a opção recomendada é a extensão **Continue** usando **Ollama** local.
+
 ```bash
 mkdir -p ~/.continue
 cp infra/codex-local/continue/config.yaml ~/.continue/config.yaml
