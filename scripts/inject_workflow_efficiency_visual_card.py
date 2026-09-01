@@ -13,7 +13,14 @@ import json
 from pathlib import Path
 from typing import Any
 
-from scripts.inject_executive_promotion_advisor_card import patch_dashboard as patch_advisor_dashboard
+try:
+    from scripts.inject_executive_promotion_advisor_card import (
+        patch_dashboard as patch_advisor_dashboard,
+    )
+except ModuleNotFoundError:
+    from inject_executive_promotion_advisor_card import (
+        patch_dashboard as patch_advisor_dashboard,
+    )
 
 MARKER = 'id="workflow-efficiency-visual-card"'
 
