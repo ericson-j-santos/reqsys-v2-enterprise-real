@@ -129,6 +129,13 @@ function isLikelyHumanLiteral(value) {
   if (/^[a-z0-9_.:/-]+$/i.test(text) && text === text.toLowerCase()) return false
   if (/^[A-Z0-9_.:/-]+$/u.test(text) && !/\s/u.test(text)) return false
   if (/^[a-z0-9_.:/-]*\$\{[^}]+\}[a-z0-9_.:/-]*$/i.test(text)) return false
+  // STRING_LITERAL não entende aninhamento de template literals (backtick):
+  // um `${a}/rota${cond ? `?${b}` : ''}` é cortado no backtick interno e
+  // sobra um "${" sem "}" correspondente — sinal de que isto não é o
+  // conteúdo real de uma string, e sim um recorte indevido de código.
+  const opens = (text.match(/\$\{/g) || []).length
+  const closes = (text.match(/\}/g) || []).length
+  if (opens !== closes) return false
   return /\s|[À-ÿ]|[.!?,;:()]/u.test(text) || /^[A-Z][a-zÀ-ÿ]+$/u.test(text)
 }
 
@@ -225,16 +232,23 @@ function walk(directory) {
   return files
 }
 
-let changedFiles = 0
-for (const filePath of walk(SOURCE_ROOT)) {
-  const before = fs.readFileSync(filePath, 'utf8')
-  const after = path.extname(filePath).toLowerCase() === '.vue'
-    ? transformVue(before)
-    : transformJavascript(before)
-  if (after === before) continue
-  fs.writeFileSync(filePath, after, 'utf8')
-  changedFiles += 1
-  console.log(`corrigido: ${path.relative(path.resolve(SOURCE_ROOT, '..'), filePath)}`)
+export { isLikelyHumanLiteral, replaceHumanText, transformJavascript, transformVue }
+
+function run() {
+  let changedFiles = 0
+  for (const filePath of walk(SOURCE_ROOT)) {
+    const before = fs.readFileSync(filePath, 'utf8')
+    const after = path.extname(filePath).toLowerCase() === '.vue'
+      ? transformVue(before)
+      : transformJavascript(before)
+    if (after === before) continue
+    fs.writeFileSync(filePath, after, 'utf8')
+    changedFiles += 1
+    console.log(`corrigido: ${path.relative(path.resolve(SOURCE_ROOT, '..'), filePath)}`)
+  }
+  console.log(`Arquivos corrigidos: ${changedFiles}`)
 }
 
-console.log(`Arquivos corrigidos: ${changedFiles}`)
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  run()
+}
