@@ -1,0 +1,259 @@
+name: Aceite Real da Jornada do Usuário DEV
+
+on:
+  workflow_run:
+    workflows: ["Fly DEV Fast Deploy"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      feature:
+        description: "Jornada real a validar"
+        required: true
+        type: choice
+        default: wsjf_planner_excel_simples
+        options:
+          - wsjf_planner_excel_simples
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+env:
+  FEATURE: wsjf_planner_excel_simples
+  FRONTEND_URL: https://reqsys-app-dev.fly.dev
+  API_URL: https://reqsys-api-dev.fly.dev
+  FLY_APP: reqsys-api-dev
+  EVIDENCE_DIR: audit/user-journey/wsjf-planner-excel-dev
+
+concurrency:
+  group: user-journey-acceptance-dev-wsjf
+  cancel-in-progress: true
+
+jobs:
+  real-user-journey:
+    name: Jornada real WSJF — sem mocks
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 30
+    steps:
+      - name: Resolver SHA publicado
+        id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            echo "sha=$WORKFLOW_RUN_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Preparar diretório de evidências
+        run: mkdir -p "$EVIDENCE_DIR"
+
+      - name: Instalar dependências backend
+        run: |
+          set -euo pipefail
+          bash .github/scripts/install-unixodbc-ci.sh
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Instalar dependências frontend e Chromium
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Testes automatizados relevantes
+        id: automated
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python -m pytest \
+            tests/test_user_journey_acceptance_gate.py \
+            tests/test_wsjf_business_effect_gate.py \
+            backend/tests/test_wsjf_planner_excel_provisioning.py \
+            -q
+          cd frontend
+          npx vitest run src/services/__tests__/wsjfPlannerExcelInstaller.test.js
+
+      - name: Validar deploy real e SHA publicado
+        id: deploy
+        continue-on-error: true
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          python scripts/validate_publication_sync.py \
+            --environment dev \
+            --expected-sha "$TARGET_SHA" \
+            --timeout 30 \
+            --output "$EVIDENCE_DIR/publication-sync.json"
+          python scripts/validate_public_runtime.py \
+            --base-url "$API_URL" \
+            --environment dev \
+            --include-optional-evidence \
+            --output "$EVIDENCE_DIR/public-runtime.json"
+
+      - name: Browser real no DEV sem mocks
+        id: browser
+        continue-on-error: true
+        working-directory: frontend
+        env:
+          REAL_USER_JOURNEY: "true"
+          E2E_BASE_URL: ${{ env.FRONTEND_URL }}
+        run: |
+          set -euo pipefail
+          npx playwright test tests/e2e/wsjf-planner-excel-live.spec.js --reporter=line
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Resolver credencial Fly da API DEV
+        id: flycred
+        continue-on-error: true
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-dev-deploy
+          consumer: github-actions:fly-dev
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/user-journey/wsjf-planner-excel-dev/fly-credential.json
+
+      - name: Integrações Microsoft reais no runtime
+        id: integrations
+        if: steps.flycred.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          payload="$(base64 -w0 backend/app/microsoft_identity_e2e.py)"
+          output="$(flyctl ssh console -a "$FLY_APP" --command "python -c 'import base64; exec(compile(base64.b64decode(\"$payload\"), \"microsoft_identity_e2e.py\", \"exec\"))'")"
+          result="$(echo "$output" | tail -n 1)"
+          printf '%s\n' "$result" > "$EVIDENCE_DIR/microsoft-integrations.json"
+          echo "$result" | grep -q '"status":"PASS"'
+          echo "$result" | grep -q '"check":"powerplatform_environments"'
+          echo "$result" | grep -q '"check":"graph_groups"'
+
+      - name: Validar efeito de negócio real
+        id: business
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          # Este arquivo só deve ser criado por um probe real que tenha observado
+          # Planner → Power Automate → tbDemandas. Enquanto não existir, o gate
+          # permanece vermelho e 100% é proibido.
+          python scripts/wsjf_business_effect_gate.py \
+            --evidence "$EVIDENCE_DIR/business-effect-input.json" \
+            --output "$EVIDENCE_DIR/business-effect-result.json" \
+            --max-age-hours 24
+
+      - name: Consolidar cinco camadas de aceite
+        if: always()
+        env:
+          AUTOMATED_OUTCOME: ${{ steps.automated.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+          FLYCRED_OUTCOME: ${{ steps.flycred.outcome }}
+          INTEGRATIONS_OUTCOME: ${{ steps.integrations.outcome }}
+          BUSINESS_OUTCOME: ${{ steps.business.outcome }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          evidence_dir = Path(os.environ['EVIDENCE_DIR'])
+          evidence_dir.mkdir(parents=True, exist_ok=True)
+
+          def passed(name):
+              return os.environ.get(name) == 'success'
+
+          automated = passed('AUTOMATED_OUTCOME')
+          deploy = passed('DEPLOY_OUTCOME')
+          browser = passed('BROWSER_OUTCOME')
+          integrations = passed('FLYCRED_OUTCOME') and passed('INTEGRATIONS_OUTCOME') and browser
+          business = passed('BUSINESS_OUTCOME')
+          run_url = os.environ['RUN_URL']
+
+          data = {
+              'feature': os.environ['FEATURE'],
+              'environment': 'dev',
+              'stages': {
+                  'automated_tests': {
+                      'status': 'passed' if automated else 'blocked',
+                      'real': False,
+                      'mocked': False,
+                      'evidence': run_url + '#automated-tests',
+                  },
+                  'real_deploy': {
+                      'status': 'passed' if deploy else 'blocked',
+                      'real': deploy,
+                      'mocked': False,
+                      'evidence': run_url + '#real-deploy',
+                  },
+                  'live_browser_no_mocks': {
+                      'status': 'passed' if browser else 'blocked',
+                      'real': browser,
+                      'mocked': False,
+                      'evidence': run_url + '#live-browser',
+                  },
+                  'real_external_integrations': {
+                      'status': 'passed' if integrations else 'blocked',
+                      'real': integrations,
+                      'mocked': False,
+                      'evidence': run_url + '#external-integrations',
+                  },
+                  'business_effect': {
+                      'status': 'passed' if business else 'blocked',
+                      'real': business,
+                      'mocked': False,
+                      'evidence': run_url + '#business-effect',
+                  },
+              },
+          }
+          (evidence_dir / 'acceptance-input.json').write_text(
+              json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8'
+          )
+          PY
+
+      - name: Gate final — 100% somente com jornada real completa
+        if: always()
+        run: |
+          python scripts/user_journey_acceptance_gate.py \
+            --evidence "$EVIDENCE_DIR/acceptance-input.json" \
+            --policy config/user-journey-acceptance-policy.json \
+            --output "$EVIDENCE_DIR/acceptance-result.json" \
+            --strict
+
+      - name: Publicar evidências da jornada real
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: user-journey-acceptance-dev-wsjf-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_DIR }}/
+          if-no-files-found: error
+          retention-days: 30
