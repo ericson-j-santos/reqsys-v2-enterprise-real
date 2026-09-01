@@ -17,6 +17,20 @@ O fluxo é fail-closed: ausência de aprovação, hash divergente, dado pessoal 
 7. Produzir evidência sanitizada sem texto OCR bruto.
 8. Tornar DEV→STG elegível somente quando todos os critérios forem atendidos.
 
+## Preparação assistida, sem fabricar evidência
+
+O script `scripts/ocr_real_corpus_prepare.py` pode ser executado somente no ambiente controlado para inventariar os documentos e calcular os hashes SHA-256 automaticamente.
+
+```bash
+python scripts/ocr_real_corpus_prepare.py \
+  --corpus-root /secure/ocr/corpus \
+  --output /secure/ocr/manifest-draft.json
+```
+
+O rascunho gerado permanece deliberadamente bloqueado para certificação. O script não presume anonimização, não inventa aprovação, não cria verdade conhecida e não cria referência de revisão humana. Esses campos ficam pendentes até uma pessoa autorizada revisar cada caso.
+
+O preparador também bloqueia corpus ou manifesto localizados dentro do repositório. Nenhum conteúdo documental é copiado, extraído ou publicado durante essa preparação; somente metadados de inventário e SHA-256 são escritos no rascunho externo.
+
 ## Manifesto externo
 
 Exemplo estrutural, sem dados reais:
