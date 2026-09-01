@@ -51,7 +51,7 @@
               @update:model-value="carregarConexoes"
             >
               <template #item="{ props, item }">
-                <v-list-item v-bind="props" :subtitle="item.raw.url || item.raw.id" />
+                <v-list-item v-bind="props" :subtitle="item.raw?.url || item.raw?.id" />
               </template>
             </v-select>
           </v-card-text>
@@ -74,7 +74,7 @@
               @update:model-value="carregarGrupo"
             >
               <template #item="{ props, item }">
-                <v-list-item v-bind="props" :subtitle="item.raw.email || item.raw.id" />
+                <v-list-item v-bind="props" :subtitle="item.raw?.email || item.raw?.id" />
               </template>
             </v-select>
 

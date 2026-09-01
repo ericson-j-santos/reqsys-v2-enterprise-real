@@ -33,7 +33,14 @@ test.describe('aceite real WSJF Planner → Excel', () => {
       // um clique na opção visível. Não usa force:true nem intercepta HTTP.
       await combo.focus()
       await combo.press('ArrowDown')
-      const option = page.getByRole('option').first()
+      // Escopado ao menu deste combobox (via aria-controls): a página tem outros
+      // elementos com role="option" (ex.: navegação lateral) e um locator global
+      // pode resolver para o item errado.
+      const menuId = await combo.getAttribute('aria-controls')
+      const menu = page.locator(`#${menuId}`)
+      // Quando há um valor esperado (ex.: o grupo real do WSJF entre vários grupos
+      // do tenant), seleciona a opção que bate com ele em vez de sempre a primeira.
+      const option = valorEsperado ? menu.getByRole('option', { name: valorEsperado }).first() : menu.getByRole('option').first()
       await expect(option).toBeVisible({ timeout: 20_000 })
       const escolhido = (await option.textContent())?.trim() || ''
       await option.click()
@@ -43,7 +50,7 @@ test.describe('aceite real WSJF Planner → Excel', () => {
     }
 
     await escolherPrimeiro('Ambiente Power Platform de desenvolvimento')
-    await escolherPrimeiro('Grupo ou equipe Microsoft 365')
+    await escolherPrimeiro('Grupo ou equipe Microsoft 365', /ReqSys WSJF DEV/i)
     await escolherPrimeiro('Planner WSJF')
     await escolherPrimeiro('Planilha WSJF', /WSJF\.xlsx/i)
     await escolherPrimeiro('Planner')

@@ -188,8 +188,14 @@ def _upload_workbook(client: httpx.Client, token: str, target: dict[str, str], d
 def _wait_row(client: httpx.Client, token: str, target: dict[str, str], task_id: str, deadline: float, *, title: str | None = None, marker: str | None = None) -> dict[str, Any]:
     last: dict[str, Any] = {"matching_rows": 0}
     while time.time() < deadline:
-        data, _ = _download_workbook(client, token, target)
-        last = _read_task_row(data, task_id)
+        try:
+            data, _ = _download_workbook(client, token, target)
+            last = _read_task_row(data, task_id)
+        except Exception:
+            # Leitura logo após criação/gravação pode encontrar o arquivo
+            # ainda em processamento no SharePoint; trata como não pronto.
+            time.sleep(15)
+            continue
         values = last.get("values") or {}
         title_ok = title is None or str(values.get("Título") or "") == title
         marker_ok = marker is None or all(str(values.get(field) or "") == marker for field in LOCAL_MARKER_FIELDS)
