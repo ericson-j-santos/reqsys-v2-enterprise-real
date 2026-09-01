@@ -67,7 +67,7 @@ Os limites podem ser endurecidos no manifesto, mas não devem ser relaxados sem 
 
 ## Evidência publicada
 
-O artefato `ocr-real-corpus-certification.json` contém somente:
+O arquivo `ocr-real-corpus-certification.json` contém somente:
 
 - IDs dos casos;
 - tipo documental;
@@ -85,7 +85,7 @@ Texto OCR bruto e texto esperado não são publicados.
 
 ## Execução
 
-O workflow `OCR Real Corpus Certification` é manual e exige runner controlado com o rótulo `ocr-real-corpus` e acesso local ao corpus externo.
+A política atual do ReqSys não autoriza runners self-hosted. Por isso, o GitHub Actions valida apenas o contrato, a sintaxe e os testes do certificador em runner hospedado pelo GitHub. A execução com corpus real acontece fora do GitHub Actions, em ambiente controlado que tenha acesso local ao corpus externo.
 
 ```bash
 python scripts/ocr_real_corpus_certify.py \
@@ -93,6 +93,8 @@ python scripts/ocr_real_corpus_certify.py \
   --corpus-root /secure/ocr/corpus \
   --output artifacts/ocr-real-corpus-certification.json
 ```
+
+O resultado sanitizado pode ser anexado posteriormente à trilha de evidências de release, sem incluir corpus, texto OCR bruto ou verdade conhecida.
 
 ## Critério DEV → STG
 
