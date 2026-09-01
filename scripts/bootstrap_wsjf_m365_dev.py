@@ -121,13 +121,14 @@ def _graph(
 
 
 def _find_or_create_group(client: httpx.Client, token: str) -> tuple[dict[str, Any], bool]:
+    escaped_group_name = GROUP_NAME.replace("'", "''")
     response = _graph(
         client,
         "GET",
         "/groups",
         token,
         params={
-            "$filter": f"displayName eq '{GROUP_NAME.replace("'", "''")}'",
+            "$filter": f"displayName eq '{escaped_group_name}'",
             "$select": "id,displayName,groupTypes,mailNickname",
             "$top": "10",
         },
@@ -231,6 +232,7 @@ def _find_or_create_bucket(client: httpx.Client, token: str, plan_id: str) -> tu
 def _xlsx_has_table(data: bytes) -> bool:
     try:
         from io import BytesIO
+
         with zipfile.ZipFile(BytesIO(data)) as archive:
             for name in archive.namelist():
                 if not name.startswith("xl/tables/") or not name.endswith(".xml"):
@@ -298,7 +300,11 @@ def main() -> int:
             group_id = str(group.get("id") or "")
             if not group_id:
                 raise BootstrapError("Grupo Microsoft 365 sem id")
-            evidence["group"] = {"name": GROUP_NAME, "status": "created" if group_created else "reused", "id_hash": _hash(group_id)}
+            evidence["group"] = {
+                "name": GROUP_NAME,
+                "status": "created" if group_created else "reused",
+                "id_hash": _hash(group_id),
+            }
 
             drive = _wait_drive(client, token, group_id)
             drive_id = str(drive.get("id") or "")
@@ -309,11 +315,19 @@ def main() -> int:
             plan_id = str(plan.get("id") or "")
             if not plan_id:
                 raise BootstrapError("Planner sem id")
-            evidence["planner"] = {"name": PLAN_NAME, "status": "created" if plan_created else "reused", "id_hash": _hash(plan_id)}
+            evidence["planner"] = {
+                "name": PLAN_NAME,
+                "status": "created" if plan_created else "reused",
+                "id_hash": _hash(plan_id),
+            }
 
             bucket, bucket_created = _find_or_create_bucket(client, token, plan_id)
             bucket_id = str(bucket.get("id") or "")
-            evidence["bucket"] = {"name": BUCKET_NAME, "status": "created" if bucket_created else "reused", "id_hash": _hash(bucket_id)}
+            evidence["bucket"] = {
+                "name": BUCKET_NAME,
+                "status": "created" if bucket_created else "reused",
+                "id_hash": _hash(bucket_id),
+            }
 
             workbook, workbook_created = _find_or_create_file(client, token, drive_id, args.template)
             file_id = str(workbook.get("id") or "")
