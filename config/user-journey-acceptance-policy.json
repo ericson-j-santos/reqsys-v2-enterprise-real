@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0.0",
+  "policy": "real_user_journey_acceptance",
+  "description": "Uma funcionalidade ou aplicação só pode ser declarada 100% aceita quando a jornada real do usuário foi comprovada ponta a ponta no ambiente real, sem mocks nas etapas operacionais.",
+  "required_stages": [
+    "automated_tests",
+    "real_deploy",
+    "live_browser_no_mocks",
+    "real_external_integrations",
+    "business_effect"
+  ],
+  "stage_labels": {
+    "automated_tests": "Testes automatizados passaram",
+    "real_deploy": "Deploy real passou",
+    "live_browser_no_mocks": "Browser real sem mocks passou",
+    "real_external_integrations": "Integrações externas reais passaram",
+    "business_effect": "Efeito de negócio foi comprovado"
+  },
+  "pass_statuses": ["pass", "passed", "success"],
+  "rules": {
+    "forbid_100_without_all_stages": true,
+    "forbid_mocked_operational_evidence": true,
+    "fail_closed_when_evidence_is_missing": true,
+    "real_evidence_required_for": [
+      "real_deploy",
+      "live_browser_no_mocks",
+      "real_external_integrations",
+      "business_effect"
+    ],
+    "mock_forbidden_for": [
+      "live_browser_no_mocks",
+      "real_external_integrations",
+      "business_effect"
+    ]
+  }
+}
