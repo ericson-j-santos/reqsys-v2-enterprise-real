@@ -126,7 +126,7 @@ jobs:
           E2E_BASE_URL: ${{ env.FRONTEND_URL }}
         run: |
           set -euo pipefail
-          npx playwright test tests/e2e/wsjf-planner-excel-live.spec.js --project=chromium --reporter=line
+          npx playwright test tests/e2e/wsjf-planner-excel-live.spec.js --reporter=line
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
