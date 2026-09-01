@@ -18,34 +18,45 @@ test.describe('aceite real WSJF Planner → Excel', () => {
     await expect(page.getByText('Identidade Microsoft do ReqSys disponível para descoberta.')).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText('O ReqSys ainda não possui identidade Microsoft configurada neste ambiente.')).toHaveCount(0)
 
-    async function escolherPrimeiro(nome) {
+    async function escolherPrimeiro(nome, valorEsperado = null) {
       const combo = page.getByRole('combobox', { name: nome, exact: true })
       await expect(combo).toBeEnabled({ timeout: 20_000 })
-      await combo.click()
+
+      // Vuetify mantém um <input role="combobox"> sob o wrapper visual. Clicar
+      // diretamente nesse input pode ser interceptado pelo v-field. Se a tela já
+      // auto-selecionou o único recurso real, apenas validamos e seguimos.
+      const atual = (await combo.inputValue().catch(() => '')).trim()
+      if (atual) {
+        if (valorEsperado) expect(atual).toMatch(valorEsperado)
+        return atual
+      }
+
+      // Teclado exercita o mesmo componente real sem usar force:true e sem
+      // mascarar problemas de interação do usuário.
+      await combo.focus()
+      await combo.press('ArrowDown')
       const option = page.getByRole('option').first()
       await expect(option).toBeVisible({ timeout: 20_000 })
-      await option.click()
+      const escolhido = (await option.textContent())?.trim() || ''
+      await combo.press('Enter')
+      await expect(combo).not.toHaveValue('', { timeout: 20_000 })
+      if (valorEsperado) await expect(combo).toHaveValue(valorEsperado, { timeout: 20_000 })
+      return escolhido || (await combo.inputValue())
     }
 
     await escolherPrimeiro('Ambiente Power Platform de desenvolvimento')
     await escolherPrimeiro('Grupo ou equipe Microsoft 365')
     await escolherPrimeiro('Planner WSJF')
-
-    const wsjf = page.getByRole('combobox', { name: 'Planilha WSJF', exact: true })
-    await expect(wsjf).toBeEnabled({ timeout: 20_000 })
-    await wsjf.click()
-    await expect(page.getByRole('option', { name: /WSJF\.xlsx/i }).first()).toBeVisible({ timeout: 20_000 })
-    await page.getByRole('option', { name: /WSJF\.xlsx/i }).first().click()
-
+    await escolherPrimeiro('Planilha WSJF', /WSJF\.xlsx/i)
     await escolherPrimeiro('Planner')
     await escolherPrimeiro('Excel Online (Business)')
 
     await expect(page.getByText('Pronto para validar')).toBeVisible({ timeout: 20_000 })
     await page.getByRole('button', { name: 'Validar', exact: true }).click()
     await expect(page.getByText(/Validação aprovada/)).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByText(/tbDemandas/)).toBeVisible()
+    await expect(page.getByText(/tbDemandas/).first()).toBeVisible()
 
-    // O teste não intercepta chamadas HTTP e não usa page.route().
+    // Este teste não intercepta chamadas HTTP e não usa page.route().
     // Instalação/mutação fica fora desta etapa; o efeito de negócio é um gate separado.
   })
 })
