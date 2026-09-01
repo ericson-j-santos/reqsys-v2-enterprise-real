@@ -11,21 +11,46 @@ gitlab_environments_baseline:
       - audit/gitlab-environments-report.json
       - audit/gitlab-environments-report.md
 
-review_app_placeholder:
+# Review app real em Fly.io (nao placeholder). Reaproveita o mesmo FLY_API_TOKEN
+# ja usado por deploy_staging_fly (credential fly-api-hml-deploy no cofre) - nenhuma
+# credencial nova. Um app efemero por MR, config copiada de fly.staging.toml.
+#
+# NAO VALIDADO CONTRA UMA CONTA FLY REAL ainda (sem credencial disponivel nesta
+# sessao para testar de ponta a ponta) - rode manualmente uma vez e confira o
+# resultado antes de confiar neste job para MRs reais. Ver
+# gitlab/docs/GITLAB_OPERATING_MODEL.md para o racional da escolha de ambiente.
+review_app_deploy:
   stage: deploy
   image: alpine:3.20
+  resource_group: reqsys-review-$CI_MERGE_REQUEST_IID
   environment:
     name: review/$CI_COMMIT_REF_SLUG
-    url: https://review-$CI_COMMIT_REF_SLUG.example.com
-    on_stop: stop_review_app_placeholder
+    url: https://reqsys-review-mr-$CI_MERGE_REQUEST_IID.fly.dev
+    on_stop: review_app_stop
     auto_stop_in: 3 days
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
+  before_script:
+    - apk add --no-cache curl bash
+    - curl -L https://fly.io/install.sh | sh
+    - export FLYCTL_INSTALL="/root/.fly"
+    - export PATH="$FLYCTL_INSTALL/bin:$PATH"
   script:
-    - echo "Review App placeholder governado para GitLab Edition"
+    - |
+      if [ -z "$FLY_API_TOKEN" ]; then
+        echo "FLY_API_TOKEN não configurado nas variáveis de CI deste projeto GitLab." >&2
+        echo "Reaproveita a mesma variável de deploy_staging_fly - configure uma vez." >&2
+        exit 1
+      fi
+    - export FLYCTL_INSTALL="/root/.fly"
+    - export PATH="$FLYCTL_INSTALL/bin:$PATH"
+    - export APP_NAME="reqsys-review-mr-$CI_MERGE_REQUEST_IID"
+    - cd backend
+    - flyctl apps create "$APP_NAME" --org personal 2>&1 | tee /tmp/fly-create.log || (grep -qi "already been taken\|already exists" /tmp/fly-create.log && echo "App $APP_NAME já existe, seguindo para deploy." || (cat /tmp/fly-create.log && exit 1))
+    - flyctl deploy --remote-only -c fly.staging.toml --app "$APP_NAME"
 
-stop_review_app_placeholder:
+review_app_stop:
   stage: deploy
   image: alpine:3.20
   environment:
@@ -34,5 +59,15 @@ stop_review_app_placeholder:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
+  before_script:
+    - apk add --no-cache curl bash
+    - curl -L https://fly.io/install.sh | sh
   script:
-    - echo "Stop Review App placeholder governado para GitLab Edition"
+    - |
+      if [ -z "$FLY_API_TOKEN" ]; then
+        echo "FLY_API_TOKEN não configurado nas variáveis de CI deste projeto GitLab." >&2
+        exit 1
+      fi
+    - export FLYCTL_INSTALL="/root/.fly"
+    - export PATH="$FLYCTL_INSTALL/bin:$PATH"
+    - flyctl apps destroy "reqsys-review-mr-$CI_MERGE_REQUEST_IID" --yes

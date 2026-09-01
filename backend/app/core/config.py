@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     reqsys_rag_llm_model: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_LLM_MODEL', '') or '')
     reqsys_rag_embedding_provider: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_EMBEDDING_PROVIDER', '') or '')
     reqsys_rag_embedding_api_key: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_EMBEDDING_API_KEY', '') or '')
-    reqsys_rag_embedding_model: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_EMBEDDING_MODEL', 'text-embedding-3-small') or 'text-embedding-3-small')
+    reqsys_rag_embedding_model: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_EMBEDDING_MODEL', '') or '')
 
     # Fila de autonomia operacional — memória somente em DEV/testes; Redis Streams em STG/PROD.
     operational_queue_provider: str = Field(default_factory=lambda: get_secret('OPERATIONAL_QUEUE_PROVIDER', '') or '')
