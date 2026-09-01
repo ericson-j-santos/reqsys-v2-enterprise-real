@@ -61,7 +61,7 @@ REQUIRED_INCLUDE_TERMS = {
         "container_scanning_trivy",
         "artifacts:",
     ],
-    "gitlab/ci/environments.yml": ["gitlab_environments_baseline", "review_app_placeholder", "stop_review_app_placeholder", "environment:"],
+    "gitlab/ci/environments.yml": ["gitlab_environments_baseline", "review_app_deploy", "review_app_stop", "FLY_API_TOKEN", "environment:"],
     "gitlab/ci/evidence.yml": [
         "gitlab_evidence_summary",
         "gitlab_operational_evidence_gate",

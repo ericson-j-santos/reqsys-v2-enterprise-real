@@ -78,6 +78,53 @@ def test_gateway_gemini_monta_payload_padrao():
     assert chamadas[0][2]['x-goog-api-key'] == 'AIza-test'
 
 
+def test_gateway_embeddings_openai_monta_payload_e_ordena_por_index():
+    chamadas = []
+
+    def fake_post(url, payload, headers=None, timeout=45):
+        chamadas.append((url, payload, headers, timeout))
+        return {
+            'data': [
+                {'index': 1, 'embedding': [0.2, 0.3]},
+                {'index': 0, 'embedding': [0.1, 0.4]},
+            ]
+        }
+
+    gateway = LLMGateway(post_json=fake_post)
+    vetores = gateway.gerar_embeddings_openai(api_key='sk-test', model='text-embedding-3-small', textos=['a', 'b'])
+
+    assert chamadas[0][0] == 'https://api.openai.com/v1/embeddings'
+    assert chamadas[0][1] == {'model': 'text-embedding-3-small', 'input': ['a', 'b']}
+    assert chamadas[0][2]['Authorization'] == 'Bearer sk-test'
+    assert vetores == [[0.1, 0.4], [0.2, 0.3]]
+
+
+def test_gateway_embeddings_openai_sem_api_key_levanta_erro():
+    gateway = LLMGateway(post_json=lambda *a, **k: {})
+    try:
+        gateway.gerar_embeddings_openai(api_key='', model='m', textos=['a'])
+    except RuntimeError as exc:
+        assert 'REQSYS_RAG_EMBEDDING_API_KEY' in str(exc)
+    else:
+        raise AssertionError('Era esperado RuntimeError')
+
+
+def test_gateway_embeddings_gemini_monta_payload_e_normaliza_modelo():
+    chamadas = []
+
+    def fake_post(url, payload, headers=None, timeout=45):
+        chamadas.append((url, payload, headers, timeout))
+        return {'embeddings': [{'values': [0.5, 0.6]}]}
+
+    gateway = LLMGateway(post_json=fake_post)
+    vetores = gateway.gerar_embeddings_gemini(api_key='AIza-test', model='text-embedding-004', textos=['a'])
+
+    assert chamadas[0][0] == 'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents'
+    assert chamadas[0][1] == {'requests': [{'model': 'models/text-embedding-004', 'content': {'parts': [{'text': 'a'}]}}]}
+    assert chamadas[0][2]['x-goog-api-key'] == 'AIza-test'
+    assert vetores == [[0.5, 0.6]]
+
+
 def _fake_response(payload):
     resp = MagicMock()
     resp.raise_for_status.return_value = None

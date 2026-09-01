@@ -2,6 +2,7 @@ from app.core.config import settings
 from app.services.rag_governado import (
     PROVIDER_HASH_LOCAL,
     ChunkRAG,
+    VectorStoreMemoria,
     criar_chunks,
     gerar_resposta_llm,
     indexar_chunks_persistentes,
@@ -11,7 +12,6 @@ from app.services.rag_governado import (
     resolver_provider_embedding_ativo,
     responder_rag_governado,
     responder_rag_governado_persistido,
-    VectorStoreMemoria,
 )
 
 
@@ -177,6 +177,30 @@ def test_resolver_provider_embedding_ativo_configurado_usa_externo(monkeypatch):
     monkeypatch.setattr(settings, 'reqsys_rag_embedding_provider', 'openai')
     monkeypatch.setattr(settings, 'reqsys_rag_embedding_api_key', 'chave-fake')
     assert resolver_provider_embedding_ativo() == 'openai'
+
+
+def test_resolver_provider_embedding_ativo_gemini_e_suportado(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_provider', 'gemini')
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_api_key', 'chave-fake')
+    assert resolver_provider_embedding_ativo() == 'gemini'
+
+
+def test_embeddings_lote_usa_modelo_padrao_gratuito_do_provider_quando_nao_configurado(monkeypatch):
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_provider', 'gemini')
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_api_key', 'chave-fake')
+    monkeypatch.setattr(settings, 'reqsys_rag_embedding_model', '')
+
+    modelos_recebidos = []
+
+    class GatewayGeminiFake:
+        def gerar_embeddings_gemini(self, *, api_key, model, textos):
+            modelos_recebidos.append(model)
+            return [[1.0, 0.0] for _ in textos]
+
+    from app.services.rag_governado import _embeddings_lote
+
+    _embeddings_lote(['texto'], provider='gemini', gateway=GatewayGeminiFake())
+    assert modelos_recebidos == ['text-embedding-004']
 
 
 class GatewayEmbeddingFake:

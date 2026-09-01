@@ -291,3 +291,29 @@ class LLMGateway:
             timeout=timeout,
         )
         return extrair_resposta_gemini(data)
+
+    def gerar_embeddings_gemini(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        textos: list[str],
+        timeout: int = 45,
+    ) -> list[list[float]]:
+        if not api_key:
+            raise RuntimeError('GEMINI_API_KEY ausente')
+        modelo_normalizado = model if model.startswith('models/') else f'models/{model}'
+        payload = {
+            'requests': [
+                {'model': modelo_normalizado, 'content': {'parts': [{'text': texto}]}}
+                for texto in textos
+            ]
+        }
+        headers = {'x-goog-api-key': api_key, 'Content-Type': 'application/json'}
+        data = self._post_json(
+            f'https://generativelanguage.googleapis.com/v1beta/{modelo_normalizado}:batchEmbedContents',
+            payload,
+            headers=headers,
+            timeout=timeout,
+        )
+        return [[float(valor) for valor in item['values']] for item in data['embeddings']]

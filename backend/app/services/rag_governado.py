@@ -27,6 +27,13 @@ ENGINE_PERSISTIDO = 'semantic-hash-embedding+postgres-vector-store-v1'
 PROVIDER_HASH_LOCAL = 'hash-local-256'
 _METODOS_EMBEDDING_POR_PROVIDER = {
     'openai': 'gerar_embeddings_openai',
+    'gemini': 'gerar_embeddings_gemini',
+}
+# Gemini oferece camada gratuita para embeddings (text-embedding-004); usado quando
+# REQSYS_RAG_EMBEDDING_MODEL nao e configurado explicitamente para o provider ativo.
+_MODELO_EMBEDDING_PADRAO_POR_PROVIDER = {
+    'openai': 'text-embedding-3-small',
+    'gemini': 'text-embedding-004',
 }
 
 _SYSTEM_PROMPT_LLM_RAG = (
@@ -176,7 +183,7 @@ def _embeddings_lote(textos: list[str], *, provider: str, gateway: LLMGateway | 
     gw = gateway or LLMGateway()
     vetores = getattr(gw, metodo)(
         api_key=settings.reqsys_rag_embedding_api_key,
-        model=settings.reqsys_rag_embedding_model or '',
+        model=settings.reqsys_rag_embedding_model or _MODELO_EMBEDDING_PADRAO_POR_PROVIDER.get(provider, ''),
         textos=textos,
     )
     if len(vetores) != len(textos):
