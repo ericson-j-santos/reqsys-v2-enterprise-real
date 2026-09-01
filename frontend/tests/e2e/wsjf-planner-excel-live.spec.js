@@ -22,23 +22,21 @@ test.describe('aceite real WSJF Planner → Excel', () => {
       const combo = page.getByRole('combobox', { name: nome, exact: true })
       await expect(combo).toBeEnabled({ timeout: 20_000 })
 
-      // Vuetify mantém um <input role="combobox"> sob o wrapper visual. Clicar
-      // diretamente nesse input pode ser interceptado pelo v-field. Se a tela já
-      // auto-selecionou o único recurso real, apenas validamos e seguimos.
+      // Se a tela já auto-selecionou o único recurso real, apenas validamos e seguimos.
       const atual = (await combo.inputValue().catch(() => '')).trim()
       if (atual) {
         if (valorEsperado) expect(atual).toMatch(valorEsperado)
         return atual
       }
 
-      // Teclado exercita o mesmo componente real sem usar force:true e sem
-      // mascarar problemas de interação do usuário.
+      // Abre o menu pelo teclado e conclui a mesma ação que o usuário faria com
+      // um clique na opção visível. Não usa force:true nem intercepta HTTP.
       await combo.focus()
       await combo.press('ArrowDown')
       const option = page.getByRole('option').first()
       await expect(option).toBeVisible({ timeout: 20_000 })
       const escolhido = (await option.textContent())?.trim() || ''
-      await combo.press('Enter')
+      await option.click()
       await expect(combo).not.toHaveValue('', { timeout: 20_000 })
       if (valorEsperado) await expect(combo).toHaveValue(valorEsperado, { timeout: 20_000 })
       return escolhido || (await combo.inputValue())
