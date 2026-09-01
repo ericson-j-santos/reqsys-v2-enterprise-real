@@ -4,6 +4,15 @@ on:
   workflow_run:
     workflows: ["Fly DEV Fast Deploy"]
     types: [completed]
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/user-journey-acceptance-dev.yml"
+      - "scripts/wsjf_business_effect_probe.py"
+      - "scripts/wsjf_business_effect_gate.py"
+      - "scripts/user_journey_acceptance_gate.py"
+      - "config/user-journey-acceptance-policy.json"
+      - "frontend/tests/e2e/wsjf-planner-excel-live.spec.js"
   workflow_dispatch:
     inputs:
       feature:
@@ -34,28 +43,52 @@ jobs:
   real-user-journey:
     name: Jornada real WSJF — sem mocks
     if: >-
+      github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
     timeout-minutes: 160
     steps:
-      - name: Resolver SHA publicado
+      - name: Resolver SHA do teste e SHA realmente publicado
         id: target
         env:
           EVENT_NAME: ${{ github.event_name }}
           WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "workflow_run" ]; then
-            echo "sha=$WORKFLOW_RUN_SHA" >> "$GITHUB_OUTPUT"
+            source_sha="$WORKFLOW_RUN_SHA"
+            expected_sha="$WORKFLOW_RUN_SHA"
           else
-            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            source_sha="$SOURCE_SHA"
+            expected_sha="$(python - <<'PY'
+          import json
+          import os
+          from urllib.request import Request, urlopen
+
+          url = os.environ['API_URL'].rstrip('/') + '/api/runtime/build-info'
+          request = Request(url, headers={'Accept': 'application/json', 'User-Agent': 'reqsys-user-journey/1.0'})
+          with urlopen(request, timeout=20) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          if isinstance(payload.get('data'), dict):
+              payload = payload['data']
+          sha = str(payload.get('build_sha') or payload.get('commit_sha') or '').strip()
+          if not sha:
+              raise SystemExit('Runtime DEV não informou SHA publicado')
+          print(sha)
+          PY
+          )"
           fi
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "expected_sha=$expected_sha" >> "$GITHUB_OUTPUT"
+          echo "Código dos testes: $source_sha"
+          echo "Código publicado em DEV: $expected_sha"
 
       - uses: actions/checkout@v4
         with:
-          ref: ${{ steps.target.outputs.sha }}
+          ref: ${{ steps.target.outputs.source_sha }}
 
       - uses: actions/setup-python@v5
         with:
@@ -105,7 +138,7 @@ jobs:
         id: deploy
         continue-on-error: true
         env:
-          TARGET_SHA: ${{ steps.target.outputs.sha }}
+          TARGET_SHA: ${{ steps.target.outputs.expected_sha }}
         run: |
           set -euo pipefail
           python scripts/validate_publication_sync.py \
