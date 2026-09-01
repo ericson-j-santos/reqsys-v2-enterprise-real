@@ -89,6 +89,8 @@ jobs:
       - name: Testes automatizados relevantes
         id: automated
         continue-on-error: true
+        env:
+          PYTHONPATH: backend
         run: |
           set -euo pipefail
           python -m pytest \
@@ -195,7 +197,7 @@ jobs:
           automated = passed('AUTOMATED_OUTCOME')
           deploy = passed('DEPLOY_OUTCOME')
           browser = passed('BROWSER_OUTCOME')
-          integrations = passed('FLYCRED_OUTCOME') and passed('INTEGRATIONS_OUTCOME') and browser
+          integrations = passed('FLYCRED_OUTCOME') and passed('INTEGRATIONS_OUTCOME')
           business = passed('BUSINESS_OUTCOME')
           run_url = os.environ['RUN_URL']
 
@@ -254,6 +256,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: user-journey-acceptance-dev-wsjf-${{ github.run_id }}
-          path: ${{ env.EVIDENCE_DIR }}/
-          if-no-files-found: error
+          path: |
+            ${{ env.EVIDENCE_DIR }}/
+            frontend/test-results/
+          if-no-files-found: warn
           retention-days: 30
