@@ -1,0 +1,20 @@
+name: Diagnostico - Confirmar identidade AZURE_CLIENT_ID
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hash:
+    name: Calcular hash do AZURE_CLIENT_ID (nao expoe o valor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Hash SHA-256 do AZURE_CLIENT_ID
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$AZURE_CLIENT_ID" | sha256sum | awk '{print "sha256(appId) =", $1}'
