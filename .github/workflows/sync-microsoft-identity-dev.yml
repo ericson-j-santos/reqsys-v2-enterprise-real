@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/sync-microsoft-identity-dev.yml"
+      - "backend/app/microsoft_identity_e2e.py"
   workflow_dispatch:
 
 permissions:
@@ -20,7 +21,7 @@ jobs:
     name: Sincronizar identidade Microsoft no ReqSys DEV
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -87,9 +88,24 @@ jobs:
           echo "$output"
           echo "$output" | grep -q 'configured'
 
+      - name: Teste ponta a ponta Microsoft no runtime DEV
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          payload="$(base64 -w0 backend/app/microsoft_identity_e2e.py)"
+          output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import base64; exec(compile(base64.b64decode(\"$payload\"), \"microsoft_identity_e2e.py\", \"exec\"))'")"
+          echo "$output"
+          result="$(echo "$output" | tail -n 1)"
+          printf '%s\n' "$result" > audit/microsoft-identity-dev-e2e.json
+          echo "$result" | grep -q '"status":"PASS"'
+          echo "$result" | grep -q '"check":"powerplatform_environments"'
+          echo "$result" | grep -q '"check":"graph_groups"'
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: microsoft-identity-dev-sync
-          path: audit/microsoft-identity-dev-fly-credential.json
+          path: |
+            audit/microsoft-identity-dev-fly-credential.json
+            audit/microsoft-identity-dev-e2e.json
           if-no-files-found: warn
