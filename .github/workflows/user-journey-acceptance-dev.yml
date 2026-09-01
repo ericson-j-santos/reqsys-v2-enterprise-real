@@ -38,7 +38,7 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
-    timeout-minutes: 30
+    timeout-minutes: 160
     steps:
       - name: Resolver SHA publicado
         id: target
@@ -160,14 +160,32 @@ jobs:
           echo "$result" | grep -q '"check":"powerplatform_environments"'
           echo "$result" | grep -q '"check":"graph_groups"'
 
+      - name: Produzir evidência real Planner → Power Automate → Excel
+        id: business_probe
+        continue-on-error: true
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          WSJF_DEV_GROUP_ID: ${{ vars.WSJF_DEV_GROUP_ID }}
+          WSJF_DEV_PLAN_ID: ${{ vars.WSJF_DEV_PLAN_ID }}
+          WSJF_DEV_BUCKET_ID: ${{ vars.WSJF_DEV_BUCKET_ID }}
+          WSJF_DEV_DRIVE_ID: ${{ vars.WSJF_DEV_DRIVE_ID }}
+          WSJF_DEV_FILE_ID: ${{ vars.WSJF_DEV_FILE_ID }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python -m pip install 'openpyxl>=3.1,<4'
+          python scripts/wsjf_business_effect_probe.py \
+            --output "$EVIDENCE_DIR/business-effect-input.json" \
+            --run-url "$RUN_URL" \
+            --wait-seconds 3900
+
       - name: Validar efeito de negócio real
         id: business
         continue-on-error: true
         run: |
           set -euo pipefail
-          # Este arquivo só deve ser criado por um probe real que tenha observado
-          # Planner → Power Automate → tbDemandas. Enquanto não existir, o gate
-          # permanece vermelho e 100% é proibido.
           python scripts/wsjf_business_effect_gate.py \
             --evidence "$EVIDENCE_DIR/business-effect-input.json" \
             --output "$EVIDENCE_DIR/business-effect-result.json" \
