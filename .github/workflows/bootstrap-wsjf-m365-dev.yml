@@ -1,0 +1,77 @@
+name: Bootstrap WSJF Microsoft 365 DEV
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/bootstrap-wsjf-m365-dev.yml"
+      - "scripts/bootstrap_wsjf_m365_dev.py"
+      - "templates/wsjf/WSJF.xlsx.base64"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: bootstrap-wsjf-m365-dev
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Criar Grupo + Planner + WSJF.xlsx + tbDemandas
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Preparar dependência HTTP
+        run: python -m pip install 'httpx==0.28.1'
+
+      - name: Materializar WSJF.xlsx canônico
+        run: |
+          set -euo pipefail
+          mkdir -p audit/wsjf-bootstrap-dev build/wsjf
+          base64 --decode templates/wsjf/WSJF.xlsx.base64 > build/wsjf/WSJF.xlsx
+          test "$(sha256sum build/wsjf/WSJF.xlsx | awk '{print $1}')" = "15931c47cf4b13c5e215f3ac2a0021d7c177dbce3ddde7b310a973da093b8aa3"
+
+      - name: Criar ou reutilizar recursos Microsoft 365 do WSJF
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          python scripts/bootstrap_wsjf_m365_dev.py \
+            --template build/wsjf/WSJF.xlsx \
+            --output audit/wsjf-bootstrap-dev/result.json
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wsjf-m365-bootstrap-dev-${{ github.run_id }}
+          path: audit/wsjf-bootstrap-dev/result.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Reexecutar aceite real WSJF
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/user-journey-acceptance-dev.yml/dispatches" \
+            -d '{"ref":"main","inputs":{"feature":"wsjf_planner_excel_simples"}}'
