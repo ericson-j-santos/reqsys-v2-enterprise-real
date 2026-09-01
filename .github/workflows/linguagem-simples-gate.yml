@@ -6,6 +6,8 @@ on:
       - 'frontend/src/**'
       - 'frontend/scripts/validate-user-facing-language.mjs'
       - 'frontend/scripts/validate-user-facing-language.test.mjs'
+      - 'frontend/scripts/fix-user-facing-language.mjs'
+      - 'frontend/scripts/fix-user-facing-language.test.mjs'
       - '.github/workflows/linguagem-simples-gate.yml'
   push:
     branches:
@@ -14,6 +16,8 @@ on:
       - 'frontend/src/**'
       - 'frontend/scripts/validate-user-facing-language.mjs'
       - 'frontend/scripts/validate-user-facing-language.test.mjs'
+      - 'frontend/scripts/fix-user-facing-language.mjs'
+      - 'frontend/scripts/fix-user-facing-language.test.mjs'
       - '.github/workflows/linguagem-simples-gate.yml'
   workflow_dispatch:
 
@@ -40,6 +44,9 @@ jobs:
 
       - name: Testar verificador
         run: node --test frontend/scripts/validate-user-facing-language.test.mjs
+
+      - name: Testar corretor automático
+        run: node --test frontend/scripts/fix-user-facing-language.test.mjs
 
       - name: Validar textos apresentados ao usuário
         run: node frontend/scripts/validate-user-facing-language.mjs
