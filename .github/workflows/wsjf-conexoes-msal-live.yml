@@ -1,0 +1,72 @@
+name: WSJF conexoes - sessao MSAL real
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/tests/e2e/wsjf-planner-excel-conexoes-live.spec.js"
+      - "frontend/src/auth/msal.js"
+      - "frontend/src/services/copilotMemoryInstaller.js"
+      - "backend/app/services/copilot_memory_install_assistant.py"
+      - "backend/app/api/copilot_memory.py"
+      - ".github/workflows/wsjf-conexoes-msal-live.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FRONTEND_URL: https://reqsys-app-dev.fly.dev
+
+jobs:
+  conexoes-msal-real:
+    name: Conexoes Planner/Excel via token delegado MSAL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias e Chromium
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Decodificar sessao MSAL (se configurada)
+        id: state
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${WSJF_MSAL_STORAGE_STATE_B64:-}" ]; then
+            echo "Secret WSJF_MSAL_STORAGE_STATE_B64 nao configurado — rode scripts/setup-msal-storage-state.mjs localmente e cadastre o secret."
+            echo "path=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$RUNNER_TEMP/msal-storage-state.json"
+          echo "path=$RUNNER_TEMP/msal-storage-state.json" >> "$GITHUB_OUTPUT"
+        env:
+          WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
+
+      - name: Jornada real de conexoes com sessao Microsoft real
+        working-directory: frontend
+        env:
+          REAL_USER_JOURNEY: "true"
+          E2E_BASE_URL: ${{ env.FRONTEND_URL }}
+          MSAL_STORAGE_STATE_PATH: ${{ steps.state.outputs.path }}
+        run: npx playwright test tests/e2e/wsjf-planner-excel-conexoes-live.spec.js --reporter=line
+
+      - name: Publicar evidencia
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wsjf-conexoes-msal-live-${{ github.run_id }}
+          path: frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
