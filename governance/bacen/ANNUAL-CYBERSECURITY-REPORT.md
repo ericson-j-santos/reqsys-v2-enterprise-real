@@ -26,16 +26,16 @@
 *(seção narrativa — preencher: principais riscos do período, decisões relevantes,
 investimentos em segurança, mudanças regulatórias observadas)*
 
-## Panorama dos controles internos ReqSys relacionados ao BACEN
+## Panorama dos controles mínimos BACEN
 
 Gerado automaticamente a partir de `governance/bacen/BACEN-CONTROL-MATRIX.yaml` por
 `scripts/generate_bacen_annual_report.py`. Não editar manualmente entre os
 marcadores abaixo — a próxima execução do gerador sobrescreve este bloco.
 
-> Os itens abaixo são **macrocontroles internos do ReqSys** e não constituem, por
-> si só, o universo normativo vigente. Enquanto o eixo normativo não estiver
-> integralmente modelado e avaliado, este relatório não publica percentual agregado
-> de cobertura regulatória.
+> **Escopo deste quadro:** os itens abaixo são macrocontroles internos do ReqSys
+> relacionados ao BACEN; eles não constituem, isoladamente, o universo normativo
+> vigente. Enquanto o eixo normativo não estiver integralmente modelado e avaliado,
+> este relatório não publica percentual agregado de cobertura regulatória.
 
 <!-- BACEN-08:CONTROLS-SUMMARY:START -->
 
