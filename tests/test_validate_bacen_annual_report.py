@@ -34,6 +34,11 @@ Texto real preenchido pela equipe de governança, sem placeholder.
 <!-- BACEN-08:CONTROLS-SUMMARY:END -->
 """
 
+REPORT_WITH_COVERAGE_SCALAR = REPORT_GENERATED.replace(
+    "<!-- BACEN-08:CONTROLS-SUMMARY:END -->",
+    "Cobertura ponderada: **50.0%**\n<!-- BACEN-08:CONTROLS-SUMMARY:END -->",
+)
+
 REPORT_NEVER_GENERATED = """# Report
 
 <!-- BACEN-08:EXECUTIVE:START -->
@@ -64,6 +69,7 @@ class ValidateTests(unittest.TestCase):
         report = validate(REPORT_GENERATED, DESIGNATION_DESIGNATED)
         self.assertEqual(report["result"], "valid")
         self.assertEqual(report["errors"], [])
+        self.assertFalse(report["summary"]["coverage_scalar_present"])
 
     def test_pending_designation_is_a_warning_not_an_error(self):
         report = validate(REPORT_GENERATED, DESIGNATION_PENDING)
@@ -82,6 +88,12 @@ class ValidateTests(unittest.TestCase):
     def test_narrative_placeholder_is_flagged_as_warning(self):
         report = validate(REPORT_WITH_NARRATIVE_PLACEHOLDER, DESIGNATION_DESIGNATED)
         self.assertGreaterEqual(report["summary"]["narrative_sections_pending"], 1)
+
+    def test_aggregate_coverage_scalar_is_invalid(self):
+        report = validate(REPORT_WITH_COVERAGE_SCALAR, DESIGNATION_DESIGNATED)
+        self.assertEqual(report["result"], "invalid")
+        self.assertTrue(report["summary"]["coverage_scalar_present"])
+        self.assertTrue(any("escalar agregado" in error for error in report["errors"]))
 
 
 if __name__ == "__main__":
