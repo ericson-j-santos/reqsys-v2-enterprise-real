@@ -8,6 +8,16 @@ on:
         required: false
         default: '100'
         type: string
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ci-lead-time-analytics.yml'
+      - 'scripts/build_ci_process_improvement_analytics.py'
+      - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
+      - 'docs/contracts/ci-lead-time-analytics.schema.json'
+      - 'docs/runbooks/ci-lead-time-analytics.md'
+      - 'docs/runbooks/ci-lead-time-kpi-contract.md'
   schedule:
     - cron: '45 * * * *'
   push:
