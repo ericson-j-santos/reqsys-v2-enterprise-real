@@ -86,9 +86,13 @@ async def copilot_memory_install_workbook(
 @router.get('/install/connections')
 async def copilot_memory_install_connections(
     environment_id: str = Query(..., min_length=2, max_length=120),
+    x_power_platform_token: str | None = Header(default=None, alias='X-Power-Platform-Token'),
     _auth=Depends(require_copilot_memory_auth),
 ):
-    return ok(await listar_conexoes_instalacao(environment_id))
+    """Conexoes Planner/Excel sao pessoais do usuario: exige token delegado
+    (adquirido via MSAL no frontend) para enxerga-las — credencial app-only
+    nao tem visibilidade sobre conexoes de outro usuario."""
+    return ok(await listar_conexoes_instalacao(environment_id, user_token=x_power_platform_token))
 
 
 @router.post('/install/deploy')

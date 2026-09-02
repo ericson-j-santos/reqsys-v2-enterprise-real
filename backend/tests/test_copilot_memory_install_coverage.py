@@ -211,10 +211,9 @@ def test_criar_planilha_valida_nome_e_envia_arquivo(monkeypatch):
 
 def test_listar_conexoes_separa_planner_excel(monkeypatch):
     _set_microsoft_credentials(monkeypatch, True)
-    vazio = asyncio.run(assistant.listar_conexoes_instalacao(''))
+    vazio = asyncio.run(assistant.listar_conexoes_instalacao('', user_token='delegado'))
     assert vazio['erro'] == 'Ambiente obrigatorio'
 
-    monkeypatch.setattr(assistant, '_token', AsyncMock(return_value='token'))
     url = f'{assistant._POWER_PLATFORM_BASE}/connectivity/environments/env-1/connections'
     FakeAsyncClient.reset({('GET', url): FakeResponse({'value': [
         {'name': 'planner-1', 'id': '/planner/1', 'properties': {'apiId': '/providers/Microsoft.PowerApps/apis/shared_planner', 'displayName': 'Planner principal'}},
@@ -223,16 +222,43 @@ def test_listar_conexoes_separa_planner_excel(monkeypatch):
     ]})})
     monkeypatch.setattr(assistant.httpx, 'AsyncClient', FakeAsyncClient)
 
-    result = asyncio.run(assistant.listar_conexoes_instalacao('env-1'))
+    result = asyncio.run(assistant.listar_conexoes_instalacao('env-1', user_token='delegado'))
     assert [item['id'] for item in result['planner']] == ['planner-1']
     assert [item['id'] for item in result['excel']] == ['excel-1']
     assert result['planner'][0]['nome'] == 'Planner principal'
 
 
+def test_listar_conexoes_sem_token_delegado_nao_chama_rede(monkeypatch):
+    _set_microsoft_credentials(monkeypatch, True)
+
+    def _falha_se_chamado(*args, **kwargs):
+        raise AssertionError('nao deveria chamar a rede sem token delegado')
+    monkeypatch.setattr(assistant.httpx, 'AsyncClient', _falha_se_chamado)
+
+    result = asyncio.run(assistant.listar_conexoes_instalacao('env-1'))
+    assert result['planner'] == []
+    assert result['excel'] == []
+    assert 'token delegado' in result['erro'].lower()
+
+
 def test_listar_conexoes_retorna_erro(monkeypatch):
     _set_microsoft_credentials(monkeypatch, True)
-    monkeypatch.setattr(assistant, '_token', AsyncMock(side_effect=RuntimeError('power platform negado')))
-    result = asyncio.run(assistant.listar_conexoes_instalacao('env-1'))
+
+    class FakeAsyncClientFalha:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, *args, **kwargs):
+            raise RuntimeError('power platform negado')
+
+    monkeypatch.setattr(assistant.httpx, 'AsyncClient', FakeAsyncClientFalha)
+    result = asyncio.run(assistant.listar_conexoes_instalacao('env-1', user_token='delegado'))
     assert result['erro'] == 'power platform negado'
 
 

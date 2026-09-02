@@ -174,12 +174,22 @@ async def criar_planilha_excel_grupo(group_id: str, nome: str = _DEFAULT_EXCEL_N
     }
 
 
-async def listar_conexoes_instalacao(environment_id: str) -> dict[str, Any]:
+async def listar_conexoes_instalacao(environment_id: str, user_token: str | None = None) -> dict[str, Any]:
     if not environment_id.strip():
         return {'configurado': _credenciais_microsoft_configuradas(), 'planner': [], 'excel': [], 'erro': 'Ambiente obrigatorio'}
+    # Conexoes do Planner/Excel Online sao pessoais do usuario que autorizou no
+    # Power Automate; a API de conectividade nao as expoe para um credential
+    # app-only (client_credentials), so para o proprio dono via token delegado.
+    if not user_token:
+        return {
+            'configurado': True,
+            'planner': [],
+            'excel': [],
+            'erro': 'Token delegado do usuario ausente: conexoes pessoais nao sao visiveis via credencial app-only.',
+        }
     try:
         safe_environment_id = _segmento_id_seguro(environment_id, 'Ambiente')
-        token = await _token('https://api.powerplatform.com/.default')
+        token = user_token
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get(
                 f'{_POWER_PLATFORM_BASE}/connectivity/environments/{safe_environment_id}/connections',

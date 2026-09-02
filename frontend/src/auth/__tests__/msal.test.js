@@ -264,6 +264,57 @@ describe('acquireTeamsGraphToken', () => {
   })
 })
 
+describe('acquirePowerPlatformToken', () => {
+  it('retorna access_token via acquireTokenSilent quando ha conta logada', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockResolvedValue({ accessToken: 'pp-silent-token' })
+
+    const { acquirePowerPlatformToken, POWER_PLATFORM_SCOPES } = await import('../msal')
+    const token = await acquirePowerPlatformToken()
+
+    expect(token).toBe('pp-silent-token')
+    expect(mockAcquireTokenSilent).toHaveBeenCalledWith(
+      expect.objectContaining({ scopes: POWER_PLATFORM_SCOPES, account: { username: 'user@tieri659.onmicrosoft.com' } })
+    )
+    expect(mockAcquireTokenPopup).not.toHaveBeenCalled()
+  })
+
+  it('cai para acquireTokenPopup quando o silent exige interacao', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    const interactionErr = Object.assign(new Error('interaction required'), { name: 'InteractionRequiredAuthError' })
+    mockAcquireTokenSilent.mockRejectedValue(interactionErr)
+    mockAcquireTokenPopup.mockResolvedValue({ accessToken: 'pp-popup-token' })
+
+    const { acquirePowerPlatformToken } = await import('../msal')
+    const token = await acquirePowerPlatformToken()
+
+    expect(token).toBe('pp-popup-token')
+    expect(mockAcquireTokenPopup).toHaveBeenCalledTimes(1)
+  })
+
+  it('retorna null (sem lancar) quando nao ha conta Microsoft logada, ex.: login demo', async () => {
+    mockGetAllAccounts.mockReturnValue([])
+    const { acquirePowerPlatformToken } = await import('../msal')
+    await expect(acquirePowerPlatformToken()).resolves.toBeNull()
+    expect(mockAcquireTokenSilent).not.toHaveBeenCalled()
+  })
+
+  it('retorna null quando Azure AD nao esta configurado no servidor', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
+    const { acquirePowerPlatformToken } = await import('../msal')
+    await expect(acquirePowerPlatformToken()).resolves.toBeNull()
+  })
+
+  it('propaga erros do silent que nao sao de interacao', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockRejectedValue(new Error('falha de rede'))
+
+    const { acquirePowerPlatformToken } = await import('../msal')
+    await expect(acquirePowerPlatformToken()).rejects.toThrow('falha de rede')
+  })
+})
+
 describe('getContaAtual', () => {
   it('retorna a primeira conta logada', async () => {
     mockGetAllAccounts.mockReturnValue([{ localAccountId: 'user-123', username: 'user@tieri659.onmicrosoft.com' }])
