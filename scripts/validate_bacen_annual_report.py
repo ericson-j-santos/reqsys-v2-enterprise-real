@@ -6,7 +6,9 @@ Não valida conteúdo de negócio (isso exige revisão humana). Garante apenas q
   (i.e. o gerador já rodou pelo menos uma vez sobre a versão atual da matriz);
 - o registro de designação executiva existe e tem um status reconhecido;
 - lacunas que ainda dependem de decisão humana (designação executiva, seções
-  narrativas) são reportadas como avisos, nunca como declaração de conformidade.
+  narrativas) são reportadas como avisos, nunca como declaração de conformidade;
+- nenhum escalar agregado de cobertura regulatória é publicado enquanto o eixo
+  normativo vigente não estiver integralmente modelado e avaliado.
 """
 from __future__ import annotations
 
@@ -26,6 +28,10 @@ from scripts.generate_bacen_annual_report import parse_designation  # noqa: E402
 VALID_DESIGNATION_STATUS = {"pending_formal_designation", "designated", "expired"}
 NARRATIVE_PLACEHOLDER_PATTERN = re.compile(r"\*\(seção narrativa")
 GENERATOR_PLACEHOLDER = "(executar o gerador para preencher)"
+PROHIBITED_COVERAGE_SCALAR_PATTERNS = (
+    re.compile(r"Cobertura\s+ponderada\s*:\s*\*\*?\s*\d+(?:[.,]\d+)?%", re.IGNORECASE),
+    re.compile(r"Cobertura\s+regulat[óo]ria\s*:\s*\*\*?\s*\d+(?:[.,]\d+)?%", re.IGNORECASE),
+)
 
 
 def validate(report_text: str, designation_text: str) -> dict[str, object]:
@@ -38,6 +44,12 @@ def validate(report_text: str, designation_text: str) -> dict[str, object]:
         errors.append("bloco CONTROLS-SUMMARY ausente no relatório")
     if GENERATOR_PLACEHOLDER in report_text:
         errors.append("gerador nunca executado sobre este relatório (placeholder não substituído)")
+
+    if any(pattern.search(report_text) for pattern in PROHIBITED_COVERAGE_SCALAR_PATTERNS):
+        errors.append(
+            "escalar agregado de cobertura regulatória proibido: publique o vetor de estados "
+            "até o eixo normativo vigente estar integralmente modelado e avaliado"
+        )
 
     narrative_pending = len(NARRATIVE_PLACEHOLDER_PATTERN.findall(report_text))
     if narrative_pending:
@@ -54,13 +66,16 @@ def validate(report_text: str, designation_text: str) -> dict[str, object]:
         )
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "control_id": "BACEN-08",
         "generated_at": datetime.now(UTC).isoformat(),
         "mode": "advisory",
         "summary": {
             "executive_designation_status": status,
             "narrative_sections_pending": narrative_pending,
+            "coverage_scalar_present": any(
+                pattern.search(report_text) for pattern in PROHIBITED_COVERAGE_SCALAR_PATTERNS
+            ),
         },
         "errors": errors,
         "warnings": warnings,

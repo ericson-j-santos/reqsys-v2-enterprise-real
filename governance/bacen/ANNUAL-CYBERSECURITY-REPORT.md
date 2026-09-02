@@ -32,9 +32,14 @@ Gerado automaticamente a partir de `governance/bacen/BACEN-CONTROL-MATRIX.yaml` 
 `scripts/generate_bacen_annual_report.py`. Não editar manualmente entre os
 marcadores abaixo — a próxima execução do gerador sobrescreve este bloco.
 
+> **Escopo deste quadro:** os itens abaixo são macrocontroles internos do ReqSys
+> relacionados ao BACEN; eles não constituem, isoladamente, o universo normativo
+> vigente. Enquanto o eixo normativo não estiver integralmente modelado e avaliado,
+> este relatório não publica percentual agregado de cobertura regulatória.
+
 <!-- BACEN-08:CONTROLS-SUMMARY:START -->
 
-| Controle | Domínio | Criticidade | Status |
+| Controle interno | Domínio | Criticidade | Status |
 |---|---|---|---|
 | BACEN-01 | governance | critical | partial |
 | BACEN-02 | identity | critical | partial |
@@ -45,7 +50,7 @@ marcadores abaixo — a próxima execução do gerador sobrescreve este bloco.
 | BACEN-07 | audit | high | implemented |
 | BACEN-08 | executive_governance | critical | partial |
 
-Total: **8** · Implementados: **4** · Parciais: **4** · Lacunas: **0** · Cobertura ponderada: **50.0%**
+> **Nota:** estes são macrocontroles internos do ReqSys. Nenhum percentual agregado de cobertura regulatória é publicado enquanto o eixo normativo vigente não estiver integralmente modelado e avaliado.
 <!-- BACEN-08:CONTROLS-SUMMARY:END -->
 
 ## Incidentes de segurança do período

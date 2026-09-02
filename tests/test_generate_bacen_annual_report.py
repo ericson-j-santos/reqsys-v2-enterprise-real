@@ -78,13 +78,22 @@ class RenderExecutiveBlockTests(unittest.TestCase):
 
 
 class RenderControlsBlockTests(unittest.TestCase):
-    def test_summarizes_real_counts(self):
+    def test_renders_internal_control_state_vector(self):
         from scripts.validate_bacen_controls import parse_controls
 
         block = render_controls_block(parse_controls(MATRIX))
         self.assertIn("BACEN-01", block)
-        self.assertIn("Implementados: **1**", block)
-        self.assertIn("Lacunas: **1**", block)
+        self.assertIn("BACEN-02", block)
+        self.assertIn("BACEN-03", block)
+        self.assertIn("macrocontroles internos", block)
+
+    def test_does_not_publish_aggregate_coverage_scalar(self):
+        from scripts.validate_bacen_controls import parse_controls
+
+        block = render_controls_block(parse_controls(MATRIX))
+        self.assertNotIn("Cobertura ponderada", block)
+        self.assertNotIn("50.0%", block)
+        self.assertNotRegex(block, r"Cobertura\s+regulat[óo]ria\s*:\s*\d")
 
     def test_is_deterministic(self):
         from scripts.validate_bacen_controls import parse_controls
@@ -100,6 +109,7 @@ class RegenerateTests(unittest.TestCase):
         self.assertEqual(once, twice)
         self.assertNotIn("placeholder", once)
         self.assertIn("BACEN-01", once)
+        self.assertNotIn("Cobertura ponderada", once)
 
 
 if __name__ == "__main__":
