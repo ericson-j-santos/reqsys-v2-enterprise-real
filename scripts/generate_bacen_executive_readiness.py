@@ -15,6 +15,7 @@ REQUIRED_REPORT_SECTIONS = {
     "Controles mínimos": (
         "Situação dos controles mínimos",
         "Panorama dos controles mínimos BACEN",
+        "Panorama dos macrocontroles internos ReqSys",
     ),
     "Incidentes de segurança do período": ("Incidentes de segurança do período",),
     "Avaliação de terceiros e nuvem": ("Avaliação de terceiros e nuvem",),
