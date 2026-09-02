@@ -45,7 +45,7 @@ normative_baseline:
       exclude_render_metadata: true
   referenced_documents:
     - uid: doc-catalogo-servicos-sfn
-      title: Catálogo de Serviços do SFN
+      title: "Catálogo de Serviços do SFN"
       version: "5.13"
       published_at: "2026-07-24"
       checked_at: "2026-09-02"
@@ -56,7 +56,7 @@ normative_baseline:
       hash_state: pending_initial_capture
       content_sha256: null
     - uid: doc-manual-redes-sfn
-      title: Manual de Redes do SFN
+      title: "Manual de Redes do SFN"
       version: "9.3"
       published_at: "2023-10-06"
       checked_at: "2026-09-02"
@@ -67,7 +67,7 @@ normative_baseline:
       hash_state: pending_initial_capture
       content_sha256: null
     - uid: doc-manual-seguranca-sfn-vol1
-      title: Manual de Segurança do SFN — Volume I
+      title: "Manual de Segurança do SFN — Volume I"
       version: "6.00"
       published_at: "2026-06-08"
       checked_at: "2026-09-02"
@@ -78,7 +78,7 @@ normative_baseline:
       hash_state: pending_initial_capture
       content_sha256: null
     - uid: doc-manual-seguranca-sfn-vol2
-      title: Manual de Segurança do SFN — Volume II: Segurança do Pix
+      title: "Manual de Segurança do SFN — Volume II: Segurança do Pix"
       version: "6.00"
       published_at: "2026-06-08"
       checked_at: "2026-09-02"
