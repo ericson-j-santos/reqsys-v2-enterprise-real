@@ -1,0 +1,105 @@
+{
+  "baseline_schema_version": "1.0.0",
+  "frozen": true,
+  "frozen_at": "2026-09-02T22:58:32.248287+00:00",
+  "source": {
+    "analytics_schema_version": "1.0.2",
+    "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+    "workflow": "CI Lead Time Analytics",
+    "workflow_run_id": 33692899180,
+    "workflow_run_number": 1154,
+    "head_branch": "feat/process-improvement-statistics",
+    "head_sha": "cf467cd5e9fda039b4a5431aad1581cc49252aaa",
+    "event_name": "pull_request",
+    "artifact_id": 9870698698,
+    "artifact_name": "ci-lead-time-analytics-33692899180",
+    "artifact_zip_sha256": "bebd83620a630eb6668bcd924796f6fbb20f2ff55e429ea723cac9639df001be",
+    "analytics_json_sha256": "c4d51b56f48931c97320f21f42b3c0d3e39451ee418572d69e138206cd937df2"
+  },
+  "sample": {
+    "window_runs": 100,
+    "completed_runs": 62,
+    "window_span_hours": 0.58
+  },
+  "quality": {
+    "success_count": 48,
+    "failure_count": 4,
+    "cancelled_count": 4,
+    "skipped_count": 6,
+    "rerun_count": 0,
+    "success_rate_percent": 77.42,
+    "failure_rate_percent": 6.45,
+    "first_pass_success_rate_percent": 77.42,
+    "rerun_rate_percent": 0.0
+  },
+  "time": {
+    "avg_seconds": 18.89,
+    "p50_seconds": 14.0,
+    "p90_seconds": 33.6,
+    "p95_seconds": 38.9,
+    "max_seconds": 156.0,
+    "stddev_seconds": 21.32,
+    "cv_percent": 112.91,
+    "avg_queue_seconds": 0.0,
+    "p95_queue_seconds": 0.0
+  },
+  "throughput": {
+    "runs_per_hour": 106.08,
+    "runs_per_day": 2546.01
+  },
+  "trend_comparison": {
+    "current_runs": 31,
+    "previous_runs": 31,
+    "delta": {
+      "success_rate_pp": 0.0,
+      "failure_rate_pp": 6.45,
+      "p50_seconds": -3.0,
+      "p95_seconds": -38.0,
+      "cv_percent": -65.01
+    },
+    "signals": {
+      "success_rate": "stable",
+      "failure_rate": "regressed",
+      "p50": "improved",
+      "p95": "improved",
+      "variability": "improved"
+    }
+  },
+  "failure_pareto": [
+    {
+      "name": "BACEN Non-Production Temporary Tolerance Guard",
+      "failures": 1,
+      "share_percent": 25.0,
+      "cumulative_share_percent": 25.0
+    },
+    {
+      "name": "PR CI Watch",
+      "failures": 1,
+      "share_percent": 25.0,
+      "cumulative_share_percent": 50.0
+    },
+    {
+      "name": "Teams Notification Control Center Smoke",
+      "failures": 1,
+      "share_percent": 25.0,
+      "cumulative_share_percent": 75.0
+    },
+    {
+      "name": "Teams Public Dashboard Smoke",
+      "failures": 1,
+      "share_percent": 25.0,
+      "cumulative_share_percent": 100.0
+    }
+  ],
+  "observed_status": "warning",
+  "observed_warnings": [
+    "Failure rate acima do alvo: 6.45% > 5%",
+    "First-pass success abaixo do alvo: 77.42% < 90%"
+  ],
+  "governance": {
+    "mode": "report-only",
+    "use": "baseline for future before/after comparisons",
+    "causality": "descriptive evidence only; trend deltas do not prove causation",
+    "new_gate_thresholds_created": false
+  }
+}
