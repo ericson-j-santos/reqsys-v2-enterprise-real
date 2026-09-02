@@ -13,6 +13,20 @@
 - Período coberto: *(preencher — ex.: 2026)*
 - Data de emissão formal: *(preencher quando aprovado)*
 
+## Baseline normativa utilizada
+
+- `as_of`: `2026-09-02T22:01:00Z`
+- Estado da baseline: `transitional_pending_normative_axis`
+- Norma-base: Resolução CMN nº 4.893/2021 — texto consolidado.
+- Alteração material incorporada ao contrato: Resolução CMN nº 5.274/2025, publicada em 18/12/2025.
+- Família Resolução BCB nº 85/2021 + Resolução BCB nº 538/2025: `applicability_pending`.
+- Documentos vivos SFN referenciados pela norma: `nao_avaliado` até a implantação do eixo normativo versionado do ADR-015.
+
+> Este bloco registra a baseline usada para estruturar o relatório. Não constitui
+> decisão institucional de aplicabilidade nem declaração de conformidade. A
+> reconciliação com documentos vivos, seus hashes de texto normalizado e a
+> aplicabilidade por entidade permanece pendente do eixo normativo.
+
 ## Responsável executivo
 
 <!-- BACEN-08:EXECUTIVE:START -->
@@ -55,12 +69,38 @@ marcadores abaixo — a próxima execução do gerador sobrescreve este bloco.
 
 ## Incidentes de segurança do período
 
-*(seção narrativa — o BACEN-03 possui evidência operacional automatizada de
-exercício de resposta a incidentes, mas a integração de métricas de incidentes
-reais ainda não existe. Esta seção deve ser preenchida manualmente a partir do
-artifact `artifacts/bacen/bacen-03-incident-exercise-evidence.json`, dos registros
-do processo operacional real e do plano em
-`governance/bacen/INCIDENT-RESPONSE-PLAN.md`.)*
+- Estado do bloco normativo: `nao_avaliado`.
+- Evidência técnica disponível: exercício BACEN-03 em `artifacts/bacen/bacen-03-incident-exercise-evidence.json`.
+- Lacuna: métricas e registros de incidentes cibernéticos reais do período ainda não estão integrados ao gerador anual.
+
+*(seção narrativa — revisar os incidentes cibernéticos relevantes efetivamente
+ocorridos no período. Exercício de resposta não deve ser promovido automaticamente
+a incidente real.)*
+
+## Resultados dos testes de continuidade de negócios
+
+- Estado do bloco normativo: `nao_avaliado`.
+- Insumo técnico existente: evidências BACEN-04 de backup/restauração.
+- Lacuna: o ReqSys ainda não reconcilia automaticamente essas evidências com o contrato normativo de resultados dos testes de continuidade de negócios do período.
+
+> Até essa reconciliação, backup/restauração técnico não é declarado como resultado
+> completo de teste de continuidade de negócios para fins regulatórios.
+
+## Resultados dos testes de intrusão
+
+- Estado do bloco normativo: `nao_avaliado`.
+- Evidência de pentest independente vigente: `nao_evidenciada_no_repositorio`.
+- Plano corretivo associado: `nao_avaliado`.
+
+> A ausência de evidência no repositório não afirma que o teste não exista na
+> instituição; afirma somente que o ReqSys não possui evidência governada suficiente
+> para preencher este bloco como `evidenciado`.
+
+## Varreduras e análises de vulnerabilidades
+
+- Estado do bloco normativo: `nao_avaliado`.
+- Existem scanners e gates técnicos de segurança no ReqSys, porém ainda não há mapeamento normativo que permita promovê-los automaticamente a evidência deste bloco.
+- Resultado agregado do período: `pendente_de_reconciliacao`.
 
 ## Avaliação de terceiros e nuvem
 
@@ -68,6 +108,10 @@ do processo operacional real e do plano em
 insumo; registrar decisões de risco tomadas no período)*
 
 ## Plano de ação para o próximo ciclo
+
+- Estado do bloco normativo: `parcial`.
+- Ações técnicas existentes permanecem rastreadas nos controles internos e artefatos BACEN do ReqSys.
+- Lacuna: consolidar neste relatório os planos corretivos derivados de incidentes, continuidade, pentest e vulnerabilidades, sem converter ausência de avaliação em conformidade parcial.
 
 *(seção narrativa — priorizar lacunas abertas na matriz de controles,
 especialmente as de criticidade `critical`)*
