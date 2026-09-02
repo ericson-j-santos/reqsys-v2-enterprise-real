@@ -70,7 +70,9 @@ marcadores abaixo — a próxima execução do gerador sobrescreve este bloco.
 ## Incidentes de segurança do período
 
 - Estado do bloco normativo: `nao_avaliado`.
-- Evidência técnica disponível: exercício BACEN-03 em `artifacts/bacen/bacen-03-incident-exercise-evidence.json`.
+- Evidência técnica disponível: `artifacts/bacen/bacen-03-incident-exercise-evidence.json`.
+- Política/plano técnico relacionado: `governance/bacen/INCIDENT-RESPONSE-PLAN.md`.
+- Cenário de exercício relacionado: `governance/bacen/INCIDENT-EXERCISE-SCENARIO.json`.
 - Lacuna: métricas e registros de incidentes cibernéticos reais do período ainda não estão integrados ao gerador anual.
 
 *(seção narrativa — revisar os incidentes cibernéticos relevantes efetivamente
