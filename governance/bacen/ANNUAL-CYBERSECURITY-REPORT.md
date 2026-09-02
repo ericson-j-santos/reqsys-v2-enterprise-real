@@ -40,7 +40,7 @@
 *(seção narrativa — preencher: principais riscos do período, decisões relevantes,
 investimentos em segurança, mudanças regulatórias observadas)*
 
-## Panorama dos controles mínimos BACEN
+## Panorama dos macrocontroles internos ReqSys
 
 Gerado automaticamente a partir de `governance/bacen/BACEN-CONTROL-MATRIX.yaml` por
 `scripts/generate_bacen_annual_report.py`. Não editar manualmente entre os
