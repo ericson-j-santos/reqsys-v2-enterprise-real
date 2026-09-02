@@ -42,6 +42,9 @@ out/
 playwright-report/
 test-results/
 .playwright/
+# Sessao MSAL real capturada por setup-msal-storage-state.mjs — contem
+# cookies/tokens reais, nunca deve ser versionada.
+msal-storage-state.json
 
 # IDEs
 .vscode/

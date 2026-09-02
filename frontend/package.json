@@ -10,6 +10,7 @@
         "test:coverage": "vitest run --coverage",
         "test:e2e": "playwright test",
         "test:e2e:stable": "node scripts/run-e2e-safe.js --reporter=line",
+        "setup:msal-state": "node scripts/setup-msal-storage-state.mjs",
         "test:readiness": "node --test scripts/frontend-readiness-gate.test.mjs",
         "readiness:frontend": "node scripts/frontend-readiness-gate.mjs",
         "validate:design-tokens": "node scripts/validate-design-tokens.mjs",
