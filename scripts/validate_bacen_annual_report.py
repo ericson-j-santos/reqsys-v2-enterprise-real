@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Valida a estrutura do relatório anual de segurança cibernética (BACEN-08).
+"""Valida o contrato estrutural do relatório anual de segurança cibernética (BACEN-08).
 
-Não valida conteúdo de negócio (isso exige revisão humana). Garante apenas que:
-- o relatório existe e os blocos gerados automaticamente foram preenchidos
-  (i.e. o gerador já rodou pelo menos uma vez sobre a versão atual da matriz);
-- o registro de designação executiva existe e tem um status reconhecido;
-- lacunas que ainda dependem de decisão humana (designação executiva, seções
-  narrativas) são reportadas como avisos, nunca como declaração de conformidade;
+Não declara conformidade e não substitui revisão humana. O validador garante que:
+- o relatório existe e os blocos gerados automaticamente foram preenchidos;
+- o registro de designação executiva existe e possui status reconhecido;
+- o contrato mínimo do relatório anual possui todos os blocos normativos exigidos;
+- blocos obrigatórios não estão ausentes nem vazios;
+- toda publicação estrutural possui `as_of` em UTC/RFC 3339;
 - nenhum escalar agregado de cobertura regulatória é publicado enquanto o eixo
   normativo vigente não estiver integralmente modelado e avaliado.
+
+Conteúdo ainda não avaliado deve ser declarado explicitamente como tal. O gate
+falha por ausência estrutural, não por inventar conformidade para preencher lacunas.
 """
 from __future__ import annotations
 
@@ -28,10 +31,84 @@ from scripts.generate_bacen_annual_report import parse_designation  # noqa: E402
 VALID_DESIGNATION_STATUS = {"pending_formal_designation", "designated", "expired"}
 NARRATIVE_PLACEHOLDER_PATTERN = re.compile(r"\*\(seção narrativa")
 GENERATOR_PLACEHOLDER = "(executar o gerador para preencher)"
+HEADING_PATTERN = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
+AS_OF_PATTERN = re.compile(
+    r"`as_of`\s*:\s*`(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)`"
+)
 PROHIBITED_COVERAGE_SCALAR_PATTERNS = (
     re.compile(r"Cobertura\s+ponderada\s*:\s*\*\*?\s*\d+(?:[.,]\d+)?%", re.IGNORECASE),
     re.compile(r"Cobertura\s+regulat[óo]ria\s*:\s*\*\*?\s*\d+(?:[.,]\d+)?%", re.IGNORECASE),
 )
+
+# Chaves estáveis para saída de máquina; valores aceitam aliases legados para
+# preservar contratos existentes enquanto o vocabulário do relatório converge.
+REQUIRED_CONTRACT_SECTIONS: dict[str, tuple[str, ...]] = {
+    "baseline_normativa": ("Baseline normativa utilizada",),
+    "incidentes_ciberneticos": (
+        "Incidentes cibernéticos relevantes do período",
+        "Incidentes de segurança do período",
+    ),
+    "continuidade_negocios": ("Resultados dos testes de continuidade de negócios",),
+    "testes_intrusao": ("Resultados dos testes de intrusão",),
+    "vulnerabilidades": ("Varreduras e análises de vulnerabilidades",),
+    "planos_corretivos": (
+        "Planos de ação para correções",
+        "Plano de ação para o próximo ciclo",
+    ),
+}
+
+
+def extract_sections(report_text: str) -> dict[str, str]:
+    """Extrai seções de nível 2 sem interpretar conteúdo de negócio."""
+    matches = list(HEADING_PATTERN.finditer(report_text))
+    sections: dict[str, str] = {}
+    for index, match in enumerate(matches):
+        heading = match.group(1).strip()
+        body_start = match.end()
+        body_end = matches[index + 1].start() if index + 1 < len(matches) else len(report_text)
+        sections[heading] = report_text[body_start:body_end].strip()
+    return sections
+
+
+def has_meaningful_body(body: str) -> bool:
+    """Comentários HTML isolados não satisfazem bloco obrigatório."""
+    without_comments = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
+    return bool(without_comments.strip())
+
+
+def resolve_contract_sections(
+    sections: dict[str, str],
+) -> tuple[dict[str, str], list[str], list[str]]:
+    resolved: dict[str, str] = {}
+    missing: list[str] = []
+    empty: list[str] = []
+
+    for key, aliases in REQUIRED_CONTRACT_SECTIONS.items():
+        heading = next((alias for alias in aliases if alias in sections), None)
+        if heading is None:
+            missing.append(key)
+            continue
+        resolved[key] = heading
+        if not has_meaningful_body(sections[heading]):
+            empty.append(key)
+
+    return resolved, missing, empty
+
+
+def extract_report_as_of(sections: dict[str, str]) -> str | None:
+    baseline_body = sections.get("Baseline normativa utilizada", "")
+    match = AS_OF_PATTERN.search(baseline_body)
+    if not match:
+        return None
+
+    value = match.group(1)
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() != UTC.utcoffset(parsed):
+        return None
+    return value
 
 
 def validate(report_text: str, designation_text: str) -> dict[str, object]:
@@ -45,10 +122,30 @@ def validate(report_text: str, designation_text: str) -> dict[str, object]:
     if GENERATOR_PLACEHOLDER in report_text:
         errors.append("gerador nunca executado sobre este relatório (placeholder não substituído)")
 
-    if any(pattern.search(report_text) for pattern in PROHIBITED_COVERAGE_SCALAR_PATTERNS):
+    coverage_scalar_present = any(
+        pattern.search(report_text) for pattern in PROHIBITED_COVERAGE_SCALAR_PATTERNS
+    )
+    if coverage_scalar_present:
         errors.append(
             "escalar agregado de cobertura regulatória proibido: publique o vetor de estados "
             "até o eixo normativo vigente estar integralmente modelado e avaliado"
+        )
+
+    sections = extract_sections(report_text)
+    resolved_sections, missing_sections, empty_sections = resolve_contract_sections(sections)
+    if missing_sections:
+        errors.append(
+            "blocos obrigatórios do contrato normativo ausentes: " + ", ".join(missing_sections)
+        )
+    if empty_sections:
+        errors.append(
+            "blocos obrigatórios do contrato normativo vazios: " + ", ".join(empty_sections)
+        )
+
+    report_as_of = extract_report_as_of(sections)
+    if report_as_of is None:
+        errors.append(
+            "baseline normativa sem `as_of` válido em UTC/RFC 3339; toda publicação de estado deve carimbar o instante de apuração"
         )
 
     narrative_pending = len(NARRATIVE_PLACEHOLDER_PATTERN.findall(report_text))
@@ -65,17 +162,23 @@ def validate(report_text: str, designation_text: str) -> dict[str, object]:
             "controle não pode ser declarado 'implemented' enquanto isso persistir"
         )
 
+    contract_complete = not missing_sections and not empty_sections and report_as_of is not None
+
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "control_id": "BACEN-08",
         "generated_at": datetime.now(UTC).isoformat(),
         "mode": "advisory",
         "summary": {
             "executive_designation_status": status,
             "narrative_sections_pending": narrative_pending,
-            "coverage_scalar_present": any(
-                pattern.search(report_text) for pattern in PROHIBITED_COVERAGE_SCALAR_PATTERNS
-            ),
+            "coverage_scalar_present": coverage_scalar_present,
+            "contract_sections_required": len(REQUIRED_CONTRACT_SECTIONS),
+            "contract_sections_resolved": resolved_sections,
+            "contract_sections_missing": missing_sections,
+            "contract_sections_empty": empty_sections,
+            "report_as_of": report_as_of,
+            "contract_complete": contract_complete,
         },
         "errors": errors,
         "warnings": warnings,
@@ -101,7 +204,10 @@ def main() -> int:
 
     if not report_path.exists() or not designation_path.exists():
         missing = [str(p) for p in (report_path, designation_path) if not p.exists()]
-        report: dict[str, object] = {"result": "invalid", "errors": [f"arquivo ausente: {m}" for m in missing]}
+        report: dict[str, object] = {
+            "result": "invalid",
+            "errors": [f"arquivo ausente: {m}" for m in missing],
+        }
     else:
         report = validate(
             report_path.read_text(encoding="utf-8"), designation_path.read_text(encoding="utf-8")
