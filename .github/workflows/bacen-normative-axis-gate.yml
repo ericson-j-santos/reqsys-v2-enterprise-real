@@ -73,7 +73,12 @@ jobs:
           print(f"- Baseline: `{report.get('baseline_uid')}`")
           print(f"- as_of: `{report.get('as_of')}`")
           print(f"- Obrigações modeladas: **{summary.get('obligations_modeled', 0)}**")
+          print(f"- Controles mínimos: **{summary.get('minimum_controls', 0)}**")
+          print(f"- Obrigações estendidas: **{summary.get('extended_obligations', 0)}**")
           print(f"- Estado derivado `nao_avaliado`: **{summary.get('derived_nao_avaliado', 0)}**")
+          print(f"- Documentos vivos: **{summary.get('referenced_documents', 0)}**")
+          print(f"- Hash normalizado capturado: **{summary.get('hash_captured', 0)}**")
+          print(f"- Hash normalizado pendente: **{summary.get('hash_pending', 0)}**")
           print(f"- Aplicabilidade: `{summary.get('applicability_decision')}`")
           print(f"- Escalar de cobertura publicado: `{summary.get('coverage_scalar_published')}`")
           for warning in report.get("warnings", []):
