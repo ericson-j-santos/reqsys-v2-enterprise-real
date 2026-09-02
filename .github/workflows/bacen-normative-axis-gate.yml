@@ -1,0 +1,87 @@
+name: BACEN Normative Axis Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/normative/**"
+      - "scripts/validate_bacen_normative_axis.py"
+      - "tests/test_validate_bacen_normative_axis.py"
+      - ".github/workflows/bacen-normative-axis-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/normative/**"
+      - "scripts/validate_bacen_normative_axis.py"
+      - "tests/test_validate_bacen_normative_axis.py"
+      - ".github/workflows/bacen-normative-axis-gate.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-normative-axis-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN Eixo 1 — Integridade normativa
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML
+
+      - name: Compile validator
+        run: python -m py_compile scripts/validate_bacen_normative_axis.py
+
+      - name: Run normative axis tests
+        run: python -m unittest tests.test_validate_bacen_normative_axis
+
+      - name: Validate normative baseline
+        run: python scripts/validate_bacen_normative_axis.py
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-normative-axis-evidence
+          path: artifacts/bacen/bacen-normative-axis-check.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Append summary
+        if: always()
+        run: |
+          echo "## BACEN — Eixo 1 normativo" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f artifacts/bacen/bacen-normative-axis-check.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-normative-axis-check.json").read_text())
+          summary = report.get("summary", {})
+          print(f"- Resultado: `{report.get('result')}`")
+          print(f"- Baseline: `{report.get('baseline_uid')}`")
+          print(f"- as_of: `{report.get('as_of')}`")
+          print(f"- Obrigações modeladas: **{summary.get('obligations_modeled', 0)}**")
+          print(f"- Estado derivado `nao_avaliado`: **{summary.get('derived_nao_avaliado', 0)}**")
+          print(f"- Aplicabilidade: `{summary.get('applicability_decision')}`")
+          print(f"- Escalar de cobertura publicado: `{summary.get('coverage_scalar_published')}`")
+          for warning in report.get("warnings", []):
+              print(f"  - ⚠️ {warning}")
+          for error in report.get("errors", []):
+              print(f"  - ❌ {error}")
+          PY
+          else
+            echo "- Evidência não gerada." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

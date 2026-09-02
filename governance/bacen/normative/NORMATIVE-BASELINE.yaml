@@ -1,0 +1,279 @@
+schema_version: 1.0.0
+mode: advisory
+axis: normative
+
+normative_baseline:
+  uid: baseline-2026-09-02
+  as_of: "2026-09-02T22:10:00Z"
+  source_verified_at: "2026-09-02"
+  scope: initial_minimum_controls
+  scope_note: >-
+    Este incremento modela os 14 procedimentos e controles mínimos do art. 3º,
+    § 2º, da Resolução CMN nº 4.893/2021, com redação introduzida pela Resolução
+    CMN nº 5.274/2025. Requisitos adicionais do art. 3º-A, detalhamentos dos
+    §§ 7º a 12, arts. 22-A, 22-B e 23 e documentos vivos do SFN permanecem fora
+    desta baseline inicial e devem ser incorporados em incrementos posteriores.
+  regulations:
+    - uid: reg-cmn-4893
+      reference: "CMN 4.893/2021"
+      role: base
+      published_at: "2021-02-26"
+      consolidated_as_of: "2026-09-02"
+      official_source: "https://www.bcb.gov.br/estabilidadefinanceira/exibenormativo?numero=4893&tipo=Resolu%C3%A7%C3%A3o+CMN"
+    - uid: reg-cmn-5274
+      reference: "CMN 5.274/2025"
+      role: amendment
+      published_at: "2025-12-18"
+      adaptation_deadline: "2026-03-01"
+      official_source: "https://www.bcb.gov.br/estabilidadefinanceira/exibenormativo?numero=5274&tipo=Resolu%C3%A7%C3%A3o+CMN"
+  referenced_documents: []
+  referenced_documents_state: nao_avaliado
+
+applicability:
+  family: CMN-4893
+  decision: pending_decision
+  decided_by: null
+  decided_at: null
+  rationale: >-
+    A entidade e o escopo institucional ainda não foram parametrizados neste
+    incremento. A ausência de decisão de aplicabilidade não pode ser convertida
+    em não aplicável nem em conformidade parcial.
+
+obligations:
+  - uid: norm-b8a2a3e3
+    code: CMN4893-ART3-P2-I
+    title: Autenticação
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "I"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-9f874935
+    code: CMN4893-ART3-P2-II
+    title: Mecanismos de criptografia
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "II"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-17e04755
+    code: CMN4893-ART3-P2-III
+    title: Mecanismos de prevenção e detecção de intrusão
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "III"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-26d9e63b
+    code: CMN4893-ART3-P2-IV
+    title: Mecanismos de prevenção de vazamentos de informações
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "IV"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-858a156c
+    code: CMN4893-ART3-P2-V
+    title: Mecanismos de proteção contra softwares maliciosos
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "V"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-673abde6
+    code: CMN4893-ART3-P2-VI
+    title: Mecanismos de rastreabilidade
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "VI"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-97aa256c
+    code: CMN4893-ART3-P2-VII
+    title: Gestão de cópias de segurança dos dados e das informações
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "VII"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-ee538890
+    code: CMN4893-ART3-P2-VIII
+    title: Avaliação e correção de vulnerabilidades dos recursos computacionais e dos sistemas de informação
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "VIII"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-27949799
+    code: CMN4893-ART3-P2-IX
+    title: Controles de acesso
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "IX"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-70274551
+    code: CMN4893-ART3-P2-X
+    title: Definição e implementação de perfis de configuração segura de ativos de tecnologia
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "X"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-efd5d5e9
+    code: CMN4893-ART3-P2-XI
+    title: Mecanismos de proteção da rede
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "XI"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-86c08dab
+    code: CMN4893-ART3-P2-XII
+    title: Gestão de certificados digitais
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "XII"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-b2453e25
+    code: CMN4893-ART3-P2-XIII
+    title: Requisitos de segurança para integração de sistemas de informação por meio de interfaces eletrônicas
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "XIII"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
+
+  - uid: norm-cb588018
+    code: CMN4893-ART3-P2-XIV
+    title: Ações de inteligência no ambiente cibernético
+    source:
+      regulation: CMN-4893-2021
+      article: "3"
+      paragraph: "2"
+      item: "XIV"
+    introduced_by:
+      regulation: CMN-5274-2025
+      published_at: "2025-12-18"
+    mapping:
+      state: pending
+      corporate_refs: []
+      implementation_refs: []
+    assessment: null
