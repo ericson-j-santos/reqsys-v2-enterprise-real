@@ -15,20 +15,25 @@
 
 ## Baseline normativa utilizada
 
-- `as_of`: `2026-09-02T22:10:00Z`
-- Baseline canônica inicial: `governance/bacen/normative/NORMATIVE-BASELINE.yaml`.
-- Estado da baseline: `initial_normative_axis_v1`.
+- `as_of`: `2026-09-02T22:30:00Z`
+- Baseline canônica vigente no ReqSys: `governance/bacen/normative/NORMATIVE-BASELINE-V2.yaml`.
+- Baseline histórica preservada: `governance/bacen/normative/NORMATIVE-BASELINE.yaml` (`v1`).
+- Estado da baseline: `extended_normative_axis_v2_pending_assessment`.
 - Norma-base: Resolução CMN nº 4.893/2021 — texto consolidado.
 - Alteração material incorporada: Resolução CMN nº 5.274/2025, publicada em 18/12/2025.
-- Escopo modelado neste incremento: 14 procedimentos e controles mínimos do art. 3º, § 2º, incisos I a XIV.
-- Estado derivado inicial das 14 obrigações: `nao_avaliado`.
+- Escopo modelado: 14 controles mínimos do art. 3º, § 2º + 43 obrigações adicionais materiais do § 6º, §§ 7º–12, art. 3º-A, arts. 22-A/22-B e art. 23, X.
+- Total estrutural modelado no Eixo 1 v2: 57 obrigações.
+- Estado inicial derivado: `nao_avaliado`; nenhuma obrigação foi promovida automaticamente.
+- Documentos vivos SFN modelados: Catálogo de Serviços 5.13, Manual de Redes 9.3 e Manual de Segurança 6.00 (Volumes I e II).
+- Identidade primária dos documentos vivos: `version + published_at`.
+- Hash auxiliar: SHA-256 sobre `normalized_text` (`bcb-text-v1`), nunca sobre PDF bruto.
+- Captura inicial dos hashes normalizados: `pending_initial_capture`; enquanto pendente, não há prontidão para Gate 2.
 - Família Resolução BCB nº 85/2021 + Resolução BCB nº 538/2025: `applicability_pending`.
-- Documentos vivos SFN e requisitos adicionais do art. 3º-A: `nao_avaliado` e fora da baseline inicial.
 
 > A existência do Eixo 1 não constitui decisão institucional de aplicabilidade nem
 > declaração de conformidade. Os vínculos com os eixos corporativo e de implementação,
-> os documentos vivos, a aplicabilidade por entidade e a avaliação das obrigações
-> permanecem sujeitos aos próximos incrementos do ADR-015/ADR-016.
+> a decisão por entidade, a captura dos hashes dos documentos vivos e a avaliação das
+> obrigações permanecem pendentes e não podem ser inferidos pela automação.
 
 ## Responsável executivo
 
