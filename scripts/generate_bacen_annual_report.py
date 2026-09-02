@@ -7,6 +7,11 @@ existem em outros arquivos versionados: o status real da designação executiva
 (`EXECUTIVE-DESIGNATION.yaml`) e o panorama da matriz de controles
 (`BACEN-CONTROL-MATRIX.yaml`). Tudo o que exige decisão humana permanece como
 texto placeholder até revisão manual.
+
+Importante: enquanto o eixo normativo vigente não estiver integralmente modelado
+e avaliado, o gerador publica apenas o vetor de estados dos macrocontroles
+internos. Ele não calcula nem publica percentual agregado de cobertura
+regulatória.
 """
 from __future__ import annotations
 
@@ -67,24 +72,24 @@ def render_executive_block(designation: dict[str, str]) -> str:
 
 
 def render_controls_block(controls: list[dict[str, str]]) -> str:
+    """Renderiza somente o vetor de estados dos controles internos.
+
+    Não publica percentual agregado. Os BACEN-01..08 são macrocontroles internos
+    e não constituem, isoladamente, o denominador normativo vigente.
+    """
     lines = [CONTROLS_START, ""]
-    lines.append("| Controle | Domínio | Criticidade | Status |")
+    lines.append("| Controle interno | Domínio | Criticidade | Status |")
     lines.append("|---|---|---|---|")
     for control in controls:
         lines.append(
             f"| {control.get('id', '?')} | {control.get('domain', '?')} "
             f"| {control.get('criticality', '?')} | {control.get('status', '?')} |"
         )
-    total = len(controls)
-    implemented = sum(1 for c in controls if c.get("status") == "implemented")
-    partial = sum(1 for c in controls if c.get("status") == "partial")
-    gaps = sum(1 for c in controls if c.get("status") == "gap")
-    coverage = round(100 * implemented / total, 2) if total else 0.0
     lines.append("")
     lines.append(
-        f"Total: **{total}** · Implementados: **{implemented}** · "
-        f"Parciais: **{partial}** · Lacunas: **{gaps}** · "
-        f"Cobertura ponderada: **{coverage}%**"
+        "> **Nota:** estes são macrocontroles internos do ReqSys. "
+        "Nenhum percentual agregado de cobertura regulatória é publicado enquanto "
+        "o eixo normativo vigente não estiver integralmente modelado e avaliado."
     )
     lines.append(CONTROLS_END)
     return "\n".join(lines)
