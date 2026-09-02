@@ -15,17 +15,20 @@
 
 ## Baseline normativa utilizada
 
-- `as_of`: `2026-09-02T22:01:00Z`
-- Estado da baseline: `transitional_pending_normative_axis`
+- `as_of`: `2026-09-02T22:10:00Z`
+- Baseline canônica inicial: `governance/bacen/normative/NORMATIVE-BASELINE.yaml`.
+- Estado da baseline: `initial_normative_axis_v1`.
 - Norma-base: Resolução CMN nº 4.893/2021 — texto consolidado.
-- Alteração material incorporada ao contrato: Resolução CMN nº 5.274/2025, publicada em 18/12/2025.
+- Alteração material incorporada: Resolução CMN nº 5.274/2025, publicada em 18/12/2025.
+- Escopo modelado neste incremento: 14 procedimentos e controles mínimos do art. 3º, § 2º, incisos I a XIV.
+- Estado derivado inicial das 14 obrigações: `nao_avaliado`.
 - Família Resolução BCB nº 85/2021 + Resolução BCB nº 538/2025: `applicability_pending`.
-- Documentos vivos SFN referenciados pela norma: `nao_avaliado` até a implantação do eixo normativo versionado do ADR-015.
+- Documentos vivos SFN e requisitos adicionais do art. 3º-A: `nao_avaliado` e fora da baseline inicial.
 
-> Este bloco registra a baseline usada para estruturar o relatório. Não constitui
-> decisão institucional de aplicabilidade nem declaração de conformidade. A
-> reconciliação com documentos vivos, seus hashes de texto normalizado e a
-> aplicabilidade por entidade permanece pendente do eixo normativo.
+> A existência do Eixo 1 não constitui decisão institucional de aplicabilidade nem
+> declaração de conformidade. Os vínculos com os eixos corporativo e de implementação,
+> os documentos vivos, a aplicabilidade por entidade e a avaliação das obrigações
+> permanecem sujeitos aos próximos incrementos do ADR-015/ADR-016.
 
 ## Responsável executivo
 
