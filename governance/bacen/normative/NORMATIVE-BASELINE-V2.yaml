@@ -1,0 +1,100 @@
+schema_version: 2.0.0
+mode: advisory
+axis: normative
+
+normative_baseline:
+  uid: baseline-2026-09-02-v2
+  as_of: "2026-09-02T22:30:00Z"
+  source_verified_at: "2026-09-02"
+  parent_baseline: governance/bacen/normative/NORMATIVE-BASELINE.yaml
+  scope: extended_cmn_5274_material_obligations
+  scope_note: >-
+    Compõe os 14 controles mínimos do art. 3º, § 2º, com as obrigações adicionais
+    materiais introduzidas pela Resolução CMN nº 5.274/2025: art. 3º, § 6º e
+    §§ 7º a 12; art. 3º-A; arts. 22-A e 22-B; e art. 23, inciso X. O estado das
+    obrigações permanece derivado e inicialmente nao_avaliado.
+  regulations:
+    - uid: reg-cmn-4893
+      reference: "CMN 4.893/2021"
+      role: base
+      consolidated_as_of: "2026-09-02"
+      official_source: "https://www.bcb.gov.br/estabilidadefinanceira/exibenormativo?numero=4893&tipo=Resolu%C3%A7%C3%A3o+CMN"
+    - uid: reg-cmn-5274
+      reference: "CMN 5.274/2025"
+      role: amendment
+      published_at: "2025-12-18"
+      adaptation_deadline: "2026-03-01"
+      official_source: "https://www.bcb.gov.br/estabilidadefinanceira/exibenormativo?numero=5274&tipo=Resolu%C3%A7%C3%A3o+CMN"
+  obligation_sets:
+    - path: governance/bacen/normative/NORMATIVE-BASELINE.yaml
+      selector: obligations
+      expected_count: 14
+    - path: governance/bacen/normative/NORMATIVE-OBLIGATIONS-EXTENDED.yaml
+      selector: obligations
+      expected_count: 43
+  hash_policy:
+    primary_identity: [version, published_at]
+    content_hash_role: auxiliary_change_detector
+    hash_scope: normalized_text
+    normalization_profile: bcb-text-v1
+    rules:
+      unicode_normalization: NFKC
+      line_endings: LF
+      collapse_whitespace: true
+      strip_paginated_headers_footers: true
+      exclude_render_metadata: true
+  referenced_documents:
+    - uid: doc-catalogo-servicos-sfn
+      title: "Catálogo de Serviços do SFN"
+      version: "5.13"
+      published_at: "2026-07-24"
+      checked_at: "2026-09-02"
+      check_cycle_days: 7
+      official_source: "https://www.bcb.gov.br/estabilidadefinanceira/comunicacaodados"
+      hash_scope: normalized_text
+      normalization_profile: bcb-text-v1
+      hash_state: pending_initial_capture
+      content_sha256: null
+    - uid: doc-manual-redes-sfn
+      title: "Manual de Redes do SFN"
+      version: "9.3"
+      published_at: "2023-10-06"
+      checked_at: "2026-09-02"
+      check_cycle_days: 30
+      official_source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual_de_Redes_do_SFN_Ver_9.3.pdf"
+      hash_scope: normalized_text
+      normalization_profile: bcb-text-v1
+      hash_state: pending_initial_capture
+      content_sha256: null
+    - uid: doc-manual-seguranca-sfn-vol1
+      title: "Manual de Segurança do SFN — Volume I"
+      version: "6.00"
+      published_at: "2026-06-08"
+      checked_at: "2026-09-02"
+      check_cycle_days: 7
+      official_source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual%20de%20Seguran%C3%A7a%20do%20SFN%20-%20Vol.I%20-%20v6_00.pdf"
+      hash_scope: normalized_text
+      normalization_profile: bcb-text-v1
+      hash_state: pending_initial_capture
+      content_sha256: null
+    - uid: doc-manual-seguranca-sfn-vol2
+      title: "Manual de Segurança do SFN — Volume II: Segurança do Pix"
+      version: "6.00"
+      published_at: "2026-06-08"
+      checked_at: "2026-09-02"
+      check_cycle_days: 7
+      official_source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual%20de%20Seguran%C3%A7a%20do%20SFN%20-%20Vol.II%20-%20v6_00.pdf"
+      hash_scope: normalized_text
+      normalization_profile: bcb-text-v1
+      hash_state: pending_initial_capture
+      content_sha256: null
+
+applicability:
+  family: CMN-4893
+  decision: pending_decision
+  decided_by: null
+  decided_at: null
+  rationale: >-
+    A entidade e o escopo institucional permanecem sem decisão formal neste
+    incremento. Requisitos RSFN, Pix, STR e SMF são modelados sem presumir
+    aplicabilidade; desconhecimento não é convertido em nao_aplicavel.
