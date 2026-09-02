@@ -2,26 +2,83 @@ const fs = require('node:fs')
 const { test, expect } = require('@playwright/test')
 
 // Este spec testa especificamente o caminho de token delegado (MSAL) para
-// "Conexões Microsoft" — o pedaço que wsjf-planner-excel-live.spec.js NÃO
-// consegue exercitar porque loga via "Entrar (demo)" (nunca passa pelo MSAL).
+// "Conexões Microsoft". O login demo nao exercita esse fluxo.
 //
-// Precisa de uma sessão Microsoft real e pré-autenticada (cookies +
-// sessionStorage onde o MSAL guarda o cache de tokens), capturada com
-// scripts/setup-msal-storage-state.mjs e apontada via MSAL_STORAGE_STATE_PATH.
-// Sem isso, pula — de propósito, para não fingir sucesso sem evidência real.
+// O arquivo apontado por MSAL_STORAGE_STATE_PATH e um envelope criado por
+// scripts/setup-msal-storage-state.mjs. Ele contem o storageState nativo do
+// Playwright e, separadamente, o sessionStorage usado pelo MSAL. Playwright
+// nao persiste sessionStorage em storageState por conta propria.
 
 const storageStatePath = process.env.MSAL_STORAGE_STATE_PATH || ''
-const hasStorageState = Boolean(storageStatePath) && fs.existsSync(storageStatePath)
 const realJourney = process.env.REAL_USER_JOURNEY === 'true'
+
+function loadAuthBundle(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return null
+
+  const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+
+  if (parsed?.schemaVersion !== 1) {
+    throw new Error('MSAL storage state invalido: schemaVersion esperado = 1.')
+  }
+  if (!parsed.origin || typeof parsed.origin !== 'string') {
+    throw new Error('MSAL storage state invalido: origin ausente.')
+  }
+  // Falha cedo caso o origin esteja malformado.
+  new URL(parsed.origin)
+
+  if (!parsed.storageState || !Array.isArray(parsed.storageState.cookies) || !Array.isArray(parsed.storageState.origins)) {
+    throw new Error('MSAL storage state invalido: storageState do Playwright ausente ou malformado.')
+  }
+  if (!Array.isArray(parsed.sessionStorage) || parsed.sessionStorage.length === 0) {
+    throw new Error('MSAL storage state invalido: sessionStorage ausente ou vazio.')
+  }
+
+  const malformedEntry = parsed.sessionStorage.some(
+    (entry) => !entry || typeof entry.name !== 'string' || typeof entry.value !== 'string',
+  )
+  if (malformedEntry) {
+    throw new Error('MSAL storage state invalido: entrada de sessionStorage malformada.')
+  }
+
+  const hasMsalCache = parsed.sessionStorage.some((entry) => entry.name.toLowerCase().includes('msal'))
+  if (!hasMsalCache) {
+    throw new Error('MSAL storage state invalido: cache MSAL nao encontrado no sessionStorage.')
+  }
+
+  return parsed
+}
+
+const authBundle = loadAuthBundle(storageStatePath)
+const hasAuthBundle = Boolean(authBundle)
 
 test.describe('aceite real WSJF — conexões via token delegado MSAL', () => {
   test.skip(!realJourney, 'Executado somente pelo gate de aceite real no DEV.')
-  test.skip(!hasStorageState, 'Sem MSAL_STORAGE_STATE_PATH válido — rode scripts/setup-msal-storage-state.mjs e configure o secret.')
+  test.skip(!hasAuthBundle, 'Sem MSAL_STORAGE_STATE_PATH valido — rode npm run setup:msal-state e configure o secret.')
 
-  test.use({ storageState: storageStatePath })
+  test.use({
+    storageState: authBundle?.storageState || { cookies: [], origins: [] },
+  })
+
+  test.beforeEach(async ({ context }) => {
+    if (!authBundle) return
+
+    await context.addInitScript(
+      ({ origin, entries }) => {
+        if (window.location.origin !== origin) return
+        for (const { name, value } of entries) {
+          window.sessionStorage.setItem(name, value)
+        }
+      },
+      {
+        origin: authBundle.origin,
+        entries: authBundle.sessionStorage,
+      },
+    )
+  })
 
   test('com sessão Microsoft real, conexões Planner/Excel resolvem de verdade (sem mocks)', async ({ page }) => {
-    // Já autenticado via storageState — vai direto para a tela, sem login demo.
+    // storageState restaura cookies/localStorage e addInitScript restaura o
+    // sessionStorage antes dos scripts da aplicacao rodarem.
     await page.goto('/hub-lowcode/wsjf/planner-excel/instalar')
     await expect(page.getByRole('heading', { name: 'Instalar Planner → Excel WSJF' })).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText('Identidade Microsoft do ReqSys disponível para descoberta.')).toBeVisible({ timeout: 20_000 })
@@ -54,10 +111,9 @@ test.describe('aceite real WSJF — conexões via token delegado MSAL', () => {
     await escolherPrimeiro('Planner WSJF')
     await escolherPrimeiro('Planilha WSJF', /WSJF\.xlsx/i)
 
-    // O ponto real deste teste: com sessão Microsoft de verdade, o MSAL
-    // consegue emitir um token delegado (Connectivity.Connections.Read) e o
-    // backend enxerga as conexões pessoais do usuário — diferente do login
-    // demo, que nunca chega aqui com dado real.
+    // O ponto real deste teste: com sessao Microsoft de verdade, o MSAL
+    // consegue emitir um token delegado do Power Platform e o backend enxerga
+    // as conexoes pessoais do usuario, diferente do login demo.
     await escolherPrimeiro('Planner')
     await escolherPrimeiro('Excel Online (Business)')
 
@@ -69,7 +125,7 @@ test.describe('aceite real WSJF — conexões via token delegado MSAL', () => {
     await page.getByRole('button', { name: 'Validar', exact: true }).click()
     await expect(page.getByText(/Validação aprovada/)).toBeVisible({ timeout: 30_000 })
 
-    // Instalação real fica fora deste teste — só prova que a descoberta de
-    // conexões via token delegado funciona de ponta a ponta contra o tenant real.
+    // A instalacao real fica fora deste teste: o objetivo e provar a descoberta
+    // das conexoes via token delegado ponta a ponta contra o tenant real.
   })
 })
