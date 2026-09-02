@@ -9,6 +9,8 @@ on:
       - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
       - "scripts/generate_bacen_annual_report.py"
       - "scripts/validate_bacen_annual_report.py"
+      - "tests/test_generate_bacen_annual_report.py"
+      - "tests/test_validate_bacen_annual_report.py"
       - ".github/workflows/bacen-annual-report-gate.yml"
   push:
     branches: [main]
@@ -18,6 +20,8 @@ on:
       - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
       - "scripts/generate_bacen_annual_report.py"
       - "scripts/validate_bacen_annual_report.py"
+      - "tests/test_generate_bacen_annual_report.py"
+      - "tests/test_validate_bacen_annual_report.py"
       - ".github/workflows/bacen-annual-report-gate.yml"
   workflow_dispatch: {}
 
@@ -46,6 +50,12 @@ jobs:
         run: |
           python -m py_compile scripts/generate_bacen_annual_report.py
           python -m py_compile scripts/validate_bacen_annual_report.py
+
+      - name: Run annual report contract tests
+        run: |
+          python -m unittest \
+            tests.test_generate_bacen_annual_report \
+            tests.test_validate_bacen_annual_report
 
       - name: Fail if the report is stale relative to the control matrix
         run: |
@@ -79,6 +89,10 @@ jobs:
           report = json.loads(Path("artifacts/bacen/bacen-08-annual-report-check.json").read_text())
           summary = report.get("summary", {})
           print(f"- Resultado: `{report.get('result')}`")
+          print(f"- Contrato estrutural completo: `{summary.get('contract_complete')}`")
+          print(f"- as_of: `{summary.get('report_as_of')}`")
+          print(f"- Seções obrigatórias ausentes: `{', '.join(summary.get('contract_sections_missing', [])) or 'nenhuma'}`")
+          print(f"- Seções obrigatórias vazias: `{', '.join(summary.get('contract_sections_empty', [])) or 'nenhuma'}`")
           print(f"- Designação executiva: `{summary.get('executive_designation_status')}`")
           print(f"- Seções narrativas pendentes: **{summary.get('narrative_sections_pending', 0)}**")
           for warning in report.get("warnings", []):
