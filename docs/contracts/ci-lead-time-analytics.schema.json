@@ -23,111 +23,42 @@
     "workflow_stats"
   ],
   "properties": {
-    "schema_version": {
-      "type": "string",
-      "pattern": "^1\\.0\\.[0-9]+$"
-    },
-    "generated_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "repository": {
-      "type": "string",
-      "pattern": "^[^/]+/[^/]+$"
-    },
-    "event_name": {
-      "type": ["string", "null"]
-    },
-    "run_id": {
-      "type": ["string", "null"]
-    },
-    "window_runs": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 100
-    },
-    "completed_runs": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "success_count": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "failure_count": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "cancelled_count": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "skipped_count": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "success_rate_percent": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 100
-    },
-    "failure_rate_percent": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 100
-    },
-    "avg_seconds": {
-      "type": "number",
-      "minimum": 0
-    },
-    "p50_seconds": {
-      "type": "number",
-      "minimum": 0
-    },
-    "p95_seconds": {
-      "type": "number",
-      "minimum": 0
-    },
-    "max_seconds": {
-      "type": "number",
-      "minimum": 0
-    },
-    "baseline_incident_minutes": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "baseline_incident_seconds": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "status": {
-      "type": "string",
-      "enum": ["passed", "warning"]
-    },
-    "warnings": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "bottlenecks": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/workflow_stat"
-      }
-    },
-    "workflow_stats": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/workflow_stat"
-      }
-    },
-    "recent_completed_runs": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/run_summary"
-      }
-    }
+    "schema_version": {"type": "string", "pattern": "^1\\.0\\.[0-9]+$"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "repository": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+    "event_name": {"type": ["string", "null"]},
+    "run_id": {"type": ["string", "null"]},
+    "window_runs": {"type": "integer", "minimum": 1, "maximum": 100},
+    "completed_runs": {"type": "integer", "minimum": 0},
+    "success_count": {"type": "integer", "minimum": 0},
+    "failure_count": {"type": "integer", "minimum": 0},
+    "cancelled_count": {"type": "integer", "minimum": 0},
+    "skipped_count": {"type": "integer", "minimum": 0},
+    "rerun_count": {"type": "integer", "minimum": 0},
+    "first_pass_success_count": {"type": "integer", "minimum": 0},
+    "success_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+    "failure_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+    "first_pass_success_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+    "rerun_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+    "avg_seconds": {"type": "number", "minimum": 0},
+    "p50_seconds": {"type": "number", "minimum": 0},
+    "p90_seconds": {"type": "number", "minimum": 0},
+    "p95_seconds": {"type": "number", "minimum": 0},
+    "max_seconds": {"type": "number", "minimum": 0},
+    "stddev_seconds": {"type": "number", "minimum": 0},
+    "cv_percent": {"type": "number", "minimum": 0},
+    "avg_queue_seconds": {"type": "number", "minimum": 0},
+    "p95_queue_seconds": {"type": "number", "minimum": 0},
+    "throughput": {"$ref": "#/$defs/throughput"},
+    "trend_comparison": {"$ref": "#/$defs/trend_comparison"},
+    "failure_pareto": {"type": "array", "items": {"$ref": "#/$defs/failure_pareto_item"}},
+    "baseline_incident_minutes": {"type": "integer", "minimum": 0},
+    "baseline_incident_seconds": {"type": "integer", "minimum": 0},
+    "status": {"type": "string", "enum": ["passed", "warning"]},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "bottlenecks": {"type": "array", "items": {"$ref": "#/$defs/workflow_stat"}},
+    "workflow_stats": {"type": "array", "items": {"$ref": "#/$defs/workflow_stat"}},
+    "recent_completed_runs": {"type": "array", "items": {"$ref": "#/$defs/run_summary"}}
   },
   "$defs": {
     "workflow_stat": {
@@ -135,34 +66,19 @@
       "additionalProperties": true,
       "required": ["name", "runs", "success_rate_percent", "avg_seconds", "p50_seconds", "p95_seconds", "max_seconds"],
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "runs": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "success_rate_percent": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 100
-        },
-        "avg_seconds": {
-          "type": "number",
-          "minimum": 0
-        },
-        "p50_seconds": {
-          "type": "number",
-          "minimum": 0
-        },
-        "p95_seconds": {
-          "type": "number",
-          "minimum": 0
-        },
-        "max_seconds": {
-          "type": "number",
-          "minimum": 0
-        }
+        "name": {"type": "string"},
+        "runs": {"type": "integer", "minimum": 0},
+        "success_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "failure_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "rerun_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "avg_seconds": {"type": "number", "minimum": 0},
+        "p50_seconds": {"type": "number", "minimum": 0},
+        "p90_seconds": {"type": "number", "minimum": 0},
+        "p95_seconds": {"type": "number", "minimum": 0},
+        "max_seconds": {"type": "number", "minimum": 0},
+        "stddev_seconds": {"type": "number", "minimum": 0},
+        "cv_percent": {"type": "number", "minimum": 0},
+        "p95_queue_seconds": {"type": "number", "minimum": 0}
       }
     },
     "run_summary": {
@@ -170,46 +86,69 @@
       "additionalProperties": true,
       "required": ["id", "name", "event", "status", "duration_seconds", "duration_minutes"],
       "properties": {
-        "id": {
-          "type": "integer"
-        },
-        "name": {
-          "type": "string"
-        },
-        "event": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "conclusion": {
-          "type": ["string", "null"]
-        },
-        "head_branch": {
-          "type": ["string", "null"]
-        },
-        "head_sha": {
-          "type": ["string", "null"]
-        },
-        "html_url": {
-          "type": ["string", "null"]
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updated_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "duration_seconds": {
-          "type": "number",
-          "minimum": 0
-        },
-        "duration_minutes": {
-          "type": "number",
-          "minimum": 0
-        }
+        "id": {"type": "integer"},
+        "name": {"type": "string"},
+        "event": {"type": "string"},
+        "status": {"type": "string"},
+        "conclusion": {"type": ["string", "null"]},
+        "head_branch": {"type": ["string", "null"]},
+        "head_sha": {"type": ["string", "null"]},
+        "html_url": {"type": ["string", "null"]},
+        "created_at": {"type": "string", "format": "date-time"},
+        "run_started_at": {"type": ["string", "null"], "format": "date-time"},
+        "updated_at": {"type": "string", "format": "date-time"},
+        "run_attempt": {"type": "integer", "minimum": 1},
+        "queue_seconds": {"type": "number", "minimum": 0},
+        "execution_seconds": {"type": "number", "minimum": 0},
+        "duration_seconds": {"type": "number", "minimum": 0},
+        "duration_minutes": {"type": "number", "minimum": 0}
+      }
+    },
+    "throughput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["window_span_hours", "runs_per_hour", "runs_per_day"],
+      "properties": {
+        "window_span_hours": {"type": "number", "minimum": 0},
+        "runs_per_hour": {"type": "number", "minimum": 0},
+        "runs_per_day": {"type": "number", "minimum": 0}
+      }
+    },
+    "window_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runs", "success_rate_percent", "failure_rate_percent", "p50_seconds", "p95_seconds", "cv_percent"],
+      "properties": {
+        "runs": {"type": "integer", "minimum": 0},
+        "success_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "failure_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "p50_seconds": {"type": "number", "minimum": 0},
+        "p95_seconds": {"type": "number", "minimum": 0},
+        "cv_percent": {"type": "number", "minimum": 0}
+      }
+    },
+    "trend_comparison": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["available"],
+      "properties": {
+        "available": {"type": "boolean"},
+        "reason": {"type": "string"},
+        "current": {"$ref": "#/$defs/window_metrics"},
+        "previous": {"$ref": "#/$defs/window_metrics"},
+        "delta": {"type": "object", "additionalProperties": {"type": "number"}},
+        "signals": {"type": "object", "additionalProperties": {"type": "string", "enum": ["improved", "stable", "regressed"]}}
+      }
+    },
+    "failure_pareto_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "failures", "share_percent", "cumulative_share_percent"],
+      "properties": {
+        "name": {"type": "string"},
+        "failures": {"type": "integer", "minimum": 1},
+        "share_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "cumulative_share_percent": {"type": "number", "minimum": 0, "maximum": 100}
       }
     }
   }
