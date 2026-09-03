@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../api'
 import { acquirePowerPlatformToken } from '../../auth/msal'
-import { listarConexoesInstalacao } from '../copilotMemoryInstaller'
+import { listarConexoesInstalacao, mensagemErroInstalacao } from '../copilotMemoryInstaller'
 
 vi.mock('../api', () => ({
   api: {
@@ -47,12 +47,30 @@ describe('listarConexoesInstalacao', () => {
     )
   })
 
-  it('propaga falha real de aquisicao do token e nao consulta conexoes sem credencial', async () => {
-    const erro = new Error('consent_required')
-    acquirePowerPlatformToken.mockRejectedValue(erro)
+  it('propaga erro de aquisicao do token e nao chama o backend sem header', async () => {
+    const error = Object.assign(new Error('consent required'), { errorCode: 'consent_required' })
+    acquirePowerPlatformToken.mockRejectedValue(error)
 
-    await expect(listarConexoesInstalacao('env-1')).rejects.toBe(erro)
-
+    await expect(listarConexoesInstalacao('env-1')).rejects.toBe(error)
     expect(api.get).not.toHaveBeenCalled()
+  })
+})
+
+describe('mensagemErroInstalacao', () => {
+  it.each([
+    { errorCode: 'consent_required', message: 'consent required' },
+    { errorCode: 'invalid_scope', message: 'invalid scope' },
+    { errorCode: 'unauthorized_client', message: 'unauthorized client' },
+    { errorCode: 'access_denied', message: 'access denied' },
+    { errorCode: '', message: 'AADSTS65001: consent required' },
+  ])('explica a verificacao do Entra para erro de permissao/token: $errorCode', (data) => {
+    const error = Object.assign(new Error(data.message), { errorCode: data.errorCode })
+
+    expect(mensagemErroInstalacao(error)).toContain('Connectivity.Connections.Read')
+    expect(mensagemErroInstalacao(error)).toContain('Microsoft Entra')
+  })
+
+  it('preserva mensagem de erro desconhecido', () => {
+    expect(mensagemErroInstalacao(new Error('falha de rede'))).toBe('falha de rede')
   })
 })

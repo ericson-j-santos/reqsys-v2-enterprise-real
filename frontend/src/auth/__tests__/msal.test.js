@@ -213,6 +213,45 @@ describe('handleRedirectResult', () => {
   })
 })
 
+describe('acquireIdTokenSilent', () => {
+  it('retorna id_token via acquireTokenSilent quando ha conta em cache', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockResolvedValue({ idToken: 'fresh-id-token' })
+
+    const { acquireIdTokenSilent, SCOPES } = await import('../msal')
+    const idToken = await acquireIdTokenSilent()
+
+    expect(idToken).toBe('fresh-id-token')
+    expect(mockAcquireTokenSilent).toHaveBeenCalledWith(
+      expect.objectContaining({ scopes: SCOPES, account: { username: 'user@tieri659.onmicrosoft.com' } })
+    )
+  })
+
+  it('retorna null (sem lancar) quando nao ha conta Microsoft em cache', async () => {
+    mockGetAllAccounts.mockReturnValue([])
+    const { acquireIdTokenSilent } = await import('../msal')
+    await expect(acquireIdTokenSilent()).resolves.toBeNull()
+    expect(mockAcquireTokenSilent).not.toHaveBeenCalled()
+  })
+
+  it('retorna null (sem lancar, sem popup) quando a sessao SSO nao esta mais valida', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    const interactionErr = Object.assign(new Error('interaction required'), { name: 'InteractionRequiredAuthError' })
+    mockAcquireTokenSilent.mockRejectedValue(interactionErr)
+
+    const { acquireIdTokenSilent } = await import('../msal')
+    await expect(acquireIdTokenSilent()).resolves.toBeNull()
+    expect(mockAcquireTokenPopup).not.toHaveBeenCalled()
+  })
+
+  it('retorna null quando Azure AD nao esta configurado no servidor', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
+    const { acquireIdTokenSilent } = await import('../msal')
+    await expect(acquireIdTokenSilent()).resolves.toBeNull()
+  })
+})
+
 describe('acquireTeamsGraphToken', () => {
   it('retorna access_token via acquireTokenSilent quando ha conta logada', async () => {
     mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
