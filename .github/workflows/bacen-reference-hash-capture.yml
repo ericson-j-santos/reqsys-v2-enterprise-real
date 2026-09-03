@@ -47,6 +47,31 @@ jobs:
       - name: Capture official BCB references
         run: python scripts/capture_bacen_reference_hashes.py
 
+      - name: Print computed hash evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-reference-hashes.json").read_text(encoding="utf-8"))
+          print(json.dumps({
+              "result": report["result"],
+              "documents": [
+                  {
+                      "uid": item["uid"],
+                      "version": item["version"],
+                      "published_at": item["published_at"],
+                      "capture_scope": item["capture_scope"],
+                      "parser": item["parser"],
+                      "parser_version": item.get("parser_version"),
+                      "pages": item.get("pages"),
+                      "normalized_chars": item["normalized_chars"],
+                      "content_sha256": item["content_sha256"],
+                  }
+                  for item in report["documents"]
+              ],
+          }, ensure_ascii=False, indent=2))
+          PY
+
       - name: Enforce captured baseline when all hashes are committed
         run: |
           python - <<'PY'
