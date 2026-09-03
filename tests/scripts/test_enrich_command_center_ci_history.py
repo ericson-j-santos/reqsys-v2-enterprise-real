@@ -1,6 +1,11 @@
+import sys
 import unittest
+from pathlib import Path
 
-from scripts.enrich_command_center_ci_history import summarize_history
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from scripts.enrich_command_center_ci_history import summarize_history  # noqa: E402
 
 
 def record(idx: int, signal: str, success: float = 90.0, failure: float = 4.0, p95: float = 30.0, cv: float = 50.0):
