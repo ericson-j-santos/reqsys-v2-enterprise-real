@@ -1,4 +1,4 @@
-schema_version: 2.1.0
+schema_version: 2.2.0
 mode: advisory
 axis: normative
 
@@ -53,35 +53,50 @@ normative_baseline:
       check_cycle_days: 7
       official_source: "https://www.bcb.gov.br/estabilidadefinanceira/comunicacaodados"
       capture:
-        kind: html_section
-        scope: publication_notice_for_catalog_version
-        source: "https://www.bcb.gov.br/estabilidadefinanceira/exibenormativo?numero=45631&tipo=Comunicado"
-        start_marker: "COMUNICADO"
-        end_marker: "Comunicação Eletrônica de Dados no Âmbito do SFN"
+        kind: pdf_text_set
+        scope: ordered_complete_pdf_text_set
+        parser: "pypdf==6.16.2"
         expected_markers:
-          - "45.631"
-          - "versão 5.13"
           - "Catálogo de Serviços do SFN"
+          - "Versão 5.13"
+        sources:
+          - uid: volume-I
+            source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Catalogos/Catalogo_de_Servicos_do_SFN_Volume_I_Versao_513.pdf"
+            expected_markers: ["Catálogo de Serviços do SFN", "Volume I", "Versão 5.13"]
+          - uid: volume-II
+            source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Catalogos/Catalogo_de_Servicos_do_SFN_Volume_II_Versao_513.pdf"
+            expected_markers: ["Catálogo de Serviços do SFN", "Volume II", "Versão 5.13"]
+          - uid: volume-III
+            source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Catalogos/Catalogo_de_Servicos_do_SFN_Volume_III_Versao_513.pdf"
+            expected_markers: ["Catálogo de Serviços do SFN", "Volume III", "Versão 5.13"]
+          - uid: volume-IV
+            source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Catalogos/Catalogo_de_Servicos_do_SFN_Volume_IV_Versao_513.pdf"
+            expected_markers: ["Catálogo de Serviços do SFN", "Volume IV", "Versão 5.13"]
+          - uid: volume-V
+            source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Catalogos/Catalogo_de_Servicos_do_SFN_Volume_V_Versao_513.pdf"
+            expected_markers: ["Catálogo de Serviços do SFN", "Volume V", "Versão 5.13"]
+          - uid: volume-VI
+            source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Catalogos/Catalogo_de_Servicos_do_SFN_Volume_VI_Versao_513.pdf"
+            expected_markers: ["Catálogo de Serviços do SFN", "Volume VI", "Versão 5.13"]
       hash_scope: normalized_text
       normalization_profile: bcb-text-v1
       hash_state: pending_initial_capture
       content_sha256: null
     - uid: doc-manual-redes-sfn
       title: "Manual de Redes do SFN"
-      version: "9.3"
-      published_at: "2023-10-06"
+      version: "9.4"
+      published_at: "2026-08-14"
       checked_at: "2026-09-02"
-      check_cycle_days: 30
-      official_source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual_de_Redes_do_SFN_Ver_9.3.pdf"
+      check_cycle_days: 7
+      official_source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual_de_Redes_do_SFN_Ver_9.4.pdf"
       capture:
         kind: pdf_text
         scope: complete_pdf_text
-        source: "https://liftchallenge.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual_de_Redes_do_SFN_Ver_9.3.pdf"
+        source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual_de_Redes_do_SFN_Ver_9.4.pdf"
         parser: "pypdf==6.16.2"
         expected_markers:
           - "MANUAL DE REDES DO SFN"
-          - "VERSÃO 9.3"
-          - "06 de outubro de 2023"
+          - "VERSÃO 9.4"
       hash_scope: normalized_text
       normalization_profile: bcb-text-v1
       hash_state: pending_initial_capture
