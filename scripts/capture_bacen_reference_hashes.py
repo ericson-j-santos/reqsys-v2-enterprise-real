@@ -10,7 +10,6 @@ import argparse
 import io
 import json
 import ssl
-import sys
 import urllib.request
 from datetime import UTC, datetime
 from html.parser import HTMLParser
@@ -20,8 +19,10 @@ from typing import Any
 import yaml
 from pypdf import PdfReader, __version__ as pypdf_version
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from validate_bacen_normative_axis import normalized_text_sha256, normalize_bcb_text  # noqa: E402
+try:
+    from scripts.validate_bacen_normative_axis import normalized_text_sha256, normalize_bcb_text
+except ModuleNotFoundError:  # execução direta: python scripts/capture_bacen_reference_hashes.py
+    from validate_bacen_normative_axis import normalized_text_sha256, normalize_bcb_text
 
 USER_AGENT = "ReqSys-BACEN-Normative-Capture/1.0 (+https://github.com/ericson-j-santos/reqsys-v2-enterprise-real)"
 
