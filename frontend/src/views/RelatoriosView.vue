@@ -5,7 +5,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">Relatórios SSRS</h1>
-        <div class="muted" style="font-size:13px;margin-top:2px">
+        <div class="muted" style="font-size:var(--font-size-md);margin-top:var(--space-xs)">
           Monitoramento e acesso centralizado dos relatórios publicados
         </div>
       </div>
@@ -91,7 +91,7 @@
           </div>
           <div class="metric-value-row">
             <span class="metric-value text-green">{{ statusOnline }}</span>
-            <span class="muted" style="font-size:11px;margin-left:4px">/ {{ statusReports.length }}</span>
+            <span class="muted" style="font-size:var(--font-size-xs);margin-left:var(--space-xs)">/ {{ statusReports.length }}</span>
           </div>
         </v-card>
       </v-col>
@@ -102,7 +102,7 @@
             <span>Última Verificação</span>
           </div>
           <div class="metric-value-row">
-            <span class="metric-value" style="font-size:14px">{{ ultimaVerificacao }}</span>
+            <span class="metric-value" style="font-size:var(--font-size-base)">{{ ultimaVerificacao }}</span>
           </div>
         </v-card>
       </v-col>
@@ -132,7 +132,7 @@
               </thead>
               <tbody>
                 <tr v-if="!reports.length">
-                  <td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">
+                  <td colspan="5" style="text-align:center;padding:var(--space-xl);color:var(--muted)">
                     Nenhum relatório disponível
                   </td>
                 </tr>
@@ -158,7 +158,7 @@
                     <v-chip v-else size="x-small" color="grey" variant="tonal">—</v-chip>
                   </td>
                   <td class="text-center">
-                    <span style="font-size:12px;color:var(--muted)">
+                    <span style="font-size:var(--font-size-sm);color:var(--muted)">
                       {{ row.status_code || '—' }}
                     </span>
                   </td>
@@ -217,7 +217,7 @@
           </div>
         </v-expand-transition>
 
-        <div v-if="statusChecked" class="muted mt-2" style="font-size:12px;text-align:right">
+        <div v-if="statusChecked" class="muted mt-2" style="font-size:var(--font-size-sm);text-align:right">
           Verificado em {{ ultimaVerificacao }}
           <v-btn size="x-small" variant="text" :loading="verificando" @click="verificarStatus">re-verificar</v-btn>
         </div>
@@ -228,7 +228,7 @@
         <v-row>
           <v-col cols="12" md="3">
             <v-card class="table-card">
-              <v-card-title class="py-2 px-4" style="font-size:14px">Relatórios</v-card-title>
+              <v-card-title class="py-2 px-4" style="font-size:var(--font-size-base)">Relatórios</v-card-title>
               <v-divider />
               <v-list density="compact" nav>
                 <v-list-item
@@ -283,7 +283,7 @@
                     style="width:100%;height:100%;border:0"
                   />
                 </div>
-                <div v-else class="empty-state" style="padding:48px 0">
+                <div v-else class="empty-state" style="padding:var(--space-3xl) 0">
                   <v-icon size="48" color="grey">mdi-file-chart-outline</v-icon>
                   <div class="empty-sub mt-2">Selecione um relatório na lista à esquerda</div>
                 </div>
@@ -293,7 +293,7 @@
                   variant="tonal"
                   density="compact"
                   class="mt-2"
-                  style="font-size:12px"
+                  style="font-size:var(--font-size-sm)"
                 >
                   Se o preview não carregar (X-Frame-Options), use "Nova guia" ou "Download PDF".
                 </v-alert>
@@ -306,11 +306,11 @@
       <!-- ─── Tab: Downloads ────────────────────────────────────────── -->
       <v-window-item value="downloads">
         <v-card class="table-card">
-          <v-card-title class="py-3 px-4" style="font-size:15px">
+          <v-card-title class="py-3 px-4" style="font-size:var(--font-size-lg)">
             <v-icon class="mr-2" color="secondary">mdi-file-pdf-box</v-icon>
             Download de Relatórios em PDF
           </v-card-title>
-          <v-card-subtitle class="px-4 pb-2" style="font-size:12px">
+          <v-card-subtitle class="px-4 pb-2" style="font-size:var(--font-size-sm)">
             PDF gerado via SSRS pelo backend. Autenticação Windows gerenciada automaticamente.
           </v-card-subtitle>
           <v-divider />
@@ -332,8 +332,8 @@
                   <div style="display:flex;align-items:center;gap:10px">
                     <v-icon color="secondary" size="28">mdi-file-pdf-box</v-icon>
                     <div>
-                      <div style="font-weight:600;font-size:13px">{{ r.name }}</div>
-                      <div v-if="statusChecked" style="font-size:11px;margin-top:2px">
+                      <div style="font-weight:600;font-size:var(--font-size-md)">{{ r.name }}</div>
+                      <div v-if="statusChecked" style="font-size:var(--font-size-xs);margin-top:var(--space-xs)">
                         <v-chip
                           size="x-small"
                           :color="r.accessible ? 'green' : 'red'"
@@ -510,7 +510,7 @@ onMounted(() => {
 
 <style scoped>
 .metric {
-  padding: 14px 16px 12px;
+  padding: var(--space-lg) var(--space-lg) var(--space-md);
   border-radius: 12px;
   background: var(--card-alt, #e8f1fa);
   min-height: 76px;
@@ -520,9 +520,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--muted, #6b6b6b);
-  margin-bottom: 6px;
+  margin-bottom: var(--space-sm);
 }
 
 .metric-value-row {
@@ -531,7 +531,7 @@ onMounted(() => {
 }
 
 .metric-value {
-  font-size: 24px;
+  font-size: var(--font-size-2xl);
   font-weight: 700;
   line-height: 1;
 }
@@ -551,6 +551,6 @@ onMounted(() => {
 }
 
 @media (max-width: 600px) {
-  .metric-value { font-size: 18px; }
+  .metric-value { font-size: var(--font-size-xl); }
 }
 </style>

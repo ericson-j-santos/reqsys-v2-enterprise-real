@@ -450,14 +450,14 @@ onMounted(carregar)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-sm);
   font-size: 0.92rem;
 }
 
 .empty-cell {
   text-align: center;
   color: var(--muted);
-  padding: 18px;
+  padding: var(--space-lg);
 }
 
 .provider-header {
