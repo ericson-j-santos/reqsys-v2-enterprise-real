@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.envelope import ok
@@ -67,11 +67,15 @@ async def wsjf_planner_excel_validate(
 @router.post('/deploy')
 async def wsjf_planner_excel_deploy(
     payload: WsjfPlannerExcelProvisionRequest,
+    x_power_automate_token: str | None = Header(default=None, alias='X-Power-Automate-Token'),
     _auth=Depends(require_wsjf_auth),
 ):
+    """Cria/atualiza o fluxo de verdade. Exige token delegado (via MSAL no
+    frontend): a API de gerenciamento de fluxos nao aceita credencial
+    app-only."""
     try:
         await validar_destino_assistente(payload.environment_id, payload.environment_url)
-        result = await despachar(payload.model_dump())
+        result = await despachar(payload.model_dump(), user_token=x_power_automate_token)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return ok(result, result.get('correlation_id'))

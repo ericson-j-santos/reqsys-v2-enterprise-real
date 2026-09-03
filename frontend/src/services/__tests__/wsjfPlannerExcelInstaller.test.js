@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../api'
+import { acquireFlowManagementToken } from '../../auth/msal'
 import {
   carregarContratoWsjf,
   instalarWsjfPlannerExcel,
@@ -13,6 +14,10 @@ vi.mock('../api', () => ({
     get: vi.fn(),
     post: vi.fn(),
   },
+}))
+
+vi.mock('../../auth/msal', () => ({
+  acquireFlowManagementToken: vi.fn(),
 }))
 
 vi.mock('../copilotMemoryInstaller', () => ({
@@ -69,7 +74,8 @@ describe('wsjfPlannerExcelInstaller', () => {
     )
   })
 
-  it('instala apenas quando a chamada explicita usa confirmar true', async () => {
+  it('instala apenas quando a chamada explicita usa confirmar true, com token delegado do Power Automate', async () => {
+    acquireFlowManagementToken.mockResolvedValue('flow-token-123')
     api.post.mockResolvedValueOnce({ data: { data: { dispatched: true } } })
 
     await instalarWsjfPlannerExcel({ environment_id: 'dev', confirmar: false })
@@ -77,6 +83,20 @@ describe('wsjfPlannerExcelInstaller', () => {
     expect(api.post).toHaveBeenCalledWith(
       '/v1/hub-lowcode/wsjf/planner-excel/deploy',
       { environment_id: 'dev', confirmar: true },
+      { headers: { 'X-Power-Automate-Token': 'flow-token-123' } },
+    )
+  })
+
+  it('instala sem o header quando nao ha token (backend responde com mensagem clara)', async () => {
+    acquireFlowManagementToken.mockResolvedValue(null)
+    api.post.mockResolvedValueOnce({ data: { data: { dispatched: false } } })
+
+    await instalarWsjfPlannerExcel({ environment_id: 'dev', confirmar: false })
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/v1/hub-lowcode/wsjf/planner-excel/deploy',
+      { environment_id: 'dev', confirmar: true },
+      { headers: {} },
     )
   })
 })

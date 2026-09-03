@@ -1,4 +1,5 @@
 import { api } from './api'
+import { acquireFlowManagementToken } from '../auth/msal'
 import {
   carregarStatusInstalacao,
   listarArquivosInstalacao,
@@ -43,5 +44,11 @@ export async function validarWsjfPlannerExcel(payload) {
 }
 
 export async function instalarWsjfPlannerExcel(payload) {
-  return unwrap(await api.post(`${BASE}/deploy`, { ...payload, confirmar: true }))
+  // Criar/atualizar o fluxo de verdade exige token delegado (via MSAL): a
+  // API de gerenciamento de fluxos do Power Automate não aceita credencial
+  // app-only. Diferente da leitura de conexões, aqui deixamos o erro de
+  // aquisição propagar — é uma instalação real, não deve seguir silenciosa.
+  const token = await acquireFlowManagementToken()
+  const headers = token ? { 'X-Power-Automate-Token': token } : {}
+  return unwrap(await api.post(`${BASE}/deploy`, { ...payload, confirmar: true }, { headers }))
 }

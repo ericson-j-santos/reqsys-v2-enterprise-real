@@ -58,6 +58,11 @@ export const TEAMS_GRAPH_SCOPES = ['ChatMessage.Send', 'Chat.ReadWrite']
 // credential app-only) consegue enxerga-las.
 export const POWER_PLATFORM_SCOPES = ['https://api.powerplatform.com/.default']
 
+// Escopo delegado do Power Automate (api.flow.microsoft.com). Essa API nao
+// aceita credencial app-only (client_credentials) para criar/atualizar
+// fluxos — so token delegado do proprio usuario.
+export const FLOW_MANAGEMENT_SCOPES = ['https://service.flow.microsoft.com/.default']
+
 function clearInteractionState(clientId) {
   const prefixes = [`msal.${clientId}`, 'msal.']
   const markers = [
@@ -184,6 +189,31 @@ export async function acquirePowerPlatformToken() {
   if (!account) return null
 
   const request = { scopes: POWER_PLATFORM_SCOPES, account }
+  try {
+    const response = await msal.acquireTokenSilent(request)
+    return response.accessToken
+  } catch (err) {
+    if (err.name === 'InteractionRequiredAuthError' || String(err.errorCode || '').includes('interaction_required')) {
+      const response = await msal.acquireTokenPopup(request)
+      return response.accessToken
+    }
+    throw err
+  }
+}
+
+// Adquire um access_token delegado do Power Automate (criar/atualizar o
+// fluxo real). Mesmo padrao de acquirePowerPlatformToken: tenta silencioso,
+// cai para popup só se exigir interação. Retorna null quando não há conta
+// Microsoft logada, para o backend responder com uma mensagem clara em vez
+// de uma exceção crua.
+export async function acquireFlowManagementToken() {
+  const msal = await getMsalInstance()
+  if (!msal) return null
+
+  const account = msal.getAllAccounts()[0]
+  if (!account) return null
+
+  const request = { scopes: FLOW_MANAGEMENT_SCOPES, account }
   try {
     const response = await msal.acquireTokenSilent(request)
     return response.accessToken

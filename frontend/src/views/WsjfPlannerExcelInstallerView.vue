@@ -195,10 +195,6 @@
               <v-list-item title="Conexão Excel" :subtitle="excelConnection ? 'Conectada' : 'Pendente'" />
               <v-list-item title="Fluxos" subtitle="1 — Planner → Excel" />
             </v-list>
-            <v-divider class="my-3" />
-            <v-alert :type="status.alm_configurado ? 'success' : 'warning'" variant="tonal" density="compact">
-              {{ status.alm_configurado ? 'Executor de instalação disponível.' : 'Executor de instalação ainda não está configurado no ReqSys.' }}
-            </v-alert>
           </v-card-text>
         </v-card>
 
@@ -267,7 +263,7 @@ const camposLocais = computed(() => contrato.value.local_fields_preserved || [
 const prontoParaValidar = computed(() => Boolean(
   ambiente.value?.id && ambiente.value?.url && grupo.value?.id && plano.value?.id &&
   arquivo.value?.id && arquivo.value?.drive_id && plannerConnection.value?.id &&
-  excelConnection.value?.id && status.value.alm_configurado,
+  excelConnection.value?.id,
 ))
 
 const prontoParaInstalar = computed(() => Boolean(

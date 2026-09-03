@@ -56,17 +56,25 @@ Campos locais preservados nas atualizações:
 
 A implantação exige autenticação administrativa ou token de serviço com escopo `wsjf_powerautomate:provisionar`.
 
-## ALM
+## Provisionamento real
 
-Executor dedicado no repositório `reqsys-powerplatform-alm`:
+A API de gerenciamento de fluxos do Power Automate (`api.flow.microsoft.com`)
+não aceita credencial app-only (client_credentials) — só token delegado do
+usuário. Por isso o `/deploy` cria/atualiza o fluxo **diretamente**, sem
+relay via GitHub Actions/ALM/PAC CLI:
 
-`.github/workflows/wsjf-planner-excel-provisioning.yml`
+1. Frontend adquire um token delegado via MSAL (`acquireFlowManagementToken`,
+   escopo `https://service.flow.microsoft.com/.default`) e envia no header
+   `X-Power-Automate-Token`.
+2. Backend (`despachar` em `wsjf_planner_excel_provisioning.py`) faz
+   `PUT .../environments/{id}/flows/{flow_guid}` com a definição do fluxo e
+   as `connectionReferences` (Planner/Excel) já autorizadas pelo usuário.
+3. `flow_guid` é determinístico (`uuid5` fixo por perfil): reexecutar
+   "Instalar fluxo" atualiza o mesmo fluxo em vez de criar duplicatas.
 
-A solution é isolada:
-
-`WsjfPlannerExcelInstaller`
-
-Ela não modifica `CopilotMemoryInstaller`, `ReqSysAutomacao` ou a solução WSJF atualmente em uso.
+Não usa repositório ALM externo, `GITHUB_PAT` nem solution zip/import —
+essas exigem PAC CLI + Dataverse Application User, um caminho diferente e
+mais pesado que não foi necessário aqui.
 
 ## Segurança
 
@@ -82,14 +90,13 @@ Ela não modifica `CopilotMemoryInstaller`, `ReqSysAutomacao` ou a solução WSJ
 ## Critério de aceite DEV
 
 1. `/validate` retorna exatamente um fluxo e `tbDemandas`.
-2. workflow ALM empacota `WsjfPlannerExcelInstaller.zip`.
-3. importação encontra exatamente o flow `ReqSys WSJF - Planner para Excel` no Dataverse.
-4. conectar Planner e Excel autorizados.
-5. ativar somente em DEV.
-6. criar uma tarefa no Planner e confirmar uma linha no Excel.
-7. preencher `Risco` e `Próxima ação` manualmente no Excel.
-8. alterar a tarefa no Planner e executar novamente.
-9. confirmar a mesma linha, sem duplicidade, preservando os campos locais.
+2. Conexões Planner e Excel Online (Business) autorizadas pelo usuário no Power Automate.
+3. `/deploy` (com token delegado) cria/atualiza o flow `ReqSys WSJF - Planner para Excel` de verdade no ambiente DEV (`PUT` real na API do Power Automate).
+4. flow importado parado (`state: Stopped`); ativação posterior é explícita.
+5. criar uma tarefa no Planner e confirmar uma linha no Excel.
+6. preencher `Risco` e `Próxima ação` manualmente no Excel.
+7. alterar a tarefa no Planner e executar novamente.
+8. confirmar a mesma linha, sem duplicidade, preservando os campos locais.
 
 ## Limite operacional atual
 
