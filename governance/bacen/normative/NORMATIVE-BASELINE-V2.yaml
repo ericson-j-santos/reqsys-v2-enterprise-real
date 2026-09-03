@@ -1,4 +1,4 @@
-schema_version: 2.0.0
+schema_version: 2.1.0
 mode: advisory
 axis: normative
 
@@ -32,6 +32,7 @@ normative_baseline:
     - path: governance/bacen/normative/NORMATIVE-OBLIGATIONS-EXTENDED.yaml
       selector: obligations
       expected_count: 43
+  mapping_file: governance/bacen/normative/NORMATIVE-CONTROL-MAPPING.yaml
   hash_policy:
     primary_identity: [version, published_at]
     content_hash_role: auxiliary_change_detector
@@ -51,6 +52,16 @@ normative_baseline:
       checked_at: "2026-09-02"
       check_cycle_days: 7
       official_source: "https://www.bcb.gov.br/estabilidadefinanceira/comunicacaodados"
+      capture:
+        kind: html_section
+        scope: publication_notice_for_catalog_version
+        source: "https://www.bcb.gov.br/estabilidadefinanceira/exibenormativo?numero=45631&tipo=Comunicado"
+        start_marker: "COMUNICADO"
+        end_marker: "Comunicação Eletrônica de Dados no Âmbito do SFN"
+        expected_markers:
+          - "45.631"
+          - "versão 5.13"
+          - "Catálogo de Serviços do SFN"
       hash_scope: normalized_text
       normalization_profile: bcb-text-v1
       hash_state: pending_initial_capture
@@ -62,6 +73,15 @@ normative_baseline:
       checked_at: "2026-09-02"
       check_cycle_days: 30
       official_source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual_de_Redes_do_SFN_Ver_9.3.pdf"
+      capture:
+        kind: pdf_text
+        scope: complete_pdf_text
+        source: "https://liftchallenge.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual_de_Redes_do_SFN_Ver_9.3.pdf"
+        parser: "pypdf==6.16.2"
+        expected_markers:
+          - "MANUAL DE REDES DO SFN"
+          - "VERSÃO 9.3"
+          - "06 de outubro de 2023"
       hash_scope: normalized_text
       normalization_profile: bcb-text-v1
       hash_state: pending_initial_capture
@@ -73,6 +93,15 @@ normative_baseline:
       checked_at: "2026-09-02"
       check_cycle_days: 7
       official_source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual%20de%20Seguran%C3%A7a%20do%20SFN%20-%20Vol.I%20-%20v6_00.pdf"
+      capture:
+        kind: pdf_text
+        scope: complete_pdf_text
+        source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual%20de%20Seguran%C3%A7a%20do%20SFN%20-%20Vol.I%20-%20v6_00.pdf"
+        parser: "pypdf==6.16.2"
+        expected_markers:
+          - "Manual de Segurança do SFN"
+          - "Volume I"
+          - "Versão 6.00"
       hash_scope: normalized_text
       normalization_profile: bcb-text-v1
       hash_state: pending_initial_capture
@@ -84,6 +113,15 @@ normative_baseline:
       checked_at: "2026-09-02"
       check_cycle_days: 7
       official_source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual%20de%20Seguran%C3%A7a%20do%20SFN%20-%20Vol.II%20-%20v6_00.pdf"
+      capture:
+        kind: pdf_text
+        scope: complete_pdf_text
+        source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual%20de%20Seguran%C3%A7a%20do%20SFN%20-%20Vol.II%20-%20v6_00.pdf"
+        parser: "pypdf==6.16.2"
+        expected_markers:
+          - "Manual de Segurança do SFN"
+          - "Volume II"
+          - "Versão 6.00"
       hash_scope: normalized_text
       normalization_profile: bcb-text-v1
       hash_state: pending_initial_capture
