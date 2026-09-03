@@ -271,6 +271,13 @@ async def despachar(payload: dict[str, Any], *, user_token: str | None = None) -
 
     flow_guid e deterministico (uuid5 fixo): reexecutar "Instalar fluxo"
     atualiza o mesmo fluxo em vez de criar duplicatas.
+
+    O verbo e PATCH, nao PUT: confirmado em DEV que PUT em
+    .../flows/{id} devolve 404 de roteamento ("No HTTP resource was
+    found that matches the request URI") mesmo com payload valido —
+    essa API (Microsoft.ProcessSimple) so registra rota para
+    GET/PATCH/DELETE em .../flows/{id}; criacao e atualizacao usam o
+    mesmo PATCH com upsert pelo id informado.
     """
     bundle = montar_bundle(payload)
     if not payload.get('confirmar'):
@@ -302,7 +309,7 @@ async def despachar(payload: dict[str, Any], *, user_token: str | None = None) -
         },
     }
     async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.put(
+        response = await client.patch(
             url,
             headers={'Authorization': f'Bearer {user_token}'},
             params={'api-version': '2016-11-01'},

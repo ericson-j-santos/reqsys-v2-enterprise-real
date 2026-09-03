@@ -43,7 +43,7 @@ class FakeAsyncClient:
     async def __aexit__(self, exc_type, exc, tb):
         return False
 
-    async def put(self, url, **kwargs):
+    async def patch(self, url, **kwargs):
         self.__class__.calls.append((url, kwargs))
         return self.__class__.response
 
