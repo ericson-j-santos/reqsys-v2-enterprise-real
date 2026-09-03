@@ -15,9 +15,11 @@ on:
       - 'scripts/build_ci_process_improvement_analytics.py'
       - 'scripts/compare_ci_process_baseline.py'
       - 'scripts/update_ci_process_history.py'
+      - 'scripts/enrich_command_center_ci_history.py'
       - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
       - 'tests/scripts/test_compare_ci_process_baseline.py'
       - 'tests/scripts/test_update_ci_process_history.py'
+      - 'tests/scripts/test_enrich_command_center_ci_history.py'
       - 'audit/baselines/ci-process-improvement-baseline-2026-09-02.json'
       - 'docs/contracts/ci-lead-time-analytics.schema.json'
       - 'docs/runbooks/ci-lead-time-analytics.md'
@@ -30,9 +32,11 @@ on:
       - 'scripts/build_ci_process_improvement_analytics.py'
       - 'scripts/compare_ci_process_baseline.py'
       - 'scripts/update_ci_process_history.py'
+      - 'scripts/enrich_command_center_ci_history.py'
       - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
       - 'tests/scripts/test_compare_ci_process_baseline.py'
       - 'tests/scripts/test_update_ci_process_history.py'
+      - 'tests/scripts/test_enrich_command_center_ci_history.py'
       - 'audit/baselines/ci-process-improvement-baseline-2026-09-02.json'
       - 'docs/contracts/ci-lead-time-analytics.schema.json'
       - 'docs/runbooks/ci-lead-time-analytics.md'
@@ -73,6 +77,7 @@ jobs:
           python tests/scripts/test_build_ci_process_improvement_analytics.py
           python tests/scripts/test_compare_ci_process_baseline.py
           python tests/scripts/test_update_ci_process_history.py
+          python tests/scripts/test_enrich_command_center_ci_history.py
 
       - name: Build analytics artifact
         env:
