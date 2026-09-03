@@ -47,15 +47,12 @@ describe('listarConexoesInstalacao', () => {
     )
   })
 
-  it('segue sem o header quando a aquisicao do token lanca erro', async () => {
-    acquirePowerPlatformToken.mockRejectedValue(new Error('popup bloqueado'))
-    api.get.mockResolvedValue({ data: { data: { planner: [], excel: [] } } })
+  it('propaga falha real de aquisicao do token e nao consulta conexoes sem credencial', async () => {
+    const erro = new Error('consent_required')
+    acquirePowerPlatformToken.mockRejectedValue(erro)
 
-    await listarConexoesInstalacao('env-1')
+    await expect(listarConexoesInstalacao('env-1')).rejects.toBe(erro)
 
-    expect(api.get).toHaveBeenCalledWith(
-      '/v1/hub-lowcode/copilot-memory/install/connections',
-      expect.objectContaining({ headers: {} })
-    )
+    expect(api.get).not.toHaveBeenCalled()
   })
 })
