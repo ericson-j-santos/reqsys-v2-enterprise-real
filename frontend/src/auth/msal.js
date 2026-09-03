@@ -127,6 +127,27 @@ export async function handleRedirectResult() {
   }
 }
 
+// Renova a sessao do ReqSys silenciosamente quando ha uma conta Microsoft em
+// cache mas nenhum id_token pendente de redirect (ex.: reqsys_token expirou
+// com a aba ja aberta, ou o usuario abriu uma URL direta em uma aba nova).
+// Usa a sessao SSO do navegador via iframe oculto — sem popup, sem redirect
+// visivel. Retorna null em qualquer falha (silenciosa ou nao): no pior caso
+// a tela de login normal aparece, exatamente como antes desta funcao existir.
+export async function acquireIdTokenSilent() {
+  const msal = await getMsalInstance()
+  if (!msal) return null
+
+  const account = msal.getAllAccounts()[0]
+  if (!account) return null
+
+  try {
+    const response = await msal.acquireTokenSilent({ scopes: SCOPES, account })
+    return response?.idToken ?? null
+  } catch {
+    return null
+  }
+}
+
 // Adquire um access_token delegado do Graph para mensageria Teams (chat 1:1/grupo).
 // Tenta silencioso primeiro (funciona sem interacao, ja que o escopo ja foi
 // consentido); só abre popup se o silent falhar por exigir interacao.
