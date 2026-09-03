@@ -28,15 +28,13 @@ export async function criarPlanilhaInstalacao(groupId, nome = 'CopilotMemory.xls
 
 export async function listarConexoesInstalacao(environmentId) {
   // Conexoes Planner/Excel Online sao pessoais do usuario: precisa de um
-  // token delegado (via MSAL) para o backend enxerga-las. Se a aquisicao
-  // falhar (ex.: login demo, sem conta Microsoft), segue sem o header — o
-  // backend responde com uma mensagem clara em vez de lista vazia muda.
-  let token = null
-  try {
-    token = await acquirePowerPlatformToken()
-  } catch {
-    token = null
-  }
+  // token delegado (via MSAL) para o backend enxerga-las.
+  //
+  // Ausencia de token continua valida para login demo/sem conta Microsoft e o
+  // backend devolve a mensagem funcional correspondente. Erro real de MSAL,
+  // consentimento ou escopo NAO pode ser convertido em null, pois isso mascara
+  // a causa raiz e faz a descoberta parecer apenas "pendente".
+  const token = await acquirePowerPlatformToken()
   const headers = token ? { 'X-Power-Platform-Token': token } : {}
   return unwrap(await api.get(`${INSTALL}/connections`, { params: { environment_id: environmentId }, headers }))
 }
@@ -70,9 +68,25 @@ export function baixarPacoteGerado(solution) {
   URL.revokeObjectURL(url)
 }
 
+function isPowerPlatformConsentError(error) {
+  const code = String(error?.errorCode || error?.code || '').toLowerCase()
+  const message = String(error?.message || '').toLowerCase()
+  return [
+    'consent_required',
+    'invalid_scope',
+    'unauthorized_client',
+    'access_denied',
+    'aadsts65001',
+  ].some((marker) => code.includes(marker) || message.includes(marker))
+}
+
 export function mensagemErroInstalacao(error) {
   const status = error?.response?.status
   const detail = error?.response?.data?.detail
+
+  if (isPowerPlatformConsentError(error)) {
+    return 'O ReqSys não conseguiu obter o token delegado da Power Platform. Verifique no Microsoft Entra se o aplicativo possui a permissão delegada Connectivity.Connections.Read e se o consentimento necessário foi concedido.'
+  }
   if (status === 401) return 'Sua sessão expirou. Entre novamente no ReqSys.'
   if (status === 403) return 'Esta instalação exige uma conta administradora autorizada.'
   if (status === 409) return typeof detail === 'string' ? detail : 'O ambiente bloqueou uma etapa da instalação.'
