@@ -1,0 +1,97 @@
+name: BACEN Gate 1.5 — as_of Congelado
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/normative/**"
+      - "scripts/bacen_derived_status.py"
+      - "scripts/bacen_gate_1_5.py"
+      - "tests/test_bacen_gate_1_5.py"
+      - "governance/merge/current-sha-required-workflows.json"
+      - ".github/workflows/bacen-gate-1-5.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  gate-1-5:
+    name: BACEN — regressão normativa no mesmo as_of
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Obter base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Obter head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          persist-credentials: false
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependência determinística
+        run: python -m pip install --disable-pip-version-check PyYAML==6.0.3
+
+      - name: Congelar as_of uma única vez
+        id: clock
+        shell: bash
+        run: |
+          set -euo pipefail
+          AS_OF="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          echo "as_of=$AS_OF" >> "$GITHUB_OUTPUT"
+          echo "as_of congelado: $AS_OF"
+
+      - name: Testar contrato do Gate 1.5
+        working-directory: head
+        run: python -m unittest tests.test_bacen_gate_1_5 -v
+
+      - name: Comparar base e head no mesmo instante
+        shell: bash
+        env:
+          AS_OF: ${{ steps.clock.outputs.as_of }}
+        run: |
+          set -euo pipefail
+          (
+            cd head
+            python -m scripts.bacen_gate_1_5 \
+              --base-root ../base \
+              --head-root . \
+              --as-of "$AS_OF" \
+              --output "$RUNNER_TEMP/bacen-gate-1-5.json"
+          )
+
+      - name: Publicar resumo
+        if: always()
+        shell: bash
+        env:
+          AS_OF: ${{ steps.clock.outputs.as_of }}
+        run: |
+          {
+            echo '# BACEN Gate 1.5'
+            echo
+            echo "- as_of único para base/head: $AS_OF"
+            if [ -f "$RUNNER_TEMP/bacen-gate-1-5.json" ]; then
+              echo "- decisão: $(python -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"] + "/bacen-gate-1-5.json"))["decision"])')"
+              echo "- regressões: $(python -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"] + "/bacen-gate-1-5.json"))["regression_count"])')"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-gate-1-5-${{ github.run_id }}
+          path: ${{ runner.temp }}/bacen-gate-1-5.json
+          if-no-files-found: warn
+          retention-days: 30

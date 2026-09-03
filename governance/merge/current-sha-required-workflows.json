@@ -9,7 +9,8 @@
     "ReqSys Required Fast Gate",
     "Test Quality Gate — Padrão Ouro",
     "Minimum Controlled Version Gate",
-    "BACEN Production Formal Gate"
+    "BACEN Production Formal Gate",
+    "BACEN Gate 1.5 — as_of Congelado"
   ],
   "allowed_conclusions": [
     "success",
