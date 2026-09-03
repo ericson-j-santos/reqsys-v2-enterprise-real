@@ -1,0 +1,74 @@
+name: Gerador Pentaho Dossie Validation
+
+on:
+  pull_request:
+    paths:
+      - "tools/gerador_pentaho/**"
+      - "tests/test_gerador_pentaho.py"
+      - "docs/servicos/gerador-pentaho-dossie.md"
+      - ".github/workflows/gerador-pentaho-dossie-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools/gerador_pentaho/**"
+      - "tests/test_gerador_pentaho.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: gerador-pentaho-dossie-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-generator:
+    name: Validate gerador_pentaho
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install test dependencies
+        run: python -m pip install --quiet pytest
+
+      - name: Testes do empacotador (pytest)
+        run: python -m pytest tests/test_gerador_pentaho.py -v --tb=short
+
+      - name: Precheck dry-run
+        run: python tools/gerador_pentaho/gerador_solucao_completa.py --dry-run
+
+      - name: Gerar aplicação e rodar testes Node.js (node --test)
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/gerador-pentaho-dossie
+          python tools/gerador_pentaho/gerador_solucao_completa.py \
+            --output /tmp/gerador-pentaho-dossie \
+            --force \
+            --zip /tmp/gerador-pentaho-dossie.zip \
+            --run-tests
+
+      - name: Upload aplicação gerada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gerador-pentaho-dossie-${{ github.run_id }}
+          path: /tmp/gerador-pentaho-dossie
+          if-no-files-found: error
+          retention-days: 30

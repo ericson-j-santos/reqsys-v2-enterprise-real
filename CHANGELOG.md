@@ -6,6 +6,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-09-03
+
+### Adicionado (Gerador Pentaho — fluxo de dossiê trazido ao padrão ouro do repositório)
+
+- `tools/gerador_pentaho/`: aplicação de treinamento de fluxo de criação de dossiê (Node.js + job/transformações Pentaho Data Integration 7.1+, `pentaho/*.kjb`/`*.ktr`), antes mantida solta fora do repositório como `gerador_solucao_completa_v2.1.0.py` — um script que embarcava toda a aplicação como blob base64 validado contra um SHA-256 fixo. Trazida para dentro do controle de versão como arquivos reais em `tools/gerador_pentaho/pacote/` (revisável em PR, diffável, testável), com `gerador_solucao_completa.py` reduzido a um empacotador (`--dry-run`/`--output`/`--force`/`--zip`/`--run-tests`) no mesmo padrão CLI dos demais geradores do repositório (`tools/geradores/gerar_servicos_email_teams.py`).
+- Dados exclusivamente sintéticos (ADR-002/LGPD) — sem segredo, CPF, e-mail real ou endpoint interno; varrido e confirmado antes da migração.
+- Testes: `tests/test_gerador_pentaho.py` (pytest, 7 casos — listagem, geração de diretório byte-idêntica à fonte, falha sem `--force`, sobrescrita com `--force`, geração de ZIP com prefixo/conteúdo corretos, ausência de termos de segredo) e `tools/gerador_pentaho/pacote/testes/fluxo.test.js` (`node --test`, 2 casos — criação de dossiê e recusa de regra de negócio), este último executável também via `--run-tests` do CLI.
+- Novo workflow `.github/workflows/gerador-pentaho-dossie-validation.yml`, disparado em qualquer alteração em `tools/gerador_pentaho/**`: roda os testes pytest, o `--dry-run`, gera a aplicação e roda os testes Node.js de ponta a ponta.
+- Documentação: `tools/gerador_pentaho/README.md` (uso do CLI) e `docs/servicos/gerador-pentaho-dossie.md` (origem, decisão técnica, testes aplicados).
+
 ## [Unreleased] - 2026-08-27
 
 ### Corrigido (GovBI IA · endpoint Gemini incorreto quebrava o provider primário)

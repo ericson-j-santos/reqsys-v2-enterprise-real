@@ -1,0 +1,4 @@
+demanda_id;tipo_servico;data_referencia;simular_falha
+DEM-TREINO-0001;ANALISE_DOCUMENTAL;2026-08-10;N
+DEM-TREINO-0002;VALIDACAO_CADASTRAL;2026-08-10;S
+
