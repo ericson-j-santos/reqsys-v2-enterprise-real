@@ -1,8 +1,12 @@
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.update_ci_process_history import history_record, load_history, merge_history, write_history
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from scripts.update_ci_process_history import history_record, load_history, merge_history, write_history  # noqa: E402
 
 
 class ProcessHistoryTests(unittest.TestCase):
