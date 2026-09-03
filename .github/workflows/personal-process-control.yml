@@ -1,0 +1,69 @@
+name: Personal Process Control Daily
+
+on:
+  pull_request:
+    paths:
+      - "scripts/personal_process_control.py"
+      - "tests/test_personal_process_control.py"
+      - "governance/personal-process/**"
+      - ".github/workflows/personal-process-control.yml"
+  schedule:
+    - cron: "7 11 * * *"
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: "Data de referencia opcional (YYYY-MM-DD)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: personal-process-control-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-and-generate:
+    name: Validate governance and generate Pareto artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -p 'test_personal_process_control.py' -v
+
+      - name: Generate daily control artifacts
+        env:
+          AS_OF: ${{ inputs.as_of }}
+        run: |
+          python scripts/personal_process_control.py \
+            --input-dir governance/personal-process \
+            --out-dir artifacts/personal-process \
+            --as-of "${AS_OF}"
+
+      - name: Publish job summary
+        run: cat artifacts/personal-process/relatorio.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify generated artifacts
+        run: |
+          test -s artifacts/personal-process/snapshot.json
+          test -s artifacts/personal-process/pareto.json
+          test -s artifacts/personal-process/relatorio.md
+          test -s artifacts/personal-process/controle_mestre_processos.xlsx
+          python -m zipfile -t artifacts/personal-process/controle_mestre_processos.xlsx
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-process-control-${{ github.run_id }}
+          path: artifacts/personal-process/
+          retention-days: 90

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Personal Process Control v1",
+  "type": "object",
+  "description": "Contrato documental. A validacao operacional e implementada sem dependencias externas em scripts/personal_process_control.py.",
+  "required": ["demandas", "biblioteca", "automacoes"],
+  "properties": {
+    "demandas": {"type": "array"},
+    "biblioteca": {"type": "array"},
+    "automacoes": {"type": "array"}
+  }
+}

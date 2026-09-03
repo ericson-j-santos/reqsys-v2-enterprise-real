@@ -1,0 +1,7 @@
+[
+  {"id":"LIB-0001","nome":"Checklist de encerramento por evidencia","tipo":"Checklist","area":"Processos","problema_resolvido":"Evitar conclusao sem comprovacao.","versao":"1.0.0","status":"Ativo"},
+  {"id":"LIB-0002","nome":"Modelo de proxima acao objetiva","tipo":"Template","area":"Processos","problema_resolvido":"Eliminar itens abertos sem acao executavel.","versao":"1.0.0","status":"Ativo"},
+  {"id":"LIB-0003","nome":"Classificacao de bloqueio","tipo":"Padrao","area":"Processos","problema_resolvido":"Separar dependencia humana, tecnica e externa.","versao":"1.0.0","status":"Ativo"},
+  {"id":"LIB-0004","nome":"Pontuacao Pareto","tipo":"Padrao","area":"Processos","problema_resolvido":"Priorizar pelo maior retorno relativo.","versao":"1.0.0","status":"Ativo"},
+  {"id":"LIB-0005","nome":"Registro de evidencia","tipo":"Template","area":"Processos","problema_resolvido":"Padronizar prova objetiva de resultado.","versao":"1.0.0","status":"Ativo"}
+]

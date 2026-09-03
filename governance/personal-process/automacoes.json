@@ -1,0 +1,14 @@
+[
+  {
+    "id":"AUT-0001",
+    "tarefa":"Revisao diaria do Controle Mestre",
+    "area":"Processos",
+    "frequencia":5,
+    "tempo_manual_min":20,
+    "impacto":5,
+    "esforco_automacao":1,
+    "status":"Em execucao",
+    "proxima_acao":"Executar diariamente e registrar artefatos de governanca, Pareto e proximo incremento.",
+    "evidencia":"Workflow Personal Process Control Daily"
+  }
+]
