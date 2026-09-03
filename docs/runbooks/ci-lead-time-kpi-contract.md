@@ -8,12 +8,12 @@ Formalizar o contrato do artifact `ci-lead-time-analytics.json` para consumo por
 
 - Nome lógico: `ci-lead-time-analytics.json`
 - Schema: `docs/contracts/ci-lead-time-analytics.schema.json`
-- Schema version gerada: `1.0.2`
+- Schema version gerada: `1.0.3`
 - Modo: `report-only`
-- Fonte: GitHub Actions API
+- Fonte: GitHub Actions API + baseline congelado versionado
 - Permissões: `actions: read` e `contents: read`
 
-A versão `1.0.2` é aditiva: preserva os campos obrigatórios existentes e acrescenta indicadores de melhoria de processo.
+A versão `1.0.3` é aditiva: preserva os campos de `1.0.2` e acrescenta `baseline_comparison` depois da coleta, antes do upload do artifact.
 
 ## KPIs
 
@@ -34,6 +34,7 @@ A versão `1.0.2` é aditiva: preserva os campos obrigatórios existentes e acre
 | `p95_queue_seconds` | segundos | Cauda da fila |
 | `throughput.runs_per_hour` | runs/hora | Capacidade observada |
 | `trend_comparison` | objeto | Antes/depois dentro da janela |
+| `baseline_comparison` | objeto | Janela atual contra baseline congelado |
 | `failure_pareto` | lista | Concentração de falhas |
 | `bottlenecks` | lista | Top workflows por P95 |
 
@@ -41,12 +42,7 @@ A versão `1.0.2` é aditiva: preserva os campos obrigatórios existentes e acre
 
 ### Primeira passagem
 
-Uma execução conta como primeira passagem quando:
-
-- `conclusion == success`; e
-- `run_attempt == 1`.
-
-A taxa usa como denominador todas as execuções concluídas da janela. Assim, reexecuções bem-sucedidas continuam visíveis como retrabalho.
+Uma execução conta como primeira passagem quando `conclusion == success` e `run_attempt == 1`. A taxa usa como denominador todas as execuções concluídas da janela.
 
 ### Fila
 
@@ -56,30 +52,40 @@ A taxa usa como denominador todas as execuções concluídas da janela. Assim, r
 
 `duration_seconds = updated_at - created_at`.
 
-Valores negativos são normalizados para zero para proteção contra inconsistência de timestamp.
+Valores negativos são normalizados para zero.
 
 ### Variabilidade
 
 - desvio-padrão: população observada na janela;
 - coeficiente de variação: `stddev / mean * 100`.
 
-CV igual a zero é usado quando não há dados suficientes ou a média é zero.
+### Tendência interna
 
-### Tendência
+As execuções concluídas são ordenadas por `created_at`. A metade mais recente é comparada com a metade anterior por success rate, failure rate, P50, P95 e CV.
 
-As execuções concluídas são ordenadas por `created_at`. A metade mais recente é comparada com a metade anterior usando:
+### Comparação histórica congelada
 
-- success rate;
-- failure rate;
-- P50;
-- P95;
-- CV.
+A referência é `audit/baselines/ci-process-improvement-baseline-2026-09-02.json`.
 
-A tendência é evidência descritiva, não prova causal.
+`baseline_comparison.delta` possui três grupos:
+
+- `quality`: success rate, failure rate, first-pass success e rerun rate;
+- `speed`: média, P50, P95 e P95 de fila;
+- `variability`: desvio-padrão e CV.
+
+Cada indicador recebe `improved`, `stable` ou `regressed`. `overall_signal` pode ser `improved`, `stable`, `regressed` ou `mixed`.
+
+Regras fixas de governança:
+
+- `baseline_comparison.mode == report-only`;
+- `baseline_comparison.creates_gate == false`;
+- deltas são evidência descritiva e não prova causal;
+- baseline ausente ou ilegível resulta em `available=false`, sem impedir publicação da evidência;
+- baseline marcado como mutável (`frozen != true`) é rejeitado pelo comparador e coberto por teste.
 
 ### Pareto
 
-Falhas são agrupadas por workflow, ordenadas por contagem decrescente e recebem participação e participação acumulada. O objetivo é priorizar investigação das causas que concentram maior volume de falhas.
+Falhas são agrupadas por workflow, ordenadas por contagem decrescente e recebem participação e participação acumulada.
 
 ## Classificação executiva
 
@@ -91,20 +97,21 @@ Falhas são agrupadas por workflow, ordenadas por contagem decrescente e recebem
 | First-pass success < 90% | warning |
 | Demais casos | passed |
 
-O status continua `report-only`.
+A comparação com baseline não altera essa classificação e não cria gate.
 
 ## Governança
 
 - Não registrar token, secret ou conteúdo sensível.
 - URLs de workflow são permitidas apenas para rastreabilidade.
-- Novos KPIs permanecem observacionais até existir baseline histórico.
-- Nenhum limite de CV, fila ou throughput deve virar gate sem amostra suficiente.
+- CV, fila, throughput e deltas históricos permanecem observacionais.
+- Nenhum delta deve virar gate sem série temporal suficiente e critério estatístico formal.
 - Mudança incompatível deve elevar a versão do contrato.
 
 ## Testes
 
 ```bash
 python tests/scripts/test_build_ci_process_improvement_analytics.py
+python tests/scripts/test_compare_ci_process_baseline.py
 ```
 
-Critério mínimo: suíte totalmente verde antes de gerar o artifact.
+Critério mínimo: ambas as suítes totalmente verdes antes da geração e enriquecimento do artifact.
