@@ -344,6 +344,12 @@ async function carregarConexoes() {
     conexoes.value = { planner: c.planner || [], excel: c.excel || [] }
     autoSelecionar(conexoes.value.planner, plannerConnection)
     autoSelecionar(conexoes.value.excel, excelConnection)
+    // O backend responde 200 mesmo quando a descoberta falhou (token
+    // delegado rejeitado, escopo insuficiente, etc.) e carrega o motivo em
+    // c.erro. Sem isto, uma falha real ficava indistinguivel de "conexoes
+    // genuinamente nao autorizadas ainda" — mesmo alerta generico nos dois
+    // casos.
+    if (c.erro) erro.value = c.erro
   } catch (e) {
     erro.value = mensagemErroInstalacao(e)
   } finally {
