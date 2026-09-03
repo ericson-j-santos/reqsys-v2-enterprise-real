@@ -10,7 +10,13 @@ gitlab_governance_validation:
     paths:
       - audit/gitlab-governance-report.md
 
-# Manual, protected and idempotent governance provisioning.
+# Automatic (not manual): --output-dir without --apply is read-only by
+# construction (Config.from_environment(dry_run=not args.apply) gates every
+# mutating call in provision_gitlab_governance.py behind `if not
+# config.dry_run`), so there is no real-write risk in running it on every
+# push to main. Was previously `when: manual` and never actually clicked
+# (see audit trail before this change) — this closes that recurring human
+# step. `_apply` below stays manual: it performs real writes.
 # Required protected variable: GITLAB_PROVISIONING_TOKEN (api scope).
 # Optional source variables are copied without being printed:
 # GITLAB_GOVERNANCE_TOKEN_SOURCE and FLY_API_TOKEN_SOURCE.
@@ -27,7 +33,6 @@ gitlab_governance_provision_dry_run:
       - audit/gitlab-governance-provisioning.md
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-      when: manual
   allow_failure: true
 
 gitlab_governance_provision_apply:
@@ -47,10 +52,11 @@ gitlab_governance_provision_apply:
   allow_failure: true
 
 # Routes open issues labelled ia:* to their domain branch (see
-# gitlab/docs/GITLAB_OPERATING_MODEL.md). Manual, protected and idempotent,
-# same GITLAB_PROVISIONING_TOKEN as the jobs above. Apply performs real
-# writes (branch creation, labelling, commenting) so it stays manual-only
-# until this has been exercised a few times, not schedule-triggered.
+# gitlab/docs/GITLAB_OPERATING_MODEL.md). Protected, idempotent, same
+# GITLAB_PROVISIONING_TOKEN as the jobs above. Automatic like the governance
+# dry-run above, for the same reason: route_issue_by_label.py gates every
+# mutating call behind `if config.dry_run` too, so no branch/label/comment
+# writes happen without --apply. `_apply` below (real writes) stays manual.
 gitlab_route_issues_dry_run:
   stage: governance
   image: python:3.12-alpine
@@ -64,7 +70,6 @@ gitlab_route_issues_dry_run:
       - audit/gitlab-issue-routing.md
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-      when: manual
   allow_failure: true
 
 gitlab_route_issues_apply:
