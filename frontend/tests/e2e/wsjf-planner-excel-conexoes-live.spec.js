@@ -121,11 +121,10 @@ test.describe('aceite real WSJF — conexões via token delegado MSAL', () => {
     await expect(resumoCard.getByText('Conectada')).toHaveCount(2, { timeout: 20_000 })
     await expect(resumoCard.getByText('Pendente')).toHaveCount(0)
 
-    await expect(page.getByText('Pronto para validar')).toBeVisible({ timeout: 20_000 })
-    await page.getByRole('button', { name: 'Validar', exact: true }).click()
-    await expect(page.getByText(/Validação aprovada/)).toBeVisible({ timeout: 30_000 })
-
-    // A instalacao real fica fora deste teste: o objetivo e provar a descoberta
-    // das conexoes via token delegado ponta a ponta contra o tenant real.
+    // O objetivo deste teste termina aqui: provar que a descoberta de
+    // conexoes via token delegado funciona ponta a ponta contra o tenant
+    // real. "Validar"/"Instalar fluxo" tambem exigem status.alm_configurado
+    // (GITHUB_PAT + repositorio ALM no backend) — uma precondicao separada,
+    // sem relacao com MSAL/conexoes, e fora do escopo deste spec.
   })
 })
