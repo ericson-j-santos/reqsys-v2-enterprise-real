@@ -1,4 +1,4 @@
-schema_version: 2.0.0
+schema_version: 2.3.0
 mode: advisory
 axis: normative
 
@@ -32,6 +32,7 @@ normative_baseline:
     - path: governance/bacen/normative/NORMATIVE-OBLIGATIONS-EXTENDED.yaml
       selector: obligations
       expected_count: 43
+  mapping_file: governance/bacen/normative/NORMATIVE-CONTROL-MAPPING.yaml
   hash_policy:
     primary_identity: [version, published_at]
     content_hash_role: auxiliary_change_detector
@@ -51,21 +52,69 @@ normative_baseline:
       checked_at: "2026-09-02"
       check_cycle_days: 7
       official_source: "https://www.bcb.gov.br/estabilidadefinanceira/comunicacaodados"
+      capture:
+        kind: pdf_text_set
+        scope: ordered_complete_pdf_text_set
+        parser: "pypdf==6.16.2"
+        expected_markers:
+          - "Catálogo de Serviços do SFN"
+          - "Versão 5.13"
+        sources:
+          - uid: volume-I
+            source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Catalogos/Catalogo_de_Servicos_do_SFN_Volume_I_Versao_513.pdf"
+            expected_markers: ["Catálogo de Serviços do SFN", "Volume I", "Versão 5.13"]
+          - uid: volume-II
+            source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Catalogos/Catalogo_de_Servicos_do_SFN_Volume_II_Versao_513.pdf"
+            expected_markers: ["Catálogo de Serviços do SFN", "Volume II", "Versão 5.13"]
+          - uid: volume-III
+            source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Catalogos/Catalogo_de_Servicos_do_SFN_Volume_III_Versao_513.pdf"
+            expected_markers: ["Catálogo de Serviços do SFN", "Volume III", "Versão 5.13"]
+          - uid: volume-IV
+            source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Catalogos/Catalogo_de_Servicos_do_SFN_Volume_IV_Versao_513.pdf"
+            expected_markers: ["Catálogo de Serviços do SFN", "Volume IV", "Versão 5.13"]
+          - uid: volume-V
+            source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Catalogos/Catalogo_de_Servicos_do_SFN_Volume_V_Versao_513.pdf"
+            expected_markers: ["Catálogo de Serviços do SFN", "Volume V", "Versão 5.13"]
+          - uid: volume-VI
+            source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Catalogos/Catalogo_de_Servicos_do_SFN_Volume_VI_Versao_513.pdf"
+            expected_markers: ["Catálogo de Serviços do SFN", "Volume VI", "Versão 5.13"]
       hash_scope: normalized_text
       normalization_profile: bcb-text-v1
-      hash_state: pending_initial_capture
-      content_sha256: null
+      hash_state: captured
+      content_sha256: "eb8f107e25fbf73963a9610308eeec497aca82b033491ccf36d112d1a1d9aa1b"
+      capture_evidence:
+        captured_at: "2026-09-03T02:11:05Z"
+        workflow_run_id: 33706477349
+        artifact_id: 9875430142
+        parser_version: "pypdf==6.16.2"
+        normalized_chars: 2147296
+        pages: 1306
     - uid: doc-manual-redes-sfn
       title: "Manual de Redes do SFN"
-      version: "9.3"
-      published_at: "2023-10-06"
+      version: "9.4"
+      published_at: "2026-08-14"
       checked_at: "2026-09-02"
-      check_cycle_days: 30
-      official_source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual_de_Redes_do_SFN_Ver_9.3.pdf"
+      check_cycle_days: 7
+      official_source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual_de_Redes_do_SFN_Ver_9.4.pdf"
+      capture:
+        kind: pdf_text
+        scope: complete_pdf_text
+        source: "https://www.bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual_de_Redes_do_SFN_Ver_9.4.pdf"
+        parser: "pypdf==6.16.2"
+        expected_markers:
+          - "MANUAL DE REDES DO SFN"
+          - "VERSÃO 9.4"
       hash_scope: normalized_text
       normalization_profile: bcb-text-v1
-      hash_state: pending_initial_capture
-      content_sha256: null
+      hash_state: captured
+      content_sha256: "aad2b3c09c5af1b4dc24f39f559c8a5ff34dd62d041ad2cb8d0bde8c16be754d"
+      capture_evidence:
+        captured_at: "2026-09-03T02:11:05Z"
+        workflow_run_id: 33706477349
+        artifact_id: 9875430142
+        parser_version: "pypdf==6.16.2"
+        normalized_chars: 87772
+        pages: 52
     - uid: doc-manual-seguranca-sfn-vol1
       title: "Manual de Segurança do SFN — Volume I"
       version: "6.00"
@@ -73,10 +122,26 @@ normative_baseline:
       checked_at: "2026-09-02"
       check_cycle_days: 7
       official_source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual%20de%20Seguran%C3%A7a%20do%20SFN%20-%20Vol.I%20-%20v6_00.pdf"
+      capture:
+        kind: pdf_text
+        scope: complete_pdf_text
+        source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual%20de%20Seguran%C3%A7a%20do%20SFN%20-%20Vol.I%20-%20v6_00.pdf"
+        parser: "pypdf==6.16.2"
+        expected_markers:
+          - "Manual de Segurança do SFN"
+          - "Volume I"
+          - "Versão 6.00"
       hash_scope: normalized_text
       normalization_profile: bcb-text-v1
-      hash_state: pending_initial_capture
-      content_sha256: null
+      hash_state: captured
+      content_sha256: "cf45151ecbe7efd11306cb097581e988f666d92c7be717f9a7c54c9516d6639d"
+      capture_evidence:
+        captured_at: "2026-09-03T02:11:05Z"
+        workflow_run_id: 33706477349
+        artifact_id: 9875430142
+        parser_version: "pypdf==6.16.2"
+        normalized_chars: 68457
+        pages: 37
     - uid: doc-manual-seguranca-sfn-vol2
       title: "Manual de Segurança do SFN — Volume II: Segurança do Pix"
       version: "6.00"
@@ -84,10 +149,26 @@ normative_baseline:
       checked_at: "2026-09-02"
       check_cycle_days: 7
       official_source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual%20de%20Seguran%C3%A7a%20do%20SFN%20-%20Vol.II%20-%20v6_00.pdf"
+      capture:
+        kind: pdf_text
+        scope: complete_pdf_text
+        source: "https://bcb.gov.br/content/estabilidadefinanceira/cedsfn/Manual%20de%20Seguran%C3%A7a%20do%20SFN%20-%20Vol.II%20-%20v6_00.pdf"
+        parser: "pypdf==6.16.2"
+        expected_markers:
+          - "Manual de Segurança do SFN"
+          - "Volume II"
+          - "Versão 6.00"
       hash_scope: normalized_text
       normalization_profile: bcb-text-v1
-      hash_state: pending_initial_capture
-      content_sha256: null
+      hash_state: captured
+      content_sha256: "bfcee30dadeafd7faa9d4abc4624591c589a3b04c678210d121105a892b5c9ea"
+      capture_evidence:
+        captured_at: "2026-09-03T02:11:05Z"
+        workflow_run_id: 33706477349
+        artifact_id: 9875430142
+        parser_version: "pypdf==6.16.2"
+        normalized_chars: 72112
+        pages: 43
 
 applicability:
   family: CMN-4893
