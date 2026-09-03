@@ -67,8 +67,11 @@ relay via GitHub Actions/ALM/PAC CLI:
    escopo `https://service.flow.microsoft.com/.default`) e envia no header
    `X-Power-Automate-Token`.
 2. Backend (`despachar` em `wsjf_planner_excel_provisioning.py`) faz
-   `PUT .../environments/{id}/flows/{flow_guid}` com a definição do fluxo e
+   `PATCH .../environments/{id}/flows/{flow_guid}` com a definição do fluxo e
    as `connectionReferences` (Planner/Excel) já autorizadas pelo usuário.
+   `PUT` nesse mesmo caminho devolve 404 de roteamento — a API
+   `Microsoft.ProcessSimple` só registra rota GET/PATCH/DELETE em
+   `.../flows/{id}`; PATCH também cria (upsert) quando o id ainda não existe.
 3. `flow_guid` é determinístico (`uuid5` fixo por perfil): reexecutar
    "Instalar fluxo" atualiza o mesmo fluxo em vez de criar duplicatas.
 
@@ -91,7 +94,7 @@ mais pesado que não foi necessário aqui.
 
 1. `/validate` retorna exatamente um fluxo e `tbDemandas`.
 2. Conexões Planner e Excel Online (Business) autorizadas pelo usuário no Power Automate.
-3. `/deploy` (com token delegado) cria/atualiza o flow `ReqSys WSJF - Planner para Excel` de verdade no ambiente DEV (`PUT` real na API do Power Automate).
+3. `/deploy` (com token delegado) cria/atualiza o flow `ReqSys WSJF - Planner para Excel` de verdade no ambiente DEV (`PATCH` real na API do Power Automate).
 4. flow importado parado (`state: Stopped`); ativação posterior é explícita.
 5. criar uma tarefa no Planner e confirmar uma linha no Excel.
 6. preencher `Risco` e `Próxima ação` manualmente no Excel.
