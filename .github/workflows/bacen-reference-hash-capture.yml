@@ -6,7 +6,6 @@ on:
     paths:
       - "governance/bacen/normative/NORMATIVE-BASELINE-V2.yaml"
       - "scripts/capture_bacen_reference_hashes.py"
-      - "scripts/discover_bacen_live_links.mjs"
       - "scripts/validate_bacen_normative_axis.py"
       - ".github/workflows/bacen-reference-hash-capture.yml"
   push:
@@ -14,9 +13,10 @@ on:
     paths:
       - "governance/bacen/normative/NORMATIVE-BASELINE-V2.yaml"
       - "scripts/capture_bacen_reference_hashes.py"
-      - "scripts/discover_bacen_live_links.mjs"
       - "scripts/validate_bacen_normative_axis.py"
       - ".github/workflows/bacen-reference-hash-capture.yml"
+  schedule:
+    - cron: "17 11 * * 1"
   workflow_dispatch: {}
 
 permissions:
@@ -35,28 +35,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node for one-time URL discovery
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install temporary browser tooling
-        run: |
-          npm install --no-save --package-lock=false --ignore-scripts @playwright/test@1.59.1
-          npx playwright install chromium
-
-      - name: Discover rendered BCB links
-        run: node scripts/discover_bacen_live_links.mjs
-
-      - name: Publish URL discovery evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bacen-live-link-discovery
-          path: artifacts/bacen/bcb-live-links.json
-          if-no-files-found: error
-          retention-days: 7
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -68,15 +46,19 @@ jobs:
       - name: Compile capture script
         run: python -m py_compile scripts/capture_bacen_reference_hashes.py
 
-      - name: Capture official BCB references
-        run: python scripts/capture_bacen_reference_hashes.py
+      - name: Capture and verify official BCB references
+        run: python scripts/capture_bacen_reference_hashes.py --verify
 
       - name: Print computed hash evidence
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          report = json.loads(Path("artifacts/bacen/bacen-reference-hashes.json").read_text(encoding="utf-8"))
+          path = Path("artifacts/bacen/bacen-reference-hashes.json")
+          if not path.exists():
+              raise SystemExit("evidência de captura não gerada")
+          report = json.loads(path.read_text(encoding="utf-8"))
           print(json.dumps({
               "result": report["result"],
               "documents": [
@@ -88,25 +70,14 @@ jobs:
                       "parser": item["parser"],
                       "parser_version": item.get("parser_version"),
                       "pages": item.get("pages"),
+                      "members": item.get("members"),
                       "normalized_chars": item["normalized_chars"],
                       "content_sha256": item["content_sha256"],
+                      "matches_baseline": item["matches_baseline"],
                   }
                   for item in report["documents"]
               ],
           }, ensure_ascii=False, indent=2))
-          PY
-
-      - name: Enforce captured baseline when all hashes are committed
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          report = json.loads(Path("artifacts/bacen/bacen-reference-hashes.json").read_text(encoding="utf-8"))
-          summary = report["summary"]
-          if summary["pending_in_baseline"] == 0 and report["result"] != "verified":
-              raise SystemExit(f"baseline capturada divergiu: {report['mismatches']}")
-          if summary["documents"] != 4:
-              raise SystemExit(f"esperados 4 documentos, encontrados {summary['documents']}")
           PY
 
       - name: Publish capture evidence
@@ -131,6 +102,7 @@ jobs:
               raise SystemExit(1)
           report = json.loads(path.read_text(encoding="utf-8"))
           print(f"- Resultado: `{report['result']}`")
+          print(f"- Baseline: `{report['baseline_uid']}`")
           for item in report["documents"]:
-              print(f"- `{item['uid']}`: `{item['content_sha256']}` — {item['normalized_chars']} caracteres normalizados")
+              print(f"- `{item['uid']}` v{item['version']}: `{item['content_sha256']}` — match=`{item['matches_baseline']}`")
           PY
