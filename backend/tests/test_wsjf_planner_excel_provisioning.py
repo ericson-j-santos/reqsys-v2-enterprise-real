@@ -30,7 +30,8 @@ class FakeResponse:
 
 
 class FakeAsyncClient:
-    response = FakeResponse()
+    list_response = FakeResponse(json_body={'value': []})
+    write_response = FakeResponse()
     calls = []
 
     def __init__(self, *args, **kwargs):
@@ -43,13 +44,22 @@ class FakeAsyncClient:
     async def __aexit__(self, exc_type, exc, tb):
         return False
 
+    async def get(self, url, **kwargs):
+        self.__class__.calls.append(('GET', url, kwargs))
+        return self.__class__.list_response
+
     async def patch(self, url, **kwargs):
-        self.__class__.calls.append((url, kwargs))
-        return self.__class__.response
+        self.__class__.calls.append(('PATCH', url, kwargs))
+        return self.__class__.write_response
+
+    async def post(self, url, **kwargs):
+        self.__class__.calls.append(('POST', url, kwargs))
+        return self.__class__.write_response
 
     @classmethod
-    def reset(cls, status_code=200, text='', json_body=None):
-        cls.response = FakeResponse(status_code=status_code, text=text, json_body=json_body)
+    def reset(cls, *, existing_flows=None, status_code=200, text='', json_body=None):
+        cls.list_response = FakeResponse(json_body={'value': existing_flows or []})
+        cls.write_response = FakeResponse(status_code=status_code, text=text, json_body=json_body)
         cls.calls = []
 
 
@@ -151,8 +161,8 @@ def test_despachar_confirmado_falha_fechado_sem_token():
     assert 'Flows.Manage.All' in result['erro']
 
 
-def test_despachar_confirmado_cria_fluxo_via_token_delegado(monkeypatch):
-    FakeAsyncClient.reset(status_code=200, json_body={'name': 'flow-real-id'})
+def test_despachar_confirmado_cria_fluxo_novo_quando_nao_existe(monkeypatch):
+    FakeAsyncClient.reset(existing_flows=[], status_code=200, json_body={'name': 'flow-real-id'})
     monkeypatch.setattr(provisioning.httpx, 'AsyncClient', FakeAsyncClient)
 
     result = asyncio.run(despachar(_payload(confirmar=True), user_token='delegado-teste'))
@@ -160,9 +170,13 @@ def test_despachar_confirmado_cria_fluxo_via_token_delegado(monkeypatch):
     assert result['dispatched'] is True
     assert result['status'] == 'implantado'
     assert result['flow_id'] == 'flow-real-id'
-    assert len(FakeAsyncClient.calls) == 1
-    url, kwargs = FakeAsyncClient.calls[0]
-    assert '/environments/env-dev-001/flows/' in url
+    assert len(FakeAsyncClient.calls) == 2
+    metodo_busca, url_busca, _ = FakeAsyncClient.calls[0]
+    metodo_escrita, url_escrita, kwargs = FakeAsyncClient.calls[1]
+    assert metodo_busca == 'GET'
+    assert url_busca == 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env-dev-001/flows'
+    assert metodo_escrita == 'POST'
+    assert url_escrita == url_busca
     assert kwargs['headers']['Authorization'] == 'Bearer delegado-teste'
     body = kwargs['json']['properties']
     assert body['state'] == 'Stopped'
@@ -170,8 +184,28 @@ def test_despachar_confirmado_cria_fluxo_via_token_delegado(monkeypatch):
     assert body['connectionReferences']['shared_excelonlinebusiness']['connectionName'] == 'excel-connection-dev'
 
 
+def test_despachar_confirmado_atualiza_fluxo_existente_pelo_displayname(monkeypatch):
+    FakeAsyncClient.reset(
+        existing_flows=[
+            {'name': 'id-ja-existente', 'properties': {'displayName': 'ReqSys WSJF - Planner para Excel'}},
+            {'name': 'outro-flow', 'properties': {'displayName': 'Outro fluxo qualquer'}},
+        ],
+        status_code=200,
+        json_body={'name': 'id-ja-existente'},
+    )
+    monkeypatch.setattr(provisioning.httpx, 'AsyncClient', FakeAsyncClient)
+
+    result = asyncio.run(despachar(_payload(confirmar=True), user_token='delegado-teste'))
+
+    assert result['dispatched'] is True
+    assert result['flow_id'] == 'id-ja-existente'
+    metodo_escrita, url_escrita, _ = FakeAsyncClient.calls[1]
+    assert metodo_escrita == 'PATCH'
+    assert url_escrita.endswith('/flows/id-ja-existente')
+
+
 def test_despachar_propaga_erro_http_sanitizado(monkeypatch):
-    FakeAsyncClient.reset(status_code=403, text='consent_required')
+    FakeAsyncClient.reset(existing_flows=[], status_code=403, text='consent_required')
     monkeypatch.setattr(provisioning.httpx, 'AsyncClient', FakeAsyncClient)
 
     result = asyncio.run(despachar(_payload(confirmar=True), user_token='delegado-teste'))
