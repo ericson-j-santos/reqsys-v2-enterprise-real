@@ -503,12 +503,12 @@ function mostrarSnack(msg, cor = 'success') {
 }
 
 .sidebar-title {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--v-theme-on-surface);
   display: flex;
   align-items: center;
-  padding: 12px 16px 8px;
+  padding: var(--space-md) var(--space-lg) var(--space-sm);
 }
 
 .file-chips {
@@ -532,19 +532,19 @@ function mostrarSnack(msg, cor = 'success') {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 20px;
+  padding: 80px var(--space-xl);
 }
 
 .content-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: var(--space-lg) var(--space-xl);
   gap: 12px;
 }
 
 .feature-title {
-  font-size: 16px;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   color: rgba(255,255,255,0.9);
 }
@@ -557,52 +557,52 @@ function mostrarSnack(msg, cor = 'success') {
 /* Editor */
 .editor-area :deep(textarea) {
   font-family: 'Fira Code', 'Courier New', monospace !important;
-  font-size: 13px !important;
+  font-size: var(--font-size-md) !important;
   line-height: 1.6 !important;
 }
 
 /* Markdown */
 .markdown-body {
-  padding: 20px 28px;
+  padding: var(--space-xl) var(--space-2xl);
   line-height: 1.7;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   color: rgba(255,255,255,0.87);
 }
 
 .markdown-body :deep(h1) {
-  font-size: 22px;
+  font-size: var(--font-size-2xl);
   font-weight: 700;
-  margin: 0 0 16px;
+  margin: 0 0 var(--space-lg);
   color: rgba(255,255,255,0.95);
   border-bottom: 1px solid rgba(255,255,255,0.08);
-  padding-bottom: 8px;
+  padding-bottom: var(--space-sm);
 }
 
 .markdown-body :deep(h2) {
-  font-size: 17px;
+  font-size: var(--font-size-lg);
   font-weight: 600;
-  margin: 24px 0 10px;
+  margin: var(--space-xl) 0 var(--space-md);
   color: rgba(255,255,255,0.9);
 }
 
 .markdown-body :deep(h3) {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-weight: 600;
-  margin: 16px 0 6px;
+  margin: var(--space-lg) 0 var(--space-sm);
   color: rgba(255,193,7,0.9);
 }
 
 .markdown-body :deep(p) {
-  margin: 0 0 10px;
+  margin: 0 0 var(--space-md);
 }
 
 .markdown-body :deep(ul) {
-  padding-left: 20px;
-  margin: 6px 0 10px;
+  padding-left: var(--space-xl);
+  margin: var(--space-sm) 0 var(--space-md);
 }
 
 .markdown-body :deep(li) {
-  margin: 3px 0;
+  margin: var(--space-xs) 0;
 }
 
 .markdown-body :deep(strong) {
@@ -612,35 +612,35 @@ function mostrarSnack(msg, cor = 'success') {
 .markdown-body :deep(hr) {
   border: none;
   border-top: 1px solid rgba(255,255,255,0.08);
-  margin: 20px 0;
+  margin: var(--space-xl) 0;
 }
 
 .markdown-body :deep(.inline-code) {
   background: rgba(255,255,255,0.08);
-  padding: 1px 5px;
+  padding: var(--space-xs) var(--space-xs);
   border-radius: 4px;
   font-family: 'Fira Code', monospace;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
 }
 
 .markdown-body :deep(.code-block) {
   background: rgba(0,0,0,0.3);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 6px;
-  padding: 12px 16px;
-  margin: 12px 0;
+  padding: var(--space-md) var(--space-lg);
+  margin: var(--space-md) 0;
   overflow-x: auto;
   font-family: 'Fira Code', monospace;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
 }
 
 .markdown-body :deep(.mermaid-block) {
   background: rgba(255,193,7,0.05);
   border: 1px solid rgba(255,193,7,0.2);
   border-radius: 6px;
-  padding: 12px 16px;
-  margin: 12px 0;
-  font-size: 12px;
+  padding: var(--space-md) var(--space-lg);
+  margin: var(--space-md) 0;
+  font-size: var(--font-size-sm);
   color: rgba(255,193,7,0.8);
 }
 
@@ -658,13 +658,13 @@ function mostrarSnack(msg, cor = 'success') {
 .markdown-body :deep(.md-table) {
   border-collapse: collapse;
   width: 100%;
-  margin: 12px 0;
-  font-size: 13px;
+  margin: var(--space-md) 0;
+  font-size: var(--font-size-md);
 }
 
 .markdown-body :deep(.md-table td) {
   border: 1px solid rgba(255,255,255,0.1);
-  padding: 6px 10px;
+  padding: var(--space-sm) var(--space-md);
 }
 
 .markdown-body :deep(.md-table tr:first-child td) {

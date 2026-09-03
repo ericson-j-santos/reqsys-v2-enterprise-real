@@ -77,7 +77,7 @@ watch(() => route.fullPath, focusMainContent)
   position: fixed;
   top: 8px;
   left: 8px;
-  z-index: 10000;
+  z-index: var(--z-skip-link);
   transform: translateY(-160%);
   padding: 10px 14px;
   border-radius: 8px;
@@ -111,7 +111,7 @@ watch(() => route.fullPath, focusMainContent)
   position: fixed;
   top: 12px;
   right: 12px;
-  z-index: 9999;
+  z-index: var(--z-connectivity-alert);
   width: min(440px, calc(100vw - 24px));
 }
 

@@ -55,6 +55,16 @@ async function main() {
       fontFamily: {
         base: { $type: 'fontFamily', $value: source.typography.fontFamily },
       },
+      fontSize: sortObjectEntries(source.typography.scale, (value) => ({
+        $type: 'dimension',
+        $value: value,
+      })),
+      spacing: sortObjectEntries(source.spacing, (value) => ({ $type: 'dimension', $value: value })),
+      zIndex: sortObjectEntries(source.zIndex, (value) => ({ $type: 'number', $value: value })),
+      table: sortObjectEntries(source.table, (value) => ({
+        $type: /^-?[0-9.]+(px|rem|em)$/.test(String(value)) ? 'dimension' : 'other',
+        $value: value,
+      })),
       semantic: sortObjectEntries(source.semantic, (value) => ({
         $type: 'color',
         $value: `{reqsys.color.${value}}`,
@@ -79,6 +89,10 @@ async function main() {
     colors: Object.keys(source.colors).length,
     radius: Object.keys(source.radius).length,
     fontFamily: 1,
+    fontSize: Object.keys(source.typography.scale).length,
+    spacing: Object.keys(source.spacing).length,
+    zIndex: Object.keys(source.zIndex).length,
+    table: Object.keys(source.table).length,
     semantic: Object.keys(source.semantic).length,
   }
   tokenCounts.total = Object.values(tokenCounts).reduce((total, count) => total + count, 0)

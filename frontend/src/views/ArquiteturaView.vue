@@ -203,7 +203,7 @@
                   <span class="comp-name">Serviço · Pytest</span>
                   <v-chip size="x-small" color="success" variant="tonal">59 passing</v-chip>
                 </div>
-                <div class="muted" style="font-size:11px">test_auth · test_requisitos · test_dashboard</div>
+                <div class="muted" style="font-size:var(--font-size-xs)">test_auth · test_requisitos · test_dashboard</div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -215,7 +215,7 @@
                   <span class="comp-name">Aplicação · E2E Playwright</span>
                   <v-chip size="x-small" color="success" variant="tonal">30 passing</v-chip>
                 </div>
-                <div class="muted" style="font-size:11px">acesso · painel · relatórios · requisitos · segredos</div>
+                <div class="muted" style="font-size:var(--font-size-xs)">acesso · painel · relatórios · requisitos · segredos</div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -227,7 +227,7 @@
                   <span class="comp-name">Serviço .NET · xUnit</span>
                   <v-chip size="x-small" color="info" variant="tonal">em evolução</v-chip>
                 </div>
-                <div class="muted" style="font-size:11px">dotnet test ReqSys.DotNet.sln</div>
+                <div class="muted" style="font-size:var(--font-size-xs)">dotnet test ReqSys.DotNet.sln</div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -241,45 +241,45 @@
         <v-row>
           <v-col cols="12" md="6">
             <v-card class="comp-card" elevation="0">
-              <v-card-title class="pa-3 pb-1" style="font-size:13px;font-weight:700">Serviço</v-card-title>
+              <v-card-title class="pa-3 pb-1" style="font-size:var(--font-size-md);font-weight:700">Serviço</v-card-title>
               <v-card-text class="pa-3 pt-1">
                 <pre class="code-block">cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload</pre>
-                <div class="muted mt-2" style="font-size:11px">Porta 8000 · docs em /docs</div>
+                <div class="muted mt-2" style="font-size:var(--font-size-xs)">Porta 8000 · docs em /docs</div>
               </v-card-text>
             </v-card>
           </v-col>
           <v-col cols="12" md="6">
             <v-card class="comp-card" elevation="0">
-              <v-card-title class="pa-3 pb-1" style="font-size:13px;font-weight:700">Aplicação</v-card-title>
+              <v-card-title class="pa-3 pb-1" style="font-size:var(--font-size-md);font-weight:700">Aplicação</v-card-title>
               <v-card-text class="pa-3 pt-1">
                 <pre class="code-block">cd frontend
 npm install
 npm run dev</pre>
-                <div class="muted mt-2" style="font-size:11px">Porta 5173 · Vite HMR</div>
+                <div class="muted mt-2" style="font-size:var(--font-size-xs)">Porta 5173 · Vite HMR</div>
               </v-card-text>
             </v-card>
           </v-col>
           <v-col cols="12" md="6">
             <v-card class="comp-card" elevation="0">
-              <v-card-title class="pa-3 pb-1" style="font-size:13px;font-weight:700">Docker (prod local)</v-card-title>
+              <v-card-title class="pa-3 pb-1" style="font-size:var(--font-size-md);font-weight:700">Docker (prod local)</v-card-title>
               <v-card-text class="pa-3 pt-1">
                 <pre class="code-block">docker compose \
   -f docker-compose.yml \
   -f docker-compose.prod.yml \
   up --build -d</pre>
-                <div class="muted mt-2" style="font-size:11px">Gateway nginx na porta 8081</div>
+                <div class="muted mt-2" style="font-size:var(--font-size-xs)">Gateway nginx na porta 8081</div>
               </v-card-text>
             </v-card>
           </v-col>
           <v-col cols="12" md="6">
             <v-card class="comp-card" elevation="0">
-              <v-card-title class="pa-3 pb-1" style="font-size:13px;font-weight:700">Implantação Fly.io</v-card-title>
+              <v-card-title class="pa-3 pb-1" style="font-size:var(--font-size-md);font-weight:700">Implantação Fly.io</v-card-title>
               <v-card-text class="pa-3 pt-1">
                 <pre class="code-block">.\scripts\fly-deploy.ps1 -Env prod
 # ou: -Env dev | -Env staging</pre>
-                <div class="muted mt-2" style="font-size:11px">Requer flyctl autenticado</div>
+                <div class="muted mt-2" style="font-size:var(--font-size-xs)">Requer flyctl autenticado</div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -377,7 +377,7 @@ npm run dev</pre>
             <div v-if="i < almPipeline.length - 1" class="pipeline-arrow">→</div>
           </div>
         </div>
-        <div class="muted mb-6" style="font-size:11px;padding-left:4px">
+        <div class="muted mb-6" style="font-size:var(--font-size-xs);padding-left:var(--space-xs)">
           Fluxo de trabalho de exportação cria Solicitação de integração automaticamente → integração de alterações dispara implantação em Build/Test → aprovação em main → Prod + GitHub Release
         </div>
 
@@ -394,7 +394,7 @@ npm run dev</pre>
             <tr v-for="env in dataverseEnvs" :key="env.slug">
               <td><v-chip size="x-small" :color="env.cor" variant="tonal">{{ env.slug }}</v-chip></td>
               <td><code class="small-code">{{ env.url }}</code></td>
-              <td class="muted" style="font-size:11px">{{ env.papel }}</td>
+              <td class="muted" style="font-size:var(--font-size-xs)">{{ env.papel }}</td>
             </tr>
           </tbody>
         </v-table>
@@ -433,7 +433,7 @@ npm run dev</pre>
                   <v-icon color="warning" size="16">mdi-microsoft-sharepoint</v-icon>
                   <span class="comp-name">IA_Catalogo_Projetos</span>
                 </div>
-                <div class="muted" style="font-size:11px">Lista SharePoint · tieri659.sharepoint.com</div>
+                <div class="muted" style="font-size:var(--font-size-xs)">Lista SharePoint · tieri659.sharepoint.com</div>
                 <div class="comp-desc mt-1">Catálogo de projetos IA. Lido por /hub-lowcode/pacotes via Microsoft Graph.</div>
               </v-card-text>
             </v-card>
@@ -445,7 +445,7 @@ npm run dev</pre>
                   <v-icon color="info" size="16">mdi-key-chain-variant</v-icon>
                   <span class="comp-name">SPN cb8c924f</span>
                 </div>
-                <div class="muted" style="font-size:11px">Service Principal · tenant 6d09c88c</div>
+                <div class="muted" style="font-size:var(--font-size-xs)">Service Principal · tenant 6d09c88c</div>
                 <div class="comp-desc mt-1">Administrador nos 4 ambientes. 3 permissões Microsoft Graph: Sites.Read.All · Sites.ReadWrite.All · Sites.Manage.All</div>
               </v-card-text>
             </v-card>
@@ -457,7 +457,7 @@ npm run dev</pre>
                   <v-icon color="success" size="16">mdi-microsoft-teams</v-icon>
                   <span class="comp-name">Teams · Canal ativo</span>
                 </div>
-                <div class="muted" style="font-size:11px">Bot ReqSysAgent instalado e publicado</div>
+                <div class="muted" style="font-size:var(--font-size-xs)">Bot ReqSysAgent instalado e publicado</div>
                 <div class="comp-desc mt-1">Usuários conversam com o bot no Teams para capturar e criar tarefas no Planner.</div>
               </v-card-text>
             </v-card>
@@ -637,20 +637,20 @@ const scripts = [
   background: var(--card-alt);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 20px 24px;
-  margin-bottom: 32px;
+  padding: var(--space-xl) var(--space-xl);
+  margin-bottom: var(--space-2xl);
 }
 
 .arch-row {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin: 6px 0;
+  margin: var(--space-sm) 0;
 }
 
 .arch-label {
   width: 90px;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -669,9 +669,9 @@ const scripts = [
 .arch-node {
   flex: 1;
   min-width: 140px;
-  padding: 10px 14px;
+  padding: var(--space-md) var(--space-lg);
   border-radius: 8px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 700;
   text-align: center;
   line-height: 1.4;
@@ -680,8 +680,8 @@ const scripts = [
 .arch-node small {
   display: block;
   font-weight: 400;
-  font-size: 10px;
-  margin-top: 2px;
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-xs);
 }
 
 .arch-node--external    { background: rgba(100,100,100,.1); border: 1px solid rgba(100,100,100,.25); }
@@ -691,9 +691,9 @@ const scripts = [
 .arch-node--integration { background: rgba(46,125,50,.1);   border: 1px solid rgba(46,125,50,.3);    }
 
 .arch-arrow {
-  padding: 2px 0 2px 106px;
+  padding: var(--space-xs) 0 var(--space-xs) 106px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
 }
 
 /* ─── Flow Diagram ─── */
@@ -706,20 +706,20 @@ const scripts = [
   background: var(--card-alt);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 6px;
+  padding: var(--space-xl);
+  margin-bottom: var(--space-sm);
 }
 
 .flow-label {
   text-align: center;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
 }
 
 .flow-node {
   text-align: center;
-  padding: 12px 20px;
+  padding: var(--space-md) var(--space-xl);
   border-radius: 10px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 700;
   line-height: 1.4;
   min-width: 130px;
@@ -728,14 +728,14 @@ const scripts = [
 .flow-node small {
   display: block;
   font-weight: 400;
-  font-size: 10px;
-  margin-top: 2px;
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-xs);
 }
 
 .flow-connector {
-  padding: 0 10px;
+  padding: 0 var(--space-md);
   color: var(--muted);
-  font-size: 20px;
+  font-size: var(--font-size-xl);
   font-weight: 300;
 }
 
@@ -753,24 +753,24 @@ const scripts = [
   background: var(--card-alt);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 16px 20px;
+  padding: var(--space-lg) var(--space-xl);
 }
 
 .pipeline-step {
   text-align: center;
-  padding: 8px 14px;
+  padding: var(--space-sm) var(--space-lg);
   min-width: 90px;
 }
 
 .pipeline-nome {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
-  margin-top: 4px;
+  margin-top: var(--space-xs);
 }
 
 .pipeline-desc {
-  font-size: 10px;
-  margin-top: 2px;
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-xs);
   max-width: 100px;
 }
 
@@ -778,8 +778,8 @@ const scripts = [
   display: flex;
   align-items: center;
   color: var(--muted);
-  font-size: 16px;
-  padding: 0 2px;
+  font-size: var(--font-size-lg);
+  padding: 0 var(--space-xs);
 }
 
 /* ─── Component Cards ─── */
@@ -789,19 +789,19 @@ const scripts = [
 }
 
 .comp-name {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 700;
   color: var(--text);
 }
 
 .comp-rota {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-family: 'Consolas', 'Fira Code', monospace;
   color: var(--muted);
 }
 
 .comp-desc {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--muted);
   line-height: 1.4;
 }
@@ -811,15 +811,15 @@ const scripts = [
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--muted);
-  margin-bottom: 10px;
-  padding-left: 2px;
+  margin-bottom: var(--space-md);
+  padding-left: var(--space-xs);
   border-left: 3px solid var(--accent);
-  padding-left: 8px;
+  padding-left: var(--space-sm);
 }
 
 /* ─── Tables ─── */
@@ -848,8 +848,8 @@ const scripts = [
   background: var(--card-alt);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 11px;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-xs);
   font-family: 'Consolas', 'Fira Code', monospace;
   white-space: pre-wrap;
   margin: 0;
@@ -858,7 +858,7 @@ const scripts = [
 }
 
 .small-code {
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-family: 'Consolas', monospace;
   color: var(--muted);
 }
@@ -874,8 +874,8 @@ const scripts = [
   }
   .flow-connector {
     transform: rotate(90deg);
-    font-size: 14px;
-    padding: 2px 0;
+    font-size: var(--font-size-base);
+    padding: var(--space-xs) 0;
   }
   .pipeline-flow {
     flex-direction: column;

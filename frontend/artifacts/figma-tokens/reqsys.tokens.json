@@ -91,6 +91,40 @@
         "$value": "Inter, system-ui, sans-serif"
       }
     },
+    "fontSize": {
+      "2xl": {
+        "$type": "dimension",
+        "$value": "1.5rem"
+      },
+      "base": {
+        "$type": "dimension",
+        "$value": "0.875rem"
+      },
+      "display": {
+        "$type": "dimension",
+        "$value": "1.9rem"
+      },
+      "lg": {
+        "$type": "dimension",
+        "$value": "1rem"
+      },
+      "md": {
+        "$type": "dimension",
+        "$value": "0.8125rem"
+      },
+      "sm": {
+        "$type": "dimension",
+        "$value": "0.75rem"
+      },
+      "xl": {
+        "$type": "dimension",
+        "$value": "1.25rem"
+      },
+      "xs": {
+        "$type": "dimension",
+        "$value": "0.6875rem"
+      }
+    },
     "radius": {
       "card": {
         "$type": "dimension",
@@ -129,6 +163,68 @@
       "informational": {
         "$type": "color",
         "$value": "{reqsys.color.analytics}"
+      }
+    },
+    "spacing": {
+      "2xl": {
+        "$type": "dimension",
+        "$value": "32px"
+      },
+      "3xl": {
+        "$type": "dimension",
+        "$value": "48px"
+      },
+      "lg": {
+        "$type": "dimension",
+        "$value": "16px"
+      },
+      "md": {
+        "$type": "dimension",
+        "$value": "12px"
+      },
+      "sm": {
+        "$type": "dimension",
+        "$value": "8px"
+      },
+      "xl": {
+        "$type": "dimension",
+        "$value": "24px"
+      },
+      "xs": {
+        "$type": "dimension",
+        "$value": "4px"
+      }
+    },
+    "table": {
+      "density": {
+        "$type": "other",
+        "$value": "compact"
+      },
+      "rowFontSize": {
+        "$type": "dimension",
+        "$value": "0.75rem"
+      }
+    },
+    "zIndex": {
+      "connectivityAlert": {
+        "$type": "number",
+        "$value": 4000
+      },
+      "routeFeedback": {
+        "$type": "number",
+        "$value": 3000
+      },
+      "skipLink": {
+        "$type": "number",
+        "$value": 5000
+      },
+      "toast": {
+        "$type": "number",
+        "$value": 3500
+      },
+      "tooltip": {
+        "$type": "number",
+        "$value": 6000
       }
     }
   }

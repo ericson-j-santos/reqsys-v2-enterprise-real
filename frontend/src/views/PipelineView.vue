@@ -68,9 +68,9 @@
     <v-card class="mb-5 pa-4" style="background:var(--card)!important;border:1px solid var(--border)!important">
       <div
         v-if="statusOrigemDemanda && snapshotAplicado"
-        style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#1b2536"
+        style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:var(--space-md);padding:var(--space-sm) var(--space-md);border:1px solid var(--border);border-radius:8px;background:#1b2536"
       >
-        <div style="display:flex;align-items:center;gap:6px;color:#cbd5e1;font-size:12px">
+        <div style="display:flex;align-items:center;gap:6px;color:#cbd5e1;font-size:var(--font-size-sm)">
           <v-icon size="15" color="amber">mdi-timeline-check-outline</v-icon>
           Snapshot inicial aplicado a partir do status {{ statusOrigemLabel(statusOrigemDemanda) }}
         </div>
@@ -80,8 +80,8 @@
           </template>
         </v-tooltip>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <div style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:var(--space-md)">
+        <div style="font-size:var(--font-size-xs);color:var(--muted);display:flex;align-items:center;gap:6px">
           <v-icon size="14" color="grey">mdi-information-outline</v-icon>
           Legenda de status da demanda (clique para simular)
         </div>
@@ -170,7 +170,7 @@
       <!-- Formulário -->
       <v-col cols="12" md="5">
         <v-card style="background:var(--card)!important;border:1px solid var(--border)!important">
-          <v-card-title class="py-3 px-4" style="font-size:15px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <v-card-title class="py-3 px-4" style="font-size:var(--font-size-lg);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             Solicitação de Requisito
             <v-tooltip text="Preencha todos os campos obrigatórios (*) e clique em Executar Fluxo" location="top">
               <template #activator="{ props }">
@@ -191,7 +191,7 @@
                 class="mb-4"
                 icon="mdi-alert-circle-outline"
               >
-                <div style="font-weight:600;margin-bottom:6px">Campos com erro — clique para ir ao campo:</div>
+                <div style="font-weight:600;margin-bottom:var(--space-sm)">Campos com erro — clique para ir ao campo:</div>
                 <div style="display:flex;flex-wrap:wrap;gap:6px">
                   <v-chip
                     v-for="campo in Object.keys(errosApiCampos)"
@@ -375,7 +375,7 @@
               />
 
               <v-divider class="my-3" />
-              <div style="font-size:12px;font-weight:700;color:#e2e8f0;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+              <div style="font-size:var(--font-size-sm);font-weight:700;color:#e2e8f0;margin-bottom:var(--space-sm);display:flex;align-items:center;gap:6px">
                 <v-icon size="16" color="amber">mdi-source-pull</v-icon>
                 Integração GitHub para publicação no Redmine
               </div>
@@ -463,7 +463,7 @@
                   </v-col>
                 </v-row>
 
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:var(--space-xs) 0 var(--space-sm)">
                   <v-btn
                     size="small"
                     variant="outlined"
@@ -471,12 +471,12 @@
                     :loading="githubLoading"
                     @click="carregarIssuesGithub"
                   >Carregar issues</v-btn>
-                  <span style="font-size:11px;color:var(--muted)">
+                  <span style="font-size:var(--font-size-xs);color:var(--muted)">
                     {{ githubIssues.length }} issue(s) carregada(s) {{ githubSelecionadasCount > 0 ? `· ${githubSelecionadasCount} selecionada(s)` : '' }}
                   </span>
                 </div>
 
-                <div v-if="githubIssues.length" style="max-height:140px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#121a27">
+                <div v-if="githubIssues.length" style="max-height:140px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:var(--space-sm) var(--space-md);margin-bottom:var(--space-sm);background:#121a27">
                   <v-checkbox
                     v-for="issue in githubIssues"
                     :key="issue.number"
@@ -488,8 +488,8 @@
                   >
                     <template #label>
                       <div style="display:flex;align-items:center;gap:6px;min-width:0">
-                        <span style="font-size:11px;color:#94a3b8">#{{ issue.number }}</span>
-                        <span style="font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ issue.title }}</span>
+                        <span style="font-size:var(--font-size-xs);color:#94a3b8">#{{ issue.number }}</span>
+                        <span style="font-size:var(--font-size-sm);color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ issue.title }}</span>
                       </div>
                     </template>
                   </v-checkbox>
@@ -525,7 +525,7 @@
       <!-- Resultado / log -->
       <v-col cols="12" md="7">
         <v-card style="background:var(--card)!important;border:1px solid var(--border)!important">
-          <v-card-title class="py-3 px-4" style="font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <v-card-title class="py-3 px-4" style="font-size:var(--font-size-lg);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             Resultado da Execução
             <v-chip v-if="resultado" :color="resultadoColor" size="x-small" class="ml-2">
               {{ resultadoStatus }}
@@ -560,7 +560,7 @@
             <div v-for="step in stepsFiltrados" :key="step.key" class="step-log-item" v-show="step.log || step.status !== 'idle'">
               <div class="step-log-header" @click="step.expanded = !step.expanded" style="cursor:pointer">
                 <v-icon size="14" :color="stepColor(step.status)" class="mr-1">{{ stepIcon(step.status) }}</v-icon>
-                <span style="font-size:13px;font-weight:600">{{ step.label }}</span>
+                <span style="font-size:var(--font-size-md);font-weight:600">{{ step.label }}</span>
                 <v-chip v-if="step.duration" size="x-small" variant="text" class="ml-1" style="color:var(--muted)">
                   {{ step.duration }}ms
                 </v-chip>
@@ -600,7 +600,7 @@
               </div>
               <div class="result-row" v-if="correlatioId">
                 <span class="result-key">Correlation ID</span>
-                <code class="result-val" style="font-size:11px">{{ correlatioId }}</code>
+                <code class="result-val" style="font-size:var(--font-size-xs)">{{ correlatioId }}</code>
               </div>
             </div>
 
@@ -608,7 +608,7 @@
             <div v-if="resultado?.alertas?.length" class="mt-3">
               <div class="result-row" v-for="alerta in resultado.alertas" :key="alerta">
                 <v-icon size="14" color="warning" class="mr-1">mdi-alert</v-icon>
-                <span style="font-size:12px;color:#fbbf24">{{ alerta }}</span>
+                <span style="font-size:var(--font-size-sm);color:#fbbf24">{{ alerta }}</span>
               </div>
             </div>
 
@@ -716,7 +716,7 @@
         :items-per-page="10"
       >
         <template #item.executadoEm="{ item }">
-          <span style="font-size:11px">{{ formatarDataPipeline(item.executadoEm) }}</span>
+          <span style="font-size:var(--font-size-xs)">{{ formatarDataPipeline(item.executadoEm) }}</span>
         </template>
         <template #item.duration="{ item }">
           <span>{{ item.duration ?? '—' }} ms</span>
@@ -1479,9 +1479,9 @@ function toastIcon(type) {
   z-index: 1;
 }
 .step-label {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--muted);
-  margin-top: 6px;
+  margin-top: var(--space-sm);
   text-align: center;
 }
 .step-connector {
@@ -1502,29 +1502,29 @@ function toastIcon(type) {
 .step-running .step-badge { background: #451a03; border: 1px solid #f59e0b; }
 .step-active .step-badge  { border: 2px solid var(--accent); }
 
-.step-log-item { border-left: 2px solid var(--border); padding: 6px 10px; margin-bottom: 4px; border-radius: 0 6px 6px 0; }
+.step-log-item { border-left: 2px solid var(--border); padding: var(--space-sm) var(--space-md); margin-bottom: var(--space-xs); border-radius: 0 6px 6px 0; }
 .step-log-header { display: flex; align-items: center; gap: 4px; }
-.step-log-body { font-size: 11px; color: var(--muted); margin-top: 4px; font-family: 'JetBrains Mono', monospace; white-space: pre-wrap; }
+.step-log-body { font-size: var(--font-size-xs); color: var(--muted); margin-top: var(--space-xs); font-family: 'JetBrains Mono', monospace; white-space: pre-wrap; }
 
-.result-box { background: #0a1628; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
-.result-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
-.result-key { font-size: 11px; color: var(--muted); min-width: 90px; }
-.result-val { font-size: 12px; color: var(--accent); background: #1a2640; padding: 2px 6px; border-radius: 4px; }
-.result-link { font-size: 12px; color: #60a5fa; text-decoration: underline; }
+.result-box { background: #0a1628; border: 1px solid var(--border); border-radius: 8px; padding: var(--space-md); }
+.result-row { display: flex; align-items: center; gap: 8px; margin-bottom: var(--space-sm); flex-wrap: wrap; }
+.result-key { font-size: var(--font-size-xs); color: var(--muted); min-width: 90px; }
+.result-val { font-size: var(--font-size-sm); color: var(--accent); background: #1a2640; padding: var(--space-xs) var(--space-sm); border-radius: 4px; }
+.result-link { font-size: var(--font-size-sm); color: #60a5fa; text-decoration: underline; }
 
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; }
 
-.demo-badge { background: #7c3aed; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 1px; }
-.draft-info { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+.demo-badge { background: #7c3aed; color: white; font-size: var(--font-size-xs); padding: var(--space-xs) var(--space-sm); border-radius: 4px; font-weight: 700; letter-spacing: 1px; }
+.draft-info { font-size: var(--font-size-xs); color: var(--muted); display: flex; align-items: center; gap: 4px; }
 
 /* Toasts */
-.toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
-.toast-item { padding: 10px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; display: flex; align-items: center; min-width: 220px; max-width: 360px; box-shadow: 0 4px 16px #0008; }
+.toast-container { position: fixed; top: 20px; right: 20px; z-index: var(--z-toast); display: flex; flex-direction: column; gap: 8px; }
+.toast-item { padding: var(--space-md) var(--space-lg); border-radius: 8px; font-size: var(--font-size-md); cursor: pointer; display: flex; align-items: center; min-width: 220px; max-width: 360px; box-shadow: 0 4px 16px #0008; }
 .toast-success  { background: #14532d; border: 1px solid #4ade80; color: #bbf7d0; }
 .toast-error    { background: #7f1d1d; border: 1px solid #f87171; color: #fecaca; }
 .toast-warning  { background: #451a03; border: 1px solid #fbbf24; color: #fef3c7; }
 .toast-info     { background: #1e3a5f; border: 1px solid #60a5fa; color: #bfdbfe; }
 .toast-enter-active, .toast-leave-active { transition: all .25s ease; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(40px); }
-.correlation-link { color: var(--accent); cursor: pointer; text-decoration: underline dotted; font-size: 11px; }
+.correlation-link { color: var(--accent); cursor: pointer; text-decoration: underline dotted; font-size: var(--font-size-xs); }
 </style>

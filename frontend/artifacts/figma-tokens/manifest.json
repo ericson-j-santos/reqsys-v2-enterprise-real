@@ -2,14 +2,18 @@
   "artifact": "reqsys-figma-tokens",
   "format": "figma-tokens-studio",
   "schemaVersion": "1",
-  "sha256": "5d4f8c5799a68059719f5509ed6914777f031a8ada38d0be7e265e337d24d7e9",
+  "sha256": "3c94f9187367558d715db10ff516473ff0c2e38b0d74232d2844275c5755542e",
   "source": "frontend/src/theme/design-tokens.json",
   "tokenCounts": {
     "colors": 17,
     "fontFamily": 1,
+    "fontSize": 8,
     "radius": 3,
     "semantic": 6,
-    "total": 27
+    "spacing": 7,
+    "table": 2,
+    "total": 49,
+    "zIndex": 5
   },
   "version": "1.0.0"
 }
