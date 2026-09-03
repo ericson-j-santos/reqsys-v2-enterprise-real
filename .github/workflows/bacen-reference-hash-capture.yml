@@ -6,6 +6,7 @@ on:
     paths:
       - "governance/bacen/normative/NORMATIVE-BASELINE-V2.yaml"
       - "scripts/capture_bacen_reference_hashes.py"
+      - "scripts/discover_bacen_live_links.mjs"
       - "scripts/validate_bacen_normative_axis.py"
       - ".github/workflows/bacen-reference-hash-capture.yml"
   push:
@@ -13,6 +14,7 @@ on:
     paths:
       - "governance/bacen/normative/NORMATIVE-BASELINE-V2.yaml"
       - "scripts/capture_bacen_reference_hashes.py"
+      - "scripts/discover_bacen_live_links.mjs"
       - "scripts/validate_bacen_normative_axis.py"
       - ".github/workflows/bacen-reference-hash-capture.yml"
   workflow_dispatch: {}
@@ -28,10 +30,32 @@ jobs:
   capture:
     name: BACEN — Captura de hashes normalizados
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node for one-time URL discovery
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install temporary browser tooling
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts @playwright/test@1.59.1
+          npx playwright install chromium
+
+      - name: Discover rendered BCB links
+        run: node scripts/discover_bacen_live_links.mjs
+
+      - name: Publish URL discovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-live-link-discovery
+          path: artifacts/bacen/bcb-live-links.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Setup Python
         uses: actions/setup-python@v5
