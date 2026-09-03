@@ -6,14 +6,18 @@ on:
     paths:
       - "governance/bacen/normative/**"
       - "scripts/validate_bacen_normative_axis.py"
+      - "scripts/validate_bacen_normative_mapping.py"
       - "tests/test_validate_bacen_normative_axis.py"
+      - "tests/test_validate_bacen_normative_mapping.py"
       - ".github/workflows/bacen-normative-axis-gate.yml"
   push:
     branches: [main]
     paths:
       - "governance/bacen/normative/**"
       - "scripts/validate_bacen_normative_axis.py"
+      - "scripts/validate_bacen_normative_mapping.py"
       - "tests/test_validate_bacen_normative_axis.py"
+      - "tests/test_validate_bacen_normative_mapping.py"
       - ".github/workflows/bacen-normative-axis-gate.yml"
   workflow_dispatch: {}
 
@@ -41,21 +45,30 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --disable-pip-version-check PyYAML
 
-      - name: Compile validator
-        run: python -m py_compile scripts/validate_bacen_normative_axis.py
+      - name: Compile validators
+        run: |
+          python -m py_compile scripts/validate_bacen_normative_axis.py
+          python -m py_compile scripts/validate_bacen_normative_mapping.py
 
       - name: Run normative axis tests
-        run: python -m unittest tests.test_validate_bacen_normative_axis
+        run: |
+          python -m unittest tests.test_validate_bacen_normative_axis
+          python -m unittest tests.test_validate_bacen_normative_mapping
 
       - name: Validate normative baseline
         run: python scripts/validate_bacen_normative_axis.py
+
+      - name: Validate normative N-to-N mapping
+        run: python scripts/validate_bacen_normative_mapping.py
 
       - name: Publish evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bacen-normative-axis-evidence
-          path: artifacts/bacen/bacen-normative-axis-check.json
+          path: |
+            artifacts/bacen/bacen-normative-axis-check.json
+            artifacts/bacen/bacen-normative-mapping-check.json
           if-no-files-found: error
           retention-days: 90
 
@@ -87,6 +100,22 @@ jobs:
               print(f"  - ❌ {error}")
           PY
           else
-            echo "- Evidência não gerada." >> "$GITHUB_STEP_SUMMARY"
+            echo "- Evidência normativa não gerada." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if [ -f artifacts/bacen/bacen-normative-mapping-check.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-normative-mapping-check.json").read_text())
+          summary = report.get("summary", {})
+          print(f"- Mapeamento N:N: `{report.get('result')}`")
+          print(f"- Obrigações mapeadas: **{summary.get('mapped_obligations', 0)}/{summary.get('expected_obligations', 0)}**")
+          print(f"- Macrocontroles referenciados: **{summary.get('macrocontrols_referenced', 0)}**")
+          print(f"- Promoção de assessment: `{summary.get('assessment_promotion')}`")
+          print(f"- Declaração de evidência: `{summary.get('evidence_claim')}`")
+          PY
+          else
+            echo "- Evidência de mapeamento não gerada." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
