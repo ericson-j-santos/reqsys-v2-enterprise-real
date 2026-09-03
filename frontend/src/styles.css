@@ -30,6 +30,39 @@
   --radius-card: 16px;
   --radius-pill: 999px;
   --font-sans: Inter, system-ui, sans-serif;
+
+  /* Escala tipográfica (fonte única: src/theme/design-tokens.json#typography.scale) */
+  --font-size-xs: 0.6875rem;
+  --font-size-sm: 0.75rem;
+  --font-size-md: 0.8125rem;
+  --font-size-base: 0.875rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-display: 1.9rem;
+
+  /* Escala de espaçamento, múltiplos de 4px (fonte: design-tokens.json#spacing) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+
+  /*
+   * Escala de z-index nomeada (fonte: design-tokens.json#zIndex). Ordem
+   * deliberada: aviso de rota < toast < alerta de conectividade < skip-link,
+   * para que nenhum overlay de app cubra os demais por acidente.
+   */
+  --z-route-feedback: 3000;
+  --z-toast: 3500;
+  --z-connectivity-alert: 4000;
+  --z-skip-link: 5000;
+  --z-tooltip: 6000;
+
+  /* Densidade padrão de tabela (fonte: design-tokens.json#table) */
+  --table-row-font-size: 0.75rem;
 }
 
 .v-theme--reqsysClaro {
@@ -73,9 +106,9 @@ body {
 .v-tooltip > .v-overlay__content {
   background-color: rgba(7, 21, 38, 0.96) !important;
   color: var(--text) !important;
-  font-size: 12px !important;
+  font-size: var(--font-size-sm) !important;
   border-radius: 8px !important;
-  padding: 6px 10px !important;
+  padding: var(--space-xs) var(--space-sm) !important;
   max-width: min(280px, calc(100vw - 32px));
   line-height: 1.4;
   border: 1px solid var(--line);
@@ -102,7 +135,7 @@ body {
   position: fixed !important;
   top: 16px;
   right: 16px;
-  z-index: 3000;
+  z-index: var(--z-route-feedback);
   width: min(520px, calc(100vw - 32px));
   border: 1px solid rgba(245, 158, 11, 0.45) !important;
   background: color-mix(in srgb, var(--panel) 94%, transparent) !important;
@@ -273,6 +306,7 @@ h1,
 .v-data-table {
   border-radius: var(--radius-card);
   overflow: hidden;
+  font-size: var(--table-row-font-size);
 }
 
 .v-table__wrapper {

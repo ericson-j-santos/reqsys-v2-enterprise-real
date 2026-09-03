@@ -7,7 +7,7 @@ import designTokens from './design-tokens.json'
  * nomes históricos usados pelos componentes e pelo tema `figmaPadraoOuro`,
  * evitando duplicação e drift entre Figma, documentação e runtime.
  */
-const { colors, radius, typography } = designTokens
+const { colors, radius, typography, spacing, zIndex, table } = designTokens
 
 export const DSC_TOKENS = Object.freeze({
   primary: colors.primary,
@@ -37,6 +37,18 @@ export const DSC_TOKENS = Object.freeze({
 
 /** Alias preservado para retrocompatibilidade com componentes existentes. */
 export const FIGMA_TOKENS = DSC_TOKENS
+
+/**
+ * Escala tipográfica, de espaçamento, z-index e densidade de tabela.
+ * Use estes tokens em vez de `font-size`/`padding`/`margin`/`z-index` soltos
+ * em componentes — eles espelham as variáveis CSS equivalentes em `styles.css`
+ * (--font-size-*, --space-*, --z-*) para uso em lógica JS/inline styles quando
+ * uma classe utilitária do Vuetify não for suficiente.
+ */
+export const DSC_TYPOGRAPHY_SCALE = Object.freeze({ ...typography.scale })
+export const DSC_SPACING = Object.freeze({ ...spacing })
+export const DSC_Z_INDEX = Object.freeze({ ...zIndex })
+export const DSC_TABLE = Object.freeze({ ...table })
 
 export const figmaVuetifyTheme = {
   dark: true,

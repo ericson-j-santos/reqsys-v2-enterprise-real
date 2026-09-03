@@ -12,7 +12,7 @@ import './responsive-pareto.css'
 import { useAuthStore } from './stores/auth'
 import { api } from './services/api'
 import { acquireIdTokenSilent, handleRedirectResult } from './auth/msal'
-import { figmaVuetifyLightTheme, figmaVuetifyTheme } from './theme/figmaPadraoOuro'
+import { DSC_TABLE, DSC_Z_INDEX, figmaVuetifyLightTheme, figmaVuetifyTheme } from './theme/figmaPadraoOuro'
 
 const temaPersistido = localStorage.getItem('reqsys_tema_visual')
 const temaInicial = temaPersistido === 'reqsysClaro' ? 'reqsysClaro' : 'figmaPadraoOuro'
@@ -26,6 +26,23 @@ const vuetify = createVuetify({
       figmaPadraoOuro: figmaVuetifyTheme,
       reqsysClaro: figmaVuetifyLightTheme,
     },
+  },
+  defaults: {
+    // Densidade única de tabela (design-tokens.json#table) — nenhuma tela
+    // precisa mais escolher `density` individualmente. Não alteramos `variant`
+    // aqui de propósito: mudar o estilo visual padrão de inputs em todo o app
+    // exige validação visual tela a tela, fora do escopo desta correção.
+    VDataTable: { density: DSC_TABLE.density },
+    VDataTableServer: { density: DSC_TABLE.density },
+    VTable: { density: DSC_TABLE.density },
+    VTextField: { density: 'comfortable' },
+    VSelect: { density: 'comfortable' },
+    VBtn: { density: 'comfortable' },
+    // zIndex explícito: VTooltip roda com `_disableGlobalStack`, então nunca
+    // sobe acima do zIndex padrão (2000) da Vuetify sozinho — sem isso, toast/
+    // alerta de conectividade/route-feedback do app (z-index 3000-5000) cobrem
+    // o tooltip sempre que se sobrepõem na tela.
+    VTooltip: { location: 'top', openDelay: 200, zIndex: DSC_Z_INDEX.tooltip },
   },
 })
 

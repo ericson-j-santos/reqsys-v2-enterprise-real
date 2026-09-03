@@ -32,7 +32,37 @@
     "frame": "24px"
   },
   "typography": {
-    "fontFamily": "Inter, system-ui, sans-serif"
+    "fontFamily": "Inter, system-ui, sans-serif",
+    "scale": {
+      "xs": "0.6875rem",
+      "sm": "0.75rem",
+      "md": "0.8125rem",
+      "base": "0.875rem",
+      "lg": "1rem",
+      "xl": "1.25rem",
+      "2xl": "1.5rem",
+      "display": "1.9rem"
+    }
+  },
+  "spacing": {
+    "xs": "4px",
+    "sm": "8px",
+    "md": "12px",
+    "lg": "16px",
+    "xl": "24px",
+    "2xl": "32px",
+    "3xl": "48px"
+  },
+  "zIndex": {
+    "routeFeedback": 3000,
+    "toast": 3500,
+    "connectivityAlert": 4000,
+    "skipLink": 5000,
+    "tooltip": 6000
+  },
+  "table": {
+    "density": "compact",
+    "rowFontSize": "0.75rem"
   },
   "semantic": {
     "governance": "primary",

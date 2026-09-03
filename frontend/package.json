@@ -22,16 +22,16 @@
         "quality:linguagem-simples": "npm run test:linguagem-simples && npm run validate:linguagem-simples"
     },
     "dependencies": {
-        "@azure/msal-browser": "^5.12.0",
-        "@mdi/font": "latest",
-        "@vitejs/plugin-vue": "latest",
-        "axios": "latest",
-        "mermaid": "latest",
-        "pinia": "latest",
-        "vite": "latest",
-        "vue": "latest",
-        "vue-router": "latest",
-        "vuetify": "latest"
+        "@azure/msal-browser": "^5.18.0",
+        "@mdi/font": "^7.4.47",
+        "@vitejs/plugin-vue": "^6.0.8",
+        "axios": "^1.19.0",
+        "mermaid": "^11.16.1",
+        "pinia": "^4.0.2",
+        "vite": "^8.2.1",
+        "vue": "^3.5.41",
+        "vue-router": "^5.2.0",
+        "vuetify": "^4.1.8"
     },
     "devDependencies": {
         "@playwright/test": "^1.59.1",

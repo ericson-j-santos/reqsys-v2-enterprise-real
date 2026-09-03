@@ -1518,7 +1518,7 @@ function toastIcon(type) {
 .draft-info { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
 
 /* Toasts */
-.toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+.toast-container { position: fixed; top: 20px; right: 20px; z-index: var(--z-toast); display: flex; flex-direction: column; gap: 8px; }
 .toast-item { padding: 10px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; display: flex; align-items: center; min-width: 220px; max-width: 360px; box-shadow: 0 4px 16px #0008; }
 .toast-success  { background: #14532d; border: 1px solid #4ade80; color: #bbf7d0; }
 .toast-error    { background: #7f1d1d; border: 1px solid #f87171; color: #fecaca; }
