@@ -343,6 +343,27 @@ def test_descoberta_grupos_retorna_erro(monkeypatch):
 client = TestClient(app)
 
 
+def test_cors_preflight_permite_header_power_platform_token():
+    # X-Power-Platform-Token e um header nao-simples: qualquer requisicao com
+    # ele dispara preflight OPTIONS do navegador. Se o backend nao o listar
+    # em allow_headers, o navegador bloqueia a chamada real antes mesmo dela
+    # chegar na rota — listar_conexoes_instalacao nunca roda, e a UI mostra
+    # "nao autorizado" sem nenhum erro visivel, indistinguivel de uma falha
+    # real de permissao.
+    origin = settings.cors_origins_list[0]
+    response = client.options(
+        '/v1/hub-lowcode/copilot-memory/install/connections',
+        headers={
+            'Origin': origin,
+            'Access-Control-Request-Method': 'GET',
+            'Access-Control-Request-Headers': 'x-power-platform-token',
+        },
+    )
+    assert response.status_code == 200
+    allowed = response.headers.get('access-control-allow-headers', '').lower()
+    assert 'x-power-platform-token' in allowed
+
+
 def _auth_ctx():
     return ServiceAuthContext(ator='admin@teste', via_token=False)
 
