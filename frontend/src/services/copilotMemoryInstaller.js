@@ -28,15 +28,10 @@ export async function criarPlanilhaInstalacao(groupId, nome = 'CopilotMemory.xls
 
 export async function listarConexoesInstalacao(environmentId) {
   // Conexoes Planner/Excel Online sao pessoais do usuario: precisa de um
-  // token delegado (via MSAL) para o backend enxerga-las. Se a aquisicao
-  // falhar (ex.: login demo, sem conta Microsoft), segue sem o header — o
-  // backend responde com uma mensagem clara em vez de lista vazia muda.
-  let token = null
-  try {
-    token = await acquirePowerPlatformToken()
-  } catch {
-    token = null
-  }
+  // token delegado (via MSAL) para o backend enxerga-las. A ausencia de conta
+  // Microsoft continua representada por null; falhas reais de aquisicao nao
+  // podem ser descartadas, pois carregam a causa de consentimento/permissao.
+  const token = await acquirePowerPlatformToken()
   const headers = token ? { 'X-Power-Platform-Token': token } : {}
   return unwrap(await api.get(`${INSTALL}/connections`, { params: { environment_id: environmentId }, headers }))
 }
