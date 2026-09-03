@@ -1,0 +1,87 @@
+name: BACEN Reference Hash Capture
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/normative/NORMATIVE-BASELINE-V2.yaml"
+      - "scripts/capture_bacen_reference_hashes.py"
+      - "scripts/validate_bacen_normative_axis.py"
+      - ".github/workflows/bacen-reference-hash-capture.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/normative/NORMATIVE-BASELINE-V2.yaml"
+      - "scripts/capture_bacen_reference_hashes.py"
+      - "scripts/validate_bacen_normative_axis.py"
+      - ".github/workflows/bacen-reference-hash-capture.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-reference-hash-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    name: BACEN — Captura de hashes normalizados
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deterministic parser dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML pypdf==6.16.2
+
+      - name: Compile capture script
+        run: python -m py_compile scripts/capture_bacen_reference_hashes.py
+
+      - name: Capture official BCB references
+        run: python scripts/capture_bacen_reference_hashes.py
+
+      - name: Enforce captured baseline when all hashes are committed
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-reference-hashes.json").read_text(encoding="utf-8"))
+          summary = report["summary"]
+          if summary["pending_in_baseline"] == 0 and report["result"] != "verified":
+              raise SystemExit(f"baseline capturada divergiu: {report['mismatches']}")
+          if summary["documents"] != 4:
+              raise SystemExit(f"esperados 4 documentos, encontrados {summary['documents']}")
+          PY
+
+      - name: Publish capture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-reference-hashes
+          path: artifacts/bacen/bacen-reference-hashes.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Append summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          path = Path("artifacts/bacen/bacen-reference-hashes.json")
+          print("## BACEN — referências técnicas vivas")
+          if not path.exists():
+              print("- Evidência de captura não gerada.")
+              raise SystemExit(1)
+          report = json.loads(path.read_text(encoding="utf-8"))
+          print(f"- Resultado: `{report['result']}`")
+          for item in report["documents"]:
+              print(f"- `{item['uid']}`: `{item['content_sha256']}` — {item['normalized_chars']} caracteres normalizados")
+          PY
