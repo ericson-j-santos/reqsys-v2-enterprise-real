@@ -35,6 +35,9 @@ jobs:
     name: Monitorar workflows e executar allowlist
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      CI_PROCESS_HISTORY_PATH: audit/history/ci-process-improvement-history.jsonl
+      COMMAND_CENTER_OUTPUT_DIR: artifacts/workflow-command-center
 
     steps:
       - name: Checkout
@@ -44,6 +47,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Restore process improvement history
+        uses: actions/cache/restore@v4
+        with:
+          path: audit/history
+          key: ci-process-history-main-command-center-${{ github.run_id }}
+          restore-keys: |
+            ci-process-history-main-
+
+      - name: Validar histórico no Command Center
+        run: python tests/scripts/test_enrich_command_center_ci_history.py
 
       - name: Executar command center
         shell: bash
@@ -57,12 +71,16 @@ jobs:
             --repo "${GITHUB_REPOSITORY}"
             --branch "main"
             --limit "30"
-            --output-dir "artifacts/workflow-command-center"
+            --output-dir "${COMMAND_CENTER_OUTPUT_DIR}"
           )
           if [[ -n "${DISPATCH_WORKFLOW}" ]]; then
             args+=(--dispatch "${DISPATCH_WORKFLOW}" --dispatch-ref "${DISPATCH_REF}")
           fi
           python scripts/workflow_command_center.py "${args[@]}"
+
+      - name: Enriquecer Command Center com série histórica
+        if: always()
+        run: python scripts/enrich_command_center_ci_history.py
 
       - name: Publicar artifact de evidencia
         if: always()
@@ -71,4 +89,4 @@ jobs:
           name: workflow-command-center-evidence
           path: artifacts/workflow-command-center
           if-no-files-found: error
-          retention-days: 15
+          retention-days: 30
