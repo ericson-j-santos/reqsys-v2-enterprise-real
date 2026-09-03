@@ -12,7 +12,6 @@ import json
 import ssl
 import urllib.request
 from datetime import UTC, datetime
-from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
@@ -21,36 +20,10 @@ from pypdf import PdfReader, __version__ as pypdf_version
 
 try:
     from scripts.validate_bacen_normative_axis import normalized_text_sha256, normalize_bcb_text
-except ModuleNotFoundError:  # execução direta: python scripts/capture_bacen_reference_hashes.py
+except ModuleNotFoundError:  # execução direta
     from validate_bacen_normative_axis import normalized_text_sha256, normalize_bcb_text
 
-USER_AGENT = "ReqSys-BACEN-Normative-Capture/1.0 (+https://github.com/ericson-j-santos/reqsys-v2-enterprise-real)"
-
-
-class VisibleTextParser(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self._blocked = 0
-        self.parts: list[str] = []
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag.casefold() in {"script", "style", "noscript", "svg"}:
-            self._blocked += 1
-        elif not self._blocked and tag.casefold() in {"p", "div", "li", "br", "h1", "h2", "h3", "h4", "td", "th"}:
-            self.parts.append("\n")
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag.casefold() in {"script", "style", "noscript", "svg"} and self._blocked:
-            self._blocked -= 1
-        elif not self._blocked and tag.casefold() in {"p", "div", "li", "h1", "h2", "h3", "h4", "td", "th"}:
-            self.parts.append("\n")
-
-    def handle_data(self, data: str) -> None:
-        if not self._blocked:
-            self.parts.append(data)
-
-    def text(self) -> str:
-        return "".join(self.parts)
+USER_AGENT = "ReqSys-BACEN-Normative-Capture/1.1 (+https://github.com/ericson-j-santos/reqsys-v2-enterprise-real)"
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -60,13 +33,12 @@ def load_yaml(path: Path) -> dict[str, Any]:
     return payload
 
 
-def fetch_bytes(url: str, timeout: int = 45) -> tuple[bytes, str]:
+def fetch_bytes(url: str, timeout: int = 60) -> tuple[bytes, str]:
+    if not url.startswith("https://"):
+        raise ValueError(f"fonte deve usar HTTPS: {url}")
     request = urllib.request.Request(
         url,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "application/pdf,text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
-        },
+        headers={"User-Agent": USER_AGENT, "Accept": "application/pdf,*/*;q=0.5"},
     )
     context = ssl.create_default_context()
     with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
@@ -77,33 +49,12 @@ def fetch_bytes(url: str, timeout: int = 45) -> tuple[bytes, str]:
     return data, content_type
 
 
-def extract_pdf_text(data: bytes) -> tuple[str, dict[str, Any]]:
+def extract_pdf_text(data: bytes) -> tuple[str, int]:
     reader = PdfReader(io.BytesIO(data))
-    pages = [(page.extract_text() or "") for page in reader.pages]
-    text = "\n".join(pages)
+    text = "\n".join((page.extract_text() or "") for page in reader.pages)
     if not text.strip():
         raise ValueError("PDF sem texto extraível")
-    return text, {"parser": "pypdf", "parser_version": pypdf_version, "pages": len(reader.pages)}
-
-
-def extract_html_section(data: bytes, capture: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    html = data.decode("utf-8", errors="replace")
-    parser = VisibleTextParser()
-    parser.feed(html)
-    text = normalize_bcb_text(parser.text())
-    start_marker = str(capture.get("start_marker") or "")
-    end_marker = str(capture.get("end_marker") or "")
-    if start_marker:
-        start = text.casefold().find(start_marker.casefold())
-        if start < 0:
-            raise ValueError(f"marcador inicial não encontrado: {start_marker}")
-        text = text[start:]
-    if end_marker:
-        end = text.casefold().find(end_marker.casefold())
-        if end < 0:
-            raise ValueError(f"marcador final não encontrado: {end_marker}")
-        text = text[: end + len(end_marker)]
-    return text, {"parser": "html-visible-text-v1"}
+    return text, len(reader.pages)
 
 
 def validate_markers(text: str, markers: list[str], uid: str) -> None:
@@ -113,27 +64,77 @@ def validate_markers(text: str, markers: list[str], uid: str) -> None:
         raise ValueError(f"{uid}: marcadores esperados ausentes: {', '.join(missing)}")
 
 
+def capture_single_pdf(capture: dict[str, Any], uid: str) -> tuple[str, dict[str, Any]]:
+    source = str(capture.get("source") or "")
+    data, content_type = fetch_bytes(source)
+    text, pages = extract_pdf_text(data)
+    normalized = normalize_bcb_text(text)
+    validate_markers(normalized, [str(item) for item in capture.get("expected_markers") or []], uid)
+    return normalized, {
+        "capture_source": source,
+        "source_content_type": content_type,
+        "parser": "pypdf",
+        "parser_version": pypdf_version,
+        "pages": pages,
+    }
+
+
+def capture_pdf_set(capture: dict[str, Any], uid: str) -> tuple[str, dict[str, Any]]:
+    sources = capture.get("sources")
+    if not isinstance(sources, list) or not sources:
+        raise ValueError(f"{uid}: pdf_text_set requer sources não vazio")
+
+    normalized_members: list[str] = []
+    member_evidence: list[dict[str, Any]] = []
+    total_pages = 0
+    for index, member in enumerate(sources, start=1):
+        if not isinstance(member, dict):
+            raise ValueError(f"{uid}: membro {index} inválido")
+        member_uid = str(member.get("uid") or f"member-{index}")
+        source = str(member.get("source") or "")
+        data, content_type = fetch_bytes(source)
+        text, pages = extract_pdf_text(data)
+        normalized = normalize_bcb_text(text)
+        validate_markers(normalized, [str(item) for item in member.get("expected_markers") or []], f"{uid}/{member_uid}")
+        normalized_members.append(normalized)
+        total_pages += pages
+        member_evidence.append(
+            {
+                "uid": member_uid,
+                "source": source,
+                "content_type": content_type,
+                "pages": pages,
+                "normalized_chars": len(normalized),
+                "normalized_sha256": normalized_text_sha256(normalized),
+            }
+        )
+
+    combined = normalize_bcb_text("\n\n".join(normalized_members))
+    validate_markers(combined, [str(item) for item in capture.get("expected_markers") or []], uid)
+    return combined, {
+        "capture_source": [item["source"] for item in member_evidence],
+        "source_content_type": "application/pdf-set",
+        "parser": "pypdf-set",
+        "parser_version": pypdf_version,
+        "pages": total_pages,
+        "members": member_evidence,
+    }
+
+
 def capture_document(doc: dict[str, Any]) -> dict[str, Any]:
     uid = str(doc.get("uid") or "UNKNOWN")
     capture = doc.get("capture")
     if not isinstance(capture, dict):
         raise ValueError(f"{uid}: bloco capture ausente")
     kind = str(capture.get("kind") or "")
-    source = str(capture.get("source") or doc.get("official_source") or "")
-    if not source.startswith("https://"):
-        raise ValueError(f"{uid}: fonte de captura deve usar HTTPS")
 
-    data, content_type = fetch_bytes(source)
     if kind == "pdf_text":
-        text, metadata = extract_pdf_text(data)
-    elif kind == "html_section":
-        text, metadata = extract_html_section(data, capture)
+        normalized, metadata = capture_single_pdf(capture, uid)
+    elif kind == "pdf_text_set":
+        normalized, metadata = capture_pdf_set(capture, uid)
     else:
         raise ValueError(f"{uid}: capture.kind não suportado: {kind}")
 
-    normalized = normalize_bcb_text(text)
-    markers = [str(item) for item in capture.get("expected_markers") or []]
-    validate_markers(normalized, markers, uid)
     sha256 = normalized_text_sha256(normalized)
     expected = doc.get("content_sha256")
     state = doc.get("hash_state")
@@ -146,8 +147,6 @@ def capture_document(doc: dict[str, Any]) -> dict[str, Any]:
         "published_at": doc.get("published_at"),
         "capture_kind": kind,
         "capture_scope": capture.get("scope"),
-        "capture_source": source,
-        "source_content_type": content_type,
         "normalization_profile": doc.get("normalization_profile"),
         "normalized_chars": len(normalized),
         "content_sha256": sha256,
@@ -169,7 +168,7 @@ def run(baseline_path: Path, verify: bool) -> dict[str, Any]:
     mismatches = [item["uid"] for item in results if item.get("matches_baseline") is False]
     uncaptured = [item["uid"] for item in results if item.get("baseline_hash_state") != "captured"]
     report = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "generated_at": datetime.now(UTC).isoformat(),
         "baseline_uid": baseline.get("uid"),
         "documents": results,
