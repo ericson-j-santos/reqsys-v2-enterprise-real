@@ -1,1 +1,0 @@
-Este arquivo existe apenas como anotação de migração e será removido antes da conclusão da PR.
