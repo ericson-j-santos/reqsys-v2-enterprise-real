@@ -1,4 +1,4 @@
-schema_version: 1.0.0
+schema_version: 1.1.0
 mode: advisory
 model: bacen_temporal_evidence
 
@@ -6,6 +6,8 @@ invariants:
   status_is_derived: true
   status_manual_input_forbidden: true
   as_of_required: true
+  gate_1_5_same_as_of_for_base_and_head: true
+  gate_1_5_fail_closed_on_regression: true
   temporal_origin: event_at
   collected_at_drives_validity: false
   collected_at_drives_retention: false
@@ -50,8 +52,22 @@ status_derivation:
   implementado: implementação completa sem evidência válida em as_of
   evidenciado: implementação completa com evidência íntegra e válida em as_of
 
+gate_1_5:
+  comparison: status(base, T) versus status(head, T)
+  clock_rule: o mesmo T deve ser usado para base e head
+  blocks:
+    - remoção de obrigação existente
+    - alteração de code para o mesmo uid
+    - regressão na ordem nao_avaliado -> lacuna -> parcial -> implementado -> evidenciado
+    - transição para ou de nao_aplicavel sem revisão explícita
+  allows:
+    - estado derivado estável
+    - progressão de estado derivado
+    - inclusão de nova obrigação
+
 notes:
   - Evidência vencida pode continuar em retenção sem permanecer válida.
   - event_at representa quando o evento ou teste ocorreu.
   - collected_at representa somente quando o ReqSys ingeriu a evidência.
-  - Gate 1.5 deverá reutilizar esta função com o mesmo as_of para base e head.
+  - O Gate 1.5 reutiliza a função canônica de derivação com o mesmo as_of para base e head.
+  - A passagem do relógio, isoladamente, nunca diferencia base de head dentro da mesma execução.
