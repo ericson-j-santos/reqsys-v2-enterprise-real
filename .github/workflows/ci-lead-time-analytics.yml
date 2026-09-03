@@ -9,33 +9,33 @@ on:
         default: '100'
         type: string
   pull_request:
-    branches:
-      - main
+    branches: [main]
     paths:
       - '.github/workflows/ci-lead-time-analytics.yml'
       - 'scripts/build_ci_process_improvement_analytics.py'
       - 'scripts/compare_ci_process_baseline.py'
+      - 'scripts/update_ci_process_history.py'
       - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
       - 'tests/scripts/test_compare_ci_process_baseline.py'
+      - 'tests/scripts/test_update_ci_process_history.py'
       - 'audit/baselines/ci-process-improvement-baseline-2026-09-02.json'
       - 'docs/contracts/ci-lead-time-analytics.schema.json'
       - 'docs/runbooks/ci-lead-time-analytics.md'
-      - 'docs/runbooks/ci-lead-time-kpi-contract.md'
   schedule:
     - cron: '45 * * * *'
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - '.github/workflows/ci-lead-time-analytics.yml'
       - 'scripts/build_ci_process_improvement_analytics.py'
       - 'scripts/compare_ci_process_baseline.py'
+      - 'scripts/update_ci_process_history.py'
       - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
       - 'tests/scripts/test_compare_ci_process_baseline.py'
+      - 'tests/scripts/test_update_ci_process_history.py'
       - 'audit/baselines/ci-process-improvement-baseline-2026-09-02.json'
       - 'docs/contracts/ci-lead-time-analytics.schema.json'
       - 'docs/runbooks/ci-lead-time-analytics.md'
-      - 'docs/runbooks/ci-lead-time-kpi-contract.md'
 
 concurrency:
   group: ci-lead-time-analytics-${{ github.ref }}
@@ -55,14 +55,24 @@ jobs:
       LEAD_TIME_WARNING_SECONDS: '900'
       BASELINE_INCIDENT_MINUTES: '143'
       PROCESS_BASELINE_PATH: 'audit/baselines/ci-process-improvement-baseline-2026-09-02.json'
+      CI_PROCESS_HISTORY_PATH: 'audit/history/ci-process-improvement-history.jsonl'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Restore process improvement history
+        uses: actions/cache/restore@v4
+        with:
+          path: audit/history
+          key: ci-process-history-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            ci-process-history-${{ github.ref_name }}-
 
       - name: Validate process-improvement statistics
         run: |
           python tests/scripts/test_build_ci_process_improvement_analytics.py
           python tests/scripts/test_compare_ci_process_baseline.py
+          python tests/scripts/test_update_ci_process_history.py
 
       - name: Build analytics artifact
         env:
@@ -74,6 +84,16 @@ jobs:
 
       - name: Compare current window with frozen baseline
         run: python scripts/compare_ci_process_baseline.py
+
+      - name: Update process improvement history
+        run: python scripts/update_ci_process_history.py
+
+      - name: Save process improvement history
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: audit/history
+          key: ci-process-history-${{ github.ref_name }}-${{ github.run_id }}
 
       - name: Upload CI lead time analytics evidence
         if: always()
