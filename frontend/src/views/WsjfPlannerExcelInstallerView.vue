@@ -19,7 +19,7 @@
     <v-alert v-if="resultado?.dispatched" type="success" variant="tonal" class="mb-4">
       Instalação solicitada. O fluxo será criado inicialmente parado.
       <strong v-if="resultado.correlation_id"> Referência: {{ resultado.correlation_id }}.</strong>
-      <a v-if="resultado.workflow_url" :href="resultado.workflow_url" target="_blank" rel="noopener">Acompanhar execução</a>
+      <a v-if="resultado.flow_url" :href="resultado.flow_url" target="_blank" rel="noopener">Acompanhar execução</a>
     </v-alert>
 
     <v-row>
@@ -393,6 +393,9 @@ async function instalar() {
   resultado.value = null
   try {
     resultado.value = await instalarWsjfPlannerExcel(payload())
+    if (!resultado.value?.dispatched && resultado.value?.erro) {
+      erro.value = resultado.value.erro
+    }
   } catch (e) {
     erro.value = mensagemErroInstalacao(e)
   } finally {
