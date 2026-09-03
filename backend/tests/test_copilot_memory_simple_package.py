@@ -24,6 +24,7 @@ from copilot_memory_powerautomate_complete import (
 from copilot_memory_simple_package import (
     FLOW_CONTRACTS,
     gerar_pacote_pronto,
+    gerar_planilha_xlsx,
     validar_planilha_xlsx,
 )
 
@@ -52,6 +53,45 @@ def test_planilha_pronta_declara_cellstyles_para_evitar_reparo_no_excel():
 
     assert '<cellStyles' in styles
     assert 'name="Normal"' in styles
+
+
+def test_planilha_declara_docprops_exigidos_pelo_motor_excel_do_graph():
+    xlsx = gerar_planilha_xlsx()
+
+    with zipfile.ZipFile(io.BytesIO(xlsx)) as archive:
+        names = set(archive.namelist())
+        content_types = archive.read('[Content_Types].xml').decode('utf-8')
+        root_rels = archive.read('_rels/.rels').decode('utf-8')
+
+    assert 'docProps/core.xml' in names
+    assert 'docProps/app.xml' in names
+    assert '/docProps/core.xml' in content_types
+    assert '/docProps/app.xml' in content_types
+    assert 'docProps/core.xml' in root_rels
+    assert 'docProps/app.xml' in root_rels
+
+
+def test_planilha_aceita_tabelas_customizadas_para_outros_perfis():
+    tabelas = [('Demandas', 'tbDemandas', ['TaskId', 'Titulo'])]
+
+    xlsx = gerar_planilha_xlsx(tabelas)
+    resultado = validar_planilha_xlsx_customizada(xlsx, tabelas)
+
+    assert resultado['tabelas'] == ['tbDemandas']
+    assert zipfile.is_zipfile(io.BytesIO(xlsx))
+
+
+def validar_planilha_xlsx_customizada(xlsx: bytes, tabelas) -> dict:
+    import re
+
+    with zipfile.ZipFile(io.BytesIO(xlsx)) as archive:
+        found = []
+        for index in range(1, len(tabelas) + 1):
+            texto = archive.read(f'xl/tables/table{index}.xml').decode('utf-8')
+            match = re.search(r'displayName="([^"]+)"', texto)
+            if match:
+                found.append(match.group(1))
+    return {'tabelas': found}
 
 
 def test_autoteste_do_pacote_pronto_fica_aprovado():

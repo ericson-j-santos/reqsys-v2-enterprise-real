@@ -121,16 +121,47 @@ def _table_xml(table_id: int, name: str, headers: list[str]) -> str:
     )
 
 
-def gerar_planilha_xlsx() -> bytes:
+def _core_properties_xml() -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
+        'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" '
+        'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+        '<dc:creator>ReqSys</dc:creator><cp:lastModifiedBy>ReqSys</cp:lastModifiedBy>'
+        '</cp:coreProperties>'
+    )
+
+
+def _app_properties_xml() -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" '
+        'xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
+        '<Application>ReqSys</Application></Properties>'
+    )
+
+
+def gerar_planilha_xlsx(tables: list[tuple[str, str, list[str]]] | None = None) -> bytes:
+    """Gera um .xlsx minimo, valido tambem para o motor Excel do Microsoft Graph.
+
+    As partes docProps/core.xml e docProps/app.xml sao obrigatorias para o
+    Graph (nao so para o Excel desktop): um pacote OOXML sem elas abre
+    normalmente no Excel local mas falha no Graph com
+    'FileCorruptTryRepair'/'unsupportedWorkbook' ao tentar ler o workbook
+    via API — confirmado em DEV com o WSJF.xlsx gerado antes desse fix.
+    """
+    tables = tables if tables is not None else TABLES
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
         overrides = [
             '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>',
             '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>',
+            '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>',
+            '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>',
         ]
         sheets = []
         rels = []
-        for i, (sheet, table, headers) in enumerate(TABLES, 1):
+        for i, (sheet, table, headers) in enumerate(tables, 1):
             overrides += [
                 f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>',
                 f'<Override PartName="/xl/tables/table{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>',
@@ -158,8 +189,12 @@ def gerar_planilha_xlsx() -> bytes:
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
             '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+            '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'
+            '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>'
             '</Relationships>',
         )
+        archive.writestr('docProps/core.xml', _core_properties_xml())
+        archive.writestr('docProps/app.xml', _app_properties_xml())
         archive.writestr(
             'xl/workbook.xml',
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
