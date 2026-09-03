@@ -48,16 +48,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Restore process improvement history
-        uses: actions/cache/restore@v4
-        with:
-          path: audit/history
-          key: ci-process-history-main-command-center-${{ github.run_id }}
-          restore-keys: |
-            ci-process-history-main-
+      - name: Restaurar histórico de melhoria do último artifact da main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/restore_ci_process_history.py
 
       - name: Validar histórico no Command Center
-        run: python tests/scripts/test_enrich_command_center_ci_history.py
+        run: |
+          python tests/scripts/test_restore_ci_process_history.py
+          python tests/scripts/test_enrich_command_center_ci_history.py
 
       - name: Executar command center
         shell: bash
