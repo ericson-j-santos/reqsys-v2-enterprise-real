@@ -2,9 +2,11 @@ import asyncio
 import json
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.api.wsjf_planner_excel import wsjf_planner_excel_contract
 from app.core.config import settings
+from app.main import app
 from app.services import wsjf_planner_excel_provisioning as provisioning
 from app.services.wsjf_planner_excel_provisioning import (
     LOCAL_FIELDS,
@@ -18,9 +20,13 @@ from app.services.wsjf_planner_excel_provisioning import (
 
 
 class FakeResponse:
-    def __init__(self, status_code=204, text=''):
+    def __init__(self, status_code=200, text='', json_body=None):
         self.status_code = status_code
         self.text = text
+        self._json_body = json_body if json_body is not None else {}
+
+    def json(self):
+        return self._json_body
 
 
 class FakeAsyncClient:
@@ -37,13 +43,13 @@ class FakeAsyncClient:
     async def __aexit__(self, exc_type, exc, tb):
         return False
 
-    async def post(self, url, **kwargs):
+    async def put(self, url, **kwargs):
         self.__class__.calls.append((url, kwargs))
         return self.__class__.response
 
     @classmethod
-    def reset(cls, status_code=204, text=''):
-        cls.response = FakeResponse(status_code=status_code, text=text)
+    def reset(cls, status_code=200, text='', json_body=None):
+        cls.response = FakeResponse(status_code=status_code, text=text, json_body=json_body)
         cls.calls = []
 
 
@@ -137,43 +143,56 @@ def test_despachar_sem_confirmacao_apenas_valida():
     assert result['bundle']['profile'] == PROFILE
 
 
-def test_despachar_confirmado_falha_fechado_sem_token(monkeypatch):
-    monkeypatch.setattr(settings, 'github_pat', '')
-
-    result = asyncio.run(despachar(_payload(confirmar=True)))
+def test_despachar_confirmado_falha_fechado_sem_token():
+    result = asyncio.run(despachar(_payload(confirmar=True), user_token=None))
 
     assert result['dispatched'] is False
     assert result['status'] == 'pending_configuration'
-    assert 'GITHUB_PAT' in result['erro']
+    assert 'Flows.Manage.All' in result['erro']
 
 
-def test_despachar_confirmado_envia_workflow_sem_ativar(monkeypatch):
-    monkeypatch.setattr(settings, 'github_pat', 'token-teste')
-    monkeypatch.setattr(settings, 'github_alm_repo', 'ericson-j-santos/reqsys-powerplatform-alm')
-    FakeAsyncClient.reset(status_code=204)
+def test_despachar_confirmado_cria_fluxo_via_token_delegado(monkeypatch):
+    FakeAsyncClient.reset(status_code=200, json_body={'name': 'flow-real-id'})
     monkeypatch.setattr(provisioning.httpx, 'AsyncClient', FakeAsyncClient)
 
-    result = asyncio.run(despachar(_payload(confirmar=True)))
+    result = asyncio.run(despachar(_payload(confirmar=True), user_token='delegado-teste'))
 
     assert result['dispatched'] is True
-    assert result['status'] == 'implantacao_solicitada'
+    assert result['status'] == 'implantado'
+    assert result['flow_id'] == 'flow-real-id'
     assert len(FakeAsyncClient.calls) == 1
     url, kwargs = FakeAsyncClient.calls[0]
-    assert url.endswith('/actions/workflows/wsjf-planner-excel-provisioning.yml/dispatches')
-    assert kwargs['json']['inputs']['activate_after_import'] == 'false'
-    assert kwargs['json']['inputs']['dry_run'] == 'false'
-    assert kwargs['headers']['Authorization'] == 'Bearer token-teste'
+    assert '/environments/env-dev-001/flows/' in url
+    assert kwargs['headers']['Authorization'] == 'Bearer delegado-teste'
+    body = kwargs['json']['properties']
+    assert body['state'] == 'Stopped'
+    assert body['connectionReferences']['shared_planner']['connectionName'] == 'planner-connection-dev'
+    assert body['connectionReferences']['shared_excelonlinebusiness']['connectionName'] == 'excel-connection-dev'
 
 
 def test_despachar_propaga_erro_http_sanitizado(monkeypatch):
-    monkeypatch.setattr(settings, 'github_pat', 'token-teste')
-    monkeypatch.setattr(settings, 'github_alm_repo', 'ericson-j-santos/reqsys-powerplatform-alm')
-    FakeAsyncClient.reset(status_code=422, text='payload invalido')
+    FakeAsyncClient.reset(status_code=403, text='consent_required')
     monkeypatch.setattr(provisioning.httpx, 'AsyncClient', FakeAsyncClient)
 
-    result = asyncio.run(despachar(_payload(confirmar=True)))
+    result = asyncio.run(despachar(_payload(confirmar=True), user_token='delegado-teste'))
 
     assert result['dispatched'] is False
-    assert result['status'] == 'erro_dispatch'
-    assert result['status_code'] == 422
-    assert result['erro'] == 'payload invalido'
+    assert result['status'] == 'erro_provisionamento'
+    assert result['status_code'] == 403
+    assert result['erro'] == 'consent_required'
+
+
+def test_cors_preflight_permite_header_power_automate_token():
+    client = TestClient(app)
+    origin = settings.cors_origins_list[0]
+    response = client.options(
+        '/v1/hub-lowcode/wsjf/planner-excel/deploy',
+        headers={
+            'Origin': origin,
+            'Access-Control-Request-Method': 'POST',
+            'Access-Control-Request-Headers': 'x-power-automate-token',
+        },
+    )
+    assert response.status_code == 200
+    allowed = response.headers.get('access-control-allow-headers', '').lower()
+    assert 'x-power-automate-token' in allowed

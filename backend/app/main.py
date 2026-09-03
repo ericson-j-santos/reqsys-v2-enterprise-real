@@ -104,7 +104,7 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allow_headers=['Authorization', 'Content-Type', 'Accept', 'X-Requested-With', 'X-Correlation-Id', 'X-Power-Platform-Token'],
+    allow_headers=['Authorization', 'Content-Type', 'Accept', 'X-Requested-With', 'X-Correlation-Id', 'X-Power-Platform-Token', 'X-Power-Automate-Token'],
     expose_headers=['X-Request-ID', 'X-Correlation-Id'],
 )
 

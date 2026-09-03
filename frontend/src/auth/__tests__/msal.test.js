@@ -354,6 +354,50 @@ describe('acquirePowerPlatformToken', () => {
   })
 })
 
+describe('acquireFlowManagementToken', () => {
+  it('retorna access_token via acquireTokenSilent quando ha conta logada', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockResolvedValue({ accessToken: 'flow-silent-token' })
+
+    const { acquireFlowManagementToken, FLOW_MANAGEMENT_SCOPES } = await import('../msal')
+    const token = await acquireFlowManagementToken()
+
+    expect(token).toBe('flow-silent-token')
+    expect(mockAcquireTokenSilent).toHaveBeenCalledWith(
+      expect.objectContaining({ scopes: FLOW_MANAGEMENT_SCOPES, account: { username: 'user@tieri659.onmicrosoft.com' } })
+    )
+    expect(mockAcquireTokenPopup).not.toHaveBeenCalled()
+  })
+
+  it('cai para acquireTokenPopup quando o silent exige interacao', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    const interactionErr = Object.assign(new Error('interaction required'), { name: 'InteractionRequiredAuthError' })
+    mockAcquireTokenSilent.mockRejectedValue(interactionErr)
+    mockAcquireTokenPopup.mockResolvedValue({ accessToken: 'flow-popup-token' })
+
+    const { acquireFlowManagementToken } = await import('../msal')
+    const token = await acquireFlowManagementToken()
+
+    expect(token).toBe('flow-popup-token')
+    expect(mockAcquireTokenPopup).toHaveBeenCalledTimes(1)
+  })
+
+  it('retorna null (sem lancar) quando nao ha conta Microsoft logada', async () => {
+    mockGetAllAccounts.mockReturnValue([])
+    const { acquireFlowManagementToken } = await import('../msal')
+    await expect(acquireFlowManagementToken()).resolves.toBeNull()
+    expect(mockAcquireTokenSilent).not.toHaveBeenCalled()
+  })
+
+  it('propaga erros do silent que nao sao de interacao', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockRejectedValue(new Error('falha de rede'))
+
+    const { acquireFlowManagementToken } = await import('../msal')
+    await expect(acquireFlowManagementToken()).rejects.toThrow('falha de rede')
+  })
+})
+
 describe('getContaAtual', () => {
   it('retorna a primeira conta logada', async () => {
     mockGetAllAccounts.mockReturnValue([{ localAccountId: 'user-123', username: 'user@tieri659.onmicrosoft.com' }])

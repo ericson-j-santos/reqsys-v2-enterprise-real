@@ -1,18 +1,13 @@
 from __future__ import annotations
 
-import base64
-import gzip
 import json
 import uuid
 from typing import Any, Iterator
 
 import httpx
 
-from app.core.config import settings
-
 PROFILE = 'wsjf_planner_excel_simples'
-WORKFLOW_FILE = 'wsjf-planner-excel-provisioning.yml'
-DEFAULT_ALM_REPO = 'ericson-j-santos/reqsys-powerplatform-alm'
+FLOW_MANAGEMENT_BASE = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple'
 SCHEMA = 'https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#'
 PLANNER_API = '/providers/Microsoft.PowerApps/apis/shared_planner'
 EXCEL_API = '/providers/Microsoft.PowerApps/apis/shared_excelonlinebusiness'
@@ -24,6 +19,17 @@ LOCAL_FIELDS = {
     'Risco',
     'Observações',
 }
+
+
+def _segmento_id_seguro(value: str, label: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f'{label} obrigatorio')
+    parts = normalized.split('-')
+    for part in parts:
+        if not part or not part.isalnum():
+            raise ValueError(f'{label} invalido')
+    return '-'.join(parts)
 
 
 def _parameters(payload: dict[str, Any]) -> dict[str, Any]:
@@ -254,12 +260,18 @@ def montar_bundle(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _compactar(bundle: dict[str, Any]) -> str:
-    raw = json.dumps(bundle, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
-    return base64.b64encode(gzip.compress(raw, compresslevel=9, mtime=0)).decode('ascii')
+async def despachar(payload: dict[str, Any], *, user_token: str | None = None) -> dict[str, Any]:
+    """Cria/atualiza o fluxo Planner->Excel de verdade no Power Automate.
 
+    A API de gerenciamento de fluxos (api.flow.microsoft.com) nao aceita
+    credencial app-only (client_credentials) — so token delegado do proprio
+    usuario. Por isso este provisionamento e feito diretamente pelo backend
+    com o token que o frontend adquire via MSAL (mesmo padrao ja usado para
+    "Conexoes Microsoft"), em vez de relay via GitHub Actions/PAC CLI.
 
-async def despachar(payload: dict[str, Any]) -> dict[str, Any]:
+    flow_guid e deterministico (uuid5 fixo): reexecutar "Instalar fluxo"
+    atualiza o mesmo fluxo em vez de criar duplicatas.
+    """
     bundle = montar_bundle(payload)
     if not payload.get('confirmar'):
         return {
@@ -268,50 +280,48 @@ async def despachar(payload: dict[str, Any]) -> dict[str, Any]:
             'correlation_id': bundle['correlation_id'],
             'bundle': bundle,
         }
-    if not settings.github_pat:
+    if not user_token:
         return {
             'dispatched': False,
             'status': 'pending_configuration',
             'correlation_id': bundle['correlation_id'],
-            'erro': 'GITHUB_PAT nao configurado no ReqSys',
+            'erro': 'Token delegado do Power Automate ausente: verifique se a permissao delegada Flows.Manage.All foi consentida no Microsoft Entra.',
         }
-    encoded = _compactar(bundle)
-    if len(encoded) > 60000:
-        raise ValueError('Bundle WSJF excede o limite seguro do workflow_dispatch')
-    repo = settings.github_alm_repo or DEFAULT_ALM_REPO
-    url = f'https://api.github.com/repos/{repo}/actions/workflows/{WORKFLOW_FILE}/dispatches'
-    request = {
-        'ref': 'main',
-        'inputs': {
-            'bundle_base64': encoded,
-            'environment_url': payload['environment_url'],
-            'environment_id': payload['environment_id'],
-            'planner_connection_id': payload['planner_connection_id'],
-            'excel_connection_id': payload['excel_connection_id'],
-            'correlation_id': bundle['correlation_id'],
-            'dry_run': 'false',
-            'activate_after_import': 'false',
+    flow = bundle['flows'][0]
+    safe_environment_id = _segmento_id_seguro(payload['environment_id'], 'Ambiente')
+    url = f"{FLOW_MANAGEMENT_BASE}/environments/{safe_environment_id}/flows/{flow['flow_guid']}"
+    body = {
+        'properties': {
+            'displayName': flow['display_name'],
+            'definition': flow['definition'],
+            'connectionReferences': {
+                'shared_planner': {'connectionName': bundle['connections']['planner'], 'id': PLANNER_API},
+                'shared_excelonlinebusiness': {'connectionName': bundle['connections']['excel'], 'id': EXCEL_API},
+            },
+            'state': 'Stopped',
         },
     }
-    headers = {
-        'Accept': 'application/vnd.github+json',
-        'Authorization': f'Bearer {settings.github_pat}',
-        'X-GitHub-Api-Version': '2022-11-28',
-    }
-    async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.post(url, json=request, headers=headers)
-    if response.status_code != 204:
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.put(
+            url,
+            headers={'Authorization': f'Bearer {user_token}'},
+            params={'api-version': '2016-11-01'},
+            json=body,
+        )
+    if response.status_code not in (200, 201):
         return {
             'dispatched': False,
-            'status': 'erro_dispatch',
+            'status': 'erro_provisionamento',
             'status_code': response.status_code,
             'erro': response.text[:500],
             'correlation_id': bundle['correlation_id'],
         }
+    data = response.json()
     return {
         'dispatched': True,
-        'status': 'implantacao_solicitada',
+        'status': 'implantado',
         'correlation_id': bundle['correlation_id'],
-        'workflow_url': f'https://github.com/{repo}/actions/workflows/{WORKFLOW_FILE}',
-        'flows': ['ReqSys WSJF - Planner para Excel'],
+        'flow_id': data.get('name') or flow['flow_guid'],
+        'flow_url': f"https://make.powerautomate.com/environments/{safe_environment_id}/flows/{flow['flow_guid']}/details",
+        'flows': [flow['display_name']],
     }
