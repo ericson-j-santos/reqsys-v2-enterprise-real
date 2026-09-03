@@ -5,22 +5,10 @@
   "type": "object",
   "additionalProperties": true,
   "required": [
-    "schema_version",
-    "generated_at",
-    "repository",
-    "window_runs",
-    "completed_runs",
-    "success_rate_percent",
-    "failure_rate_percent",
-    "avg_seconds",
-    "p50_seconds",
-    "p95_seconds",
-    "max_seconds",
-    "baseline_incident_minutes",
-    "status",
-    "warnings",
-    "bottlenecks",
-    "workflow_stats"
+    "schema_version", "generated_at", "repository", "window_runs", "completed_runs",
+    "success_rate_percent", "failure_rate_percent", "avg_seconds", "p50_seconds",
+    "p95_seconds", "max_seconds", "baseline_incident_minutes", "status", "warnings",
+    "bottlenecks", "workflow_stats"
   ],
   "properties": {
     "schema_version": {"type": "string", "pattern": "^1\\.0\\.[0-9]+$"},
@@ -51,6 +39,7 @@
     "p95_queue_seconds": {"type": "number", "minimum": 0},
     "throughput": {"$ref": "#/$defs/throughput"},
     "trend_comparison": {"$ref": "#/$defs/trend_comparison"},
+    "baseline_comparison": {"$ref": "#/$defs/baseline_comparison"},
     "failure_pareto": {"type": "array", "items": {"$ref": "#/$defs/failure_pareto_item"}},
     "baseline_incident_minutes": {"type": "integer", "minimum": 0},
     "baseline_incident_seconds": {"type": "integer", "minimum": 0},
@@ -62,91 +51,91 @@
   },
   "$defs": {
     "workflow_stat": {
-      "type": "object",
-      "additionalProperties": true,
+      "type": "object", "additionalProperties": true,
       "required": ["name", "runs", "success_rate_percent", "avg_seconds", "p50_seconds", "p95_seconds", "max_seconds"],
       "properties": {
-        "name": {"type": "string"},
-        "runs": {"type": "integer", "minimum": 0},
+        "name": {"type": "string"}, "runs": {"type": "integer", "minimum": 0},
         "success_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
         "failure_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
         "rerun_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
-        "avg_seconds": {"type": "number", "minimum": 0},
-        "p50_seconds": {"type": "number", "minimum": 0},
-        "p90_seconds": {"type": "number", "minimum": 0},
-        "p95_seconds": {"type": "number", "minimum": 0},
-        "max_seconds": {"type": "number", "minimum": 0},
-        "stddev_seconds": {"type": "number", "minimum": 0},
-        "cv_percent": {"type": "number", "minimum": 0},
-        "p95_queue_seconds": {"type": "number", "minimum": 0}
+        "avg_seconds": {"type": "number", "minimum": 0}, "p50_seconds": {"type": "number", "minimum": 0},
+        "p90_seconds": {"type": "number", "minimum": 0}, "p95_seconds": {"type": "number", "minimum": 0},
+        "max_seconds": {"type": "number", "minimum": 0}, "stddev_seconds": {"type": "number", "minimum": 0},
+        "cv_percent": {"type": "number", "minimum": 0}, "p95_queue_seconds": {"type": "number", "minimum": 0}
       }
     },
     "run_summary": {
-      "type": "object",
-      "additionalProperties": true,
+      "type": "object", "additionalProperties": true,
       "required": ["id", "name", "event", "status", "duration_seconds", "duration_minutes"],
       "properties": {
-        "id": {"type": "integer"},
-        "name": {"type": "string"},
-        "event": {"type": "string"},
-        "status": {"type": "string"},
-        "conclusion": {"type": ["string", "null"]},
-        "head_branch": {"type": ["string", "null"]},
-        "head_sha": {"type": ["string", "null"]},
-        "html_url": {"type": ["string", "null"]},
-        "created_at": {"type": "string", "format": "date-time"},
-        "run_started_at": {"type": ["string", "null"], "format": "date-time"},
-        "updated_at": {"type": "string", "format": "date-time"},
-        "run_attempt": {"type": "integer", "minimum": 1},
-        "queue_seconds": {"type": "number", "minimum": 0},
-        "execution_seconds": {"type": "number", "minimum": 0},
-        "duration_seconds": {"type": "number", "minimum": 0},
-        "duration_minutes": {"type": "number", "minimum": 0}
+        "id": {"type": "integer"}, "name": {"type": "string"}, "event": {"type": "string"}, "status": {"type": "string"},
+        "conclusion": {"type": ["string", "null"]}, "head_branch": {"type": ["string", "null"]},
+        "head_sha": {"type": ["string", "null"]}, "html_url": {"type": ["string", "null"]},
+        "created_at": {"type": "string", "format": "date-time"}, "run_started_at": {"type": ["string", "null"], "format": "date-time"},
+        "updated_at": {"type": "string", "format": "date-time"}, "run_attempt": {"type": "integer", "minimum": 1},
+        "queue_seconds": {"type": "number", "minimum": 0}, "execution_seconds": {"type": "number", "minimum": 0},
+        "duration_seconds": {"type": "number", "minimum": 0}, "duration_minutes": {"type": "number", "minimum": 0}
       }
     },
     "throughput": {
-      "type": "object",
-      "additionalProperties": false,
+      "type": "object", "additionalProperties": false,
       "required": ["window_span_hours", "runs_per_hour", "runs_per_day"],
       "properties": {
-        "window_span_hours": {"type": "number", "minimum": 0},
-        "runs_per_hour": {"type": "number", "minimum": 0},
+        "window_span_hours": {"type": "number", "minimum": 0}, "runs_per_hour": {"type": "number", "minimum": 0},
         "runs_per_day": {"type": "number", "minimum": 0}
       }
     },
     "window_metrics": {
-      "type": "object",
-      "additionalProperties": false,
+      "type": "object", "additionalProperties": false,
       "required": ["runs", "success_rate_percent", "failure_rate_percent", "p50_seconds", "p95_seconds", "cv_percent"],
       "properties": {
-        "runs": {"type": "integer", "minimum": 0},
-        "success_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
-        "failure_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
-        "p50_seconds": {"type": "number", "minimum": 0},
-        "p95_seconds": {"type": "number", "minimum": 0},
-        "cv_percent": {"type": "number", "minimum": 0}
+        "runs": {"type": "integer", "minimum": 0}, "success_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "failure_rate_percent": {"type": "number", "minimum": 0, "maximum": 100}, "p50_seconds": {"type": "number", "minimum": 0},
+        "p95_seconds": {"type": "number", "minimum": 0}, "cv_percent": {"type": "number", "minimum": 0}
       }
     },
     "trend_comparison": {
-      "type": "object",
-      "additionalProperties": true,
-      "required": ["available"],
+      "type": "object", "additionalProperties": true, "required": ["available"],
       "properties": {
-        "available": {"type": "boolean"},
-        "reason": {"type": "string"},
-        "current": {"$ref": "#/$defs/window_metrics"},
-        "previous": {"$ref": "#/$defs/window_metrics"},
+        "available": {"type": "boolean"}, "reason": {"type": "string"},
+        "current": {"$ref": "#/$defs/window_metrics"}, "previous": {"$ref": "#/$defs/window_metrics"},
         "delta": {"type": "object", "additionalProperties": {"type": "number"}},
         "signals": {"type": "object", "additionalProperties": {"type": "string", "enum": ["improved", "stable", "regressed"]}}
       }
     },
+    "baseline_comparison": {
+      "type": "object", "additionalProperties": true, "required": ["available", "mode", "baseline_path"],
+      "properties": {
+        "available": {"type": "boolean"}, "mode": {"const": "report-only"}, "baseline_path": {"type": "string"},
+        "reason": {"type": "string"}, "creates_gate": {"type": "boolean"},
+        "overall_signal": {"type": "string", "enum": ["improved", "stable", "regressed", "mixed"]},
+        "causality": {"type": "string"},
+        "baseline": {"type": "object", "additionalProperties": true},
+        "delta": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "quality": {"type": "object", "additionalProperties": {"type": "number"}},
+            "speed": {"type": "object", "additionalProperties": {"type": "number"}},
+            "variability": {"type": "object", "additionalProperties": {"type": "number"}}
+          }
+        },
+        "signals": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "quality": {"$ref": "#/$defs/signal_map"}, "speed": {"$ref": "#/$defs/signal_map"},
+            "variability": {"$ref": "#/$defs/signal_map"}
+          }
+        }
+      }
+    },
+    "signal_map": {
+      "type": "object", "additionalProperties": {"type": "string", "enum": ["improved", "stable", "regressed"]}
+    },
     "failure_pareto_item": {
-      "type": "object",
-      "additionalProperties": false,
+      "type": "object", "additionalProperties": false,
       "required": ["name", "failures", "share_percent", "cumulative_share_percent"],
       "properties": {
-        "name": {"type": "string"},
-        "failures": {"type": "integer", "minimum": 1},
+        "name": {"type": "string"}, "failures": {"type": "integer", "minimum": 1},
         "share_percent": {"type": "number", "minimum": 0, "maximum": 100},
         "cumulative_share_percent": {"type": "number", "minimum": 0, "maximum": 100}
       }
