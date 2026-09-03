@@ -14,7 +14,10 @@ on:
     paths:
       - '.github/workflows/ci-lead-time-analytics.yml'
       - 'scripts/build_ci_process_improvement_analytics.py'
+      - 'scripts/compare_ci_process_baseline.py'
       - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
+      - 'tests/scripts/test_compare_ci_process_baseline.py'
+      - 'audit/baselines/ci-process-improvement-baseline-2026-09-02.json'
       - 'docs/contracts/ci-lead-time-analytics.schema.json'
       - 'docs/runbooks/ci-lead-time-analytics.md'
       - 'docs/runbooks/ci-lead-time-kpi-contract.md'
@@ -26,7 +29,10 @@ on:
     paths:
       - '.github/workflows/ci-lead-time-analytics.yml'
       - 'scripts/build_ci_process_improvement_analytics.py'
+      - 'scripts/compare_ci_process_baseline.py'
       - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
+      - 'tests/scripts/test_compare_ci_process_baseline.py'
+      - 'audit/baselines/ci-process-improvement-baseline-2026-09-02.json'
       - 'docs/contracts/ci-lead-time-analytics.schema.json'
       - 'docs/runbooks/ci-lead-time-analytics.md'
       - 'docs/runbooks/ci-lead-time-kpi-contract.md'
@@ -48,12 +54,15 @@ jobs:
       LEAD_TIME_ALERT_SECONDS: '3600'
       LEAD_TIME_WARNING_SECONDS: '900'
       BASELINE_INCIDENT_MINUTES: '143'
+      PROCESS_BASELINE_PATH: 'audit/baselines/ci-process-improvement-baseline-2026-09-02.json'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Validate process-improvement statistics
-        run: python tests/scripts/test_build_ci_process_improvement_analytics.py
+        run: |
+          python tests/scripts/test_build_ci_process_improvement_analytics.py
+          python tests/scripts/test_compare_ci_process_baseline.py
 
       - name: Build analytics artifact
         env:
@@ -62,6 +71,9 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           RUN_ID: ${{ github.run_id }}
         run: python scripts/build_ci_process_improvement_analytics.py
+
+      - name: Compare current window with frozen baseline
+        run: python scripts/compare_ci_process_baseline.py
 
       - name: Upload CI lead time analytics evidence
         if: always()
