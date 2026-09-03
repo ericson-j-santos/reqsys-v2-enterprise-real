@@ -1,0 +1,59 @@
+name: BACEN Derived Status Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/bacen_derived_status.py"
+      - "governance/bacen/normative/EVIDENCE-MODEL.yaml"
+      - "tests/test_bacen_derived_status.py"
+      - ".github/workflows/bacen-derived-status-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/bacen_derived_status.py"
+      - "governance/bacen/normative/EVIDENCE-MODEL.yaml"
+      - "tests/test_bacen_derived_status.py"
+      - ".github/workflows/bacen-derived-status-gate.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  derived-status:
+    name: BACEN — status derivado e evidência temporal
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deterministic dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML==6.0.3
+      - name: Compile
+        run: python -m py_compile scripts/bacen_derived_status.py
+      - name: Test derived status
+        run: python -m unittest tests.test_bacen_derived_status -v
+      - name: Assert no manual status in normative baselines
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          paths = [
+              Path('governance/bacen/normative/NORMATIVE-BASELINE.yaml'),
+              Path('governance/bacen/normative/NORMATIVE-OBLIGATIONS-EXTENDED.yaml'),
+          ]
+          total = 0
+          for path in paths:
+              payload = yaml.safe_load(path.read_text(encoding='utf-8'))
+              obligations = payload.get('obligations') or []
+              total += len(obligations)
+              offenders = [o.get('uid') for o in obligations if 'status' in o]
+              if offenders:
+                  raise SystemExit(f'{path}: status manual encontrado: {offenders}')
+          if total != 57:
+              raise SystemExit(f'esperadas 57 obrigações, encontradas {total}')
+          print('57 obrigações preservadas sem status manual')
+          PY

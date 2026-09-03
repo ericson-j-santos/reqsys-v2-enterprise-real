@@ -1,0 +1,57 @@
+schema_version: 1.0.0
+mode: advisory
+model: bacen_temporal_evidence
+
+invariants:
+  status_is_derived: true
+  status_manual_input_forbidden: true
+  as_of_required: true
+  temporal_origin: event_at
+  collected_at_drives_validity: false
+  collected_at_drives_retention: false
+  validity_and_retention_are_independent: true
+
+status_vocabulary:
+  - nao_avaliado
+  - nao_aplicavel
+  - lacuna
+  - parcial
+  - implementado
+  - evidenciado
+
+evidence_contract:
+  required:
+    - uid
+    - norm_uid
+    - event_at
+    - collected_at
+    - sha256
+    - source
+  optional:
+    - valid_until
+    - retention_until
+    - reference_period
+    - custody_ref
+    - masking
+  forbidden:
+    - status
+
+applicability_decision:
+  nao_aplicavel_requires:
+    - decided_by
+    - decided_at
+    - rationale
+
+status_derivation:
+  nao_avaliado: assessment ausente ou não executado
+  nao_aplicavel: decisão formal válida de não aplicabilidade
+  lacuna: avaliação executada sem implementação
+  parcial: implementação incompleta
+  implementado: implementação completa sem evidência válida em as_of
+  evidenciado: implementação completa com evidência íntegra e válida em as_of
+
+notes:
+  - Evidência vencida pode continuar em retenção sem permanecer válida.
+  - event_at representa quando o evento ou teste ocorreu.
+  - collected_at representa somente quando o ReqSys ingeriu a evidência.
+  - Gate 1.5 deverá reutilizar esta função com o mesmo as_of para base e head.
