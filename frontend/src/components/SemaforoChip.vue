@@ -40,9 +40,9 @@ const resolved = computed(() => normalizarSemaforo(props.value))
 <style scoped>
 .figma-badge {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 800;
-  padding: 3px 8px;
+  padding: var(--space-xs) var(--space-sm);
   border-radius: 999px;
   white-space: nowrap;
 }

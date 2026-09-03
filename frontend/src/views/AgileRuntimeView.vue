@@ -317,7 +317,7 @@ onMounted(carregarWorkItems)
 .painel {
   border: 1px solid rgba(208, 208, 208, 0.9);
   border-radius: 12px;
-  padding: 16px;
+  padding: var(--space-lg);
   background: rgba(255, 255, 255, 0.02);
 }
 
@@ -335,7 +335,7 @@ onMounted(carregarWorkItems)
   text-align: left;
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: var(--space-md) var(--space-md);
   background: transparent;
   cursor: pointer;
   display: flex;
@@ -352,13 +352,13 @@ onMounted(carregarWorkItems)
 .ambientes {
   display: flex;
   gap: 8px;
-  margin: 12px 0;
+  margin: var(--space-md) 0;
 }
 
 .ambientes button {
   border: 1px solid rgba(208, 208, 208, 0.9);
   border-radius: 999px;
-  padding: 6px 12px;
+  padding: var(--space-sm) var(--space-md);
   background: transparent;
   cursor: pointer;
 }
@@ -371,7 +371,7 @@ onMounted(carregarWorkItems)
 .meta {
   display: grid;
   gap: 8px;
-  margin: 0 0 16px;
+  margin: 0 0 var(--space-lg);
 }
 
 .meta div {
@@ -393,7 +393,7 @@ onMounted(carregarWorkItems)
 .acao {
   display: inline-flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: var(--space-sm) var(--space-md);
   border-radius: 8px;
   background: rgba(25, 118, 210, 0.12);
   color: inherit;
@@ -413,7 +413,7 @@ onMounted(carregarWorkItems)
 .trace-form {
   display: grid;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: var(--space-lg);
 }
 
 .trace-form label {
@@ -423,7 +423,7 @@ onMounted(carregarWorkItems)
 }
 
 .trace-form input {
-  padding: 8px 10px;
+  padding: var(--space-sm) var(--space-md);
   border-radius: 8px;
   border: 1px solid rgba(208, 208, 208, 0.9);
   background: transparent;
@@ -432,7 +432,7 @@ onMounted(carregarWorkItems)
 
 .trace-form button {
   justify-self: start;
-  padding: 8px 12px;
+  padding: var(--space-sm) var(--space-md);
   border-radius: 8px;
   border: 1px solid rgba(25, 118, 210, 0.5);
   background: rgba(25, 118, 210, 0.12);
@@ -448,7 +448,7 @@ onMounted(carregarWorkItems)
 }
 
 .nota {
-  margin-top: 12px;
+  margin-top: var(--space-md);
   font-size: 0.9rem;
   opacity: 0.8;
 }

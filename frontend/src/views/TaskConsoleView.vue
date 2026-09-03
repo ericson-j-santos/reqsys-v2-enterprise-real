@@ -859,7 +859,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
+  padding: var(--space-lg);
   min-height: 96px;
 }
 
@@ -874,8 +874,8 @@ onMounted(() => {
 }
 
 .metric-value {
-  margin-top: 4px;
-  font-size: 28px;
+  margin-top: var(--space-xs);
+  font-size: var(--font-size-display);
   color: var(--accent-strong);
   font-weight: 800;
 }
@@ -886,7 +886,7 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  font-size: 15px;
+  font-size: var(--font-size-lg);
   font-weight: 700;
 }
 
@@ -921,7 +921,7 @@ onMounted(() => {
 }
 
 .task-description {
-  margin-top: 2px;
+  margin-top: var(--space-xs);
   max-width: 64ch;
 }
 
@@ -935,7 +935,7 @@ onMounted(() => {
   background: #102033;
   border: 1px solid #24425f;
   border-radius: 8px;
-  padding: 14px;
+  padding: var(--space-lg);
   font: 12px/1.5 Consolas, 'Courier New', monospace;
 }
 
@@ -944,8 +944,8 @@ onMounted(() => {
   grid-template-columns: 132px minmax(80px, 1fr) 32px;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
-  font-size: 13px;
+  margin-bottom: var(--space-md);
+  font-size: var(--font-size-md);
 }
 
 .bucket-track {

@@ -50,7 +50,7 @@ function handleClick() {
   height: 100%;
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 16px;
+  padding: var(--space-lg);
   background: rgba(255, 255, 255, 0.02);
   min-height: 148px;
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
@@ -74,7 +74,7 @@ function handleClick() {
   gap: 8px;
   flex-wrap: wrap;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-size-md);
 }
 
 .card-icon {
@@ -87,16 +87,16 @@ function handleClick() {
 }
 
 .card-value {
-  font-size: 32px;
+  font-size: var(--font-size-display);
   font-weight: 800;
-  margin: 10px 0 6px;
+  margin: var(--space-md) 0 var(--space-sm);
   line-height: 1.1;
   color: var(--text);
 }
 
 .card-hint {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--muted);
 }
 
@@ -104,8 +104,8 @@ function handleClick() {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 10px;
-  font-size: 12px;
+  margin-top: var(--space-md);
+  font-size: var(--font-size-sm);
   font-weight: 700;
   color: var(--accent);
 }

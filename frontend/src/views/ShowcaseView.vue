@@ -407,7 +407,7 @@ function stepClass(index) {
 <style scoped>
 .showcase-page {
   min-height: 100vh;
-  padding: 24px clamp(18px, 4vw, 64px) 36px;
+  padding: var(--space-xl) clamp(18px, 4vw, 64px) var(--space-2xl);
   background:
     radial-gradient(circle at 15% 5%, rgba(255, 193, 7, 0.12), transparent 28%),
     radial-gradient(circle at 90% 20%, rgba(33, 150, 243, 0.1), transparent 30%),
@@ -428,7 +428,7 @@ function stepClass(index) {
 
 .showcase-header {
   max-width: 1440px;
-  margin: 0 auto 28px;
+  margin: 0 auto var(--space-2xl);
 }
 
 .brand-lockup,
@@ -464,7 +464,7 @@ function stepClass(index) {
   background: rgb(var(--v-theme-warning));
   color: #17120a;
   font-weight: 900;
-  font-size: 20px;
+  font-size: var(--font-size-xl);
 }
 
 .hero-panel,
@@ -488,7 +488,7 @@ function stepClass(index) {
 }
 
 .hero-copy h1 {
-  margin: 8px 0 16px;
+  margin: var(--space-sm) 0 var(--space-lg);
   font-size: clamp(34px, 5vw, 68px);
   line-height: 1.02;
   letter-spacing: -0.045em;
@@ -512,12 +512,12 @@ function stepClass(index) {
 
 .audience-card {
   width: min(100%, 410px);
-  padding: 24px;
+  padding: var(--space-xl);
   align-self: center;
 }
 
 .audience-toggle {
-  margin: 14px 0 18px;
+  margin: var(--space-lg) 0 var(--space-lg);
   flex-wrap: wrap;
 }
 
@@ -533,11 +533,11 @@ function stepClass(index) {
 
 .metrics-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-top: 16px;
+  margin-top: var(--space-lg);
 }
 
 .metric-card {
-  padding: 20px;
+  padding: var(--space-xl);
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
@@ -548,22 +548,22 @@ function stepClass(index) {
 
 .metric-label {
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 
 .section-block {
   max-width: 1440px;
-  margin: 46px auto 0;
+  margin: var(--space-3xl) auto 0;
 }
 
 .section-heading {
-  margin-bottom: 18px;
+  margin-bottom: var(--space-lg);
 }
 
 .section-heading h2,
 .demo-stage h2,
 .technical-panel h2 {
-  margin: 4px 0 0;
+  margin: var(--space-xs) 0 0;
   font-size: clamp(24px, 3vw, 36px);
 }
 
@@ -573,7 +573,7 @@ function stepClass(index) {
 
 .scenario-card {
   min-height: 164px;
-  padding: 18px;
+  padding: var(--space-lg);
   border-radius: 18px;
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   background: rgba(var(--v-theme-surface), 0.72);
@@ -606,19 +606,19 @@ function stepClass(index) {
 }
 
 .demo-stage {
-  margin-top: 24px;
+  margin-top: var(--space-xl);
   padding: clamp(20px, 3vw, 36px);
   background: rgba(var(--v-theme-surface), 0.88);
 }
 
 .demo-stage__header {
   align-items: flex-start;
-  margin-bottom: 18px;
+  margin-bottom: var(--space-lg);
 }
 
 .demo-stage__header p {
   max-width: 900px;
-  margin: 8px 0 0;
+  margin: var(--space-sm) 0 0;
 }
 
 .stage-status {
@@ -632,12 +632,12 @@ function stepClass(index) {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
-  margin: 28px 0;
+  margin: var(--space-2xl) 0;
 }
 
 .flow-step {
   min-height: 116px;
-  padding: 16px;
+  padding: var(--space-lg);
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 16px;
   opacity: 0.58;
@@ -693,7 +693,7 @@ function stepClass(index) {
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  padding: 10px 0;
+  padding: var(--space-md) 0;
   border-bottom: 1px solid rgba(var(--v-border-color), 0.18);
 }
 
@@ -702,7 +702,7 @@ function stepClass(index) {
 }
 
 .outcome-card ul {
-  padding-left: 20px;
+  padding-left: var(--space-xl);
   display: grid;
   gap: 10px;
   color: rgba(var(--v-theme-on-surface), 0.78);
@@ -713,7 +713,7 @@ function stepClass(index) {
 }
 
 .architecture-card {
-  padding: 20px;
+  padding: var(--space-xl);
   min-height: 176px;
   display: flex;
   flex-direction: column;
@@ -721,19 +721,19 @@ function stepClass(index) {
 }
 
 .technical-panel {
-  margin-top: 24px;
+  margin-top: var(--space-xl);
   padding: clamp(22px, 3vw, 34px);
   background: rgba(var(--v-theme-info), 0.06);
 }
 
 .technical-chips {
-  margin: 20px 0;
+  margin: var(--space-xl) 0;
 }
 
 .showcase-footer {
   max-width: 1440px;
-  margin: 38px auto 0;
-  padding-top: 20px;
+  margin: var(--space-2xl) auto 0;
+  padding-top: var(--space-xl);
   border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   color: rgba(var(--v-theme-on-surface), 0.62);
   font-size: 0.85rem;
@@ -763,7 +763,7 @@ function stepClass(index) {
 
 @media (max-width: 720px) {
   .showcase-page {
-    padding: 16px 14px 28px;
+    padding: var(--space-lg) var(--space-lg) var(--space-2xl);
   }
 
   .header-actions,

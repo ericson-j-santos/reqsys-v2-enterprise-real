@@ -148,14 +148,14 @@ async function executar() {
 </script>
 
 <style scoped>
-.merge-console { max-width: 1180px; margin: 0 auto; padding: 24px; }
+.merge-console { max-width: 1180px; margin: 0 auto; padding: var(--space-xl); }
 .merge-details { display: grid; gap: 12px; }
 .merge-details div { display: grid; grid-template-columns: minmax(120px, 180px) 1fr; gap: 12px; }
 .merge-details dt { font-weight: 700; }
 .merge-details dd { margin: 0; overflow-wrap: anywhere; }
-.resultado-json { overflow: auto; padding: 16px; border-radius: 8px; background: rgba(0, 0, 0, 0.2); }
+.resultado-json { overflow: auto; padding: var(--space-lg); border-radius: 8px; background: rgba(0, 0, 0, 0.2); }
 @media (max-width: 600px) {
-  .merge-console { padding: 16px; }
+  .merge-console { padding: var(--space-lg); }
   .merge-details div { grid-template-columns: 1fr; gap: 4px; }
 }
 </style>

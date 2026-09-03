@@ -272,10 +272,10 @@ onMounted(carregarTudo)
 </script>
 
 <style scoped>
-.analytics-hub { display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+.analytics-hub { display: flex; flex-direction: column; gap: 8px; padding: var(--space-xs); }
 .analytics-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.eyebrow { margin: 0 0 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.eyebrow { margin: 0 0 var(--space-xs); font-size: var(--font-size-sm); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; }
 .muted { color: var(--text-muted, #6b7280); }
 .panel { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 16px; }

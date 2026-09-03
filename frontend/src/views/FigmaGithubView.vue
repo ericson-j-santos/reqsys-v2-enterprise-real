@@ -312,7 +312,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.figma-github { display: grid; gap: 1rem; padding: 28px 32px 40px; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; overflow-x: clip; }
+.figma-github { display: grid; gap: 1rem; padding: var(--space-2xl) var(--space-2xl) var(--space-3xl); width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; overflow-x: clip; }
 .cabecalho, .linha-painel { display: grid; gap: 1rem; align-items: start; min-width: 0; }
 .acoes-cabecalho { display: flex; gap: 0.5rem; justify-content: flex-start; }
 .cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
@@ -347,7 +347,7 @@ th:first-child, td:first-child, th:last-child, td:last-child { white-space: norm
 .badge { border: 1px solid var(--line); border-radius: 999px; padding: 0.2rem 0.55rem; }
 .vazio { text-align: center; color: var(--muted); }
 @media (max-width: 767px) {
-  .figma-github { padding: 16px 12px 24px; }
+  .figma-github { padding: var(--space-lg) var(--space-md) var(--space-xl); }
 }
 @media (min-width: 768px) {
   .cabecalho, .linha-painel { grid-template-columns: 1fr auto; }

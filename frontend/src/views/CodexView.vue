@@ -221,7 +221,7 @@ onMounted(carregarStatus)
   background: rgba(8, 13, 28, 0.6);
   border: 1px solid rgba(43, 54, 95, 0.5);
   border-radius: 12px;
-  padding: 14px;
+  padding: var(--space-lg);
   min-height: 160px;
   overflow: auto;
   font-size: 0.85rem;

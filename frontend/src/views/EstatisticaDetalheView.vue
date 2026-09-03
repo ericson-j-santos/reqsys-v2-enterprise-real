@@ -262,20 +262,20 @@ onMounted(carregar)
 .detalhe-page { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .detalhe-actions, .detalhe-header, .operational-links { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .detalhe-header { align-items: flex-start; }
-.eyebrow { margin: 0 0 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.eyebrow { margin: 0 0 var(--space-xs); font-size: var(--font-size-sm); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; }
 .muted { color: var(--text-muted, #6b7280); }
 .panel, .metric-card { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 16px; }
-.metric-card { padding: 16px; height: 100%; }
-.metric-card span, .score-evidenciado span { display: block; color: var(--text-muted, #6b7280); font-size: 12px; }
-.metric-card strong { display: block; margin-top: 8px; font-size: clamp(20px, 3vw, 28px); word-break: break-word; }
+.metric-card { padding: var(--space-lg); height: 100%; }
+.metric-card span, .score-evidenciado span { display: block; color: var(--text-muted, #6b7280); font-size: var(--font-size-sm); }
+.metric-card strong { display: block; margin-top: var(--space-sm); font-size: clamp(20px, 3vw, 28px); word-break: break-word; }
 .metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.metadata div { border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: 10px; min-width: 0; }
+.metadata div { border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: var(--space-md); min-width: 0; }
 .metadata .full { grid-column: 1 / -1; }
-dt { font-weight: 700; font-size: 12px; color: var(--text-muted, #6b7280); }
-dd { margin: 4px 0 0; overflow-wrap: anywhere; }
-ul { padding-left: 18px; }
-.score-evidenciado strong { display: block; font-size: 40px; }
+dt { font-weight: 700; font-size: var(--font-size-sm); color: var(--text-muted, #6b7280); }
+dd { margin: var(--space-xs) 0 0; overflow-wrap: anywhere; }
+ul { padding-left: var(--space-lg); }
+.score-evidenciado strong { display: block; font-size: var(--font-size-display); }
 .operational-links { justify-content: flex-start; }
 .history-table { width: 100%; overflow-x: auto; }
 @media (max-width: 700px) {
