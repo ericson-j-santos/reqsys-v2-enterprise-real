@@ -8,6 +8,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ## [Unreleased] - 2026-09-03
 
+### Adicionado (Gerador Pentaho — Pareto na cobertura de testes do fluxo de dossiê)
+
+- `tools/gerador_pentaho/pacote/testes/fluxo.test.js`: de 2 para 8 casos, priorizados por Pareto para cobrir os 5 estados finais documentados (`DOSSIÊ_CRIADO`, `CRIAÇÃO_RECUSADA`, `RESPOSTA_INVÁLIDA`, `AUTENTICAÇÃO_RECUSADA`, `FALHA_TÉCNICA`) e os critérios de aceite de retentativa/timeout de `pacote/docs/mapeamento-pentaho.md` (5xx intermitente retentado e sucede, 4xx não retentado, 5xx persistente esgota `MAX_TENTATIVAS` e não insiste além do limite) — nenhum desses tinha teste antes. Ver análise completa em `docs/servicos/gerador-pentaho-dossie.md`.
+- Corrigido `node --test testes/fluxo.test.js` executado diretamente dentro do repositório: a raiz do monorepo declara `"type": "module"` em `package.json`, herdado por qualquer `.js` sem `package.json` mais próximo, quebrando com `ReferenceError: require is not defined`. Nunca apareceu em CI porque o workflow só testa via `--output` do CLI (fora da árvore do repo). Corrigido com `tools/gerador_pentaho/pacote/package.json` (`"type": "commonjs"`).
+
 ### Adicionado (Gerador Pentaho — fluxo de dossiê trazido ao padrão ouro do repositório)
 
 - `tools/gerador_pentaho/`: aplicação de treinamento de fluxo de criação de dossiê (Node.js + job/transformações Pentaho Data Integration 7.1+, `pentaho/*.kjb`/`*.ktr`), antes mantida solta fora do repositório como `gerador_solucao_completa_v2.1.0.py` — um script que embarcava toda a aplicação como blob base64 validado contra um SHA-256 fixo. Trazida para dentro do controle de versão como arquivos reais em `tools/gerador_pentaho/pacote/` (revisável em PR, diffável, testável), com `gerador_solucao_completa.py` reduzido a um empacotador (`--dry-run`/`--output`/`--force`/`--zip`/`--run-tests`) no mesmo padrão CLI dos demais geradores do repositório (`tools/geradores/gerar_servicos_email_teams.py`).
