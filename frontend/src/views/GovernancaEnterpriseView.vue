@@ -222,22 +222,22 @@ const iaAuditavel = [
 <style scoped>
 .governance-page { min-width: 0; }
 .governance-hero { align-items: flex-start; gap: 16px; }
-.eyebrow { color: var(--accent); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
+.eyebrow { color: var(--accent); font-size: var(--font-size-sm); font-weight: 800; text-transform: uppercase; letter-spacing: .08em; margin-bottom: var(--space-xs); }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .metric-card, .section-card, .gate-card, .ia-card { border: 1px solid rgba(148, 163, 184, .22); border-radius: 14px; background: rgba(15, 23, 42, .02); }
-.metric-label { font-size: 12px; color: var(--muted); font-weight: 700; }
-.metric-value { font-size: 26px; font-weight: 900; line-height: 1.1; margin: 4px 0; }
-.metric-desc, .card-title { font-size: 13px; }
-.card-title { font-weight: 800; margin-bottom: 6px; }
+.metric-label { font-size: var(--font-size-sm); color: var(--muted); font-weight: 700; }
+.metric-value { font-size: var(--font-size-2xl); font-weight: 900; line-height: 1.1; margin: var(--space-xs) 0; }
+.metric-desc, .card-title { font-size: var(--font-size-md); }
+.card-title { font-weight: 800; margin-bottom: var(--space-sm); }
 .flow-line { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px; }
-.flow-step { border: 1px solid rgba(148, 163, 184, .24); border-radius: 12px; padding: 12px; background: rgba(255, 255, 255, .04); }
-.step-index { width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center; font-size: 12px; font-weight: 800; background: rgba(59, 130, 246, .14); margin-bottom: 8px; }
-.step-title { font-size: 13px; font-weight: 800; }
-.governance-table code { font-size: 11px; white-space: nowrap; }
+.flow-step { border: 1px solid rgba(148, 163, 184, .24); border-radius: 12px; padding: var(--space-md); background: rgba(255, 255, 255, .04); }
+.step-index { width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center; font-size: var(--font-size-sm); font-weight: 800; background: rgba(59, 130, 246, .14); margin-bottom: var(--space-sm); }
+.step-title { font-size: var(--font-size-md); font-weight: 800; }
+.governance-table code { font-size: var(--font-size-xs); white-space: nowrap; }
 .ambiente-row { cursor: pointer; transition: background 0.15s ease; }
 .ambiente-row:hover { background: rgba(245, 158, 11, 0.08); }
 .ambiente-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .analytics-flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.analytics-node { border: 1px solid rgba(148, 163, 184, .24); border-radius: 999px; padding: 9px 12px; font-size: 13px; font-weight: 800; }
+.analytics-node { border: 1px solid rgba(148, 163, 184, .24); border-radius: 999px; padding: var(--space-sm) var(--space-md); font-size: var(--font-size-md); font-weight: 800; }
 @media (max-width: 700px) { .hero-actions { justify-content: flex-start; } .analytics-node { width: 100%; border-radius: 12px; } }
 </style>

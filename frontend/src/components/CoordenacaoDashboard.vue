@@ -345,17 +345,17 @@ onMounted(carregarTudo)
 <style scoped>
 .coordenacao-page { display: flex; flex-direction: column; gap: 8px; }
 .coordenacao-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.eyebrow { margin: 0 0 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.eyebrow { margin: 0 0 var(--space-xs); font-size: var(--font-size-sm); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; }
 .muted { color: var(--text-muted, #6b7280); }
 .panel { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 16px; }
-.coord-card { border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 12px; height: 100%; }
+.coord-card { border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: var(--space-md); height: 100%; }
 .coord-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.coord-card__selo { font-size: 11px; color: var(--text-muted, #6b7280); }
-.coord-card__nome { margin: 4px 0 8px; font-size: 13px; }
+.coord-card__selo { font-size: var(--font-size-xs); color: var(--text-muted, #6b7280); }
+.coord-card__nome { margin: var(--space-xs) 0 var(--space-sm); font-size: var(--font-size-md); }
 .coord-card__tags { display: flex; flex-wrap: wrap; gap: 4px; }
-.coord-card__automacao { margin: 8px 0 0; font-size: 12px; color: var(--text-muted, #6b7280); }
-.resultado-card { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 12px; padding: 12px; }
+.coord-card__automacao { margin: var(--space-sm) 0 0; font-size: var(--font-size-sm); color: var(--text-muted, #6b7280); }
+.resultado-card { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 12px; padding: var(--space-md); }
 .resultado-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.resultado-card__meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.resultado-card__meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-sm); }
 </style>

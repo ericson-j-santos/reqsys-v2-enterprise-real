@@ -335,10 +335,10 @@ async function assistenteIA() {
 <style scoped>
 .requisitos-subtitle { max-width: 58ch; }
 .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.summary-card { padding: 16px; }
-.summary-value { font-size: 30px; font-weight: 800; color: var(--accent); }
-.summary-filter, .filter-subtitle { font-size: 12px; }
-.filter-card { padding: 16px; }
+.summary-card { padding: var(--space-lg); }
+.summary-value { font-size: var(--font-size-display); font-weight: 800; color: var(--accent); }
+.summary-filter, .filter-subtitle { font-size: var(--font-size-sm); }
+.filter-card { padding: var(--space-lg); }
 .filter-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .filter-actions { display: flex; justify-content: flex-end; }
 .requisitos-table-clicavel :deep(tbody tr) { cursor: pointer; }

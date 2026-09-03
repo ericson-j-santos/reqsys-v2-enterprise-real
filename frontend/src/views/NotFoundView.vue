@@ -35,14 +35,14 @@
 }
 
 .not-found-card h1 {
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-md);
   font-size: clamp(2rem, 5vw, 3.25rem);
   line-height: 1;
 }
 
 .not-found-card p {
   max-width: 60ch;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-xl);
   color: #cbd5e1;
 }
 

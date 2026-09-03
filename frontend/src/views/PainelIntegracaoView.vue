@@ -850,13 +850,13 @@ onMounted(async () => {
 .painel-page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px 16px;
+  padding: var(--space-xl) var(--space-lg);
 }
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-xl);
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -904,10 +904,10 @@ onMounted(async () => {
   text-decoration: underline dotted;
 }
 .detalhes-json {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   background: rgba(0, 0, 0, 0.04);
   border-radius: 6px;
-  padding: 12px;
+  padding: var(--space-md);
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;

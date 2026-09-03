@@ -415,7 +415,7 @@ onMounted(carregar)
 }
 
 .summary-item {
-  padding: 12px;
+  padding: var(--space-md);
   border: 1px solid var(--border);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
@@ -437,7 +437,7 @@ onMounted(carregar)
 .empty-cell {
   text-align: center;
   color: var(--muted);
-  padding: 24px 12px;
+  padding: var(--space-xl) var(--space-md);
 }
 
 .actions-col {

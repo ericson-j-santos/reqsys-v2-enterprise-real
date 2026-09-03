@@ -79,7 +79,7 @@ watch(() => route.fullPath, focusMainContent)
   left: 8px;
   z-index: var(--z-skip-link);
   transform: translateY(-160%);
-  padding: 10px 14px;
+  padding: var(--space-md) var(--space-lg);
   border-radius: 8px;
   background: rgb(var(--v-theme-primary));
   color: rgb(var(--v-theme-on-primary));

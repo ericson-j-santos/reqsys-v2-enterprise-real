@@ -48,9 +48,9 @@ defineEmits(['update:modelValue', 'confirmar', 'cancelar'])
 <style scoped>
 .confirmacao-url {
   display: block;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   word-break: break-all;
-  padding: 8px 10px;
+  padding: var(--space-sm) var(--space-md);
   border-radius: 8px;
   background: rgba(148, 163, 184, 0.12);
 }

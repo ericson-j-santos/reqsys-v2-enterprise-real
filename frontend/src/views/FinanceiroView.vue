@@ -185,14 +185,14 @@ onMounted(carregar)
 <style scoped>
 .financeiro-page { display: flex; flex-direction: column; gap: 8px; }
 .financeiro-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.eyebrow { margin: 0 0 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.eyebrow { margin: 0 0 var(--space-xs); font-size: var(--font-size-sm); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; }
 .muted { color: var(--text-muted, #6b7280); }
 .panel { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 16px; }
-.metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
-.metadata div { border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: 10px; }
+.metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: var(--space-xs); }
+.metadata div { border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: var(--space-md); }
 .metadata .full { grid-column: 1 / -1; }
-dt { font-weight: 700; font-size: 12px; color: var(--text-muted, #6b7280); }
-dd { margin: 4px 0 0; word-break: break-word; }
+dt { font-weight: 700; font-size: var(--font-size-sm); color: var(--text-muted, #6b7280); }
+dd { margin: var(--space-xs) 0 0; word-break: break-word; }
 @media (max-width: 700px) { .metadata { grid-template-columns: 1fr; } }
 </style>

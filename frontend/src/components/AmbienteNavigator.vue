@@ -106,8 +106,8 @@ function tooltipAmbiente(item) {
   align-items: center;
   gap: 6px;
   border-radius: var(--radius-pill);
-  padding: 8px 14px;
-  font-size: 13px;
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--font-size-md);
   font-weight: 700;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.04);
@@ -123,8 +123,8 @@ function tooltipAmbiente(item) {
 }
 
 .ambiente-navigator--compact {
-  padding: 4px 10px;
-  font-size: 11px;
+  padding: var(--space-xs) var(--space-md);
+  font-size: var(--font-size-xs);
 }
 
 .ambiente-navigator__icon {

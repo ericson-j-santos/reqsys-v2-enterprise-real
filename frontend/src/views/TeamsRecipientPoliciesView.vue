@@ -462,9 +462,9 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.recipient-policies { max-width: 1180px; margin: 0 auto; padding: 24px; }
+.recipient-policies { max-width: 1180px; margin: 0 auto; padding: var(--space-xl); }
 code { overflow-wrap: anywhere; }
 @media (max-width: 600px) {
-  .recipient-policies { padding: 16px; }
+  .recipient-policies { padding: var(--space-lg); }
 }
 </style>

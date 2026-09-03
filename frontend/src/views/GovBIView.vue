@@ -883,7 +883,7 @@ function copiarSql() {
 .govbi-label {
   font-size: 0.78rem;
   color: var(--muted, #888);
-  margin-bottom: 2px;
+  margin-bottom: var(--space-xs);
 }
 .govbi-code {
   font-family: monospace;
@@ -891,7 +891,7 @@ function copiarSql() {
 }
 .govbi-sql {
   background: rgba(0, 0, 0, 0.12);
-  padding: 12px;
+  padding: var(--space-md);
   border-radius: 6px;
   overflow-x: auto;
   font-size: 0.82rem;

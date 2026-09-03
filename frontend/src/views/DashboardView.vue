@@ -473,7 +473,7 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 4px;
+  padding: var(--space-xs);
 }
 
 .dashboard-header {
@@ -493,8 +493,8 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
 
 .dashboard-subtitle {
   max-width: 72ch;
-  margin-top: 8px;
-  font-size: 14px;
+  margin-top: var(--space-sm);
+  font-size: var(--font-size-base);
 }
 
 .jornada-card,
@@ -506,13 +506,13 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
 }
 
 .jornada-card {
-  margin-top: 18px;
+  margin-top: var(--space-lg);
 }
 
 .jornada-card h2,
 .coleta-panel h2 {
-  margin: 0 0 4px;
-  font-size: 20px;
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-xl);
   font-weight: 800;
 }
 
@@ -520,25 +520,25 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
-  margin-top: 18px;
+  margin-top: var(--space-lg);
 }
 
 .coleta-panel {
-  margin-top: 18px;
+  margin-top: var(--space-lg);
 }
 
 .coleta-metrics-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 16px;
+  margin-top: var(--space-lg);
 }
 
 .coleta-metric,
 .coleta-detail-card {
   border: 1px solid rgba(128, 128, 128, 0.24);
   border-radius: 12px;
-  padding: 14px;
+  padding: var(--space-lg);
 }
 
 .coleta-metric {
@@ -547,7 +547,7 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
 }
 
 .coleta-metric strong {
-  font-size: 24px;
+  font-size: var(--font-size-2xl);
   line-height: 1.1;
 }
 
@@ -560,13 +560,13 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 12px;
+  margin-top: var(--space-md);
 }
 
 .coleta-lista {
   display: grid;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: var(--space-md);
 }
 
 .coleta-lista-item {
@@ -577,32 +577,32 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
 }
 
 .coleta-teams-link {
-  margin-top: 8px;
+  margin-top: var(--space-sm);
 }
 
 .coleta-nota {
   display: block;
-  margin-top: 12px;
+  margin-top: var(--space-md);
 }
 
 .lower-panels {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
   gap: 16px;
-  margin-top: 18px;
+  margin-top: var(--space-lg);
 }
 
 .pipeline-panel h2,
 .info-panel h2 {
-  margin: 0 0 4px;
-  font-size: 20px;
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-xl);
   font-weight: 700;
 }
 
 .panel-lead {
-  margin: 0 0 14px;
+  margin: 0 0 var(--space-lg);
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-size-md);
 }
 
 .timeline-steps {
@@ -615,7 +615,7 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
   justify-content: space-between;
   gap: 12px;
   align-items: center;
-  padding: 10px 12px;
+  padding: var(--space-md) var(--space-md);
   border-radius: 10px;
   cursor: pointer;
 }
@@ -632,12 +632,12 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
 
 .timeline-step span {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-size-md);
 }
 
 .step-btn {
   color: var(--accent);
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -650,7 +650,7 @@ const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento'
 .figma-btn-atualizar {
   border-radius: 999px !important;
   font-weight: 700 !important;
-  padding-inline: 14px !important;
+  padding-inline: var(--space-lg) !important;
 }
 
 .erro {
