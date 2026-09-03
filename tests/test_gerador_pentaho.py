@@ -28,6 +28,7 @@ ARQUIVOS_ESPERADOS = {
     "docs/mapeamento-pentaho.md",
     "exemplos/demandas.csv",
     "exemplos/demandas.json",
+    "package.json",
     "pentaho/config/treino.properties",
     "pentaho/executar-job.bat",
     "pentaho/executar-job.sh",

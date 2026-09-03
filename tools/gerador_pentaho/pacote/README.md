@@ -1,6 +1,6 @@
 # Fluxo de criação de dossiê — treino
 
-Versão: 2.1.0
+Versão: 2.2.0
 Compatibilidade: Node.js 18+; desenho aplicável ao Pentaho Data Integration 7.1+
 
 ## Objetivo

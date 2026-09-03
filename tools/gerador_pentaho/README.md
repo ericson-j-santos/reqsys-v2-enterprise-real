@@ -56,6 +56,34 @@ python tools/gerador_pentaho/gerador_solucao_completa.py --output /tmp/dossie-pe
 - validado em CI (`.github/workflows/gerador-pentaho-dossie-validation.yml`)
   a cada alteração em `tools/gerador_pentaho/**`.
 
+## Cobertura de testes do fluxo (`pacote/testes/fluxo.test.js`)
+
+Priorizada por Pareto: os 5 estados finais documentados em
+[`pacote/README.md`](pacote/README.md#linguagem-ubíqua-e-estados) e os
+critérios de aceite de retentativa/timeout de
+[`pacote/docs/mapeamento-pentaho.md`](pacote/docs/mapeamento-pentaho.md#critérios-de-aceite)
+concentravam o maior risco de regressão silenciosa com o menor número de
+casos — cada teste abaixo cobre pelo menos um estado final ou um critério de
+aceite antes não verificado:
+
+| Estado final / critério | Teste |
+| --- | --- |
+| `DOSSIÊ_CRIADO` | criação com sucesso |
+| `CRIAÇÃO_RECUSADA` | recusa de regra de negócio; e não repetição automática em 4xx |
+| `RESPOSTA_INVÁLIDA` | 5xx persistente após esgotar tentativas |
+| `AUTENTICAÇÃO_RECUSADA` | credencial inválida |
+| `FALHA_TÉCNICA` | campo obrigatório ausente (sem chamada de rede); e conexão recusada |
+| retentativa em 5xx intermitente | sucede antes de esgotar `MAX_TENTATIVAS` |
+| não repetir em 4xx | erro 4xx chama a API de criação exatamente uma vez |
+| respeitar `MAX_TENTATIVAS` | 5xx persistente chama exatamente `MAX_TENTATIVAS` vezes |
+
+Executar: `node --test pacote/testes/fluxo.test.js` (a partir de
+`tools/gerador_pentaho/`, ou via `--run-tests` do CLI). O `pacote/package.json`
+(`"type": "commonjs"`) existe só para isolar essa árvore da configuração
+`"type": "module"` da raiz do repositório — sem ele, `node --test` executado
+de dentro do repo (fora do gerado por `--output`) falha com
+`ReferenceError: require is not defined`.
+
 ## Estrutura
 
 ```text
@@ -65,6 +93,7 @@ tools/gerador_pentaho/
 └── pacote/                       # fonte de verdade da aplicação gerada
     ├── README.md                 # como executar a aplicação (Node.js e Pentaho)
     ├── CHANGELOG.md
+    ├── package.json              # type: commonjs (isola de "type": "module" da raiz)
     ├── .env.example
     ├── dashboard.html
     ├── docs/

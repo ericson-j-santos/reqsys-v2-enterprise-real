@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.0 — 2026-09-03
+
+- cobertura de testes priorizada por Pareto: os 5 estados finais (`DOSSIÊ_CRIADO`, `CRIAÇÃO_RECUSADA`, `RESPOSTA_INVÁLIDA`, `AUTENTICAÇÃO_RECUSADA`, `FALHA_TÉCNICA`) e os critérios de aceite de retentativa/timeout de `docs/mapeamento-pentaho.md` agora têm teste dedicado (antes só 2 dos 5 estados eram exercitados);
+- corrigido `node --test testes/fluxo.test.js` executado diretamente dentro do repositório (fora de um diretório gerado por `--output`): a raiz do monorepo declara `"type": "module"` em `package.json`, o que fazia o Node tratar os arquivos deste pacote como ES module e falhar com `ReferenceError: require is not defined`. Adicionado `package.json` local (`"type": "commonjs"`) para isolar esta árvore.
+
 ## 2.1.0 — 2026-08-10
 
 - corrigidos 4 bugs reais encontrados ao rodar o job pela primeira vez num Pentaho Data Integration 7.1 real: entrada de início do job (`START`, com `draw`), tipo de step `RowGenerator`, conversão `Integer` no hash SHA-256 e serialização `JSON.stringify` de valores Java no script de preparação;
