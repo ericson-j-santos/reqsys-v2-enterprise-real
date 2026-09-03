@@ -260,6 +260,26 @@ def montar_bundle(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def _buscar_flow_existente(
+    client: httpx.AsyncClient, base_url: str, headers: dict[str, str], display_name: str
+) -> str | None:
+    """Procura um flow existente pelo nome de exibicao.
+
+    A API nao suporta escolher o id na criacao (POST gera o id do lado do
+    servidor) nem upsert por id no PATCH (confirmado em DEV: PATCH num id
+    que nao existe devolve FlowNotFound). Por isso a idempotencia de
+    "Instalar fluxo" e feita buscando por displayName em vez de reusar um
+    id calculado localmente.
+    """
+    response = await client.get(base_url, headers=headers, params={'api-version': '2016-11-01'})
+    if response.status_code != 200:
+        return None
+    for item in response.json().get('value', []):
+        if item.get('properties', {}).get('displayName') == display_name:
+            return item.get('name')
+    return None
+
+
 async def despachar(payload: dict[str, Any], *, user_token: str | None = None) -> dict[str, Any]:
     """Cria/atualiza o fluxo Planner->Excel de verdade no Power Automate.
 
@@ -269,15 +289,16 @@ async def despachar(payload: dict[str, Any], *, user_token: str | None = None) -
     com o token que o frontend adquire via MSAL (mesmo padrao ja usado para
     "Conexoes Microsoft"), em vez de relay via GitHub Actions/PAC CLI.
 
-    flow_guid e deterministico (uuid5 fixo): reexecutar "Instalar fluxo"
-    atualiza o mesmo fluxo em vez de criar duplicatas.
+    Idempotencia: busca um flow existente com o mesmo displayName (ver
+    _buscar_flow_existente) — se achar, PATCH nesse id; senao, POST na
+    colecao para criar (o id e gerado pelo servidor). Reexecutar
+    "Instalar fluxo" atualiza o mesmo flow em vez de criar duplicatas.
 
-    O verbo e PATCH, nao PUT: confirmado em DEV que PUT em
-    .../flows/{id} devolve 404 de roteamento ("No HTTP resource was
-    found that matches the request URI") mesmo com payload valido —
-    essa API (Microsoft.ProcessSimple) so registra rota para
-    GET/PATCH/DELETE em .../flows/{id}; criacao e atualizacao usam o
-    mesmo PATCH com upsert pelo id informado.
+    Verbos confirmados em DEV, na ordem em que os bugs foram corrigidos:
+    PUT em .../flows/{id} devolve 404 de roteamento (verbo nao mapeado);
+    PATCH num id calculado localmente (nao gerado pelo servidor) devolve
+    404 de negocio (FlowNotFound) — o id tem que ser o que o servidor
+    atribuiu na criacao.
     """
     bundle = montar_bundle(payload)
     if not payload.get('confirmar'):
@@ -296,7 +317,8 @@ async def despachar(payload: dict[str, Any], *, user_token: str | None = None) -
         }
     flow = bundle['flows'][0]
     safe_environment_id = _segmento_id_seguro(payload['environment_id'], 'Ambiente')
-    url = f"{FLOW_MANAGEMENT_BASE}/environments/{safe_environment_id}/flows/{flow['flow_guid']}"
+    base_url = f"{FLOW_MANAGEMENT_BASE}/environments/{safe_environment_id}/flows"
+    headers = {'Authorization': f'Bearer {user_token}'}
     body = {
         'properties': {
             'displayName': flow['display_name'],
@@ -309,12 +331,13 @@ async def despachar(payload: dict[str, Any], *, user_token: str | None = None) -
         },
     }
     async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.patch(
-            url,
-            headers={'Authorization': f'Bearer {user_token}'},
-            params={'api-version': '2016-11-01'},
-            json=body,
-        )
+        flow_id = await _buscar_flow_existente(client, base_url, headers, flow['display_name'])
+        if flow_id:
+            response = await client.patch(
+                f'{base_url}/{flow_id}', headers=headers, params={'api-version': '2016-11-01'}, json=body
+            )
+        else:
+            response = await client.post(base_url, headers=headers, params={'api-version': '2016-11-01'}, json=body)
     if response.status_code not in (200, 201):
         return {
             'dispatched': False,
@@ -324,11 +347,12 @@ async def despachar(payload: dict[str, Any], *, user_token: str | None = None) -
             'correlation_id': bundle['correlation_id'],
         }
     data = response.json()
+    flow_id = data.get('name') or flow_id or flow['flow_guid']
     return {
         'dispatched': True,
         'status': 'implantado',
         'correlation_id': bundle['correlation_id'],
-        'flow_id': data.get('name') or flow['flow_guid'],
-        'flow_url': f"https://make.powerautomate.com/environments/{safe_environment_id}/flows/{flow['flow_guid']}/details",
+        'flow_id': flow_id,
+        'flow_url': f'https://make.powerautomate.com/environments/{safe_environment_id}/flows/{flow_id}/details',
         'flows': [flow['display_name']],
     }
