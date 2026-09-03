@@ -14,7 +14,10 @@ from typing import Any
 
 import yaml
 
-from validate_bacen_normative_axis import EXPECTED_CODES
+try:
+    from scripts.validate_bacen_normative_axis import EXPECTED_CODES
+except ModuleNotFoundError:  # execução direta: python scripts/validate_bacen_normative_mapping.py
+    from validate_bacen_normative_axis import EXPECTED_CODES
 
 ALLOWED_CONTROLS = {f"BACEN-{number:02d}" for number in range(1, 9)}
 
