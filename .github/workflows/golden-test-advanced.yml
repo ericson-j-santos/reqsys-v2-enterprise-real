@@ -85,7 +85,6 @@ jobs:
           set -euo pipefail
           cd frontend
           npm ci
-          npm install --no-save @axe-core/playwright
       - working-directory: frontend
         run: npx playwright install --with-deps chromium
       - working-directory: frontend
