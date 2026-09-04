@@ -110,3 +110,37 @@ def test_dashboard_retorna_estrutura_operacional(client, auth_headers):
     assert set(payload['contagens']) == {'recebidos', 'concluidos', 'processando', 'quarentena'}
     assert isinstance(payload['processos'], list)
     assert isinstance(payload['lotesRecentes'], list)
+
+
+def test_lote_excede_limite_de_registros_retorna_413(client, auth_headers, monkeypatch):
+    monkeypatch.setenv('REQSYS_PENTAHO_MAX_REGISTROS', '2')
+    resposta = client.post(
+        '/api/integracoes/pentaho/lotes',
+        json=_payload(registros=[{'produto': 1}, {'produto': 2}, {'produto': 3}]),
+        headers=_headers(auth_headers),
+    )
+    assert resposta.status_code == 413
+    assert 'limite configurado' in resposta.json()['detail']
+
+
+def test_reprocessar_lote_que_nao_esta_em_quarentena_retorna_409(client, auth_headers):
+    criado = client.post('/api/integracoes/pentaho/lotes', json=_payload(), headers=_headers(auth_headers))
+    assert criado.status_code == 202
+    lote_id = criado.json()['loteId']
+
+    consulta = client.get(f'/api/integracoes/pentaho/lotes/{lote_id}', headers=auth_headers)
+    assert consulta.json()['status'] == 'CONCLUIDO'
+
+    reprocessar = client.post(f'/api/integracoes/pentaho/lotes/{lote_id}/reprocessar', headers=auth_headers)
+    assert reprocessar.status_code == 409
+    assert reprocessar.json()['detail'] == 'Somente lotes em QUARENTENA podem ser reprocessados'
+
+
+def test_consultar_lote_inexistente_retorna_404(client, auth_headers):
+    resposta = client.get(f'/api/integracoes/pentaho/lotes/{uuid4()}', headers=auth_headers)
+    assert resposta.status_code == 404
+
+
+def test_reprocessar_lote_inexistente_retorna_404(client, auth_headers):
+    resposta = client.post(f'/api/integracoes/pentaho/lotes/{uuid4()}/reprocessar', headers=auth_headers)
+    assert resposta.status_code == 404
