@@ -80,6 +80,10 @@ def gerar_definicao(payload: dict[str, Any], evento: str) -> dict[str, Any]:
                 'id': "@parameters('PLANNER_PLAN_ID')",
             },
         },
+        # OnNewTask_V3/OnCompleteTask_V3 sao triggers "batch" (poll), nao
+        # push: exigem recurrence proprio, sem isso o flow management
+        # rejeita com TemplateValidationError. Confirmado em DEV.
+        'recurrence': {'frequency': 'Minute', 'interval': 5},
         'splitOn': "@triggerBody()?['value']",
     }
     notificar_teams = {

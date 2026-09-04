@@ -92,6 +92,8 @@ def test_definicao_usa_trigger_planner_permitido_e_nao_escreve_no_planner():
 
         assert validar_definicao(definicao) == []
         assert 'UpdateTask' not in raw
+        trigger = next(iter(definicao['triggers'].values()))
+        assert trigger['recurrence'] == {'frequency': 'Minute', 'interval': 5}
         acao = definicao['actions']['Notificar_Teams']
         assert acao['type'] == 'OpenApiConnection'
         assert acao['inputs']['host']['operationId'] == 'PostCardToConversation'
