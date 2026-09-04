@@ -8,6 +8,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ## [Unreleased] - 2026-09-04
 
+### Adicionado (Pentaho — Pareto na cobertura de testes de `PentahoIntegracoesView.vue`)
+
+- `frontend/tests/e2e/pentaho-integracoes.spec.js`: de 1 para 8 cenários, priorizados por Pareto — erro do backend ao carregar o painel (com e sem `detail` do backend, este último via queda de rede real), erro 409 ao reprocessar um lote fora de quarentena (continuação direta do Pareto do backend em `test_pentaho_integration_api.py`), estados vazios (nenhum processo/lote), status não mapeado sem quebrar a tela, ausência do botão Reprocessar fora de `QUARENTENA`, e recarregamento manual pelo botão Atualizar. Nenhum desses caminhos de erro/estado tinha teste antes — só o caminho feliz.
+- Corrigido o teste original (`getByText('Quarentena').last()`), que colidia com um tooltip de navegação teleportado ("Acompanhar lotes, processamento, quarentena e reprocessamento") introduzido por uma correção de acessibilidade não relacionada (#1482) — passou a ficar flaky/quebrado. Escopado para dentro de `[data-testid="route-integracoes-pentaho"]` com `exact: true`.
+- **Gotcha de ambiente, não de produto:** ao validar isso localmente via Git Bash, `VITE_API_URL=/api npm run dev` fazia o MSYS reescrever `/api` para um caminho Windows (`C:/Program Files/Git/api`) antes do Node ver a variável, quebrando toda chamada Axios da página sem nenhum erro de rede visível (a exceção nunca chegava a um XHR real). Não afeta CI/produção (não usam Git Bash para isso), mas vale registrar para quem for depurar este componente localmente no Windows.
+
 ### Adicionado (Power Platform — automação do que era acionável no blueprint de ações humanas)
 
 - `config/power-platform/environments.json`: registro versionado de DEV/TEST/PROD, substituindo anotações soltas de "nome, Environment ID e URL Dataverse" por fonte única revisada em PR. Ciclo de vida `NAO_DEFINIDO → DEFINIDO → CONEXAO_AUTORIZADA → PROMOCAO_VALIDADA`, espelhando os itens 3, 4 e 5 do blueprint. DEV não replica a URL: usa `url_secret_ref: POWER_PLATFORM_ENVIRONMENT_URL`, mantendo o valor no secret. `connection_id` é identificador de recurso, não credencial — nenhum segredo é armazenado.
