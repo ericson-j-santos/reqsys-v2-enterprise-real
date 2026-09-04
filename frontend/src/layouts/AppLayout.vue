@@ -7,11 +7,11 @@
       <v-spacer />
       <v-chip size="x-small" color="amber" variant="tonal" class="mr-2 req-role-chip">
         {{ auth.usuario?.papel || 'user' }}
-        <v-tooltip activator="parent" location="bottom" text="Seu perfil define permissoes de leitura, edicao, auditoria e acoes administrativas." />
+        <v-tooltip activator="parent" location="bottom" text="Seu perfil define permissoes de leitura, edicao, auditoria e acoes administrativas." :content-props="{ 'aria-label': 'Seu perfil define permissoes de leitura, edicao, auditoria e acoes administrativas.' }" />
       </v-chip>
       <v-btn icon variant="text" color="white" :aria-label="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" @click="alternarTemaVisual">
         <v-icon :icon="temaClaro ? 'mdi-weather-night' : 'mdi-white-balance-sunny'" />
-        <v-tooltip activator="parent" location="bottom" :text="temaClaro ? 'Alterna para o tema escuro. A preferencia fica salva neste navegador.' : 'Alterna para o tema claro. A preferencia fica salva neste navegador.'" />
+        <v-tooltip activator="parent" location="bottom" :text="temaClaro ? 'Alterna para o tema escuro. A preferencia fica salva neste navegador.' : 'Alterna para o tema claro. A preferencia fica salva neste navegador.'" :content-props="{ 'aria-label': temaClaro ? 'Alterna para o tema escuro. A preferencia fica salva neste navegador.' : 'Alterna para o tema claro. A preferencia fica salva neste navegador.' }" />
       </v-btn>
     </v-app-bar>
 
@@ -41,27 +41,27 @@
             @click="alternarSidebar"
           >
             <v-icon :icon="sidebarColapsado ? 'mdi-chevron-double-right' : 'mdi-chevron-double-left'" size="20" />
-            <v-tooltip activator="parent" location="right" :text="sidebarColapsado ? 'Expandir menu lateral' : 'Recolher menu lateral'" />
+            <v-tooltip activator="parent" location="right" :text="sidebarColapsado ? 'Expandir menu lateral' : 'Recolher menu lateral'" :aria-label="sidebarColapsado ? 'Expandir menu lateral' : 'Recolher menu lateral'" />
           </v-btn>
         </div>
         <template v-if="!sidebarRecolhidoVisivel">
           <div class="muted mt-1 version-line" data-testid="app-version-label">
             {{ versionLabel }}
-            <v-tooltip activator="parent" location="bottom" text="Versao carregada no navegador e versao informada pela API. Ajuda a identificar cache ou publicação parcial." />
+            <v-tooltip activator="parent" location="bottom" text="Versao carregada no navegador e versao informada pela API. Ajuda a identificar cache ou publicação parcial." :content-props="{ 'aria-label': 'Versao carregada no navegador e versao informada pela API. Ajuda a identificar cache ou publicação parcial.' }" />
           </div>
           <v-chip v-if="hasVersionDrift" size="x-small" color="warning" variant="tonal" class="mt-1" prepend-icon="mdi-alert-outline" data-testid="app-version-drift-chip">
             Versoes divergentes
-            <v-tooltip activator="parent" location="bottom" text="O frontend e a API parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." />
+            <v-tooltip activator="parent" location="bottom" text="O frontend e a API parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." :content-props="{ 'aria-label': 'O frontend e a API parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente.' }" />
           </v-chip>
           <AmbienteNavigator :environment-hint="environment" compact class="mt-2 d-inline-block" />
           <v-btn block variant="tonal" color="primary" class="theme-toggle mt-3" :prepend-icon="temaClaro ? 'mdi-weather-night' : 'mdi-white-balance-sunny'" :aria-label="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" @click="alternarTemaVisual">
             {{ temaClaro ? 'Tema escuro' : 'Tema claro' }}
-            <v-tooltip activator="parent" location="right" :text="temaClaro ? 'Volta para a interface escura, indicada para baixa luminosidade e uso prolongado.' : 'Muda para a interface clara, indicada para leitura em ambientes iluminados.'" />
+            <v-tooltip activator="parent" location="right" :text="temaClaro ? 'Volta para a interface escura, indicada para baixa luminosidade e uso prolongado.' : 'Muda para a interface clara, indicada para leitura em ambientes iluminados.'" :content-props="{ 'aria-label': temaClaro ? 'Volta para a interface escura, indicada para baixa luminosidade e uso prolongado.' : 'Muda para a interface clara, indicada para leitura em ambientes iluminados.' }" />
           </v-btn>
         </template>
         <v-btn v-else icon size="small" variant="tonal" color="primary" class="theme-toggle-rail mt-3" :aria-label="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" @click="alternarTemaVisual">
           <v-icon :icon="temaClaro ? 'mdi-weather-night' : 'mdi-white-balance-sunny'" size="18" />
-          <v-tooltip activator="parent" location="right" :text="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" />
+          <v-tooltip activator="parent" location="right" :text="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" :content-props="{ 'aria-label': temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro' }" />
         </v-btn>
       </div>
       <v-divider />
@@ -69,14 +69,14 @@
       <v-list v-model:opened="temasAbertos" density="compact" nav class="pt-2 req-nav-list" :class="{ 'req-nav-list--rail': sidebarRecolhidoVisivel }" aria-label="Navegacao por temas expansiveis">
         <v-list-group v-for="tema in NAV_TEMAS" :key="tema.id" :value="tema.id">
           <template #activator="{ props }">
-            <v-list-item v-bind="props" :prepend-icon="tema.icon" class="nav-theme-item" :class="{ 'nav-theme-item--active': tema.id === temaAtivo }" :data-testid="`nav-tema-${tema.id}`" @click="selecionarTema(tema.id)">
+            <v-list-item v-bind="props" role="listitem" :aria-selected="undefined" :prepend-icon="tema.icon" class="nav-theme-item" :class="{ 'nav-theme-item--active': tema.id === temaAtivo }" :data-testid="`nav-tema-${tema.id}`" @click="selecionarTema(tema.id)">
               <v-list-item-title>{{ tema.title }}</v-list-item-title>
               <v-list-item-subtitle v-if="!sidebarRecolhidoVisivel">{{ tema.topic }}</v-list-item-subtitle>
-              <v-tooltip activator="parent" location="right" :text="tooltipTema(tema)" />
+              <v-tooltip activator="parent" location="right" :text="tooltipTema(tema)" :content-props="{ 'aria-label': tooltipTema(tema) }" />
               <template #append>
                 <span v-if="!sidebarRecolhidoVisivel && badgeTema(tema.id).count > 0" class="nav-tema-badge" :class="`nav-tema-badge--${badgeTema(tema.id).level}`" :data-testid="`nav-badge-${tema.id}`" :title="`${badgeTema(tema.id).count} pendencia(s)`">
                   {{ badgeLabel(badgeTema(tema.id).count) }}
-                  <v-tooltip activator="parent" location="right" :text="tooltipBadge(tema.id)" />
+                  <v-tooltip activator="parent" location="right" :text="tooltipBadge(tema.id)" :content-props="{ 'aria-label': tooltipBadge(tema.id) }" />
                 </span>
                 <span v-else-if="sidebarRecolhidoVisivel && badgeTema(tema.id).count > 0" class="nav-tema-badge-dot" :class="`nav-tema-badge--${badgeTema(tema.id).level}`" :data-testid="`nav-badge-${tema.id}`" />
               </template>
@@ -89,19 +89,19 @@
                 <button class="nav-subgroup-header" :class="{ 'nav-subgroup-header--active': tema.id === temaAtivo && sub.id === subgrupoAtivo }" type="button" @click="selecionarSubgrupo(tema.id, sub.id)">
                   <span>{{ sub.title }}</span>
                   <small>{{ sub.topic }}</small>
-                  <v-tooltip activator="parent" location="right" :text="tooltipSubgrupo(sub)" />
+                  <v-tooltip activator="parent" location="right" :text="tooltipSubgrupo(sub)" :content-props="{ 'aria-label': tooltipSubgrupo(sub) }" />
                 </button>
-                <v-tooltip v-for="item in itensDoSubgrupo(tema.id, sub.id)" :key="item.to" :text="item.tip" location="right">
+                <v-tooltip v-for="item in itensDoSubgrupo(tema.id, sub.id)" :key="item.to" :text="item.tip" location="right" :content-props="{ 'aria-label': item.tip }">
                   <template #activator="{ props }">
-                    <v-list-item v-bind="props" :to="item.to" :prepend-icon="item.icon" :title="item.title" class="nav-item nav-item--nested" :data-testid="`nav-item-${navItemTestId(item.to)}`" @click="mobile && (drawer = false)" />
+                    <v-list-item v-bind="props" role="listitem" :to="item.to" :prepend-icon="item.icon" :title="item.title" class="nav-item nav-item--nested" :data-testid="`nav-item-${navItemTestId(item.to)}`" @click="mobile && (drawer = false)" />
                   </template>
                 </v-tooltip>
               </div>
             </div>
 
-            <v-tooltip v-for="item in tema.items" v-else :key="item.to" :text="item.tip" location="right">
+            <v-tooltip v-for="item in tema.items" v-else :key="item.to" :text="item.tip" location="right" :content-props="{ 'aria-label': item.tip }">
               <template #activator="{ props }">
-                <v-list-item v-bind="props" :to="item.to" :prepend-icon="item.icon" :title="item.title" class="nav-item nav-item--nested" :data-testid="`nav-item-${navItemTestId(item.to)}`" @click="mobile && (drawer = false)" />
+                <v-list-item v-bind="props" role="listitem" :to="item.to" :prepend-icon="item.icon" :title="item.title" class="nav-item nav-item--nested" :data-testid="`nav-item-${navItemTestId(item.to)}`" @click="mobile && (drawer = false)" />
               </template>
             </v-tooltip>
           </template>
@@ -116,11 +116,11 @@
             <div class="user-name">{{ auth.usuario.nome || auth.usuario.email }}</div>
             <div class="muted user-role">{{ auth.usuario.papel }}</div>
           </div>
-          <v-tooltip activator="parent" location="top" :text="sidebarRecolhidoVisivel ? `${auth.usuario.nome || auth.usuario.email} (${auth.usuario.papel})` : 'Usuario autenticado e papel ativo nesta sessao.'" />
+          <v-tooltip activator="parent" location="top" :text="sidebarRecolhidoVisivel ? `${auth.usuario.nome || auth.usuario.email} (${auth.usuario.papel})` : 'Usuario autenticado e papel ativo nesta sessao.'" :content-props="{ 'aria-label': sidebarRecolhidoVisivel ? `${auth.usuario.nome || auth.usuario.email} (${auth.usuario.papel})` : 'Usuario autenticado e papel ativo nesta sessao.' }" />
         </div>
         <v-list density="compact" class="pb-2">
           <v-list-item prepend-icon="mdi-logout" title="Sair" class="nav-item logout-item" @click="sair">
-            <v-tooltip activator="parent" location="right" text="Encerra sua sessao neste navegador e volta para a tela de login." />
+            <v-tooltip activator="parent" location="right" text="Encerra sua sessao neste navegador e volta para a tela de login." :content-props="{ 'aria-label': 'Encerra sua sessao neste navegador e volta para a tela de login.' }" />
           </v-list-item>
         </v-list>
       </template>
