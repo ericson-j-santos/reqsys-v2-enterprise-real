@@ -16,6 +16,7 @@
           activator="parent"
           location="bottom"
           :text="`Voce esta no ambiente ${ambienteAtualLabel}. Use este controle para trocar entre desenvolvimento, homologacao e producao preservando a pagina atual.`"
+          :aria-label="`Voce esta no ambiente ${ambienteAtualLabel}. Use este controle para trocar entre desenvolvimento, homologacao e producao preservando a pagina atual.`"
         />
       </button>
     </template>
@@ -33,6 +34,7 @@
           activator="parent"
           location="right"
           :text="tooltipAmbiente(item)"
+          :aria-label="tooltipAmbiente(item)"
         />
         <template #prepend>
           <v-chip size="x-small" :color="item.color" variant="tonal">{{ item.label }}</v-chip>
