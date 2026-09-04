@@ -173,3 +173,30 @@ Fluxo recomendado no job/transformação:
 ## Critério de conclusão
 
 O incremento está concluído quando os testes de contrato, idempotência, reivindicação atômica, recuperação de lote abandonado, limite de tentativas, quarentena, reprocessamento e painel estiverem verdes no CI e a branch estiver sem conflito com `main`.
+
+## Cobertura de testes (Pareto, 2026-09-03)
+
+`backend/tests/test_pentaho_integration_api.py` (contrato HTTP),
+`test_pentaho_worker_recovery.py` (reivindicação atômica e recuperação) e
+`test_pentaho_integration_service.py` (demais regras de serviço). Dos
+controles listados em "Controles de segurança e resiliência" acima, estes
+tinham 0% de cobertura e foram priorizados por serem os de maior risco de
+regressão silenciosa — cada um é uma linha de defesa explícita, não um
+efeito colateral de outro teste:
+
+| Controle documentado (0% de cobertura antes) | Teste |
+| --- | --- |
+| corrida de idempotência resolvida via `IntegrityError`, não só pela checagem prévia | `test_corrida_de_idempotencia_e_resolvida_via_integrity_error` |
+| reprocessamento restrito a `QUARENTENA` (409 fora disso) | `test_reprocessar_lote_que_nao_esta_em_quarentena_retorna_409` |
+| limite configurável de registros por lote (413 acima do limite) | `test_lote_excede_limite_de_registros_retorna_413` |
+| aceitação parcial (lote com registros válidos e vazios misturados) | `test_lote_com_registros_mistos_aceita_parcialmente` — as duas suítes anteriores só cobriam tudo-aceito ou tudo-rejeitado |
+| validação de parâmetros de `recuperar_lotes_abandonados` | `test_recuperar_lotes_abandonados_rejeita_timeout_invalido` / `..._max_tentativas_invalido` |
+| lote/erro 404 (consulta e reprocessamento) | `test_consultar_lote_inexistente_retorna_404` / `test_reprocessar_lote_inexistente_retorna_404` |
+
+Fora do corte por ora (menor retorno por esforço): payload persistido
+corrompido (`payload_json` inválido na revalidação de idempotência — exige
+forjar estado de banco fora do fluxo normal), o ramo defensivo de
+`atualizado_em IS NULL` em `recuperar_lotes_abandonados` (inalcançável via
+fluxo normal, já que `reivindicar_lote` sempre define `atualizado_em`), e
+contagem do painel por data/processo (risco operacional menor que os itens
+acima, mais esforço para simular fronteira de data).

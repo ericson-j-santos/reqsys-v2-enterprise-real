@@ -8,6 +8,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ## [Unreleased] - 2026-09-03
 
+### Adicionado (Integração Pentaho→ReqSys — Pareto na cobertura de testes do adaptador de lotes)
+
+- `backend/tests/test_pentaho_integration_service.py` (novo, 6 casos) e 4 casos novos em `test_pentaho_integration_api.py`: fecham as lacunas de maior risco entre os controles já documentados em `docs/architecture/pentaho-reqsys-adapter.md` mas sem teste — corrida de idempotência resolvida via `IntegrityError` real (não só a checagem prévia), reprocessamento restrito a `QUARENTENA` (409 fora disso), limite de registros por lote (413), aceitação parcial de um lote com registros válidos e vazios misturados (as suítes anteriores só cobriam tudo-aceito ou tudo-rejeitado), validação de parâmetros de `recuperar_lotes_abandonados`, e 404 de lote inexistente. Ver tabela completa em `docs/architecture/pentaho-reqsys-adapter.md#cobertura-de-testes-pareto-2026-09-03`.
+- Extraído `_buscar_lote_por_idempotencia` em `backend/app/services/pentaho_integration.py` (elimina duplicação entre a checagem inicial e o fallback de `IntegrityError`, e cria o ponto de inserção usado para simular a corrida no teste acima).
+
 ### Adicionado (Gerador Pentaho — Pareto na cobertura de testes do fluxo de dossiê)
 
 - `tools/gerador_pentaho/pacote/testes/fluxo.test.js`: de 2 para 8 casos, priorizados por Pareto para cobrir os 5 estados finais documentados (`DOSSIÊ_CRIADO`, `CRIAÇÃO_RECUSADA`, `RESPOSTA_INVÁLIDA`, `AUTENTICAÇÃO_RECUSADA`, `FALHA_TÉCNICA`) e os critérios de aceite de retentativa/timeout de `pacote/docs/mapeamento-pentaho.md` (5xx intermitente retentado e sucede, 4xx não retentado, 5xx persistente esgota `MAX_TENTATIVAS` e não insiste além do limite) — nenhum desses tinha teste antes. Ver análise completa em `docs/servicos/gerador-pentaho-dossie.md`.
