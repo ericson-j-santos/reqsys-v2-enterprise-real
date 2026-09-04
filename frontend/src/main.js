@@ -38,11 +38,18 @@ const vuetify = createVuetify({
     VTextField: { density: 'comfortable' },
     VSelect: { density: 'comfortable' },
     VBtn: { density: 'comfortable' },
-    // zIndex explícito: VTooltip roda com `_disableGlobalStack`, então nunca
-    // sobe acima do zIndex padrão (2000) da Vuetify sozinho — sem isso, toast/
-    // alerta de conectividade/route-feedback do app (z-index 3000-5000) cobrem
-    // o tooltip sempre que se sobrepõem na tela.
-    VTooltip: { location: 'top', openDelay: 200, zIndex: DSC_Z_INDEX.tooltip },
+    // attach:false + zIndex explícito: sem `attach`, VOverlay.useTeleport só
+    // teleporta para `.v-overlay-container` no <body> quando `attach === false`
+    // (não quando é apenas "não definido") — sem isso, o tooltip renderiza
+    // `position:absolute` inline dentro da árvore do componente, sujeito à
+    // ordem normal de pintura entre irmãos no DOM (não a um stacking context
+    // de overlay real), e qualquer conteúdo de página renderizado depois no
+    // DOM pode cobri-lo mesmo com z-index alto. VTooltip também roda com
+    // `_disableGlobalStack`, então nunca sobe acima do zIndex padrão (2000)
+    // da Vuetify sozinho — sem esse zIndex explícito, toast/alerta de
+    // conectividade/route-feedback do app (z-index 3000-5000) cobririam o
+    // tooltip sempre que se sobrepusessem na tela.
+    VTooltip: { location: 'top', openDelay: 200, attach: false, zIndex: DSC_Z_INDEX.tooltip },
   },
 })
 
