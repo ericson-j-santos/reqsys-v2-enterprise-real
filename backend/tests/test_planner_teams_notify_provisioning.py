@@ -7,6 +7,7 @@ from app.services import planner_teams_notify_provisioning as provisioning
 from app.services.planner_teams_notify_provisioning import (
     EVENTOS,
     PROFILE,
+    _segmento_id_seguro,
     despachar,
     gerar_definicao,
     montar_bundle,
@@ -65,7 +66,9 @@ def _payload(**overrides):
         'group_id': 'group-dev-001',
         'plan_id': 'plan-dev-001',
         'planner_connection_id': 'planner-connection-dev',
-        'teams_webhook_url': 'https://tieri.webhook.office.com/webhookb2/fake',
+        'teams_team_id': 'team-dev-001',
+        'teams_channel_id': '19:channel-dev-001@thread.tacv2',
+        'teams_connection_id': 'teams-connection-dev',
         'target_environment': 'dev',
         'confirmar': False,
         'correlation_id': 'corr-planner-teams-test',
@@ -89,7 +92,54 @@ def test_definicao_usa_trigger_planner_permitido_e_nao_escreve_no_planner():
 
         assert validar_definicao(definicao) == []
         assert 'UpdateTask' not in raw
-        assert definicao['actions']['Notificar_Teams']['type'] == 'Http'
+        acao = definicao['actions']['Notificar_Teams']
+        assert acao['type'] == 'OpenApiConnection'
+        assert acao['inputs']['host']['operationId'] == 'PostCardToConversation'
+        assert acao['inputs']['parameters']['poster'] == 'Flow bot'
+        assert acao['inputs']['parameters']['location'] == 'Channel'
+
+
+def test_segmento_id_seguro_falha_fechado_para_vazio_e_invalido():
+    with pytest.raises(ValueError, match='obrigatorio'):
+        _segmento_id_seguro('   ', 'Ambiente')
+    with pytest.raises(ValueError, match='invalido'):
+        _segmento_id_seguro('abc-!@#', 'Ambiente')
+
+
+def test_validar_definicao_rejeita_schema_trigger_e_acao_invalidos():
+    base = gerar_definicao(_payload(), 'criada')
+
+    sem_schema = {**base, '$schema': 'outro'}
+    assert 'schema_invalido' in validar_definicao(sem_schema)
+
+    sem_trigger = {**base, 'triggers': {}}
+    assert 'trigger_ausente' in validar_definicao(sem_trigger)
+
+    trigger_errado = {
+        **base,
+        'triggers': {
+            'X': {'inputs': {'host': {'apiId': '/outro/conector', 'operationId': 'Outro'}}},
+        },
+    }
+    erros = validar_definicao(trigger_errado)
+    assert 'trigger_conector_nao_permitido' in erros
+    assert 'trigger_operacao_nao_permitida' in erros
+
+    sem_acao_teams = {**base, 'actions': {}}
+    assert 'acao_notificar_teams_ausente' in validar_definicao(sem_acao_teams)
+
+    acao_errada = {
+        **base,
+        'actions': {'Notificar_Teams': {'inputs': {'host': {'apiId': '/outro', 'operationId': 'Outro'}}}},
+    }
+    assert 'acao_notificar_teams_conector_invalido' in validar_definicao(acao_errada)
+
+
+def test_montar_bundle_falha_fechado_quando_definicao_fica_invalida(monkeypatch):
+    monkeypatch.setattr(provisioning, 'validar_definicao', lambda definition: ['erro_forcado'])
+
+    with pytest.raises(ValueError, match='Definicao invalida'):
+        montar_bundle(_payload())
 
 
 def test_perfil_falha_fechado_fora_de_dev():
@@ -97,9 +147,9 @@ def test_perfil_falha_fechado_fora_de_dev():
         montar_bundle(_payload(target_environment='prod'))
 
 
-def test_perfil_falha_fechado_sem_webhook_configurado():
-    with pytest.raises(ValueError, match='Webhook do Teams'):
-        montar_bundle(_payload(teams_webhook_url=''))
+def test_perfil_falha_fechado_sem_conexao_teams():
+    with pytest.raises(ValueError, match='teams_connection_id'):
+        montar_bundle(_payload(teams_connection_id=''))
 
 
 def test_despachar_sem_confirmacao_apenas_valida():
