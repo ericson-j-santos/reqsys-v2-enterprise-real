@@ -10,6 +10,8 @@ PROFILE = 'planner_teams_notificacao_simples'
 FLOW_MANAGEMENT_BASE = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple'
 SCHEMA = 'https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#'
 PLANNER_API = '/providers/Microsoft.PowerApps/apis/shared_planner'
+TEAMS_API = '/providers/Microsoft.PowerApps/apis/shared_teams'
+TEAMS_POST_CARD_OPERATION = 'PostCardToConversation'
 
 EVENTOS = {
     'criada': {
@@ -74,23 +76,35 @@ def gerar_definicao(payload: dict[str, Any], evento: str) -> dict[str, Any]:
                 'connectionName': 'shared_planner',
             },
             'parameters': {
-                'group_id': "@parameters('PLANNER_GROUP_ID')",
+                'groupId': "@parameters('PLANNER_GROUP_ID')",
                 'id': "@parameters('PLANNER_PLAN_ID')",
             },
         },
+        # OnNewTask_V3/OnCompleteTask_V3 sao triggers "batch" (poll), nao
+        # push: exigem recurrence proprio, sem isso o flow management
+        # rejeita com TemplateValidationError. Confirmado em DEV.
+        'recurrence': {'frequency': 'Minute', 'interval': 5},
         'splitOn': "@triggerBody()?['value']",
     }
     notificar_teams = {
-        'type': 'Http',
+        'type': 'OpenApiConnection',
         'inputs': {
-            'method': 'POST',
-            'uri': "@parameters('TEAMS_WEBHOOK_URL')",
-            'headers': {'Content-Type': 'application/json'},
-            'body': {
-                'type': 'message',
-                'attachments': [
-                    {'contentType': 'application/vnd.microsoft.card.adaptive', 'content': card}
-                ],
+            'host': {
+                'apiId': TEAMS_API,
+                'operationId': TEAMS_POST_CARD_OPERATION,
+                'connectionName': 'shared_teams',
+            },
+            'parameters': {
+                # "Flow bot"/"Channel" sao seletores fixos do conector (nao
+                # ids) — confirmado via GetUnifiedActionSchema real; qualquer
+                # outro valor (ex.: um id de canal aqui) falha com HTTP 400.
+                'poster': 'Flow bot',
+                'location': 'Channel',
+                'messageBody': json.dumps(card, ensure_ascii=False),
+                'recipient': {
+                    'groupId': "@parameters('TEAMS_TEAM_ID')",
+                    'channelId': "@parameters('TEAMS_CHANNEL_ID')",
+                },
             },
         },
         'runAfter': {},
@@ -103,7 +117,8 @@ def gerar_definicao(payload: dict[str, Any], evento: str) -> dict[str, Any]:
             '$connections': {'defaultValue': {}, 'type': 'Object'},
             'PLANNER_GROUP_ID': {'defaultValue': payload['group_id'], 'type': 'String'},
             'PLANNER_PLAN_ID': {'defaultValue': payload['plan_id'], 'type': 'String'},
-            'TEAMS_WEBHOOK_URL': {'defaultValue': payload['teams_webhook_url'], 'type': 'String'},
+            'TEAMS_TEAM_ID': {'defaultValue': payload['teams_team_id'], 'type': 'String'},
+            'TEAMS_CHANNEL_ID': {'defaultValue': payload['teams_channel_id'], 'type': 'String'},
         },
         'triggers': {config['trigger_name']: trigger},
         'actions': {'Notificar_Teams': notificar_teams},
@@ -117,16 +132,18 @@ def validar_definicao(definition: dict[str, Any]) -> list[str]:
     if not definition.get('triggers'):
         errors.append('trigger_ausente')
     trigger = next(iter(definition.get('triggers', {}).values()), {})
-    host = trigger.get('inputs', {}).get('host', {})
-    if host.get('apiId') != PLANNER_API:
+    trigger_host = trigger.get('inputs', {}).get('host', {})
+    if trigger_host.get('apiId') != PLANNER_API:
         errors.append('trigger_conector_nao_permitido')
-    if host.get('operationId') not in {e['operation_id'] for e in EVENTOS.values()}:
+    if trigger_host.get('operationId') not in {e['operation_id'] for e in EVENTOS.values()}:
         errors.append('trigger_operacao_nao_permitida')
     actions = definition.get('actions', {})
     if 'Notificar_Teams' not in actions:
         errors.append('acao_notificar_teams_ausente')
-    elif actions['Notificar_Teams'].get('type') != 'Http':
-        errors.append('acao_notificar_teams_tipo_invalido')
+    else:
+        action_host = actions['Notificar_Teams'].get('inputs', {}).get('host', {})
+        if action_host.get('apiId') != TEAMS_API or action_host.get('operationId') != TEAMS_POST_CARD_OPERATION:
+            errors.append('acao_notificar_teams_conector_invalido')
     raw = json.dumps(definition, ensure_ascii=False)
     if 'UpdateTask' in raw:
         errors.append('escrita_planner_proibida')
@@ -137,8 +154,9 @@ def montar_bundle(payload: dict[str, Any]) -> dict[str, Any]:
     target = str(payload.get('target_environment') or 'dev').strip().lower()
     if target not in {'dev', 'development'}:
         raise ValueError('O perfil planner_teams_notificacao_simples está restrito a DEV neste incremento')
-    if not (payload.get('teams_webhook_url') or '').strip():
-        raise ValueError('Webhook do Teams nao configurado (TEAMS_NOTIFICATIONS_WEBHOOK_URL)')
+    for campo in ('teams_team_id', 'teams_channel_id', 'teams_connection_id'):
+        if not (payload.get(campo) or '').strip():
+            raise ValueError(f'{campo} obrigatorio (conexao Microsoft Teams autorizada no Power Automate)')
 
     correlation_id = payload.get('correlation_id') or str(uuid.uuid4())
     flows = []
@@ -166,7 +184,10 @@ def montar_bundle(payload: dict[str, Any]) -> dict[str, Any]:
             'environment_url': payload['environment_url'],
             'target_environment': 'dev',
         },
-        'connections': {'planner': payload['planner_connection_id']},
+        'connections': {
+            'planner': payload['planner_connection_id'],
+            'teams': payload['teams_connection_id'],
+        },
         'flows': flows,
     }
 
@@ -192,6 +213,11 @@ async def despachar(payload: dict[str, Any], *, user_token: str | None = None) -
     pelo cliente (o id e gerado no POST), entao a idempotencia busca por
     displayName a cada execucao e faz PATCH no id real encontrado, ou POST
     para criar quando nao existe.
+
+    A notificacao usa o conector Teams real (PostCardToConversation, "Post
+    card in a chat or channel", poster "Flow bot", location "Channel") — nao
+    um webhook generico. Confirmado em DEV: um teste real via essa mesma
+    operacao postou a mensagem no canal de verdade.
     """
     bundle = montar_bundle(payload)
     if not payload.get('confirmar'):
@@ -220,6 +246,7 @@ async def despachar(payload: dict[str, Any], *, user_token: str | None = None) -
                     'definition': flow['definition'],
                     'connectionReferences': {
                         'shared_planner': {'connectionName': bundle['connections']['planner'], 'id': PLANNER_API},
+                        'shared_teams': {'connectionName': bundle['connections']['teams'], 'id': TEAMS_API},
                     },
                     'state': 'Stopped',
                 },

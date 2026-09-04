@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.config import settings
 from app.core.envelope import ok
 from app.core.service_tokens import require_admin_or_service_token
 from app.services.copilot_memory_install_safety import validar_destino_assistente
@@ -24,15 +23,12 @@ class PlannerTeamsNotifyProvisionRequest(BaseModel):
     group_id: str = Field(..., min_length=5, max_length=120)
     plan_id: str = Field(..., min_length=5, max_length=200)
     planner_connection_id: str = Field(..., min_length=2, max_length=500)
+    teams_team_id: str = Field(..., min_length=2, max_length=120)
+    teams_channel_id: str = Field(..., min_length=2, max_length=200)
+    teams_connection_id: str = Field(..., min_length=2, max_length=500)
     target_environment: str = Field(default='dev', min_length=2, max_length=40)
     confirmar: bool = False
     correlation_id: str | None = Field(default=None, max_length=80)
-
-
-def _com_webhook(payload: PlannerTeamsNotifyProvisionRequest) -> dict:
-    data = payload.model_dump()
-    data['teams_webhook_url'] = settings.teams_notifications_webhook_url
-    return data
 
 
 @router.get('/contract')
@@ -44,7 +40,7 @@ def planner_teams_notify_contract(_auth=Depends(require_planner_teams_auth)):
             'eventos': sorted(EVENTOS),
             'writes_back_to_planner': False,
             'target_environment': 'dev',
-            'destino': 'webhook Teams ja configurado (TEAMS_NOTIFICATIONS_WEBHOOK_URL)',
+            'destino': 'canal do Teams escolhido na instalacao (conector Teams, Post as: Flow bot)',
         }
     )
 
@@ -56,7 +52,7 @@ async def planner_teams_notify_validate(
 ):
     try:
         await validar_destino_assistente(payload.environment_id, payload.environment_url)
-        data = _com_webhook(payload)
+        data = payload.model_dump()
         data['confirmar'] = False
         bundle = montar_bundle(data)
     except ValueError as exc:
@@ -75,7 +71,7 @@ async def planner_teams_notify_deploy(
     aceita credencial app-only."""
     try:
         await validar_destino_assistente(payload.environment_id, payload.environment_url)
-        result = await despachar(_com_webhook(payload), user_token=x_power_automate_token)
+        result = await despachar(payload.model_dump(), user_token=x_power_automate_token)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return ok(result, result.get('correlation_id'))

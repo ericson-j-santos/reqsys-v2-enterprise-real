@@ -4,7 +4,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.planner_teams_notify import require_planner_teams_auth
-from app.core.config import settings
 from app.core.service_tokens import ServiceAuthContext
 from app.main import app
 
@@ -18,6 +17,9 @@ def _payload(**overrides):
         'group_id': 'group-dev-001',
         'plan_id': 'plan-dev-001',
         'planner_connection_id': 'planner-connection-dev',
+        'teams_team_id': 'team-dev-001',
+        'teams_channel_id': '19:channel-dev-001@thread.tacv2',
+        'teams_connection_id': 'teams-connection-dev',
         'target_environment': 'dev',
         'confirmar': False,
     }
@@ -46,8 +48,7 @@ def test_contract_expoe_eventos_e_perfil(planner_teams_auth_override):
     assert data['writes_back_to_planner'] is False
 
 
-def test_validate_happy_path(planner_teams_auth_override, monkeypatch):
-    monkeypatch.setattr(settings, 'teams_notifications_webhook_url', 'https://tieri.webhook.office.com/webhookb2/fake')
+def test_validate_happy_path(planner_teams_auth_override):
     with patch('app.api.planner_teams_notify.validar_destino_assistente', new=AsyncMock(return_value={'id': 'env-dev'})):
         response = client.post('/v1/hub-lowcode/planner-teams-notify/validate', json=_payload())
 
@@ -67,8 +68,7 @@ def test_validate_propaga_erro_de_destino_como_409(planner_teams_auth_override):
     assert response.status_code == 409
 
 
-def test_deploy_happy_path_envia_webhook_do_backend(planner_teams_auth_override, monkeypatch):
-    monkeypatch.setattr(settings, 'teams_notifications_webhook_url', 'https://tieri.webhook.office.com/webhookb2/fake')
+def test_deploy_happy_path_repassa_teams_target_e_token(planner_teams_auth_override):
     with patch('app.api.planner_teams_notify.validar_destino_assistente', new=AsyncMock(return_value={'id': 'env-dev'})), \
          patch('app.api.planner_teams_notify.despachar', new=AsyncMock(return_value={'dispatched': True, 'correlation_id': 'cid-1'})) as despachar_mock:
         response = client.post(
@@ -80,7 +80,9 @@ def test_deploy_happy_path_envia_webhook_do_backend(planner_teams_auth_override,
     assert response.status_code == 200
     assert response.json()['data']['dispatched'] is True
     chamada_payload, chamada_kwargs = despachar_mock.call_args
-    assert chamada_payload[0]['teams_webhook_url']
+    assert chamada_payload[0]['teams_team_id'] == 'team-dev-001'
+    assert chamada_payload[0]['teams_channel_id'] == '19:channel-dev-001@thread.tacv2'
+    assert chamada_payload[0]['teams_connection_id'] == 'teams-connection-dev'
     assert chamada_kwargs['user_token'] == 'flow-token-123'
 
 
