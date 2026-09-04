@@ -34,11 +34,17 @@ def _identificador_graph_seguro(value: str, label: str) -> str:
 
     Ids de drive e de item nao sao GUIDs (`b!...`, `01ABC...`), entao o
     validador de GUID usado no resto do modulo nao serve aqui.
+
+    Exigir inicio alfanumerico nao e cosmetico: `.` esta na lista de
+    caracteres permitidos (ids reais o usam), e um id igual a `..` seria
+    normalizado pelo httpx como segmento de caminho —
+    `/v1.0/drives/../items/{id}` vira `/v1.0/items/{id}`, ou seja, outro
+    endpoint do Graph. Todo id real comeca por letra ou digito.
     """
     normalized = (value or '').strip()
     if not normalized:
         raise ValueError(f'{label} obrigatorio')
-    if not set(normalized).issubset(_CARACTERES_PERMITIDOS):
+    if not normalized[0].isalnum() or not set(normalized).issubset(_CARACTERES_PERMITIDOS):
         raise ValueError(f'{label} invalido')
     return normalized
 

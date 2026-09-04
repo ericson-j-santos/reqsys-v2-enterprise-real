@@ -166,6 +166,21 @@ def test_diagnostico_recusa_identificador_com_travessia_de_caminho(auth_override
     assert FakeGraph.calls == []
 
 
+def test_diagnostico_recusa_segmento_de_caminho_que_o_httpx_normalizaria(auth_override, monkeypatch):
+    """`..` passa por qualquer allowlist que aceite ponto, mas o httpx o resolve:
+    /v1.0/drives/../items/{id} vira /v1.0/items/{id}, outro endpoint do Graph."""
+    _preparar(monkeypatch, _template())
+
+    for identificador in ('..', '.', '.oculto'):
+        resposta = client.post(
+            f'{BASE}/excel/diagnostico', json={'excel_drive': identificador, 'excel_file': ITEM}
+        )
+        # 409 pelo validador; 422 quando o Pydantic ja barra pelo tamanho minimo.
+        assert resposta.status_code in (409, 422), identificador
+
+    assert FakeGraph.calls == []
+
+
 def test_reparo_guarda_copia_grava_no_mesmo_item_e_reverifica(auth_override, monkeypatch):
     _preparar(
         monkeypatch,
