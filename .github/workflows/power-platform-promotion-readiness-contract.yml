@@ -109,14 +109,26 @@ jobs:
           $evidenciaSimulacao = Join-Path $raiz 'simulacao.json'
           $evidencia = Join-Path $raiz 'execucao.json'
 
+          # 'pwsh -File' entrega cada argumento como string solta, entao um array em
+          # -Worktrees viraria parametro posicional. Usamos -Command (que parseia
+          # PowerShell de verdade) em processo separado, para poder inspecionar o
+          # exit code que o limpador usa para sinalizar alvo bloqueado.
+          $lista = ($alvos | ForEach-Object { "'$_'" }) -join ','
+          $base = "& '$script' -RepositorioPrincipal '$principal' -Worktrees $lista"
+          $propagarCodigo = '; exit $LASTEXITCODE'
+
           # 1) Simulacao nao pode remover nada.
-          pwsh -NoProfile -File $script -RepositorioPrincipal $principal -Worktrees $alvos -Evidencia $evidenciaSimulacao -Simular
+          pwsh -NoProfile -Command "$base -Evidencia '$evidenciaSimulacao' -Simular$propagarCodigo" | Out-Host
+          $codigoSimulacao = $LASTEXITCODE
+          if ($codigoSimulacao -ne 0) {
+            throw "Modo -Simular deveria sair com 0; recebido $codigoSimulacao."
+          }
           if (-not (Test-Path -LiteralPath $limpo)) {
             throw 'Modo -Simular removeu um worktree; deveria apenas relatar.'
           }
 
           # 2) Execucao real: remove o limpo, protege o sujo, tolera o inexistente.
-          pwsh -NoProfile -File $script -RepositorioPrincipal $principal -Worktrees $alvos -Evidencia $evidencia
+          pwsh -NoProfile -Command "$base -Evidencia '$evidencia'$propagarCodigo" | Out-Host
           $codigo = $LASTEXITCODE
           if ($codigo -ne 1) {
             throw "Esperado exit code 1 com um worktree bloqueado; recebido $codigo."
