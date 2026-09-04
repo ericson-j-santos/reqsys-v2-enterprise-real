@@ -141,6 +141,20 @@ def _app_properties_xml() -> str:
     )
 
 
+_ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
+
+
+def _escrever(archive: zipfile.ZipFile, path: str, content: str) -> None:
+    """Grava a parte com carimbo de tempo fixo.
+
+    Sem isso o mesmo pacote gera bytes diferentes a cada execucao, e o template
+    versionado do WSJF nao poderia ser comparado com o gerador em CI.
+    """
+    info = zipfile.ZipInfo(path, date_time=_ZIP_TIMESTAMP)
+    info.compress_type = zipfile.ZIP_DEFLATED
+    archive.writestr(info, content)
+
+
 def gerar_planilha_xlsx(tables: list[tuple[str, str, list[str]]] | None = None) -> bytes:
     """Gera um .xlsx minimo, valido tambem para o motor Excel do Microsoft Graph.
 
@@ -168,23 +182,23 @@ def gerar_planilha_xlsx(tables: list[tuple[str, str, list[str]]] | None = None) 
             ]
             sheets.append(f'<sheet name="{xml_escape(sheet)}" sheetId="{i}" r:id="rId{i}"/>')
             rels.append(f'<Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{i}.xml"/>')
-            archive.writestr(f'xl/worksheets/sheet{i}.xml', _sheet_xml(headers))
-            archive.writestr(
+            _escrever(archive, f'xl/worksheets/sheet{i}.xml', _sheet_xml(headers))
+            _escrever(archive,
                 f'xl/worksheets/_rels/sheet{i}.xml.rels',
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
                 '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                 f'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table{i}.xml"/>'
                 '</Relationships>',
             )
-            archive.writestr(f'xl/tables/table{i}.xml', _table_xml(i, table, headers))
-        archive.writestr(
+            _escrever(archive, f'xl/tables/table{i}.xml', _table_xml(i, table, headers))
+        _escrever(archive,
             '[Content_Types].xml',
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
             '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
             '<Default Extension="xml" ContentType="application/xml"/>' + ''.join(overrides) + '</Types>',
         )
-        archive.writestr(
+        _escrever(archive,
             '_rels/.rels',
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
@@ -193,9 +207,9 @@ def gerar_planilha_xlsx(tables: list[tuple[str, str, list[str]]] | None = None) 
             '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>'
             '</Relationships>',
         )
-        archive.writestr('docProps/core.xml', _core_properties_xml())
-        archive.writestr('docProps/app.xml', _app_properties_xml())
-        archive.writestr(
+        _escrever(archive, 'docProps/core.xml', _core_properties_xml())
+        _escrever(archive, 'docProps/app.xml', _app_properties_xml())
+        _escrever(archive,
             'xl/workbook.xml',
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
@@ -203,13 +217,13 @@ def gerar_planilha_xlsx(tables: list[tuple[str, str, list[str]]] | None = None) 
             f'<sheets>{"".join(sheets)}</sheets></workbook>',
         )
         rels.append('<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>')
-        archive.writestr(
+        _escrever(archive,
             'xl/_rels/workbook.xml.rels',
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
             + ''.join(rels) + '</Relationships>',
         )
-        archive.writestr(
+        _escrever(archive,
             'xl/styles.xml',
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'

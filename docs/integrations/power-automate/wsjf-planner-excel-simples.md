@@ -56,6 +56,12 @@ Campos locais preservados nas atualizações:
 
 A implantação exige autenticação administrativa ou token de serviço com escopo `wsjf_powerautomate:provisionar`.
 
+### Diagnóstico e reparo do WSJF.xlsx
+
+`POST /v1/hub-lowcode/wsjf/planner-excel/excel/diagnostico`
+
+`POST /v1/hub-lowcode/wsjf/planner-excel/excel/reparar`
+
 ## Provisionamento real
 
 A API de gerenciamento de fluxos do Power Automate (`api.flow.microsoft.com`)
@@ -80,6 +86,40 @@ relay via GitHub Actions/ALM/PAC CLI:
 Não usa repositório ALM externo, `GITHUB_PAT` nem solution zip/import —
 essas exigem PAC CLI + Dataverse Application User, um caminho diferente e
 mais pesado que não foi necessário aqui.
+
+## A planilha precisa ser aceita pelo motor Excel do Graph
+
+O conector Excel Online (Business) não lê o `.xlsx` como um arquivo: ele fala com
+o motor Excel do Microsoft Graph. Esse motor é mais estrito que o Excel de
+computador e recusa o pacote inteiro quando o índice ZIP não bate com o corpo do
+arquivo ou quando faltam `docProps/core.xml` e `docProps/app.xml` — o Excel local
+"recupera" e abre nos dois casos, então o problema só aparece quando o fluxo
+executa, com `unsupportedWorkbook` / `FileCorruptTryRepair`.
+
+Foi exatamente o que aconteceu no DEV: o template versionado
+`templates/wsjf/WSJF.xlsx.base64` estava corrompido e foi ele que o bootstrap
+enviou ao SharePoint.
+
+Por isso:
+
+1. `templates/wsjf/WSJF.xlsx.base64` é **gerado**, nunca editado à mão:
+   `python scripts/gerar_template_wsjf.py` (e `--check` no CI). As colunas de
+   `tbDemandas` vivem em `backend/wsjf_workbook_package.py`.
+2. `scripts/bootstrap_wsjf_m365_dev.py` valida o template com o mesmo rigor do
+   Graph e, se o `WSJF.xlsx` que já está no tenant for recusado, substitui o
+   arquivo no mesmo item — preservando o id que os fluxos referenciam — depois de
+   guardar o anterior como `WSJF.incompativel-<UTC>.xlsx` na mesma pasta.
+   Quando o pacote antigo ainda é legível, as linhas de `tbDemandas` (inclusive
+   os campos locais) são preservadas; quando não é, a planilha é recriada vazia e
+   a perda fica registrada na evidência.
+3. O instalador WSJF do ReqSys mostra o estado da planilha escolhida, oferece
+   "Regenerar WSJF.xlsx" e o `/deploy` recusa instalar sobre uma planilha
+   recusada pelo Graph. Falha de rede, permissão ou 5xx não bloqueiam a
+   instalação — só a recusa do próprio pacote.
+
+Para substituir a planilha do DEV sem passar pela tela, basta reexecutar o
+workflow `Bootstrap WSJF Microsoft 365 DEV` (`workflow_dispatch`); ele mesmo
+redispara o aceite real ao terminar.
 
 ## Segurança
 

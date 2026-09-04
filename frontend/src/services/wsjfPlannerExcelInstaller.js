@@ -52,3 +52,12 @@ export async function instalarWsjfPlannerExcel(payload) {
   const headers = token ? { 'X-Power-Automate-Token': token } : {}
   return unwrap(await api.post(`${BASE}/deploy`, { ...payload, confirmar: true }, { headers }))
 }
+
+export async function diagnosticarWorkbookWsjf({ excel_drive, excel_file }) {
+  return unwrap(await api.post(`${BASE}/excel/diagnostico`, { excel_drive, excel_file }))
+}
+
+export async function regenerarWorkbookWsjf({ excel_drive, excel_file }) {
+  // Substitui o arquivo do tenant: exige confirmação explícita no backend.
+  return unwrap(await api.post(`${BASE}/excel/reparar`, { excel_drive, excel_file, confirmar: true }))
+}

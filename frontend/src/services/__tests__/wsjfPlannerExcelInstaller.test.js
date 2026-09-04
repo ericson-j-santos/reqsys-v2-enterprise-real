@@ -3,7 +3,9 @@ import { api } from '../api'
 import { acquireFlowManagementToken } from '../../auth/msal'
 import {
   carregarContratoWsjf,
+  diagnosticarWorkbookWsjf,
   instalarWsjfPlannerExcel,
+  regenerarWorkbookWsjf,
   somenteAmbientesDev,
   somenteArquivoWsjf,
   validarWsjfPlannerExcel,
@@ -85,6 +87,34 @@ describe('wsjfPlannerExcelInstaller', () => {
       { environment_id: 'dev', confirmar: true },
       { headers: { 'X-Power-Automate-Token': 'flow-token-123' } },
     )
+  })
+
+  it('diagnostica a planilha do tenant enviando apenas drive e arquivo', async () => {
+    api.post.mockResolvedValueOnce({ data: { data: { compativel: false, precisa_reparo: true } } })
+
+    const resultado = await diagnosticarWorkbookWsjf({
+      excel_drive: 'drive-1',
+      excel_file: 'item-1',
+      excel_source: 'groups/g',
+    })
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/v1/hub-lowcode/wsjf/planner-excel/excel/diagnostico',
+      { excel_drive: 'drive-1', excel_file: 'item-1' },
+    )
+    expect(resultado.precisa_reparo).toBe(true)
+  })
+
+  it('regenera a planilha somente com confirmacao explicita', async () => {
+    api.post.mockResolvedValueOnce({ data: { data: { reparado: true } } })
+
+    const resultado = await regenerarWorkbookWsjf({ excel_drive: 'drive-1', excel_file: 'item-1' })
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/v1/hub-lowcode/wsjf/planner-excel/excel/reparar',
+      { excel_drive: 'drive-1', excel_file: 'item-1', confirmar: true },
+    )
+    expect(resultado.reparado).toBe(true)
   })
 
   it('instala sem o header quando nao ha token (backend responde com mensagem clara)', async () => {
