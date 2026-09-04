@@ -6,6 +6,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-09-04
+
+### Adicionado (Power Platform — automação do que era acionável no blueprint de ações humanas)
+
+- `config/power-platform/environments.json`: registro versionado de DEV/TEST/PROD, substituindo anotações soltas de "nome, Environment ID e URL Dataverse" por fonte única revisada em PR. Ciclo de vida `NAO_DEFINIDO → DEFINIDO → CONEXAO_AUTORIZADA → PROMOCAO_VALIDADA`, espelhando os itens 3, 4 e 5 do blueprint. DEV não replica a URL: usa `url_secret_ref: POWER_PLATFORM_ENVIRONMENT_URL`, mantendo o valor no secret. `connection_id` é identificador de recurso, não credencial — nenhum segredo é armazenado.
+- `scripts/validar_ambientes_power_platform.py` (+ `tests/test_validar_ambientes_power_platform.py`, 19 casos): bloqueia URL fora de `https://<org>.crm<N>.dynamics.com`, `environment_id`/`connection_id` não-GUID, `connection_reference_logical_name` fora do padrão Dataverse, status avançado com campo obrigatório vazio, dois ambientes lógicos apontando para o mesmo recurso (o erro clássico de apontar TEST para DEV) e `prod` validado antes de `test`. Imprime a próxima ação humana derivada do estado atual.
+- `scripts/limpar-worktrees-orfaos.ps1`: automatiza a limpeza dos 11 worktrees órfãos de forma idempotente e fail-closed — **nunca** usa `git worktree remove --force`, recusa worktree com arquivos não commitados ou commits ausentes do upstream (dizendo o que segurou), roda `prune`, reconfere a lista e grava `artifacts/governance/worktree-cleanup.json`. Não executa `checkout`, `reset` ou `stash`, respeitando o guardrail do `CLAUDE.md`.
+- `.github/workflows/power-platform-promotion-readiness-contract.yml`: valida o registro em PR e exercita o limpador contra worktrees descartáveis (limpo removido, sujo bloqueado com o arquivo pendente intacto, inexistente tolerado, branches preservados).
+- `docs/runbooks/acoes-humanas-power-platform.md`: mapa honesto das 7 ações — o que virou código e o que continua inevitavelmente manual (OAuth Teams, geração do PAT, escolha dos ambientes, segundo proprietário).
+
+### Corrigido (Promoção Teams Flow Bot e aceite da credencial #1130)
+
+- `.github/workflows/teams-flow-bot-promotion.yml`: o job não tinha `actions/checkout`, então nenhum script do repositório estava disponível em runtime. Adicionado, junto com um passo fail-closed que confere `environment_url_destino`, `connection_id_destino` e `connection_reference_logical_name` contra o registro antes de promover. Um erro de digitação no `workflow_dispatch` deixa de conseguir promover para o ambiente errado; a comparação é case-insensitive e as mensagens não ecoam o valor registrado.
+- `.github/workflows/github-workflow-permission-readiness-watch.yml`: o critério de conclusão da issue #1130 é "watcher publica evidência e **encerra** esta issue", mas o passo `Record first validated credential readiness` só comentava — o aceite ficava manual para sempre, mesmo com a credencial validada. Agora encerra a issue com `state_reason: completed`, de forma idempotente (verifica o estado antes) e sem impedir o encerramento quando o comentário já existe.
+
 ## [Unreleased] - 2026-09-03
 
 ### Adicionado (Gerador Pentaho — Pareto na cobertura de testes do fluxo de dossiê)

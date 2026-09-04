@@ -187,25 +187,46 @@ jobs:
               issue_number,
               per_page: 100,
             });
+
             if (comments.some(comment => comment.body?.includes(marker))) {
               core.info('Readiness already recorded; skipping duplicate comment.');
-              return;
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body: [
+                  marker,
+                  '## Credencial governada validada',
+                  '',
+                  '- Autenticação: `success`',
+                  '- Acesso ao repositório: `success`',
+                  '- Escrita de workflow em branch efêmera: `success`',
+                  '- Limpeza da branch efêmera: `success`',
+                  `- Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                  '- Secret exibido ou alterado: `false`',
+                  '- Promoção executada: `false`',
+                  '- production_touched: `false`',
+                ].join('\n'),
+              });
             }
-            await github.rest.issues.createComment({
+
+            // O critério de conclusão da #1130 é "watcher publica evidência e encerra
+            // esta issue". Comentar sem encerrar deixava o aceite manual para sempre.
+            const { data: issue } = await github.rest.issues.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number,
-              body: [
-                marker,
-                '## Credencial governada validada',
-                '',
-                '- Autenticação: `success`',
-                '- Acesso ao repositório: `success`',
-                '- Escrita de workflow em branch efêmera: `success`',
-                '- Limpeza da branch efêmera: `success`',
-                `- Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-                '- Secret exibido ou alterado: `false`',
-                '- Promoção executada: `false`',
-                '- production_touched: `false`',
-              ].join('\n'),
             });
+            if (issue.state === 'closed') {
+              core.info('Issue 1130 already closed; nothing to do.');
+              return;
+            }
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              state: 'closed',
+              state_reason: 'completed',
+            });
+            core.info('Issue 1130 closed after validated credential readiness.');
