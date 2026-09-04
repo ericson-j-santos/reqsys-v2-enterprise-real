@@ -76,7 +76,7 @@ def gerar_definicao(payload: dict[str, Any], evento: str) -> dict[str, Any]:
                 'connectionName': 'shared_planner',
             },
             'parameters': {
-                'group_id': "@parameters('PLANNER_GROUP_ID')",
+                'groupId': "@parameters('PLANNER_GROUP_ID')",
                 'id': "@parameters('PLANNER_PLAN_ID')",
             },
         },
