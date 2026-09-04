@@ -165,9 +165,12 @@ def reparar_workbook_wsjf(atual: bytes | None = None) -> dict[str, Any]:
     """
     avisos: list[str] = []
     if atual:
-        try:
-            from openpyxl import load_workbook
+        # Fora do try de proposito: sem openpyxl nao ha como preservar os dados,
+        # e cair calado no template vazio apagaria o arquivo do tenant. Falta da
+        # dependencia e problema de implantacao, nao arquivo corrompido.
+        from openpyxl import load_workbook
 
+        try:
             workbook = load_workbook(BytesIO(atual))
             planilha = next((aba for aba in workbook.worksheets if TABELA in aba.tables), None)
             if planilha is None:
