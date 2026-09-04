@@ -47,11 +47,11 @@
         <template v-if="!sidebarRecolhidoVisivel">
           <div class="muted mt-1 version-line" data-testid="app-version-label">
             {{ versionLabel }}
-            <v-tooltip activator="parent" location="bottom" text="Versao carregada no navegador e versao informada pela API. Ajuda a identificar cache ou publicação parcial." aria-label="Versao carregada no navegador e versao informada pela API. Ajuda a identificar cache ou publicação parcial." />
+            <v-tooltip activator="parent" location="bottom" text="Versao carregada no navegador e versao informada pela API. Ajuda a identificar cache ou publicação parcial." aria-label="Versao carregada no navegador e versao informada pela serviço. Ajuda a identificar armazenamento temporário ou publicação parcial." />
           </div>
           <v-chip v-if="hasVersionDrift" size="x-small" color="warning" variant="tonal" class="mt-1" prepend-icon="mdi-alert-outline" data-testid="app-version-drift-chip">
             Versoes divergentes
-            <v-tooltip activator="parent" location="bottom" text="O frontend e a API parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." aria-label="O frontend e a API parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." />
+            <v-tooltip activator="parent" location="bottom" text="O frontend e a API parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." aria-label="O aplicação e a serviço parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." />
           </v-chip>
           <AmbienteNavigator :environment-hint="environment" compact class="mt-2 d-inline-block" />
           <v-btn block variant="tonal" color="primary" class="theme-toggle mt-3" :prepend-icon="temaClaro ? 'mdi-weather-night' : 'mdi-white-balance-sunny'" :aria-label="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" @click="alternarTemaVisual">
