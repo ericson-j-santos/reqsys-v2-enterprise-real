@@ -8,7 +8,8 @@ import sys
 import zipfile
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.parse import urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 WORKFLOW_FILE = "ci-lead-time-analytics.yml"
 OUTPUT_HISTORY_PATH = "audit/history/ci-process-improvement-history.jsonl"
@@ -16,6 +17,19 @@ ARCHIVE_HISTORY_MEMBERS = (
     "history/ci-process-improvement-history.jsonl",
     OUTPUT_HISTORY_PATH,
 )
+
+
+class _CrossOriginSafeRedirectHandler(HTTPRedirectHandler):
+    """Remove credenciais do GitHub quando o download redirecionar para outro host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001, ANN201
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is None:
+            return None
+        if urlparse(req.full_url).netloc.lower() != urlparse(newurl).netloc.lower():
+            redirected.remove_header("Authorization")
+            redirected.remove_header("X-GitHub-Api-Version")
+        return redirected
 
 
 def _request_json(url: str, token: str) -> dict:
@@ -26,7 +40,8 @@ def _request_json(url: str, token: str) -> dict:
 
 def _request_bytes(url: str, token: str) -> bytes:
     req = Request(url, headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
-    with urlopen(req, timeout=30) as response:  # noqa: S310
+    opener = build_opener(_CrossOriginSafeRedirectHandler())
+    with opener.open(req, timeout=30) as response:  # noqa: S310
         return response.read()
 
 
