@@ -92,7 +92,7 @@
               <v-col cols="12">
                 <v-textarea v-model="createForm.recomendacao" label="Texto da recomendação" rows="4">
                   <template #append-inner>
-                    <v-tooltip text="Gerar com IA" location="top">
+                    <v-tooltip text="Gerar com IA" location="top" aria-label="Gerar com IA">
                       <template #activator="{ props }">
                         <v-btn
                           v-bind="props"

@@ -10,7 +10,7 @@
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <v-tooltip text="Verificar status de cada relatório no SSRS" location="top">
+        <v-tooltip text="Verificar situação de cada relatório no SSRS" location="top" aria-label="Verificar situação de cada relatório no SSRS">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -23,7 +23,7 @@
             >Verificar</v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Recarregar catálogo" location="top">
+        <v-tooltip text="Recarregar catálogo" location="top" aria-label="Recarregar catálogo">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -164,7 +164,7 @@
                   </td>
                   <td class="text-right">
                     <div style="display:flex;justify-content:flex-end;gap:4px">
-                      <v-tooltip text="Visualizar no painel" location="top">
+                      <v-tooltip text="Visualizar no painel" location="top" aria-label="Visualizar no painel">
                         <template #activator="{ props }">
                           <v-btn
                             v-bind="props"
@@ -176,7 +176,7 @@
                           />
                         </template>
                       </v-tooltip>
-                      <v-tooltip text="Abrir em nova guia" location="top">
+                      <v-tooltip text="Abrir em nova guia" location="top" aria-label="Abrir em nova guia">
                         <template #activator="{ props }">
                           <v-btn
                             v-bind="props"
@@ -187,7 +187,7 @@
                           />
                         </template>
                       </v-tooltip>
-                      <v-tooltip text="Baixar PDF" location="top">
+                      <v-tooltip text="Baixar PDF" location="top" aria-label="Baixar PDF">
                         <template #activator="{ props }">
                           <v-btn
                             v-bind="props"

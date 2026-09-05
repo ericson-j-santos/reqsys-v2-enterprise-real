@@ -28,7 +28,7 @@
     </div>
     <div class="page-header__actions">
       <slot name="actions" />
-      <v-tooltip v-if="chip" :text="chipTooltip || chip" location="top">
+      <v-tooltip v-if="chip" :text="chipTooltip || chip" location="top" :aria-label="chipTooltip || chip">
         <template #activator="{ props }">
           <v-chip v-bind="props" size="small" :color="chipColor" variant="tonal">
             {{ chip }}

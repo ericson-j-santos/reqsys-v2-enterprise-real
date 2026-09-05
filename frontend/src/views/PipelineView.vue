@@ -20,12 +20,12 @@
       <h1>◈ Fluxo de Requisitos</h1>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;row-gap:6px">
         <v-btn-toggle v-model="nivelFiltro" mandatory density="compact" variant="outlined" color="amber">
-          <v-tooltip text="Visão detalhada por step individual" location="top">
+          <v-tooltip text="Visão detalhada por step individual" location="top" aria-label="Visão detalhada por step individual">
             <template #activator="{ props }">
               <v-btn v-bind="props" value="micro" size="small">Micro</v-btn>
             </template>
           </v-tooltip>
-          <v-tooltip text="Visão agrupada por categoria de log" location="top">
+          <v-tooltip text="Visão agrupada por categoria de log" location="top" aria-label="Visão agrupada por categoria de log">
             <template #activator="{ props }">
               <v-btn v-bind="props" value="macro" size="small">Macro</v-btn>
             </template>
@@ -47,14 +47,14 @@
           prepend-icon="mdi-identifier"
           @click="copiarCorrelation"
         >{{ correlatioId.slice(0, 12) }}…</v-btn>
-        <v-tooltip v-if="statusOrigemDemanda" text="Status recebido da tela Ver Demanda e aplicado no snapshot inicial dos steps" location="top">
+        <v-tooltip v-if="statusOrigemDemanda" text="Status recebido da tela Ver Demanda e aplicado no snapshot inicial dos steps" location="top" aria-label="Status recebido da tela Ver Demanda e aplicado no snapshot inicial dos steps">
           <template #activator="{ props }">
             <v-chip v-bind="props" size="small" :color="statusOrigemColor(statusOrigemDemanda)" variant="flat" prepend-icon="mdi-source-branch">
               Origem: {{ statusOrigemLabel(statusOrigemDemanda) }}
             </v-chip>
           </template>
         </v-tooltip>
-        <v-tooltip v-if="statusOrigemDemanda" text="Remove o contexto importado e volta os steps para estado neutro" location="top">
+        <v-tooltip v-if="statusOrigemDemanda" text="Remove o contexto importado e volta os steps para estado neutro" location="top" aria-label="Remove o contexto importado e volta os steps para estado neutro">
           <template #activator="{ props }">
             <v-btn v-bind="props" size="small" variant="text" prepend-icon="mdi-close-circle-outline" @click="limparContextoOrigem">
               Limpar contexto
@@ -74,7 +74,7 @@
           <v-icon size="15" color="amber">mdi-timeline-check-outline</v-icon>
           Snapshot inicial aplicado a partir do status {{ statusOrigemLabel(statusOrigemDemanda) }}
         </div>
-        <v-tooltip text="Ao clicar em Executar Fluxo, o fluxo roda normalmente e recalcula os steps em tempo real" location="top">
+        <v-tooltip text="Ao clicar em Executar Fluxo, o fluxo roda normalmente e recalcula os steps em tempo real" location="top" aria-label="Ao clicar em Executar Fluxo, o fluxo roda normalmente e recalcula os steps em tempo real">
           <template #activator="{ props }">
             <v-chip v-bind="props" size="x-small" color="amber" variant="outlined">Snapshot ativo</v-chip>
           </template>
@@ -86,7 +86,7 @@
           Legenda de status da demanda (clique para simular)
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <v-tooltip text="Entrada inicial da demanda" location="top">
+          <v-tooltip text="Entrada inicial da demanda" location="top" aria-label="Entrada inicial da demanda">
             <template #activator="{ props }">
               <v-chip
                 v-bind="props"
@@ -97,7 +97,7 @@
               >Recebido</v-chip>
             </template>
           </v-tooltip>
-          <v-tooltip text="Demanda em análise funcional/técnica" location="top">
+          <v-tooltip text="Demanda em análise funcional/técnica" location="top" aria-label="Demanda em análise funcional/técnica">
             <template #activator="{ props }">
               <v-chip
                 v-bind="props"
@@ -108,7 +108,7 @@
               >Em análise</v-chip>
             </template>
           </v-tooltip>
-          <v-tooltip text="Aprovada para seguir no fluxo" location="top">
+          <v-tooltip text="Aprovada para seguir no fluxo" location="top" aria-label="Aprovada para seguir no fluxo">
             <template #activator="{ props }">
               <v-chip
                 v-bind="props"
@@ -119,7 +119,7 @@
               >Aprovado</v-chip>
             </template>
           </v-tooltip>
-          <v-tooltip text="Interrompida por reprovação ou inconsistência" location="top">
+          <v-tooltip text="Interrompida por reprovação ou inconsistência" location="top" aria-label="Interrompida por reprovação ou inconsistência">
             <template #activator="{ props }">
               <v-chip
                 v-bind="props"
@@ -130,7 +130,7 @@
               >Rejeitado</v-chip>
             </template>
           </v-tooltip>
-          <v-tooltip text="Publicada no destino final (ex.: Redmine)" location="top">
+          <v-tooltip text="Publicada no destino final (ex.: Redmine)" location="top" aria-label="Publicada no destino final (ex.: Redmine)">
             <template #activator="{ props }">
               <v-chip
                 v-bind="props"
@@ -172,7 +172,7 @@
         <v-card style="background:var(--card)!important;border:1px solid var(--border)!important">
           <v-card-title class="py-3 px-4" style="font-size:var(--font-size-lg);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             Solicitação de Requisito
-            <v-tooltip text="Preencha todos os campos obrigatórios (*) e clique em Executar Fluxo" location="top">
+            <v-tooltip text="Preencha todos os campos obrigatórios (*) e clique em Executar Fluxo" location="top" aria-label="Preencha todos os campos obrigatórios (*) e clique em Executar Fluxo">
               <template #activator="{ props }">
                 <v-icon v-bind="props" size="18" color="grey">mdi-information-outline</v-icon>
               </template>
@@ -207,7 +207,7 @@
                 </div>
               </v-alert>
 
-              <v-tooltip text="Canal de entrada da demanda (e-mail, reunião, sistema externo etc.)" location="top">
+              <v-tooltip text="Canal de entrada da demanda (e-mail, reunião, sistema externo etc.)" location="top" aria-label="Canal de entrada da demanda (e-mail, reunião, sistema externo etc.)">
                 <template #activator="{ props }">
                   <div v-bind="props">
                     <v-select
@@ -226,7 +226,7 @@
                 </template>
               </v-tooltip>
 
-              <v-tooltip text="Descreva o objetivo da demanda em até 120 caracteres" location="top">
+              <v-tooltip text="Descreva o objetivo da demanda em até 120 caracteres" location="top" aria-label="Descreva o objetivo da demanda em até 120 caracteres">
                 <template #activator="{ props }">
                   <div v-bind="props">
                     <v-text-field
@@ -249,7 +249,7 @@
                 </template>
               </v-tooltip>
 
-              <v-tooltip text="Prioridade: crítica (bloqueador), alta (impacto relevante), média, baixa" location="top">
+              <v-tooltip text="Prioridade: crítica (bloqueador), alta (impacto relevante), média, baixa" location="top" aria-label="Prioridade: crítica (bloqueador), alta (impacto relevante), média, baixa">
                 <template #activator="{ props }">
                   <div v-bind="props">
                     <v-select
@@ -268,7 +268,7 @@
                 </template>
               </v-tooltip>
 
-              <v-tooltip text="Descreva o contexto, objetivo e impacto da demanda (20–2000 chars)" location="top">
+              <v-tooltip text="Descreva o contexto, objetivo e impacto da demanda (20–2000 chars)" location="top" aria-label="Descreva o contexto, objetivo e impacto da demanda (20–2000 chars)">
                 <template #activator="{ props }">
                   <div v-bind="props">
                     <v-textarea
@@ -532,7 +532,7 @@
             </v-chip>
             <v-spacer />
             <div v-if="resultado" style="display:flex;gap:4px;flex-wrap:wrap">
-              <v-tooltip v-for="cat in logCategorias" :key="cat.value" :text="cat.hint" location="top">
+              <v-tooltip v-for="cat in logCategorias" :key="cat.value" :text="cat.hint" location="top" :aria-label="cat.hint">
                 <template #activator="{ props }">
                   <v-chip
                     v-bind="props"
