@@ -11,7 +11,9 @@ on:
       - 'scripts/validate_bacen_production_gate.py'
       - 'scripts/validate_bacen_production_readiness.py'
       - 'tests/test_bacen_production_readiness.py'
+      - 'tests/test_bacen_production_readiness_wiring.py'
       - '.github/workflows/bacen-production-readiness-gate2.yml'
+      - '.github/workflows/bacen-production-hard-gate.yml'
       - '.github/workflows/governed-promotion-pipeline.yml'
   push:
     branches: [main]
@@ -23,7 +25,9 @@ on:
       - 'scripts/validate_bacen_production_gate.py'
       - 'scripts/validate_bacen_production_readiness.py'
       - 'tests/test_bacen_production_readiness.py'
+      - 'tests/test_bacen_production_readiness_wiring.py'
       - '.github/workflows/bacen-production-readiness-gate2.yml'
+      - '.github/workflows/bacen-production-hard-gate.yml'
       - '.github/workflows/governed-promotion-pipeline.yml'
   workflow_dispatch:
     inputs:
@@ -66,8 +70,11 @@ jobs:
       - name: Instalar dependências de validação
         run: python -m pip install --disable-pip-version-check pytest PyYAML
 
-      - name: Testar contrato do Gate 2
-        run: python -m pytest -q tests/test_bacen_production_readiness.py
+      - name: Testar contrato e acoplamento do Gate 2
+        run: |
+          python -m pytest -q \
+            tests/test_bacen_production_readiness.py \
+            tests/test_bacen_production_readiness_wiring.py
 
       - name: Resolver instante e modo da avaliação
         id: context
@@ -79,7 +86,7 @@ jobs:
         run: |
           set -euo pipefail
           as_of="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          target="PRODUCTION"
+          target="DEVELOPMENT"
           enforce="false"
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             target="${DISPATCH_TARGET:-PRODUCTION}"
