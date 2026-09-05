@@ -1,0 +1,158 @@
+name: BACEN Production Readiness Gate 2
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'governance/bacen/normative/**'
+      - 'governance/bacen/BACEN-CONTROL-MATRIX.yaml'
+      - 'governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml'
+      - 'governance/merge/current-sha-required-workflows.json'
+      - 'scripts/bacen_derived_status.py'
+      - 'scripts/validate_bacen_production_gate.py'
+      - 'scripts/validate_bacen_production_readiness.py'
+      - 'tests/test_bacen_production_readiness.py'
+      - 'tests/test_bacen_production_readiness_wiring.py'
+      - '.github/workflows/bacen-production-readiness-gate2.yml'
+      - '.github/workflows/bacen-production-hard-gate.yml'
+      - '.github/workflows/governed-promotion-pipeline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'governance/bacen/normative/**'
+      - 'governance/bacen/BACEN-CONTROL-MATRIX.yaml'
+      - 'governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml'
+      - 'governance/merge/current-sha-required-workflows.json'
+      - 'scripts/bacen_derived_status.py'
+      - 'scripts/validate_bacen_production_gate.py'
+      - 'scripts/validate_bacen_production_readiness.py'
+      - 'tests/test_bacen_production_readiness.py'
+      - 'tests/test_bacen_production_readiness_wiring.py'
+      - '.github/workflows/bacen-production-readiness-gate2.yml'
+      - '.github/workflows/bacen-production-hard-gate.yml'
+      - '.github/workflows/governed-promotion-pipeline.yml'
+  workflow_dispatch:
+    inputs:
+      target_stage:
+        description: 'Estágio alvo da avaliação'
+        required: true
+        default: 'PRODUCTION'
+        type: choice
+        options:
+          - DEVELOPMENT
+          - STAGING
+          - PRODUCTION
+      enforce:
+        description: 'Aplicar bloqueio quando o alvo for PRODUCTION'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-production-readiness-gate2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  production-readiness:
+    name: BACEN — Gate 2 de prontidão para promoção
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependências de validação
+        run: python -m pip install --disable-pip-version-check pytest PyYAML
+
+      - name: Testar contrato e acoplamento do Gate 2
+        run: |
+          python -m pytest -q \
+            tests/test_bacen_production_readiness.py \
+            tests/test_bacen_production_readiness_wiring.py
+
+      - name: Resolver instante e modo da avaliação
+        id: context
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_TARGET: ${{ inputs.target_stage }}
+          DISPATCH_ENFORCE: ${{ inputs.enforce }}
+        run: |
+          set -euo pipefail
+          as_of="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          target="DEVELOPMENT"
+          enforce="false"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            target="${DISPATCH_TARGET:-PRODUCTION}"
+            enforce="${DISPATCH_ENFORCE:-false}"
+          fi
+          echo "as_of=$as_of" >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "enforce=$enforce" >> "$GITHUB_OUTPUT"
+
+      - name: Avaliar prontidão normativa e institucional
+        shell: bash
+        env:
+          AS_OF: ${{ steps.context.outputs.as_of }}
+          TARGET: ${{ steps.context.outputs.target }}
+          ENFORCE: ${{ steps.context.outputs.enforce }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/bacen-production-readiness
+          args=(
+            --baseline-v2 governance/bacen/normative/NORMATIVE-BASELINE-V2.yaml
+            --base-obligations governance/bacen/normative/NORMATIVE-BASELINE.yaml
+            --extended-obligations governance/bacen/normative/NORMATIVE-OBLIGATIONS-EXTENDED.yaml
+            --evidence-registry governance/bacen/normative/EVIDENCE-REGISTRY.yaml
+            --policy governance/bacen/normative/PRODUCTION-READINESS-POLICY.yaml
+            --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml
+            --reconciliation governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml
+            --target-stage "$TARGET"
+            --as-of "$AS_OF"
+            --output artifacts/bacen-production-readiness/gate2.json
+          )
+          if [[ "$ENFORCE" == "true" ]]; then
+            args+=(--enforce)
+          fi
+          python scripts/validate_bacen_production_readiness.py "${args[@]}"
+
+      - name: Publicar resumo
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          path = Path('artifacts/bacen-production-readiness/gate2.json')
+          print('## BACEN Production Readiness Gate 2')
+          if not path.exists():
+              print('- Relatório não foi gerado.')
+              raise SystemExit(0)
+          report = json.loads(path.read_text(encoding='utf-8'))
+          print(f"- Alvo: **{report['target_stage']}**")
+          print(f"- as_of: **{report['as_of']}**")
+          print(f"- Decisão do fluxo atual: **{report['decision']}**")
+          print(f"- Prontidão para produção: **{report['production_readiness']}**")
+          print(f"- Bloquearia produção: **{report['would_block_production']}**")
+          print(f"- Obrigações modeladas: **{report['obligations_total']}**")
+          print(f"- Decisão de aplicabilidade: **{report['family_applicability_decision']}**")
+          print(f"- Bloqueios: **{report['blocker_count']}**")
+          print('- Dívida institucional bloqueia main: **false**')
+          PY
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-production-readiness-gate2
+          path: artifacts/bacen-production-readiness/
+          if-no-files-found: warn
+          retention-days: 90

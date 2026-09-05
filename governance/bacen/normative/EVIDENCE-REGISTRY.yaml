@@ -1,0 +1,12 @@
+schema_version: 1.0.0
+mode: advisory
+registry: bacen_normative_evidence
+
+applicability_decisions: []
+evidences: []
+
+notes:
+  - O registro inicia vazio e não promove nenhuma obrigação automaticamente.
+  - Decisões de não aplicabilidade devem informar norm_uid, decided_by, decided_at e rationale.
+  - Evidências devem seguir governance/bacen/normative/EVIDENCE-MODEL.yaml.
+  - A ausência de evidência nunca é convertida em conformidade.
