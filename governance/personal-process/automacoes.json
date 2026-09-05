@@ -1,14 +1,38 @@
 [
   {
-    "id":"AUT-0001",
-    "tarefa":"Revisao diaria do Controle Mestre",
-    "area":"Processos",
-    "frequencia":5,
-    "tempo_manual_min":20,
-    "impacto":5,
-    "esforco_automacao":1,
-    "status":"Em execucao",
-    "proxima_acao":"Executar diariamente e registrar artefatos de governanca, Pareto e proximo incremento.",
-    "evidencia":"Workflow Personal Process Control Daily"
+    "id": "AUT-0001",
+    "tarefa": "Revisao diaria do Controle Mestre",
+    "area": "Processos",
+    "frequencia": 5,
+    "tempo_manual_min": 20,
+    "impacto": 5,
+    "esforco_automacao": 1,
+    "status": "Em execucao",
+    "proxima_acao": "Executar diariamente e registrar artefatos de governanca, Pareto, historico e proximo incremento.",
+    "evidencia": "Workflow Personal Process Control Daily"
+  },
+  {
+    "id": "AUT-0002",
+    "tarefa": "Sincronizacao Planner Excel Teams",
+    "area": "Power Platform",
+    "frequencia": 5,
+    "tempo_manual_min": 30,
+    "impacto": 5,
+    "esforco_automacao": 3,
+    "status": "Bloqueado",
+    "proxima_acao": "Concluir correcao XLSX e revalidar o fluxo ponta a ponta.",
+    "evidencia": "Backlog WSJF 2026-09-04"
+  },
+  {
+    "id": "AUT-0003",
+    "tarefa": "Resumo semanal OCR Evidencia",
+    "area": "OCR / Dados",
+    "frequencia": 1,
+    "tempo_manual_min": 30,
+    "impacto": 4,
+    "esforco_automacao": 1,
+    "status": "Em execucao",
+    "proxima_acao": "Consolidar estado evidenciado, lacunas e proxima acao com base em artefatos reais.",
+    "evidencia": "Automacao Status OCR Evidencia"
   }
 ]
