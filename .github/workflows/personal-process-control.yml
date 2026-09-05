@@ -1,6 +1,14 @@
 name: Personal Process Control Daily
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/personal_process_control.py"
+      - "tests/test_personal_process_control.py"
+      - "governance/personal-process/**"
+      - ".github/workflows/personal-process-control.yml"
   pull_request:
     paths:
       - "scripts/personal_process_control.py"
