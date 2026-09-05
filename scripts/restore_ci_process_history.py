@@ -20,7 +20,7 @@ ARCHIVE_HISTORY_MEMBERS = (
 
 
 class _CrossOriginSafeRedirectHandler(HTTPRedirectHandler):
-    """Remove credenciais do GitHub quando o download redirecionar para outro host."""
+    """Remove a credencial do GitHub quando o download redirecionar para outro host."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001, ANN201
         redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
@@ -28,7 +28,6 @@ class _CrossOriginSafeRedirectHandler(HTTPRedirectHandler):
             return None
         if urlparse(req.full_url).netloc.lower() != urlparse(newurl).netloc.lower():
             redirected.remove_header("Authorization")
-            redirected.remove_header("X-GitHub-Api-Version")
         return redirected
 
 
