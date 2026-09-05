@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Medir melhoria de processo no CI/CD do ReqSys com evidência periódica, separando velocidade, qualidade, previsibilidade, fila, capacidade e concentração de falhas.
+Medir melhoria de processo no CI/CD do ReqSys com evidência periódica, separando velocidade, qualidade, previsibilidade, fila, capacidade, concentração de falhas e comparabilidade das amostras.
 
 O mecanismo continua `report-only`: não substitui nem relaxa gates obrigatórios.
 
@@ -20,6 +20,7 @@ O workflow `CI Lead Time Analytics` coleta as execuções recentes do GitHub Act
 - throughput por hora e por dia na janela observada;
 - comparação entre metade mais recente e metade anterior da janela;
 - comparação da janela atual com o baseline congelado de 2026-09-02;
+- avaliação estrutural de comparabilidade entre a amostra atual e o baseline;
 - Pareto de falhas por workflow;
 - gargalos por P95;
 - baseline histórico do incidente de 143 minutos.
@@ -28,8 +29,9 @@ O workflow `CI Lead Time Analytics` coleta as execuções recentes do GitHub Act
 
 - `audit/ci-lead-time-analytics.json`
 - `audit/ci-lead-time-analytics.md`
+- `audit/history/ci-process-improvement-history.jsonl`
 
-A partir do contrato `1.0.3`, o JSON recebe `baseline_comparison` antes do upload.
+A partir do contrato `1.0.3`, o JSON recebe `baseline_comparison` antes do upload. O campo aditivo `window_comparability` é incluído sem alterar a versão do contrato e é permitido pelo contrato atual (`additionalProperties=true`).
 
 ## Dimensões de melhoria
 
@@ -44,6 +46,7 @@ A partir do contrato `1.0.3`, o JSON recebe `baseline_comparison` antes do uploa
 | Priorização | failure Pareto | Poucos workflows que concentram falhas |
 | Evolução interna | trend comparison | Delta entre janela recente e anterior |
 | Evolução histórica | baseline comparison | Delta da janela atual contra a referência congelada |
+| Comparabilidade | window comparability | Se o delta histórico foi observado em amostras estruturalmente semelhantes |
 
 ## Comparação com baseline congelado
 
@@ -51,19 +54,27 @@ Referência imutável:
 
 `audit/baselines/ci-process-improvement-baseline-2026-09-02.json`
 
-A cada execução, `scripts/compare_ci_process_baseline.py` compara a janela atual com essa referência em três grupos:
+A cada execução, `scripts/compare_ci_process_baseline.py` compara a janela atual com essa referência em três grupos: qualidade, velocidade e variabilidade.
 
-| Grupo | Deltas |
-|---|---|
-| Qualidade | success rate, failure rate, first-pass success, rerun rate |
-| Velocidade | média, P50, P95, P95 de fila |
-| Variabilidade | desvio-padrão e coeficiente de variação |
+Cada métrica recebe um sinal `improved`, `stable` ou `regressed`. O conjunto recebe `overall_signal` (`improved`, `stable`, `regressed` ou `mixed`). Esses sinais são descritivos. `baseline_comparison.creates_gate` permanece `false` e `mode` permanece `report-only`.
 
-Cada métrica recebe um sinal `improved`, `stable` ou `regressed`. O conjunto recebe `overall_signal` (`improved`, `stable`, `regressed` ou `mixed`).
+## Comparabilidade estrutural da janela
 
-Esses sinais são descritivos. `baseline_comparison.creates_gate` permanece `false` e `mode` permanece `report-only`.
+`scripts/annotate_ci_window_comparability.py` é executado depois da comparação com o baseline e antes da persistência histórica.
 
-Se o baseline não puder ser carregado, o artifact continua sendo publicado com `baseline_comparison.available=false`; ausência de comparação não derruba a geração da evidência. Alterar o baseline para `frozen=false` ou mudar sua identidade histórica é coberto por teste de regressão.
+A avaliação usa somente propriedades observáveis já existentes nas duas amostras:
+
+- mesmo `window_runs` solicitado;
+- razão entre `completed_runs` atual e baseline entre `0.80` e `1.25`;
+- razão entre `window_span_hours` atual e baseline entre `0.80` e `1.25`.
+
+Se qualquer condição falhar, `window_comparability.comparable_to_baseline=false` e `reason_codes` registra a causa. O resultado continua sendo publicado e não derruba a CI.
+
+Essa regra representa **comparabilidade estrutural da amostra**. Ela não representa significância estatística, intervalo de confiança nem prova causal. O modo é `descriptive-only` e `creates_gate=false`.
+
+O baseline congelado não é alterado. Seus dados históricos de amostra (`window_runs`, `completed_runs`, `window_span_hours`) são apenas lidos.
+
+A informação de comparabilidade também é persistida em `audit/history/ci-process-improvement-history.jsonl`, cujo registro passa a `schema_version=1.0.1`. Registros antigos continuam válidos e são preservados sem migração destrutiva.
 
 ## Política operacional
 
@@ -75,7 +86,7 @@ Ele não substitui nem relaxa:
 - `Governance Quality Gates`;
 - `Governança Padrão Ouro`.
 
-Nenhum novo KPI deve ser usado isoladamente como prova causal. Correlação e tendência indicam onde investigar; causa raiz continua exigindo evidência técnica.
+Nenhum KPI deve ser usado isoladamente como prova causal. Correlação e tendência indicam onde investigar; causa raiz continua exigindo evidência técnica.
 
 ## Regras de interpretação
 
@@ -85,8 +96,10 @@ Nenhum novo KPI deve ser usado isoladamente como prova causal. Correlação e te
 - `p95_queue_seconds` alto com execução estável indica gargalo de capacidade/fila, não necessariamente no workflow.
 - Pareto deve orientar a primeira investigação, não eliminar análise de severidade.
 - Throughput só deve ser comparado entre janelas de tamanho e comportamento semelhantes.
+- `overall_signal` deve ser interpretado junto com `window_comparability`.
+- `comparable_to_baseline=false` não invalida a medição; apenas impede tratá-la como comparação equivalente.
 - A comparação de tendência usa duas metades cronológicas da mesma janela.
-- A comparação histórica sempre usa o mesmo baseline congelado; o relógio e a referência não variam entre execuções.
+- A comparação histórica sempre usa o mesmo baseline congelado; a referência não varia entre execuções.
 
 ## Critérios iniciais
 
@@ -99,7 +112,7 @@ Nenhum novo KPI deve ser usado isoladamente como prova causal. Correlação e te
 | Max lead time recorrente | < 60 minutos |
 | Evidência publicada | 100% das execuções agendadas |
 
-CV, fila, rerun rate e throughput continuam como baseline observacional. Os deltas contra o baseline também não criam limite de gate.
+CV, fila, rerun rate, throughput, deltas e comparabilidade continuam observacionais. Nenhum deles cria limite de gate neste incremento.
 
 ## Validação
 
@@ -108,10 +121,14 @@ O workflow executa antes da coleta:
 ```bash
 python tests/scripts/test_build_ci_process_improvement_analytics.py
 python tests/scripts/test_compare_ci_process_baseline.py
+python tests/scripts/test_annotate_ci_window_comparability.py
+python tests/scripts/test_update_ci_process_history.py
+python tests/scripts/test_restore_ci_process_history.py
+python tests/scripts/test_enrich_command_center_ci_history.py
 ```
 
-A primeira suíte cobre percentis, primeira passagem, reexecução, variabilidade, fila, throughput, tendência e Pareto. A segunda cobre agrupamento dos deltas, modo `report-only`, ausência segura de baseline, rejeição de baseline mutável, idempotência e identidade da referência congelada.
+A suíte de comparabilidade cobre janela equivalente, diferença de tamanho efetivo, diferença de duração, metadados insuficientes, idempotência e preservação do contrato `1.0.3`.
 
 ## Próximo incremento
 
-Persistir uma série histórica dos `baseline_comparison.delta` e apresentá-la no Command Center para observar tendência por período sem promover qualquer delta a gate até existir amostra temporal suficiente e critério estatístico formal.
+Após acumular medições com `window_comparability.comparable_to_baseline=true`, evoluir a sustentabilidade para considerar somente observações comparáveis e, apenas com amostra temporal suficiente, avaliar um critério estatístico formal. Nenhuma promoção automática a gate deve ocorrer antes dessa etapa.
