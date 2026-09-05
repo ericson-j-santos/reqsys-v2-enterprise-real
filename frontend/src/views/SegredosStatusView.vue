@@ -8,7 +8,7 @@
       chip-tooltip="Indica a origem predominante dos segredos configurados"
     >
       <template #actions>
-        <v-tooltip text="Grava um segredo criptografado no cofre local" location="top">
+        <v-tooltip text="Grava um segredo criptografado no cofre local" location="top" aria-label="Grava um segredo criptografado no cofre local">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -23,7 +23,7 @@
             </v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Cria a master key do cofre (uma vez por ambiente)" location="top">
+        <v-tooltip text="Cria a master key do cofre (uma vez por ambiente)" location="top" aria-label="Cria a master key do cofre (uma vez por ambiente)">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -39,7 +39,7 @@
             </v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Recarrega o diagnóstico de segredos do backend" location="top">
+        <v-tooltip text="Recarrega o diagnóstico de segredos do backend" location="top" aria-label="Recarrega o diagnóstico de segredos do backend">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -149,7 +149,7 @@
                   />
                 </td>
                 <td>
-                  <v-tooltip :text="segredo.resolved ? 'Valor disponível' : 'Não configurado'" location="top">
+                  <v-tooltip :text="segredo.resolved ? 'Valor disponível' : 'Não configurado'" location="top" :aria-label="segredo.resolved ? 'Valor disponível' : 'Não configurado'">
                     <template #activator="{ props }">
                       <v-icon
                         v-bind="props"
@@ -170,7 +170,7 @@
                 </td>
                 <td class="actions-col">
                   <div class="row-actions">
-                    <v-tooltip text="Gravar no cofre" location="top">
+                    <v-tooltip text="Gravar no cofre" location="top" aria-label="Gravar no cofre">
                       <template #activator="{ props }">
                         <v-btn
                           v-bind="props"
@@ -183,7 +183,7 @@
                         />
                       </template>
                     </v-tooltip>
-                    <v-tooltip v-if="segredo.source === 'vault'" text="Remover do cofre" location="top">
+                    <v-tooltip v-if="segredo.source === 'vault'" text="Remover do cofre" location="top" aria-label="Remover do cofre">
                       <template #activator="{ props }">
                         <v-btn
                           v-bind="props"

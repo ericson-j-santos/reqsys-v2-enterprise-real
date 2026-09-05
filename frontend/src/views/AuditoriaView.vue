@@ -20,7 +20,7 @@
       <v-card-title class="py-3 px-4 d-flex align-center ga-2">
         Eventos recentes
         <v-chip v-if="totalEventos" size="small" variant="tonal" color="amber">{{ totalEventos }} registros</v-chip>
-        <v-tooltip text="Clique nos chips para inspecionar rapidamente o tipo de registro" location="top">
+        <v-tooltip text="Clique nos chips para inspecionar rapidamente o tipo de registro" location="top" aria-label="Clique nos chips para inspecionar rapidamente o tipo de registro">
           <template #activator="{ props }">
             <v-icon v-bind="props" size="18" color="grey">mdi-information-outline</v-icon>
           </template>
@@ -34,7 +34,7 @@
             <div class="event-row">
               <strong>{{ e.acao }}</strong>
               <v-chip v-if="e.entidade" size="x-small" variant="tonal">{{ e.entidade }}</v-chip>
-              <v-tooltip text="Identificador de correlação do evento" location="top">
+              <v-tooltip text="Identificador de correlação do evento" location="top" aria-label="Identificador de correlação do evento">
                 <template #activator="{ props }">
                   <v-chip v-bind="props" size="x-small" variant="outlined">{{ e.correlation_id }}</v-chip>
                 </template>

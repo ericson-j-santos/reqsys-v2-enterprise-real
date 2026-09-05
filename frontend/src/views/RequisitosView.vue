@@ -8,14 +8,14 @@
         </p>
       </div>
       <div class="header-actions">
-        <v-tooltip text="Recarrega a listagem atual de requisitos" location="top">
+        <v-tooltip text="Recarrega a listagem atual de requisitos" location="top" aria-label="Recarrega a listagem atual de requisitos">
           <template #activator="{ props }">
             <v-btn v-bind="props" variant="outlined" prepend-icon="mdi-refresh" :loading="store.carregando" @click="carregar">
               Atualizar
             </v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Abre o formulário para registrar uma nova solicitação" location="top">
+        <v-tooltip text="Abre o formulário para registrar uma nova solicitação" location="top" aria-label="Abre o formulário para registrar uma nova solicitação">
           <template #activator="{ props }">
             <v-btn v-bind="props" color="amber" prepend-icon="mdi-plus" @click="dialog = true">
               Novo requisito
@@ -117,7 +117,7 @@
       @click:row="abrirDetalhe"
     >
       <template v-slot:[`item.status`]="{ item }">
-        <v-tooltip text="Situação atual do requisito no fluxo operacional" location="top">
+        <v-tooltip text="Situação atual do requisito no fluxo operacional" location="top" aria-label="Situação atual do requisito no fluxo operacional">
           <template #activator="{ props }">
             <v-chip v-bind="props" size="small" :color="corStatus(item.status)">{{ item.status }}</v-chip>
           </template>
@@ -161,7 +161,7 @@
         <v-card-text>
           <v-row>
             <v-col cols="12" md="6">
-              <v-tooltip text="Resumo curto e objetivo do requisito" location="top">
+              <v-tooltip text="Resumo curto e objetivo do requisito" location="top" aria-label="Resumo curto e objetivo do requisito">
                 <template #activator="{ props }">
                   <div v-bind="props">
                     <v-text-field v-model="form.titulo" label="Título" variant="outlined" />
@@ -170,7 +170,7 @@
               </v-tooltip>
             </v-col>
             <v-col cols="12" md="6">
-              <v-tooltip text="Prioridade usada na triagem e ordenação do backlog" location="top">
+              <v-tooltip text="Prioridade usada na triagem e ordenação do backlog" location="top" aria-label="Prioridade usada na triagem e ordenação do backlog">
                 <template #activator="{ props }">
                   <div v-bind="props">
                     <v-select v-model="form.urgencia" label="Urgência" variant="outlined" :items="['baixa', 'media', 'alta', 'critica']" />
@@ -180,7 +180,7 @@
             </v-col>
           </v-row>
 
-          <v-tooltip text="Explique a necessidade de negócio e o impacto esperado" location="top">
+          <v-tooltip text="Explique a necessidade de negócio e o impacto esperado" location="top" aria-label="Explique a necessidade de negócio e o impacto esperado">
             <template #activator="{ props }">
               <div v-bind="props">
                 <v-textarea v-model="form.descricao" label="Descrição" variant="outlined" rows="4" />

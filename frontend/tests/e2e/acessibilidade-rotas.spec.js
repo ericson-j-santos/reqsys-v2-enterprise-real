@@ -19,29 +19,32 @@ const { mockResponsiveApis, loginDemo } = require('./helpers/responsiveMocks')
  * Isso da visibilidade real à dívida sem introduzir um gate que já nasce
  * vermelho, e impede regressão adicional enquanto a dívida não é paga.
  *
- * Dívida conhecida (sistêmica, vem do shell compartilhado AppLayout.vue,
- * presente em todas as rotas — não é conteúdo de tela):
- * - aria-required-children / aria-required-parent: o `<div class="v-list-
- *   group__items" role="group">` que a Vuetify usa para o conteúdo expansível
- *   de `<v-list-group>` é criado via `_createElementVNode` literal dentro do
- *   próprio `VListGroup.js` (sem prop pública pra sobrescrever) e fica como
- *   filho direto de `<v-list role="list">` — role="list" não aceita filho
- *   role="group" por spec ARIA. Confirmado via leitura direta do código-fonte
- *   da Vuetify instalada; não há fix de superfície (prop/atributo) para isso,
- *   exigiria substituir `<v-list-group>` por um accordion customizado.
+ * Dívida sistêmica do shell: ZERADA em 2026-09-05.
  *
- * aria-tooltip-name (PARCIALMENTE corrigido em 2026-09-04, PR #1484 + este
- * PR): os `<v-tooltip :text="...">` só renderizam o texto quando ativos; com
- * o tooltip fechado (estado padrão do scanner), o `role="tooltip"` fica sem
- * nome acessível porque a Vuetify não espelha `text` num `aria-label`
- * estático. O shell compartilhado (AppLayout.vue + AmbienteNavigator.vue, os
- * ~50 tooltips presentes em toda rota) já foi corrigido adicionando
- * `:aria-label` — NÃO `:content-props="{ 'aria-label': ... }"` como a
- * primeira tentativa fazia, porque esse prop só alcança o `.v-overlay__
- * content` (filho), não o elemento com `role="tooltip"` (o `.v-overlay` pai);
- * confirmado inspecionando o DOM renderizado. Continuam faltando os
- * tooltips específicos de 10 telas (ver allowlist abaixo) — mesmo padrão,
- * próximo incremento natural.
+ * - aria-required-children / aria-required-parent: vinham do `<div class="v-
+ *   list-group__items" role="group">` que a Vuetify cria via
+ *   `_createElementVNode` literal dentro do `VListGroup.js` (sem prop pública
+ *   pra sobrescrever) como filho direto de `<v-list role="list">` — e
+ *   role="list" só aceita filho role="listitem". Como o role="group" não sai,
+ *   o que saiu foi a afirmação de lista que a estrutura não sustentava: o
+ *   `<v-list>` do menu passou a `role="presentation"`, o cabeçalho do tema a
+ *   `role="button"` + `aria-expanded` (que é o que ele de fato é) e os itens
+ *   voltaram ao `role="link"` que a própria Vuetify calcula para `:to`.
+ *   Travado por `src/layouts/__tests__/AppLayoutAcessibilidade.test.js`, que
+ *   roda axe sobre um recorte do menu em segundos — antes de reprovar a
+ *   combinação antiga de papéis, para provar que o recorte é sensível.
+ *
+ * aria-tooltip-name: FECHADO em 2026-09-05. Os `<v-tooltip :text="...">` só
+ * renderizam o texto quando ativos; com o tooltip fechado (estado padrão do
+ * scanner) o `role="tooltip"` fica sem nome acessível, porque a Vuetify não
+ * espelha `text` num `aria-label` estático. O shell compartilhado foi
+ * corrigido nos PRs #1484/#1486 e as 10 telas restantes (49 tooltips locais)
+ * neste incremento — sempre com `aria-label` no próprio `<v-tooltip>`, NÃO
+ * com `:content-props="{ 'aria-label': ... }"`, que só alcança o
+ * `.v-overlay__content` (filho) e não o elemento que carrega `role="tooltip"`
+ * (o `.v-overlay` pai). Regressão barrada por
+ * `npm run validate:tooltip-a11y`, que reprova qualquer `<v-tooltip>` com
+ * texto e sem nome acessível.
  *
  * Além disso, violações menores e específicas de cada tela (contraste de
  * cor, botão sem texto acessível, progressbar sem nome, região com scroll
@@ -51,10 +54,10 @@ const { mockResponsiveApis, loginDemo } = require('./helpers/responsiveMocks')
  * violação NOVA da mesma regra numa rota diferente ainda quebre o teste.
  */
 
-const REGRAS_SISTEMICAS_CONHECIDAS = new Set([
-  'aria-required-children',
-  'aria-required-parent',
-])
+// Zerada: nenhuma regra falha hoje em todas as rotas por causa do shell.
+// Manter o conjunto vazio (em vez de remover o conceito) deixa explícito que
+// qualquer violação sistêmica nova é regressão, não dívida herdada.
+const REGRAS_SISTEMICAS_CONHECIDAS = new Set([])
 
 const VIOLACOES_ESPECIFICAS_CONHECIDAS = new Set([
   '/home|color-contrast',
@@ -70,18 +73,6 @@ const VIOLACOES_ESPECIFICAS_CONHECIDAS = new Set([
   '/estatisticas|nested-interactive',
   '/figma-github|color-contrast',
   '/figma-github|scrollable-region-focusable',
-  // aria-tooltip-name ainda pendente nestas 10 telas (tooltips fora do
-  // shell compartilhado — PageHeader/StatusChip/tooltips locais da view):
-  '/requisitos|aria-tooltip-name',
-  '/auditoria|aria-tooltip-name',
-  '/pipeline|aria-tooltip-name',
-  '/relatorios|aria-tooltip-name',
-  '/segredos-status|aria-tooltip-name',
-  '/qualidade-ia|aria-tooltip-name',
-  '/recomendacoes-ia|aria-tooltip-name',
-  '/task-console|aria-tooltip-name',
-  '/govbi-ia|aria-tooltip-name',
-  '/codex|aria-tooltip-name',
 ])
 
 function carregarRotasCanonicas() {

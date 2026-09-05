@@ -26,7 +26,7 @@
     <StatusChip value="aprovado" :map="{ aprovado: { label: 'OK', color: 'green' } }" />
 -->
 <template>
-  <v-tooltip v-if="tooltip" :text="tooltip" location="top">
+  <v-tooltip v-if="tooltip" :text="tooltip" location="top" :aria-label="tooltip">
     <template #activator="{ props }">
       <v-chip v-bind="props" :size="size" :color="resolved.color" :variant="variant">
         {{ resolved.label }}

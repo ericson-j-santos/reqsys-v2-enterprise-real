@@ -8,7 +8,7 @@
       chip-tooltip="Status do serviço Codex governado"
     >
       <template #actions>
-        <v-tooltip text="Verifica conectividade com o backend Codex" location="top">
+        <v-tooltip text="Verifica conectividade com o serviço Codex" location="top" aria-label="Verifica conectividade com o serviço Codex">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -23,7 +23,7 @@
             </v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Abre o Codex Online (GitHub Pages)" location="top">
+        <v-tooltip text="Abre o Codex Online (GitHub Pages)" location="top" aria-label="Abre o Codex Online (GitHub Pages)">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"

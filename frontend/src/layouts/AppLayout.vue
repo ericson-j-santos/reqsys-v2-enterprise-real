@@ -47,11 +47,11 @@
         <template v-if="!sidebarRecolhidoVisivel">
           <div class="muted mt-1 version-line" data-testid="app-version-label">
             {{ versionLabel }}
-            <v-tooltip activator="parent" location="bottom" text="Versao carregada no navegador e versao informada pela API. Ajuda a identificar cache ou publicação parcial." aria-label="Versao carregada no navegador e versao informada pela serviço. Ajuda a identificar armazenamento temporário ou publicação parcial." />
+            <v-tooltip activator="parent" location="bottom" text="Versao carregada no navegador e versao informada pelo serviço. Ajuda a identificar armazenamento temporário ou publicação parcial." aria-label="Versao carregada no navegador e versao informada pelo serviço. Ajuda a identificar armazenamento temporário ou publicação parcial." />
           </div>
           <v-chip v-if="hasVersionDrift" size="x-small" color="warning" variant="tonal" class="mt-1" prepend-icon="mdi-alert-outline" data-testid="app-version-drift-chip">
             Versoes divergentes
-            <v-tooltip activator="parent" location="bottom" text="O frontend e a API parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." aria-label="O aplicação e a serviço parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." />
+            <v-tooltip activator="parent" location="bottom" text="O aplicativo e o serviço parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." aria-label="O aplicativo e o serviço parecem estar em versoes diferentes. Atualize a pagina ou valide a implantação do ambiente." />
           </v-chip>
           <AmbienteNavigator :environment-hint="environment" compact class="mt-2 d-inline-block" />
           <v-btn block variant="tonal" color="primary" class="theme-toggle mt-3" :prepend-icon="temaClaro ? 'mdi-weather-night' : 'mdi-white-balance-sunny'" :aria-label="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" @click="alternarTemaVisual">
@@ -66,10 +66,10 @@
       </div>
       <v-divider />
 
-      <v-list v-model:opened="temasAbertos" density="compact" nav class="pt-2 req-nav-list" :class="{ 'req-nav-list--rail': sidebarRecolhidoVisivel }" aria-label="Navegacao por temas expansiveis">
+      <v-list v-model:opened="temasAbertos" density="compact" nav role="presentation" class="pt-2 req-nav-list" :class="{ 'req-nav-list--rail': sidebarRecolhidoVisivel }" aria-label="Navegacao por temas expansiveis">
         <v-list-group v-for="tema in NAV_TEMAS" :key="tema.id" :value="tema.id">
-          <template #activator="{ props }">
-            <v-list-item v-bind="props" role="listitem" :aria-selected="undefined" :prepend-icon="tema.icon" class="nav-theme-item" :class="{ 'nav-theme-item--active': tema.id === temaAtivo }" :data-testid="`nav-tema-${tema.id}`" @click="selecionarTema(tema.id)">
+          <template #activator="{ props, isOpen }">
+            <v-list-item v-bind="props" role="button" :aria-expanded="isOpen" :aria-selected="undefined" :prepend-icon="tema.icon" class="nav-theme-item" :class="{ 'nav-theme-item--active': tema.id === temaAtivo }" :data-testid="`nav-tema-${tema.id}`" @click="selecionarTema(tema.id)">
               <v-list-item-title>{{ tema.title }}</v-list-item-title>
               <v-list-item-subtitle v-if="!sidebarRecolhidoVisivel">{{ tema.topic }}</v-list-item-subtitle>
               <v-tooltip activator="parent" location="right" :text="tooltipTema(tema)" :aria-label="tooltipTema(tema)" />
@@ -93,7 +93,7 @@
                 </button>
                 <v-tooltip v-for="item in itensDoSubgrupo(tema.id, sub.id)" :key="item.to" :text="item.tip" location="right" :aria-label="item.tip">
                   <template #activator="{ props }">
-                    <v-list-item v-bind="props" role="listitem" :to="item.to" :prepend-icon="item.icon" :title="item.title" class="nav-item nav-item--nested" :data-testid="`nav-item-${navItemTestId(item.to)}`" @click="mobile && (drawer = false)" />
+                    <v-list-item v-bind="props" :to="item.to" :prepend-icon="item.icon" :title="item.title" class="nav-item nav-item--nested" :data-testid="`nav-item-${navItemTestId(item.to)}`" @click="mobile && (drawer = false)" />
                   </template>
                 </v-tooltip>
               </div>
@@ -101,7 +101,7 @@
 
             <v-tooltip v-for="item in tema.items" v-else :key="item.to" :text="item.tip" location="right" :aria-label="item.tip">
               <template #activator="{ props }">
-                <v-list-item v-bind="props" role="listitem" :to="item.to" :prepend-icon="item.icon" :title="item.title" class="nav-item nav-item--nested" :data-testid="`nav-item-${navItemTestId(item.to)}`" @click="mobile && (drawer = false)" />
+                <v-list-item v-bind="props" :to="item.to" :prepend-icon="item.icon" :title="item.title" class="nav-item nav-item--nested" :data-testid="`nav-item-${navItemTestId(item.to)}`" @click="mobile && (drawer = false)" />
               </template>
             </v-tooltip>
           </template>
