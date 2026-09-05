@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: personal-process-control-${{ github.ref }}
@@ -28,39 +29,52 @@ jobs:
     name: Validate governance and generate Pareto artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Run unit tests
         run: python -m unittest discover -s tests -p 'test_personal_process_control.py' -v
-
+      - name: Restore previous history artifact
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/previous
+          previous_run_id="$(gh run list --repo "${{ github.repository }}" --workflow personal-process-control.yml --branch main --status success --limit 10 --json databaseId --jq '[.[] | select(.databaseId != ${{ github.run_id }})][0].databaseId // empty')"
+          if [ -n "$previous_run_id" ]; then
+            gh run download "$previous_run_id" --repo "${{ github.repository }}" --name "personal-process-control-$previous_run_id" --dir artifacts/previous || true
+          fi
       - name: Generate daily control artifacts
         env:
           AS_OF: ${{ inputs.as_of }}
         run: |
-          python scripts/personal_process_control.py \
-            --input-dir governance/personal-process \
-            --out-dir artifacts/personal-process \
-            --as-of "${AS_OF}"
-
+          history_arg=()
+          if [ -s artifacts/previous/historico.json ]; then
+            history_arg=(--history-input artifacts/previous/historico.json)
+          fi
+          python scripts/personal_process_control.py --input-dir governance/personal-process --out-dir artifacts/personal-process --as-of "${AS_OF}" "${history_arg[@]}"
       - name: Publish job summary
         run: cat artifacts/personal-process/relatorio.md >> "$GITHUB_STEP_SUMMARY"
-
       - name: Verify generated artifacts
         run: |
           test -s artifacts/personal-process/snapshot.json
           test -s artifacts/personal-process/pareto.json
+          test -s artifacts/personal-process/historico.json
           test -s artifacts/personal-process/relatorio.md
           test -s artifacts/personal-process/controle_mestre_processos.xlsx
           python -m zipfile -t artifacts/personal-process/controle_mestre_processos.xlsx
-
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          history=json.loads(Path('artifacts/personal-process/historico.json').read_text(encoding='utf-8'))
+          assert history
+          dates=[item['as_of'] for item in history]
+          assert dates == sorted(set(dates))
+          PY
       - name: Upload evidence
         uses: actions/upload-artifact@v4
         with:
