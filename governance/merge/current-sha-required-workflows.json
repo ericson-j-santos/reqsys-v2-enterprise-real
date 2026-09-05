@@ -10,7 +10,8 @@
     "Test Quality Gate — Padrão Ouro",
     "Minimum Controlled Version Gate",
     "BACEN Production Formal Gate",
-    "BACEN Gate 1.5 — as_of Congelado"
+    "BACEN Gate 1.5 — as_of Congelado",
+    "BACEN Production Readiness Gate 2"
   ],
   "allowed_conclusions": [
     "success",
@@ -25,6 +26,7 @@
     "PR Quality Review",
     "Test Quality Gate — Padrão Ouro",
     "BACEN Production Formal Gate",
-    "BACEN Gate 1.5 — as_of Congelado"
+    "BACEN Gate 1.5 — as_of Congelado",
+    "BACEN Production Readiness Gate 2"
   ]
 }
