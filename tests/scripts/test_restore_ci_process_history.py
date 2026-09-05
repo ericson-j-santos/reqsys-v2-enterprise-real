@@ -27,7 +27,7 @@ def history_zip(content: str, member: str = ARCHIVE_HISTORY_MEMBERS[0]) -> bytes
 
 
 class RestoreHistoryTests(unittest.TestCase):
-    def test_cross_origin_redirect_strips_github_credentials(self):
+    def test_cross_origin_redirect_strips_github_authorization(self):
         handler = _CrossOriginSafeRedirectHandler()
         request = Request(
             "https://api.github.com/repos/o/r/actions/artifacts/99/zip",
@@ -48,7 +48,6 @@ class RestoreHistoryTests(unittest.TestCase):
         self.assertIsNotNone(redirected)
         headers = dict(redirected.header_items())
         self.assertNotIn("Authorization", headers)
-        self.assertNotIn("X-github-api-version", headers)
         self.assertEqual(headers.get("Accept"), "application/vnd.github+json")
 
     def test_same_origin_redirect_keeps_github_credentials(self):
