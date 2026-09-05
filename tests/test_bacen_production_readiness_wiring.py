@@ -6,11 +6,24 @@ def test_production_hard_gate_composes_gate2_before_authorizing_prod() -> None:
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/bacen-production-hard-gate.yml").read_text(encoding="utf-8")
 
-    assert "scripts/validate_bacen_production_readiness.py" in workflow
+    assert "scripts/validate_bacen_production_readiness_authoritative.py" in workflow
+    assert "scripts/validate_bacen_family_applicability.py" in workflow
+    assert "governance/bacen/normative/FAMILY-APPLICABILITY-DECISION.yaml" in workflow
+    assert "family_applicability_record_uid" in workflow
     assert "artifacts/bacen-production-hard-gate/gate2.json" in workflow
     assert "legacy_allowed and gate2_allowed" in workflow
     assert "main_branch_blocked_by_institutional_debt" in workflow
     assert "inputs.enforce" in workflow
+
+
+def test_gate2_workflow_uses_authoritative_family_decision() -> None:
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/bacen-production-readiness-gate2.yml").read_text(encoding="utf-8")
+
+    assert "scripts/validate_bacen_production_readiness_authoritative.py" in workflow
+    assert "scripts/validate_bacen_family_applicability.py" in workflow
+    assert "FAMILY-APPLICABILITY-DECISION.yaml" in workflow
+    assert "tests/test_bacen_family_applicability.py" in workflow
 
 
 def test_real_fly_production_sync_calls_the_composite_hard_gate() -> None:

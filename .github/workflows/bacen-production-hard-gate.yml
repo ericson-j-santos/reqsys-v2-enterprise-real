@@ -60,7 +60,16 @@ jobs:
             scripts/generate_bacen_nonprod_tolerance_decision.py \
             scripts/bacen_derived_status.py \
             scripts/validate_bacen_production_gate.py \
-            scripts/validate_bacen_production_readiness.py
+            scripts/validate_bacen_production_readiness.py \
+            scripts/validate_bacen_family_applicability.py \
+            scripts/validate_bacen_production_readiness_authoritative.py
+
+      - name: Validate institutional applicability record
+        run: |
+          mkdir -p artifacts/bacen-production-hard-gate
+          python scripts/validate_bacen_family_applicability.py \
+            --decision-file governance/bacen/normative/FAMILY-APPLICABILITY-DECISION.yaml \
+            --output artifacts/bacen-production-hard-gate/family-applicability.json
 
       - name: Generate legacy production decision
         id: decision
@@ -78,7 +87,7 @@ jobs:
         run: |
           set -euo pipefail
           as_of="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          python scripts/validate_bacen_production_readiness.py \
+          python scripts/validate_bacen_production_readiness_authoritative.py \
             --baseline-v2 governance/bacen/normative/NORMATIVE-BASELINE-V2.yaml \
             --base-obligations governance/bacen/normative/NORMATIVE-BASELINE.yaml \
             --extended-obligations governance/bacen/normative/NORMATIVE-OBLIGATIONS-EXTENDED.yaml \
@@ -86,6 +95,7 @@ jobs:
             --policy governance/bacen/normative/PRODUCTION-READINESS-POLICY.yaml \
             --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
             --reconciliation governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml \
+            --family-applicability governance/bacen/normative/FAMILY-APPLICABILITY-DECISION.yaml \
             --target-stage PRODUCTION \
             --as-of "$as_of" \
             --output artifacts/bacen-production-hard-gate/gate2.json
@@ -125,12 +135,15 @@ jobs:
               "enforced": True,
               "automatic_override_allowed": False,
               "main_branch_blocked_by_institutional_debt": False,
+              "family_applicability_source": "governance/bacen/normative/FAMILY-APPLICABILITY-DECISION.yaml",
           }
           for field, expected in gate2_required.items():
               if gate2.get(field) != expected:
                   raise SystemExit(
                       f"Invalid BACEN Gate 2 contract: {field}={gate2.get(field)!r}"
                   )
+          if not gate2.get("family_applicability_record_uid"):
+              raise SystemExit("BACEN Gate 2 contract missing family_applicability_record_uid")
 
           legacy_allowed = (
               evidence.get("decision") == "allow"
@@ -159,6 +172,8 @@ jobs:
               "gate2_allowed": gate2_allowed,
               "gate2_readiness": gate2.get("production_readiness"),
               "gate2_blocker_count": gate2.get("blocker_count"),
+              "family_applicability_decision": gate2.get("family_applicability_decision"),
+              "family_applicability_record_uid": gate2.get("family_applicability_record_uid"),
               "blocking_controls": evidence.get("blocking_controls") or [],
           }, ensure_ascii=False))
           PY
@@ -195,6 +210,8 @@ jobs:
           print(f"- Gate 2 readiness: **{gate2.get('production_readiness')}**")
           print(f"- Gate 2 blockers: **{gate2.get('blocker_count')}**")
           print(f"- Family applicability: **{gate2.get('family_applicability_decision')}**")
+          print(f"- Applicability record: **{gate2.get('family_applicability_record_uid')}**")
+          print(f"- Approval reference: **{gate2.get('family_applicability_approval_reference')}**")
           print(f"- Production allowed (composite): **{str(legacy_allowed and gate2_allowed).lower()}**")
           print(f"- Blocking controls: **{len(evidence.get('blocking_controls') or [])}**")
           print(f"- Structural findings: **{len(evidence.get('structural_findings') or [])}**")

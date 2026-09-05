@@ -11,8 +11,11 @@ on:
       - 'scripts/bacen_derived_status.py'
       - 'scripts/validate_bacen_production_gate.py'
       - 'scripts/validate_bacen_production_readiness.py'
+      - 'scripts/validate_bacen_production_readiness_authoritative.py'
+      - 'scripts/validate_bacen_family_applicability.py'
       - 'tests/test_bacen_production_readiness.py'
       - 'tests/test_bacen_production_readiness_wiring.py'
+      - 'tests/test_bacen_family_applicability.py'
       - '.github/workflows/bacen-production-readiness-gate2.yml'
       - '.github/workflows/bacen-production-hard-gate.yml'
       - '.github/workflows/governed-promotion-pipeline.yml'
@@ -26,8 +29,11 @@ on:
       - 'scripts/bacen_derived_status.py'
       - 'scripts/validate_bacen_production_gate.py'
       - 'scripts/validate_bacen_production_readiness.py'
+      - 'scripts/validate_bacen_production_readiness_authoritative.py'
+      - 'scripts/validate_bacen_family_applicability.py'
       - 'tests/test_bacen_production_readiness.py'
       - 'tests/test_bacen_production_readiness_wiring.py'
+      - 'tests/test_bacen_family_applicability.py'
       - '.github/workflows/bacen-production-readiness-gate2.yml'
       - '.github/workflows/bacen-production-hard-gate.yml'
       - '.github/workflows/governed-promotion-pipeline.yml'
@@ -76,7 +82,15 @@ jobs:
         run: |
           python -m pytest -q \
             tests/test_bacen_production_readiness.py \
-            tests/test_bacen_production_readiness_wiring.py
+            tests/test_bacen_production_readiness_wiring.py \
+            tests/test_bacen_family_applicability.py
+
+      - name: Validar registro institucional de aplicabilidade
+        run: |
+          mkdir -p artifacts/bacen-production-readiness
+          python scripts/validate_bacen_family_applicability.py \
+            --decision-file governance/bacen/normative/FAMILY-APPLICABILITY-DECISION.yaml \
+            --output artifacts/bacen-production-readiness/family-applicability.json
 
       - name: Resolver instante e modo da avaliação
         id: context
@@ -115,6 +129,7 @@ jobs:
             --policy governance/bacen/normative/PRODUCTION-READINESS-POLICY.yaml
             --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml
             --reconciliation governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml
+            --family-applicability governance/bacen/normative/FAMILY-APPLICABILITY-DECISION.yaml
             --target-stage "$TARGET"
             --as-of "$AS_OF"
             --output artifacts/bacen-production-readiness/gate2.json
@@ -122,7 +137,7 @@ jobs:
           if [[ "$ENFORCE" == "true" ]]; then
             args+=(--enforce)
           fi
-          python scripts/validate_bacen_production_readiness.py "${args[@]}"
+          python scripts/validate_bacen_production_readiness_authoritative.py "${args[@]}"
 
       - name: Publicar resumo
         if: always()
@@ -144,6 +159,8 @@ jobs:
           print(f"- Bloquearia produção: **{report['would_block_production']}**")
           print(f"- Obrigações modeladas: **{report['obligations_total']}**")
           print(f"- Decisão de aplicabilidade: **{report['family_applicability_decision']}**")
+          print(f"- Registro autoritativo: **{report.get('family_applicability_record_uid')}**")
+          print(f"- Referência de aprovação: **{report.get('family_applicability_approval_reference')}**")
           print(f"- Bloqueios: **{report['blocker_count']}**")
           print('- Dívida institucional bloqueia main: **false**')
           PY
