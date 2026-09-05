@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 
@@ -19,3 +20,15 @@ def test_real_fly_production_sync_calls_the_composite_hard_gate() -> None:
     assert "inputs.target_environment == 'prod'" in workflow
     assert "uses: ./.github/workflows/bacen-production-hard-gate.yml" in workflow
     assert "enforce: true" in workflow
+
+
+def test_merge_queue_observes_gate2_when_it_is_registered() -> None:
+    root = Path(__file__).resolve().parents[1]
+    policy = json.loads(
+        (root / "governance/merge/current-sha-required-workflows.json").read_text(encoding="utf-8")
+    )
+    gate_name = "BACEN Production Readiness Gate 2"
+
+    assert gate_name in policy["required_workflows"]
+    assert gate_name in policy["optional_when_not_registered"]
+    assert policy["absence_is_success"] is False
