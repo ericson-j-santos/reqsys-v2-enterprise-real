@@ -8,10 +8,27 @@ import sys
 import zipfile
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.parse import urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 WORKFLOW_FILE = "ci-lead-time-analytics.yml"
-HISTORY_MEMBER = "audit/history/ci-process-improvement-history.jsonl"
+OUTPUT_HISTORY_PATH = "audit/history/ci-process-improvement-history.jsonl"
+ARCHIVE_HISTORY_MEMBERS = (
+    "history/ci-process-improvement-history.jsonl",
+    OUTPUT_HISTORY_PATH,
+)
+
+
+class _CrossOriginSafeRedirectHandler(HTTPRedirectHandler):
+    """Remove a credencial do GitHub quando o download redirecionar para outro host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001, ANN201
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is None:
+            return None
+        if urlparse(req.full_url).netloc.lower() != urlparse(newurl).netloc.lower():
+            redirected.remove_header("Authorization")
+        return redirected
 
 
 def _request_json(url: str, token: str) -> dict:
@@ -22,7 +39,8 @@ def _request_json(url: str, token: str) -> dict:
 
 def _request_bytes(url: str, token: str) -> bytes:
     req = Request(url, headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
-    with urlopen(req, timeout=30) as response:  # noqa: S310
+    opener = build_opener(_CrossOriginSafeRedirectHandler())
+    with opener.open(req, timeout=30) as response:  # noqa: S310
         return response.read()
 
 
@@ -40,11 +58,12 @@ def restore(repo: str, token: str, output: Path, current_run_id: str = "") -> in
                 continue
             archive = _request_bytes(f"{base}/actions/artifacts/{artifact['id']}/zip", token)
             with zipfile.ZipFile(io.BytesIO(archive)) as zf:
-                if HISTORY_MEMBER not in zf.namelist():
+                archive_member = next((member for member in ARCHIVE_HISTORY_MEMBERS if member in zf.namelist()), None)
+                if archive_member is None:
                     continue
                 output.parent.mkdir(parents=True, exist_ok=True)
-                output.write_bytes(zf.read(HISTORY_MEMBER))
-                print(json.dumps({"restored": True, "source_run_id": run_id, "artifact_id": artifact["id"], "path": str(output)}))
+                output.write_bytes(zf.read(archive_member))
+                print(json.dumps({"restored": True, "source_run_id": run_id, "artifact_id": artifact["id"], "archive_member": archive_member, "path": str(output)}))
                 return 0
     output.parent.mkdir(parents=True, exist_ok=True)
     print(json.dumps({"restored": False, "reason": "no_prior_main_history_artifact", "path": str(output)}))
@@ -54,7 +73,7 @@ def restore(repo: str, token: str, output: Path, current_run_id: str = "") -> in
 def main() -> int:
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     token = os.environ.get("GITHUB_TOKEN", "")
-    output = Path(os.environ.get("CI_PROCESS_HISTORY_PATH", HISTORY_MEMBER))
+    output = Path(os.environ.get("CI_PROCESS_HISTORY_PATH", OUTPUT_HISTORY_PATH))
     if not repo or not token:
         print("GITHUB_REPOSITORY and GITHUB_TOKEN are required", file=sys.stderr)
         return 2
