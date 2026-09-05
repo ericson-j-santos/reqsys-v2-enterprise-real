@@ -1,83 +1,28 @@
-import importlib.util
-import json
-import tempfile
-import unittest
-import zipfile
+import importlib.util, json, tempfile, unittest, zipfile
 from datetime import date
 from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location("ppc", ROOT / "scripts" / "personal_process_control.py")
-ppc = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader
-SPEC.loader.exec_module(ppc)
-
-
-class PersonalProcessControlTests(unittest.TestCase):
-    def setUp(self):
-        base = ROOT / "governance" / "personal-process"
-        self.demands = json.loads((base / "demandas.json").read_text(encoding="utf-8"))
-        self.library = json.loads((base / "biblioteca.json").read_text(encoding="utf-8"))
-        self.automations = json.loads((base / "automacoes.json").read_text(encoding="utf-8"))
-
-    def test_seed_data_passes_governance(self):
-        self.assertEqual([], ppc.validate_demands(self.demands))
-        self.assertEqual([], ppc.validate_library(self.library))
-        self.assertEqual([], ppc.validate_automations(self.automations))
-
-    def test_open_item_requires_next_action(self):
-        data = [dict(self.demands[0], proxima_acao="")]
-        errors = ppc.validate_demands(data)
-        self.assertTrue(any("sem proxima_acao" in error for error in errors))
-
-    def test_completed_item_requires_evidence(self):
-        data = [dict(self.demands[0], status="Concluido", evidencia="")]
-        errors = ppc.validate_demands(data)
-        self.assertTrue(any("concluido sem evidencia" in error for error in errors))
-
-    def test_blocked_item_requires_blocker_type(self):
-        data = [dict(self.demands[0], status="Bloqueado", tipo_bloqueio="Nenhum")]
-        errors = ppc.validate_demands(data)
-        self.assertTrue(any("bloqueado sem tipo_bloqueio" in error for error in errors))
-
-    def test_pareto_is_deterministic(self):
-        first = ppc.pareto(self.demands, ppc.demand_score)
-        second = ppc.pareto(list(reversed(self.demands)), ppc.demand_score)
-        self.assertEqual([x["id"] for x in first], [x["id"] for x in second])
-        self.assertEqual("PROC-0001", first[0]["id"])
-        self.assertEqual("P0 - Critica", ppc.priority(first[0]["indice"]))
-
-    def test_monday_enables_deep_weekly_mode(self):
-        snapshot, _ = ppc.build_snapshot(self.demands, self.library, self.automations, date(2026, 9, 7))
-        self.assertEqual("semanal_aprofundado", snapshot["mode"])
-
-    def test_non_monday_uses_daily_mode(self):
-        snapshot, _ = ppc.build_snapshot(self.demands, self.library, self.automations, date(2026, 9, 3))
-        self.assertEqual("diario", snapshot["mode"])
-
-    def test_input_hash_is_order_independent_for_object_keys(self):
-        self.assertEqual(ppc.canonical_sha256({"b": 2, "a": 1}), ppc.canonical_sha256({"a": 1, "b": 2}))
-
-    def test_xlsx_is_valid_zip_with_expected_sheets(self):
-        snapshot, _ = ppc.build_snapshot(self.demands, self.library, self.automations, date(2026, 9, 3))
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "out.xlsx"
-            ppc.write_xlsx(path, snapshot, self.demands, self.library, self.automations)
-            with zipfile.ZipFile(path) as zf:
-                self.assertIsNone(zf.testzip())
-                names = set(zf.namelist())
-                self.assertIn("xl/workbook.xml", names)
-                self.assertIn("xl/worksheets/sheet4.xml", names)
-
-    def test_same_inputs_and_date_produce_same_xlsx(self):
-        snapshot, _ = ppc.build_snapshot(self.demands, self.library, self.automations, date(2026, 9, 3))
-        with tempfile.TemporaryDirectory() as tmp:
-            first = Path(tmp) / "a.xlsx"
-            second = Path(tmp) / "b.xlsx"
-            ppc.write_xlsx(first, snapshot, self.demands, self.library, self.automations)
-            ppc.write_xlsx(second, snapshot, self.demands, self.library, self.automations)
-            self.assertEqual(first.read_bytes(), second.read_bytes())
-
-
-if __name__ == "__main__":
-    unittest.main()
+ROOT=Path(__file__).resolve().parents[1]
+SPEC=importlib.util.spec_from_file_location('ppc',ROOT/'scripts/personal_process_control.py'); ppc=importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(ppc)
+class Tests(unittest.TestCase):
+ def setUp(self):
+  b=ROOT/'governance/personal-process'; self.d=json.loads((b/'demandas.json').read_text()); self.l=json.loads((b/'biblioteca.json').read_text()); self.a=json.loads((b/'automacoes.json').read_text())
+ def test_seed(self): self.assertEqual([],ppc.validate_demands(self.d)); self.assertEqual([],ppc.validate_library(self.l)); self.assertEqual([],ppc.validate_automations(self.a)); self.assertTrue(all(x['id'].startswith('EXT-') for x in self.d))
+ def test_source_required(self):
+  e=ppc.validate_demands([dict(self.d[0],origem='',estado_evidenciado_em='')]); self.assertTrue(any('origem' in x for x in e)); self.assertTrue(any('estado_evidenciado_em' in x for x in e))
+ def test_open_next(self): self.assertTrue(any('sem proxima_acao' in x for x in ppc.validate_demands([dict(self.d[0],proxima_acao='')])))
+ def test_concluded_evidence(self): self.assertTrue(any('concluido sem evidencia' in x for x in ppc.validate_demands([dict(self.d[0],status='Concluido',evidencia='')])))
+ def test_blocker(self): self.assertTrue(any('bloqueado sem tipo_bloqueio' in x for x in ppc.validate_demands([dict(self.d[1],tipo_bloqueio='Nenhum')])))
+ def test_pareto(self):
+  f=ppc.pareto(self.d,ppc.demand_score); s=ppc.pareto(list(reversed(self.d)),ppc.demand_score); self.assertEqual([x['id'] for x in f],[x['id'] for x in s]); self.assertEqual('EXT-002',f[0]['id']); self.assertEqual('P1 - Alta',ppc.priority(f[0]['indice']))
+ def test_modes(self): self.assertEqual('semanal_aprofundado',ppc.build_snapshot(self.d,self.l,self.a,date(2026,9,7))[0]['mode']); self.assertEqual('diario',ppc.build_snapshot(self.d,self.l,self.a,date(2026,9,4))[0]['mode'])
+ def test_hash(self): self.assertEqual(ppc.canonical_sha256({'b':2,'a':1}),ppc.canonical_sha256({'a':1,'b':2}))
+ def test_history_idempotent(self):
+  s,p=ppc.build_snapshot(self.d,self.l,self.a,date(2026,9,4)); r=ppc.history_record(s,p); h=ppc.merge_history([],r); self.assertEqual(h,ppc.merge_history(h,r)); self.assertEqual(1,len(h))
+ def test_history_order(self):
+  s1,p1=ppc.build_snapshot(self.d,self.l,self.a,date(2026,9,4)); s2,p2=ppc.build_snapshot(self.d,self.l,self.a,date(2026,9,5)); h=ppc.merge_history([],ppc.history_record(s2,p2)); h=ppc.merge_history(h,ppc.history_record(s1,p1)); self.assertEqual(['2026-09-04','2026-09-05'],[x['as_of'] for x in h])
+ def test_xlsx(self):
+  s,p=ppc.build_snapshot(self.d,self.l,self.a,date(2026,9,4)); h=ppc.merge_history([],ppc.history_record(s,p))
+  with tempfile.TemporaryDirectory() as t:
+   a=Path(t)/'a.xlsx'; b=Path(t)/'b.xlsx'; ppc.write_xlsx(a,s,self.d,self.l,self.a,h); ppc.write_xlsx(b,s,self.d,self.l,self.a,h); self.assertEqual(a.read_bytes(),b.read_bytes())
+   with zipfile.ZipFile(a) as z: self.assertIsNone(z.testzip()); self.assertIn('xl/worksheets/sheet5.xml',z.namelist())
+if __name__=='__main__': unittest.main()
