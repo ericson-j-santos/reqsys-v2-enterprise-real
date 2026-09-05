@@ -56,7 +56,7 @@ jobs:
       - name: Validar histórico no Command Center
         run: |
           python tests/scripts/test_restore_ci_process_history.py
-          python tests/scripts/test_enrich_command_center_ci_history.py
+          python tests/scripts/test_ci_fixed_window_sustainability.py
 
       - name: Executar command center
         shell: bash
@@ -77,9 +77,9 @@ jobs:
           fi
           python scripts/workflow_command_center.py "${args[@]}"
 
-      - name: Enriquecer Command Center com série histórica
+      - name: Enriquecer Command Center com janelas horárias homogêneas
         if: always()
-        run: python scripts/enrich_command_center_ci_history.py
+        run: python scripts/enrich_command_center_ci_fixed_history.py
 
       - name: Publicar artifact de evidencia
         if: always()
