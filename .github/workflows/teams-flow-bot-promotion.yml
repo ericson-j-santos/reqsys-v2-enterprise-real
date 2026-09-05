@@ -74,6 +74,8 @@ jobs:
       REQSYS_API_SERVICE_TOKEN: ${{ secrets.REQSYS_API_SERVICE_TOKEN }}
       ENVIRONMENT_URL_ORIGEM: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Validar confirmacao, gate de producao e secrets obrigatorios
         shell: pwsh
         env:
@@ -107,6 +109,26 @@ jobs:
           }
 
           Write-Host 'Confirmacao, gate de producao e secrets validados.'
+
+      - name: Conferir destino contra o registro de ambientes
+        shell: bash
+        env:
+          AMBIENTE_LOGICO: ${{ inputs.ambiente_logico }}
+          URL_DESTINO: ${{ inputs.environment_url_destino }}
+          CONNECTION_ID_DESTINO: ${{ inputs.connection_id_destino }}
+          CONNECTION_REFERENCE: ${{ inputs.connection_reference_logical_name }}
+        run: |
+          set -euo pipefail
+          # Fail-closed: o destino precisa estar declarado e revisado por PR em
+          # config/power-platform/environments.json antes de qualquer promocao real.
+          # Corrigir divergencia = abrir PR ajustando o registro, nunca relaxar aqui.
+          python3 scripts/validar_ambientes_power_platform.py \
+            --exigir-pronto "$AMBIENTE_LOGICO" \
+            --conferir-ambiente "$AMBIENTE_LOGICO" \
+            --conferir-url "$URL_DESTINO" \
+            --conferir-connection-id "$CONNECTION_ID_DESTINO" \
+            --conferir-connection-reference "$CONNECTION_REFERENCE" \
+            --output artifacts/power-platform-environment-registry-check.json
 
       - name: Registrar manifesto da promocao
         shell: pwsh

@@ -309,6 +309,14 @@ h1,
   font-size: var(--table-row-font-size);
 }
 
+/* Telas que usam <v-table> (estático) em vez de <v-data-table> precisam da
+   mesma densidade — sem isso ficam em 14px (herdado do body) enquanto o
+   resto do app fica em 12px (token), reintroduzindo a inconsistência que
+   este token foi criado para eliminar. */
+.v-table {
+  font-size: var(--table-row-font-size);
+}
+
 .v-table__wrapper {
   overflow-x: auto;
 }

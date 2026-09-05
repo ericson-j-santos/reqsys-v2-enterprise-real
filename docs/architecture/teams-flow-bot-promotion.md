@@ -46,6 +46,7 @@ Dataverse (ambiente destino): solution importada, connection vinculada, flow ati
 | Comentário automático em issue (opcional, via `issue_number`) | ✅ Implementado |
 | `REQSYS_API_SERVICE_TOKEN` no environment `reqsys-power-platform-dev` | ⛔ **Não existe** — confirmado via `gh secret list --env reqsys-power-platform-dev` em 2026-08-16. Bloqueador para rodar. |
 | Ambiente Power Platform de destino (test/stg ou prod) | ⛔ **Não existe nenhum configurado no GitHub** — só `reqsys-power-platform-dev` tem secrets. Nenhum environment `staging`/`stg`/`production` tem Power Platform credentials. |
+| Registro versionado de ambientes (`config/power-platform/environments.json`) + guarda de divergência no workflow | ✅ Implementado — inputs do `workflow_dispatch` são conferidos contra o registro revisado por PR antes de promover. Ver `docs/runbooks/acoes-humanas-power-platform.md` |
 | `connection_id_destino` pré-autorizado no ambiente de destino | ⛔ Pré-requisito manual inevitável (ver docstring do endpoint) — precisa de um humano logado no Power Platform do ambiente destino autorizando a conexão Teams antes de disparar este workflow |
 | Execução real ponta a ponta | ⏳ **Nunca testado** — este workflow nunca foi disparado |
 

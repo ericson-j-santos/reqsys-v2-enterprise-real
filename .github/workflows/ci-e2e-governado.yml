@@ -103,6 +103,8 @@ jobs:
           tests/e2e/login-accessibility.spec.js
           tests/e2e/readiness-pareto-critical.spec.js
           tests/e2e/fluxo-completo-reqsys.spec.js
+          tests/e2e/design-tokens-regressao.spec.js
+          tests/e2e/acessibilidade-rotas.spec.js
       - name: Publicar evidências E2E
         if: always()
         uses: actions/upload-artifact@v4

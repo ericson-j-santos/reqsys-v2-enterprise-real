@@ -93,6 +93,14 @@ def validar_entrada(payload: PentahoLoteEntrada, idempotency_key: str, correlati
         raise HTTPException(status_code=422, detail='X-Correlation-Id não pode ser vazio')
 
 
+def _buscar_lote_por_idempotencia(db: Session, idempotency_key: str) -> PentahoIntegrationBatch | None:
+    return (
+        db.query(PentahoIntegrationBatch)
+        .filter(PentahoIntegrationBatch.idempotency_key == idempotency_key)
+        .first()
+    )
+
+
 def criar_ou_obter_lote(
     db: Session,
     payload: PentahoLoteEntrada,
@@ -102,11 +110,7 @@ def criar_ou_obter_lote(
     validar_entrada(payload, idempotency_key, correlation_id)
     payload_json = _serializar_payload(payload)
 
-    existente = (
-        db.query(PentahoIntegrationBatch)
-        .filter(PentahoIntegrationBatch.idempotency_key == idempotency_key)
-        .first()
-    )
+    existente = _buscar_lote_por_idempotencia(db, idempotency_key)
     if existente is not None:
         _validar_reuso_idempotencia(existente, payload_json)
         return existente, True
@@ -135,11 +139,7 @@ def criar_ou_obter_lote(
     except IntegrityError:
         # Resolve corrida entre duas requisições com a mesma chave de idempotência.
         db.rollback()
-        existente = (
-            db.query(PentahoIntegrationBatch)
-            .filter(PentahoIntegrationBatch.idempotency_key == idempotency_key)
-            .first()
-        )
+        existente = _buscar_lote_por_idempotencia(db, idempotency_key)
         if existente is not None:
             _validar_reuso_idempotencia(existente, payload_json)
             return existente, True

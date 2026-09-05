@@ -17,6 +17,7 @@ from app.api import (  # noqa: E402
     monitoramento_operacional,
     notificacoes,
     pentaho_integration,
+    planner_teams_notify,
     prompt_development_coordinator,
     requisitos,
     teams_gateway,
@@ -29,6 +30,7 @@ hub_lowcode.router.include_router(prompt_development_coordinator.router)
 hub_lowcode.router.include_router(copilot_memory.router)
 hub_lowcode.router.include_router(copilot_memory_install_discovery.router)
 hub_lowcode.router.include_router(wsjf_planner_excel.router)
+hub_lowcode.router.include_router(planner_teams_notify.router)
 teams_gateway.router.include_router(notificacoes.router)
 teams_gateway.router.include_router(teams_github_actions.router)
 requisitos.api_router.include_router(levantamento_requisitos.router)
