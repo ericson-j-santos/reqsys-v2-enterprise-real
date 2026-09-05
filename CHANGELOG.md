@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-09-05
+
+### Corrigido (Acessibilidade — dívida sistêmica do shell zerada e as 10 telas com tooltip local)
+
+- `aria-tooltip-name` fechado nos 49 tooltips locais que restavam (`PageHeader`, `StatusChip` e as views de Auditoria, Codex, Pipeline, Qualidade IA, Recomendações IA, Relatórios, Requisitos, Segredos e Console de tarefas). A Vuetify só renderiza o texto do tooltip enquanto ele está aberto; com o tooltip fechado — estado padrão do scanner — o elemento com `role="tooltip"` fica sem nome acessível. O rótulo vai sempre como `aria-label` no próprio `<v-tooltip>`, nunca em `:content-props`, que só alcança o `.v-overlay__content` (filho) e não o `.v-overlay` pai que carrega o `role`.
+- `frontend/scripts/validate-tooltip-accessible-name.mjs` (+ 7 testes, ligado em `npm run quality:acessibilidade`): reprova qualquer `<v-tooltip>` com texto e sem nome acessível, inclusive a variante `:content-props`. Sem isso a dívida voltava a crescer a cada tooltip novo.
+- `aria-required-children` / `aria-required-parent` **deixaram de ser dívida aceita**. Estavam registradas como "sem fix de superfície, exigiria um accordion customizado"; a leitura do `VListGroup.js` da Vuetify instalada mostra que a causa raiz são três papéis incompatíveis entre si: o `<v-list>` declarava `role="list"` (que só aceita filhos `role="listitem"`), o `<v-list-group>` injeta um `<div class="v-list-group__items" role="group">` via `_createElementVNode` literal — sem prop pública para sobrescrever, logo aquele `role="list"` sempre teria um filho proibido — e os itens aninhados recebiam `role="listitem"` explícito tendo como pai justamente esse `role="group"`. Como o `role="group"` não sai, o que saiu foi a afirmação de lista que a estrutura não sustenta: o menu passou a `role="presentation"`, o cabeçalho do tema assumiu `role="button"` + `aria-expanded` (que é o que ele de fato é) e os itens voltaram ao `role="link"` que a própria Vuetify calcula para `:to`. O `<div role="group" aria-labelledby>` passa a ser exatamente o que diz ser: um grupo de links rotulado pelo tema. Nenhuma troca de componente foi necessária.
+- `frontend/src/layouts/__tests__/AppLayoutAcessibilidade.test.js` (novo): trava a correção em segundos rodando axe-core sobre um recorte do menu, em vez de depender dos ~10 min da suíte Playwright. O teste **reprova a combinação antiga de papéis antes de aprovar a nova**, para provar que o recorte é sensível ao bug — rodar axe no AppLayout inteiro sob jsdom passaria mesmo com a falha, porque sem o CSS da Vuetify o menu não conta como visível e a regra sai como *inapplicable*.
+- `frontend/tests/e2e/acessibilidade-rotas.spec.js`: `REGRAS_SISTEMICAS_CONHECIDAS` fica vazia (qualquer violação sistêmica nova passa a ser regressão, não dívida herdada) e os 10 pares de `aria-tooltip-name` saem da allowlist. As 37 rotas autenticadas foram executadas com a allowlist já apertada, sem violação nova.
+- Dois `aria-label` do `AppLayout` que o autofix de linguagem havia reescrito só no rótulo — deixando o nome acessível diferente do texto visível (WCAG 2.5.3) e agramatical (`"pela serviço"`, `"O aplicação e a serviço"`) — voltaram a espelhar o texto, já na redação que passa no validador de linguagem simples.
+
 ## [Unreleased] - 2026-09-04
 
 ### Corrigido (WSJF · `templates/wsjf/WSJF.xlsx.base64` era um ZIP corrompido, e era ele que ia para o tenant)
