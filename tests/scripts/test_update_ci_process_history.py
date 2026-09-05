@@ -15,6 +15,24 @@ class ProcessHistoryTests(unittest.TestCase):
         self.assertEqual(record["baseline_comparison"]["mode"], "report-only")
         self.assertFalse(record["baseline_comparison"]["creates_gate"])
 
+    def test_record_persists_window_comparability_without_gate(self):
+        record = history_record({
+            "generated_at": "2026-09-03T00:00:00Z",
+            "run_id": "1",
+            "window_comparability": {
+                "available": True,
+                "comparable_to_baseline": False,
+                "reason_codes": ["window_span_ratio_out_of_range"],
+                "ratios": {"window_span": 2.6},
+                "mode": "descriptive-only",
+                "creates_gate": False,
+            },
+        })
+        self.assertEqual(record["schema_version"], "1.0.1")
+        self.assertFalse(record["window_comparability"]["comparable_to_baseline"])
+        self.assertEqual(record["window_comparability"]["mode"], "descriptive-only")
+        self.assertFalse(record["window_comparability"]["creates_gate"])
+
     def test_merge_is_idempotent_by_run_id(self):
         first = {"generated_at":"2026-09-03T00:00:00Z","run_id":"1"}
         second = {"generated_at":"2026-09-03T01:00:00Z","run_id":"1"}

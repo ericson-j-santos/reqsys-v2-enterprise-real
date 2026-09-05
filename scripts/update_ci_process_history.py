@@ -9,8 +9,9 @@ from typing import Any
 
 def history_record(analytics: dict[str, Any]) -> dict[str, Any]:
     comparison = analytics.get("baseline_comparison") or {}
+    window_comparability = analytics.get("window_comparability") or {}
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.0.1",
         "generated_at": analytics.get("generated_at"),
         "run_id": analytics.get("run_id"),
         "status": analytics.get("status"),
@@ -33,6 +34,16 @@ def history_record(analytics: dict[str, Any]) -> dict[str, Any]:
             "delta": comparison.get("delta", {}),
             "mode": comparison.get("mode", "report-only"),
             "creates_gate": bool(comparison.get("creates_gate", False)),
+        },
+        "window_comparability": {
+            "available": bool(window_comparability.get("available")),
+            "comparable_to_baseline": bool(window_comparability.get("comparable_to_baseline")),
+            "reason_codes": list(window_comparability.get("reason_codes") or []),
+            "ratios": window_comparability.get("ratios", {}),
+            "current_sample": window_comparability.get("current_sample", {}),
+            "baseline_sample": window_comparability.get("baseline_sample"),
+            "mode": window_comparability.get("mode", "descriptive-only"),
+            "creates_gate": bool(window_comparability.get("creates_gate", False)),
         },
     }
 

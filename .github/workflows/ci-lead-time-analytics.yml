@@ -14,11 +14,13 @@ on:
       - '.github/workflows/ci-lead-time-analytics.yml'
       - 'scripts/build_ci_process_improvement_analytics.py'
       - 'scripts/compare_ci_process_baseline.py'
+      - 'scripts/annotate_ci_window_comparability.py'
       - 'scripts/update_ci_process_history.py'
       - 'scripts/restore_ci_process_history.py'
       - 'scripts/enrich_command_center_ci_history.py'
       - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
       - 'tests/scripts/test_compare_ci_process_baseline.py'
+      - 'tests/scripts/test_annotate_ci_window_comparability.py'
       - 'tests/scripts/test_update_ci_process_history.py'
       - 'tests/scripts/test_restore_ci_process_history.py'
       - 'tests/scripts/test_enrich_command_center_ci_history.py'
@@ -33,11 +35,13 @@ on:
       - '.github/workflows/ci-lead-time-analytics.yml'
       - 'scripts/build_ci_process_improvement_analytics.py'
       - 'scripts/compare_ci_process_baseline.py'
+      - 'scripts/annotate_ci_window_comparability.py'
       - 'scripts/update_ci_process_history.py'
       - 'scripts/restore_ci_process_history.py'
       - 'scripts/enrich_command_center_ci_history.py'
       - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
       - 'tests/scripts/test_compare_ci_process_baseline.py'
+      - 'tests/scripts/test_annotate_ci_window_comparability.py'
       - 'tests/scripts/test_update_ci_process_history.py'
       - 'tests/scripts/test_restore_ci_process_history.py'
       - 'tests/scripts/test_enrich_command_center_ci_history.py'
@@ -77,6 +81,7 @@ jobs:
         run: |
           python tests/scripts/test_build_ci_process_improvement_analytics.py
           python tests/scripts/test_compare_ci_process_baseline.py
+          python tests/scripts/test_annotate_ci_window_comparability.py
           python tests/scripts/test_update_ci_process_history.py
           python tests/scripts/test_restore_ci_process_history.py
           python tests/scripts/test_enrich_command_center_ci_history.py
@@ -91,6 +96,9 @@ jobs:
 
       - name: Compare current window with frozen baseline
         run: python scripts/compare_ci_process_baseline.py
+
+      - name: Annotate statistical window comparability
+        run: python scripts/annotate_ci_window_comparability.py
 
       - name: Update process improvement history
         run: python scripts/update_ci_process_history.py
