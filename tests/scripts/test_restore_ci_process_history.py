@@ -5,12 +5,18 @@ import unittest
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
+from urllib.request import Request
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.restore_ci_process_history import ARCHIVE_HISTORY_MEMBERS, OUTPUT_HISTORY_PATH, restore
+from scripts.restore_ci_process_history import (
+    ARCHIVE_HISTORY_MEMBERS,
+    OUTPUT_HISTORY_PATH,
+    _CrossOriginSafeRedirectHandler,
+    restore,
+)
 
 
 def history_zip(content: str, member: str = ARCHIVE_HISTORY_MEMBERS[0]) -> bytes:
@@ -21,6 +27,36 @@ def history_zip(content: str, member: str = ARCHIVE_HISTORY_MEMBERS[0]) -> bytes
 
 
 class RestoreHistoryTests(unittest.TestCase):
+    def test_cross_origin_redirect_strips_github_credentials(self):
+        handler = _CrossOriginSafeRedirectHandler()
+        request = Request(
+            "https://api.github.com/repos/o/r/actions/artifacts/99/zip",
+            headers={
+                "Authorization": "Bearer secret",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "Accept": "application/vnd.github+json",
+            },
+        )
+        redirected = handler.redirect_request(
+            request,
+            None,
+            302,
+            "Found",
+            {},
+            "https://example.blob.core.windows.net/artifact?sig=abc",
+        )
+        self.assertIsNotNone(redirected)
+        headers = dict(redirected.header_items())
+        self.assertNotIn("Authorization", headers)
+        self.assertNotIn("X-github-api-version", headers)
+        self.assertEqual(headers.get("Accept"), "application/vnd.github+json")
+
+    def test_same_origin_redirect_keeps_github_credentials(self):
+        handler = _CrossOriginSafeRedirectHandler()
+        request = Request("https://api.github.com/a", headers={"Authorization": "Bearer secret"})
+        redirected = handler.redirect_request(request, None, 302, "Found", {}, "https://api.github.com/b")
+        self.assertEqual(dict(redirected.header_items()).get("Authorization"), "Bearer secret")
+
     def test_restores_latest_successful_main_artifact_using_real_upload_layout(self):
         calls = []
 
