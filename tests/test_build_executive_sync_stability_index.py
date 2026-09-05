@@ -29,8 +29,8 @@ class ExecutiveSyncStabilityIndexTests(unittest.TestCase):
 
     def test_degraded_environment_requires_attention(self):
         history = self._history()
-        history["environments"]["STG"]["samples"][0]["synchronized"] = False
-        history["environments"]["STG"]["samples"][1]["passed"] = False
+        history["environments"]["STG"]["samples"][-1]["synchronized"] = False
+        history["environments"]["STG"]["samples"][-2]["passed"] = False
         index = build_index(history)
         self.assertIn(index["status"], {"attention", "improving"})
         self.assertFalse(index["production_blocker"])

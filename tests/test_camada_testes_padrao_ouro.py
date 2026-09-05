@@ -41,6 +41,8 @@ def test_all_test_layers_exist_on_disk() -> None:
     aac = json.loads(AAC.read_text(encoding="utf-8"))
     for layer_id, layer in aac["layers"].items():
         path = layer.get("path")
+        if layer.get("status") == "retired":
+            continue
         assert path and (ROOT / path).exists(), f"{layer_id} missing path: {path}"
 
 

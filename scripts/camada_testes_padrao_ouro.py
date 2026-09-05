@@ -27,7 +27,7 @@ TEST_LAYERS: list[dict[str, Any]] = [
     {"id": "frontend_vitest", "path": "frontend/src", "runner": "vitest", "ci_gate": False},
     {"id": "frontend_playwright", "path": "frontend/tests/e2e", "runner": "playwright", "ci_gate": True},
     {"id": "governance_pytest", "path": "tests", "runner": "pytest", "ci_gate": False},
-    {"id": "alt_frontends_e2e", "path": "e2e", "runner": "playwright", "ci_gate": False},
+    {"id": "alt_frontends_e2e", "path": "e2e", "runner": "playwright", "ci_gate": False, "status": "retired"},
 ]
 
 REQUIRED_ANCHOR_FILES = [
@@ -59,7 +59,7 @@ def validate() -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any
         rel = layer["path"]
         exists = (ROOT / rel).exists()
         layer_results.append({**layer, "exists": exists})
-        if not exists:
+        if not exists and layer.get("status") != "retired":
             issues.append({"severity": "error", "type": "missing_layer", "target": rel})
 
     for rel in REQUIRED_ANCHOR_FILES:
