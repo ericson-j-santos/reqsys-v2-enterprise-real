@@ -119,7 +119,7 @@
       <v-col cols="12" lg="12">
         <v-card class="panel" elevation="0">
           <v-card-title>Destinos analíticos</v-card-title>
-          <v-list density="comfortable">
+          <v-list density="comfortable" role="presentation">
             <v-list-item
               v-for="destino in destinosAnaliticos"
               :key="destino.path"

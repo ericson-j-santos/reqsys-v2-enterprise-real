@@ -8,21 +8,21 @@
       chip-tooltip="Tela web alinhada ao blueprint do Canvas App ReqSys Task Console."
     >
       <template #actions>
-        <v-tooltip text="Copia o texto no formato aceito pelo Flow ReqSys - Criar no Planner" location="top">
+        <v-tooltip text="Copia o texto no formato aceito pelo Flow ReqSys - Criar no Planner" location="top" aria-label="Copia o texto no formato aceito pelo Flow ReqSys - Criar no Planner">
           <template #activator="{ props }">
             <v-btn v-bind="props" variant="outlined" prepend-icon="mdi-content-copy" @click="copiarFlowText">
               Copiar Flow
             </v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Baixa as tarefas em CSV compativel com o modelo Power Automate" location="top">
+        <v-tooltip text="Baixa as tarefas em CSV compativel com o modelo Power Automate" location="top" aria-label="Baixa as tarefas em CSV compativel com o modelo Power Automate">
           <template #activator="{ props }">
             <v-btn v-bind="props" variant="outlined" prepend-icon="mdi-file-delimited-outline" @click="baixarCsv">
               CSV
             </v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Envia as tarefas pendentes para o Flow ReqSys - Criar no Planner" location="top">
+        <v-tooltip text="Envia as tarefas pendentes para o Flow ReqSys - Criar no Planner" location="top" aria-label="Envia as tarefas pendentes para o Flow ReqSys - Criar no Planner">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -163,7 +163,7 @@
               </v-chip>
             </template>
             <template v-slot:[`item.acoes`]="{ item }">
-              <v-tooltip text="Remove a tarefa desta lista local" location="top">
+              <v-tooltip text="Remove a tarefa desta lista local" location="top" aria-label="Remove a tarefa desta lista local">
                 <template #activator="{ props }">
                   <v-btn
                     v-bind="props"
