@@ -5,14 +5,21 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import sys
 import time
-import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import httpx
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
+
+from wsjf_workbook_package import (  # noqa: E402
+    erro_graph_indica_workbook_incompativel,
+    reparar_workbook_wsjf,
+    validar_workbook_wsjf,
+)
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 TOKEN_URL = "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
@@ -40,22 +47,18 @@ def _hash(value: str) -> str:
 
 
 def _validate_template(path: Path) -> None:
+    """Valida o template com o mesmo rigor do motor Excel do Graph.
+
+    A checagem antiga só procurava a tabela dentro do zip e por isso aprovou um
+    template cujo índice ZIP não batia com o corpo do arquivo: o Excel de
+    computador o "recuperava", o Graph respondia FileCorruptTryRepair /
+    unsupportedWorkbook e o fluxo Planner → Excel nunca rodava.
+    """
     if not path.exists():
         raise BootstrapError(f"Template não encontrado: {path}")
-    try:
-        with zipfile.ZipFile(path) as archive:
-            tables = []
-            for name in archive.namelist():
-                if not name.startswith("xl/tables/") or not name.endswith(".xml"):
-                    continue
-                text = archive.read(name).decode("utf-8", errors="replace")
-                match = re.search(r'\bname="([^"]+)"', text)
-                if match:
-                    tables.append(match.group(1))
-    except zipfile.BadZipFile as exc:
-        raise BootstrapError("WSJF.xlsx não é um XLSX válido") from exc
-    if TABLE_NAME not in tables:
-        raise BootstrapError(f"Template WSJF.xlsx não contém a tabela {TABLE_NAME}")
+    resultado = validar_workbook_wsjf(path.read_bytes())
+    if not resultado["ok"]:
+        raise BootstrapError(f"Template WSJF.xlsx inválido para o Microsoft Graph: {resultado['erros']}")
 
 
 def _token(client: httpx.Client) -> str:
@@ -229,25 +232,84 @@ def _find_or_create_bucket(client: httpx.Client, token: str, plan_id: str) -> tu
     return created, True
 
 
-def _xlsx_has_table(data: bytes) -> bool:
-    try:
-        from io import BytesIO
+def _workbook_legivel_no_graph(client: httpx.Client, token: str, drive_id: str, item_id: str) -> tuple[bool, str]:
+    """Pergunta ao próprio motor Excel do Graph se o arquivo é utilizável.
 
-        with zipfile.ZipFile(BytesIO(data)) as archive:
-            for name in archive.namelist():
-                if not name.startswith("xl/tables/") or not name.endswith(".xml"):
-                    continue
-                text = archive.read(name).decode("utf-8", errors="replace")
-                if re.search(rf'\bname="{re.escape(TABLE_NAME)}"', text):
-                    return True
-    except zipfile.BadZipFile:
-        return False
-    return False
+    É o mesmo motor que o conector Excel Online (Business) usa dentro do Power
+    Automate: se `workbook/worksheets` falha aqui, o fluxo falharia em execução.
+    """
+    response = _graph(
+        client,
+        "GET",
+        f"/drives/{drive_id}/items/{item_id}/workbook/worksheets",
+        token,
+        allow_status=(400, 403, 404, 409, 422, 423, 500, 502, 503),
+    )
+    if response.status_code < 400:
+        return True, ""
+    try:
+        payload = response.json()
+    except Exception:
+        payload = response.text
+    if erro_graph_indica_workbook_incompativel(payload):
+        return False, _error_code(response) or "unsupportedWorkbook"
+    raise BootstrapError(
+        f"Não foi possível ler {FILE_NAME} pelo Microsoft Graph: HTTP {response.status_code} ({_error_code(response)})"
+    )
+
+
+def _upload(client: httpx.Client, token: str, drive_id: str, path: str, data: bytes) -> dict[str, Any]:
+    return _graph(
+        client,
+        "PUT",
+        f"/drives/{drive_id}/root:/{path}:/content",
+        token,
+        headers={"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+        content=data,
+    ).json()
+
+
+def _replace_incompatible_file(
+    client: httpx.Client, token: str, drive_id: str, item: dict[str, Any], content: bytes, template: Path
+) -> dict[str, Any]:
+    """Substitui um WSJF.xlsx que o Graph recusa, preservando o que der.
+
+    Guarda o arquivo recusado ao lado antes de sobrescrever e regrava no mesmo
+    caminho, o que mantém o id do item — os fluxos já instalados continuam
+    apontando para ele. Quando o pacote antigo ainda pode ser lido, as linhas de
+    tbDemandas (inclusive os campos locais preenchidos por pessoas) são
+    preservadas; quando não pode, o template canônico vazio é enviado e a perda
+    fica registrada na evidência.
+    """
+    carimbo = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup = f"WSJF.incompativel-{carimbo}.xlsx"
+    _upload(client, token, drive_id, backup, content)
+
+    reparo = reparar_workbook_wsjf(content)
+    novo = reparo["conteudo"]
+    if reparo["estrategia"] == "template_canonico":
+        novo = template.read_bytes()
+    validacao = validar_workbook_wsjf(novo)
+    if not validacao["ok"]:
+        raise BootstrapError(f"Conteúdo de substituição inválido: {validacao['erros']}")
+
+    enviado = _upload(client, token, drive_id, FILE_NAME, novo)
+    item_id = str(enviado.get("id") or item.get("id") or "")
+    legivel, codigo = _workbook_legivel_no_graph(client, token, drive_id, item_id)
+    if not legivel:
+        raise BootstrapError(f"{FILE_NAME} continua recusado pelo Microsoft Graph após a substituição ({codigo})")
+    return {
+        "item": enviado,
+        "backup": backup,
+        "estrategia": reparo["estrategia"],
+        "linhas_preservadas": reparo["linhas_preservadas"],
+        "avisos": reparo["avisos"],
+    }
 
 
 def _find_or_create_file(
     client: httpx.Client, token: str, drive_id: str, template: Path
-) -> tuple[dict[str, Any], bool]:
+) -> tuple[dict[str, Any], str, dict[str, Any]]:
     existing = _graph(
         client,
         "GET",
@@ -258,23 +320,22 @@ def _find_or_create_file(
     if existing.status_code != 404:
         item = existing.json()
         content = _graph(client, "GET", f"/drives/{drive_id}/items/{item['id']}/content", token).content
-        if not _xlsx_has_table(content):
-            raise BootstrapError(f"{FILE_NAME} já existe, mas não contém {TABLE_NAME}; arquivo existente foi preservado")
-        return item, False
+        validacao = validar_workbook_wsjf(content)
+        codigo = ""
+        if validacao["ok"]:
+            legivel, codigo = _workbook_legivel_no_graph(client, token, drive_id, str(item["id"]))
+            if legivel:
+                return item, "reused", {}
+        detalhe = {"motivo": validacao["erros"] or [codigo or "graph_recusou_workbook"]}
+        troca = _replace_incompatible_file(client, token, drive_id, item, content, template)
+        detalhe.update({k: v for k, v in troca.items() if k != "item"})
+        return troca["item"], "replaced", detalhe
 
-    data = template.read_bytes()
-    uploaded = _graph(
-        client,
-        "PUT",
-        f"/drives/{drive_id}/root:/{FILE_NAME}:/content",
-        token,
-        headers={"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
-        content=data,
-    ).json()
-    verify = _graph(client, "GET", f"/drives/{drive_id}/items/{uploaded['id']}/content", token).content
-    if not _xlsx_has_table(verify):
-        raise BootstrapError(f"Upload concluído, mas {TABLE_NAME} não foi encontrada na validação pós-upload")
-    return uploaded, True
+    uploaded = _upload(client, token, drive_id, FILE_NAME, template.read_bytes())
+    legivel, codigo = _workbook_legivel_no_graph(client, token, drive_id, str(uploaded["id"]))
+    if not legivel:
+        raise BootstrapError(f"Upload concluído, mas o Microsoft Graph recusou {FILE_NAME} ({codigo})")
+    return uploaded, "created", {}
 
 
 def main() -> int:
@@ -329,15 +390,18 @@ def main() -> int:
                 "id_hash": _hash(bucket_id),
             }
 
-            workbook, workbook_created = _find_or_create_file(client, token, drive_id, args.template)
+            workbook, workbook_status, workbook_detail = _find_or_create_file(
+                client, token, drive_id, args.template
+            )
             file_id = str(workbook.get("id") or "")
             evidence["workbook"] = {
                 "name": FILE_NAME,
                 "table": TABLE_NAME,
-                "status": "created" if workbook_created else "reused",
+                "status": workbook_status,
                 "id_hash": _hash(file_id),
                 "drive_id_hash": _hash(drive_id),
                 "template_sha256": hashlib.sha256(args.template.read_bytes()).hexdigest(),
+                **workbook_detail,
             }
             evidence["status"] = "PASS"
     except Exception as exc:

@@ -109,16 +109,44 @@
               label="Planilha WSJF"
               variant="outlined"
               :disabled="!grupo || !arquivosWsjf.length"
-              @update:model-value="invalidarValidacao"
+              @update:model-value="selecionarArquivo"
             >
               <template #item="{ props, item }">
                 <v-list-item v-bind="props" subtitle="Tabela esperada: tbDemandas" />
               </template>
             </v-select>
 
+            <v-alert v-if="diagnostico?.precisa_reparo" type="error" variant="tonal" density="compact" class="mb-3">
+              O <strong>WSJF.xlsx</strong> que está no SharePoint é recusado pelo motor Excel do Microsoft Graph, o mesmo
+              usado pelo conector do fluxo. Instalar assim cria um fluxo que falha em execução com
+              <code>unsupportedWorkbook</code>. Regenere o arquivo antes de instalar.
+            </v-alert>
+
+            <v-alert v-else-if="diagnostico?.compativel" type="success" variant="tonal" density="compact" class="mb-3">
+              Planilha compatível: <strong>{{ contrato.excel_table || 'tbDemandas' }}</strong> legível pelo conector Excel.
+            </v-alert>
+
+            <v-alert v-else-if="diagnostico && !diagnostico.compativel" type="warning" variant="tonal" density="compact" class="mb-3">
+              Não foi possível confirmar a planilha com o Microsoft Graph: {{ diagnostico.graph_erro }}
+            </v-alert>
+
+            <v-alert v-if="reparo" type="info" variant="tonal" density="compact" class="mb-3">
+              WSJF.xlsx substituído ({{ legendaReparo }}).
+              Cópia do arquivo anterior: <strong>{{ reparo.copia_de_seguranca }}</strong>.
+            </v-alert>
+
             <div class="d-flex flex-wrap ga-2">
               <v-btn variant="outlined" prepend-icon="mdi-refresh" :disabled="!grupo" :loading="carregandoGrupo" @click="carregarGrupo">
                 Atualizar
+              </v-btn>
+              <v-btn
+                v-if="diagnostico?.precisa_reparo"
+                color="warning"
+                prepend-icon="mdi-file-restore"
+                :loading="regenerando"
+                @click="regenerarArquivo"
+              >
+                Regenerar WSJF.xlsx
               </v-btn>
               <v-btn v-if="arquivo?.web_url" variant="text" prepend-icon="mdi-open-in-new" :href="arquivo.web_url" target="_blank" rel="noopener">
                 Abrir WSJF.xlsx
@@ -191,6 +219,7 @@
               <v-list-item title="Planner" :subtitle="plano?.titulo || 'Não escolhido'" />
               <v-list-item title="Excel" :subtitle="arquivo?.nome || 'WSJF.xlsx não selecionado'" />
               <v-list-item title="Tabela" :subtitle="contrato.excel_table || 'tbDemandas'" />
+              <v-list-item title="Planilha compatível" :subtitle="legendaDiagnostico" />
               <v-list-item title="Conexão Planner" :subtitle="plannerConnection ? 'Conectada' : 'Pendente'" />
               <v-list-item title="Conexão Excel" :subtitle="excelConnection ? 'Conectada' : 'Pendente'" />
               <v-list-item title="Fluxos" subtitle="1 — Planner → Excel" />
@@ -217,12 +246,14 @@ import { computed, onMounted, ref } from 'vue'
 import {
   carregarContratoWsjf,
   carregarStatusInstalacao,
+  diagnosticarWorkbookWsjf,
   instalarWsjfPlannerExcel,
   listarArquivosInstalacao,
   listarConexoesInstalacao,
   listarGruposInstalacao,
   listarPlanosInstalacao,
   mensagemErroInstalacao,
+  regenerarWorkbookWsjf,
   somenteAmbientesDev,
   somenteArquivoWsjf,
   validarWsjfPlannerExcel,
@@ -241,6 +272,8 @@ const arquivo = ref(null)
 const plannerConnection = ref(null)
 const excelConnection = ref(null)
 const validacao = ref(null)
+const diagnostico = ref(null)
+const reparo = ref(null)
 const resultado = ref(null)
 const confirmado = ref(false)
 const erro = ref('')
@@ -249,6 +282,8 @@ const carregandoGrupo = ref(false)
 const carregandoConexoes = ref(false)
 const validando = ref(false)
 const implantando = ref(false)
+const diagnosticando = ref(false)
+const regenerando = ref(false)
 
 const ambientesDev = computed(() => somenteAmbientesDev(status.value.ambientes || []))
 const arquivosWsjf = computed(() => somenteArquivoWsjf(arquivos.value))
@@ -260,10 +295,24 @@ const camposLocais = computed(() => contrato.value.local_fields_preserved || [
   'Observações',
 ])
 
+const legendaReparo = computed(() => {
+  const estrategia = reparo.value?.estrategia
+  if (estrategia === 'reescrita_preservando_dados') return `${reparo.value.linhas_preservadas} linha(s) preservada(s)`
+  if (estrategia === 'tabela_adicionada') return 'tabela tbDemandas acrescentada ao arquivo existente'
+  return 'planilha recriada vazia: o arquivo anterior não pôde ser lido'
+})
+
+const legendaDiagnostico = computed(() => {
+  if (diagnosticando.value) return 'Verificando...'
+  if (!diagnostico.value) return arquivo.value ? 'Não verificada' : 'Nenhum arquivo selecionado'
+  if (diagnostico.value.precisa_reparo) return 'Recusada pelo Microsoft Graph'
+  return diagnostico.value.compativel ? 'Sim' : 'Não confirmada'
+})
+
 const prontoParaValidar = computed(() => Boolean(
   ambiente.value?.id && ambiente.value?.url && grupo.value?.id && plano.value?.id &&
   arquivo.value?.id && arquivo.value?.drive_id && plannerConnection.value?.id &&
-  excelConnection.value?.id,
+  excelConnection.value?.id && !diagnostico.value?.precisa_reparo,
 ))
 
 const prontoParaInstalar = computed(() => Boolean(
@@ -302,8 +351,45 @@ async function carregarBase() {
   }
 }
 
+function payloadArquivo() {
+  return { excel_drive: arquivo.value.drive_id, excel_file: arquivo.value.id }
+}
+
+async function selecionarArquivo() {
+  invalidarValidacao()
+  diagnostico.value = null
+  reparo.value = null
+  if (!arquivo.value?.id || !arquivo.value?.drive_id) return
+  diagnosticando.value = true
+  try {
+    diagnostico.value = await diagnosticarWorkbookWsjf(payloadArquivo())
+  } catch (e) {
+    // Diagnóstico indisponível não bloqueia a tela: o /deploy repete a
+    // verificação e recusa a instalação se o arquivo for mesmo inválido.
+    erro.value = mensagemErroInstalacao(e)
+  } finally {
+    diagnosticando.value = false
+  }
+}
+
+async function regenerarArquivo() {
+  if (!arquivo.value?.id || !arquivo.value?.drive_id) return
+  regenerando.value = true
+  erro.value = ''
+  try {
+    reparo.value = await regenerarWorkbookWsjf(payloadArquivo())
+    diagnostico.value = await diagnosticarWorkbookWsjf(payloadArquivo())
+  } catch (e) {
+    erro.value = mensagemErroInstalacao(e)
+  } finally {
+    regenerando.value = false
+  }
+}
+
 async function carregarGrupo() {
   invalidarValidacao()
+  diagnostico.value = null
+  reparo.value = null
   plano.value = null
   arquivo.value = null
   planos.value = []
@@ -320,6 +406,7 @@ async function carregarGrupo() {
     arquivos.value = a.arquivos || []
     autoSelecionar(planos.value, plano)
     autoSelecionar(arquivosWsjf.value, arquivo)
+    if (arquivo.value) await selecionarArquivo()
   } catch (e) {
     erro.value = mensagemErroInstalacao(e)
   } finally {
