@@ -22,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
   id-token: write
 
 concurrency:
@@ -256,3 +257,143 @@ jobs:
       phase: post_deploy
       strict: true
     secrets: inherit
+
+  lifecycle-evidence:
+    name: Register validated deploy in ReqSys lifecycle
+    runs-on: ubuntu-latest
+    needs: verify
+    if: always() && needs.verify.result == 'success' && needs.verify.outputs.ready == 'true'
+    steps:
+      - name: Checkout exact SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve PRs associated with promoted SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/lifecycle-deploy
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/pulls" \
+            > artifacts/lifecycle-deploy/associated-prs.json
+          python scripts/resolve_lifecycle_requirement_codes.py \
+            --pulls-json artifacts/lifecycle-deploy/associated-prs.json \
+            --output artifacts/lifecycle-deploy/requirements.json \
+            > artifacts/lifecycle-deploy/requirement-codes.txt
+
+      - name: Register deployment evidence
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          REQSYS_API_BASE_URL: ${{ vars.REQSYS_API_BASE_URL }}
+          REQSYS_LIFECYCLE_SERVICE_TOKEN: ${{ secrets.REQSYS_LIFECYCLE_SERVICE_TOKEN }}
+          CORRELATION_ID: lifecycle-deploy-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.environment }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="artifacts/lifecycle-deploy/callback-result.json"
+          mapfile -t requirement_codes < artifacts/lifecycle-deploy/requirement-codes.txt
+
+          if [ "${#requirement_codes[@]}" -eq 0 ]; then
+            python - <<'PY' > "$result"
+          import json
+          print(json.dumps({"configured": True, "resolved": 0, "sent": 0, "decision": "no_explicit_requirement_code"}, indent=2))
+          PY
+            echo "::notice::Nenhum REQ-######### explícito encontrado no PR associado ao SHA; callback não executado."
+            exit 0
+          fi
+
+          if [ -z "${REQSYS_API_BASE_URL:-}" ] || [ -z "${REQSYS_LIFECYCLE_SERVICE_TOKEN:-}" ]; then
+            export RESOLVED_COUNT="${#requirement_codes[@]}"
+            python - <<'PY' > "$result"
+          import json, os
+          print(json.dumps({
+              "configured": False,
+              "resolved": int(os.environ["RESOLVED_COUNT"]),
+              "sent": 0,
+              "decision": "callback_not_configured"
+          }, indent=2))
+          PY
+            echo "::warning::REQSYS_API_BASE_URL/REQSYS_LIFECYCLE_SERVICE_TOKEN não configurados; deploy validado, rastreabilidade pendente de reconciliação."
+            exit 0
+          fi
+
+          case "$TARGET_ENVIRONMENT" in
+            dev) lifecycle_environment="dev" ;;
+            hml) lifecycle_environment="staging" ;;
+            prod) lifecycle_environment="prod" ;;
+            *) echo "Ambiente inesperado: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
+          esac
+
+          api_url="$(python - <<'PY'
+          import json, os
+          manifest = json.load(open('infra/fly-environments.json', encoding='utf-8'))
+          print(manifest['environments'][os.environ['TARGET_ENVIRONMENT']]['api_url'])
+          PY
+          )"
+
+          sent=0
+          failed=0
+          for code in "${requirement_codes[@]}"; do
+            output="artifacts/lifecycle-deploy/${code}-${lifecycle_environment}.json"
+            set +e
+            python scripts/register_lifecycle_evidence.py \
+              --requirement-code "$code" \
+              --type deploy \
+              --provider fly \
+              --repo "$GITHUB_REPOSITORY" \
+              --reference "$TARGET_SHA" \
+              --environment "$lifecycle_environment" \
+              --url "$api_url" \
+              --title "Deploy ${lifecycle_environment} validado para ${TARGET_SHA}" \
+              --output "$output"
+            rc=$?
+            set -e
+            if [ "$rc" -eq 0 ]; then
+              sent=$((sent + 1))
+            else
+              failed=$((failed + 1))
+              echo "::warning::Falha ao registrar lifecycle para $code; deploy permanece válido e será reconciliado."
+            fi
+          done
+
+          export RESOLVED_COUNT="${#requirement_codes[@]}" SENT_COUNT="$sent" FAILED_COUNT="$failed"
+          python - <<'PY' > "$result"
+          import json, os
+          failed = int(os.environ['FAILED_COUNT'])
+          print(json.dumps({
+              "configured": True,
+              "resolved": int(os.environ['RESOLVED_COUNT']),
+              "sent": int(os.environ['SENT_COUNT']),
+              "failed": failed,
+              "decision": "registered" if failed == 0 else "reconciliation_required"
+          }, indent=2))
+          PY
+
+      - name: Publish lifecycle callback summary
+        if: always()
+        run: |
+          if [ -f artifacts/lifecycle-deploy/callback-result.json ]; then
+            echo "## ReqSys lifecycle deploy callback" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat artifacts/lifecycle-deploy/callback-result.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload lifecycle callback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifecycle-deploy-callback-${{ inputs.environment }}
+          path: artifacts/lifecycle-deploy/
+          if-no-files-found: error
+          retention-days: 365
