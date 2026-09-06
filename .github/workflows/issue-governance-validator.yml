@@ -1,0 +1,194 @@
+name: Issue Governance Validator
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  schedule:
+    # Recuperação para Issues criadas/editadas por automações com GITHUB_TOKEN,
+    # cujos eventos derivados podem ser suprimidos pelo GitHub.
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-governance-validator-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  validate-issue-governance:
+    name: Validar contrato de governança das Issues
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar e sincronizar diagnóstico
+        uses: actions/github-script@v7
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        with:
+          script: |
+            const fs = require('fs');
+            const os = require('os');
+            const path = require('path');
+            const { spawnSync } = require('child_process');
+
+            const marker = '<!-- reqsys-issue-governance-validator -->';
+            const { owner, repo } = context.repo;
+
+            async function loadTargets() {
+              if (context.eventName === 'issues') {
+                return [context.payload.issue];
+              }
+
+              // Janela maior que a periodicidade para tolerar atraso de agenda.
+              const since = new Date(Date.now() - (2 * 60 * 60 * 1000)).toISOString();
+              const items = await github.paginate(github.rest.issues.listForRepo, {
+                owner,
+                repo,
+                state: 'open',
+                since,
+                per_page: 100,
+                sort: 'updated',
+                direction: 'desc',
+              });
+              return items.filter((item) => !item.pull_request);
+            }
+
+            function validate(issue) {
+              const base = path.join(os.tmpdir(), `reqsys-issue-${issue.number}`);
+              const issueFile = `${base}.json`;
+              const commentFile = `${base}.md`;
+              fs.writeFileSync(
+                issueFile,
+                JSON.stringify({ number: issue.number, title: issue.title || '', body: issue.body || '' }),
+                'utf8',
+              );
+
+              const processResult = spawnSync(
+                'python',
+                [
+                  'scripts/validate_issue_governance.py',
+                  '--issue-json', issueFile,
+                  '--comment-output', commentFile,
+                ],
+                { encoding: 'utf8' },
+              );
+
+              if (![0, 2].includes(processResult.status)) {
+                throw new Error(
+                  `Validador falhou para Issue #${issue.number}. ` +
+                  `exit=${processResult.status}; stderr=${processResult.stderr}`,
+                );
+              }
+
+              let result;
+              try {
+                result = JSON.parse(processResult.stdout);
+              } catch (error) {
+                throw new Error(
+                  `Saída JSON inválida do validador para Issue #${issue.number}: ${processResult.stdout}`,
+                );
+              }
+
+              return {
+                result,
+                commentBody: fs.readFileSync(commentFile, 'utf8').trim(),
+              };
+            }
+
+            async function findGovernanceComment(issueNumber) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: issueNumber,
+                per_page: 100,
+              });
+              return comments.find((comment) => (comment.body || '').includes(marker));
+            }
+
+            async function syncComment(issue, validation) {
+              const existing = await findGovernanceComment(issue.number);
+
+              if (validation.result.valid && !existing) {
+                // Issue já nasceu conforme: não gerar ruído desnecessário.
+                return 'sem_comentario_necessario';
+              }
+
+              if (existing && (existing.body || '').trim() === validation.commentBody) {
+                return 'comentario_inalterado';
+              }
+
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: existing.id,
+                  body: validation.commentBody,
+                });
+                return 'comentario_atualizado';
+              }
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issue.number,
+                body: validation.commentBody,
+              });
+              return 'comentario_criado';
+            }
+
+            const targets = await loadTargets();
+            const results = [];
+
+            for (const issue of targets) {
+              const validation = validate(issue);
+              const commentAction = await syncComment(issue, validation);
+              results.push({
+                number: issue.number,
+                title: issue.title,
+                url: issue.html_url,
+                valid: validation.result.valid,
+                missing: validation.result.missing_fields,
+                invalid: validation.result.invalid_fields,
+                commentAction,
+              });
+            }
+
+            const invalidIssues = results.filter((item) => !item.valid);
+            const lines = [
+              '# Issue Governance Validator',
+              '',
+              `Evento: ${context.eventName}`,
+              `Issues avaliadas: ${results.length}`,
+              `Conformes: ${results.length - invalidIssues.length}`,
+              `Não conformes: ${invalidIssues.length}`,
+              '',
+              '| Issue | Estado | Comentário |',
+              '|---|---|---|',
+              ...results.map((item) =>
+                `| [#${item.number}](${item.url}) | ${item.valid ? 'conforme' : 'correção necessária'} | ${item.commentAction} |`
+              ),
+            ];
+            await core.summary.addRaw(lines.join('\n')).write();
+
+            if (invalidIssues.length > 0) {
+              const detail = invalidIssues.map((item) => {
+                const missing = item.missing.length ? `ausentes=${item.missing.join(', ')}` : 'ausentes=nenhum';
+                const invalid = item.invalid.length
+                  ? `inválidos=${item.invalid.map((field) => field.field).join(', ')}`
+                  : 'inválidos=nenhum';
+                return `#${item.number} (${missing}; ${invalid})`;
+              });
+              core.setFailed(`Issues fora do contrato de governança: ${detail.join(' | ')}`);
+            }
