@@ -20,14 +20,24 @@ def test_inventory_atual_e_valido() -> None:
     assert errors == []
 
 
-def test_remove_e_bloqueado_enquanto_houver_dependencias() -> None:
+def test_remover_exige_criterio_de_saida_antes_da_exclusao() -> None:
     data = copy.deepcopy(_inventory())
     legado = next(item for item in data["decisions"] if item["id"] == "frontend-vuetify")
     legado["decision"] = "REMOVER"
 
     errors = validate_inventory_data(data, REPO_ROOT)
 
-    assert any("não pode ser REMOVER" in error for error in errors)
+    assert any("com decisão REMOVER exige exit_criteria" in error for error in errors)
+
+
+def test_item_removido_bloqueia_reintroducao_do_path(tmp_path: Path) -> None:
+    data = copy.deepcopy(_inventory())
+    legado = next(item for item in data["decisions"] if item["id"] == "frontend-vuetify")
+    (tmp_path / "frontend-vuetify").mkdir()
+
+    errors = validate_inventory_data({**data, "canonical_targets": {}}, tmp_path)
+
+    assert "path removido reapareceu: frontend-vuetify." in errors
 
 
 def test_item_canonico_deve_ser_mantido() -> None:
