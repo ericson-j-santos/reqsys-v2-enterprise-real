@@ -1,3 +1,4 @@
+import json
 from time import time_ns
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -5,15 +6,28 @@ from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
 from app.db import get_db
-from app.models.agile_runtime import AgileEvidence, AgileSprint, AgileWorkItem
+from app.models.agile_runtime import (
+    AgileCeremony,
+    AgileCeremonyAction,
+    AgileEvidence,
+    AgileSprint,
+    AgileWorkItem,
+)
 from app.schemas.agile_runtime import (
     AgileAIRoutingRecommendationOut,
+    AgileCeremonyActionCriar,
+    AgileCeremonyActionOut,
+    AgileCeremonyActionStatus,
+    AgileCeremonyConcluir,
+    AgileCeremonyCriar,
+    AgileCeremonyOut,
     AgileEvidenceCriar,
     AgileEvidenceOut,
     AgileGithubLaunchpadOut,
     AgileRuntimeResumo,
     AgileSprintCriar,
     AgileSprintOut,
+    AgileSprintStatusAtualizar,
     AgileTraceabilityAtualizar,
     AgileWorkflowTransicao,
     AgileWorkItemCriar,
@@ -60,6 +74,64 @@ def _get_work_item(db: Session, work_item_id: int) -> AgileWorkItem:
     if not item:
         raise HTTPException(status_code=404, detail='Item de trabalho ágil não encontrado')
     return item
+
+
+def _get_sprint(db: Session, sprint_id: int) -> AgileSprint:
+    sprint = db.get(AgileSprint, sprint_id)
+    if not sprint:
+        raise HTTPException(status_code=404, detail='Sprint não encontrada')
+    return sprint
+
+
+def _get_ceremony(db: Session, ceremony_id: int) -> AgileCeremony:
+    ceremony = db.get(AgileCeremony, ceremony_id)
+    if not ceremony:
+        raise HTTPException(status_code=404, detail='Cerimônia ágil não encontrada')
+    return ceremony
+
+
+def _ceremony_out(ceremony: AgileCeremony) -> dict:
+    return AgileCeremonyOut(
+        id=ceremony.id,
+        codigo=ceremony.codigo,
+        sprint_id=ceremony.sprint_id,
+        tipo=ceremony.tipo,
+        titulo=ceremony.titulo,
+        inicio_em=ceremony.inicio_em,
+        duracao_minutos=ceremony.duracao_minutos,
+        facilitador=ceremony.facilitador,
+        participantes=json.loads(ceremony.participantes_json),
+        pauta=ceremony.pauta,
+        resumo=ceremony.resumo,
+        decisoes=ceremony.decisoes,
+        status=ceremony.status,
+        correlation_id=ceremony.correlation_id,
+        criado_em=ceremony.criado_em,
+    ).model_dump()
+
+
+def _validar_gate(item: AgileWorkItem, destino: str) -> None:
+    faltantes = []
+    if destino == 'pronto_para_sprint':
+        if not item.criterios_aceite:
+            faltantes.append('criterios_aceite')
+        if not item.sprint_id:
+            faltantes.append('sprint_id')
+        if not item.owner_ai:
+            faltantes.append('owner')
+        if item.pontos <= 0:
+            faltantes.append('pontos')
+    elif destino == 'concluido':
+        if not item.change_url:
+            faltantes.append('change_url')
+        if item.ci_status == 'unknown':
+            faltantes.append('ci_status')
+        if item.ambiente_deploy == 'none':
+            faltantes.append('ambiente_deploy')
+        if not item.evidencias:
+            faltantes.append('evidencias')
+    if faltantes:
+        raise HTTPException(status_code=422, detail={'gate': destino, 'campos_faltantes': faltantes})
 
 
 def _routing_out(item: AgileWorkItem, modo: str = 'preview') -> AgileAIRoutingRecommendationOut:
@@ -129,6 +201,121 @@ def criar_sprint(payload: AgileSprintCriar, db: Session = Depends(get_db), x_cor
         '{"campos":"minimizados"}',
     )
     return ok(AgileSprintOut.model_validate(sprint).model_dump(), x_correlation_id)
+
+
+@router.patch('/sprints/{sprint_id}/status')
+def atualizar_status_sprint(
+    sprint_id: int,
+    payload: AgileSprintStatusAtualizar,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    sprint = _get_sprint(db, sprint_id)
+    transicoes = {
+        'planejada': {'ativa', 'cancelada'},
+        'ativa': {'concluida', 'cancelada'},
+        'concluida': set(),
+        'cancelada': set(),
+    }
+    if payload.status not in transicoes.get(sprint.status, set()):
+        raise HTTPException(status_code=409, detail=f'Transição inválida de sprint: {sprint.status} -> {payload.status}')
+    sprint.status = payload.status
+    if payload.status == 'concluida':
+        sprint.pontos_concluidos = sum(item.pontos for item in sprint.itens if item.status == 'concluido')
+    db.commit()
+    db.refresh(sprint)
+    registrar_evento(db, x_correlation_id or 'sem-correlation-id', 'agile-runtime', 'AGILE_SPRINT_STATUS_ATUALIZADO', 'agile_sprint', sprint.id, '{"campos":"minimizados"}')
+    return ok(AgileSprintOut.model_validate(sprint).model_dump(), x_correlation_id)
+
+
+@router.get('/cerimonias')
+def listar_cerimonias(sprint_id: int | None = None, db: Session = Depends(get_db)):
+    query = db.query(AgileCeremony)
+    if sprint_id is not None:
+        query = query.filter(AgileCeremony.sprint_id == sprint_id)
+    return ok([_ceremony_out(item) for item in query.order_by(AgileCeremony.inicio_em.desc()).all()])
+
+
+@router.post('/cerimonias')
+def criar_cerimonia(
+    payload: AgileCeremonyCriar,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    _get_sprint(db, payload.sprint_id)
+    data = payload.model_dump(exclude={'participantes'})
+    ceremony = AgileCeremony(
+        codigo=_codigo('CER'),
+        participantes_json=json.dumps(payload.participantes, ensure_ascii=False),
+        correlation_id=x_correlation_id or 'sem-correlation-id',
+        **data,
+    )
+    db.add(ceremony)
+    db.commit()
+    db.refresh(ceremony)
+    registrar_evento(db, ceremony.correlation_id, 'agile-runtime', 'AGILE_CERIMONIA_CRIADA', 'agile_ceremony', ceremony.id, '{"campos":"minimizados"}')
+    return ok(_ceremony_out(ceremony), x_correlation_id)
+
+
+@router.post('/cerimonias/{ceremony_id}/concluir')
+def concluir_cerimonia(
+    ceremony_id: int,
+    payload: AgileCeremonyConcluir,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    ceremony = _get_ceremony(db, ceremony_id)
+    if ceremony.status != 'agendada':
+        raise HTTPException(status_code=409, detail='Somente cerimônia agendada pode ser concluída')
+    ceremony.resumo = payload.resumo
+    ceremony.decisoes = payload.decisoes
+    ceremony.status = 'concluida'
+    db.commit()
+    db.refresh(ceremony)
+    registrar_evento(db, x_correlation_id or ceremony.correlation_id, 'agile-runtime', 'AGILE_CERIMONIA_CONCLUIDA', 'agile_ceremony', ceremony.id, '{"campos":"minimizados"}')
+    return ok(_ceremony_out(ceremony), x_correlation_id)
+
+
+@router.get('/cerimonias/{ceremony_id}/acoes')
+def listar_acoes_cerimonia(ceremony_id: int, db: Session = Depends(get_db)):
+    _get_ceremony(db, ceremony_id)
+    items = db.query(AgileCeremonyAction).filter(AgileCeremonyAction.cerimonia_id == ceremony_id).order_by(AgileCeremonyAction.id.desc()).all()
+    return ok([AgileCeremonyActionOut.model_validate(item).model_dump() for item in items])
+
+
+@router.post('/cerimonias/{ceremony_id}/acoes')
+def criar_acao_cerimonia(
+    ceremony_id: int,
+    payload: AgileCeremonyActionCriar,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    _get_ceremony(db, ceremony_id)
+    item = AgileCeremonyAction(cerimonia_id=ceremony_id, **payload.model_dump())
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    registrar_evento(db, x_correlation_id or 'sem-correlation-id', 'agile-runtime', 'AGILE_ACAO_CERIMONIA_CRIADA', 'agile_ceremony_action', item.id, '{"campos":"minimizados"}')
+    return ok(AgileCeremonyActionOut.model_validate(item).model_dump(), x_correlation_id)
+
+
+@router.patch('/cerimonias/{ceremony_id}/acoes/{action_id}')
+def atualizar_acao_cerimonia(
+    ceremony_id: int,
+    action_id: int,
+    payload: AgileCeremonyActionStatus,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    _get_ceremony(db, ceremony_id)
+    item = db.get(AgileCeremonyAction, action_id)
+    if not item or item.cerimonia_id != ceremony_id:
+        raise HTTPException(status_code=404, detail='Ação da cerimônia não encontrada')
+    item.status = payload.status
+    db.commit()
+    db.refresh(item)
+    registrar_evento(db, x_correlation_id or 'sem-correlation-id', 'agile-runtime', 'AGILE_ACAO_CERIMONIA_ATUALIZADA', 'agile_ceremony_action', item.id, '{"campos":"minimizados"}')
+    return ok(AgileCeremonyActionOut.model_validate(item).model_dump(), x_correlation_id)
 
 
 @router.get('/work-items')
@@ -259,6 +446,8 @@ def transicionar_work_item(
             status_code=409,
             detail=f'Transicao invalida: {status_atual} -> {payload.status}',
         )
+
+    _validar_gate(item, payload.status)
 
     item.status = payload.status
     db.add(item)

@@ -1,6 +1,6 @@
 # ReqSys Agile Runtime Core
 
-**Status:** P0 — núcleo arquitetural e contrato operacional  
+**Status:** P1 — núcleo funcional, cerimônias Scrum e gates operacionais
 **Data:** 2026-06-25  
 **Repositório de aplicação:** `reqsys-v2-enterprise-real`  
 **Decisão:** implementar como módulo interno do ReqSys Enterprise, não como novo repositório isolado.
@@ -134,3 +134,28 @@ Com isso, o ReqSys passa a registrar uma história, vinculá-la a uma sprint, mo
 - Não duplicar backlog externo como fonte da verdade.
 - Não declarar maturidade avançada sem implementação funcional, teste e evidência.
 - Não acoplar diretamente GitHub/GitLab no domínio; usar portas/adaptadores.
+
+## 11. Cerimônias Scrum e melhoria contínua
+
+O runtime oferece contratos persistentes e auditáveis para `refinamento`, `planning`,
+`daily`, `review` e `retrospectiva`. Cada cerimônia pertence a uma sprint e registra
+agenda, duração, facilitador, participantes, pauta, resumo e decisões.
+
+Impedimentos, decisões e ações de melhoria são registrados como ações da cerimônia,
+com responsável, prazo, estado e indicação de bloqueio. O fluxo mínimo é:
+
+```text
+criar sprint → ativar sprint → agendar cerimônia → registrar ações
+→ acompanhar impedimentos → concluir cerimônia → concluir sprint
+```
+
+Endpoints principais:
+
+- `PATCH /v1/agile-runtime/sprints/{id}/status`;
+- `GET|POST /v1/agile-runtime/cerimonias`;
+- `POST /v1/agile-runtime/cerimonias/{id}/concluir`;
+- `GET|POST /v1/agile-runtime/cerimonias/{id}/acoes`;
+- `PATCH /v1/agile-runtime/cerimonias/{id}/acoes/{acao_id}`.
+
+As transições para `pronto_para_sprint` e `concluido` aplicam gates mínimos de DoR
+e DoD no backend, retornando os campos faltantes sem avançar o item.
