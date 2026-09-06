@@ -1,5 +1,5 @@
-name: Issue governada
-description: Registre erro, melhoria, investigação, conformidade ou tarefa com rastreabilidade mínima obrigatória.
+name: "Issue governada"
+description: "Registre erro, melhoria, investigação, conformidade ou tarefa com rastreabilidade mínima obrigatória."
 title: "[ISSUE] "
 body:
   - type: markdown
@@ -10,44 +10,44 @@ body:
   - type: textarea
     id: descricao_problema
     attributes:
-      label: Descrição do problema
-      description: Explique objetivamente o problema, necessidade, decisão ou resultado que motivou esta Issue.
-      placeholder: Descreva o contexto, o comportamento observado e por que esta Issue precisa existir.
+      label: "Descrição do problema"
+      description: "Explique objetivamente o problema, necessidade, decisão ou resultado que motivou esta Issue."
+      placeholder: "Descreva o contexto, o comportamento observado e por que esta Issue precisa existir."
     validations:
       required: true
 
   - type: textarea
     id: estado_atual
     attributes:
-      label: Estado atual evidenciado
-      description: Registre somente o que pode ser comprovado no estado atual.
-      placeholder: Inclua fatos observáveis, ambiente, execução, erro, status ou referência verificável.
+      label: "Estado atual evidenciado"
+      description: "Registre somente o que pode ser comprovado no estado atual."
+      placeholder: "Inclua fatos observáveis, ambiente, execução, erro, status ou referência verificável."
     validations:
       required: true
 
   - type: textarea
     id: estado_esperado
     attributes:
-      label: Estado esperado
-      description: Defina o resultado objetivo que deve existir quando a Issue estiver concluída.
-      placeholder: Descreva o comportamento, controle, artefato ou resultado esperado.
+      label: "Estado esperado"
+      description: "Defina o resultado objetivo que deve existir quando a Issue estiver concluída."
+      placeholder: "Descreva o comportamento, controle, artefato ou resultado esperado."
     validations:
       required: true
 
   - type: textarea
     id: causa_raiz
     attributes:
-      label: Causa raiz
-      description: Informe a causa raiz quando conhecida. Se ainda não estiver comprovada, registre explicitamente que está em investigação.
-      placeholder: Ex.: Ainda desconhecida — investigação necessária.
+      label: "Causa raiz"
+      description: "Informe a causa raiz quando conhecida. Se ainda não estiver comprovada, registre explicitamente que está em investigação."
+      placeholder: "Ex.: Ainda desconhecida — investigação necessária."
     validations:
       required: true
 
   - type: textarea
     id: criterios_aceite
     attributes:
-      label: Critérios de aceite
-      description: Liste condições objetivas e verificáveis para considerar a Issue concluída.
+      label: "Critérios de aceite"
+      description: "Liste condições objetivas e verificáveis para considerar a Issue concluída."
       placeholder: |
         - [ ] Critério verificável 1
         - [ ] Critério verificável 2
@@ -58,65 +58,65 @@ body:
   - type: textarea
     id: riscos
     attributes:
-      label: Riscos
-      description: Registre riscos técnicos, operacionais, de segurança, conformidade, regressão ou prazo.
-      placeholder: Se nenhum risco relevante estiver identificado, registre `Nenhum identificado`.
+      label: "Riscos"
+      description: "Registre riscos técnicos, operacionais, de segurança, conformidade, regressão ou prazo."
+      placeholder: "Se nenhum risco relevante estiver identificado, registre `Nenhum identificado`."
     validations:
       required: true
 
   - type: textarea
     id: dependencias
     attributes:
-      label: Dependências
-      description: Liste sistemas, equipes, permissões, decisões, ambientes, Issues ou recursos dos quais esta entrega depende.
-      placeholder: Se não houver dependências conhecidas, registre `Nenhuma`.
+      label: "Dependências"
+      description: "Liste sistemas, equipes, permissões, decisões, ambientes, Issues ou recursos dos quais esta entrega depende."
+      placeholder: "Se não houver dependências conhecidas, registre `Nenhuma`."
     validations:
       required: true
 
   - type: textarea
     id: evidencias
     attributes:
-      label: Evidências
-      description: Inclua links para logs, execuções, testes, documentos, capturas, métricas ou outros registros verificáveis.
-      placeholder: Se ainda não houver evidência, registre `Sem evidência anexada até o momento` e atualize antes do encerramento.
+      label: "Evidências"
+      description: "Inclua links para logs, execuções, testes, documentos, capturas, métricas ou outros registros verificáveis."
+      placeholder: "Se ainda não houver evidência, registre `Sem evidência anexada até o momento` e atualize antes do encerramento."
     validations:
       required: true
 
   - type: textarea
     id: prs_relacionadas
     attributes:
-      label: PR(s) relacionadas
-      description: Relacione Pull Requests que implementam ou ajudam a resolver esta Issue.
-      placeholder: Ex.: #1234. Se ainda não houver PR, registre `Nenhuma ainda`.
+      label: "PR(s) relacionadas"
+      description: "Relacione Pull Requests que implementam ou ajudam a resolver esta Issue."
+      placeholder: "Ex.: #1234. Se ainda não houver PR, registre `Nenhuma ainda`."
     validations:
       required: true
 
   - type: input
     id: responsavel
     attributes:
-      label: Responsável
-      description: Informe a pessoa, equipe ou função responsável pela condução da Issue.
-      placeholder: Ex.: @usuario, Plataforma, Segurança, responsável funcional.
+      label: "Responsável"
+      description: "Informe a pessoa, equipe ou função responsável pela condução da Issue."
+      placeholder: "Ex.: @usuario, Plataforma, Segurança, responsável funcional."
     validations:
       required: true
 
   - type: dropdown
     id: prioridade
     attributes:
-      label: Prioridade
-      description: Classifique a urgência e o impacto da Issue.
+      label: "Prioridade"
+      description: "Classifique a urgência e o impacto da Issue."
       options:
-        - P0 - Crítica / bloqueio imediato
-        - P1 - Alta / próximo incremento
-        - P2 - Média / planejada
-        - P3 - Baixa / melhoria futura
+        - "P0 - Crítica / bloqueio imediato"
+        - "P1 - Alta / próximo incremento"
+        - "P2 - Média / planejada"
+        - "P3 - Baixa / melhoria futura"
     validations:
       required: true
 
   - type: checkboxes
     id: declaracao
     attributes:
-      label: Declaração de rastreabilidade
+      label: "Declaração de rastreabilidade"
       options:
-        - label: Confirmei que o estado atual e as evidências acima não foram inventados e podem ser verificados.
+        - label: "Confirmei que o estado atual e as evidências acima não foram inventados e podem ser verificados."
           required: true
