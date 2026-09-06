@@ -45,6 +45,10 @@ class AgileSprintOut(AgileSprintCriar):
         from_attributes = True
 
 
+class AgileSprintStatusAtualizar(BaseModel):
+    status: Literal['planejada', 'ativa', 'concluida', 'cancelada']
+
+
 class AgileWorkItemCriar(BaseModel):
     tipo: AgileWorkItemTipo = 'story'
     titulo: str = Field(min_length=5, max_length=220)
@@ -131,6 +135,54 @@ class AgileRuntimeResumo(BaseModel):
     itens_bloqueados: int
     conclusao_percentual: float
     ci_success_percentual: float
+
+
+class AgileCeremonyCriar(BaseModel):
+    sprint_id: int
+    tipo: Literal['refinamento', 'planning', 'daily', 'review', 'retrospectiva']
+    titulo: str = Field(min_length=5, max_length=220)
+    inicio_em: datetime
+    duracao_minutos: int = Field(gt=0, le=480)
+    facilitador: str = Field(min_length=2, max_length=120)
+    participantes: list[str] = Field(default_factory=list, max_length=100)
+    pauta: str | None = None
+
+
+class AgileCeremonyConcluir(BaseModel):
+    resumo: str = Field(min_length=5)
+    decisoes: str | None = None
+
+
+class AgileCeremonyOut(AgileCeremonyCriar):
+    id: int
+    codigo: str
+    resumo: str | None = None
+    decisoes: str | None = None
+    status: str
+    correlation_id: str | None = None
+    criado_em: datetime
+
+
+class AgileCeremonyActionCriar(BaseModel):
+    tipo: Literal['impedimento', 'melhoria', 'decisao', 'acao']
+    descricao: str = Field(min_length=5)
+    responsavel: str = Field(min_length=2, max_length=120)
+    prazo: date | None = None
+    bloqueante: bool = False
+
+
+class AgileCeremonyActionStatus(BaseModel):
+    status: Literal['aberta', 'em_andamento', 'resolvida', 'cancelada']
+
+
+class AgileCeremonyActionOut(AgileCeremonyActionCriar):
+    id: int
+    cerimonia_id: int
+    status: str
+    criado_em: datetime
+
+    class Config:
+        from_attributes = True
 
 
 AgileLaunchpadAmbiente = Literal['dev', 'test', 'homolog', 'prod']
