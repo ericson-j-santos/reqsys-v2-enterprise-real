@@ -14,6 +14,7 @@ from app.api import (  # noqa: E402
     gestao_ti,
     hub_lowcode,
     levantamento_requisitos,
+    lifecycle,
     monitoramento_operacional,
     notificacoes,
     pentaho_integration,
@@ -34,6 +35,7 @@ hub_lowcode.router.include_router(planner_teams_notify.router)
 teams_gateway.router.include_router(notificacoes.router)
 teams_gateway.router.include_router(teams_github_actions.router)
 requisitos.api_router.include_router(levantamento_requisitos.router)
+requisitos.router.include_router(lifecycle.router)
 
 # A camada canônica é anexada aos requisitos para preservar o app.main.
 requisitos.api_router.include_router(gestao_ti.router)
