@@ -4,8 +4,8 @@ Incremento 1:
 ReqSys -> Redmine -> GitHub -> evidências de PR/commit/deploy -> ReqSys.
 
 A persistência usa ``VinculoGit`` para evitar nova migração de banco neste
-incremento. Cada integração externa possui um dono claro; o ReqSys consolida a
-rastreabilidade e não replica indiscriminadamente todos os campos.
+incremento. O orquestrador consolida rastreabilidade, mas não substitui a
+máquina de estados canônica do requisito.
 """
 
 from __future__ import annotations
@@ -19,11 +19,11 @@ from app.models.requisito import Requisito
 from app.models.vinculo_git import VinculoGit
 from app.services.auditoria import registrar_evento
 from app.services.github_lifecycle import find_or_create_requirement_issue
-from app.services.github_redmine import IntegracaoError, publish_requisito_to_redmine
+from app.services.github_redmine import publish_requisito_to_redmine
 
 ALLOWED_EVIDENCE_TYPES = {'issue', 'branch', 'pr', 'commit', 'deploy'}
 ALLOWED_ENVIRONMENTS = {'dev', 'staging', 'prod'}
-TERMINAL_REQUIREMENT_STATUSES = {'concluido', 'cancelado'}
+TERMINAL_REQUIREMENT_STATUSES = {'concluido', 'cancelado', 'exportado'}
 
 
 class LifecycleError(RuntimeError):
@@ -188,6 +188,8 @@ def start_lifecycle(
     tracker_id: int | None = None,
     priority_id: int | None = None,
 ) -> dict[str, Any]:
+    """Inicia/reconcilia os vínculos externos sem alterar o estado do requisito."""
+
     if requisito.status in TERMINAL_REQUIREMENT_STATUSES:
         raise LifecycleError(
             f"Requisito {requisito.codigo} está em estado terminal '{requisito.status}' e não pode iniciar novo ciclo."
@@ -207,7 +209,8 @@ def start_lifecycle(
         issue_id = redmine_result.get('issue_principal_id')
         if not issue_id:
             raise LifecycleError(
-                'Não foi possível criar/reutilizar a Issue Redmine. ' + ('; '.join(warnings) if warnings else 'Sem detalhe adicional.')
+                'Não foi possível criar/reutilizar a Issue Redmine. '
+                + ('; '.join(warnings) if warnings else 'Sem detalhe adicional.')
             )
         redmine_link, _ = _upsert_link(
             db,
@@ -220,9 +223,8 @@ def start_lifecycle(
             titulo=f'Redmine issue #{issue_id}',
             autor=actor,
         )
-        if requisito.status not in TERMINAL_REQUIREMENT_STATUSES:
-            requisito.status = 'backlog'
-        db.add(requisito)
+        # Persiste a referência antes da próxima chamada externa. Assim, se o
+        # GitHub falhar, a reexecução não recria a Issue Redmine.
         db.commit()
         db.refresh(redmine_link)
 
@@ -263,6 +265,7 @@ def start_lifecycle(
         json.dumps(
             {
                 'codigo': requisito.codigo,
+                'status_requisito': requisito.status,
                 'github_repo': github_repo,
                 'redmine_issue': redmine_link.referencia if redmine_link else None,
                 'github_issue': github_link.referencia if github_link else None,
@@ -290,6 +293,8 @@ def register_lifecycle_evidence(
     titulo: str | None = None,
     ambiente: str | None = None,
 ) -> dict[str, Any]:
+    """Registra evidência idempotente sem inferir transição funcional."""
+
     provedor = (provedor or '').strip().lower()
     tipo = (tipo or '').strip().lower()
     ambiente = (ambiente or '').strip().lower() or None
@@ -331,6 +336,7 @@ def register_lifecycle_evidence(
         json.dumps(
             {
                 'codigo': requisito.codigo,
+                'status_requisito': requisito.status,
                 'provedor': link.provedor,
                 'tipo': link.tipo,
                 'referencia': link.referencia,
