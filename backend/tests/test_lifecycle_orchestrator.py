@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.models.requisito import Requisito
 from app.models.vinculo_git import VinculoGit
 from app.services import lifecycle_orchestrator as lifecycle
@@ -23,7 +25,7 @@ def _requisito(db_session, codigo: str = 'REQ-123456789') -> Requisito:
     return requisito
 
 
-def test_start_lifecycle_e_idempotente(db_session, monkeypatch):
+def test_start_lifecycle_e_idempotente_sem_alterar_estado_canonico(db_session, monkeypatch):
     requisito = _requisito(db_session)
     calls = {'redmine': 0, 'github': 0}
 
@@ -64,7 +66,8 @@ def test_start_lifecycle_e_idempotente(db_session, monkeypatch):
     )
 
     assert calls == {'redmine': 1, 'github': 1}
-    assert requisito.status == 'backlog'
+    assert requisito.status == 'estruturado'
+    assert first['status_requisito'] == 'estruturado'
     assert first['stages']['redmine'] is True
     assert first['stages']['github_issue'] is True
     assert second['stages']['redmine'] is True
@@ -78,9 +81,9 @@ def test_start_lifecycle_e_idempotente(db_session, monkeypatch):
     }
 
 
-def test_register_evidence_consolida_pr_commit_e_deploy_sem_concluir(db_session):
+def test_register_evidence_consolida_pr_commit_e_deploy_sem_transicionar(db_session):
     requisito = _requisito(db_session, 'REQ-987654321')
-    requisito.status = 'backlog'
+    requisito.status = 'em_execucao'
     db_session.commit()
 
     lifecycle.register_lifecycle_evidence(
@@ -147,7 +150,7 @@ def test_register_evidence_consolida_pr_commit_e_deploy_sem_concluir(db_session)
     assert snapshot['stages']['deploy_staging'] is True
     assert snapshot['stages']['deploy_prod'] is True
     assert snapshot['ready_for_explicit_completion'] is True
-    assert requisito.status == 'backlog'
+    assert requisito.status == 'em_execucao'
 
     pr_links = (
         db_session.query(VinculoGit)
@@ -163,7 +166,7 @@ def test_register_evidence_consolida_pr_commit_e_deploy_sem_concluir(db_session)
 def test_deploy_rejeita_ambiente_desconhecido(db_session):
     requisito = _requisito(db_session, 'REQ-111222333')
 
-    try:
+    with pytest.raises(lifecycle.LifecycleError, match='dev, staging ou prod'):
         lifecycle.register_lifecycle_evidence(
             db_session,
             requisito=requisito,
@@ -175,7 +178,18 @@ def test_deploy_rejeita_ambiente_desconhecido(db_session):
             correlation_id='corr-invalid',
             actor='tester',
         )
-    except lifecycle.LifecycleError as exc:
-        assert 'dev, staging ou prod' in str(exc)
-    else:
-        raise AssertionError('LifecycleError esperado para ambiente inválido')
+
+
+def test_start_lifecycle_rejeita_requisito_terminal(db_session):
+    requisito = _requisito(db_session, 'REQ-444555666')
+    requisito.status = 'exportado'
+    db_session.commit()
+
+    with pytest.raises(lifecycle.LifecycleError, match='estado terminal'):
+        lifecycle.start_lifecycle(
+            db_session,
+            requisito=requisito,
+            github_repo='org/repo',
+            correlation_id='corr-terminal',
+            actor='tester',
+        )
