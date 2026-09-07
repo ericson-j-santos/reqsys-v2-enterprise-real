@@ -22,7 +22,6 @@ from app.schemas.movimento_email import (
     MovimentoEmailConsumirRequest,
     MovimentoEmailJobRequest,
 )
-from app.services.email_mime_report_service import EmailIdentity
 from app.services.movimento_email import queue_repository as fila
 from app.services.movimento_email.consumer import consumir_fila_email_movimento
 from app.services.movimento_email.jobs import executar_job_diario
@@ -30,7 +29,13 @@ from app.services.movimento_email.repository import (
     ExtracaoError,
     SqlServerProspeccaoMovimentoRepository,
 )
-from app.services.movimento_email.smtp_sender import EnvioEmailError, SmtpEmailSender
+from app.services.movimento_email.sender_factory import (
+    ConfiguracaoEnvioError,
+    criar_sender_email_movimento,
+    resolver_provedor_envio,
+    resolver_remetente_configurado,
+)
+from app.services.movimento_email.smtp_sender import EnvioEmailError
 
 logger = logging.getLogger('reqsys.movimento_email_api')
 
@@ -103,35 +108,35 @@ async def movimento_email_fila_consumir(
     ctx=Depends(require_consumir_auth),
     db: Session = Depends(get_db),
 ):
-    """Processa um lote da fila de envio: libera reservas travadas (timeout
-    configurável via MOVIMENTO_EMAIL_RESERVA_TIMEOUT_MINUTOS, padrão 15min —
-    ver CLAUDE.md do usuário) e envia via SMTP os itens `PENDING`.
+    """Processa um lote da fila de envio por SMTP ou Microsoft Graph.
 
-    `dry_run=true` mostra o que SERIA enviado sem chamar o SMTP nem gravar
-    nada (formato de resposta deliberadamente distinto de um envio real).
+    `MOVIMENTO_EMAIL_PROVIDER=graph` usa a identidade Microsoft Entra já
+    configurada no ReqSys e exige `MOVIMENTO_EMAIL_GRAPH_SENDER` + permissão
+    de aplicação `Mail.Send`. O padrão continua `smtp` para compatibilidade.
+
+    `dry_run=true` mostra o que SERIA enviado sem chamar provedor externo nem
+    gravar envio real.
     """
-    if not payload.dry_run and not settings.movimento_email_smtp_host:
-        raise HTTPException(status_code=409, detail='MOVIMENTO_EMAIL_SMTP_HOST não configurado')
-
     correlation_id = resolver_correlation_id()
-    sender = None
-    if not payload.dry_run:
-        sender = SmtpEmailSender(
-            host=settings.movimento_email_smtp_host,
-            port=settings.movimento_email_smtp_port,
-            username=settings.movimento_email_smtp_user,
-            password=settings.movimento_email_smtp_password,
-            use_tls=settings.movimento_email_smtp_use_tls,
-        )
     try:
+        provedor = resolver_provedor_envio()
+        if payload.dry_run:
+            sender = None
+            remetente = resolver_remetente_configurado(settings, permitir_placeholder=True)
+        else:
+            sender, remetente, provedor = criar_sender_email_movimento(settings)
+
         resultado = consumir_fila_email_movimento(
             db,
             sender,
-            remetente=EmailIdentity(settings.movimento_email_smtp_from or settings.movimento_email_smtp_user).as_header(),
+            remetente=remetente,
             lote_max=payload.lote_max or settings.movimento_email_lote_max,
             reserva_timeout_minutos=settings.movimento_email_reserva_timeout_minutos,
             dry_run=payload.dry_run,
         )
+        resultado['provedor_envio'] = provedor
+    except ConfiguracaoEnvioError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
     except EnvioEmailError as exc:
-        raise HTTPException(status_code=502, detail=f'Falha ao enviar e-mail via SMTP: {exc}') from None
+        raise HTTPException(status_code=502, detail=f'Falha ao enviar e-mail: {exc}') from None
     return ok(resultado, correlation_id)
