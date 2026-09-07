@@ -316,6 +316,11 @@ async def ai_conversations_bot_messages(
             status_code=422,
             detail='conversation_id e mensagem são obrigatórios no cartão.',
         )
+    if not usuario_aad_object_id:
+        raise HTTPException(
+            status_code=403,
+            detail='Identidade AAD do remetente Teams ausente.',
+        )
 
     activity_id = str(activity.get('id') or '').strip()
     correlation_id = resolver_correlation_id(
@@ -325,11 +330,23 @@ async def ai_conversations_bot_messages(
 
     try:
         conversa = obter_conversa(db, conversation_id)
-        if usuario_aad_object_id:
-            conversa.teams_destino_tipo = 'chat_1a1'
-            conversa.teams_destino_id = usuario_aad_object_id
-            conversa.teams_modo = 'bot'
-            db.commit()
+        destino_associado = (conversa.teams_destino_id or '').strip()
+        if not destino_associado or destino_associado != usuario_aad_object_id:
+            registrar_evento(
+                db,
+                correlation_id,
+                'teams-bot-user',
+                'AI_CONVERSATION_TEAMS_REPLY_DENIED',
+                'ai_conversation',
+                conversation_id,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail='O remetente Teams não está associado a esta conversa.',
+            )
+        conversa.teams_destino_tipo = 'chat_1a1'
+        conversa.teams_modo = 'bot'
+        db.commit()
         result = executar_turno(
             db,
             conversa=conversa,
