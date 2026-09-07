@@ -1,0 +1,111 @@
+name: BACEN 57 Simulation Assessment
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/assess_bacen_obligations_simulation.py"
+      - "governance/bacen/normative/NORMATIVE-OBLIGATIONS-EXTENDED.yaml"
+      - "governance/bacen/normative/EVIDENCE-REGISTRY.yaml"
+      - ".github/workflows/bacen-57-simulation-assessment.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/assess_bacen_obligations_simulation.py"
+      - "governance/bacen/normative/NORMATIVE-OBLIGATIONS-EXTENDED.yaml"
+      - "governance/bacen/normative/EVIDENCE-REGISTRY.yaml"
+      - ".github/workflows/bacen-57-simulation-assessment.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: bacen-57-simulation-assessment-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  assess:
+    name: Avaliar 57 obrigações e sincronizar #1506
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Executar avaliação segura
+        run: |
+          python -m pip install --disable-pip-version-check PyYAML
+          mkdir -p artifacts/bacen-57-simulation
+          python scripts/assess_bacen_obligations_simulation.py \
+            --output artifacts/bacen-57-simulation/report.json
+
+      - name: Publicar resumo da execução
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen-57-simulation/report.json").read_text(encoding="utf-8"))
+          print("## BACEN — avaliação simulada das 57 obrigações")
+          print(f"- Total: **{report['total']}**")
+          print(f"- Evidências localizadas para revisão: **{report['evidence_candidates']}**")
+          print(f"- Evidências ausentes: **{report['evidence_missing']}**")
+          print(f"- Obrigações condicionais: **{report['conditional']}**")
+          print("- Validade institucional: **false**")
+          print("- Produção permitida: **false**")
+          PY
+
+      - name: Sincronizar resultado na Issue #1506
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- reqsys-bacen-57-simulation-assessment -->';
+            const issueNumber = 1506;
+            const report = JSON.parse(fs.readFileSync('artifacts/bacen-57-simulation/report.json', 'utf8'));
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const sha = context.sha;
+            const body = [
+              marker,
+              '## Avaliação automática — 57 obrigações (SIMULAÇÃO)',
+              '',
+              `- Total avaliado: **${report.total}**`,
+              `- Evidências localizadas para revisão: **${report.evidence_candidates}**`,
+              `- Evidências ausentes: **${report.evidence_missing}**`,
+              `- Obrigações condicionais: **${report.conditional}**`,
+              `- SHA: \`${sha}\``,
+              `- Execução: ${runUrl}`,
+              '',
+              '> Este resultado é exclusivamente técnico e simulado. Não representa conformidade regulatória, não substitui a decisão institucional da #1505 e não autoriza PROD.',
+              '',
+              '`institutional_validity=false`  ',
+              '`production_allowed=false`',
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: issueNumber,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) => (comment.body || '').includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number: issueNumber, body });
+            }
+
+      - name: Publicar artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-57-simulation-assessment
+          path: artifacts/bacen-57-simulation/report.json
+          if-no-files-found: error
+          retention-days: 90
