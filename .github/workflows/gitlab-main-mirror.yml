@@ -54,6 +54,15 @@ jobs:
           fi
           python scripts/sync_gitlab_mirror.py "${args[@]}"
 
+      # Falha de mirror costuma ser permissão da identidade técnica, não defeito
+      # do script. A atestação é somente leitura e nomeia a identidade efetiva
+      # da credencial do cofre sem expor o segredo (Issue #1503).
+      - name: Atestar identidade técnica quando o mirror falhar
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        run: python scripts/attest_gitlab_mirror_identity.py >/dev/null
+
       - name: Publicar evidência
         if: always()
         uses: actions/upload-artifact@v4
@@ -62,5 +71,6 @@ jobs:
           path: |
             audit/gitlab-mirror-sync.json
             audit/gitlab-mirror-credential-resolution.json
+            audit/gitlab-mirror-identity-attestation.json
           if-no-files-found: warn
           retention-days: 30

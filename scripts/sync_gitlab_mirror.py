@@ -32,8 +32,19 @@ DEFAULT_TARGET_BRANCH = "main"
 DEFAULT_EVIDENCE = "audit/gitlab-mirror-sync.json"
 
 
+PROTECTED_BRANCH_MARKERS = (
+    "not allowed to push code to protected branches",
+    "protected branch hook declined",
+    "pre-receive hook declined",
+)
+
+
 class SyncError(RuntimeError):
     pass
+
+
+class IdentityNotAuthorizedError(SyncError):
+    """Push recusado pela proteção da branch: identidade sem autorização."""
 
 
 @dataclass
@@ -100,6 +111,12 @@ def classify_state(*, source_sha: str, target_sha: str, target_is_ancestor: bool
     if target_is_ancestor:
         return "fast_forward"
     return "diverged"
+
+
+def is_protected_branch_rejection(message: str) -> bool:
+    """Distingue recusa por permissão da identidade de falha técnica genérica."""
+    lowered = message.casefold()
+    return any(marker in lowered for marker in PROTECTED_BRANCH_MARKERS)
 
 
 def write_evidence(path: Path, evidence: Evidence) -> None:
@@ -213,10 +230,15 @@ def main() -> int:
                 print(json.dumps(asdict(evidence), ensure_ascii=False))
                 return 0
 
-            run_git(
-                ["push", args.gitlab_repository, f"{source_sha}:refs/heads/{args.target_branch}"],
-                env=auth_env,
-            )
+            try:
+                run_git(
+                    ["push", args.gitlab_repository, f"{source_sha}:refs/heads/{args.target_branch}"],
+                    env=auth_env,
+                )
+            except SyncError as exc:
+                if is_protected_branch_rejection(str(exc)):
+                    raise IdentityNotAuthorizedError(str(exc)) from exc
+                raise
 
             # Confirma o estado remoto após o push sem assumir sucesso apenas pelo exit code.
             run_git(
@@ -234,6 +256,19 @@ def main() -> int:
             write_evidence(evidence_path, evidence)
             print(json.dumps(asdict(evidence), ensure_ascii=False))
             return 0
+
+    except IdentityNotAuthorizedError as exc:
+        evidence.status = "blocked"
+        evidence.action = "identity_not_authorized"
+        evidence.detail = (
+            "A proteção da branch recusou o push: a identidade técnica do mirror não está "
+            "autorizada a avançar a branch protegida. Execute "
+            "scripts/attest_gitlab_mirror_identity.py para identificar a identidade "
+            f"autoritativa e a ação humana mínima restante. Detalhe git: {exc}"
+        )
+        write_evidence(evidence_path, evidence)
+        print(json.dumps(asdict(evidence), ensure_ascii=False))
+        return 2
 
     except Exception as exc:
         evidence.status = "failed"
