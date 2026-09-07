@@ -2,7 +2,7 @@ name: Governed Post-Merge Fly Sync Readiness
 
 on:
   workflow_run:
-    workflows: ["Governed PR Automation"]
+    workflows: ["Fly Enterprise Sync"]
     types: [completed]
     branches: [main]
   pull_request:
@@ -45,7 +45,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'workflow_dispatch')
+       github.event.workflow_run.event == 'push')
     steps:
       - name: Checkout da main atual
         uses: actions/checkout@v4
@@ -110,7 +110,7 @@ jobs:
 
           payload = {
               "contract": "reqsys-governed-post-merge-fly-sync-readiness",
-              "source_workflow": "Governed PR Automation",
+              "source_workflow": "Fly Enterprise Sync",
               "source_run_id": os.environ.get("SOURCE_RUN_ID") or None,
               "source_run_event": os.environ.get("SOURCE_RUN_EVENT"),
               "source_run_conclusion": os.environ.get("SOURCE_RUN_CONCLUSION"),
