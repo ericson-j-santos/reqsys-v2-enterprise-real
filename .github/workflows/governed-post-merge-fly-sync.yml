@@ -1,6 +1,8 @@
 name: Governed Post-Merge Fly Sync Readiness
 
 on:
+  push:
+    branches: [main]
   workflow_run:
     workflows: ["Fly Enterprise Sync"]
     types: [completed]
@@ -43,6 +45,7 @@ jobs:
     needs: contract
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push')
@@ -76,10 +79,12 @@ jobs:
         id: publication
         env:
           OBSERVED_MAIN_SHA: ${{ steps.context.outputs.main_sha }}
+          TRIGGER_MODE: ${{ github.event_name == 'workflow_run' && 'workflow_run' || (github.event_name == 'push' && 'push_fallback' || 'manual') }}
+          SOURCE_WORKFLOW: ${{ github.event_name == 'workflow_run' && 'Fly Enterprise Sync' || (github.event_name == 'push' && 'main push fallback' || 'manual dispatch') }}
           SOURCE_RUN_ID: ${{ github.event.workflow_run.id || '' }}
           SOURCE_RUN_EVENT: ${{ github.event.workflow_run.event || github.event_name }}
-          SOURCE_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'manual' }}
-          SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+          SOURCE_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion || (github.event_name == 'push' && 'push_observed' || 'manual') }}
+          SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         shell: bash
         run: |
           set -uo pipefail
@@ -110,7 +115,8 @@ jobs:
 
           payload = {
               "contract": "reqsys-governed-post-merge-fly-sync-readiness",
-              "source_workflow": "Fly Enterprise Sync",
+              "trigger_mode": os.environ.get("TRIGGER_MODE"),
+              "source_workflow": os.environ.get("SOURCE_WORKFLOW"),
               "source_run_id": os.environ.get("SOURCE_RUN_ID") or None,
               "source_run_event": os.environ.get("SOURCE_RUN_EVENT"),
               "source_run_conclusion": os.environ.get("SOURCE_RUN_CONCLUSION"),
@@ -137,11 +143,13 @@ jobs:
           DECISION: ${{ steps.publication.outputs.decision }}
           SYNCED: ${{ steps.publication.outputs.synced }}
           MAIN_SHA: ${{ steps.context.outputs.main_sha }}
+          TRIGGER_MODE: ${{ github.event_name == 'workflow_run' && 'workflow_run' || (github.event_name == 'push' && 'push_fallback' || 'manual') }}
         run: |
           {
             echo "## Governed Post-Merge Fly Sync Readiness"
             echo ""
             echo "- main observada: \`${MAIN_SHA}\`"
+            echo "- modo do gatilho: \`${TRIGGER_MODE}\`"
             echo "- decisão: \`${DECISION:-unknown}\`"
             echo "- publicação sincronizada: \`${SYNCED:-unknown}\`"
             echo "- deploy executado: \`false\`"
