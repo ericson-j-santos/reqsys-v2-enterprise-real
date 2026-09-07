@@ -10,7 +10,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import Any
-from xml.etree import ElementTree as ET
+
+from defusedxml import ElementTree as ET
 
 _SERVER_PATTERN = re.compile(r'(?i)(?:^|;)\s*(?:data\s+source|server|address|addr|network\s+address)\s*=\s*([^;]+)')
 _DATABASE_PATTERN = re.compile(r'(?i)(?:^|;)\s*(?:initial\s+catalog|database)\s*=\s*([^;]+)')
@@ -25,7 +26,7 @@ def _local_name(tag: str) -> str:
     return tag.rsplit('}', 1)[-1]
 
 
-def _texto_descendente(elemento: ET.Element, nome: str) -> str:
+def _texto_descendente(elemento: Any, nome: str) -> str:
     for filho in elemento.iter():
         if _local_name(filho.tag) == nome and filho.text:
             return filho.text.strip()

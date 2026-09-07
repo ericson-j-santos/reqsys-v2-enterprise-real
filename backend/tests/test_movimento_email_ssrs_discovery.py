@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+from defusedxml.common import DefusedXmlException
+
 from app.services.movimento_email.ssrs_discovery import descobrir_origem_ssrs
 
 
@@ -56,3 +59,20 @@ def test_reporta_data_source_compartilhado_pendente(tmp_path: Path):
 
     assert resultado['data_sources_compartilhados_pendentes'] == ['/Dados/Movimento']
     assert resultado['dsn_molde_sem_credenciais'] is None
+
+
+def test_rejeita_xml_ssrs_com_entidade_externa(tmp_path: Path):
+    rdl = tmp_path / 'MovimentoMalicioso.rdl'
+    rdl.write_text(
+        '''<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE Report [
+  <!ENTITY arquivo SYSTEM "file:///etc/passwd">
+]>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition">
+  <DataSources>&arquivo;</DataSources>
+</Report>''',
+        encoding='utf-8',
+    )
+
+    with pytest.raises(DefusedXmlException):
+        descobrir_origem_ssrs(rdl)
