@@ -6,6 +6,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-09-07
+
+### Adicionado (Mirror GitLab · correlacionar a credencial do Key Vault com a identidade que ela representa)
+
+- O mirror GitHub → GitLab está parado desde a execução #33976554671: a credencial é resolvida corretamente no Azure Key Vault, mas o `git push` é recusado com `You are not allowed to push code to protected branches on this project`. Existem duas identidades homônimas `reqsys-github-mirror` no projeto (uma Guest, nível 10, e uma Maintainer, nível 40) e, até aqui, descobrir qual delas responde pelo token do cofre dependia de investigação manual — o que mantinha a Issue #1503 como pendência humana bloqueante.
+- `scripts/attest_gitlab_mirror_identity.py` (novo, + 22 testes): atestação **somente leitura** que responde essa pergunta sem revelar o segredo. Usa o próprio token para consultar `GET /user` (que identifica de forma inequívoca a identidade efetiva), os metadados do próprio token, a associação no projeto, as identidades homônimas e a configuração da branch protegida. Emite `audit/gitlab-mirror-identity-attestation.json` com veredito (`authorized`, `insufficient_permission`, `force_push_enabled`, `undetermined`, `unresolved`), constatações e — quando ainda não autorizado — a declaração de autorização já parametrizada com o `id` e o `username` corretos. Nenhuma chamada altera identidade, permissão ou proteção de branch: conceder permissão continua sendo decisão administrativa humana, e a automação não eleva o próprio privilégio no GitLab.
+- Guarda de vazamento: `write_evidence` aborta a gravação se o valor do token aparecer na evidência serializada, em vez de confiar apenas na seleção de campos.
+- Allowances de push concedidos a grupo ou deploy key não são decidíveis só com identidade e nível de acesso. Em vez de virar um falso negativo silencioso, passam a ser registrados como constatação explícita a confirmar manualmente antes de conceder acesso adicional.
+- `scripts/sync_gitlab_mirror.py`: recusa por branch protegida deixa de cair no `failed/none` genérico e passa a ser classificada como `blocked/identity_not_authorized`, apontando para a atestação. A distinção importa porque as duas situações têm remediações opostas — uma é defeito técnico, a outra é autorização pendente.
+- `.github/workflows/gitlab-mirror-identity-attestation.yml` (novo): roda o contrato do atestador em PR que toque os scripts, e a atestação sob demanda (`workflow_dispatch`, com opção `require_authorized` para fechar o loop após a concessão) e em reverificação diária não bloqueante, publicando o veredito e a ação humana restante no summary da execução.
+- `.github/workflows/gitlab-main-mirror.yml`: executa a atestação quando o job falha, para que a evidência de falha nomeie a identidade efetiva em vez de deixar a correlação para uma investigação posterior.
+- `docs/runbooks/gitlab-main-mirror.md`: a seção de credencial ainda mandava criar o secret `GITLAB_MIRROR_TOKEN` no GitHub Actions — instrução obsoleta, já que `allow_github_secret_fallback` está `false` em `config/control-plane-lifecycle-policy.json` e a credencial vem do Key Vault via OIDC. Corrigida, e acrescentado o procedimento de identidade técnica com a ação humana mínima e a confirmação pós-concessão.
+
 ## [Unreleased] - 2026-09-05
 
 ### Corrigido (Acessibilidade — dívida sistêmica do shell zerada e as 10 telas com tooltip local)
