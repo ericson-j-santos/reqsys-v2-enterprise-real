@@ -7,6 +7,7 @@ import app.api.requisitos_runtime_transition  # noqa: F401
 # Routers especializados são anexados a superfícies já incluídas pelo app.main
 # para preservar os pontos canônicos de composição da aplicação.
 from app.api import (  # noqa: E402
+    ai_conversation,
     copilot_memory,
     copilot_memory_install_discovery,
     diagram_version_governance,
@@ -34,6 +35,7 @@ hub_lowcode.router.include_router(wsjf_planner_excel.router)
 hub_lowcode.router.include_router(planner_teams_notify.router)
 teams_gateway.router.include_router(notificacoes.router)
 teams_gateway.router.include_router(teams_github_actions.router)
+teams_gateway.router.include_router(ai_conversation.router)
 requisitos.api_router.include_router(levantamento_requisitos.router)
 requisitos.router.include_router(lifecycle.router)
 
