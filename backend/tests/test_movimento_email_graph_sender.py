@@ -4,6 +4,7 @@ import base64
 from email.message import EmailMessage
 
 import pytest
+import requests
 
 from app.services.movimento_email.graph_sender import GraphEmailSender
 from app.services.movimento_email.smtp_sender import EnvioEmailError
@@ -29,6 +30,16 @@ def _mensagem() -> EmailMessage:
     return message
 
 
+def _sender_com_post(http_post):
+    return GraphEmailSender(
+        tenant_id='tenant-123',
+        client_id='client-123',
+        client_secret='segredo',
+        sender_user='reqsys@empresa.test',
+        http_post=http_post,
+    )
+
+
 def test_graph_sender_obtem_token_e_envia_mime():
     chamadas: list[dict] = []
 
@@ -38,13 +49,7 @@ def test_graph_sender_obtem_token_e_envia_mime():
             return _Response(200, {'access_token': 'token-teste'})
         return _Response(202)
 
-    sender = GraphEmailSender(
-        tenant_id='tenant-123',
-        client_id='client-123',
-        client_secret='segredo',
-        sender_user='reqsys@empresa.test',
-        http_post=fake_post,
-    )
+    sender = _sender_com_post(fake_post)
 
     sender.enviar(_mensagem())
 
@@ -64,13 +69,7 @@ def test_graph_sender_nao_expoe_corpo_de_erro_do_graph():
             return _Response(200, {'access_token': 'token-teste'})
         return _Response(403, {'error': {'code': 'ErrorAccessDenied', 'message': 'segredo-interno'}})
 
-    sender = GraphEmailSender(
-        tenant_id='tenant-123',
-        client_id='client-123',
-        client_secret='segredo',
-        sender_user='reqsys@empresa.test',
-        http_post=fake_post,
-    )
+    sender = _sender_com_post(fake_post)
 
     with pytest.raises(EnvioEmailError) as exc_info:
         sender.enviar(_mensagem())
@@ -79,3 +78,49 @@ def test_graph_sender_nao_expoe_corpo_de_erro_do_graph():
     assert 'ErrorAccessDenied' in detalhe
     assert 'segredo-interno' not in detalhe
     assert 'segredo' not in detalhe
+
+
+def test_graph_sender_rejeita_configuracao_incompleta():
+    with pytest.raises(EnvioEmailError) as exc_info:
+        GraphEmailSender(
+            tenant_id='',
+            client_id='client-123',
+            client_secret='segredo',
+            sender_user='reqsys@empresa.test',
+        )
+
+    assert 'AZURE_TENANT_ID' in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    ('status_code', 'erro_esperado'),
+    [
+        (503, requests.RequestException),
+        (401, EnvioEmailError),
+    ],
+)
+def test_graph_sender_classifica_falha_de_autenticacao(status_code, erro_esperado):
+    sender = _sender_com_post(lambda *_args, **_kwargs: _Response(status_code))
+
+    with pytest.raises(erro_esperado):
+        sender._obter_token()
+
+
+def test_graph_sender_rejeita_json_invalido_na_autenticacao():
+    class _InvalidJsonResponse:
+        status_code = 200
+
+        def json(self):
+            raise ValueError('json inválido')
+
+    sender = _sender_com_post(lambda *_args, **_kwargs: _InvalidJsonResponse())
+
+    with pytest.raises(EnvioEmailError, match='resposta de autenticação Microsoft inválida'):
+        sender._obter_token()
+
+
+def test_graph_sender_rejeita_token_ausente_na_autenticacao():
+    sender = _sender_com_post(lambda *_args, **_kwargs: _Response(200, {}))
+
+    with pytest.raises(EnvioEmailError, match='sem access_token'):
+        sender._obter_token()
