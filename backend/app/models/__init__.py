@@ -5,6 +5,10 @@ from app.models.agile_runtime import (  # noqa: F401
     AgileSprint,
     AgileWorkItem,
 )
+from app.models.ai_conversation import (  # noqa: F401
+    AIConversation,
+    AIConversationMessage,
+)
 from app.models.ai_quality import QualidadeIASnapshot  # noqa: F401
 from app.models.auditoria import AuditoriaEvento  # noqa: F401
 from app.models.bot_conversa_referencia import BotConversaReferencia  # noqa: F401
