@@ -36,7 +36,7 @@ def _valor_conn(pattern: re.Pattern[str], connection_string: str) -> str:
     match = pattern.search(connection_string or '')
     if not match:
         return ''
-    return match.group(1).strip().strip('"\'')
+    return match.group(1).strip().strip("\"'")
 
 
 def _normalizar_objeto_sql(valor: str) -> str:
