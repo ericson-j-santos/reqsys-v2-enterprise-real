@@ -12,7 +12,6 @@ Saída:
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
 from urllib import request
 from urllib.error import URLError, HTTPError
@@ -62,6 +61,8 @@ def main() -> int:
     backend_ok, backend_status, backend_msg = _http_probe(backend_url)
     frontend_ok = False
     frontend_url = ''
+    frontend_status: int | None = None
+    frontend_msg = 'sem resposta'
     for candidate in frontend_urls:
         ok, status, msg = _http_probe(candidate)
         if ok:
@@ -71,7 +72,7 @@ def main() -> int:
             frontend_msg = msg
             break
         frontend_msg = msg
-    
+
     dsn_ok = bool(_env_value('MOVIMENTO_EMAIL_SOURCE_DSN'))
     smtp_host = _env_value('MOVIMENTO_EMAIL_SMTP_HOST')
     smtp_user = _env_value('MOVIMENTO_EMAIL_SMTP_USER')

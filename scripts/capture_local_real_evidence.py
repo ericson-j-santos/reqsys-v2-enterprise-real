@@ -19,7 +19,6 @@ import os
 import shutil
 import signal
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -87,8 +86,8 @@ def _is_endpoint_ready(url: str, timeout_seconds: int = 10) -> bool:
         return False
 
 
-def _terminate_process(process: subprocess.Popen[str]) -> None:
-    if process.poll() is not None:
+def _terminate_process(process: subprocess.Popen[str] | None) -> None:
+    if process is None or process.poll() is not None:
         return
     try:
         if os.name == "nt":
@@ -96,7 +95,7 @@ def _terminate_process(process: subprocess.Popen[str]) -> None:
         else:
             process.send_signal(signal.SIGTERM)
     except OSError:
-        pass
+        return
     try:
         process.wait(timeout=15)
     except subprocess.TimeoutExpired:
