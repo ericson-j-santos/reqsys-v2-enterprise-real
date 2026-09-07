@@ -1,0 +1,159 @@
+name: Governed Post-Merge Fly Sync Readiness
+
+on:
+  workflow_run:
+    workflows: ["Governed PR Automation"]
+    types: [completed]
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/governed-post-merge-fly-sync.yml"
+      - "tests/test_governed_post_merge_fly_sync_workflow.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: governed-post-merge-fly-sync-${{ github.event.workflow_run.id || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Validar contrato pós-merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependência de teste
+        run: python -m pip install pytest
+      - name: Executar testes do contrato
+        run: python -m pytest tests/test_governed_post_merge_fly_sync_workflow.py -q
+
+  publication-readiness:
+    name: Verificar publicação Fly sem deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: contract
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'workflow_dispatch')
+    steps:
+      - name: Checkout da main atual
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Registrar contexto observado
+        id: context
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/governed-post-merge-fly-sync
+          echo "main_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Validar manifesto Fly
+        run: |
+          set -euo pipefail
+          python scripts/validate_fly_enterprise_sync.py \
+            --output artifacts/governed-post-merge-fly-sync/fly-enterprise-sync-validation.json
+
+      - name: Verificar sincronização publicada
+        id: publication
+        env:
+          OBSERVED_MAIN_SHA: ${{ steps.context.outputs.main_sha }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id || '' }}
+          SOURCE_RUN_EVENT: ${{ github.event.workflow_run.event || github.event_name }}
+          SOURCE_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'manual' }}
+          SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          report="artifacts/governed-post-merge-fly-sync/publication-sync-gate.json"
+          python scripts/validate_publication_sync.py --timeout 8 --output "$report" || true
+
+          if [ ! -f "$report" ]; then
+            printf '%s\n' '{"ok": false, "reason": "publication_validator_did_not_produce_report"}' > "$report"
+          fi
+
+          if python -c "import json; d=json.load(open('$report')); raise SystemExit(0 if d.get('ok') else 1)"; then
+            decision="already_synced"
+            synced="true"
+          else
+            decision="drift_detected_manual_dispatch_required"
+            synced="false"
+            echo "::warning::Drift de publicação detectado. Nenhum deploy foi executado; promoção continua exigindo workflow_dispatch explícito."
+          fi
+
+          echo "decision=$decision" >> "$GITHUB_OUTPUT"
+          echo "synced=$synced" >> "$GITHUB_OUTPUT"
+          export decision synced
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              "contract": "reqsys-governed-post-merge-fly-sync-readiness",
+              "source_workflow": "Governed PR Automation",
+              "source_run_id": os.environ.get("SOURCE_RUN_ID") or None,
+              "source_run_event": os.environ.get("SOURCE_RUN_EVENT"),
+              "source_run_conclusion": os.environ.get("SOURCE_RUN_CONCLUSION"),
+              "source_head_sha": os.environ.get("SOURCE_HEAD_SHA") or None,
+              "observed_main_sha": os.environ["OBSERVED_MAIN_SHA"],
+              "publication_synced": os.environ.get("synced", "") == "true",
+              "decision": os.environ.get("decision", "unknown"),
+              "deploy_executed": False,
+              "next_action": (
+                  "none"
+                  if os.environ.get("synced") == "true"
+                  else "workflow_dispatch Fly Enterprise Sync com target_environment=dev e deploy=true após validação humana"
+              ),
+          }
+          Path("artifacts/governed-post-merge-fly-sync/readiness.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Resumo
+        if: always()
+        env:
+          DECISION: ${{ steps.publication.outputs.decision }}
+          SYNCED: ${{ steps.publication.outputs.synced }}
+          MAIN_SHA: ${{ steps.context.outputs.main_sha }}
+        run: |
+          {
+            echo "## Governed Post-Merge Fly Sync Readiness"
+            echo ""
+            echo "- main observada: \`${MAIN_SHA}\`"
+            echo "- decisão: \`${DECISION:-unknown}\`"
+            echo "- publicação sincronizada: \`${SYNCED:-unknown}\`"
+            echo "- deploy executado: \`false\`"
+            echo ""
+            echo "Este workflow é somente leitura. Drift nunca autoriza promoção automática."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar evidências
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-post-merge-fly-sync-readiness
+          path: artifacts/governed-post-merge-fly-sync/
+          if-no-files-found: error
+          retention-days: 30
