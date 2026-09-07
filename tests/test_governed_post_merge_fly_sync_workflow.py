@@ -19,6 +19,16 @@ def test_observa_fly_enterprise_sync_concluido_na_main() -> None:
     assert "github.event.workflow_run.event == 'push'" in text
 
 
+def test_tem_fallback_direto_para_push_na_main() -> None:
+    text = _workflow_text()
+
+    assert "on:\n  push:\n    branches: [main]" in text
+    assert "github.event_name == 'push'" in text
+    assert "push_fallback" in text
+    assert "main push fallback" in text
+    assert "SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}" in text
+
+
 def test_readiness_eh_somente_leitura_e_nao_concede_permissao_de_deploy() -> None:
     text = _workflow_text()
 
@@ -42,13 +52,16 @@ def test_drift_gera_evidencia_sem_falhar_ou_promover_ambiente() -> None:
     assert "export decision synced" in text
 
 
-def test_evidencia_identifica_fly_enterprise_sync_como_fonte() -> None:
+def test_evidencia_distingue_origem_fly_de_fallback_push() -> None:
     text = _workflow_text()
 
-    assert '"source_workflow": "Fly Enterprise Sync"' in text
-    assert '"source_workflow": "Governed PR Automation"' not in text
+    assert "TRIGGER_MODE:" in text
+    assert "SOURCE_WORKFLOW:" in text
+    assert "Fly Enterprise Sync" in text
+    assert "main push fallback" in text
+    assert '"trigger_mode": os.environ.get("TRIGGER_MODE")' in text
+    assert '"source_workflow": os.environ.get("SOURCE_WORKFLOW")' in text
     assert "SOURCE_RUN_ID: ${{ github.event.workflow_run.id || '' }}" in text
-    assert "SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}" in text
 
 
 def test_checkout_pos_merge_observa_main_atual_e_publica_evidencia() -> None:
