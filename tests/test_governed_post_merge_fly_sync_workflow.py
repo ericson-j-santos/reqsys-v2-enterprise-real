@@ -8,14 +8,15 @@ def _workflow_text() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
 
-def test_observa_governed_pr_automation_concluida_na_main() -> None:
+def test_observa_fly_enterprise_sync_concluido_na_main() -> None:
     text = _workflow_text()
 
-    assert 'workflows: ["Governed PR Automation"]' in text
+    assert 'workflows: ["Fly Enterprise Sync"]' in text
+    assert 'workflows: ["Governed PR Automation"]' not in text
     assert "types: [completed]" in text
     assert "branches: [main]" in text
     assert "github.event.workflow_run.conclusion == 'success'" in text
-    assert "github.event.workflow_run.event == 'workflow_dispatch'" in text
+    assert "github.event.workflow_run.event == 'push'" in text
 
 
 def test_readiness_eh_somente_leitura_e_nao_concede_permissao_de_deploy() -> None:
@@ -39,6 +40,15 @@ def test_drift_gera_evidencia_sem_falhar_ou_promover_ambiente() -> None:
     assert "Nenhum deploy foi executado" in text
     assert "deploy=true após validação humana" in text
     assert "export decision synced" in text
+
+
+def test_evidencia_identifica_fly_enterprise_sync_como_fonte() -> None:
+    text = _workflow_text()
+
+    assert '"source_workflow": "Fly Enterprise Sync"' in text
+    assert '"source_workflow": "Governed PR Automation"' not in text
+    assert "SOURCE_RUN_ID: ${{ github.event.workflow_run.id || '' }}" in text
+    assert "SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}" in text
 
 
 def test_checkout_pos_merge_observa_main_atual_e_publica_evidencia() -> None:
