@@ -26,6 +26,7 @@ from app.services.ai_conversation import (
     serializar_conversa,
     status_provedores,
 )
+from app.services.ai_conversation_readiness import avaliar_prontidao_ai_teams
 from app.services.ai_conversation_teams_bot import (
     AITeamsBotDeliveryError,
     enviar_cartao_conversa_bot,
@@ -120,10 +121,22 @@ def ai_conversations_status(
                 'bot_messaging_endpoint': (
                     '/v1/teams-gateway/ai-conversations/bot/messages'
                 ),
+                'readiness_endpoint': (
+                    '/v1/teams-gateway/ai-conversations/readiness'
+                ),
                 'service_token_scope': 'teams_gateway:ai_conversations',
             },
         }
     )
+
+
+@router.get('/readiness')
+def ai_conversations_readiness(
+    _ctx: ServiceAuthContext = Depends(require_ai_conversation_auth),
+    db: Session = Depends(get_db),
+):
+    """Pré-condições verificáveis para executar o aceite bidirecional em um ambiente."""
+    return ok(avaliar_prontidao_ai_teams(db))
 
 
 @router.post('')
