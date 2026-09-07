@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_grafana_dashboard_has_required_operational_panels() -> None:
-    dashboard = json.loads((ROOT / "observability/grafana-dashboard.json").read_text())
+    dashboard = json.loads((ROOT / "observability/grafana-dashboard.json").read_text(encoding="utf-8"))
     titles = {panel["title"] for panel in dashboard["panels"]}
     assert {
         "Taxa de requisições",
@@ -25,7 +25,7 @@ def test_grafana_dashboard_has_required_operational_panels() -> None:
 
 
 def test_prometheus_rules_cover_red_and_collector_loss() -> None:
-    rules = yaml.safe_load((ROOT / "observability/prometheus-alerts.yaml").read_text())
+    rules = yaml.safe_load((ROOT / "observability/prometheus-alerts.yaml").read_text(encoding="utf-8"))
     alerts = {
         rule["alert"]
         for group in rules["groups"]
@@ -42,7 +42,7 @@ def test_prometheus_rules_cover_red_and_collector_loss() -> None:
 
 
 def test_alert_rules_define_duration_and_severity() -> None:
-    rules = yaml.safe_load((ROOT / "observability/prometheus-alerts.yaml").read_text())
+    rules = yaml.safe_load((ROOT / "observability/prometheus-alerts.yaml").read_text(encoding="utf-8"))
     for group in rules["groups"]:
         for rule in group["rules"]:
             assert rule.get("for")
