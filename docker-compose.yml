@@ -31,10 +31,23 @@ services:
       - WIKI_SYNC_BASE_URL=${WIKI_SYNC_BASE_URL:-}
       - WIKI_SYNC_TOKEN=${WIKI_SYNC_TOKEN:-}
       - SDD_SPECS_PATH=${SDD_SPECS_PATH:-/sdd}
+      - MOVIMENTO_EMAIL_SMTP_HOST=${MOVIMENTO_EMAIL_SMTP_HOST:-mailhog}
+      - MOVIMENTO_EMAIL_SMTP_PORT=${MOVIMENTO_EMAIL_SMTP_PORT:-1025}
+      - MOVIMENTO_EMAIL_SMTP_USER=${MOVIMENTO_EMAIL_SMTP_USER:-}
+      - MOVIMENTO_EMAIL_SMTP_PASSWORD=${MOVIMENTO_EMAIL_SMTP_PASSWORD:-}
+      - MOVIMENTO_EMAIL_SMTP_USE_TLS=${MOVIMENTO_EMAIL_SMTP_USE_TLS:-false}
+      - MOVIMENTO_EMAIL_SMTP_FROM=${MOVIMENTO_EMAIL_SMTP_FROM:-ReqSys <noreply@localhost>}
+      - MOVIMENTO_EMAIL_RECIPIENTS=${MOVIMENTO_EMAIL_RECIPIENTS:-dev@localhost}
     volumes:
       - ${SDD_SPECS_HOST_PATH:-../../my-first-spec-project/.sdd}:/sdd:ro
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -42,6 +55,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mailhog:
+        condition: service_started
     networks:
       - reqsys-net
 
@@ -59,10 +74,24 @@ services:
     volumes:
       - reqsys-db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-reqsys_app} -d $${POSTGRES_DB:-reqsys}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER:-reqsys_app} -d $${POSTGRES_DB:-reqsys}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - reqsys-net
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
     networks:
       - reqsys-net
 
