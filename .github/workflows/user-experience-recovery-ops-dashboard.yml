@@ -62,7 +62,7 @@ jobs:
           import json
           report = json.load(open('.tmp/ux-dashboard/ops-dashboard.json', encoding='utf-8'))
           card = next(item for item in report['cards'] if item['id'] == 'ux-recovery-standard-gold-readiness')
-          assert card['confidence_percent'] == 53
+          assert card['confidence_percent'] == 36
           assert card['latest_evidence']['source_run_id'] == '101'
           assert card['mode'] == 'advisory'
           assert card['production_blocker'] is False

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -139,17 +140,18 @@ def patch_dashboard(path: Path) -> None:
     if MARKER not in text:
         text = inject_before(
             text,
-            ('    <section class="card">\n      <h2>Runtime público — readiness Fly/DuckDNS</h2>', '  </main>'),
+            ('    <section class="card">\n      <h2>Runtime público — readiness Fly/DuckDNS</h2>', '</main>'),
             SECTION + "\n",
             "seção visual",
         )
     if "function renderWorkflowEfficiency(payload)" not in text:
-        text = inject_before(text, ("    async function renderRuntimeExecutiveIndex()",), FUNCTION + "\n", "função de renderização")
+        text = inject_before(text, ("async function renderRuntimeExecutiveIndex()",), FUNCTION + "\n", "função de renderização")
     if "renderWorkflowEfficiency(payload);" not in text:
-        needle = "      const cards = payload.cards || fallback.cards;"
-        if needle not in text:
+        match = re.search(r"^(?P<indent>[ \t]*)const cards = payload\.cards \|\| fallback\.cards;", text, flags=re.MULTILINE)
+        if not match:
             raise RuntimeError("Hook do Runtime Executive Index não encontrado")
-        text = text.replace(needle, "      renderWorkflowEfficiency(payload);\n" + needle, 1)
+        hook = f"{match.group('indent')}renderWorkflowEfficiency(payload);\n"
+        text = text[:match.start()] + hook + text[match.start():]
     path.write_text(text, encoding="utf-8")
     patch_advisor_dashboard(path)
 

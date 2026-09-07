@@ -29,8 +29,9 @@ def test_bacen_gate_reduces_pending_materialization_without_promoting_partial_co
     assert report["result"] == "valid"
     assert resolutions["BACEN-02"] == "canonical_manifest"
     assert resolutions["BACEN-05"] == "canonical_manifest"
+    assert resolutions["BACEN-04"] == "not_materialized"
     assert report["summary"]["canonical_evidence_resolved"] >= 5
-    assert report["summary"]["evidence_not_materialized"] == 2
+    assert report["summary"]["evidence_not_materialized"] == 1
     assert report["summary"]["implemented"] == 4
     assert report["summary"]["partial"] == 4
     assert report["summary"]["implemented_coverage_percent"] == 50.0

@@ -47,7 +47,9 @@ def test_capture_collects_fly_runtime_publication_and_login() -> None:
     assert "validate_publication_sync.py" in workflow
     assert "validar_login_multi_ambiente.py" in workflow
     assert "evaluate_environment_promotion_capture.py" in workflow
-    assert "secrets.FLY_API_TOKEN" in workflow
+    assert "uses: ./.github/actions/resolve-managed-credential" in workflow
+    assert "export-env: FLY_API_TOKEN" in workflow
+    assert "secrets.FLY_API_TOKEN" not in workflow
     assert "retention-days: 90" in workflow
 
 

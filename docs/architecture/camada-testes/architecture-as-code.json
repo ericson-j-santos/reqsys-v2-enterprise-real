@@ -44,11 +44,11 @@
       "scope": "scripts, workflows, contracts, trilhas"
     },
     "alt_frontends_e2e": {
-      "status": "active",
+      "status": "retired",
       "path": "e2e/",
       "runner": "playwright",
       "ci_gate": false,
-      "local_script": "scripts/validar_qualidade.sh"
+      "retirement_reason": "suite removida; E2E canônico consolidado em frontend/tests/e2e/"
     }
   },
   "ci_main": {

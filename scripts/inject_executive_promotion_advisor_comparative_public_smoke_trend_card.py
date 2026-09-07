@@ -56,7 +56,10 @@ def inject(html: str, runtime_index: dict[str, Any], trend_state: dict[str, Any]
         end = html.find("</section>", start)
         if end == -1:
             raise ValueError("card hook found without closing section")
-        html = html[:start] + block + html[end + len("</section>"):]
+        suffix = html[end + len("</section>"):]
+        if suffix.startswith("\n"):
+            suffix = suffix[1:]
+        html = html[:start] + block + suffix
     elif "</main>" in html:
         html = html.replace("</main>", block + "</main>", 1)
     else:

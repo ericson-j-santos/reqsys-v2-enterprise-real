@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -20,10 +21,12 @@ def policy() -> dict:
         "allowed_control_statuses": ["implemented", "partial"],
         "always_block_statuses": ["gap"],
         "maximum_review_window_days": 30,
-        "valid_from": "2026-07-30",
-        "valid_until": "2026-08-29",
-        "review_owner_role": "GOVERNANCE",
-        "renewal_requires_explicit_policy_change": True,
+        "activation": {
+            "valid_from": "2026-07-30",
+            "valid_until": "2026-08-29",
+            "review_owner_role": "GOVERNANCE",
+            "renewal_requires_explicit_policy_change": True,
+        },
     }
 
 
@@ -55,7 +58,9 @@ def test_partial_control_blocks_production(tmp_path):
     )
     write_yaml(policy_path, policy())
 
-    decision = build_decision(matrix_path, policy_path, "prod")
+    decision = build_decision(
+        matrix_path, policy_path, "prod", now=datetime(2026, 8, 1, tzinfo=UTC)
+    )
     assert decision["decision"] == "block"
     assert decision["production_deployment_allowed"] is False
     assert decision["blocking_controls"] == ["BACEN-08"]
@@ -79,7 +84,9 @@ def test_all_implemented_controls_allow_production(tmp_path):
     )
     write_yaml(policy_path, policy())
 
-    decision = build_decision(matrix_path, policy_path, "prod")
+    decision = build_decision(
+        matrix_path, policy_path, "prod", now=datetime(2026, 8, 1, tzinfo=UTC)
+    )
     assert decision["decision"] == "allow"
     assert decision["production_deployment_allowed"] is True
     assert decision["blocking_controls"] == []

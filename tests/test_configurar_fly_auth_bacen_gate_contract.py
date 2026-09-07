@@ -4,15 +4,16 @@ from pathlib import Path
 WORKFLOW = Path(".github/workflows/configurar-fly-auth-azure.yml")
 
 
-def test_production_gate_precedes_flyctl_and_secrets():
+def test_production_gate_precedes_flyctl_and_managed_credential_resolution():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "REQSYS_PRODUCTION_GOVERNANCE_GATE" in text
     assert text.count("--scope prod") == 2
 
     first_gate = text.index("Gate BACEN antes de configurar produção")
     first_flyctl = text.index("Instalar flyctl")
-    first_secret = text.index("secrets.FLY_API_TOKEN")
-    assert first_gate < first_flyctl < first_secret
+    first_credential_resolution = text.index("uses: ./.github/actions/resolve-managed-credential")
+    assert "secrets.FLY_API_TOKEN" not in text
+    assert first_gate < first_flyctl < first_credential_resolution
 
 
 def test_only_production_cells_execute_the_gate():

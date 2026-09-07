@@ -32,7 +32,7 @@ def test_probe_demo_login_allows_dev(monkeypatch):
     assert result.has_token is True
 
 
-def test_validate_environment_login_compara_redirect_uri_com_sufixo_callback(monkeypatch):
+def test_validate_environment_login_compara_redirect_uri_com_origem_publica(monkeypatch):
     chamadas = []
 
     def fake_validar_config(api_url, expected_redirect_uri):
@@ -57,7 +57,7 @@ def test_validate_environment_login_compara_redirect_uri_com_sufixo_callback(mon
         timeout=1.0,
     )
 
-    assert chamadas == [('https://reqsys-api.fly.dev', 'https://reqsys-app.fly.dev/auth/callback.html')]
+    assert chamadas == [('https://reqsys-api.fly.dev', 'https://reqsys-app.fly.dev')]
 
 
 def test_build_payload_uses_manifest(monkeypatch):

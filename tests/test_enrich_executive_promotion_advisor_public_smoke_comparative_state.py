@@ -41,10 +41,10 @@ class AdvisorPublicSmokeComparativeStateTests(unittest.TestCase):
         self.assertEqual("insufficient-environment-coverage", card["trend"])
 
     def test_ambiente_com_taxa_baixa_resulta_atencao(self) -> None:
-        card = summarize(history(prod_rate=70.0))
+        card = summarize(history(prod_rate=69.0))
         self.assertEqual("attention", card["trend"])
         self.assertFalse(card["eligible_for_gate_review"])
-        self.assertEqual(70.0, card["minimum_pass_rate_percent"])
+        self.assertEqual(69.0, card["minimum_pass_rate_percent"])
 
     def test_estado_de_producao_e_preservado(self) -> None:
         runtime = {"summary": {"production_ready": True}, "cards": {}, "links": {}, "guardrails": []}

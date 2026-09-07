@@ -8,10 +8,11 @@ def test_bacen_gate_precedes_production_environment_and_secret() -> None:
     gate = text.index("\n  production-gate:\n")
     deploy = text.index("\n  deploy:\n")
     environment = text.index("    environment:\n", deploy)
-    secret = text.index("FLY_API_TOKEN:", deploy)
+    credential_resolution = text.index("uses: ./.github/actions/resolve-managed-credential", deploy)
 
     assert text.startswith("# REQSYS_PRODUCTION_GOVERNANCE_GATE\n")
-    assert gate < deploy < environment < secret
+    assert "secrets.FLY_API_TOKEN" not in text
+    assert gate < deploy < environment < credential_resolution
     assert "inputs.environment == 'prod' && inputs.deploy == true" in text
     assert "uses: ./.github/workflows/bacen-production-hard-gate.yml" in text
     assert "      - production-gate" in text
