@@ -13,7 +13,11 @@ from typing import Any
 from app.core.secrets import get_secret
 from app.services.email_mime_report_service import EmailIdentity
 from app.services.movimento_email.graph_sender import GraphEmailSender
-from app.services.movimento_email.smtp_sender import EmailSender, EnvioEmailError, SmtpEmailSender
+from app.services.movimento_email.smtp_sender import (
+    EmailSender,
+    EnvioEmailError,
+    SmtpEmailSender,
+)
 
 PROVEDOR_SMTP = 'smtp'
 PROVEDOR_GRAPH = 'graph'
