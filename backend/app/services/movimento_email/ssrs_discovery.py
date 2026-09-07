@@ -99,7 +99,7 @@ def gerar_molde_dsn(*, servidor: str | None, banco: str | None) -> str | None:
         return None
     return (
         'Driver={ODBC Driver 18 for SQL Server};'
-        f'Server={servidor};Database={banco};'
+        f'Server={servidor};Database={banco};'  # placeholder seguro: somente servidor e banco, sem credenciais
         'Encrypt=yes;TrustServerCertificate=no;Authentication=<DEFINIR_COM_DBA>'
     )
 
