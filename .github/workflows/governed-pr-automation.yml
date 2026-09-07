@@ -34,7 +34,7 @@ permissions:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  REQUIRED_WORKFLOWS: >-
+  REQUIRED_WORKFLOWS: |
     CI Enterprise Fast
     CI — ReqSys v2 Enterprise
     Governance Quality Gates
@@ -233,6 +233,10 @@ jobs:
           PR_NUMBER: ${{ github.event.inputs.pr_number }}
         run: |
           set -euo pipefail
+          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::pr_number invalido: '$PR_NUMBER'. Informe um numero de PR maior que zero."
+            exit 1
+          fi
           mkdir -p artifacts/governed-pr-increment-gate
           PR_JSON=$(gh pr view "$PR_NUMBER" --json title,body,labels,headRefName,baseRefName,number)
           echo "$PR_JSON" > artifacts/governed-pr-increment-gate/pr.json
@@ -255,7 +259,7 @@ jobs:
             --status-json artifacts/coordenador-status/coordenador-status.json \
             --output-dir artifacts/governed-pr-increment-gate \
             --json | tee artifacts/governed-pr-increment-gate/decision.json
-          code=$?
+          code=${PIPESTATUS[0]}
           set -e
           echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
           if [[ "$code" != "0" ]]; then
@@ -266,11 +270,26 @@ jobs:
       - name: Validate PR gates
         id: validate
         uses: actions/github-script@v7
+        env:
+          PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number }}
+          EXECUTE_MERGE_INPUT: ${{ github.event.inputs.execute_merge }}
+          REQUIRED_LABEL_INPUT: ${{ github.event.inputs.required_label }}
         with:
           script: |
-            const prNumber = Number(core.getInput('pr_number'));
-            const executeMerge = core.getInput('execute_merge') === 'true';
-            const requiredLabel = core.getInput('required_label');
+            const prNumber = Number(process.env.PR_NUMBER_INPUT);
+            const executeMerge = process.env.EXECUTE_MERGE_INPUT === 'true';
+            const requiredLabel = (process.env.REQUIRED_LABEL_INPUT || '').trim();
+
+            if (!Number.isInteger(prNumber) || prNumber <= 0) {
+              throw new Error(`pr_number invalido: ${process.env.PR_NUMBER_INPUT || '<vazio>'}`);
+            }
+            if (!['true', 'false'].includes(process.env.EXECUTE_MERGE_INPUT || '')) {
+              throw new Error(`execute_merge invalido: ${process.env.EXECUTE_MERGE_INPUT || '<vazio>'}`);
+            }
+            if (!requiredLabel) {
+              throw new Error('required_label nao pode ser vazio.');
+            }
+
             const requiredWorkflows = process.env.REQUIRED_WORKFLOWS
               .split('\n')
               .map((item) => item.trim())
@@ -353,9 +372,14 @@ jobs:
       - name: Merge PR when explicitly authorized
         if: steps.validate.outputs.eligible == 'true' && steps.validate.outputs.execute_merge == 'true'
         uses: actions/github-script@v7
+        env:
+          PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number }}
         with:
           script: |
-            const prNumber = Number(core.getInput('pr_number'));
+            const prNumber = Number(process.env.PR_NUMBER_INPUT);
+            if (!Number.isInteger(prNumber) || prNumber <= 0) {
+              throw new Error(`pr_number invalido no merge: ${process.env.PR_NUMBER_INPUT || '<vazio>'}`);
+            }
             const headSha = '${{ steps.validate.outputs.head_sha }}';
             const { owner, repo } = context.repo;
             await github.rest.pulls.merge({
