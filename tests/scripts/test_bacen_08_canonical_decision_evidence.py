@@ -12,17 +12,22 @@ def test_bacen_08_decision_reference_is_canonical_without_replicating_pii() -> N
     evidence = document["decision_evidence"]
     designation = document["designation"]
 
-    assert document["schema_version"] == "1.1.0"
+    assert document["schema_version"] == "1.2.0"
     assert evidence["decision"] == "approved"
     assert evidence["authenticated_actor"] == "ericson-j-santos"
-    assert evidence["comment_url"].endswith("#issuecomment-5141616243")
+    assert evidence["comment_url"].endswith("#issuecomment-5415495880")
     assert evidence["comment_sha256"] == (
-        "d45d901949da5b527c514268e24cf5a7d04fb3e29d5c5f8df18602c69688a60f"
+        "fe7e01da351994f15c766c74bcab85bf03d3ce4007a8c3901723951079364be5"
     )
-    assert evidence["designation_document_reference"] == "REF-2026-015"
-    assert evidence["report_signoff_reference"] == "REF-2026-021"
+    assert evidence["designation_document_reference"] == "autodesignação-2026-08-25"
+    assert evidence["report_signoff_reference"] is None
     assert evidence["personal_or_sensitive_content_replicated"] is False
     assert evidence["automatic_status_promotion_allowed"] is False
+
+    deferred = document["deferred_institutional_governance"]
+    assert deferred["enabled"] is True
+    assert deferred["maximum_control_status"] == "partial"
+    assert deferred["production_gate"]["block_production_when_missing"] is True
 
     assert designation["status"] == "pending_formal_designation"
     assert designation["executive_name"] is None

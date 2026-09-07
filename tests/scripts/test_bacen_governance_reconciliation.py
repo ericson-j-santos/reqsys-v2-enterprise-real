@@ -32,7 +32,13 @@ def test_approval_comments_do_not_promote_bacen_controls() -> None:
         assert decisions[control_id]["decision_evidence_recorded"] is True
         assert decisions[control_id]["promote_control_status"] is False
         assert decisions[control_id]["closure_ready"] is False
-        assert decisions[control_id]["blockers"]
+        assert decisions[control_id]["blockers"] == []
+        assert decisions[control_id]["deferred_requirements"]
+        assert decisions[control_id]["production_gate"] == {
+            "required": True,
+            "block_when_deferred_requirements_missing": True,
+        }
+        assert decisions[control_id]["human_action_required_now"] is False
 
     assert reconciliation["summary"]["approvals_recorded"] == 2
     assert reconciliation["summary"]["controls_promoted"] == 0

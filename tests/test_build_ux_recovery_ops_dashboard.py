@@ -23,7 +23,7 @@ class UxRecoveryOpsDashboardTests(unittest.TestCase):
         }
         card = build_card(history, stability)
         self.assertEqual(card["latest_evidence"]["source_run_id"], "123")
-        self.assertEqual(card["confidence_percent"], 53)
+        self.assertEqual(card["confidence_percent"], 36)
         self.assertIn("coletar mais 2 amostra(s)", card["remaining_gap"])
         self.assertFalse(card["production_blocker"])
 

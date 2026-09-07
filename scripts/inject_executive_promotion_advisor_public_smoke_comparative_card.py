@@ -126,7 +126,7 @@ def inject_before_pattern(text: str, pattern: str, insertion: str, label: str) -
 def patch_dashboard(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     if MARKER not in text:
-        text = inject_before_pattern(text, r"^[ \t]*</main>", SECTION + "\n", "seção visual")
+        text = inject_before_pattern(text, r"</main>", SECTION + "\n", "seção visual")
     if "function renderExecutivePromotionAdvisorPublicSmokeComparative(payload)" not in text:
         text = inject_before_pattern(
             text,

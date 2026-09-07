@@ -24,8 +24,9 @@ def test_mutable_production_commands_use_reusable_gate():
 def test_secret_is_materialized_only_after_gate_result():
     workflow = text()
     governed_start = workflow.index("\n  governed-command:\n")
-    secret = workflow.index("secrets.FLY_API_TOKEN", governed_start)
-    block = workflow[governed_start:secret]
+    credential_resolution = workflow.index("Resolver token Fly (bootstrap/controlador) do Key Vault", governed_start)
+    block = workflow[governed_start:credential_resolution]
+    assert "secrets.FLY_API_TOKEN" not in workflow
     assert "needs: production-gate" in block
     assert "needs.production-gate.result == 'success'" in block
     assert "needs.production-gate.result == 'skipped'" in block

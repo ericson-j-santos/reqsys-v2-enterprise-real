@@ -18,13 +18,14 @@ def test_bacen_gate_precedes_every_production_capability():
     text = workflow_text()
     gate = text.index("Gerar decisão BACEN de produção")
     environment = text.index("environment: production")
-    secret = text.index("secrets.FLY_API_TOKEN")
+    credential_resolution = text.index("uses: ./.github/actions/resolve-managed-credential")
     deploy = text.index("flyctl deploy")
 
     assert "REQSYS_PRODUCTION_GOVERNANCE_GATE" in text
     assert "--scope prod" in text
     assert gate < environment
-    assert gate < secret
+    assert "secrets.FLY_API_TOKEN" not in text
+    assert gate < credential_resolution
     assert gate < deploy
 
 

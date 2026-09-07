@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-ALLOWED_DECISIONS = {"MANTER", "CONSOLIDAR", "DEPRECAR", "REMOVER"}
+ALLOWED_DECISIONS = {"MANTER", "CONSOLIDAR", "DEPRECAR", "REMOVER", "REMOVIDO"}
 REQUIRED_ITEM_FIELDS = {
     "id",
     "path",
@@ -89,7 +89,10 @@ def validate_inventory_data(data: dict[str, Any], repo_root: Path) -> list[str]:
             errors.append(f"path duplicado: {item_path}.")
         else:
             seen_paths.add(item_path)
-            if not (repo_root / item_path).exists():
+            path_exists = (repo_root / item_path).exists()
+            if decision == "REMOVIDO" and path_exists:
+                errors.append(f"path removido reapareceu: {item_path}.")
+            elif decision != "REMOVIDO" and not path_exists:
                 errors.append(f"path inexistente: {item_path}.")
 
         if not isinstance(kind, str) or not kind.strip():
@@ -117,6 +120,11 @@ def validate_inventory_data(data: dict[str, Any], repo_root: Path) -> list[str]:
         if decision == "REMOVER" and blockers:
             errors.append(
                 f"{prefix} não pode ser REMOVER enquanto blocking_dependencies não estiver vazio."
+            )
+
+        if decision == "REMOVIDO" and (blockers or exit_criteria):
+            errors.append(
+                f"{prefix} com decisão REMOVIDO deve ter dependências e critérios de saída concluídos."
             )
 
         if canonical is True:

@@ -295,6 +295,7 @@ jobs:
           set -o pipefail
           python -m pytest tests/ -v --tb=short \
             --cov=app \
+            --cov-config=pyproject.toml \
             --cov-report=term-missing:skip-covered \
             --cov-report=xml:/tmp/backend-coverage.xml \
             --cov-fail-under=60 2>&1 | tee /tmp/backend-pytest-output.log

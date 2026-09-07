@@ -8,13 +8,14 @@ def test_reusable_bacen_gate_precedes_production_job():
     text = WORKFLOW.read_text(encoding="utf-8")
     gate = text.index("production-gate:")
     environment = text.index("environment: production")
-    secret = text.index("secrets.FLY_API_TOKEN")
+    credential_resolution = text.index("uses: ./.github/actions/resolve-managed-credential")
     deploy = text.index("flyctl deploy")
 
     assert "REQSYS_PRODUCTION_GOVERNANCE_GATE" in text
     assert "uses: ./.github/workflows/bacen-production-hard-gate.yml" in text
     assert "enforce: true" in text
-    assert gate < environment < secret < deploy
+    assert "secrets.FLY_API_TOKEN" not in text
+    assert gate < environment < credential_resolution < deploy
 
 
 def test_deploy_requires_validation_and_gate_success():

@@ -181,7 +181,10 @@ def build_scorecard(audit: dict[str, Any]) -> dict[str, Any]:
         item.domain for item in domain_scores if item.status in {"action_required", "manual"}
     ]
     ready_domains = [item.domain for item in domain_scores if item.score >= 95]
-    status = status_from_score(maturity_percent)
+    # Um bloqueio explícito em qualquer domínio prevalece sobre a média
+    # ponderada: uma pontuação global aceitável não pode mascarar um gate
+    # obrigatório bloqueado.
+    status = "blocked" if blocked_domains else status_from_score(maturity_percent)
 
     return {
         "schema_version": "1.0.0",
