@@ -9,7 +9,10 @@ from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.service_tokens import ServiceAuthContext, require_admin_or_service_token
 from app.db import get_db
-from app.schemas.ai_conversation import AIConversationCreateRequest, AIConversationReplyRequest
+from app.schemas.ai_conversation import (
+    AIConversationCreateRequest,
+    AIConversationReplyRequest,
+)
 from app.services.ai_conversation import (
     AIConversationConflictError,
     AIConversationError,
