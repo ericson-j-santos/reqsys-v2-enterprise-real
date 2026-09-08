@@ -107,6 +107,7 @@ jobs:
           mkdir -p audit "$PACKAGE_DIR"
 
           CREATED_APP=0
+          CREATED_SP=0
           CREATED_GROUP=0
           CREATED_BOT=0
           COMMITTED=0
@@ -120,6 +121,9 @@ jobs:
               echo "::warning::Falha antes do commit dos segredos DEV; revertendo somente recursos criados por esta execução."
               if [ "$CREATED_BOT" -eq 1 ]; then
                 az bot delete --name "$BOT_NAME" --resource-group "$RESOURCE_GROUP" --only-show-errors >/dev/null 2>&1 || true
+              fi
+              if [ "$CREATED_SP" -eq 1 ] && [ -n "$APP_ID" ]; then
+                az ad sp delete --id "$APP_ID" >/dev/null 2>&1 || true
               fi
               if [ "$CREATED_APP" -eq 1 ] && [ -n "$APP_OBJECT_ID" ]; then
                 az ad app delete --id "$APP_OBJECT_ID" >/dev/null 2>&1 || true
@@ -157,7 +161,9 @@ jobs:
             echo "::error::App ID não retornado após criação da identidade dedicada."
             exit 5
           fi
+
           az ad sp create --id "$APP_ID" --only-show-errors --output none >/dev/null
+          CREATED_SP=1
 
           CLIENT_SECRET="$(az ad app credential reset \
             --id "$APP_ID" \
@@ -198,7 +204,7 @@ jobs:
             --resource-group "$RESOURCE_GROUP" \
             --only-show-errors --output none
 
-          python - <<'PY'
+          APP_ID_FOR_PACKAGE="$APP_ID" python - <<'PY'
           import json
           import os
           import shutil
@@ -288,15 +294,14 @@ jobs:
 
           echo "app_id=$APP_ID" >> "$GITHUB_OUTPUT"
           trap - ERR
-        env:
-          APP_ID_FOR_PACKAGE: ${{ steps.provision.outputs.app_id }}
 
-      - name: Corrigir pacote com App ID da execução
+      - name: Validar pacote gerado
         if: success()
         shell: bash
+        env:
+          APP_ID: ${{ steps.provision.outputs.app_id }}
         run: |
           set -euo pipefail
-          APP_ID="${{ steps.provision.outputs.app_id }}"
           if [ -z "$APP_ID" ]; then
             echo "::error::App ID não disponível para validação final do pacote."
             exit 9
@@ -306,6 +311,7 @@ jobs:
           import os
           import zipfile
           from pathlib import Path
+
           package = Path(os.environ['PACKAGE_ZIP'])
           with zipfile.ZipFile(package) as zf:
               manifest = json.loads(zf.read('manifest.json'))
@@ -313,9 +319,8 @@ jobs:
           assert manifest['id'] == expected
           assert manifest['bots'][0]['botId'] == expected
           assert manifest['bots'][0]['isNotificationOnly'] is False
+          assert 'reqsys-api-dev.fly.dev' in manifest['validDomains']
           PY
-        env:
-          APP_ID: ${{ steps.provision.outputs.app_id }}
 
       - name: Publicar evidência de provisionamento
         if: always()
