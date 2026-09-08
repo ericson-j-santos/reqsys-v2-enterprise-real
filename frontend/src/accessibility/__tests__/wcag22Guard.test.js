@@ -16,7 +16,7 @@ describe('wcag22Guard', () => {
     applyWcag22Guard(document)
 
     expect(document.querySelector('[role="progressbar"]').getAttribute('aria-label'))
-      .toBe('Score geral de qualidade de IA')
+      .toBe('Nota geral de qualidade de IA')
   })
 
   it('nomeia botão apenas com ícone sem sobrescrever nome existente', () => {
