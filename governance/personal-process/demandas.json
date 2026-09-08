@@ -7,13 +7,13 @@
     "impacto": 5,
     "esforco": 3,
     "frequencia": 5,
-    "status": "Em execucao",
-    "tipo_bloqueio": "Nenhum",
-    "proxima_acao": "Homologar CNPJ alfanumerico/CNH, medir erro do baseline e completar a matriz de rastreabilidade antes de liberar escrita automatica.",
-    "criterio_conclusao": "Gate C aprovado com amostra representativa e criterio de liberacao documentado.",
-    "evidencia": "",
+    "status": "Bloqueado",
+    "tipo_bloqueio": "Humano",
+    "proxima_acao": "Disponibilizar corpus real autorizado, anonimizado ou homologado fora do repositorio; executar preparacao, politica e certificacao; publicar somente a evidencia sanitizada.",
+    "criterio_conclusao": "Certificacao real sanitizada com promotion_eligible=true, 100% dos casos aprovados, SHA-256 integro e nenhuma revisao humana pendente.",
+    "evidencia": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1420",
     "origem": "ocr_evidencia - baseline 92 testes e acompanhamento semanal",
-    "estado_evidenciado_em": "2026-08-31"
+    "estado_evidenciado_em": "2026-09-08"
   },
   {
     "id": "EXT-002",

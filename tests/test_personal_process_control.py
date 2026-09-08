@@ -12,6 +12,11 @@ class Tests(unittest.TestCase):
  def test_open_next(self): self.assertTrue(any('sem proxima_acao' in x for x in ppc.validate_demands([dict(self.d[0],proxima_acao='')])))
  def test_concluded_evidence(self): self.assertTrue(any('concluido sem evidencia' in x for x in ppc.validate_demands([dict(self.d[0],status='Concluido',evidencia='')])))
  def test_blocker(self): self.assertTrue(any('bloqueado sem tipo_bloqueio' in x for x in ppc.validate_demands([dict(self.d[1],tipo_bloqueio='Nenhum')])))
+ def test_ocr_blocker_is_evidenced(self):
+  item=next(x for x in self.d if x['id']=='EXT-001')
+  self.assertEqual('Bloqueado',item['status']); self.assertEqual('Humano',item['tipo_bloqueio'])
+  self.assertEqual('https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1420',item['evidencia'])
+  self.assertEqual('2026-09-08',item['estado_evidenciado_em']); self.assertIn('corpus real autorizado',item['proxima_acao'].lower())
  def test_pareto(self):
   f=ppc.pareto(self.d,ppc.demand_score); s=ppc.pareto(list(reversed(self.d)),ppc.demand_score); self.assertEqual([x['id'] for x in f],[x['id'] for x in s]); self.assertEqual('EXT-002',f[0]['id']); self.assertEqual('P1 - Alta',ppc.priority(f[0]['indice']))
  def test_modes(self): self.assertEqual('semanal_aprofundado',ppc.build_snapshot(self.d,self.l,self.a,date(2026,9,7))[0]['mode']); self.assertEqual('diario',ppc.build_snapshot(self.d,self.l,self.a,date(2026,9,4))[0]['mode'])
