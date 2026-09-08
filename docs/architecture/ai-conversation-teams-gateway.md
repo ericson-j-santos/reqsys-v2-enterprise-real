@@ -140,6 +140,10 @@ As chaves específicas são opcionais. Quando ausentes, o adaptador reutiliza as
 - Metadados da fila passam pelo sanitizador existente.
 - Reenvios são idempotentes.
 - A seleção implícita de destinatário é recusada quando há ambiguidade.
+- `TEAMS_BOT_APP_ID` pertence a App Registration dedicada e não pode reutilizar `AZURE_CLIENT_ID`/`ReqSys Enterprise`.
+- O CI não recebe permissão `Application.ReadWrite.*` no Microsoft Graph para contornar bootstrap do Entra.
+- `CCP_AZURE_CLIENT_ID_DEV` permanece restrito aos tokens Fly DEV já definidos no Credential Control Plane; ele não lê o segredo do bot.
+- O bootstrap do bot usa a identidade mutadora apenas para ler os dois segredos de controle no Key Vault e configurar credenciais no app Fly DEV fixo. Esse caminho não executa deploy e não amplia os leitores HML/PROD.
 
 ## Limitação explícita
 
@@ -158,13 +162,69 @@ Integrações futuras para chats nativos devem entrar como adaptadores observado
 7. Reenviar a mesma atividade do Teams e comprovar que não houve segunda chamada ao provedor.
 8. Validar `correlation_id`, SHA-256 e evento de auditoria.
 
-## Ativação humana mínima
+## Ativação DEV governada
 
-Após merge/deploy em DEV:
+A ativação foi separada em duas fronteiras para preservar menor privilégio.
 
-1. No Azure Bot, alterar o **Messaging endpoint** para `/v1/teams-gateway/ai-conversations/bot/messages`.
-2. Garantir `TEAMS_BOT_APP_ID`, `TEAMS_BOT_APP_TENANT_ID` e `TEAMS_BOT_SECRET` no ambiente.
-3. Iniciar/instalar o bot uma vez no Teams para gravar a `conversationReference`.
-4. Definir `AI_CONVERSATION_TEAMS_USER_AAD_OBJECT_ID` quando houver mais de um usuário cadastrado.
-5. Configurar ao menos um provedor de IA.
-6. Executar o critério de aceite ponta a ponta em DEV antes de promover para TEST/PROD.
+### 1. Ação humana única no Microsoft Entra
+
+Uma conta autorizada executa localmente:
+
+```bash
+python scripts/bootstrap_teams_bot_dev_identity.py \
+  --confirm CRIAR-IDENTIDADE-TEAMS-BOT-DEV \
+  --tenant-id <TENANT_ID>
+```
+
+O script:
+
+1. exige confirmação literal;
+2. cria ou valida exatamente uma App Registration `ReqSys Teams Bot DEV` do tipo `AzureADMyOrg`;
+3. cria o service principal quando ausente;
+4. cria um client secret somente quando o segredo canônico ainda não existe;
+5. grava o valor diretamente em `kv-reqsys-ccp/reqsys-teams-bot-dev-secret` com a tag `app-id`;
+6. nunca imprime nem grava o valor do segredo em evidência local.
+
+Não conceder `Application.ReadWrite.All` ou `Application.ReadWrite.OwnedBy` ao CI apenas para eliminar essa ação humana inicial.
+
+### 2. Ativação automática pelo GitHub Actions
+
+`Teams Bot DEV Provision` usa `CCP_AZURE_CLIENT_ID`, federado à `main`, e executa:
+
+```text
+Key Vault: identidade + secret do bot
+        ↓
+Key Vault: reqsys-fly-control-plane-org-token
+        ↓
+preflight somente leitura contra reqsys-api-dev
+        ↓
+Azure Bot F0 / SingleTenant
+        ↓
+Messaging endpoint exato
+        ↓
+canal Microsoft Teams
+        ↓
+pacote Teams com App ID real
+        ↓
+TEAMS_BOT_APP_ID
+TEAMS_BOT_APP_TENANT_ID
+TEAMS_BOT_SECRET
+        ↓
+reqsys-api-dev
+        ↓
+/health
+```
+
+O trust anchor Fly é usado somente neste bootstrap de credencial para o app fixo `reqsys-api-dev`; não executa `flyctl deploy`, não cria tokens sucessores e não substitui os readers de deploy do Credential Control Plane.
+
+A execução é idempotente: quando o Azure Bot já existe, o workflow exige correspondência de App ID, endpoint e SKU antes de reutilizá-lo. Falhas antes do commit dos segredos Fly removem apenas recursos Azure criados pela própria execução. Depois do commit no Fly, a configuração é preservada para permitir reexecução e diagnóstico sem apagar um runtime parcialmente ativado.
+
+### 3. Primeira interação Teams
+
+Depois de Azure Bot + runtime DEV verdes:
+
+1. instalar/iniciar o pacote gerado no usuário DEV;
+2. enviar a primeira mensagem ao bot para gravar a `conversationReference`;
+3. definir `AI_CONVERSATION_TEAMS_USER_AAD_OBJECT_ID` quando houver mais de um usuário cadastrado;
+4. configurar ao menos um provedor de IA;
+5. executar os oito critérios de aceite acima antes de qualquer promoção para TEST/PROD.
