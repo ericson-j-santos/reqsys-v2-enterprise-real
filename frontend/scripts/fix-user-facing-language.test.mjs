@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isLikelyHumanLiteral, transformJavascript, transformVue } from './fix-user-facing-language.mjs'
+import {
+  isLikelyHumanLiteral,
+  isTechnicalSelectorOrIdentifier,
+  transformJavascript,
+  transformVue,
+} from './fix-user-facing-language.mjs'
 
 test('não mexe em template literal aninhado (endereço de serviço real)', () => {
   const source = [
@@ -23,6 +28,20 @@ test('isLikelyHumanLiteral rejeita fatia de template literal com interpolação 
 
 test('isLikelyHumanLiteral ainda aceita texto humano com uma interpolação simples', () => {
   assert.equal(isLikelyHumanLiteral('Você tem ${count} pendências'), true)
+})
+
+test('não traduz seletor CSS com data-testid nem classe técnica', () => {
+  const selector = '[data-testid="route-specs"] .content-body'
+  assert.equal(isTechnicalSelectorOrIdentifier(selector), true)
+  assert.equal(isLikelyHumanLiteral(selector), false)
+
+  const source = `const selector = '${selector}'`
+  assert.equal(transformJavascript(source), source)
+})
+
+test('não traduz identificador técnico route-specs', () => {
+  assert.equal(isTechnicalSelectorOrIdentifier('route-specs'), true)
+  assert.equal(isLikelyHumanLiteral('route-specs'), false)
 })
 
 test('ainda simplifica termos em texto de tela dentro do template', () => {
