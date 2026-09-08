@@ -1,0 +1,330 @@
+name: Teams Bot DEV Provision
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/teams-bot-dev-provision.yml"
+      - "tests/test_teams_bot_dev_provision_workflow.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/teams-bot-dev-provision.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: teams-bot-dev-provision
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Validar contrato de provisionamento do Azure Bot DEV
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Executar testes focados
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir "pytest==9.0.3"
+          python -m pytest -q tests/test_teams_bot_dev_provision_workflow.py
+
+  provision:
+    name: Provisionar Azure Bot e segredos no ReqSys DEV
+    if: ${{ github.event_name != 'pull_request' && vars.CCP_ENABLED == 'true' }}
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_CLIENT_ID_DEV: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      BOT_NAME: reqsys-teams-bot-dev-1228361750
+      APP_DISPLAY_NAME: ReqSys Teams Bot DEV
+      RESOURCE_GROUP: rg-reqsys-teams-bot-dev
+      AZURE_LOCATION: brazilsouth
+      TARGET_ENDPOINT: https://reqsys-api-dev.fly.dev/v1/teams-gateway/ai-conversations/bot/messages
+      FLY_APP: reqsys-api-dev
+      PACKAGE_DIR: audit/teams-app-dev-package
+      PACKAGE_ZIP: audit/reqsys-teams-gateway-dev-v1.1.0.zip
+      EVIDENCE_FILE: audit/teams-bot-dev-provision.json
+      AZURE_CORE_OUTPUT: none
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Validar pré-requisitos OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_CLIENT_ID_DEV CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name não configurado; provisionamento permanece fail-closed."
+              exit 2
+            fi
+          done
+
+      - name: Resolver credencial Fly DEV pelo Credential Control Plane
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-dev-deploy
+          consumer: github-actions:fly-dev
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ env.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ env.CCP_AZURE_CLIENT_ID_DEV }}
+          azure-tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/teams-bot-dev-fly-credential.json
+
+      - name: Validar acesso ao app Fly DEV antes de qualquer mutação
+        shell: bash
+        run: |
+          set -euo pipefail
+          flyctl status --app "$FLY_APP" >/dev/null
+
+      - name: Autenticar identidade de provisionamento no Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Provisionar Azure Bot DEV e configurar runtime
+        id: provision
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p audit "$PACKAGE_DIR"
+
+          CREATED_APP=0
+          CREATED_GROUP=0
+          CREATED_BOT=0
+          COMMITTED=0
+          APP_OBJECT_ID=""
+          APP_ID=""
+          CLIENT_SECRET=""
+
+          cleanup() {
+            rc=$?
+            if [ "$rc" -ne 0 ] && [ "$COMMITTED" -eq 0 ]; then
+              echo "::warning::Falha antes do commit dos segredos DEV; revertendo somente recursos criados por esta execução."
+              if [ "$CREATED_BOT" -eq 1 ]; then
+                az bot delete --name "$BOT_NAME" --resource-group "$RESOURCE_GROUP" --only-show-errors >/dev/null 2>&1 || true
+              fi
+              if [ "$CREATED_APP" -eq 1 ] && [ -n "$APP_OBJECT_ID" ]; then
+                az ad app delete --id "$APP_OBJECT_ID" >/dev/null 2>&1 || true
+              fi
+              if [ "$CREATED_GROUP" -eq 1 ]; then
+                az group delete --name "$RESOURCE_GROUP" --yes --no-wait >/dev/null 2>&1 || true
+              fi
+            fi
+            exit "$rc"
+          }
+          trap cleanup ERR
+
+          existing_bots="$(az resource list \
+            --subscription "$CCP_AZURE_SUBSCRIPTION_ID" \
+            --resource-type Microsoft.BotService/botServices \
+            --query 'length(@)' --output tsv --only-show-errors)"
+          if [ "$existing_bots" != "0" ]; then
+            echo "::error::A sonda prévia indicou zero bots, mas agora há $existing_bots recurso(s). Abortando para evitar ambiguidade."
+            exit 3
+          fi
+
+          existing_apps="$(az ad app list --display-name "$APP_DISPLAY_NAME" --query 'length(@)' --output tsv --only-show-errors)"
+          if [ "$existing_apps" != "0" ]; then
+            echo "::error::Já existe App Registration com o nome '$APP_DISPLAY_NAME'. Nenhuma identidade existente será reutilizada implicitamente."
+            exit 4
+          fi
+
+          APP_OBJECT_ID="$(az ad app create \
+            --display-name "$APP_DISPLAY_NAME" \
+            --sign-in-audience AzureADMyOrg \
+            --query id --output tsv --only-show-errors)"
+          CREATED_APP=1
+          APP_ID="$(az ad app show --id "$APP_OBJECT_ID" --query appId --output tsv --only-show-errors)"
+          if [ -z "$APP_ID" ]; then
+            echo "::error::App ID não retornado após criação da identidade dedicada."
+            exit 5
+          fi
+          az ad sp create --id "$APP_ID" --only-show-errors --output none >/dev/null
+
+          CLIENT_SECRET="$(az ad app credential reset \
+            --id "$APP_ID" \
+            --append \
+            --display-name "reqsys-dev-bot-${GITHUB_RUN_ID}" \
+            --years 1 \
+            --query password --output tsv --only-show-errors)"
+          if [ -z "$CLIENT_SECRET" ]; then
+            echo "::error::Secret do bot não foi gerado."
+            exit 6
+          fi
+          echo "::add-mask::$CLIENT_SECRET"
+
+          if ! az group show --name "$RESOURCE_GROUP" --only-show-errors >/dev/null 2>&1; then
+            az group create \
+              --name "$RESOURCE_GROUP" \
+              --location "$AZURE_LOCATION" \
+              --tags reqsys=true environment=dev component=teams-bot managed-by=github-actions \
+              --only-show-errors --output none
+            CREATED_GROUP=1
+          fi
+
+          az bot create \
+            --name "$BOT_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --app-type SingleTenant \
+            --appid "$APP_ID" \
+            --tenant-id "$CCP_AZURE_TENANT_ID" \
+            --endpoint "$TARGET_ENDPOINT" \
+            --location global \
+            --sku F0 \
+            --tags reqsys=true environment=dev component=teams-bot managed-by=github-actions \
+            --only-show-errors --output none
+          CREATED_BOT=1
+
+          az bot msteams create \
+            --name "$BOT_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --only-show-errors --output none
+
+          python - <<'PY'
+          import json
+          import os
+          import shutil
+          import zipfile
+          from pathlib import Path
+
+          root = Path('infra/teams-app')
+          out = Path(os.environ['PACKAGE_DIR'])
+          out.mkdir(parents=True, exist_ok=True)
+          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          app_id = os.environ['APP_ID_FOR_PACKAGE']
+          manifest['id'] = app_id
+          manifest['bots'][0]['botId'] = app_id
+          domains = list(manifest.get('validDomains') or [])
+          for domain in ('reqsys-api-dev.fly.dev', 'token.botframework.com'):
+              if domain not in domains:
+                  domains.append(domain)
+          manifest['validDomains'] = domains
+          (out / 'manifest.json').write_text(
+              json.dumps(manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8'
+          )
+          shutil.copy2(root / 'color.png', out / 'color.png')
+          shutil.copy2(root / 'outline.png', out / 'outline.png')
+          with zipfile.ZipFile(os.environ['PACKAGE_ZIP'], 'w', zipfile.ZIP_DEFLATED) as zf:
+              for name in ('manifest.json', 'color.png', 'outline.png'):
+                  zf.write(out / name, arcname=name)
+          PY
+
+          flyctl secrets set \
+            "TEAMS_BOT_APP_ID=$APP_ID" \
+            "TEAMS_BOT_APP_TENANT_ID=$CCP_AZURE_TENANT_ID" \
+            "TEAMS_BOT_SECRET=$CLIENT_SECRET" \
+            --app "$FLY_APP"
+          COMMITTED=1
+
+          bot_endpoint="$(az bot show --name "$BOT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.endpoint --output tsv --only-show-errors)"
+          if [ "${bot_endpoint%/}" != "${TARGET_ENDPOINT%/}" ]; then
+            echo "::error::Messaging endpoint divergente após provisionamento."
+            exit 7
+          fi
+          az bot msteams show --name "$BOT_NAME" --resource-group "$RESOURCE_GROUP" --with-secrets false --only-show-errors >/dev/null
+
+          secret_names="$(flyctl secrets list --app "$FLY_APP")"
+          for secret_name in TEAMS_BOT_APP_ID TEAMS_BOT_APP_TENANT_ID TEAMS_BOT_SECRET; do
+            if ! grep -q "$secret_name" <<<"$secret_names"; then
+              echo "::error::Secret $secret_name não apareceu no inventário sanitizado do Fly."
+              exit 8
+            fi
+          done
+
+          APP_ID="$APP_ID" BOT_NAME="$BOT_NAME" RESOURCE_GROUP="$RESOURCE_GROUP" TARGET_ENDPOINT="$TARGET_ENDPOINT" PACKAGE_ZIP="$PACKAGE_ZIP" EVIDENCE_FILE="$EVIDENCE_FILE" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          evidence = {
+              'schema_version': '1.0.0',
+              'environment': 'dev',
+              'status': 'azure_bot_provisioned',
+              'bot_name': os.environ['BOT_NAME'],
+              'resource_group': os.environ['RESOURCE_GROUP'],
+              'app_id': os.environ['APP_ID'],
+              'messaging_endpoint': os.environ['TARGET_ENDPOINT'],
+              'teams_channel_enabled': True,
+              'sku': 'F0',
+              'fly_app': 'reqsys-api-dev',
+              'fly_secret_names': [
+                  'TEAMS_BOT_APP_ID',
+                  'TEAMS_BOT_APP_TENANT_ID',
+                  'TEAMS_BOT_SECRET',
+              ],
+              'secret_value_exposed': False,
+              'teams_app_package': os.environ['PACKAGE_ZIP'],
+              'next_action': 'Publicar/instalar o pacote Teams no usuário DEV e enviar a primeira mensagem ao bot.',
+          }
+          Path(os.environ['EVIDENCE_FILE']).write_text(
+              json.dumps(evidence, indent=2, ensure_ascii=False) + '\n', encoding='utf-8'
+          )
+          print(json.dumps({
+              'status': evidence['status'],
+              'bot_name': evidence['bot_name'],
+              'teams_channel_enabled': evidence['teams_channel_enabled'],
+              'sku': evidence['sku'],
+              'secret_value_exposed': False,
+          }, ensure_ascii=False))
+          PY
+
+          echo "app_id=$APP_ID" >> "$GITHUB_OUTPUT"
+          trap - ERR
+        env:
+          APP_ID_FOR_PACKAGE: ${{ steps.provision.outputs.app_id }}
+
+      - name: Corrigir pacote com App ID da execução
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_ID="${{ steps.provision.outputs.app_id }}"
+          if [ -z "$APP_ID" ]; then
+            echo "::error::App ID não disponível para validação final do pacote."
+            exit 9
+          fi
+          python - <<'PY'
+          import json
+          import os
+          import zipfile
+          from pathlib import Path
+          package = Path(os.environ['PACKAGE_ZIP'])
+          with zipfile.ZipFile(package) as zf:
+              manifest = json.loads(zf.read('manifest.json'))
+          expected = os.environ['APP_ID']
+          assert manifest['id'] == expected
+          assert manifest['bots'][0]['botId'] == expected
+          assert manifest['bots'][0]['isNotificationOnly'] is False
+          PY
+        env:
+          APP_ID: ${{ steps.provision.outputs.app_id }}
+
+      - name: Publicar evidência de provisionamento
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-bot-dev-provision-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            audit/teams-bot-dev-provision.json
+            audit/teams-bot-dev-fly-credential.json
+            audit/reqsys-teams-gateway-dev-v1.1.0.zip
+          if-no-files-found: warn
+          retention-days: 90
