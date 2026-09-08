@@ -268,11 +268,11 @@ def _create_and_store_secret(*, app_id: str, vault: str, secret_name: str) -> No
             stage="keyvault_secret_set",
         )
     except BootstrapError:
+        # A credencial já existe no Entra, mas não ficou governada no cofre: revogar
+        # é o que impede uma credencial órfã sobreviver a esta falha.
         for key_id in emitted:
             _revoke_credential(app_id, key_id)
         raise
-    finally:
-        del client_secret  # redução explícita do tempo de vida da referência em memória.
 
 
 def _plan(args: argparse.Namespace, tenant_id: str) -> dict[str, Any]:
