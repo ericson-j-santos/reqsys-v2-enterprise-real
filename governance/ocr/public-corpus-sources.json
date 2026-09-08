@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0.0",
+  "corpus_type": "public_reference",
+  "allowed_domains": [
+    "bcb.gov.br",
+    "gov.br"
+  ],
+  "sources": [
+    {
+      "case_id": "bcb-ref-2022-04",
+      "document_type": "RELATORIO_PUBLICO",
+      "authority": "Banco Central do Brasil",
+      "url": "https://www.bcb.gov.br/content/publicacoes/ref/202204/RELESTAB202204-refPub.pdf"
+    },
+    {
+      "case_id": "bcb-ref-2024-04",
+      "document_type": "RELATORIO_PUBLICO",
+      "authority": "Banco Central do Brasil",
+      "url": "https://www.bcb.gov.br/content/publicacoes/ref/202404/RELESTAB202404-refPub.pdf"
+    },
+    {
+      "case_id": "gov-transferegov-tutorial-2026",
+      "document_type": "MANUAL_PUBLICO",
+      "authority": "Governo Federal",
+      "url": "https://www.gov.br/transferegov/pt-br/manuais/ferramentas/ferramentas-1/tutorial-5-acesso-ao-painel-fundo-a-fundo.pdf"
+    },
+    {
+      "case_id": "gov-ppa-2024-2027",
+      "document_type": "MANUAL_PUBLICO",
+      "authority": "Governo Federal",
+      "url": "https://www.gov.br/planejamento/pt-br/assuntos/planejamento/plano-plurianual/manual-do-ppa-2024-2027-atualizada-22_12_2025_final-1.pdf"
+    }
+  ],
+  "governance": {
+    "institutional_validity": false,
+    "production_allowed": false,
+    "human_review_required": false,
+    "purpose": "technical_ocr_regression_only"
+  }
+}
