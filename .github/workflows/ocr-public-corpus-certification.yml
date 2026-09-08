@@ -99,13 +99,17 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Sincronizar evidência técnica na issue 1420
-        if: always() && hashFiles(format('{0}/ocr-public/report.json', runner.temp)) != ''
+        if: always()
         uses: actions/github-script@v7
         env:
           REPORT_PATH: ${{ runner.temp }}/ocr-public/report.json
         with:
           script: |
             const fs = require('fs');
+            if (!fs.existsSync(process.env.REPORT_PATH)) {
+              core.info('Relatório não existe; nenhuma evidência será sincronizada.');
+              return;
+            }
             const marker = '<!-- reqsys-ocr-public-corpus -->';
             const r = JSON.parse(fs.readFileSync(process.env.REPORT_PATH, 'utf8'));
             const body = `${marker}\n## Corpus público OCR — evidência técnica automática\n\n` +
