@@ -1,0 +1,133 @@
+name: OCR Public Corpus Technical Certification
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 10 * * 2'
+  pull_request:
+    paths:
+      - 'scripts/ocr_public_corpus_collect.py'
+      - 'scripts/ocr_public_corpus_certify.py'
+      - 'governance/ocr/public-corpus-sources.json'
+      - 'backend/ocr_tests/test_public_corpus_certify.py'
+      - '.github/workflows/ocr-public-corpus-certification.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ocr-public-corpus-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validar sintaxe
+        run: python -m py_compile scripts/ocr_public_corpus_collect.py scripts/ocr_public_corpus_certify.py
+      - name: Executar testes do contrato público
+        working-directory: backend
+        run: |
+          python -m pip install --disable-pip-version-check pytest==9.0.3
+          pytest -q ocr_tests/test_public_corpus_certify.py
+
+  certify-public-corpus:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: validate-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar dependências do OCR
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-por
+      - name: Coletar documentos públicos
+        run: |
+          mkdir -p "$RUNNER_TEMP/ocr-public/corpus"
+          python scripts/ocr_public_corpus_collect.py \
+            --config governance/ocr/public-corpus-sources.json \
+            --output-root "$RUNNER_TEMP/ocr-public/corpus" \
+            --manifest "$RUNNER_TEMP/ocr-public/manifest.json"
+      - name: Certificar tecnicamente
+        id: certify
+        continue-on-error: true
+        run: |
+          python scripts/ocr_public_corpus_certify.py \
+            --manifest "$RUNNER_TEMP/ocr-public/manifest.json" \
+            --corpus-root "$RUNNER_TEMP/ocr-public/corpus" \
+            --output "$RUNNER_TEMP/ocr-public/report.json"
+      - name: Publicar resumo sanitizado
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ocr-public' / 'report.json'
+          if not p.exists():
+              print('Relatório não foi gerado.')
+              raise SystemExit(0)
+          r = json.loads(p.read_text(encoding='utf-8'))
+          summary = pathlib.Path(os.environ['GITHUB_STEP_SUMMARY'])
+          summary.write_text(
+              '# OCR — corpus público técnico\n\n'
+              f"- gate técnico: `{r['technical_gate']}`\n"
+              f"- casos: `{r['cases_passed']}/{r['cases_total']}`\n"
+              f"- CER médio: `{r['average_cer']}`\n"
+              f"- correspondência exata: `{r['exact_match_ratio']}`\n"
+              '- validade institucional: `false`\n'
+              '- produção permitida: `false`\n'
+              '- promotion_eligible: `false`\n',
+              encoding='utf-8'
+          )
+          PY
+      - name: Anexar somente relatório sanitizado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-public-corpus-report-${{ github.sha }}
+          path: ${{ runner.temp }}/ocr-public/report.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Sincronizar evidência técnica na issue 1420
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          REPORT_PATH: ${{ runner.temp }}/ocr-public/report.json
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync(process.env.REPORT_PATH)) {
+              core.info('Relatório não existe; nenhuma evidência será sincronizada.');
+              return;
+            }
+            const marker = '<!-- reqsys-ocr-public-corpus -->';
+            const r = JSON.parse(fs.readFileSync(process.env.REPORT_PATH, 'utf8'));
+            const body = `${marker}\n## Corpus público OCR — evidência técnica automática\n\n` +
+              `- gate técnico: \`${r.technical_gate}\`;\n` +
+              `- casos: \`${r.cases_passed}/${r.cases_total}\`;\n` +
+              `- CER médio: \`${r.average_cer}\`;\n` +
+              `- correspondência exata: \`${r.exact_match_ratio}\`;\n` +
+              `- validade institucional: \`false\`;\n` +
+              `- produção permitida: \`false\`;\n` +
+              `- promotion_eligible: \`false\`;\n` +
+              `- execução: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}.\n\n` +
+              `Este corpus público substitui revisão humana apenas para regressão técnica. A certificação institucional real da #1420 permanece separada.`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner, repo: context.repo.repo, issue_number: 1420, per_page: 100
+            });
+            const previous = comments.find(c => c.body && c.body.includes(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({owner: context.repo.owner, repo: context.repo.repo, comment_id: previous.id, body});
+            } else {
+              await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 1420, body});
+            }
