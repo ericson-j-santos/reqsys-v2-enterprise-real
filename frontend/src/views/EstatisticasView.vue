@@ -52,15 +52,9 @@
     <v-row class="mt-2" dense>
       <v-col v-for="indicador in indicadoresFiltrados" :key="indicador.id" cols="12" md="6" xl="4">
         <v-card
-          class="indicator-card indicator-card--clickable"
+          class="indicator-card"
           elevation="0"
-          role="button"
-          tabindex="0"
           :data-testid="`estatisticas-indicador-${indicador.id}`"
-          :aria-label="`Abrir detalhe operacional de ${indicador.nome}`"
-          @click="abrirDetalhe(indicador)"
-          @keyup.enter="abrirDetalhe(indicador)"
-          @keyup.space.prevent="abrirDetalhe(indicador)"
         >
           <v-card-title class="indicator-title">
             <span>{{ indicador.nome }}</span>
@@ -79,7 +73,7 @@
               <div><dt>Confiabilidade</dt><dd>{{ indicador.fonte.confiabilidade }}</dd></div>
               <div class="full"><dt>Fórmula</dt><dd>{{ indicador.formula }}</dd></div>
             </dl>
-            <v-expansion-panels variant="accordion" class="mt-3" @click.stop @keyup.stop>
+            <v-expansion-panels variant="accordion" class="mt-3">
               <v-expansion-panel title="Analítico e guard rails">
                 <v-expansion-panel-text>
                   <h3>Evidências</h3>
@@ -99,7 +93,7 @@
               variant="tonal"
               class="mt-3"
               :data-testid="`estatisticas-abrir-${indicador.id}`"
-              @click.stop="abrirDetalhe(indicador)"
+              @click="abrirDetalhe(indicador)"
             >
               Abrir detalhe completo
             </v-btn>
@@ -111,7 +105,7 @@
     <v-card class="panel mt-4" elevation="0">
       <v-card-title>Analítico consolidado</v-card-title>
       <v-card-text>
-        <div class="table-scroll">
+        <div class="table-scroll" tabindex="0" aria-label="Tabela de indicadores; use as setas horizontais para navegar quando necessário">
           <v-table density="compact">
             <thead>
               <tr>
@@ -243,13 +237,7 @@ onMounted(async () => {
 h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; }
 .muted { color: var(--text-muted, #6b7280); }
 .panel, .indicator-card { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 16px; }
-.indicator-card--clickable, .indicator-row { cursor: pointer; transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease; }
-.indicator-card--clickable:hover, .indicator-card--clickable:focus-visible {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  outline-offset: 2px;
-}
+.indicator-row { cursor: pointer; transition: background 0.16s ease; }
 .indicator-row:hover, .indicator-row:focus-visible { background: rgba(148, 163, 184, 0.1); outline: 2px solid var(--accent); outline-offset: -2px; }
 .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .indicator-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -259,6 +247,7 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; }
 .metadata div { border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: var(--space-md); }
 .metadata .full { grid-column: 1 / -1; }
 .table-scroll { width: 100%; overflow-x: auto; }
+.table-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 dt { font-weight: 700; font-size: var(--font-size-sm); color: var(--text-muted, #6b7280); }
 dd { margin: var(--space-xs) 0 0; word-break: break-word; }
 ul { padding-left: var(--space-lg); }
