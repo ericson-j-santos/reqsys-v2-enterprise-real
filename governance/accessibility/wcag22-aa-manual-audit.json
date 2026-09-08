@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "standard": "WCAG 2.2 AA",
+  "formal_status": "pending_manual_audit",
+  "automated_evidence_required": true,
+  "manual_criteria": [
+    {
+      "id": "keyboard_navigation",
+      "description": "Navegação integral apenas por teclado nos fluxos críticos",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "focus_visibility_and_not_obscured",
+      "description": "Foco visível e não encoberto durante a navegação",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "zoom_and_reflow",
+      "description": "Zoom e refluxo de conteúdo sem perda funcional",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "screen_reader_critical_flows",
+      "description": "Validação dos fluxos críticos com leitor de tela real",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "text_spacing_and_content_loss",
+      "description": "Espaçamento de texto sem perda de conteúdo ou funcionalidade",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "accessible_authentication",
+      "description": "Autenticação utilizável sem barreira cognitiva incompatível com WCAG 2.2 AA",
+      "status": "pending",
+      "evidence": []
+    }
+  ]
+}

@@ -19,6 +19,8 @@
         "test:tooltip-a11y": "node --test scripts/validate-tooltip-accessible-name.test.mjs",
         "validate:tooltip-a11y": "node scripts/validate-tooltip-accessible-name.mjs",
         "test:wcag22-guard": "vitest run src/accessibility/__tests__/wcag22Guard.test.js",
+        "validate:wcag22-evidence": "node scripts/validate-wcag22-evidence.mjs",
+        "validate:wcag22-formal": "node scripts/validate-wcag22-formal-readiness.mjs",
         "export:figma-tokens": "node scripts/export-figma-tokens.mjs",
         "check:figma-token-drift": "npm run export:figma-tokens && git diff --exit-code -- artifacts/figma-tokens",
         "quality:design-system": "npm run validate:design-tokens && npm run check:figma-token-drift && npm run build",

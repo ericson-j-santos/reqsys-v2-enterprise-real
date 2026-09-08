@@ -1,8 +1,16 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
+const baseURL = process.env.E2E_BASE_URL || process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 const tagsWcagAA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+
+function persistirJson(nome: string, valor: unknown) {
+  const diretorio = path.resolve(process.cwd(), 'test-results/accessibility');
+  fs.mkdirSync(diretorio, { recursive: true });
+  fs.writeFileSync(path.join(diretorio, nome), `${JSON.stringify(valor, null, 2)}\n`, 'utf8');
+}
 
 for (const viewport of [
   { name: 'desktop', width: 1440, height: 900 },
@@ -18,6 +26,8 @@ for (const viewport of [
       const resultado = await new AxeBuilder({ page })
         .withTags(tagsWcagAA)
         .analyze();
+
+      persistirJson(`wcag22-incomplete-${viewport.name}.json`, resultado.incomplete);
 
       await testInfo.attach(`wcag22-incomplete-${viewport.name}.json`, {
         body: JSON.stringify(resultado.incomplete, null, 2),
