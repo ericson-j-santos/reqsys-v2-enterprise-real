@@ -235,9 +235,35 @@ A execução é idempotente: quando o Azure Bot já existe, o workflow exige cor
 
 ### 3. Primeira interação Teams
 
+Esta é a segunda fronteira humana. Ela **não** pode ser antecipada: o pacote só
+existe depois que a etapa 2 gera o App ID real, e o conector Microsoft 365 em uso
+não expõe operação de instalação de aplicativo Teams — os escopos delegados
+concedidos são de leitura de chats/canais e não incluem
+`TeamsAppInstallation.ReadWriteForUser`.
+
+Identidade de aceite (resolvida via Microsoft Graph, não presumida):
+
+| Campo | Valor |
+| --- | --- |
+| UPN | `ericsonjosedossantos@tieri659.onmicrosoft.com` |
+| AAD object ID | `0099abe2-63d9-4855-b087-364d1fbc9c30` |
+| Tenant | `6d09c88c-0617-490c-8329-305e577684bc` |
+
+O tenant da conta de aceite é o mesmo alvo do bootstrap, o que é condição
+necessária para instalar um bot `AzureADMyOrg`: uma conta de outro tenant não
+enxergaria o aplicativo. O `AAD object ID` acima é o valor a usar em
+`AI_CONVERSATION_TEAMS_USER_AAD_OBJECT_ID` quando houver mais de um usuário
+cadastrado.
+
+Pré-requisito ainda não verificável por esta automação: o tenant precisa permitir
+o upload de aplicativo personalizado (sideloading) para a conta de aceite. A
+política vive no Teams admin center e sua leitura exige escopo administrativo que
+o conector atual não possui — se a instalação for recusada, verificar essa
+política antes de suspeitar do pacote.
+
 Depois de Azure Bot + runtime DEV verdes:
 
-1. instalar/iniciar o pacote gerado no usuário DEV;
+1. instalar/iniciar o pacote gerado no escopo pessoal da conta de aceite acima;
 2. enviar a primeira mensagem ao bot para gravar a `conversationReference`;
 3. definir `AI_CONVERSATION_TEAMS_USER_AAD_OBJECT_ID` quando houver mais de um usuário cadastrado;
 4. configurar ao menos um provedor de IA;

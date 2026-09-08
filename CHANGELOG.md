@@ -17,6 +17,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 - Mesma execução idempotente deixa de reiniciar o `reqsys-api-dev`: quando as três credenciais já estão no app, a regravação é ignorada, com `force_runtime_sync` disponível por `workflow_dispatch` para rotação de segredo. Sem isso, o poll horário provocaria um release do runtime DEV a cada janela.
 - Testes: as asserções de texto do bootstrap foram substituídas por 14 testes executáveis com o Azure CLI simulado (rollback, recusa de identidade ambígua ou multi-tenant, dry-run sem mutação, segredo nunca presente na evidência) e o passo de bloqueio do workflow passa a ser **executado** nos quatro cruzamentos de gatilho e bloqueio, em vez de conferido por substring.
 
+### Documentado (Central de Conversas IA · identidade de aceite da instalação Teams atestada)
+
+- A segunda fronteira humana da Issue #1532 — instalar o pacote Teams — nomeava apenas "o usuário DEV". A conta de aceite foi resolvida contra o Microsoft Graph e registrada em `docs/architecture/ai-conversation-teams-gateway.md`: UPN, `AAD object ID` e tenant. O tenant coincide com o alvo do bootstrap, condição necessária para instalar um bot `AzureADMyOrg` — uma conta de outro tenant sequer enxergaria o aplicativo, e essa verificação antes valeria apenas no momento da instalação.
+- O mesmo `AAD object ID` é o valor de `AI_CONVERSATION_TEAMS_USER_AAD_OBJECT_ID`, que deixa de exigir uma consulta manual ao diretório durante o aceite.
+- Registrado também o que a automação **não** consegue verificar: a política de upload de aplicativo personalizado (sideloading) do tenant, cuja leitura exige escopo administrativo ausente do conector. É a primeira hipótese a checar se a instalação for recusada, antes de suspeitar do pacote.
+
 ## [Unreleased] - 2026-09-07
 
 ### Adicionado (Mirror GitLab · correlacionar a credencial do Key Vault com a identidade que ela representa)
