@@ -122,9 +122,24 @@ function replaceHumanText(value) {
   return output
 }
 
+function isTechnicalSelectorOrIdentifier(value) {
+  const text = String(value).trim()
+  if (!text) return false
+
+  // Seletores CSS/DOM, nomes de data-testid e contratos de automação são
+  // identificadores técnicos. Traduzi-los quebra testes, acessibilidade e
+  // integrações mesmo quando contêm palavras consideradas "não simples".
+  if (/\[(?:data-testid|data-test|aria-[\w-]+|role)\s*=/iu.test(text)) return true
+  if (/(?:^|[\s>+~,(])(?:\.[a-z_][\w-]*|#[a-z_][\w-]*)/iu.test(text)) return true
+  if (/^(?:route|testid|data-testid|aria|css|selector)-[a-z0-9_-]+$/iu.test(text)) return true
+
+  return false
+}
+
 function isLikelyHumanLiteral(value) {
   const text = String(value).trim()
   if (!text) return false
+  if (isTechnicalSelectorOrIdentifier(text)) return false
   if (/^(?:https?:\/\/|\/|\.\/|\.\.\/)/i.test(text)) return false
   if (/^[a-z0-9_.:/-]+$/i.test(text) && text === text.toLowerCase()) return false
   if (/^[A-Z0-9_.:/-]+$/u.test(text) && !/\s/u.test(text)) return false
@@ -162,6 +177,7 @@ function transformJavascript(content) {
 
 function transformInterpolation(expression) {
   return expression.replace(STRING_LITERAL, (full, quote, value) => {
+    if (!isLikelyHumanLiteral(value)) return full
     const replaced = replaceHumanText(value)
     return replaced === value ? full : `${quote}${replaced}${quote}`
   })
@@ -232,7 +248,7 @@ function walk(directory) {
   return files
 }
 
-export { isLikelyHumanLiteral, replaceHumanText, transformJavascript, transformVue }
+export { isLikelyHumanLiteral, isTechnicalSelectorOrIdentifier, replaceHumanText, transformJavascript, transformVue }
 
 function run() {
   let changedFiles = 0

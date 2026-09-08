@@ -9,6 +9,8 @@ import App from './App.vue'
 import router from './router'
 import './styles.css'
 import './responsive-pareto.css'
+import './accessibility/wcag22-aa.css'
+import { installWcag22Guard } from './accessibility/wcag22Guard'
 import { useAuthStore } from './stores/auth'
 import { api } from './services/api'
 import { acquireIdTokenSilent, handleRedirectResult } from './auth/msal'
@@ -79,7 +81,9 @@ async function boot() {
     window.history.replaceState({}, document.title, '/login')
   }
 
-  createApp(App).use(pinia).use(router).use(vuetify).mount('#app')
+  const app = createApp(App).use(pinia).use(router).use(vuetify)
+  app.mount('#app')
+  installWcag22Guard(router)
 }
 
 boot()

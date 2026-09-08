@@ -18,11 +18,12 @@
         "test:linguagem-simples": "node --test scripts/validate-user-facing-language.test.mjs",
         "test:tooltip-a11y": "node --test scripts/validate-tooltip-accessible-name.test.mjs",
         "validate:tooltip-a11y": "node scripts/validate-tooltip-accessible-name.mjs",
+        "test:wcag22-guard": "vitest run src/accessibility/__tests__/wcag22Guard.test.js",
         "export:figma-tokens": "node scripts/export-figma-tokens.mjs",
         "check:figma-token-drift": "npm run export:figma-tokens && git diff --exit-code -- artifacts/figma-tokens",
         "quality:design-system": "npm run validate:design-tokens && npm run check:figma-token-drift && npm run build",
         "quality:linguagem-simples": "npm run test:linguagem-simples && npm run validate:linguagem-simples",
-        "quality:acessibilidade": "npm run test:tooltip-a11y && npm run validate:tooltip-a11y"
+        "quality:acessibilidade": "npm run test:tooltip-a11y && npm run validate:tooltip-a11y && npm run test:wcag22-guard"
     },
     "dependencies": {
         "@azure/msal-browser": "^5.18.0",

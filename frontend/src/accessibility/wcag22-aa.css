@@ -1,0 +1,61 @@
+/*
+ * Correções semânticas de contraste para componentes que usavam cores fixas
+ * incompatíveis com um dos temas do ReqSys. Os valores vêm dos tokens de tema,
+ * evitando uma segunda paleta específica de acessibilidade.
+ */
+
+.user-final-page .eyebrow,
+.user-final-page .drilldown-hint {
+  color: var(--text) !important;
+}
+
+.user-final-page .hero-copy {
+  color: var(--text-muted) !important;
+}
+
+[data-testid="route-specs"] .feature-title,
+[data-testid="route-specs"] .markdown-body,
+[data-testid="route-specs"] .markdown-body h1,
+[data-testid="route-specs"] .markdown-body h2,
+[data-testid="route-specs"] .markdown-body h3,
+[data-testid="route-specs"] .markdown-body strong,
+[data-testid="route-specs"] .markdown-body .mermaid-block,
+[data-testid="route-specs"] .markdown-body .req-link {
+  color: var(--text) !important;
+}
+
+[data-testid="route-specs"] .markdown-body .req-link {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  border-bottom: 0 !important;
+}
+
+[data-testid="route-specs"] .content-body:focus-visible,
+[data-testid="route-specs"] .code-block:focus-visible,
+[data-testid="route-specs"] .mermaid-block:focus-visible,
+[data-testid="route-task-console"] .payload-box:focus-visible {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+/*
+ * O azul padrão do Vuetify não mantém contraste AA com o texto claro usado
+ * pelos chips. Mantemos o significado visual "azul" usando o token primário
+ * institucional, cujo contraste com o texto on-color do componente é >= 4.5:1.
+ */
+.v-chip.bg-blue {
+  background-color: var(--dsc-primary) !important;
+}
+
+/*
+ * Estado vazio informativo: o atributo disabled do item de lista aplicava
+ * opacidade ao bloco inteiro e derrubava o contraste do texto abaixo de AA.
+ * Preservamos a semântica visual por cor, sem reduzir opacidade do conteúdo.
+ */
+[data-testid="route-specs"] .v-list-item--disabled {
+  opacity: 1 !important;
+}
+
+[data-testid="route-specs"] .v-list-item--disabled .muted {
+  color: var(--text-muted) !important;
+}

@@ -117,7 +117,7 @@
         <div><dt>Modo</dt><dd>{{ resultadoSync.mode || '-' }}</dd></div>
         <div><dt>Situação</dt><dd>{{ resultadoSync.status || 'processado' }}</dd></div>
       </dl>
-      <pre class="json-retorno">{{ JSON.stringify(resultadoSync, null, 2) }}</pre>
+      <pre class="json-retorno" tabindex="0" aria-label="Retorno JSON da última sincronização">{{ JSON.stringify(resultadoSync, null, 2) }}</pre>
     </section>
 
     <section class="painel" aria-labelledby="titulo-analitico">
@@ -135,7 +135,11 @@
         </label>
       </div>
 
-      <div class="tabela-wrapper responsive-table-shell">
+      <div
+        class="tabela-wrapper responsive-table-shell"
+        tabindex="0"
+        aria-label="Tabela de vínculos entre Figma e GitHub; use as setas horizontais para navegar quando necessário"
+      >
         <table class="figma-github-table">
           <thead>
             <tr>
@@ -318,18 +322,19 @@ onMounted(async () => {
 .cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .card, .painel { border: 1px solid var(--line); border-radius: 16px; padding: 1rem; background: rgba(255,255,255,0.02); min-width: 0; max-width: 100%; }
 .card span, .card strong { display: block; }
-.card strong { font-size: 1.4rem; margin-top: 0.5rem; color: var(--accent); }
+.card strong { font-size: 1.4rem; margin-top: 0.5rem; color: var(--text); }
 .formulario { display: grid; gap: 0.75rem; grid-template-columns: 1fr; margin-top: 1rem; }
 .formulario label, .filtro { display: grid; gap: 0.25rem; font-weight: 600; color: var(--text); }
 input, select, button { border: 1px solid var(--line); border-radius: 8px; padding: 0.65rem; background: rgba(255,255,255,0.04); color: var(--text); }
-button { cursor: pointer; font-weight: 700; background: var(--accent); color: #111; border-color: var(--accent); }
+button { cursor: pointer; font-weight: 700; background: var(--dsc-primary); color: #fff; border-color: var(--dsc-primary); }
 button:disabled { cursor: not-allowed; opacity: 0.6; }
+button:focus-visible, input:focus-visible, select:focus-visible, .tabela-wrapper:focus-visible, .json-retorno:focus-visible, .link-externo:focus-visible { outline: 3px solid var(--accent-strong); outline-offset: 2px; }
 .checks { display: grid; gap: 0.4rem; align-content: end; }
 .checks label { display: flex; gap: 0.4rem; align-items: center; font-weight: 500; }
 .alerta, .aviso-config { border-radius: 8px; padding: 0.75rem; }
-.aviso-config { border: 1px solid var(--amber); color: var(--amber); background: rgba(245, 158, 11, 0.08); }
-.erro { border: 1px solid var(--red); color: var(--red); }
-.sucesso { border: 1px solid var(--green); color: var(--green); }
+.aviso-config { border: 1px solid var(--amber); color: var(--text); background: rgba(245, 158, 11, 0.08); }
+.erro { border: 1px solid var(--red); color: var(--text); }
+.sucesso { border: 1px solid var(--green); color: var(--text); }
 .detalhes { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .detalhes div { border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; }
 dt { font-weight: 700; }
@@ -338,7 +343,7 @@ dd { margin: 0.25rem 0 0; word-break: break-word; color: var(--muted); }
 .figma-preview-panel { gap: 1rem; display: grid; }
 .figma-embed-shell { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-height: 520px; background: #111827; }
 .figma-embed-shell iframe { display: block; width: 100%; min-height: 520px; border: 0; }
-.link-externo { color: var(--accent); font-weight: 700; }
+.link-externo { color: var(--text); font-weight: 700; text-decoration: underline; text-underline-offset: 0.18em; }
 small { color: var(--muted); font-weight: 500; }
 .tabela-wrapper { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; contain: inline-size; }
 .figma-github-table { border-collapse: collapse; width: max(100%, 720px); min-width: 720px; }
