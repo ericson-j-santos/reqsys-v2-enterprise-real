@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
+const tagsWcagAA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 for (const viewport of [
   { name: 'desktop', width: 1440, height: 900 },
@@ -10,17 +11,23 @@ for (const viewport of [
   test.describe(`qualidade visual ${viewport.name}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-    test('não possui violações críticas nem overflow horizontal', async ({ page }, testInfo) => {
+    test('não possui violações WCAG 2.2 A/AA nem overflow horizontal', async ({ page }, testInfo) => {
       await page.goto(baseURL, { waitUntil: 'networkidle' });
       await expect(page.locator('body')).toBeVisible();
 
       const resultado = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+        .withTags(tagsWcagAA)
         .analyze();
-      const criticas = resultado.violations.filter((item) =>
-        ['critical', 'serious'].includes(item.impact || ''),
-      );
-      expect(criticas, JSON.stringify(criticas, null, 2)).toEqual([]);
+
+      await testInfo.attach(`wcag22-incomplete-${viewport.name}.json`, {
+        body: JSON.stringify(resultado.incomplete, null, 2),
+        contentType: 'application/json',
+      });
+
+      expect(
+        resultado.violations,
+        JSON.stringify(resultado.violations, null, 2),
+      ).toEqual([]);
 
       const overflow = await page.evaluate(() =>
         document.documentElement.scrollWidth - document.documentElement.clientWidth,
