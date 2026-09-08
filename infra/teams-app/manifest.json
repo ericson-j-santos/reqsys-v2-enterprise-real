@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
   "manifestVersion": "1.16",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "id": "00000000-0000-0000-0000-000000000000",
   "developer": {
     "name": "ReqSys",
@@ -18,8 +18,8 @@
     "full": "ReqSys Teams Messaging Gateway"
   },
   "description": {
-    "short": "Envia notificacoes do ReqSys diretamente no seu Teams.",
-    "full": "Bot do ReqSys usado pelo Teams Messaging Gateway para enviar mensagens proativas 1:1 sem exigir login interativo a cada envio."
+    "short": "Integra o ReqSys a conversas e notificacoes no Microsoft Teams.",
+    "full": "Bot do ReqSys usado pelo Teams Messaging Gateway para mensagens proativas 1:1 e continuidade bidirecional das conversas gerenciadas pela Central de Conversas de IA."
   },
   "accentColor": "#5B3CC4",
   "bots": [
@@ -27,7 +27,7 @@
       "botId": "${{TEAMS_BOT_APP_ID}}",
       "scopes": ["personal"],
       "supportsFiles": false,
-      "isNotificationOnly": true
+      "isNotificationOnly": false
     }
   ],
   "permissions": ["identity", "messageTeamMembers"],
