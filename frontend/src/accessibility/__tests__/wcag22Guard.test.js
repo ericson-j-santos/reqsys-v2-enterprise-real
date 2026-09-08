@@ -6,10 +6,12 @@ describe('wcag22Guard', () => {
     document.body.innerHTML = ''
   })
 
-  it('nomeia progressbar de qualidade IA com contexto', () => {
+  it('nomeia progressbar de qualidade IA mesmo quando existe texto visual interno', () => {
     document.body.innerHTML = `
       <section data-testid="route-qualidade-ia">
-        <div class="score-wrap"><div role="progressbar"></div></div>
+        <div class="score-wrap">
+          <div role="progressbar"><strong>88%</strong></div>
+        </div>
       </section>
     `
 
