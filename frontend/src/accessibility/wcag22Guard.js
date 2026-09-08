@@ -105,24 +105,18 @@ export function applyWcag22Guard(root = document) {
 }
 
 export function installWcag22Guard(router, root = document) {
-  let scheduled = false
-  const schedule = () => {
-    if (scheduled) return
-    scheduled = true
-    const run = () => {
-      scheduled = false
-      applyWcag22Guard(root)
-    }
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run)
-    else queueMicrotask(run)
-  }
+  const run = () => applyWcag22Guard(root)
 
-  applyWcag22Guard(root)
-  router?.afterEach?.(schedule)
+  // Aplica imediatamente no DOM atual e novamente após navegação. O observador
+  // executa de forma síncrona no callback de mutação: não aguardamos um frame,
+  // pois isso criava uma janela em que leitores de acessibilidade/axe podiam
+  // inspecionar componentes recém-renderizados antes da correção semântica.
+  run()
+  router?.afterEach?.(() => queueMicrotask(run))
 
   const target = root.getElementById?.('app') || root.body
   if (target && typeof MutationObserver !== 'undefined') {
-    const observer = new MutationObserver(schedule)
+    const observer = new MutationObserver(run)
     observer.observe(target, { childList: true, subtree: true })
     return () => observer.disconnect()
   }
