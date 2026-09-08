@@ -37,3 +37,25 @@
   outline: 3px solid var(--accent-strong);
   outline-offset: 2px;
 }
+
+/*
+ * O azul padrão do Vuetify não mantém contraste AA com o texto claro usado
+ * pelos chips. Mantemos o significado visual "azul" usando o token primário
+ * institucional, cujo contraste com o texto on-color do componente é >= 4.5:1.
+ */
+.v-chip.bg-blue {
+  background-color: var(--dsc-primary) !important;
+}
+
+/*
+ * Estado vazio informativo: o atributo disabled do item de lista aplicava
+ * opacidade ao bloco inteiro e derrubava o contraste do texto abaixo de AA.
+ * Preservamos a semântica visual por cor, sem reduzir opacidade do conteúdo.
+ */
+[data-testid="route-specs"] .v-list-item--disabled {
+  opacity: 1 !important;
+}
+
+[data-testid="route-specs"] .v-list-item--disabled .muted {
+  color: var(--text-muted) !important;
+}
