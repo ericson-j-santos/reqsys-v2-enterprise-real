@@ -38,6 +38,12 @@ function carregarRotasCanonicas() {
   }))
 }
 
+function persistirJson(nome, valor) {
+  const diretorio = path.resolve(process.cwd(), 'test-results/accessibility')
+  fs.mkdirSync(diretorio, { recursive: true })
+  fs.writeFileSync(path.join(diretorio, nome), `${JSON.stringify(valor, null, 2)}\n`, 'utf8')
+}
+
 const ROTAS_AUTENTICADAS = carregarRotasCanonicas().filter((item) => !item.public)
 
 test.describe('acessibilidade: catálogo completo de rotas autenticadas', () => {
@@ -86,6 +92,22 @@ test.describe('acessibilidade: catálogo completo de rotas autenticadas', () => 
       })
     }
 
+    const rotasComRevisaoManual = Object.keys(revisaoManualPorRota).length
+    const resumo = {
+      schema_version: 1,
+      commit_sha: process.env.GITHUB_SHA || null,
+      tags_wcag: TAGS_WCAG_AA,
+      rotas_autenticadas: ROTAS_AUTENTICADAS.length,
+      rotas_com_violacao: Object.keys(violacoesPorRota).length,
+      rotas_com_revisao_manual_axe: rotasComRevisaoManual,
+      resultado_automatizado: Object.keys(violacoesPorRota).length === 0 ? 'approved' : 'failed',
+      conformidade_formal: 'pending_manual_audit',
+    }
+
+    persistirJson('wcag22-revisao-manual.json', revisaoManualPorRota)
+    persistirJson('wcag22-violacoes.json', violacoesPorRota)
+    persistirJson('wcag22-resumo.json', resumo)
+
     await test.info().attach('wcag22-revisao-manual.json', {
       body: JSON.stringify(revisaoManualPorRota, null, 2),
       contentType: 'application/json',
@@ -96,6 +118,12 @@ test.describe('acessibilidade: catálogo completo de rotas autenticadas', () => 
       contentType: 'application/json',
     })
 
+    await test.info().attach('wcag22-resumo.json', {
+      body: JSON.stringify(resumo, null, 2),
+      contentType: 'application/json',
+    })
+
+    expect(ROTAS_AUTENTICADAS.length, 'Catálogo autenticado deve conter exatamente 37 rotas').toBe(37)
     expect(
       violacoesPorRota,
       `Violações automatizáveis WCAG 2.2 A/AA: ${JSON.stringify(violacoesPorRota, null, 2)}`,
