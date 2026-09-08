@@ -20,12 +20,12 @@ function normalizeText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim()
 }
 
-function hasAccessibleName(element) {
+function hasAccessibleName(element, { allowTextContent = true } = {}) {
   return Boolean(
     normalizeText(element.getAttribute('aria-label')) ||
     normalizeText(element.getAttribute('aria-labelledby')) ||
     normalizeText(element.getAttribute('title')) ||
-    normalizeText(element.textContent),
+    (allowTextContent && normalizeText(element.textContent)),
   )
 }
 
@@ -77,7 +77,9 @@ export function applyWcag22Guard(root = document) {
   if (!root?.querySelectorAll) return
 
   for (const progress of root.querySelectorAll('[role="progressbar"]')) {
-    if (!hasAccessibleName(progress)) {
+    // ARIA progressbar torna seus descendentes presentacionais. Portanto,
+    // texto visual interno (ex.: "88%") não constitui nome acessível.
+    if (!hasAccessibleName(progress, { allowTextContent: false })) {
       progress.setAttribute('aria-label', contextualProgressName(progress))
     }
   }
@@ -105,18 +107,24 @@ export function applyWcag22Guard(root = document) {
 }
 
 export function installWcag22Guard(router, root = document) {
-  const run = () => applyWcag22Guard(root)
+  let scheduled = false
+  const schedule = () => {
+    if (scheduled) return
+    scheduled = true
+    const run = () => {
+      scheduled = false
+      applyWcag22Guard(root)
+    }
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run)
+    else queueMicrotask(run)
+  }
 
-  // Aplica imediatamente no DOM atual e novamente após navegação. O observador
-  // executa de forma síncrona no callback de mutação: não aguardamos um frame,
-  // pois isso criava uma janela em que leitores de acessibilidade/axe podiam
-  // inspecionar componentes recém-renderizados antes da correção semântica.
-  run()
-  router?.afterEach?.(() => queueMicrotask(run))
+  applyWcag22Guard(root)
+  router?.afterEach?.(schedule)
 
   const target = root.getElementById?.('app') || root.body
   if (target && typeof MutationObserver !== 'undefined') {
-    const observer = new MutationObserver(run)
+    const observer = new MutationObserver(schedule)
     observer.observe(target, { childList: true, subtree: true })
     return () => observer.disconnect()
   }
