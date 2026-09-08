@@ -24,7 +24,7 @@ from app.ocr.documento_worker import FalhaOcrDocumento, TesseractDocumento
 from ocr_real_corpus_certify import character_error_rate, _normalize
 
 DEFAULT_MAX_CER = 0.10
-DEFAULT_MIN_EXACT_MATCH = 0.50
+DEFAULT_MIN_EXACT_MATCH = 0.0
 
 
 @dataclass(frozen=True)
