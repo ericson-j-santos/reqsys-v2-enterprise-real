@@ -1,10 +1,10 @@
 const SCROLLABLE_REGIONS = [
-  ['[data-testid="route-task-console"] .payload-box', 'Prévia do payload enviado ao Flow'],
-  ['[data-testid="route-figma-github"] .json-retorno', 'Retorno JSON da última sincronização'],
-  ['[data-testid="route-figma-github"] .tabela-wrapper', 'Tabela de vínculos entre Figma e GitHub'],
-  ['[data-testid="route-especificações"] .content-body', 'Conteúdo da especificação'],
-  ['[data-testid="route-especificações"] .code-block', 'Bloco de código da especificação'],
-  ['[data-testid="route-especificações"] .mermaid-block', 'Diagrama Mermaid da especificação'],
+  { routeTestId: 'route-task-console', selector: '.payload-box', label: 'Prévia do payload enviado ao Flow' },
+  { routeTestId: 'route-figma-github', selector: '.json-retorno', label: 'Retorno JSON da última sincronização' },
+  { routeTestId: 'route-figma-github', selector: '.tabela-wrapper', label: 'Tabela de vínculos entre Figma e GitHub' },
+  { routeTestId: 'route-specs', selector: '.content-body', label: 'Conteúdo da especificação' },
+  { routeTestId: 'route-specs', selector: '.code-block', label: 'Bloco de código da especificação' },
+  { routeTestId: 'route-specs', selector: '.mermaid-block', label: 'Diagrama Mermaid da especificação' },
 ]
 
 const ICON_BUTTON_NAMES = new Map([
@@ -68,6 +68,11 @@ function contextualProgressName(progress) {
   return 'Indicador de progresso'
 }
 
+function findRouteRoot(root, routeTestId) {
+  return [...root.querySelectorAll('[data-testid]')]
+    .find((element) => element.getAttribute('data-testid') === routeTestId) || null
+}
+
 export function applyWcag22Guard(root = document) {
   if (!root?.querySelectorAll) return
 
@@ -86,8 +91,11 @@ export function applyWcag22Guard(root = document) {
     if (name) button.setAttribute('aria-label', name)
   }
 
-  for (const [selector, label] of SCROLLABLE_REGIONS) {
-    for (const region of root.querySelectorAll(selector)) {
+  for (const { routeTestId, selector, label } of SCROLLABLE_REGIONS) {
+    const routeRoot = findRouteRoot(root, routeTestId)
+    if (!routeRoot) continue
+
+    for (const region of routeRoot.querySelectorAll(selector)) {
       if (!region.hasAttribute('tabindex')) region.setAttribute('tabindex', '0')
       if (!region.hasAttribute('aria-label') && !region.hasAttribute('aria-labelledby')) {
         region.setAttribute('aria-label', label)
