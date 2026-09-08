@@ -2,9 +2,9 @@ const SCROLLABLE_REGIONS = [
   ['[data-testid="route-task-console"] .payload-box', 'Prévia do payload enviado ao Flow'],
   ['[data-testid="route-figma-github"] .json-retorno', 'Retorno JSON da última sincronização'],
   ['[data-testid="route-figma-github"] .tabela-wrapper', 'Tabela de vínculos entre Figma e GitHub'],
-  ['[data-testid="route-especificações"] .content-body', 'Conteúdo da especificação'],
-  ['[data-testid="route-especificações"] .code-block', 'Bloco de código da especificação'],
-  ['[data-testid="route-especificações"] .mermaid-block', 'Diagrama Mermaid da especificação'],
+  ['[data-testid="route-specs"] .content-body', 'Conteúdo da especificação'],
+  ['[data-testid="route-specs"] .code-block', 'Bloco de código da especificação'],
+  ['[data-testid="route-specs"] .mermaid-block', 'Diagrama Mermaid da especificação'],
 ]
 
 const ICON_BUTTON_NAMES = new Map([
