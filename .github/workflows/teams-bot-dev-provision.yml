@@ -30,7 +30,7 @@ jobs:
           python-version: "3.12"
       - name: Executar testes focados
         run: |
-          python -m pip install --disable-pip-version-check --no-cache-dir "pytest==9.0.3"
+          python -m pip install --disable-pip-version-check --no-cache-dir "pytest==9.0.3" "PyYAML==6.0.2"
           python -m pytest -q tests/test_teams_bot_dev_provision_workflow.py
 
   provision-azure:
@@ -132,10 +132,7 @@ jobs:
             exit 4
           fi
 
-          APP_OBJECT_ID="$(az ad app create \
-            --display-name "$APP_DISPLAY_NAME" \
-            --sign-in-audience AzureADMyOrg \
-            --query id --output tsv --only-show-errors)"
+          APP_OBJECT_ID="$(az ad app create --display-name "$APP_DISPLAY_NAME" --sign-in-audience AzureADMyOrg --query id --output tsv --only-show-errors)"
           CREATED_APP=1
           APP_ID="$(az ad app show --id "$APP_OBJECT_ID" --query appId --output tsv --only-show-errors)"
           test -n "$APP_ID"
@@ -143,41 +140,18 @@ jobs:
           az ad sp create --id "$APP_ID" --only-show-errors --output none >/dev/null
           CREATED_SP=1
 
-          CLIENT_SECRET="$(az ad app credential reset \
-            --id "$APP_ID" \
-            --append \
-            --display-name "reqsys-dev-bot-${GITHUB_RUN_ID}" \
-            --years 1 \
-            --query password --output tsv --only-show-errors)"
+          CLIENT_SECRET="$(az ad app credential reset --id "$APP_ID" --append --display-name "reqsys-dev-bot-${GITHUB_RUN_ID}" --years 1 --query password --output tsv --only-show-errors)"
           test -n "$CLIENT_SECRET"
           echo "::add-mask::$CLIENT_SECRET"
 
           if ! az group show --name "$RESOURCE_GROUP" --only-show-errors >/dev/null 2>&1; then
-            az group create \
-              --name "$RESOURCE_GROUP" \
-              --location "$AZURE_LOCATION" \
-              --tags reqsys=true environment=dev component=teams-bot managed-by=github-actions \
-              --only-show-errors --output none
+            az group create --name "$RESOURCE_GROUP" --location "$AZURE_LOCATION" --tags reqsys=true environment=dev component=teams-bot managed-by=github-actions --only-show-errors --output none
             CREATED_GROUP=1
           fi
 
-          az bot create \
-            --name "$BOT_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --app-type SingleTenant \
-            --appid "$APP_ID" \
-            --tenant-id "$CCP_AZURE_TENANT_ID" \
-            --endpoint "$TARGET_ENDPOINT" \
-            --location global \
-            --sku F0 \
-            --tags reqsys=true environment=dev component=teams-bot managed-by=github-actions \
-            --only-show-errors --output none
+          az bot create --name "$BOT_NAME" --resource-group "$RESOURCE_GROUP" --app-type SingleTenant --appid "$APP_ID" --tenant-id "$CCP_AZURE_TENANT_ID" --endpoint "$TARGET_ENDPOINT" --location global --sku F0 --tags reqsys=true environment=dev component=teams-bot managed-by=github-actions --only-show-errors --output none
           CREATED_BOT=1
-
-          az bot msteams create \
-            --name "$BOT_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --only-show-errors --output none
+          az bot msteams create --name "$BOT_NAME" --resource-group "$RESOURCE_GROUP" --only-show-errors --output none
 
           bot_endpoint="$(az bot show --name "$BOT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.endpoint --output tsv --only-show-errors)"
           if [ "${bot_endpoint%/}" != "${TARGET_ENDPOINT%/}" ]; then
@@ -187,86 +161,40 @@ jobs:
           az bot msteams show --name "$BOT_NAME" --resource-group "$RESOURCE_GROUP" --with-secrets false --only-show-errors >/dev/null
 
           APP_ID_FOR_PACKAGE="$APP_ID" python - <<'PY'
-          import json
-          import os
-          import shutil
-          import zipfile
+          import json, os, shutil, zipfile
           from pathlib import Path
-
-          root = Path('infra/teams-app')
-          out = Path(os.environ['PACKAGE_DIR'])
-          out.mkdir(parents=True, exist_ok=True)
-          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
-          app_id = os.environ['APP_ID_FOR_PACKAGE']
-          manifest['id'] = app_id
-          manifest['bots'][0]['botId'] = app_id
+          root = Path('infra/teams-app'); out = Path(os.environ['PACKAGE_DIR']); out.mkdir(parents=True, exist_ok=True)
+          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8')); app_id = os.environ['APP_ID_FOR_PACKAGE']
+          manifest['id'] = app_id; manifest['bots'][0]['botId'] = app_id
           domains = list(manifest.get('validDomains') or [])
           for domain in ('reqsys-api-dev.fly.dev', 'token.botframework.com'):
-              if domain not in domains:
-                  domains.append(domain)
+              if domain not in domains: domains.append(domain)
           manifest['validDomains'] = domains
-          (out / 'manifest.json').write_text(
-              json.dumps(manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8'
-          )
-          shutil.copy2(root / 'color.png', out / 'color.png')
-          shutil.copy2(root / 'outline.png', out / 'outline.png')
+          (out / 'manifest.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          shutil.copy2(root / 'color.png', out / 'color.png'); shutil.copy2(root / 'outline.png', out / 'outline.png')
           with zipfile.ZipFile(os.environ['PACKAGE_ZIP'], 'w', zipfile.ZIP_DEFLATED) as zf:
-              for name in ('manifest.json', 'color.png', 'outline.png'):
-                  zf.write(out / name, arcname=name)
+              for name in ('manifest.json', 'color.png', 'outline.png'): zf.write(out / name, arcname=name)
           PY
 
           expires="$(date -u -d '+365 days' '+%Y-%m-%dT%H:%M:%SZ')"
-          az keyvault secret set \
-            --vault-name "$REQSYS_KEY_VAULT_NAME" \
-            --name "$BOT_SECRET_VAULT_NAME" \
-            --value "$CLIENT_SECRET" \
-            --expires "$expires" \
-            --tags reqsys=true environment=dev component=teams-bot app-id="$APP_ID" \
-            --only-show-errors --output none
+          az keyvault secret set --vault-name "$REQSYS_KEY_VAULT_NAME" --name "$BOT_SECRET_VAULT_NAME" --value "$CLIENT_SECRET" --expires "$expires" --tags reqsys=true environment=dev component=teams-bot app-id="$APP_ID" --only-show-errors --output none
           COMMITTED=1
 
           APP_ID="$APP_ID" python - <<'PY'
-          import json
-          import os
-          import zipfile
+          import json, os, zipfile
           from pathlib import Path
-
           package = Path(os.environ['PACKAGE_ZIP'])
-          with zipfile.ZipFile(package) as zf:
-              manifest = json.loads(zf.read('manifest.json'))
-          expected = os.environ['APP_ID']
-          assert manifest['id'] == expected
-          assert manifest['bots'][0]['botId'] == expected
-          assert manifest['bots'][0]['isNotificationOnly'] is False
-          assert 'reqsys-api-dev.fly.dev' in manifest['validDomains']
+          with zipfile.ZipFile(package) as zf: manifest = json.loads(zf.read('manifest.json'))
+          expected = os.environ['APP_ID']; assert manifest['id'] == expected; assert manifest['bots'][0]['botId'] == expected
+          assert manifest['bots'][0]['isNotificationOnly'] is False; assert 'reqsys-api-dev.fly.dev' in manifest['validDomains']
           PY
 
           APP_ID="$APP_ID" python - <<'PY'
-          import json
-          import os
+          import json, os
           from pathlib import Path
-
-          evidence = {
-              'schema_version': '1.1.0',
-              'environment': 'dev',
-              'status': 'azure_bot_provisioned_secret_in_keyvault',
-              'bot_name': os.environ['BOT_NAME'],
-              'resource_group': os.environ['RESOURCE_GROUP'],
-              'app_id': os.environ['APP_ID'],
-              'messaging_endpoint': os.environ['TARGET_ENDPOINT'],
-              'teams_channel_enabled': True,
-              'sku': 'F0',
-              'secret_store': 'Azure Key Vault',
-              'secret_name': os.environ['BOT_SECRET_VAULT_NAME'],
-              'secret_value_exposed': False,
-              'teams_app_package': os.environ['PACKAGE_ZIP'],
-              'next_action': 'Configurar os três segredos no reqsys-api-dev usando a identidade DEV federada ao environment:dev.',
-          }
-          Path(os.environ['EVIDENCE_FILE']).write_text(
-              json.dumps(evidence, indent=2, ensure_ascii=False) + '\n', encoding='utf-8'
-          )
+          evidence = {'schema_version':'1.1.0','environment':'dev','status':'azure_bot_provisioned_secret_in_keyvault','bot_name':os.environ['BOT_NAME'],'resource_group':os.environ['RESOURCE_GROUP'],'app_id':os.environ['APP_ID'],'messaging_endpoint':os.environ['TARGET_ENDPOINT'],'teams_channel_enabled':True,'sku':'F0','secret_store':'Azure Key Vault','secret_name':os.environ['BOT_SECRET_VAULT_NAME'],'secret_value_exposed':False,'teams_app_package':os.environ['PACKAGE_ZIP'],'next_action':'Configurar os três segredos no reqsys-api-dev usando a identidade DEV federada ao environment:dev.'}
+          Path(os.environ['EVIDENCE_FILE']).write_text(json.dumps(evidence, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
           PY
-
           echo "app_id=$APP_ID" >> "$GITHUB_OUTPUT"
           trap - ERR
 
@@ -322,65 +250,30 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$BOT_APP_ID"
-          BOT_SECRET="$(az keyvault secret show \
-            --vault-name "$REQSYS_KEY_VAULT_NAME" \
-            --name "$BOT_SECRET_VAULT_NAME" \
-            --query value --output tsv --only-show-errors)"
+          BOT_SECRET="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name "$BOT_SECRET_VAULT_NAME" --query value --output tsv --only-show-errors)"
           test -n "$BOT_SECRET"
           echo "::add-mask::$BOT_SECRET"
-
           flyctl status --app "$FLY_APP" >/dev/null
-          flyctl secrets set \
-            "TEAMS_BOT_APP_ID=$BOT_APP_ID" \
-            "TEAMS_BOT_APP_TENANT_ID=$CCP_AZURE_TENANT_ID" \
-            "TEAMS_BOT_SECRET=$BOT_SECRET" \
-            --app "$FLY_APP"
-
+          flyctl secrets set "TEAMS_BOT_APP_ID=$BOT_APP_ID" "TEAMS_BOT_APP_TENANT_ID=$CCP_AZURE_TENANT_ID" "TEAMS_BOT_SECRET=$BOT_SECRET" --app "$FLY_APP"
           secret_names="$(flyctl secrets list --app "$FLY_APP")"
           for secret_name in TEAMS_BOT_APP_ID TEAMS_BOT_APP_TENANT_ID TEAMS_BOT_SECRET; do
-            if ! grep -q "$secret_name" <<<"$secret_names"; then
-              echo "::error::Secret $secret_name não apareceu no inventário sanitizado do Fly."
-              exit 6
-            fi
+            if ! grep -q "$secret_name" <<<"$secret_names"; then echo "::error::Secret $secret_name não apareceu no inventário sanitizado do Fly."; exit 6; fi
           done
-
           curl --fail --silent --show-error --retry 5 --retry-delay 3 "$HEALTH_URL" >/dev/null
-
           mkdir -p audit
           BOT_APP_ID="$BOT_APP_ID" python - <<'PY'
-          import json
-          import os
+          import json, os
           from pathlib import Path
-
-          evidence = {
-              'schema_version': '1.1.0',
-              'environment': 'dev',
-              'status': 'runtime_configured',
-              'fly_app': os.environ['FLY_APP'],
-              'bot_app_id': os.environ['BOT_APP_ID'],
-              'tenant_configured': True,
-              'bot_secret_configured': True,
-              'fly_secret_names': [
-                  'TEAMS_BOT_APP_ID',
-                  'TEAMS_BOT_APP_TENANT_ID',
-                  'TEAMS_BOT_SECRET',
-              ],
-              'health_ok': True,
-              'secret_value_exposed': False,
-              'next_action': 'Instalar o pacote Teams v1.1.0 no usuário DEV e enviar a primeira mensagem para gerar a conversationReference.',
-          }
-          Path(os.environ['RUNTIME_EVIDENCE_FILE']).write_text(
-              json.dumps(evidence, indent=2, ensure_ascii=False) + '\n', encoding='utf-8'
-          )
+          evidence = {'schema_version':'1.1.0','environment':'dev','status':'runtime_configured','fly_app':os.environ['FLY_APP'],'bot_app_id':os.environ['BOT_APP_ID'],'tenant_configured':True,'bot_secret_configured':True,'fly_secret_names':['TEAMS_BOT_APP_ID','TEAMS_BOT_APP_TENANT_ID','TEAMS_BOT_SECRET'],'health_ok':True,'secret_value_exposed':False}
+          Path(os.environ['RUNTIME_EVIDENCE_FILE']).write_text(json.dumps(evidence, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
           PY
 
-      - name: Publicar evidência do runtime DEV
-        if: always()
+      - name: Publicar evidência runtime DEV
         uses: actions/upload-artifact@v4
         with:
           name: teams-bot-dev-runtime-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             audit/teams-bot-dev-runtime-config.json
             audit/teams-bot-dev-fly-credential.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
