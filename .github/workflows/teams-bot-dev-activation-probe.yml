@@ -1,0 +1,199 @@
+name: Teams Bot DEV Activation Probe
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/teams-bot-dev-activation-probe.yml"
+      - "tests/test_teams_bot_dev_activation_probe_workflow.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/teams-bot-dev-activation-probe.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: teams-bot-dev-activation-probe-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Validar contrato da sonda Azure Bot DEV
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Executar testes focados
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir "pytest==9.0.3" "PyYAML==6.0.2"
+          python -m pytest -q tests/test_teams_bot_dev_activation_probe_workflow.py
+
+  azure-probe:
+    name: Descobrir Azure Bot DEV sem alterar recursos
+    if: ${{ github.event_name != 'pull_request' && vars.CCP_ENABLED == 'true' }}
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      TARGET_ENDPOINT: https://reqsys-api-dev.fly.dev/v1/teams-gateway/ai-conversations/bot/messages
+      EVIDENCE_FILE: audit/teams-bot-dev-activation-probe.json
+      AZURE_CORE_OUTPUT: none
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar configuração OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name não configurado. Sonda permanece fail-closed."
+              exit 2
+            fi
+          done
+
+      - name: Autenticar no Azure por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Descobrir Azure Bot e canal Teams
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$EVIDENCE_FILE")"
+
+          bots_json="$(az resource list \
+            --subscription "$CCP_AZURE_SUBSCRIPTION_ID" \
+            --resource-type Microsoft.BotService/botServices \
+            --query '[].{name:name,resourceGroup:resourceGroup}' \
+            --output json \
+            --only-show-errors)"
+
+          export BOTS_JSON="$bots_json"
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          bots = json.loads(os.environ.get('BOTS_JSON') or '[]')
+          target = os.environ['TARGET_ENDPOINT']
+          evidence = {
+              'schema_version': '1.0.0',
+              'environment': 'dev',
+              'target_endpoint': target,
+              'bot_count': len(bots),
+              'bots': [],
+              'mutation_executed': False,
+          }
+
+          for item in bots:
+              name = item.get('name') or ''
+              rg = item.get('resourceGroup') or ''
+              bot = {
+                  'name': name,
+                  'resource_group': rg,
+                  'endpoint_matches_target': False,
+                  'teams_channel_enabled': False,
+                  'app_id_configured': False,
+                  'tenant_id_configured': False,
+              }
+
+              show = subprocess.run(
+                  [
+                      'az', 'bot', 'show', '--name', name, '--resource-group', rg,
+                      '--query', '{endpoint:properties.endpoint,msaAppId:properties.msaAppId,msaAppTenantId:properties.msaAppTenantId}',
+                      '--output', 'json', '--only-show-errors'
+                  ],
+                  check=False,
+                  capture_output=True,
+                  text=True,
+              )
+              if show.returncode == 0 and show.stdout.strip():
+                  data = json.loads(show.stdout)
+                  bot['endpoint_matches_target'] = (data.get('endpoint') or '').rstrip('/') == target.rstrip('/')
+                  bot['app_id_configured'] = bool(data.get('msaAppId'))
+                  bot['tenant_id_configured'] = bool(data.get('msaAppTenantId'))
+
+              teams = subprocess.run(
+                  [
+                      'az', 'bot', 'msteams', 'show', '--name', name,
+                      '--resource-group', rg, '--with-secrets', 'false',
+                      '--output', 'json', '--only-show-errors'
+                  ],
+                  check=False,
+                  capture_output=True,
+                  text=True,
+              )
+              bot['teams_channel_enabled'] = teams.returncode == 0
+              evidence['bots'].append(bot)
+
+          if not bots:
+              evidence['status'] = 'no_bot_found'
+              evidence['next_action'] = 'Criar ou tornar acessível o Azure Bot dedicado do ReqSys DEV.'
+          elif len(bots) > 1:
+              evidence['status'] = 'ambiguous_multiple_bots'
+              evidence['next_action'] = 'Selecionar explicitamente o Azure Bot do ReqSys DEV antes de qualquer alteração.'
+          else:
+              bot = evidence['bots'][0]
+              if not bot['teams_channel_enabled']:
+                  evidence['status'] = 'teams_channel_missing'
+                  evidence['next_action'] = 'Habilitar o canal Microsoft Teams no Azure Bot identificado.'
+              elif not bot['endpoint_matches_target']:
+                  evidence['status'] = 'endpoint_update_required'
+                  evidence['next_action'] = 'Atualizar o Messaging endpoint para o endpoint DEV da Central de Conversas de IA.'
+              elif not (bot['app_id_configured'] and bot['tenant_id_configured']):
+                  evidence['status'] = 'identity_incomplete'
+                  evidence['next_action'] = 'Completar App ID/Tenant ID do Azure Bot sem expor segredo.'
+              else:
+                  evidence['status'] = 'azure_bot_ready'
+                  evidence['next_action'] = 'Instalar o aplicativo Teams v1.1.0 e gerar a conversationReference.'
+
+          Path(os.environ['EVIDENCE_FILE']).write_text(
+              json.dumps(evidence, indent=2, ensure_ascii=False) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps(evidence, ensure_ascii=False))
+          PY
+
+      - name: Publicar resumo sanitizado
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$EVIDENCE_FILE" ]; then
+            python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          data = json.loads(Path(os.environ['EVIDENCE_FILE']).read_text(encoding='utf-8'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('# Azure Bot DEV — sonda somente leitura\n\n')
+              out.write(f"- Status: **{data.get('status', 'unknown')}**\n")
+              out.write(f"- Bots encontrados: **{data.get('bot_count', 0)}**\n")
+              out.write(f"- Alteração executada: **{data.get('mutation_executed', False)}**\n")
+              out.write(f"- Próxima ação: {data.get('next_action', 'n/a')}\n")
+          PY
+          fi
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-bot-dev-activation-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: warn
+          retention-days: 90
