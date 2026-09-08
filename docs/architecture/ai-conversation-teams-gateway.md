@@ -171,6 +171,14 @@ A ativação foi separada em duas fronteiras para preservar menor privilégio.
 Uma conta autorizada executa localmente:
 
 ```bash
+az login --tenant <TENANT_ID>
+
+# opcional: descreve o que seria criado, sem tocar em Entra ou Key Vault
+python scripts/bootstrap_teams_bot_dev_identity.py \
+  --confirm CRIAR-IDENTIDADE-TEAMS-BOT-DEV \
+  --tenant-id <TENANT_ID> \
+  --dry-run
+
 python scripts/bootstrap_teams_bot_dev_identity.py \
   --confirm CRIAR-IDENTIDADE-TEAMS-BOT-DEV \
   --tenant-id <TENANT_ID>
@@ -179,11 +187,15 @@ python scripts/bootstrap_teams_bot_dev_identity.py \
 O script:
 
 1. exige confirmação literal;
-2. cria ou valida exatamente uma App Registration `ReqSys Teams Bot DEV` do tipo `AzureADMyOrg`;
-3. cria o service principal quando ausente;
-4. cria um client secret somente quando o segredo canônico ainda não existe;
-5. grava o valor diretamente em `kv-reqsys-ccp/reqsys-teams-bot-dev-secret` com a tag `app-id`;
-6. nunca imprime nem grava o valor do segredo em evidência local.
+2. valida sessão, tenant e acesso ao cofre **antes** de qualquer mutação, para nunca deixar uma identidade criada sem o segredo governado;
+3. cria ou valida exatamente uma App Registration `ReqSys Teams Bot DEV` do tipo `AzureADMyOrg`, recusando uma homônima com outro `signInAudience`;
+4. cria o service principal quando ausente;
+5. cria um client secret somente quando o segredo canônico ainda não existe;
+6. grava o valor diretamente em `kv-reqsys-ccp/reqsys-teams-bot-dev-secret` com a tag `app-id`;
+7. nunca imprime nem grava o valor do segredo em evidência local;
+8. em falha, reverte o que criou nesta execução — revoga a credencial recém-emitida e remove a App Registration quando ela também foi criada aqui.
+
+Pré-requisitos da conta humana: permissão para criar/gerir a App Registration e a role `Key Vault Secrets Officer` sobre `kv-reqsys-ccp`. A ausência do acesso ao cofre é detectada no início e aborta antes de criar qualquer identidade.
 
 Não conceder `Application.ReadWrite.All` ou `Application.ReadWrite.OwnedBy` ao CI apenas para eliminar essa ação humana inicial.
 
@@ -217,7 +229,9 @@ reqsys-api-dev
 
 O trust anchor Fly é usado somente neste bootstrap de credencial para o app fixo `reqsys-api-dev`; não executa `flyctl deploy`, não cria tokens sucessores e não substitui os readers de deploy do Credential Control Plane.
 
-A execução é idempotente: quando o Azure Bot já existe, o workflow exige correspondência de App ID, endpoint e SKU antes de reutilizá-lo. Falhas antes do commit dos segredos Fly removem apenas recursos Azure criados pela própria execução. Depois do commit no Fly, a configuração é preservada para permitir reexecução e diagnóstico sem apagar um runtime parcialmente ativado.
+A retomada é automática: além de `push` e `workflow_dispatch`, o workflow roda de hora em hora. Enquanto o bootstrap humano não existir, a execução agendada encerra sem alterar nada e sem alarme falso; assim que o segredo aparece no Key Vault, a janela seguinte conclui o provisionamento sem novo merge e sem reexecução manual. Qualquer outro bloqueio continua vermelho em qualquer gatilho.
+
+A execução é idempotente: quando o Azure Bot já existe, o workflow exige correspondência de App ID, endpoint e SKU antes de reutilizá-lo. Quando as três credenciais já estão no `reqsys-api-dev`, a regravação é ignorada para não reiniciar o app a cada janela; use `workflow_dispatch` com `force_runtime_sync` para forçar a ressincronização após uma rotação de segredo. Falhas antes do commit dos segredos Fly removem apenas recursos Azure criados pela própria execução. Depois do commit no Fly, a configuração é preservada para permitir reexecução e diagnóstico sem apagar um runtime parcialmente ativado.
 
 ### 3. Primeira interação Teams
 
