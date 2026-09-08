@@ -1,5 +1,10 @@
+import json
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 
@@ -131,3 +136,68 @@ def test_artifact_nao_publica_valores_secretos() -> None:
     artifact_section = text[text.index('Publicar pacote e evidência da ativação'):]
     assert 'BOT_SECRET' not in artifact_section
     assert 'FLY_ADMIN_TOKEN' not in artifact_section
+
+
+def _step(job: str, name: str) -> dict:
+    for step in _workflow()['jobs'][job]['steps']:
+        if step.get('name') == name:
+            return step
+    raise AssertionError(f'passo não encontrado: {name}')
+
+
+def test_poll_agendado_retoma_ativacao_apos_bootstrap_humano() -> None:
+    workflow = _workflow()
+    triggers = workflow[True] if True in workflow else workflow['on']
+    assert 'schedule' in triggers
+    assert triggers['schedule'] == [{'cron': '23 * * * *'}]
+    condition = workflow['jobs']['activate-dev']['if']
+    assert 'schedule' not in condition
+
+
+def test_espera_por_bootstrap_nao_gera_alarme_em_execucao_agendada() -> None:
+    script = _step('activate-dev', 'Bloquear até bootstrap humano mínimo')['run']
+    assert 'TEAMS_BOT_IDENTITY_BOOTSTRAP_REQUIRED' in script
+    assert '"$EVENT_NAME" = "schedule"' in script
+    assert 'exit 0' in script
+    assert 'exit 20' in script
+
+
+@pytest.mark.skipif(shutil.which('jq') is None, reason='jq indisponível')
+@pytest.mark.parametrize(
+    ('event', 'blocker', 'esperado'),
+    [
+        ('schedule', 'TEAMS_BOT_IDENTITY_BOOTSTRAP_REQUIRED', 0),
+        ('schedule', 'EXISTING_BOT_CONTRACT_MISMATCH', 20),
+        ('push', 'TEAMS_BOT_IDENTITY_BOOTSTRAP_REQUIRED', 20),
+        ('workflow_dispatch', 'TEAMS_BOT_IDENTITY_BOOTSTRAP_REQUIRED', 20),
+    ],
+)
+def test_bloqueio_falha_fechado_exceto_no_poll_de_retomada(
+    tmp_path: Path, event: str, blocker: str, esperado: int
+) -> None:
+    evidence = tmp_path / 'evidencia.json'
+    evidence.write_text(json.dumps({'status': 'precondition_failed', 'blocker': blocker}), encoding='utf-8')
+    script = _step('activate-dev', 'Bloquear até bootstrap humano mínimo')['run']
+    result = subprocess.run(
+        ['bash', '-c', script],
+        env={'PATH': os.environ['PATH'], 'EVENT_NAME': event, 'EVIDENCE_FILE': str(evidence)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == esperado
+
+
+def test_runtime_ja_sincronizado_nao_regrava_segredos_no_fly() -> None:
+    text = _text()
+    assert 'runtime_secrets_present=false' in text
+    assert 'echo "runtime_synced=$runtime_synced" >> "$GITHUB_OUTPUT"' in text
+    assert 'RUNTIME_ALREADY_SYNCED: ${{ steps.preflight.outputs.runtime_synced }}' in text
+    assert '[ "$RUNTIME_ALREADY_SYNCED" != "true" ] || [ "$FORCE_RUNTIME_SYNC" = "true" ]' in text
+    assert "'runtime_secret_sync': os.environ['RUNTIME_SECRET_SYNC']" in text
+
+
+def test_regravacao_do_runtime_pode_ser_forcada_por_dispatch() -> None:
+    workflow = _workflow()
+    triggers = workflow[True] if True in workflow else workflow['on']
+    assert triggers['workflow_dispatch']['inputs']['force_runtime_sync']['default'] is False
+    assert 'FORCE_RUNTIME_SYNC: ${{ inputs.force_runtime_sync || false }}' in _text()

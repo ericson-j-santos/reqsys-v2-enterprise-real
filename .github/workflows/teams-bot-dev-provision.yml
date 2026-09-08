@@ -11,7 +11,16 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/teams-bot-dev-provision.yml"
+  schedule:
+    # Retomada automática: assim que o bootstrap humano materializar a identidade
+    # no Key Vault, a próxima janela conclui o provisionamento sem novo merge.
+    - cron: "23 * * * *"
   workflow_dispatch:
+    inputs:
+      force_runtime_sync:
+        description: "Regravar os segredos do bot no Fly mesmo que já estejam presentes"
+        type: boolean
+        default: false
 
 concurrency:
   group: teams-bot-dev-provision
@@ -164,12 +173,20 @@ jobs:
             write_evidence
             exit 24
           fi
-          if ! FLY_API_TOKEN="$fly_admin_token" flyctl secrets list --app "$FLY_APP" >/dev/null; then
+          fly_inventory=""
+          if ! fly_inventory="$(FLY_API_TOKEN="$fly_admin_token" flyctl secrets list --app "$FLY_APP")"; then
             blocker="FLY_TRUST_ANCHOR_CANNOT_READ_SECRET_INVENTORY"
             write_evidence
             exit 25
           fi
           unset fly_admin_token
+
+          runtime_secrets_present=true
+          for secret_name in TEAMS_BOT_APP_ID TEAMS_BOT_APP_TENANT_ID TEAMS_BOT_SECRET; do
+            if ! grep -q "$secret_name" <<<"$fly_inventory"; then
+              runtime_secrets_present=false
+            fi
+          done
 
           if az bot show --name "$BOT_NAME" --resource-group "$RESOURCE_GROUP" --only-show-errors >/dev/null 2>&1; then
             bot_exists=true
@@ -183,9 +200,15 @@ jobs:
             fi
           fi
 
+          runtime_synced=false
+          if [ "$bot_exists" = "true" ] && [ "$runtime_secrets_present" = "true" ]; then
+            runtime_synced=true
+          fi
+
           status="preflight_ready"
           write_evidence
           echo "app_id=$app_id" >> "$GITHUB_OUTPUT"
+          echo "runtime_synced=$runtime_synced" >> "$GITHUB_OUTPUT"
 
       - name: Ativar Azure Bot, Teams e segredos no Fly DEV
         if: steps.preflight.outcome == 'success'
@@ -193,6 +216,8 @@ jobs:
         shell: bash
         env:
           BOT_APP_ID: ${{ steps.preflight.outputs.app_id }}
+          RUNTIME_ALREADY_SYNCED: ${{ steps.preflight.outputs.runtime_synced }}
+          FORCE_RUNTIME_SYNC: ${{ inputs.force_runtime_sync || false }}
         run: |
           set -Eeuo pipefail
           mkdir -p audit "$PACKAGE_DIR"
@@ -323,11 +348,17 @@ jobs:
           PY
 
           STAGE="configure_fly_runtime"
-          FLY_API_TOKEN="$FLY_ADMIN_TOKEN" flyctl secrets set \
-            "TEAMS_BOT_APP_ID=$BOT_APP_ID" \
-            "TEAMS_BOT_APP_TENANT_ID=$CCP_AZURE_TENANT_ID" \
-            "TEAMS_BOT_SECRET=$BOT_SECRET" \
-            --app "$FLY_APP"
+          RUNTIME_SECRET_SYNC="applied"
+          if [ "$RUNTIME_ALREADY_SYNCED" != "true" ] || [ "$FORCE_RUNTIME_SYNC" = "true" ]; then
+            FLY_API_TOKEN="$FLY_ADMIN_TOKEN" flyctl secrets set \
+              "TEAMS_BOT_APP_ID=$BOT_APP_ID" \
+              "TEAMS_BOT_APP_TENANT_ID=$CCP_AZURE_TENANT_ID" \
+              "TEAMS_BOT_SECRET=$BOT_SECRET" \
+              --app "$FLY_APP"
+          else
+            RUNTIME_SECRET_SYNC="skipped_already_present"
+            echo "::notice::Runtime DEV já possui as três credenciais do bot; regravação ignorada para não reiniciar $FLY_APP."
+          fi
           RUNTIME_COMMITTED=1
 
           secret_names="$(FLY_API_TOKEN="$FLY_ADMIN_TOKEN" flyctl secrets list --app "$FLY_APP")"
@@ -342,7 +373,7 @@ jobs:
           curl --fail --silent --show-error --retry 8 --retry-delay 5 --retry-all-errors "$HEALTH_URL" >/dev/null
 
           STAGE="write_evidence"
-          APP_ID_VALUE="$BOT_APP_ID" python - <<'PY'
+          APP_ID_VALUE="$BOT_APP_ID" RUNTIME_SECRET_SYNC="$RUNTIME_SECRET_SYNC" python - <<'PY'
           import json, os, zipfile
           from pathlib import Path
           with zipfile.ZipFile(os.environ['PACKAGE_ZIP']) as zf:
@@ -368,6 +399,7 @@ jobs:
                   'TEAMS_BOT_SECRET',
               ],
               'health_ok': True,
+              'runtime_secret_sync': os.environ['RUNTIME_SECRET_SYNC'],
               'bot_secret_store': 'Azure Key Vault',
               'bot_secret_name': os.environ['BOT_SECRET_VAULT_NAME'],
               'fly_auth_source': 'Azure Key Vault control-plane trust anchor',
@@ -397,6 +429,14 @@ jobs:
       - name: Bloquear até bootstrap humano mínimo
         if: always() && steps.preflight.outcome != 'success'
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          set -uo pipefail
+          blocker="$(jq -r '.blocker // "UNKNOWN"' "$EVIDENCE_FILE" 2>/dev/null || echo UNKNOWN)"
+          if [ "$EVENT_NAME" = "schedule" ] && [ "$blocker" = "TEAMS_BOT_IDENTITY_BOOTSTRAP_REQUIRED" ]; then
+            echo "::notice::Identidade dedicada ainda não materializada. Nada foi alterado; a próxima janela agendada retoma automaticamente após o bootstrap humano."
+            exit 0
+          fi
           echo "::error::Bootstrap Entra/Key Vault pendente. Nenhum recurso Azure Bot/Fly foi alterado nesta execução."
           exit 20

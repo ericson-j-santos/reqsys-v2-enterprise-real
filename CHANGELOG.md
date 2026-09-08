@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ---
 
+## [Unreleased] - 2026-09-08
+
+### Corrigido (Central de Conversas IA · bootstrap do Azure Bot DEV à prova de falha parcial e com retomada automática)
+
+- O bloqueio da Issue #1532 permanece humano por decisão de projeto: a identidade de CI não possui `Application.ReadWrite.*` no Microsoft Graph e ampliá-la só para criar a App Registration do bot violaria menor privilégio. O que foi eliminado é todo o custo humano ao redor desse único passo.
+- `scripts/bootstrap_teams_bot_dev_identity.py`: a execução deixa de poder falhar pela metade. O acesso ao Key Vault é validado **antes** de qualquer mutação (a falta dele abortava só depois de já existir uma App Registration sem segredo governado); uma App Registration homônima fora de `AzureADMyOrg` é recusada em vez de gerar um Azure Bot `SingleTenant` incompatível mais adiante; e a credencial recém-emitida é revogada quando a gravação no cofre falha — inclusive sobre aplicativo preexistente, caso em que o rollback anterior não removia nada e deixava credencial órfã. O executável `az` passa a ser resolvido pelo PATH (com `az.cmd`), trocando um traceback por erro acionável quando o Azure CLI não está instalado, e as falhas sensíveis nomeiam o estágio e a remediação sem expor valor.
+- `--dry-run` (novo): descreve exatamente o que seria criado sem tocar em Microsoft Entra ou Key Vault. Para uma ação humana única e privilegiada, conferir o plano antes de aplicá-lo deixa de depender de leitura do código.
+- `.github/workflows/teams-bot-dev-provision.yml`: a retomada deixa de exigir reexecução manual dos jobs falhos. Um poll horário conclui o provisionamento assim que o segredo aparece no cofre; enquanto isso, a espera pelo bootstrap encerra sem alterar nada e **sem alarme falso** — mas somente no gatilho agendado e somente para `TEAMS_BOT_IDENTITY_BOOTSTRAP_REQUIRED`. Qualquer outro bloqueio, e qualquer outro gatilho, seguem fail-closed em vermelho.
+- Mesma execução idempotente deixa de reiniciar o `reqsys-api-dev`: quando as três credenciais já estão no app, a regravação é ignorada, com `force_runtime_sync` disponível por `workflow_dispatch` para rotação de segredo. Sem isso, o poll horário provocaria um release do runtime DEV a cada janela.
+- Testes: as asserções de texto do bootstrap foram substituídas por 14 testes executáveis com o Azure CLI simulado (rollback, recusa de identidade ambígua ou multi-tenant, dry-run sem mutação, segredo nunca presente na evidência) e o passo de bloqueio do workflow passa a ser **executado** nos quatro cruzamentos de gatilho e bloqueio, em vez de conferido por substring.
+
 ## [Unreleased] - 2026-09-07
 
 ### Adicionado (Mirror GitLab · correlacionar a credencial do Key Vault com a identidade que ela representa)
