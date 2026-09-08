@@ -8,16 +8,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-REAL_CERT_PATH = ROOT / "scripts" / "ocr_real_corpus_certify.py"
 PUBLIC_CERT_PATH = ROOT / "scripts" / "ocr_public_corpus_certify.py"
 
-for name, path in (("ocr_real_corpus_certify", REAL_CERT_PATH), ("ocr_public_corpus_certify", PUBLIC_CERT_PATH)):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-
-cert = sys.modules["ocr_public_corpus_certify"]
+spec = importlib.util.spec_from_file_location("ocr_public_corpus_certify", PUBLIC_CERT_PATH)
+module = importlib.util.module_from_spec(spec)
+sys.modules["ocr_public_corpus_certify"] = module
+spec.loader.exec_module(module)
+cert = module
 
 
 @dataclass(frozen=True)
