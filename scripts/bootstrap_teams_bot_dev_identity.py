@@ -272,7 +272,7 @@ def _create_and_store_secret(*, app_id: str, vault: str, secret_name: str) -> No
             _revoke_credential(app_id, key_id)
         raise
     finally:
-        client_secret = ""  # noqa: F841 - redução explícita do tempo de vida da referência em memória.
+        del client_secret  # redução explícita do tempo de vida da referência em memória.
 
 
 def _plan(args: argparse.Namespace, tenant_id: str) -> dict[str, Any]:
