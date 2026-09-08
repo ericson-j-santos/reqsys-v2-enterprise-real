@@ -9,6 +9,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths:
       - "frontend/**"
+      - "governance/accessibility/**"
       - ".github/workflows/ci-e2e-governado.yml"
 
 permissions:
@@ -45,7 +46,7 @@ jobs:
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
             git fetch --no-tags --depth=200 origin || true
             git diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/e2e-changed-files.txt || true
-            if grep -Eq '^(frontend/tests/e2e/|frontend/playwright\.config\.|frontend/src/router/|frontend/src/views/Login|frontend/src/views/.*Auth|frontend/src/services/auth|frontend/src/stores/.*auth)' /tmp/e2e-changed-files.txt; then
+            if grep -Eq '^(frontend/tests/e2e/|frontend/playwright\.config\.|frontend/scripts/validate-wcag22-|frontend/src/router/|frontend/src/views/Login|frontend/src/views/.*Auth|frontend/src/services/auth|frontend/src/stores/.*auth|governance/accessibility/)' /tmp/e2e-changed-files.txt; then
               run_e2e=true
             fi
           fi
@@ -105,6 +106,22 @@ jobs:
           tests/e2e/fluxo-completo-reqsys.spec.js
           tests/e2e/design-tokens-regressao.spec.js
           tests/e2e/acessibilidade-rotas.spec.js
+          tests/e2e/accessibility-visual.spec.ts
+      - name: Validar evidência automatizada WCAG 2.2
+        run: npm run validate:wcag22-evidence
+      - name: Avaliar prontidão formal WCAG 2.2 AA
+        id: wcag_formal
+        continue-on-error: true
+        run: npm run validate:wcag22-formal
+      - name: Registrar estado formal
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${{ steps.wcag_formal.outcome }}" == "success" ]]; then
+            echo "WCAG 2.2 AA formal: APROVADO" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "WCAG 2.2 AA formal: PENDENTE DE AUDITORIA MANUAL" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Publicar evidências E2E
         if: always()
         uses: actions/upload-artifact@v4
@@ -113,5 +130,5 @@ jobs:
           path: |
             frontend/test-results/
             frontend/playwright-report/
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 30
