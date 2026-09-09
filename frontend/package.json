@@ -14,6 +14,8 @@
         "test:readiness": "node --test scripts/frontend-readiness-gate.test.mjs",
         "readiness:frontend": "node scripts/frontend-readiness-gate.mjs",
         "validate:design-tokens": "node scripts/validate-design-tokens.mjs",
+        "test:design-token-usage": "node --test scripts/validate-design-token-usage.test.mjs",
+        "validate:design-token-usage": "node scripts/validate-design-token-usage.mjs",
         "validate:linguagem-simples": "node scripts/validate-user-facing-language.mjs",
         "test:linguagem-simples": "node --test scripts/validate-user-facing-language.test.mjs",
         "test:tooltip-a11y": "node --test scripts/validate-tooltip-accessible-name.test.mjs",
@@ -23,7 +25,7 @@
         "validate:wcag22-formal": "node scripts/validate-wcag22-formal-readiness.mjs",
         "export:figma-tokens": "node scripts/export-figma-tokens.mjs",
         "check:figma-token-drift": "npm run export:figma-tokens && git diff --exit-code -- artifacts/figma-tokens",
-        "quality:design-system": "npm run validate:design-tokens && npm run check:figma-token-drift && npm run build",
+        "quality:design-system": "npm run validate:design-tokens && npm run check:figma-token-drift && npm run test:design-token-usage && npm run validate:design-token-usage && npm run build",
         "quality:linguagem-simples": "npm run test:linguagem-simples && npm run validate:linguagem-simples",
         "quality:acessibilidade": "npm run test:tooltip-a11y && npm run validate:tooltip-a11y && npm run test:wcag22-guard"
     },

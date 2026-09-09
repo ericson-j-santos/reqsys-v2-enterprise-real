@@ -46,7 +46,7 @@ jobs:
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
             git fetch --no-tags --depth=200 origin || true
             git diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/e2e-changed-files.txt || true
-            if grep -Eq '^(frontend/tests/e2e/|frontend/playwright\.config\.|frontend/scripts/validate-wcag22-|frontend/src/router/|frontend/src/views/Login|frontend/src/views/.*Auth|frontend/src/services/auth|frontend/src/stores/.*auth|governance/accessibility/)' /tmp/e2e-changed-files.txt; then
+            if grep -Eq '^(frontend/tests/e2e/|frontend/playwright\.config\.|frontend/scripts/validate-wcag22-|frontend/scripts/validate-tooltip-accessible-name|frontend/src/router/|frontend/src/views/|frontend/src/components/|frontend/src/layouts/|frontend/src/services/auth|frontend/src/stores/.*auth|governance/accessibility/)' /tmp/e2e-changed-files.txt; then
               run_e2e=true
             fi
           fi
