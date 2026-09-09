@@ -48,13 +48,19 @@ jobs:
           chmod 600 "$STATE"
           echo "path=$STATE" >> "$GITHUB_OUTPUT"
           cd frontend
+          set +e
           MSAL_STORAGE_STATE_PATH="$STATE" npm run check:msal-state -- --json > "$RUNNER_TEMP/msal-state-check.json"
-          python - <<'PY'
+          MSAL_RC=$?
+          set -e
+          MSAL_RC="$MSAL_RC" python - <<'PY'
           import json, os
           p = os.path.join(os.environ['RUNNER_TEMP'], 'msal-state-check.json')
           data = json.load(open(p, encoding='utf-8'))
-          if data.get('status') not in {'valido', 'expirando'}:
-              raise SystemExit('BLOQUEIO: sessão MSAL não está válida para bootstrap delegado.')
+          status = data.get('status')
+          expira = data.get('expiraEm') or 'n/a'
+          print(f'Estado MSAL: {status}; expira_em={expira}')
+          if status not in {'valido', 'expirando'}:
+              raise SystemExit(f'BLOQUEIO: sessão MSAL não está válida para bootstrap delegado. status={status}; expira_em={expira}')
           print('Sessão MSAL válida para bootstrap delegado.')
           PY
 
@@ -65,8 +71,8 @@ jobs:
         run: |
           set -euo pipefail
           TOKEN_FILE="$RUNNER_TEMP/power-automate-token"
-          TOKEN_FILE="$TOKEN_FILE" node <<'NODE'
-          const fs = require('node:fs')
+          TOKEN_FILE="$TOKEN_FILE" node --input-type=module <<'NODE'
+          import fs from 'node:fs'
           const state = JSON.parse(fs.readFileSync(process.env.MSAL_STATE_PATH, 'utf8'))
           const entries = Array.isArray(state.sessionStorage) ? state.sessionStorage : []
           const parsed = entries.map((entry) => {
@@ -114,9 +120,9 @@ jobs:
           TOKEN_FILE="$RUNNER_TEMP/power-automate-token"
           CALLBACK_FILE="$RUNNER_TEMP/teams-callback-url"
           EVIDENCE_FILE="$RUNNER_TEMP/teams-callback-bootstrap-evidence.json"
-          TOKEN_FILE="$TOKEN_FILE" CALLBACK_FILE="$CALLBACK_FILE" EVIDENCE_FILE="$EVIDENCE_FILE" TARGET_FLOW_DISPLAY_NAME="$TARGET_FLOW_DISPLAY_NAME" node <<'NODE'
-          const fs = require('node:fs')
-          const crypto = require('node:crypto')
+          TOKEN_FILE="$TOKEN_FILE" CALLBACK_FILE="$CALLBACK_FILE" EVIDENCE_FILE="$EVIDENCE_FILE" TARGET_FLOW_DISPLAY_NAME="$TARGET_FLOW_DISPLAY_NAME" node --input-type=module <<'NODE'
+          import fs from 'node:fs'
+          import crypto from 'node:crypto'
           const token = fs.readFileSync(process.env.TOKEN_FILE, 'utf8').trim()
           const base = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple'
           const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' }
