@@ -30,6 +30,15 @@ class AIConversation(Base):
     status: Mapped[str] = mapped_column(String(30), default='aguardando_usuario', index=True)
     correlation_id: Mapped[str] = mapped_column(String(160), index=True)
 
+    data_classification: Mapped[str] = mapped_column(String(20), default='internal', index=True)
+    classification_lock_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    requested_provider: Mapped[str] = mapped_column(String(30), index=True)
+    authorized_provider: Mapped[str] = mapped_column(String(30), index=True)
+    policy_mode: Mapped[str] = mapped_column(String(20), default='off', index=True)
+    policy_decision: Mapped[str] = mapped_column(String(20), default='allowed', index=True)
+    policy_reason: Mapped[str] = mapped_column(String(500))
+    policy_correlation_id: Mapped[str] = mapped_column(String(160), index=True)
+
     teams_destino_tipo: Mapped[str] = mapped_column(String(20), default='auto')
     teams_destino_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
     teams_modo: Mapped[str] = mapped_column(String(30), default='auto')

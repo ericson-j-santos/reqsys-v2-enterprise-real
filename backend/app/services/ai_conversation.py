@@ -13,6 +13,10 @@ from sqlalchemy.orm import Session
 from app.models.ai_conversation import AIConversation, AIConversationMessage
 from app.schemas.ai_conversation import AIConversationCreateRequest
 from app.schemas.teams_notifications import TeamsNotificationEnqueueRequest
+from app.services.ai_corporate_policy import (
+    CorporateAIPolicyError,
+    evaluate_provider_policy,
+)
 from app.services.llm_provider import LLMGateway
 from app.services.teams_notifications import criar_item_fila
 
@@ -66,6 +70,12 @@ def _env_int(env: Mapping[str, str] | None, name: str, default: int) -> int:
         return default
 
 
+def _classification_lock(conversation_id: str, data_classification: str) -> str:
+    return hashlib.sha256(
+        f'{conversation_id}|{data_classification}'.encode('utf-8')
+    ).hexdigest()
+
+
 def status_provedores(env: Mapping[str, str] | None = None) -> dict[str, dict[str, bool]]:
     return {
         'openai': {'configurado': bool(_env_value(env, 'AI_CONVERSATION_OPENAI_API_KEY', 'CODEX_OPENAI_KEY'))},
@@ -86,14 +96,31 @@ def status_provedores(env: Mapping[str, str] | None = None) -> dict[str, dict[st
 
 
 def criar_conversa(db: Session, payload: AIConversationCreateRequest, *, correlation_id: str) -> AIConversation:
+    try:
+        decision = evaluate_provider_policy(
+            provider=payload.provider,
+            data_classification=payload.data_classification,
+        )
+    except CorporateAIPolicyError as exc:
+        raise AIProviderConfigurationError(str(exc)) from None
+
+    conversation_id = str(uuid.uuid4())
     conversa = AIConversation(
-        id=str(uuid.uuid4()),
+        id=conversation_id,
         provider=payload.provider,
         model=payload.model,
         titulo=payload.titulo,
         origem=payload.origem,
         status='aguardando_usuario',
         correlation_id=correlation_id,
+        data_classification=payload.data_classification,
+        classification_lock_sha256=_classification_lock(conversation_id, payload.data_classification),
+        requested_provider=decision.requested_provider,
+        authorized_provider=decision.authorized_provider or payload.provider,
+        policy_mode=decision.mode,
+        policy_decision='allowed' if decision.allowed else 'blocked',
+        policy_reason=decision.reason,
+        policy_correlation_id=correlation_id,
         teams_destino_tipo=payload.teams_destino_tipo,
         teams_destino_id=payload.teams_destino_id,
         teams_modo=payload.teams_modo,
@@ -190,13 +217,54 @@ def _montar_contexto(db: Session, *, conversation_id: str, max_chars: int) -> st
     return '\n'.join(f'{item.role.upper()}: {item.content}' for item in selecionadas)
 
 
+def _validar_politica_persistida(
+    conversa: AIConversation,
+    *,
+    correlation_id: str,
+    env: Mapping[str, str] | None,
+) -> None:
+    expected_lock = _classification_lock(conversa.id, conversa.data_classification)
+    if conversa.classification_lock_sha256 != expected_lock:
+        raise AIProviderConfigurationError(
+            'Classificação da conversa foi alterada sem atualização governada da trava de integridade.'
+        )
+    if conversa.requested_provider != conversa.provider:
+        raise AIProviderConfigurationError(
+            'Provedor da conversa diverge do provedor originalmente solicitado.'
+        )
+    try:
+        decision = evaluate_provider_policy(
+            provider=conversa.provider,
+            data_classification=conversa.data_classification,
+            env=env,
+        )
+    except CorporateAIPolicyError as exc:
+        conversa.policy_decision = 'blocked'
+        conversa.policy_reason = str(exc)[:500]
+        conversa.policy_correlation_id = correlation_id
+        raise AIProviderConfigurationError(str(exc)) from None
+
+    if decision.authorized_provider != conversa.provider:
+        raise AIProviderConfigurationError(
+            'Provedor autorizado pela política diverge do provedor persistido na conversa.'
+        )
+    conversa.authorized_provider = decision.authorized_provider or conversa.provider
+    conversa.policy_mode = decision.mode
+    conversa.policy_decision = 'allowed'
+    conversa.policy_reason = decision.reason
+    conversa.policy_correlation_id = correlation_id
+
+
 def _chamar_provider(
     *,
     conversa: AIConversation,
     prompt: str,
     gateway: LLMGateway,
     env: Mapping[str, str] | None,
+    correlation_id: str,
 ) -> str:
+    _validar_politica_persistida(conversa, correlation_id=correlation_id, env=env)
+
     provider = conversa.provider
     model = conversa.model
     timeout = _env_int(env, 'AI_CONVERSATION_TIMEOUT_SECONDS', DEFAULT_TIMEOUT_SECONDS)
@@ -309,6 +377,8 @@ def _enfileirar_teams(
             'conversation_id': conversa.id,
             'provider': conversa.provider,
             'model': conversa.model,
+            'data_classification': conversa.data_classification,
+            'policy_decision': conversa.policy_decision,
             'reply_endpoint': f'/v1/teams-gateway/ai-conversations/{conversa.id}/reply',
             'requires_wait_for_response': True,
             'adaptiveCard': card,
@@ -400,6 +470,7 @@ def executar_turno(
             prompt=prompt,
             gateway=gateway or LLMGateway(),
             env=env,
+            correlation_id=correlation_id,
         )
     except AIConversationError:
         conversa.status = 'falha'
@@ -453,6 +524,13 @@ def serializar_conversa(
         'origem': conversa.origem,
         'status': conversa.status,
         'correlation_id': conversa.correlation_id,
+        'data_classification': conversa.data_classification,
+        'requested_provider': conversa.requested_provider,
+        'authorized_provider': conversa.authorized_provider,
+        'policy_mode': conversa.policy_mode,
+        'policy_decision': conversa.policy_decision,
+        'policy_reason': conversa.policy_reason,
+        'policy_correlation_id': conversa.policy_correlation_id,
         'teams_destino_tipo': conversa.teams_destino_tipo,
         'teams_modo': conversa.teams_modo,
         'criado_em': conversa.criado_em.isoformat() if conversa.criado_em else None,

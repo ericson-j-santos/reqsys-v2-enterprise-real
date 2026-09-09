@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 SUPPORTED_PROVIDERS = frozenset({'openai', 'claude', 'gemini', 'groq', 'ollama'})
 SUPPORTED_DATA_CLASSIFICATIONS = frozenset({'public', 'internal', 'confidential', 'restricted'})
@@ -12,44 +13,40 @@ class CorporateAIPolicyError(ValueError):
     """Bloqueio explícito de política corporativa de IA."""
 
 
+@dataclass(frozen=True)
+class CorporateAIPolicyDecision:
+    allowed: bool
+    requested_provider: str
+    authorized_provider: str | None
+    data_classification: str
+    mode: str
+    reason: str
+
+
 def _env_value(env: Mapping[str, str] | None, name: str) -> str:
     value = env.get(name) if env is not None else os.getenv(name)
     return str(value or '').strip()
 
 
 def _parse_csv(value: str) -> frozenset[str]:
-    return frozenset(
-        item.strip().lower()
-        for item in value.split(',')
-        if item.strip()
-    )
+    return frozenset(item.strip().lower() for item in value.split(',') if item.strip())
 
 
 def policy_mode(env: Mapping[str, str] | None = None) -> str:
-    """Retorna `off` ou `enforce`; valores inválidos falham de forma segura."""
     mode = (_env_value(env, 'AI_CORPORATE_POLICY_MODE') or 'off').lower()
     if mode in {'off', 'disabled', 'legacy'}:
         return 'off'
     if mode == 'enforce':
         return mode
-    raise CorporateAIPolicyError(
-        'AI_CORPORATE_POLICY_MODE inválido; use off ou enforce.'
-    )
+    raise CorporateAIPolicyError('AI_CORPORATE_POLICY_MODE inválido; use off ou enforce.')
 
 
-def assert_provider_allowed(
+def evaluate_provider_policy(
     *,
     provider: str,
     data_classification: str,
     env: Mapping[str, str] | None = None,
-) -> None:
-    """Valida se um provedor pode processar a classificação informada.
-
-    Em modo `off`, preserva o comportamento legado. Em `enforce`, a política é
-    deny-by-default: a classe precisa declarar explicitamente seus provedores.
-    Dados `restricted` possuem uma barreira adicional e só podem usar provedores
-    considerados locais, independentemente de uma configuração permissiva por engano.
-    """
+) -> CorporateAIPolicyDecision:
     provider_normalized = str(provider or '').strip().lower()
     classification_normalized = str(data_classification or '').strip().lower()
 
@@ -62,8 +59,16 @@ def assert_provider_allowed(
             'Classificação de informação inválida; use public, internal, confidential ou restricted.'
         )
 
-    if policy_mode(env) == 'off':
-        return
+    mode = policy_mode(env)
+    if mode == 'off':
+        return CorporateAIPolicyDecision(
+            allowed=True,
+            requested_provider=provider_normalized,
+            authorized_provider=provider_normalized,
+            data_classification=classification_normalized,
+            mode=mode,
+            reason='legacy_policy_mode_off',
+        )
 
     class_key = f'AI_CORPORATE_{classification_normalized.upper()}_PROVIDERS'
     class_allowed = _parse_csv(_env_value(env, class_key))
@@ -73,9 +78,7 @@ def assert_provider_allowed(
         )
 
     global_allowed = _parse_csv(_env_value(env, 'AI_CORPORATE_ALLOWED_PROVIDERS'))
-    effective_allowed = class_allowed
-    if global_allowed:
-        effective_allowed = effective_allowed.intersection(global_allowed)
+    effective_allowed = class_allowed.intersection(global_allowed) if global_allowed else class_allowed
 
     if classification_normalized == 'restricted':
         configured_local = _parse_csv(_env_value(env, 'AI_CORPORATE_LOCAL_PROVIDERS'))
@@ -89,3 +92,25 @@ def assert_provider_allowed(
         raise CorporateAIPolicyError(
             f'Provedor {provider_normalized} não autorizado para dados {classification_normalized}.'
         )
+
+    return CorporateAIPolicyDecision(
+        allowed=True,
+        requested_provider=provider_normalized,
+        authorized_provider=provider_normalized,
+        data_classification=classification_normalized,
+        mode=mode,
+        reason='provider_explicitly_allowed_for_classification',
+    )
+
+
+def assert_provider_allowed(
+    *,
+    provider: str,
+    data_classification: str,
+    env: Mapping[str, str] | None = None,
+) -> None:
+    evaluate_provider_policy(
+        provider=provider,
+        data_classification=data_classification,
+        env=env,
+    )
