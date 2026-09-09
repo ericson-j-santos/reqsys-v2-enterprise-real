@@ -103,6 +103,8 @@ npm run dev
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
+Esta stack local (`http://localhost:8083`) é independente do app `reqsys-api-dev`/`reqsys-app-dev` no Fly.io — não depende de rede pública nem de secrets do Fly, e cobre os mesmos `required_secret_names` do ambiente `dev` em `infra/fly-environments.json` (`JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, já com defaults de dev no `docker-compose.yml`). Use-a para todo o dia a dia de desenvolvimento; o Fly dev só entra em jogo se algo precisar ser validado num ambiente público de fato.
+
 ## Matriz de ambientes (URLs explícitas)
 
 Status atual no repositório:
