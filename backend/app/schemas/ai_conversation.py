@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.services.ai_corporate_policy import (
     CorporateAIPolicyError,
     assert_provider_allowed,
+    policy_mode,
 )
 
 AIProvider = Literal['openai', 'claude', 'gemini', 'groq', 'ollama']
@@ -20,6 +21,10 @@ class AIConversationCreateRequest(BaseModel):
     model: str = Field(..., min_length=1, max_length=160)
     mensagem: str = Field(..., min_length=1, max_length=20000)
     data_classification: AIDataClassification = 'internal'
+    tenant_id: str = Field(default='default', min_length=1, max_length=120)
+    area_id: str = Field(default='default', min_length=1, max_length=120)
+    requester_id: str = Field(default='system', min_length=1, max_length=160)
+    cost_center: str = Field(default='default', min_length=1, max_length=120)
     titulo: str = Field(default='Conversa de IA', min_length=1, max_length=300)
     origem: str = Field(default='reqsys', min_length=1, max_length=40)
     idempotency_key: str | None = Field(default=None, max_length=200)
@@ -29,7 +34,10 @@ class AIConversationCreateRequest(BaseModel):
     teams_permitir_fallback: bool = True
     enviar_teams: bool = True
 
-    @field_validator('model', 'mensagem', 'titulo', 'origem', 'idempotency_key', 'teams_destino_id', mode='before')
+    @field_validator(
+        'model', 'mensagem', 'tenant_id', 'area_id', 'requester_id', 'cost_center',
+        'titulo', 'origem', 'idempotency_key', 'teams_destino_id', mode='before'
+    )
     @classmethod
     def normalizar_textos(cls, value):
         if value is None:
@@ -46,6 +54,16 @@ class AIConversationCreateRequest(BaseModel):
                 provider=self.provider,
                 data_classification=self.data_classification,
             )
+            if policy_mode() == 'enforce':
+                placeholders = {
+                    'tenant_id': {'default', 'legacy'},
+                    'area_id': {'default', 'legacy'},
+                    'requester_id': {'system', 'legacy-system'},
+                    'cost_center': {'default', 'legacy'},
+                }
+                for field, invalid in placeholders.items():
+                    if getattr(self, field).lower() in invalid:
+                        raise ValueError(f'{field} explícito é obrigatório no modo corporativo.')
         except CorporateAIPolicyError as exc:
             raise ValueError(str(exc)) from None
         return self

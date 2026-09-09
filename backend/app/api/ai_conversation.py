@@ -14,9 +14,11 @@ from app.schemas.ai_conversation import (
     AIConversationReplyRequest,
 )
 from app.services.ai_conversation import (
+    AIConversationBudgetError,
     AIConversationConflictError,
     AIConversationError,
     AIConversationNotFoundError,
+    AIConversationScopeError,
     AIProviderConfigurationError,
     AIProviderExecutionError,
     _enfileirar_teams,
@@ -31,6 +33,11 @@ from app.services.ai_conversation_teams_bot import (
     AITeamsBotDeliveryError,
     enviar_cartao_conversa_bot,
 )
+from app.services.ai_corporate_policy import policy_mode
+from app.services.ai_history_protection import (
+    delete_conversation,
+    purge_expired_conversations,
+)
 from app.services.auditoria import registrar_evento
 from app.services.teams_gateway import (
     salvar_conversa_referencia_bot,
@@ -39,26 +46,32 @@ from app.services.teams_gateway import (
 from app.services.teams_notifications import executar_item_fila, serializar_item
 
 logger = logging.getLogger('reqsys.ai_conversation_api')
-
 router = APIRouter(prefix='/ai-conversations', tags=['Central de Conversas de IA'])
-require_ai_conversation_auth = require_admin_or_service_token(
-    'teams_gateway:ai_conversations'
-)
+require_ai_conversation_auth = require_admin_or_service_token('teams_gateway:ai_conversations')
 
 
 def _http_error(exc: AIConversationError) -> HTTPException:
     if isinstance(exc, AIConversationNotFoundError):
         return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, AIConversationScopeError):
+        return HTTPException(status_code=403, detail=str(exc))
+    if isinstance(exc, AIConversationBudgetError):
+        return HTTPException(status_code=429, detail=str(exc))
     if isinstance(exc, AIConversationConflictError):
         return HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, AIProviderConfigurationError):
         return HTTPException(status_code=503, detail=str(exc))
     if isinstance(exc, AIProviderExecutionError):
         return HTTPException(status_code=502, detail=str(exc))
-    return HTTPException(
-        status_code=500,
-        detail='Falha interna na Central de Conversas de IA.',
-    )
+    return HTTPException(status_code=500, detail='Falha interna na Central de Conversas de IA.')
+
+
+def _require_api_scope(tenant_id: str | None, area_id: str | None) -> None:
+    if policy_mode() == 'enforce' and (not tenant_id or not area_id):
+        raise HTTPException(
+            status_code=403,
+            detail='X-Tenant-ID e X-Area-ID são obrigatórios no modo corporativo.',
+        )
 
 
 async def _entregar_resposta_teams(
@@ -71,7 +84,6 @@ async def _entregar_resposta_teams(
 ):
     if not habilitado:
         return None
-
     try:
         direct = await enviar_cartao_conversa_bot(
             db,
@@ -100,11 +112,7 @@ async def _entregar_resposta_teams(
         correlation_id=correlation_id,
     )
     item = await executar_item_fila(db, item)
-    return {
-        'modo': 'fila_gateway',
-        'entrega': None,
-        'fila': serializar_item(item),
-    }
+    return {'modo': 'fila_gateway', 'entrega': None, 'fila': serializar_item(item)}
 
 
 @router.get('/status')
@@ -113,17 +121,20 @@ def ai_conversations_status(
 ):
     return ok(
         {
-            'schema_version': '1.1.0',
+            'schema_version': '1.2.0',
             'providers': status_provedores(),
+            'history_protection': {
+                'tenant_area_scope': True,
+                'pii_masking_before_provider': True,
+                'retention_endpoint': '/v1/teams-gateway/ai-conversations/retention/purge',
+                'deletion_supported': True,
+                'estimated_token_ledger': True,
+            },
             'teams_reply_contract': {
                 'action': 'ai_conversation_reply',
                 'input_field': 'mensagem',
-                'bot_messaging_endpoint': (
-                    '/v1/teams-gateway/ai-conversations/bot/messages'
-                ),
-                'readiness_endpoint': (
-                    '/v1/teams-gateway/ai-conversations/readiness'
-                ),
+                'bot_messaging_endpoint': '/v1/teams-gateway/ai-conversations/bot/messages',
+                'readiness_endpoint': '/v1/teams-gateway/ai-conversations/readiness',
                 'service_token_scope': 'teams_gateway:ai_conversations',
             },
         }
@@ -135,8 +146,29 @@ def ai_conversations_readiness(
     _ctx: ServiceAuthContext = Depends(require_ai_conversation_auth),
     db: Session = Depends(get_db),
 ):
-    """Pré-condições verificáveis para executar o aceite bidirecional em um ambiente."""
     return ok(avaliar_prontidao_ai_teams(db))
+
+
+@router.post('/retention/purge')
+def ai_conversations_retention_purge(
+    ctx: ServiceAuthContext = Depends(require_ai_conversation_auth),
+    db: Session = Depends(get_db),
+    x_tenant_id: str | None = Header(default=None, alias='X-Tenant-ID'),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+):
+    if policy_mode() == 'enforce' and not x_tenant_id:
+        raise HTTPException(status_code=403, detail='X-Tenant-ID é obrigatório para purga no modo corporativo.')
+    correlation_id = resolver_correlation_id(x_correlation_id, None)
+    result = purge_expired_conversations(db, tenant_id=x_tenant_id)
+    registrar_evento(
+        db,
+        correlation_id,
+        ctx.ator,
+        'AI_CONVERSATION_RETENTION_PURGE',
+        'ai_conversation',
+        x_tenant_id or 'all-tenants',
+    )
+    return ok(result, correlation_id)
 
 
 @router.post('')
@@ -147,7 +179,10 @@ async def ai_conversations_create(
     x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
 ):
     correlation_id = resolver_correlation_id(x_correlation_id, None)
-    conversa = criar_conversa(db, payload, correlation_id=correlation_id)
+    try:
+        conversa = criar_conversa(db, payload, correlation_id=correlation_id)
+    except AIConversationError as exc:
+        raise _http_error(exc) from None
     registrar_evento(
         db,
         correlation_id,
@@ -156,7 +191,6 @@ async def ai_conversations_create(
         'ai_conversation',
         conversa.id,
     )
-
     try:
         result = executar_turno(
             db,
@@ -209,12 +243,52 @@ def ai_conversations_get(
     conversation_id: str,
     _ctx: ServiceAuthContext = Depends(require_ai_conversation_auth),
     db: Session = Depends(get_db),
+    x_tenant_id: str | None = Header(default=None, alias='X-Tenant-ID'),
+    x_area_id: str | None = Header(default=None, alias='X-Area-ID'),
 ):
+    _require_api_scope(x_tenant_id, x_area_id)
     try:
-        conversa = obter_conversa(db, conversation_id)
+        conversa = obter_conversa(
+            db,
+            conversation_id,
+            tenant_id=x_tenant_id,
+            area_id=x_area_id,
+        )
     except AIConversationError as exc:
         raise _http_error(exc) from None
     return ok(serializar_conversa(db, conversa))
+
+
+@router.delete('/{conversation_id}')
+def ai_conversations_delete(
+    conversation_id: str,
+    ctx: ServiceAuthContext = Depends(require_ai_conversation_auth),
+    db: Session = Depends(get_db),
+    x_tenant_id: str | None = Header(default=None, alias='X-Tenant-ID'),
+    x_area_id: str | None = Header(default=None, alias='X-Area-ID'),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+):
+    _require_api_scope(x_tenant_id, x_area_id)
+    correlation_id = resolver_correlation_id(x_correlation_id, None)
+    try:
+        conversa = obter_conversa(
+            db,
+            conversation_id,
+            tenant_id=x_tenant_id,
+            area_id=x_area_id,
+        )
+    except AIConversationError as exc:
+        raise _http_error(exc) from None
+    registrar_evento(
+        db,
+        correlation_id,
+        ctx.ator,
+        'AI_CONVERSATION_DELETE_REQUESTED',
+        'ai_conversation',
+        conversation_id,
+    )
+    delete_conversation(db, conversa)
+    return ok({'conversation_id': conversation_id, 'deleted': True}, correlation_id)
 
 
 @router.post('/{conversation_id}/reply')
@@ -224,10 +298,18 @@ async def ai_conversations_reply(
     ctx: ServiceAuthContext = Depends(require_ai_conversation_auth),
     db: Session = Depends(get_db),
     x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+    x_tenant_id: str | None = Header(default=None, alias='X-Tenant-ID'),
+    x_area_id: str | None = Header(default=None, alias='X-Area-ID'),
 ):
+    _require_api_scope(x_tenant_id, x_area_id)
     correlation_id = resolver_correlation_id(x_correlation_id, None)
     try:
-        conversa = obter_conversa(db, conversation_id)
+        conversa = obter_conversa(
+            db,
+            conversation_id,
+            tenant_id=x_tenant_id,
+            area_id=x_area_id,
+        )
         result = executar_turno(
             db,
             conversa=conversa,
@@ -279,27 +361,15 @@ async def ai_conversations_bot_messages(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Endpoint do Azure Bot que preserva o comportamento base e trata o cartão."""
     auth_header = request.headers.get('authorization', '')
-    token = (
-        auth_header[7:].strip()
-        if auth_header.lower().startswith('bearer ')
-        else ''
-    )
+    token = auth_header[7:].strip() if auth_header.lower().startswith('bearer ') else ''
     if not token:
-        raise HTTPException(
-            status_code=401,
-            detail='Token do Bot Framework ausente',
-        )
-
+        raise HTTPException(status_code=401, detail='Token do Bot Framework ausente')
     try:
         validar_jwt_bot_framework(token)
     except Exception:
         logger.warning('ai_conversation_bot_token_invalido')
-        raise HTTPException(
-            status_code=401,
-            detail='Token do Bot Framework invalido',
-        ) from None
+        raise HTTPException(status_code=401, detail='Token do Bot Framework invalido') from None
 
     activity = await request.json()
     remetente = activity.get('from') or {}
@@ -307,9 +377,7 @@ async def ai_conversations_bot_messages(
     service_url = activity.get('serviceUrl')
     teams_conversation_id = (activity.get('conversation') or {}).get('id')
     bot_id = (activity.get('recipient') or {}).get('id', '')
-    tenant_id = (
-        ((activity.get('channelData') or {}).get('tenant') or {}).get('id', '')
-    )
+    tenant_id = ((activity.get('channelData') or {}).get('tenant') or {}).get('id', '')
 
     if usuario_aad_object_id and service_url and teams_conversation_id:
         salvar_conversa_referencia_bot(
@@ -328,24 +396,21 @@ async def ai_conversations_bot_messages(
     conversation_id = str(value.get('conversation_id') or '').strip()
     mensagem = str(value.get('mensagem') or activity.get('text') or '').strip()
     if not conversation_id or not mensagem:
-        raise HTTPException(
-            status_code=422,
-            detail='conversation_id e mensagem são obrigatórios no cartão.',
-        )
+        raise HTTPException(status_code=422, detail='conversation_id e mensagem são obrigatórios no cartão.')
     if not usuario_aad_object_id:
-        raise HTTPException(
-            status_code=403,
-            detail='Identidade AAD do remetente Teams ausente.',
-        )
+        raise HTTPException(status_code=403, detail='Identidade AAD do remetente Teams ausente.')
 
     activity_id = str(activity.get('id') or '').strip()
     correlation_id = resolver_correlation_id(
         str(value.get('correlation_id') or '').strip() or None,
         None,
     )
-
     try:
-        conversa = obter_conversa(db, conversation_id)
+        conversa = obter_conversa(
+            db,
+            conversation_id,
+            tenant_id=tenant_id or None,
+        )
         destino_associado = (conversa.teams_destino_id or '').strip()
         if not destino_associado or destino_associado != usuario_aad_object_id:
             registrar_evento(
@@ -368,11 +433,7 @@ async def ai_conversations_bot_messages(
             conversa=conversa,
             mensagem=mensagem,
             correlation_id=correlation_id,
-            idempotency_key=(
-                f'teams-activity:{activity_id}'
-                if activity_id
-                else None
-            ),
+            idempotency_key=f'teams-activity:{activity_id}' if activity_id else None,
             origem='teams',
             enviar_teams=False,
         )
