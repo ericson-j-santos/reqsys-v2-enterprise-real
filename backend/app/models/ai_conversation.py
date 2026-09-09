@@ -7,12 +7,12 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
-    Text,
     UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.encrypted_text import EncryptedText
 from app.db import Base
 
 
@@ -29,6 +29,11 @@ class AIConversation(Base):
     origem: Mapped[str] = mapped_column(String(40), default='reqsys', index=True)
     status: Mapped[str] = mapped_column(String(30), default='aguardando_usuario', index=True)
     correlation_id: Mapped[str] = mapped_column(String(160), index=True)
+
+    tenant_id: Mapped[str] = mapped_column(String(120), default='default', index=True)
+    area_id: Mapped[str] = mapped_column(String(120), default='default', index=True)
+    requester_id: Mapped[str] = mapped_column(String(160), default='system', index=True)
+    cost_center: Mapped[str] = mapped_column(String(120), default='default', index=True)
 
     data_classification: Mapped[str] = mapped_column(String(20), default='internal', index=True)
     classification_lock_sha256: Mapped[str] = mapped_column(String(64), index=True)
@@ -60,10 +65,29 @@ class AIConversationMessage(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     conversation_id: Mapped[str] = mapped_column(ForeignKey('ai_conversations.id', ondelete='CASCADE'), index=True)
     role: Mapped[str] = mapped_column(String(20), index=True)
-    content: Mapped[str] = mapped_column(Text)
+    content: Mapped[str] = mapped_column(EncryptedText())
     source: Mapped[str] = mapped_column(String(30), default='api', index=True)
     correlation_id: Mapped[str] = mapped_column(String(160), index=True)
     idempotency_key: Mapped[str] = mapped_column(String(200))
     content_sha256: Mapped[str] = mapped_column(String(64), index=True)
     provider_message_id: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class AIUsageLedger(Base):
+    """Consumo estimado e auditável por usuário/centro de custo."""
+
+    __tablename__ = 'ai_usage_ledger'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(ForeignKey('ai_conversations.id', ondelete='CASCADE'), index=True)
+    tenant_id: Mapped[str] = mapped_column(String(120), index=True)
+    requester_id: Mapped[str] = mapped_column(String(160), index=True)
+    cost_center: Mapped[str] = mapped_column(String(120), index=True)
+    provider: Mapped[str] = mapped_column(String(30), index=True)
+    model: Mapped[str] = mapped_column(String(160), index=True)
+    correlation_id: Mapped[str] = mapped_column(String(160), index=True)
+    estimated_input_tokens: Mapped[int] = mapped_column(Integer)
+    estimated_output_tokens: Mapped[int] = mapped_column(Integer)
+    total_estimated_tokens: Mapped[int] = mapped_column(Integer)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
