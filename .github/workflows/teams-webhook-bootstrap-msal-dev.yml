@@ -1,0 +1,256 @@
+name: Bootstrap governado Teams webhook DEV via MSAL
+
+on:
+  push:
+    branches:
+      - ops/teams-webhook-bootstrap-msal
+    paths:
+      - ".github/workflows/teams-webhook-bootstrap-msal-dev.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+
+env:
+  FLY_APP: reqsys-api-dev
+  BASE_URL: https://reqsys-api-dev.fly.dev
+  TARGET_FLOW_DISPLAY_NAME: robo_envia_teamsv2
+
+jobs:
+  bootstrap:
+    name: Recuperar callback Power Automate -> configurar DEV -> validar gateway
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main publicada
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Preparar e validar sessão MSAL governada
+        id: msal
+        shell: bash
+        env:
+          WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "${WSJF_MSAL_STORAGE_STATE_B64:-}" || {
+            echo "BLOQUEIO: WSJF_MSAL_STORAGE_STATE_B64 ausente no environment development." >&2
+            exit 1
+          }
+          STATE="$RUNNER_TEMP/msal-storage-state.json"
+          printf '%s' "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$STATE"
+          chmod 600 "$STATE"
+          echo "path=$STATE" >> "$GITHUB_OUTPUT"
+          cd frontend
+          MSAL_STORAGE_STATE_PATH="$STATE" npm run check:msal-state -- --json > "$RUNNER_TEMP/msal-state-check.json"
+          python - <<'PY'
+          import json, os
+          p = os.path.join(os.environ['RUNNER_TEMP'], 'msal-state-check.json')
+          data = json.load(open(p, encoding='utf-8'))
+          if data.get('status') not in {'valido', 'expirando'}:
+              raise SystemExit('BLOQUEIO: sessão MSAL não está válida para bootstrap delegado.')
+          print('Sessão MSAL válida para bootstrap delegado.')
+          PY
+
+      - name: Emitir token delegado Power Automate sem expor credencial
+        shell: bash
+        env:
+          MSAL_STATE_PATH: ${{ steps.msal.outputs.path }}
+        run: |
+          set -euo pipefail
+          TOKEN_FILE="$RUNNER_TEMP/power-automate-token"
+          TOKEN_FILE="$TOKEN_FILE" node <<'NODE'
+          const fs = require('node:fs')
+          const state = JSON.parse(fs.readFileSync(process.env.MSAL_STATE_PATH, 'utf8'))
+          const entries = Array.isArray(state.sessionStorage) ? state.sessionStorage : []
+          const parsed = entries.map((entry) => {
+            try { return { key: entry.name, value: JSON.parse(entry.value) } } catch { return null }
+          }).filter(Boolean)
+          const refresh = parsed.find((entry) => entry.value?.credentialType === 'RefreshToken')?.value
+          const idToken = parsed.find((entry) => entry.value?.credentialType === 'IdToken')?.value
+          if (!refresh?.secret || !refresh?.clientId) throw new Error('RefreshToken MSAL sem secret/clientId.')
+          let tenant = refresh.realm || ''
+          if (idToken?.secret) {
+            try {
+              const payload = JSON.parse(Buffer.from(idToken.secret.split('.')[1], 'base64url').toString('utf8'))
+              tenant = payload.tid || tenant
+            } catch {}
+          }
+          if (!tenant) throw new Error('Tenant não identificado no cache MSAL.')
+          const form = new URLSearchParams({
+            client_id: refresh.clientId,
+            grant_type: 'refresh_token',
+            refresh_token: refresh.secret,
+            scope: 'https://service.flow.microsoft.com/.default openid profile offline_access',
+          })
+          const url = `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: form,
+          })
+          const body = await response.json()
+          if (!response.ok || !body.access_token) {
+            const code = body.error || `HTTP_${response.status}`
+            throw new Error(`Falha ao renovar token delegado Power Automate: ${code}`)
+          }
+          fs.writeFileSync(process.env.TOKEN_FILE, body.access_token, { mode: 0o600 })
+          NODE
+          test -s "$TOKEN_FILE"
+          TOKEN="$(cat "$TOKEN_FILE")"
+          echo "::add-mask::$TOKEN"
+          echo "Token delegado Power Automate emitido e mantido somente em arquivo efêmero."
+
+      - name: Descobrir ambiente, fluxo e recuperar callback sem logar URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN_FILE="$RUNNER_TEMP/power-automate-token"
+          CALLBACK_FILE="$RUNNER_TEMP/teams-callback-url"
+          EVIDENCE_FILE="$RUNNER_TEMP/teams-callback-bootstrap-evidence.json"
+          TOKEN_FILE="$TOKEN_FILE" CALLBACK_FILE="$CALLBACK_FILE" EVIDENCE_FILE="$EVIDENCE_FILE" TARGET_FLOW_DISPLAY_NAME="$TARGET_FLOW_DISPLAY_NAME" node <<'NODE'
+          const fs = require('node:fs')
+          const crypto = require('node:crypto')
+          const token = fs.readFileSync(process.env.TOKEN_FILE, 'utf8').trim()
+          const base = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple'
+          const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' }
+          const request = async (url, options = {}) => {
+            const response = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } })
+            const text = await response.text()
+            let body = {}
+            try { body = text ? JSON.parse(text) : {} } catch {}
+            if (!response.ok) {
+              const code = body?.error?.code || body?.error || `HTTP_${response.status}`
+              throw new Error(`Power Automate API falhou: ${code}`)
+            }
+            return body
+          }
+          const envPayload = await request(`${base}/environments?api-version=2016-11-01`)
+          const environments = Array.isArray(envPayload.value) ? envPayload.value : []
+          const scored = environments.map((env) => {
+            const display = String(env?.properties?.displayName || '')
+            const id = String(env?.name || '')
+            const text = `${display} ${id}`.toLowerCase()
+            let score = 0
+            if (text.includes('reqsys')) score += 4
+            if (text.includes('dev')) score += 3
+            if (text.includes('development')) score += 2
+            return { env, score, display, id }
+          }).sort((a, b) => b.score - a.score)
+          const chosen = scored.find((item) => item.score >= 3)
+          if (!chosen) throw new Error('Ambiente Power Platform DEV do ReqSys não encontrado via token delegado.')
+          const envId = chosen.id
+          const flowPayload = await request(`${base}/environments/${encodeURIComponent(envId)}/flows?api-version=2016-11-01`)
+          const flows = Array.isArray(flowPayload.value) ? flowPayload.value : []
+          const norm = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+          const target = norm(process.env.TARGET_FLOW_DISPLAY_NAME)
+          const flow = flows.find((item) => norm(item?.properties?.displayName) === target)
+            || flows.find((item) => norm(item?.properties?.displayName).includes(target))
+          if (!flow?.name) throw new Error(`Fluxo ${process.env.TARGET_FLOW_DISPLAY_NAME} não encontrado no ambiente delegado.`)
+          const callbackPayload = await request(
+            `${base}/environments/${encodeURIComponent(envId)}/flows/${encodeURIComponent(flow.name)}/triggers/manual/listCallbackUrl?api-version=2016-11-01`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+          )
+          const callback = callbackPayload?.response?.value || callbackPayload?.value || ''
+          if (!/^https:\/\//i.test(callback)) throw new Error('Callback HTTPS não retornado pelo listCallbackUrl.')
+          fs.writeFileSync(process.env.CALLBACK_FILE, callback, { mode: 0o600 })
+          const url = new URL(callback)
+          const evidence = {
+            schema_version: '1.0.0',
+            environment_id: envId,
+            environment_display_name: chosen.display,
+            flow_id: flow.name,
+            flow_display_name: flow?.properties?.displayName || process.env.TARGET_FLOW_DISPLAY_NAME,
+            callback_recovered: true,
+            callback_host: url.host,
+            callback_sha256: crypto.createHash('sha256').update(callback).digest('hex'),
+            callback_exposed: false,
+          }
+          fs.writeFileSync(process.env.EVIDENCE_FILE, JSON.stringify(evidence, null, 2) + '\n')
+          NODE
+          test -s "$CALLBACK_FILE"
+          CALLBACK="$(cat "$CALLBACK_FILE")"
+          echo "::add-mask::$CALLBACK"
+          echo "Callback recuperado; valor mascarado e mantido somente em arquivo efêmero."
+          cat "$EVIDENCE_FILE"
+
+      - name: Resolver credencial Fly API DEV
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-dev-deploy
+          consumer: github-actions:fly-dev
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/teams-webhook-bootstrap-msal-credential-resolution.json
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Cadastrar callback no runtime DEV sem expor valor
+        shell: bash
+        run: |
+          set -euo pipefail
+          CALLBACK_FILE="$RUNNER_TEMP/teams-callback-url"
+          test -s "$CALLBACK_FILE" || { echo "BLOQUEIO: callback efêmero ausente." >&2; exit 1; }
+          CALLBACK="$(cat "$CALLBACK_FILE")"
+          echo "::add-mask::$CALLBACK"
+          test -n "${FLY_API_TOKEN:-}" || { echo "BLOQUEIO: credencial Fly DEV ausente." >&2; exit 1; }
+          flyctl secrets set "TEAMS_NOTIFICATIONS_WEBHOOK_URL=$CALLBACK" --app "$FLY_APP"
+          echo "TEAMS_NOTIFICATIONS_WEBHOOK_URL cadastrado no runtime DEV."
+
+      - name: Validar rota webhook operacional no gateway
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import time
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          base = os.environ['BASE_URL'].rstrip('/')
+          result = {'webhook_disponivel': False, 'tentativas': 0, 'campos_faltantes': []}
+          for attempt in range(1, 25):
+              result['tentativas'] = attempt
+              try:
+                  req = Request(base + '/v1/teams-gateway/status', headers={'Accept': 'application/json'})
+                  with urlopen(req, timeout=20) as response:
+                      payload = json.loads(response.read().decode('utf-8'))
+                  data = payload.get('data', payload) if isinstance(payload, dict) else {}
+                  rota = next((r for r in data.get('rotas', []) if r.get('canal') == 'webhook'), {})
+                  result['webhook_disponivel'] = rota.get('disponivel') is True
+                  result['campos_faltantes'] = rota.get('campos_faltantes', [])
+                  if result['webhook_disponivel']:
+                      break
+              except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+                  pass
+              time.sleep(5)
+          evidence_path = os.path.join(os.environ['RUNNER_TEMP'], 'teams-callback-bootstrap-evidence.json')
+          evidence = json.load(open(evidence_path, encoding='utf-8'))
+          evidence['gateway_webhook_disponivel'] = result['webhook_disponivel']
+          evidence['gateway_tentativas'] = result['tentativas']
+          evidence['gateway_campos_faltantes'] = result['campos_faltantes']
+          json.dump(evidence, open(evidence_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+          print(json.dumps(result, ensure_ascii=False))
+          if not result['webhook_disponivel']:
+              raise SystemExit('BLOQUEIO: callback foi cadastrado, mas gateway ainda não marcou webhook como disponível.')
+          PY
+
+      - name: Publicar evidência sem segredo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-webhook-bootstrap-msal-dev-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/teams-callback-bootstrap-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
