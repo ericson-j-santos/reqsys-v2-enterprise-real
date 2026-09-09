@@ -1,0 +1,140 @@
+name: Reutilizar webhook Teams governado existente no DEV
+
+on:
+  push:
+    branches:
+      - ops/teams-webhook-bootstrap-msal
+    paths:
+      - ".github/workflows/teams-webhook-reuse-existing-dev.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+
+env:
+  FLY_APP: reqsys-api-dev
+  BASE_URL: https://reqsys-api-dev.fly.dev
+
+jobs:
+  reuse:
+    name: TEAMS_WEBHOOK_URL -> DEV -> validar gateway
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main publicada
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Validar segredo governado existente sem expor valor
+        id: source
+        shell: bash
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          test -n "${TEAMS_WEBHOOK_URL:-}" || {
+            echo "BLOQUEIO: secret TEAMS_WEBHOOK_URL ausente." >&2
+            exit 1
+          }
+          echo "::add-mask::$TEAMS_WEBHOOK_URL"
+          case "$TEAMS_WEBHOOK_URL" in
+            https://*) ;;
+            *) echo "BLOQUEIO: TEAMS_WEBHOOK_URL não é HTTPS." >&2; exit 1 ;;
+          esac
+          python - <<'PY'
+          import hashlib, json, os
+          from urllib.parse import urlparse
+          value = os.environ['TEAMS_WEBHOOK_URL']
+          parsed = urlparse(value)
+          evidence = {
+              'schema_version': '1.0.0',
+              'source_secret': 'TEAMS_WEBHOOK_URL',
+              'source_available': True,
+              'source_host': parsed.hostname,
+              'source_sha256': hashlib.sha256(value.encode()).hexdigest(),
+              'source_exposed': False,
+          }
+          path = os.path.join(os.environ['RUNNER_TEMP'], 'teams-webhook-reuse-evidence.json')
+          with open(path, 'w', encoding='utf-8') as fh:
+              json.dump(evidence, fh, ensure_ascii=False, indent=2)
+          print(json.dumps({'source_available': True, 'source_host': parsed.hostname, 'source_exposed': False}))
+          PY
+
+      - name: Resolver credencial Fly API DEV
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-dev-deploy
+          consumer: github-actions:fly-dev
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/teams-webhook-reuse-existing-dev-credential-resolution.json
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Cadastrar segredo existente como rota de notificações do DEV
+        shell: bash
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          test -n "${FLY_API_TOKEN:-}" || { echo "BLOQUEIO: credencial Fly DEV ausente." >&2; exit 1; }
+          test -n "${TEAMS_WEBHOOK_URL:-}" || { echo "BLOQUEIO: TEAMS_WEBHOOK_URL ausente." >&2; exit 1; }
+          echo "::add-mask::$TEAMS_WEBHOOK_URL"
+          flyctl secrets set "TEAMS_NOTIFICATIONS_WEBHOOK_URL=$TEAMS_WEBHOOK_URL" --app "$FLY_APP"
+          echo "Segredo reutilizado no reqsys-api-dev sem exposição do valor."
+
+      - name: Validar gateway após reinício do runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, time
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+          base = os.environ['BASE_URL'].rstrip('/')
+          result = {'webhook_disponivel': False, 'tentativas': 0, 'campos_faltantes': []}
+          for attempt in range(1, 37):
+              result['tentativas'] = attempt
+              try:
+                  req = Request(base + '/v1/teams-gateway/status', headers={'Accept': 'application/json'})
+                  with urlopen(req, timeout=20) as response:
+                      payload = json.loads(response.read().decode('utf-8'))
+                  data = payload.get('data', payload) if isinstance(payload, dict) else {}
+                  rota = next((r for r in data.get('rotas', []) if r.get('canal') == 'webhook'), {})
+                  result['webhook_disponivel'] = rota.get('disponivel') is True
+                  result['campos_faltantes'] = rota.get('campos_faltantes', [])
+                  if result['webhook_disponivel']:
+                      break
+              except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+                  pass
+              time.sleep(5)
+          evidence_path = os.path.join(os.environ['RUNNER_TEMP'], 'teams-webhook-reuse-evidence.json')
+          evidence = json.load(open(evidence_path, encoding='utf-8'))
+          evidence['gateway_webhook_disponivel'] = result['webhook_disponivel']
+          evidence['gateway_tentativas'] = result['tentativas']
+          evidence['gateway_campos_faltantes'] = result['campos_faltantes']
+          with open(evidence_path, 'w', encoding='utf-8') as fh:
+              json.dump(evidence, fh, ensure_ascii=False, indent=2)
+          print(json.dumps(result, ensure_ascii=False))
+          if not result['webhook_disponivel']:
+              raise SystemExit('BLOQUEIO: runtime reiniciou, mas gateway não reconheceu o webhook.')
+          PY
+
+      - name: Publicar evidência sem segredo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-webhook-reuse-existing-dev-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/teams-webhook-reuse-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
