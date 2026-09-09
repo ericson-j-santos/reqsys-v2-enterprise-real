@@ -15,6 +15,12 @@ DEFAULT_ENDPOINTS = {
     'gemini': 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
     'gemini_embeddings': 'https://generativelanguage.googleapis.com/v1beta/{model}:batchEmbedContents',
 }
+LEGACY_SECRET_NAMES = {
+    'openai': ('CODEX_OPENAI_KEY',),
+    'claude': ('CODEX_CLAUDE_KEY',),
+    'gemini': ('GEMINI_API_KEY',),
+    'groq': ('GROQ_API_KEY',),
+}
 
 
 class AIProviderRuntimeConfigError(ValueError):
@@ -83,14 +89,24 @@ def resolve_endpoint(
 
 def resolve_secret(provider: str, *, env: Mapping[str, str] | None = None) -> tuple[str, str]:
     env_name = f'AI_CONVERSATION_{provider.upper()}_API_KEY'
-    vault_key = f'AI_CONVERSATION_{provider.upper()}_API_KEY'
+    vault_key = env_name
     mapped = _value(env, env_name)
     if mapped:
         return mapped, 'mapping'
+    for legacy in LEGACY_SECRET_NAMES.get(provider, ()): 
+        mapped_legacy = _value(env, legacy)
+        if mapped_legacy:
+            return mapped_legacy, f'mapping:{legacy}'
 
     prefer_vault = (_value(env, 'AI_CORPORATE_PREFER_VAULT') or 'true').lower() not in {'0', 'false', 'no'}
     secret = get_secret(env_name, '', vault_key=vault_key, prefer_vault=prefer_vault) or ''
-    return secret, 'vault_or_env' if secret else 'absent'
+    if secret:
+        return secret, 'vault_or_env'
+    for legacy in LEGACY_SECRET_NAMES.get(provider, ()):
+        secret = get_secret(legacy, '', vault_key=legacy, prefer_vault=prefer_vault) or ''
+        if secret:
+            return secret, f'vault_or_env:{legacy}'
+    return '', 'absent'
 
 
 def resolve_provider_config(
