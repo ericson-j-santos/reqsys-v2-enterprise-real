@@ -1,6 +1,7 @@
 # ADR-046 — PC próprio 24x7 como substituto do Fly.io
 
-Status: proposto (bloqueio regulatório BACEN descartado em 2026-09-09; aguardando domínio, backup e comparação de custo)
+Status: proposto (piloto restrito a dev iniciado em 2026-09-09 — ver
+`docs/runbooks/pc24x7-piloto-dev.md`; comparação de custo real ainda pendente)
 Data: 2026-09-09
 
 ## Contexto
@@ -184,19 +185,39 @@ foi confirmada.
       2026-09-09**: é uma prática de governança genuína, mas o próprio
       sistema declara `production_touched: false`/pré-institucionalização;
       não há bloqueio regulatório vigente hoje (ver seção de riscos acima).
-- [ ] Domínio definido e nameservers migrados para a Cloudflare.
-- [ ] Decisão explícita: produção realmente migra junto, ou fica no Fly.io
-      enquanto dev/hml migram primeiro como piloto?
-- [ ] Estratégia de backup dos dados definida (frequência, destino,
-      teste de restore).
-- [ ] Estratégia de restart automático do PC/Docker após queda de energia ou
-      reinício do sistema operacional definida.
+- [x] Decisão explícita: produção realmente migra junto, ou fica no Fly.io
+      enquanto dev/hml migram primeiro como piloto? — **resolvido
+      2026-09-09**: usuário optou por **dev primeiro, isolado**. hml e prod
+      continuam no Fly.io até o piloto ser validado (ver critério de saída em
+      `docs/runbooks/pc24x7-piloto-dev.md`).
+- [x] Estratégia de backup dos dados definida — **resolvido 2026-09-09**:
+      reaproveita o padrão já usado pelo ReqSys para BACEN-04 (restic +
+      Cloudflare R2, gratuito até 10 GiB), adaptado em
+      `scripts/pc24x7_backup_restic.sh` para rodar no mesmo host (sem a
+      orquestração de Fly Machines da versão original). Documentado em
+      `docs/runbooks/pc24x7-piloto-dev.md`.
+- [x] Estratégia de restart automático do PC/Docker após queda de energia ou
+      reinício do sistema operacional definida — **resolvido 2026-09-09**:
+      Linux com `systemctl enable docker` (recomendado para o PC 24x7
+      definitivo); se continuar no Windows, WSL2 + Ubuntu + systemd + Docker
+      Engine nativo (evita depender de login de usuário, ao contrário do
+      Docker Desktop). Detalhes em `docs/runbooks/pc24x7-piloto-dev.md`.
+- [x] Domínio definido e nameservers migrados para a Cloudflare — **resolvido
+      2026-09-09 em duas fases**: fase 1 (agora, sem custo) usa Cloudflare
+      Quick Tunnel — URL pública temporária, sem precisar de domínio próprio.
+      Fase 2 (quando houver orçamento) troca para domínio próprio + túnel
+      nomeado. Ver `docs/runbooks/pc24x7-piloto-dev.md`, seção 3.
 - [ ] Comparação de custo real (domínio + energia + tempo de administração)
-      feita e documentada.
+      feita e documentada. **Ainda pendente**: usuário confirmou que o custo
+      atual (Fly.io ou domínio) já é proibitivo ("custa muito pra quem não
+      tem dinheiro") — a fase 1 do piloto foi desenhada para não exigir
+      nenhum gasto novo (Quick Tunnel + R2 gratuito), então este item fica
+      menos urgente para decidir *se* vale a pena migrar, mas continua
+      relevante para decidir quando valeria gastar num domínio (fase 2).
 
 ## Próximo incremento
 
-Com as respostas dos critérios de aceite, desenhar um piloto restrito a
-**dev** primeiro (menor risco), validar o Cloudflare Tunnel e o
-`docker-compose` de produção-like nesse ambiente por um período, e só então
-decidir sobre hml e prod com dados reais de estabilidade em mãos.
+Piloto de **dev** iniciado em 2026-09-09 — ver
+[`docs/runbooks/pc24x7-piloto-dev.md`](../runbooks/pc24x7-piloto-dev.md) para os passos
+operacionais completos (subir a stack, expor via Cloudflare Quick Tunnel, configurar backup
+restic/R2, garantir restart automático) e o critério de saída antes de revisitar hml/prod.
