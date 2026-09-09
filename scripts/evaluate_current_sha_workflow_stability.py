@@ -45,6 +45,31 @@ def latest_runs_by_name(runs: list[dict[str, Any]], head_sha: str) -> dict[str, 
     return selected
 
 
+def base_refs_for_sha(runs: list[dict[str, Any]], head_sha: str) -> set[str]:
+    """Return PR base refs observed by workflow runs for the evaluated head SHA."""
+    base_refs: set[str] = set()
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        if str(run.get("head_sha") or "") != head_sha:
+            continue
+        if str(run.get("event") or "") != "pull_request":
+            continue
+        pull_requests = run.get("pull_requests") or []
+        if not isinstance(pull_requests, list):
+            continue
+        for pull_request in pull_requests:
+            if not isinstance(pull_request, dict):
+                continue
+            base = pull_request.get("base") or {}
+            if not isinstance(base, dict):
+                continue
+            ref = str(base.get("ref") or "").strip()
+            if ref:
+                base_refs.add(ref)
+    return base_refs
+
+
 def evaluate_stability(
     *,
     runs_payload: dict[str, Any],
@@ -56,6 +81,7 @@ def evaluate_stability(
     required = policy.get("required_workflows") or []
     allowed = set(policy.get("allowed_conclusions") or ["success", "neutral", "skipped"])
     optional_when_not_registered = set(policy.get("optional_when_not_registered") or [])
+    required_base_branches = policy.get("required_base_branches") or {}
     if not isinstance(required, list) or not required or not all(isinstance(item, str) and item.strip() for item in required):
         raise ValueError("policy required_workflows must be a non-empty string list")
     if not allowed:
@@ -63,11 +89,23 @@ def evaluate_stability(
     unknown_optional = optional_when_not_registered.difference(required)
     if unknown_optional:
         raise ValueError("policy optional_when_not_registered must be a subset of required_workflows")
+    if not isinstance(required_base_branches, dict):
+        raise ValueError("policy required_base_branches must be an object")
+    unknown_scoped = set(required_base_branches).difference(required)
+    if unknown_scoped:
+        raise ValueError("policy required_base_branches keys must be a subset of required_workflows")
+    for workflow, branches in required_base_branches.items():
+        if not isinstance(branches, list) or not branches or not all(
+            isinstance(branch, str) and branch.strip() for branch in branches
+        ):
+            raise ValueError(f"policy required_base_branches[{workflow!r}] must be a non-empty string list")
 
     runs = runs_payload.get("workflow_runs") or []
     if not isinstance(runs, list):
         raise ValueError("workflow_runs must be a list")
     latest = latest_runs_by_name(runs, evaluated_sha)
+    observed_base_refs = sorted(base_refs_for_sha(runs, evaluated_sha))
+    evaluated_base_ref = observed_base_refs[0] if len(observed_base_refs) == 1 else None
 
     missing: list[str] = []
     incomplete: list[dict[str, str]] = []
@@ -94,8 +132,18 @@ def evaluate_stability(
         elif conclusion not in allowed:
             failed.append({"workflow": workflow, "conclusion": conclusion})
 
-    blocking_missing = [workflow for workflow in missing if workflow not in optional_when_not_registered]
-    tolerated_missing = [workflow for workflow in missing if workflow in optional_when_not_registered]
+    tolerated_due_to_base: list[str] = []
+    for workflow in missing:
+        branches = required_base_branches.get(workflow) or []
+        if evaluated_base_ref and branches and evaluated_base_ref not in branches:
+            tolerated_due_to_base.append(workflow)
+
+    tolerated_missing = [
+        workflow
+        for workflow in missing
+        if workflow in optional_when_not_registered or workflow in tolerated_due_to_base
+    ]
+    blocking_missing = [workflow for workflow in missing if workflow not in tolerated_missing]
     same_sha = bool(evaluated_sha) and evaluated_sha == current_sha
     stable = same_sha and not blocking_missing and not incomplete and not failed
     if not same_sha:
@@ -117,13 +165,17 @@ def evaluate_stability(
         "evaluated_sha": evaluated_sha,
         "current_sha": current_sha,
         "same_sha": same_sha,
+        "base_ref": evaluated_base_ref,
+        "observed_base_refs": observed_base_refs,
         "stable": stable,
         "decision": decision,
         "required_workflows": required,
         "allowed_conclusions": sorted(allowed),
         "missing_workflows": blocking_missing,
         "tolerated_missing_workflows": tolerated_missing,
+        "tolerated_missing_due_to_base": tolerated_due_to_base,
         "optional_when_not_registered": sorted(optional_when_not_registered),
+        "required_base_branches": required_base_branches,
         "incomplete_workflows": incomplete,
         "failed_workflows": failed,
         "observed_workflows": observed,
