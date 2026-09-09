@@ -46,8 +46,6 @@ def consumir_fila_email_movimento(
     reserva_timeout_minutos: int = fila.DEFAULT_RESERVA_TIMEOUT_MINUTOS,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    reservas_liberadas = fila.limpar_reservas_travadas(db, timeout_minutos=reserva_timeout_minutos)
-
     if dry_run:
         pendentes_preview = (
             db.query(MovimentoEmailDispatch)
@@ -59,7 +57,7 @@ def consumir_fila_email_movimento(
         return {
             'dry_run': True,
             'enviado': False,
-            'reservas_liberadas': reservas_liberadas,
+            'reservas_liberadas': 0,
             'total_pendentes_no_lote': len(pendentes_preview),
             'seriam_processados': [
                 {'id': item.id, 'correlation_id': item.correlation_id, 'assunto': item.assunto}
@@ -67,6 +65,7 @@ def consumir_fila_email_movimento(
             ],
         }
 
+    reservas_liberadas = fila.limpar_reservas_travadas(db, timeout_minutos=reserva_timeout_minutos)
     lote = fila.reservar_lote(db, lote_max=lote_max)
     enviados = 0
     falhas = 0

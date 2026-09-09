@@ -81,3 +81,18 @@ def test_consumo_libera_reservas_travadas_antes_de_reservar_novo_lote(db_session
 
     assert resultado['reservas_liberadas'] == 1
     assert resultado['enviados'] == 1
+
+
+def test_dry_run_nao_libera_reservas_travadas(db_session):
+    travado = _enfileirar(db_session, 'corr-travado')
+    travado.status = fila.STATUS_PROCESSING
+    travado.reserved_at = datetime.now(UTC) - timedelta(minutes=30)
+    db_session.add(travado)
+    db_session.commit()
+
+    sender = _FakeSenderOk()
+    resultado = consumir_fila_email_movimento(db_session, sender, remetente='robo@empresa.com', dry_run=True)
+
+    assert resultado['reservas_liberadas'] == 0
+    db_session.refresh(travado)
+    assert travado.status == fila.STATUS_PROCESSING
