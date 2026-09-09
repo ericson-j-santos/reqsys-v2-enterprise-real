@@ -49,7 +49,7 @@ jobs:
           echo "path=$STATE" >> "$GITHUB_OUTPUT"
           cd frontend
           set +e
-          MSAL_STORAGE_STATE_PATH="$STATE" npm run check:msal-state -- --json > "$RUNNER_TEMP/msal-state-check.json"
+          MSAL_STORAGE_STATE_PATH="$STATE" node scripts/check-msal-state.mjs --json > "$RUNNER_TEMP/msal-state-check.json"
           MSAL_RC=$?
           set -e
           MSAL_RC="$MSAL_RC" python - <<'PY'
