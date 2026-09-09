@@ -41,19 +41,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Detect backend coverage relevance
         id: coverage_scope
         shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           should_run=true
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags --depth=1 origin "$BASE_SHA"
-            changed="$(git diff --name-only "$BASE_SHA" "$GITHUB_SHA")"
+            changed="$(git diff --name-only HEAD^1 HEAD)"
             printf '%s\n' "$changed"
 
             if ! printf '%s\n' "$changed" | grep -Eq '^(backend/app/|backend/tests/|scripts/evaluate_domain_coverage\.py$|scripts/propose_domain_coverage_baseline\.py$|tests/test_evaluate_domain_coverage\.py$|tests/test_propose_domain_coverage_baseline\.py$|config/domain-coverage-policy\.json$)'; then
