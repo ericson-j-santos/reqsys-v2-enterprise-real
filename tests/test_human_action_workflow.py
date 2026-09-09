@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts" / "governance" / "human_action_workflow.py"
-SPEC = importlib.util.spec_from_file_location("human_action_workflow", MODULE_PATH)
+MODULE_NAME = "human_action_workflow"
+SPEC = importlib.util.spec_from_file_location(MODULE_NAME, MODULE_PATH)
 assert SPEC and SPEC.loader
 module = importlib.util.module_from_spec(SPEC)
+sys.modules[MODULE_NAME] = module
 SPEC.loader.exec_module(module)
 
 
