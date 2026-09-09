@@ -17,6 +17,10 @@ from app.services.ai_corporate_policy import (
     CorporateAIPolicyError,
     evaluate_provider_policy,
 )
+from app.services.ai_provider_config import (
+    AIProviderRuntimeConfigError,
+    resolve_provider_config,
+)
 from app.services.llm_provider import LLMGateway
 from app.services.teams_notifications import criar_item_fila
 
@@ -71,28 +75,23 @@ def _env_int(env: Mapping[str, str] | None, name: str, default: int) -> int:
 
 
 def _classification_lock(conversation_id: str, data_classification: str) -> str:
-    return hashlib.sha256(
-        f'{conversation_id}|{data_classification}'.encode('utf-8')
-    ).hexdigest()
+    return hashlib.sha256(f'{conversation_id}|{data_classification}'.encode('utf-8')).hexdigest()
 
 
 def status_provedores(env: Mapping[str, str] | None = None) -> dict[str, dict[str, bool]]:
-    return {
-        'openai': {'configurado': bool(_env_value(env, 'AI_CONVERSATION_OPENAI_API_KEY', 'CODEX_OPENAI_KEY'))},
-        'claude': {'configurado': bool(_env_value(env, 'AI_CONVERSATION_CLAUDE_API_KEY', 'CODEX_CLAUDE_KEY'))},
-        'gemini': {'configurado': bool(_env_value(env, 'AI_CONVERSATION_GEMINI_API_KEY', 'GEMINI_API_KEY'))},
-        'groq': {'configurado': bool(_env_value(env, 'AI_CONVERSATION_GROQ_API_KEY', 'GROQ_API_KEY'))},
-        'ollama': {
-            'configurado': bool(
-                _env_value(
-                    env,
-                    'AI_CONVERSATION_OLLAMA_BASE_URL',
-                    'CODEX_OLLAMA_BASE_URL',
-                    'OLLAMA_BASE_URL',
-                )
-            )
-        },
+    status: dict[str, dict[str, bool]] = {}
+    for provider in ('openai', 'claude', 'gemini', 'groq'):
+        try:
+            resolve_provider_config(provider, env=env)
+            status[provider] = {'configurado': True}
+        except AIProviderRuntimeConfigError:
+            status[provider] = {'configurado': False}
+    status['ollama'] = {
+        'configurado': bool(
+            _env_value(env, 'AI_CONVERSATION_OLLAMA_BASE_URL', 'CODEX_OLLAMA_BASE_URL', 'OLLAMA_BASE_URL')
+        )
     }
+    return status
 
 
 def criar_conversa(db: Session, payload: AIConversationCreateRequest, *, correlation_id: str) -> AIConversation:
@@ -141,11 +140,9 @@ def obter_conversa(db: Session, conversation_id: str) -> AIConversation:
 
 
 def listar_mensagens(db: Session, conversation_id: str) -> list[AIConversationMessage]:
-    stmt = (
-        select(AIConversationMessage)
-        .where(AIConversationMessage.conversation_id == conversation_id)
-        .order_by(AIConversationMessage.id.asc())
-    )
+    stmt = select(AIConversationMessage).where(
+        AIConversationMessage.conversation_id == conversation_id
+    ).order_by(AIConversationMessage.id.asc())
     return list(db.execute(stmt).scalars().all())
 
 
@@ -229,9 +226,7 @@ def _validar_politica_persistida(
             'Classificação da conversa foi alterada sem atualização governada da trava de integridade.'
         )
     if conversa.requested_provider != conversa.provider:
-        raise AIProviderConfigurationError(
-            'Provedor da conversa diverge do provedor originalmente solicitado.'
-        )
+        raise AIProviderConfigurationError('Provedor da conversa diverge do provedor originalmente solicitado.')
     try:
         decision = evaluate_provider_policy(
             provider=conversa.provider,
@@ -271,33 +266,39 @@ def _chamar_provider(
     system_prompt = _env_value(env, 'AI_CONVERSATION_SYSTEM_PROMPT') or DEFAULT_SYSTEM_PROMPT
 
     try:
-        if provider == 'openai':
-            api_key = _env_value(env, 'AI_CONVERSATION_OPENAI_API_KEY', 'CODEX_OPENAI_KEY')
-            if not api_key:
-                raise AIProviderConfigurationError('Provedor OpenAI não configurado.')
-            resposta = gateway.gerar_openai(api_key=api_key, model=model, prompt=prompt, system_prompt=system_prompt, timeout=timeout)
-        elif provider == 'claude':
-            api_key = _env_value(env, 'AI_CONVERSATION_CLAUDE_API_KEY', 'CODEX_CLAUDE_KEY')
-            if not api_key:
-                raise AIProviderConfigurationError('Provedor Claude não configurado.')
-            resposta = gateway.gerar_claude(api_key=api_key, model=model, prompt=prompt, system_prompt=system_prompt, timeout=timeout)
-        elif provider == 'gemini':
-            api_key = _env_value(env, 'AI_CONVERSATION_GEMINI_API_KEY', 'GEMINI_API_KEY')
-            if not api_key:
-                raise AIProviderConfigurationError('Provedor Gemini não configurado.')
-            resposta = gateway.gerar_gemini(api_key=api_key, model=model, prompt=prompt, system_prompt=system_prompt, timeout=timeout)
-        elif provider == 'groq':
-            api_key = _env_value(env, 'AI_CONVERSATION_GROQ_API_KEY', 'GROQ_API_KEY')
-            if not api_key:
-                raise AIProviderConfigurationError('Provedor Groq não configurado.')
-            resposta = gateway.gerar_groq(api_key=api_key, model=model, prompt=prompt, system_prompt=system_prompt, timeout=timeout)
+        if provider in {'openai', 'claude', 'gemini', 'groq'}:
+            runtime = resolve_provider_config(provider, env=env)
+            common = {
+                'api_key': runtime.secret,
+                'model': model,
+                'prompt': prompt,
+                'system_prompt': system_prompt,
+                'timeout': timeout,
+                'endpoint': runtime.endpoint,
+                'auth_mode': runtime.auth_mode,
+            }
+            if provider == 'openai':
+                resposta = gateway.gerar_openai(**common)
+            elif provider == 'claude':
+                resposta = gateway.gerar_claude(**common)
+            elif provider == 'gemini':
+                resposta = gateway.gerar_gemini(**common)
+            else:
+                resposta = gateway.gerar_groq(**common)
         elif provider == 'ollama':
             base_url = _env_value(env, 'AI_CONVERSATION_OLLAMA_BASE_URL', 'CODEX_OLLAMA_BASE_URL', 'OLLAMA_BASE_URL')
             if not base_url:
                 raise AIProviderConfigurationError('Provedor Ollama não configurado.')
-            resposta = gateway.gerar_ollama(base_url=base_url, model=model, prompt=f'{system_prompt}\n\n{prompt}', timeout=timeout)
+            resposta = gateway.gerar_ollama(
+                base_url=base_url,
+                model=model,
+                prompt=f'{system_prompt}\n\n{prompt}',
+                timeout=timeout,
+            )
         else:
             raise AIProviderConfigurationError(f'Provedor não suportado: {provider}.')
+    except AIProviderRuntimeConfigError as exc:
+        raise AIProviderConfigurationError(str(exc)) from None
     except AIProviderConfigurationError:
         raise
     except Exception as exc:
@@ -414,16 +415,10 @@ def executar_turno(
         raise AIConversationConflictError('Mensagem vazia não é permitida.')
 
     user_key = (idempotency_key or f'turn:{uuid.uuid4()}').strip()
-    existente = _buscar_mensagem_idempotente(
-        db,
-        conversation_id=conversa.id,
-        idempotency_key=user_key,
-    )
+    existente = _buscar_mensagem_idempotente(db, conversation_id=conversa.id, idempotency_key=user_key)
     if existente is not None:
         if existente.content_sha256 != _hash_content(mensagem_normalizada):
-            raise AIConversationConflictError(
-                'A mesma chave de idempotência foi reutilizada com conteúdo diferente.'
-            )
+            raise AIConversationConflictError('A mesma chave de idempotência foi reutilizada com conteúdo diferente.')
         resposta_existente = _buscar_mensagem_idempotente(
             db,
             conversation_id=conversa.id,
