@@ -53,12 +53,6 @@ kill_timeout = "5s"
     protocol = "http"
 
 [[vm]]
-  # 512mb bastava ate 2026-09-04; todo deploy DEV desde 2026-09-05 falha no
-  # smoke pos-deploy (API nunca fica pronta) sem nenhuma mudanca de codigo de
-  # backend em comum entre os commits afetados - indicio de OOM no boot com o
-  # acumulo de dependencias dos ultimos incrementos. Sem acesso a flyctl
-  # logs/status para confirmar a causa raiz; este aumento e mitigacao
-  # best-effort, nao confirmacao do diagnostico.
-  memory = "1024mb"
+  memory = "512mb"
   cpu_kind = "shared"
   cpus = 1

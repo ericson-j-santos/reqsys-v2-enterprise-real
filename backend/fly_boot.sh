@@ -12,12 +12,7 @@ if [ -n "${REQSYS_BOOT_MAX_ATTEMPTS:-}" ]; then
 elif [ "$BOOT_FALLBACK" = "true" ]; then
   MAX_ATTEMPTS=8
 else
-  # 30 (30s) bastava ate 2026-09-04; todo deploy DEV desde 2026-09-05 falha no
-  # smoke pos-deploy sem mudanca de codigo em comum entre os commits afetados,
-  # o que sugere disputa pelo volume single-attach durante o --strategy
-  # immediate. 60s da mais margem para o Fly reanexar o volume antes de
-  # desistir; nao confirmado sem flyctl logs/status.
-  MAX_ATTEMPTS=60
+  MAX_ATTEMPTS=30
 fi
 
 log() {
@@ -39,14 +34,14 @@ ensure_writable_data_dir() {
 }
 
 if ensure_writable_data_dir; then
-  log "data_dir_ready path=${DATA_DIR} attempts=${attempt}"
+  log "data_dir_ready path=${DATA_DIR}"
 else
-  log "data_dir_unwritable path=${DATA_DIR} fallback=${BOOT_FALLBACK} attempts=${MAX_ATTEMPTS}"
+  log "data_dir_unwritable path=${DATA_DIR} fallback=${BOOT_FALLBACK}"
   if [ "$BOOT_FALLBACK" = "true" ]; then
     export DATABASE_URL="${REQSYS_BOOT_FALLBACK_DATABASE_URL:-sqlite:////tmp/reqsys-fallback.db}"
     log "using_ephemeral_database url=${DATABASE_URL}"
   else
-    log "boot_aborted reason=volume_not_ready attempts=${MAX_ATTEMPTS}"
+    log "boot_aborted reason=volume_not_ready"
     exit 1
   fi
 fi
