@@ -46,18 +46,52 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _resolve_public_file(case: dict, corpus_root: Path) -> tuple[Path | None, str | None]:
+    raw_file = str(case.get("file") or "").strip()
+    relative = Path(raw_file)
+    if not raw_file or relative.is_absolute() or ".." in relative.parts:
+        return None, "UNSAFE_FILE_PATH"
+
+    root = corpus_root.resolve()
+    file_path = (root / relative).resolve()
+    try:
+        file_path.relative_to(root)
+    except ValueError:
+        return None, "PATH_OUTSIDE_CORPUS_ROOT"
+
+    if file_path.suffix.lower() != ".pdf":
+        return None, "PUBLIC_CORPUS_REQUIRES_PDF"
+    if not file_path.is_file():
+        return None, "FILE_NOT_FOUND"
+    return file_path, None
+
+
 def certify_case(case: dict, corpus_root: Path, motor) -> PublicCaseResult:
-    file_path = (corpus_root / str(case["file"])).resolve()
     failures: list[str] = []
-    actual_hash = _sha256(file_path)
-    if actual_hash != str(case.get("file_sha256") or ""):
-        failures.append("SHA256_MISMATCH")
+    file_path, file_failure = _resolve_public_file(case, corpus_root)
+    if file_failure:
+        failures.append(file_failure)
     if case.get("classification") != "PUBLIC_REFERENCE_DOCUMENT":
         failures.append("CLASSIFICATION_INVALID")
     if case.get("contains_personal_data") is not False:
         failures.append("PERSONAL_DATA_NOT_ALLOWED")
     if case.get("human_review_required") is not False:
         failures.append("PUBLIC_CORPUS_MUST_NOT_REQUIRE_HUMAN_REVIEW")
+
+    if file_path is None:
+        return PublicCaseResult(
+            case_id=str(case.get("case_id") or ""),
+            document_type=str(case.get("document_type") or "PUBLIC_DOCUMENT"),
+            file_sha256="",
+            cer=1.0,
+            exact_match=False,
+            status="FAIL",
+            failures=tuple(failures),
+        )
+
+    actual_hash = _sha256(file_path)
+    if actual_hash != str(case.get("file_sha256") or ""):
+        failures.append("SHA256_MISMATCH")
 
     try:
         result = motor.processar(file_path, content_type="application/pdf")

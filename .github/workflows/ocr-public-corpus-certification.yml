@@ -10,6 +10,7 @@ on:
       - 'scripts/ocr_public_corpus_certify.py'
       - 'governance/ocr/public-corpus-sources.json'
       - 'backend/ocr_tests/test_public_corpus_certify.py'
+      - 'docs/architecture/ocr-public-corpus-certification-v1.md'
       - '.github/workflows/ocr-public-corpus-certification.yml'
 
 permissions:

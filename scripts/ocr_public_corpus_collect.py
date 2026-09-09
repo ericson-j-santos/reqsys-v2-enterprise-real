@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import urllib.request
 from datetime import datetime, timezone
@@ -17,6 +18,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 MAX_BYTES = 25 * 1024 * 1024
+SAFE_CASE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 
 
 def _allowed(hostname: str, domains: list[str]) -> bool:
@@ -30,6 +32,23 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _validate_case_id(value: object) -> str:
+    case_id = str(value or "").strip()
+    if not SAFE_CASE_ID.fullmatch(case_id):
+        raise ValueError("PUBLIC_CASE_ID_INVALID")
+    return case_id
+
+
+def _destination_for(output_root: Path, case_id: str) -> Path:
+    root = output_root.resolve()
+    destination = (root / f"{case_id}.pdf").resolve()
+    try:
+        destination.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("PUBLIC_OUTPUT_PATH_OUTSIDE_ROOT") from exc
+    return destination
 
 
 def _download(url: str, destination: Path, allowed_domains: list[str]) -> None:
@@ -80,12 +99,22 @@ def collect(config_path: Path, output_root: Path, manifest_path: Path) -> dict:
     if not domains or not sources:
         raise ValueError("PUBLIC_CORPUS_CONFIG_EMPTY")
 
-    cases = []
+    validated_sources: list[tuple[dict, str, str]] = []
+    case_ids: set[str] = set()
     for source in sources:
-        case_id = str(source["case_id"]).strip()
+        if not isinstance(source, dict):
+            raise ValueError("PUBLIC_SOURCE_INVALID")
+        case_id = _validate_case_id(source.get("case_id"))
+        if case_id in case_ids:
+            raise ValueError("PUBLIC_CASE_ID_DUPLICATED")
+        case_ids.add(case_id)
         url = str(source["url"]).strip()
+        validated_sources.append((source, case_id, url))
+
+    cases = []
+    for source, case_id, url in validated_sources:
         filename = f"{case_id}.pdf"
-        file_path = output_root / filename
+        file_path = _destination_for(output_root, case_id)
         _download(url, file_path, domains)
         expected = _extract_reference_text(file_path)
         cases.append({

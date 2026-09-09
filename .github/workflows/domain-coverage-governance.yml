@@ -4,7 +4,8 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "backend/**"
+      - "backend/app/**"
+      - "backend/tests/**"
       - "scripts/evaluate_domain_coverage.py"
       - "scripts/propose_domain_coverage_baseline.py"
       - "tests/test_evaluate_domain_coverage.py"
@@ -14,7 +15,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "backend/**"
+      - "backend/app/**"
+      - "backend/tests/**"
       - "scripts/evaluate_domain_coverage.py"
       - "scripts/propose_domain_coverage_baseline.py"
       - "tests/test_evaluate_domain_coverage.py"
@@ -39,6 +41,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect backend coverage relevance
+        id: coverage_scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          should_run=true
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            changed="$(git diff --name-only HEAD^1 HEAD)"
+            printf '%s\n' "$changed"
+
+            if ! printf '%s\n' "$changed" | grep -Eq '^(backend/app/|backend/tests/|scripts/evaluate_domain_coverage\.py$|scripts/propose_domain_coverage_baseline\.py$|tests/test_evaluate_domain_coverage\.py$|tests/test_propose_domain_coverage_baseline\.py$|config/domain-coverage-policy\.json$)'; then
+              should_run=false
+            fi
+          fi
+
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -61,6 +83,7 @@ jobs:
             tests/test_propose_domain_coverage_baseline.py
 
       - name: Measure backend coverage
+        if: steps.coverage_scope.outputs.should_run == 'true'
         working-directory: backend
         run: |
           set -euo pipefail
@@ -71,6 +94,7 @@ jobs:
             --cov-report=json:../artifacts/domain-coverage/coverage.json
 
       - name: Evaluate domain regression
+        if: steps.coverage_scope.outputs.should_run == 'true'
         run: |
           set -euo pipefail
           python scripts/evaluate_domain_coverage.py --json
@@ -78,7 +102,7 @@ jobs:
           cp artifacts/domain-coverage/report.json docs/ops-dashboard/data/domain-coverage-latest.json
 
       - name: Publish evidence
-        if: always()
+        if: always() && steps.coverage_scope.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: domain-coverage-evidence
@@ -92,7 +116,10 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          if [ -f artifacts/domain-coverage/report.json ]; then
+          if [ "${{ steps.coverage_scope.outputs.should_run }}" != "true" ]; then
+            echo "# Domain Coverage Governance" >> "$GITHUB_STEP_SUMMARY"
+            echo "Medição de cobertura ignorada: a PR não altera código ou testes pertencentes ao conjunto medido pelo gate." >> "$GITHUB_STEP_SUMMARY"
+          elif [ -f artifacts/domain-coverage/report.json ]; then
             python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
           from pathlib import Path
