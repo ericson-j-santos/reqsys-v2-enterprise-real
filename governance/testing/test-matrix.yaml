@@ -1,0 +1,117 @@
+{
+  "schema_version": "1.0",
+  "default_profile": "pr",
+  "mode": "report-only",
+  "profiles": {
+    "fast": {
+      "description": "Validação rápida da própria infraestrutura de testes.",
+      "suites": [
+        "quality_fabric_selftest"
+      ]
+    },
+    "pr": {
+      "description": "Validação seletiva de PR baseada nos caminhos alterados, sem substituir os gates atuais.",
+      "suites": [
+        "quality_fabric_selftest",
+        "backend_tests",
+        "frontend_unit",
+        "frontend_build",
+        "frontend_e2e_responsive"
+      ]
+    }
+  },
+  "suites": {
+    "quality_fabric_selftest": {
+      "description": "Valida manifesto, roteamento, execução segura e geração de evidências do Quality Fabric.",
+      "cwd": ".",
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_testing_orchestrator.py"
+      ],
+      "timeout_seconds": 180,
+      "always_run": true,
+      "paths": [
+        "governance/testing/**",
+        "scripts/testing/**",
+        "tests/test_testing_orchestrator.py"
+      ],
+      "evidence_kind": "governance"
+    },
+    "backend_tests": {
+      "description": "Suíte backend existente do ReqSys.",
+      "cwd": "backend",
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "tests/",
+        "-q",
+        "--tb=short"
+      ],
+      "timeout_seconds": 1800,
+      "always_run": false,
+      "paths": [
+        "backend/**"
+      ],
+      "evidence_kind": "unit-integration"
+    },
+    "frontend_unit": {
+      "description": "Testes unitários frontend existentes em Vitest.",
+      "cwd": "frontend",
+      "command": [
+        "npm",
+        "run",
+        "test:unit"
+      ],
+      "timeout_seconds": 900,
+      "always_run": false,
+      "paths": [
+        "frontend/src/**",
+        "frontend/package.json",
+        "frontend/package-lock.json",
+        "frontend/vite.config.*"
+      ],
+      "evidence_kind": "unit"
+    },
+    "frontend_build": {
+      "description": "Build de produção do frontend para detectar regressões de empacotamento.",
+      "cwd": "frontend",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "timeout_seconds": 900,
+      "always_run": false,
+      "paths": [
+        "frontend/**"
+      ],
+      "evidence_kind": "build"
+    },
+    "frontend_e2e_responsive": {
+      "description": "E2E responsivo existente, roteado apenas para mudanças de UI, autenticação, rotas ou E2E.",
+      "cwd": "frontend",
+      "command": [
+        "npx",
+        "playwright",
+        "test",
+        "tests/e2e/responsividade.spec.js"
+      ],
+      "timeout_seconds": 1200,
+      "always_run": false,
+      "paths": [
+        "frontend/tests/e2e/**",
+        "frontend/playwright.config.*",
+        "frontend/src/router/**",
+        "frontend/src/views/Login*",
+        "frontend/src/views/*Auth*",
+        "frontend/src/services/auth*",
+        "frontend/src/stores/*auth*"
+      ],
+      "evidence_kind": "e2e"
+    }
+  }
+}
