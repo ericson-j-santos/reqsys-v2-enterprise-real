@@ -9,7 +9,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 import httpx
 from openpyxl import load_workbook
@@ -19,6 +19,9 @@ GRAPH = "https://graph.microsoft.com/v1.0"
 TIMEOUT = 30.0
 TABLE = "tbDemandas"
 LOCAL_MARKER_FIELDS = ("Risco", "Próxima ação")
+LOCK_RETRY_ATTEMPTS = 12
+LOCK_RETRY_DELAY_SECONDS = 5.0
+_T = TypeVar("_T")
 
 
 def _env(*names: str) -> str:
@@ -63,6 +66,30 @@ def _graph(client: httpx.Client, method: str, path: str, token: str, **kwargs: A
     response = client.request(method, GRAPH + path, headers=headers, timeout=TIMEOUT, **kwargs)
     response.raise_for_status()
     return response
+
+
+def _retry_locked(
+    operation: Callable[[], _T],
+    *,
+    attempts: int = LOCK_RETRY_ATTEMPTS,
+    delay_seconds: float = LOCK_RETRY_DELAY_SECONDS,
+) -> _T:
+    """Repete somente o lock transitório 423 do arquivo Excel.
+
+    O Microsoft Graph pode manter o workbook bloqueado por alguns segundos
+    enquanto o Power Automate/Excel Online conclui uma gravação. Outros erros
+    continuam fail-closed e não são mascarados.
+    """
+    if attempts < 1:
+        raise ValueError("attempts deve ser >= 1")
+    for attempt in range(1, attempts + 1):
+        try:
+            return operation()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code != 423 or attempt >= attempts:
+                raise
+            time.sleep(delay_seconds)
+    raise RuntimeError("retentativa de lock terminou em estado impossível")
 
 
 def _discover_target(client: httpx.Client, token: str) -> dict[str, str]:
@@ -112,7 +139,11 @@ def _discover_target(client: httpx.Client, token: str) -> dict[str, str]:
             if not buckets:
                 continue
             buckets = sorted(buckets, key=lambda item: str(item.get("name") or "").casefold())
-            preferred = [b for b in buckets if any(k in str(b.get("name") or "").casefold() for k in ("backlog", "demanda", "entrada"))]
+            preferred = [
+                b
+                for b in buckets
+                if any(k in str(b.get("name") or "").casefold() for k in ("backlog", "demanda", "entrada"))
+            ]
             bucket = preferred[0] if preferred else buckets[0]
             candidates.append(
                 {
@@ -132,9 +163,22 @@ def _discover_target(client: httpx.Client, token: str) -> dict[str, str]:
 
 
 def _download_workbook(client: httpx.Client, token: str, target: dict[str, str]) -> tuple[bytes, str]:
-    meta = _graph(client, "GET", f"/drives/{target['drive_id']}/items/{target['file_id']}?$select=id,name,eTag", token).json()
-    data = _graph(client, "GET", f"/drives/{target['drive_id']}/items/{target['file_id']}/content", token).content
-    return data, str(meta.get("eTag") or "")
+    def operation() -> tuple[bytes, str]:
+        meta = _graph(
+            client,
+            "GET",
+            f"/drives/{target['drive_id']}/items/{target['file_id']}?$select=id,name,eTag",
+            token,
+        ).json()
+        data = _graph(
+            client,
+            "GET",
+            f"/drives/{target['drive_id']}/items/{target['file_id']}/content",
+            token,
+        ).content
+        return data, str(meta.get("eTag") or "")
+
+    return _retry_locked(operation)
 
 
 def _table_context(data: bytes, task_id: str) -> tuple[Any, Any, Any, list[str], list[int]]:
@@ -148,7 +192,11 @@ def _table_context(data: bytes, task_id: str) -> tuple[Any, Any, Any, list[str],
         if "TaskId" not in headers:
             raise RuntimeError("tbDemandas não contém coluna TaskId")
         task_col = min_col + headers.index("TaskId")
-        matches = [row for row in range(min_row + 1, max_row + 1) if str(ws.cell(row, task_col).value or "").strip() == task_id]
+        matches = [
+            row
+            for row in range(min_row + 1, max_row + 1)
+            if str(ws.cell(row, task_col).value or "").strip() == task_id
+        ]
         return wb, ws, table, headers, matches
     raise RuntimeError("Tabela tbDemandas não encontrada em WSJF.xlsx")
 
@@ -182,10 +230,30 @@ def _upload_workbook(client: httpx.Client, token: str, target: dict[str, str], d
     headers = {"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
     if etag:
         headers["If-Match"] = etag
-    _graph(client, "PUT", f"/drives/{target['drive_id']}/items/{target['file_id']}/content", token, headers=headers, content=data)
+
+    def operation() -> None:
+        _graph(
+            client,
+            "PUT",
+            f"/drives/{target['drive_id']}/items/{target['file_id']}/content",
+            token,
+            headers=headers,
+            content=data,
+        )
+
+    _retry_locked(operation)
 
 
-def _wait_row(client: httpx.Client, token: str, target: dict[str, str], task_id: str, deadline: float, *, title: str | None = None, marker: str | None = None) -> dict[str, Any]:
+def _wait_row(
+    client: httpx.Client,
+    token: str,
+    target: dict[str, str],
+    task_id: str,
+    deadline: float,
+    *,
+    title: str | None = None,
+    marker: str | None = None,
+) -> dict[str, Any]:
     last: dict[str, Any] = {"matching_rows": 0}
     while time.time() < deadline:
         try:
@@ -224,6 +292,7 @@ def main() -> int:
         "planner_task_id": "",
         "excel_task_id": "",
         "excel_matching_rows": 0,
+        "first_sync_observed": False,
         "local_fields_preserved": False,
         "planner_writeback_detected": True,
         "probe_marker": marker,
@@ -234,7 +303,11 @@ def main() -> int:
         with httpx.Client(follow_redirects=True) as client:
             token = _token(client)
             target = _discover_target(client, token)
-            evidence["target"] = {k: target.get(k) for k in ("group_name", "plan_name", "bucket_name") if target.get(k)}
+            evidence["target"] = {
+                k: target.get(k)
+                for k in ("group_name", "plan_name", "bucket_name")
+                if target.get(k)
+            }
 
             created = _graph(
                 client,
@@ -250,6 +323,11 @@ def main() -> int:
             first = _wait_row(client, token, target, task_id, time.time() + args.wait_seconds)
             if first.get("matching_rows") != 1:
                 raise RuntimeError("TaskId não apareceu exatamente uma vez em tbDemandas no primeiro ciclo")
+
+            first_values = first.get("values") or {}
+            evidence["excel_task_id"] = str(first_values.get("TaskId") or "")
+            evidence["excel_matching_rows"] = int(first.get("matching_rows") or 0)
+            evidence["first_sync_observed"] = evidence["excel_task_id"] == task_id
 
             data, etag = _download_workbook(client, token, target)
             _upload_workbook(client, token, target, _write_local_markers(data, task_id, marker), etag)
@@ -281,10 +359,14 @@ def main() -> int:
             values = second.get("values") or {}
             evidence["excel_task_id"] = str(values.get("TaskId") or "")
             evidence["excel_matching_rows"] = int(second.get("matching_rows") or 0)
-            evidence["local_fields_preserved"] = all(str(values.get(field) or "") == marker for field in LOCAL_MARKER_FIELDS)
+            evidence["local_fields_preserved"] = all(
+                str(values.get(field) or "") == marker for field in LOCAL_MARKER_FIELDS
+            )
 
             planner_after_flow = _graph(client, "GET", f"/planner/tasks/{task_id}", token).json()
-            evidence["planner_writeback_detected"] = str(planner_after_flow.get("@odata.etag") or "") != etag_after_update
+            evidence["planner_writeback_detected"] = (
+                str(planner_after_flow.get("@odata.etag") or "") != etag_after_update
+            )
             evidence["captured_at"] = datetime.now(timezone.utc).isoformat()
     except Exception as exc:
         evidence["probe_error"] = f"{type(exc).__name__}: {str(exc)[:400]}"
@@ -295,13 +377,22 @@ def main() -> int:
                     token = _token(cleanup)
                     current = _graph(cleanup, "GET", f"/planner/tasks/{task_id}", token).json()
                     etag = str(current.get("@odata.etag") or "")
-                    _graph(cleanup, "DELETE", f"/planner/tasks/{task_id}", token, headers={"If-Match": etag})
+                    _graph(
+                        cleanup,
+                        "DELETE",
+                        f"/planner/tasks/{task_id}",
+                        token,
+                        headers={"If-Match": etag},
+                    )
                     evidence["planner_cleanup"] = True
             except Exception as exc:
                 evidence["planner_cleanup"] = False
                 evidence["cleanup_warning"] = f"{type(exc).__name__}: {str(exc)[:240]}"
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        args.output.write_text(
+            json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
     ok = (
         evidence.get("planner_task_id")
@@ -311,7 +402,13 @@ def main() -> int:
         and evidence.get("planner_writeback_detected") is False
         and "probe_error" not in evidence
     )
-    print(json.dumps({"status": "PASS" if ok else "BLOCKED", "task_id": task_id or None}, ensure_ascii=False, separators=(",", ":")))
+    print(
+        json.dumps(
+            {"status": "PASS" if ok else "BLOCKED", "task_id": task_id or None},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+    )
     return 0 if ok else 1
 
 

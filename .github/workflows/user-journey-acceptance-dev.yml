@@ -11,8 +11,10 @@ on:
       - "scripts/wsjf_business_effect_probe.py"
       - "scripts/wsjf_business_effect_gate.py"
       - "scripts/user_journey_acceptance_gate.py"
+      - "tests/test_wsjf_business_effect_probe.py"
       - "config/user-journey-acceptance-policy.json"
       - "frontend/tests/e2e/wsjf-planner-excel-live.spec.js"
+      - "frontend/tests/e2e/wsjf-planner-excel-conexoes-live.spec.js"
   workflow_dispatch:
     inputs:
       feature:
@@ -129,6 +131,7 @@ jobs:
           python -m pytest \
             tests/test_user_journey_acceptance_gate.py \
             tests/test_wsjf_business_effect_gate.py \
+            tests/test_wsjf_business_effect_probe.py \
             backend/tests/test_wsjf_planner_excel_provisioning.py \
             -q
           cd frontend
@@ -152,16 +155,44 @@ jobs:
             --include-optional-evidence \
             --output "$EVIDENCE_DIR/public-runtime.json"
 
-      - name: Browser real no DEV sem mocks
+      - name: Decodificar sessão MSAL real
+        id: msal_state
+        continue-on-error: true
+        shell: bash
+        env:
+          WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WSJF_MSAL_STORAGE_STATE_B64:-}" ]; then
+            echo "::error::WSJF_MSAL_STORAGE_STATE_B64 ausente; o aceite real não pode usar login demo para conexões delegadas."
+            exit 1
+          fi
+          echo "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$RUNNER_TEMP/msal-storage-state.json"
+          echo "path=$RUNNER_TEMP/msal-storage-state.json" >> "$GITHUB_OUTPUT"
+
+      - name: Verificar validade da sessão MSAL real
+        id: msal_check
+        if: steps.msal_state.outcome == 'success'
+        continue-on-error: true
+        working-directory: frontend
+        env:
+          MSAL_STORAGE_STATE_PATH: ${{ steps.msal_state.outputs.path }}
+        run: |
+          set -euo pipefail
+          npm run check:msal-state
+
+      - name: Browser real no DEV com sessão Microsoft e sem mocks
         id: browser
+        if: steps.msal_state.outcome == 'success' && steps.msal_check.outcome == 'success'
         continue-on-error: true
         working-directory: frontend
         env:
           REAL_USER_JOURNEY: "true"
           E2E_BASE_URL: ${{ env.FRONTEND_URL }}
+          MSAL_STORAGE_STATE_PATH: ${{ steps.msal_state.outputs.path }}
         run: |
           set -euo pipefail
-          npx playwright test tests/e2e/wsjf-planner-excel-live.spec.js --reporter=line
+          npx playwright test tests/e2e/wsjf-planner-excel-conexoes-live.spec.js --reporter=line
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
@@ -186,9 +217,22 @@ jobs:
         run: |
           set -euo pipefail
           payload="$(base64 -w0 backend/app/microsoft_identity_e2e.py)"
-          output="$(flyctl ssh console -a "$FLY_APP" --command "python -c 'import base64; exec(compile(base64.b64decode(\"$payload\"), \"microsoft_identity_e2e.py\", \"exec\"))'")"
-          result="$(echo "$output" | tail -n 1)"
-          printf '%s\n' "$result" > "$EVIDENCE_DIR/microsoft-integrations.json"
+          set +e
+          output="$(flyctl ssh console -a "$FLY_APP" --command "python -c 'import base64; exec(compile(base64.b64decode(\"$payload\"), \"microsoft_identity_e2e.py\", \"exec\"))'" 2>&1)"
+          rc=$?
+          set -e
+          result="$(printf '%s\n' "$output" | grep -E '\{"status":"(PASS|FAIL)"' | tail -n 1 || true)"
+          if [ -z "$result" ]; then
+            result="$(RC="$rc" python - <<'PY'
+          import json, os
+          print(json.dumps({"status":"FAIL","stage":"fly_ssh","exit_code":int(os.environ["RC"])}, separators=(",", ":")))
+          PY
+          )"
+          fi
+          printf '%s\n' "$result" | tee "$EVIDENCE_DIR/microsoft-integrations.json"
+          if [ "$rc" -ne 0 ]; then
+            exit "$rc"
+          fi
           echo "$result" | grep -q '"status":"PASS"'
           echo "$result" | grep -q '"check":"powerplatform_environments"'
           echo "$result" | grep -q '"check":"graph_groups"'
