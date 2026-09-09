@@ -17,6 +17,7 @@ def run(
     conclusion: str | None = "success",
     run_id: int = 1,
     created_at: str = "2026-07-31T18:00:00Z",
+    base_ref: str = "main",
 ) -> dict:
     return {
         "id": run_id,
@@ -28,6 +29,13 @@ def run(
         "created_at": created_at,
         "html_url": f"https://github.com/example/repo/actions/runs/{run_id}",
         "run_attempt": 1,
+        "pull_requests": [
+            {
+                "number": 123,
+                "head": {"ref": "feature/example", "sha": sha},
+                "base": {"ref": base_ref, "sha": "base-sha"},
+            }
+        ],
     }
 
 
@@ -46,6 +54,7 @@ def test_stable_only_when_all_required_workflows_complete() -> None:
     assert report["stable"] is True
     assert report["decision"] == "stable"
     assert report["missing_workflows"] == []
+    assert report["base_ref"] == "main"
 
 
 def test_missing_workflow_is_not_success() -> None:
@@ -122,3 +131,44 @@ def test_path_filtered_workflow_may_be_absent_but_still_blocks_when_failed() -> 
     )
     assert failed_report["stable"] is False
     assert failed_report["decision"] == "required_workflows_failed"
+
+
+def test_base_scoped_workflow_may_be_absent_on_stacked_pr() -> None:
+    policy = {
+        **POLICY,
+        "required_base_branches": {"Security": ["main"]},
+    }
+    report = evaluate_stability(
+        runs_payload={
+            "workflow_runs": [
+                run("CI", base_ref="feat/parent"),
+                run("Evidence", run_id=2, base_ref="feat/parent"),
+            ]
+        },
+        policy=policy,
+        evaluated_sha="abc",
+        current_sha="abc",
+        observed_at=datetime(2026, 7, 31, 18, 5, tzinfo=UTC),
+    )
+    assert report["stable"] is True
+    assert report["base_ref"] == "feat/parent"
+    assert report["missing_workflows"] == []
+    assert report["tolerated_missing_due_to_base"] == ["Security"]
+
+
+def test_base_scoped_workflow_remains_required_on_main() -> None:
+    policy = {
+        **POLICY,
+        "required_base_branches": {"Security": ["main"]},
+    }
+    report = evaluate_stability(
+        runs_payload={"workflow_runs": [run("CI"), run("Evidence", run_id=2)]},
+        policy=policy,
+        evaluated_sha="abc",
+        current_sha="abc",
+        observed_at=datetime(2026, 7, 31, 18, 5, tzinfo=UTC),
+    )
+    assert report["stable"] is False
+    assert report["decision"] == "required_workflows_not_registered"
+    assert report["missing_workflows"] == ["Security"]
+    assert report["tolerated_missing_due_to_base"] == []
