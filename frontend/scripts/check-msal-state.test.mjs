@@ -5,8 +5,22 @@ import path from 'node:path'
 import test from 'node:test'
 import { avaliarEstado, decodificarJwtPayload, formatarDuracao } from './check-msal-state.mjs'
 
+// mkdtemp (nao um nome de arquivo montado a mao em os.tmpdir()) e o jeito
+// seguro de criar arquivos temporarios em Node: o diretorio recebe um sufixo
+// aleatorio verificado pelo proprio SO, sem a corrida/previsibilidade que um
+// nome montado com Date.now()/Math.random() teria (CWE-377, pego pelo
+// CodeQL na primeira versao deste arquivo).
+const dirTemp = fs.mkdtempSync(path.join(os.tmpdir(), 'msal-state-teste-'))
+test.after(() => fs.rmSync(dirTemp, { recursive: true, force: true }))
+let proximoId = 0
+
+function caminhoTemp(sufixo) {
+  proximoId += 1
+  return path.join(dirTemp, `${proximoId}-${sufixo}`)
+}
+
 function escreverEstado(overrides = {}) {
-  const arquivo = path.join(os.tmpdir(), `msal-state-teste-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
+  const arquivo = caminhoTemp('estado.json')
   const bundle = {
     schemaVersion: 1,
     origin: 'https://reqsys-app-dev.fly.dev',
@@ -76,7 +90,7 @@ test('avaliarEstado: sessao expirada', () => {
 })
 
 test('avaliarEstado: arquivo sem RefreshToken no cache fica invalido', () => {
-  const arquivo = path.join(os.tmpdir(), `msal-state-sem-refresh-${Date.now()}.json`)
+  const arquivo = caminhoTemp('sem-refresh.json')
   fs.writeFileSync(arquivo, JSON.stringify({
     schemaVersion: 1,
     sessionStorage: [{ name: 'msal.version', value: '"3.0.0"' }],
@@ -92,7 +106,7 @@ test('avaliarEstado: arquivo sem RefreshToken no cache fica invalido', () => {
 test('avaliarEstado: extrai a conta do IdToken quando presente', () => {
   const claims = { preferred_username: 'ericson@tieri659.onmicrosoft.com' }
   const idJwt = `x.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.y`
-  const arquivo = path.join(os.tmpdir(), `msal-state-conta-${Date.now()}.json`)
+  const arquivo = caminhoTemp('conta.json')
   fs.writeFileSync(arquivo, JSON.stringify({
     schemaVersion: 1,
     capturedAt: '2026-09-04T10:00:00.000Z',
