@@ -72,6 +72,7 @@ def office_container_readiness() -> dict[str, object]:
             'version': None,
             'mode': 'vba_project_only',
             'office_execution': False,
+            'pcode_integrity_check': False,
         }
     return {
         'ready': True,
@@ -79,6 +80,8 @@ def office_container_readiness() -> dict[str, object]:
         'version': version,
         'mode': 'vba_project_only',
         'office_execution': False,
+        'pcode_integrity_check': True,
+        'pcode_engine': 'pcodedmp',
     }
 
 
@@ -233,6 +236,42 @@ def _extract_modules(project: bytes, *, project_path: str) -> list[dict[str, str
             pass
 
 
+def _detect_vba_stomping(project: bytes, *, project_path: str) -> dict[str, object]:
+    parser = _parser_factory(project_path, project)
+    try:
+        detector = getattr(parser, 'detect_vba_stomping', None)
+        if detector is None:
+            return {
+                'status': 'indeterminate',
+                'detected': None,
+                'method': 'oletools.detect_vba_stomping',
+                'pcode_engine': 'pcodedmp',
+                'reason': 'parser_method_unavailable',
+            }
+        detected = bool(detector())
+        return {
+            'status': 'detected' if detected else 'not_detected',
+            'detected': detected,
+            'method': 'oletools.detect_vba_stomping',
+            'pcode_engine': 'pcodedmp',
+            'reason': None,
+        }
+    except Exception as exc:
+        return {
+            'status': 'indeterminate',
+            'detected': None,
+            'method': 'oletools.detect_vba_stomping',
+            'pcode_engine': 'pcodedmp',
+            'reason': 'parser_error',
+            'parser_error_type': type(exc).__name__,
+        }
+    finally:
+        try:
+            parser.close()
+        except Exception:
+            pass
+
+
 def _sum_summary(analyses: list[dict[str, object]], key: str) -> int:
     total = 0
     for analysis in analyses:
@@ -255,6 +294,7 @@ def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str,
         extension=extension,
     )
     modules = _extract_modules(project, project_path=project_path)
+    stomping = _detect_vba_stomping(project, project_path=project_path)
 
     analyzed_modules: list[dict[str, object]] = []
     risks: list[dict[str, object]] = []
@@ -281,14 +321,43 @@ def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str,
         for candidate in analysis['requirement_candidates']:
             requirement_candidates.append({'module': module['name'], **candidate})
 
+    if stomping['status'] == 'detected':
+        risks.append(
+            {
+                'module': None,
+                'code': 'VBA_STOMPING_DETECTED',
+                'severity': 'high',
+                'message': 'Há divergência entre o código-fonte VBA e o P-code compilado.',
+                'evidence': 'oletools.detect_vba_stomping',
+                'requires_human_review': True,
+            }
+        )
+    elif stomping['status'] == 'indeterminate':
+        risks.append(
+            {
+                'module': None,
+                'code': 'VBA_STOMPING_ASSESSMENT_INDETERMINATE',
+                'severity': 'medium',
+                'message': 'A comparação entre fonte VBA e P-code não pôde ser concluída.',
+                'evidence': str(stomping.get('reason') or 'unknown'),
+                'requires_human_review': True,
+            }
+        )
+
     risks_by_severity = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
     for risk in risks:
         severity = str(risk.get('severity') or '').lower()
         if severity in risks_by_severity:
             risks_by_severity[severity] += 1
 
+    integrity_status = 'NO_INDICATION'
+    if stomping['status'] == 'detected':
+        integrity_status = 'REVIEW_REQUIRED'
+    elif stomping['status'] == 'indeterminate':
+        integrity_status = 'INDETERMINATE'
+
     return {
-        'schema_version': '1.0.0',
+        'schema_version': '1.1.0',
         'analyzer': 'reqsys-vba-office-container-static',
         'analysis_type': 'static_only',
         'execution_performed': False,
@@ -303,6 +372,12 @@ def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str,
             'vba_project_sha256': hashlib.sha256(project).hexdigest(),
             'archive': archive_stats,
         },
+        'integrity': {
+            'status': integrity_status,
+            'vba_stomping': stomping,
+            'source_vs_pcode_checked': stomping['status'] != 'indeterminate',
+            'execution_performed': False,
+        },
         'summary': {
             'modules': len(analyzed_modules),
             'procedures': _sum_summary(analyses, 'procedures'),
@@ -311,11 +386,17 @@ def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str,
             'risks': len(risks),
             'risks_by_severity': risks_by_severity,
             'requirement_candidates': len(requirement_candidates),
+            'vba_stomping_status': stomping['status'],
         },
         'modules': analyzed_modules,
         'risks': risks,
         'requirement_candidates': requirement_candidates,
         'modernization_plan': [
+            {
+                'priority': 'P0',
+                'action': 'Revisar divergência fonte/P-code antes de confiar no código-fonte VBA.',
+                'required': stomping['status'] != 'not_detected',
+            },
             {
                 'priority': 'P0',
                 'action': 'Revisar riscos críticos e segredos antes de qualquer modernização.',
