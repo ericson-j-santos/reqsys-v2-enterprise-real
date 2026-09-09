@@ -6,7 +6,9 @@ from io import BytesIO
 from pathlib import PurePosixPath
 from zipfile import BadZipFile, ZipFile
 
-from app.services.vba_semantic_analyzer import analyze_vba_semantics as analyze_vba_source
+from app.services.vba_semantic_analyzer import (
+    analyze_vba_semantics as analyze_vba_source,
+)
 
 OFFICE_CONTAINER_EXTENSIONS = {'.xlsm', '.xlsb', '.xlam', '.docm', '.dotm'}
 _EXPECTED_PROJECT_PATH = {
