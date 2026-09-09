@@ -100,11 +100,17 @@ def gerar_definicao(payload: dict[str, Any], evento: str) -> dict[str, Any]:
                 # outro valor (ex.: um id de canal aqui) falha com HTTP 400.
                 'poster': 'Flow bot',
                 'location': 'Channel',
-                'messageBody': json.dumps(card, ensure_ascii=False),
-                'recipient': {
-                    'groupId': "@parameters('TEAMS_TEAM_ID')",
-                    'channelId': "@parameters('TEAMS_CHANNEL_ID')",
-                },
+                # Objeto aninhado (messageBody/recipient como estava antes)
+                # e aceito e ecoado pela API de gerenciamento de fluxos, mas
+                # NAO e o que fica persistido de fato — o designer do Power
+                # Automate so reconhece parametros de objeto aninhado nessa
+                # notacao "caminho achatado com prefixo body/". Confirmado
+                # em DEV: com o formato aninhado, o campo Cartao Adaptavel
+                # aparecia vazio no designer e o grupo do trigger revertia
+                # sozinho ao salvar.
+                'body/messageBody': json.dumps(card, ensure_ascii=False),
+                'body/recipient/groupId': "@parameters('TEAMS_TEAM_ID')",
+                'body/recipient/channelId': "@parameters('TEAMS_CHANNEL_ID')",
             },
         },
         'runAfter': {},

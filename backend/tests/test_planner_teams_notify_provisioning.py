@@ -99,6 +99,17 @@ def test_definicao_usa_trigger_planner_permitido_e_nao_escreve_no_planner():
         assert acao['inputs']['host']['operationId'] == 'PostCardToConversation'
         assert acao['inputs']['parameters']['poster'] == 'Flow bot'
         assert acao['inputs']['parameters']['location'] == 'Channel'
+        # Formato "caminho achatado" (body/x/y), nao objeto aninhado: e o
+        # unico que o designer do Power Automate reconhece de verdade para
+        # esse parametro de objeto (recipient). A API de gerenciamento de
+        # fluxos aceita e ecoa um objeto aninhado, mas nao persiste — o
+        # designer mostra o campo vazio e o proximo "Salvar" reverte outros
+        # parametros do fluxo. Confirmado em DEV.
+        assert 'body/messageBody' in acao['inputs']['parameters']
+        assert 'body/recipient/groupId' in acao['inputs']['parameters']
+        assert 'body/recipient/channelId' in acao['inputs']['parameters']
+        assert 'recipient' not in acao['inputs']['parameters']
+        assert 'messageBody' not in acao['inputs']['parameters']
 
 
 def test_segmento_id_seguro_falha_fechado_para_vazio_e_invalido():
