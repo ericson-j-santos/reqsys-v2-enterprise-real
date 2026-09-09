@@ -6,6 +6,8 @@ import pytest
 from app.services import planner_teams_notify_provisioning as provisioning
 from app.services.planner_teams_notify_provisioning import (
     EVENTOS,
+    FILTRO_TAREFA_TESTE_ID,
+    PREFIXO_TAREFA_TESTE_IGNORADA,
     PROFILE,
     _segmento_id_seguro,
     despachar,
@@ -94,7 +96,13 @@ def test_definicao_usa_trigger_planner_permitido_e_nao_escreve_no_planner():
         assert 'UpdateTask' not in raw
         trigger = next(iter(definicao['triggers'].values()))
         assert trigger['recurrence'] == {'frequency': 'Minute', 'interval': 5}
-        acao = definicao['actions']['Notificar_Teams']
+
+        filtro = definicao['actions'][FILTRO_TAREFA_TESTE_ID]
+        assert filtro['type'] == 'If'
+        assert PREFIXO_TAREFA_TESTE_IGNORADA in filtro['expression']
+        assert 'not(startsWith(' in filtro['expression']
+
+        acao = filtro['actions']['Notificar_Teams']
         assert acao['type'] == 'OpenApiConnection'
         assert acao['inputs']['host']['operationId'] == 'PostCardToConversation'
         assert acao['inputs']['parameters']['poster'] == 'Flow bot'
