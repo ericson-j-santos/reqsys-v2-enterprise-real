@@ -6,7 +6,7 @@ from io import BytesIO
 from pathlib import PurePosixPath
 from zipfile import BadZipFile, ZipFile
 
-from app.services.vba_semantic_analyzer import analyze_vba_semantics
+from app.services.vba_semantic_analyzer import analyze_vba_semantics as analyze_vba_source
 
 OFFICE_CONTAINER_EXTENSIONS = {'.xlsm', '.xlsb', '.xlam', '.docm', '.dotm'}
 _EXPECTED_PROJECT_PATH = {
@@ -282,6 +282,25 @@ def _sum_summary(analyses: list[dict[str, object]], key: str) -> int:
     return total
 
 
+def _semantic_or_legacy(analysis: dict[str, object]) -> dict[str, object]:
+    semantic = analysis.get('semantic_analysis')
+    if isinstance(semantic, dict):
+        return semantic
+    return {
+        'status': 'NOT_AVAILABLE_FROM_LEGACY_ANALYZER',
+        'execution_performed': False,
+        'source_persisted': False,
+        'data_flow': {
+            'schema_version': '1.0.0',
+            'nodes': [],
+            'edges': [],
+            'sinks': [],
+            'summary': {'nodes': 0, 'edges': 0, 'sinks': 0, 'procedures_with_flow': 0},
+        },
+        'test_candidates': [],
+    }
+
+
 def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str, object]:
     extension = _extension(file_name)
     if extension not in OFFICE_CONTAINER_EXTENSIONS:
@@ -305,9 +324,9 @@ def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str,
     analyses: list[dict[str, object]] = []
 
     for module in modules:
-        analysis = analyze_vba_semantics(module['source'], file_name=module['name'])
+        analysis = analyze_vba_source(module['source'], file_name=module['name'])
         analyses.append(analysis)
-        semantic = analysis['semantic_analysis']
+        semantic = _semantic_or_legacy(analysis)
         analyzed_modules.append(
             {
                 'name': module['name'],
