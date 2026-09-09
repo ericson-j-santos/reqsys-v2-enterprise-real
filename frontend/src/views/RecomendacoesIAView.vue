@@ -445,7 +445,7 @@ onMounted(loadAll)
 
 .page-header h1 {
   font-size: 1.55rem;
-  margin: 0 0 4px;
+  margin: 0 0 var(--space-xs);
 }
 
 .page-header p {

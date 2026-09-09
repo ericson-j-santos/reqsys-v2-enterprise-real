@@ -159,6 +159,16 @@ jobs:
         working-directory: ${{ steps.detect.outputs.workdir }}
         run: npm run typecheck --if-present
 
+      - name: Validar nome acessivel de tooltips (v-tooltip sem aria-label)
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        run: npm run validate:tooltip-a11y --if-present
+
+      - name: Validar uso de design tokens (font-size/padding/margin sem px hardcoded)
+        if: steps.detect.outputs.enabled == 'true'
+        working-directory: ${{ steps.detect.outputs.workdir }}
+        run: npm run validate:design-token-usage --if-present
+
       - name: Testes unitarios frontend
         if: steps.detect.outputs.enabled == 'true'
         working-directory: ${{ steps.detect.outputs.workdir }}
