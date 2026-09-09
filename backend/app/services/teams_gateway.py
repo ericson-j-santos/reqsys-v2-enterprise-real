@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
+import os
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -267,12 +270,80 @@ def _payload_webhook(texto: str, content_type: str, metadata: dict[str, Any]) ->
     }
 
 
-async def _enviar_webhook(url: str, texto: str, content_type: str, metadata: dict[str, Any]) -> dict[str, Any]:
-    payload = _payload_webhook(texto, content_type, metadata)
+def _payload_power_automate_webhook(
+    texto: str,
+    content_type: str,
+    metadata: dict[str, Any],
+    *,
+    correlation_id: str,
+    recipient: str,
+) -> dict[str, Any]:
+    title = metadata.get('titulo') or metadata.get('title') or 'ReqSys Teams Gateway'
+    content = texto if content_type == 'text' else texto.replace('<br>', '\n')
+    card = _adaptive_card_de_metadata(metadata, content)
+    if card is None:
+        card = {
+            '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',
+            'type': 'AdaptiveCard',
+            'version': '1.2',
+            'body': [
+                {'type': 'TextBlock', 'size': 'Medium', 'weight': 'Bolder', 'text': title},
+                {'type': 'TextBlock', 'text': content, 'wrap': True},
+            ],
+        }
+
+    try:
+        provider_correlation = str(uuid.UUID(correlation_id))
+    except (ValueError, AttributeError, TypeError):
+        provider_correlation = str(uuid.uuid5(uuid.NAMESPACE_URL, f'reqsys:{correlation_id}'))
+
+    event_type = (
+        metadata.get('notification_type')
+        or metadata.get('event_type')
+        or metadata.get('evento_status')
+        or 'reqsys-notification'
+    )
+    return {
+        'to': recipient,
+        'title': str(title),
+        'content': content,
+        'signature': 'ReqSys',
+        'stampDate': datetime.now(timezone.utc).isoformat(),
+        'correlationId': provider_correlation,
+        'eventType': str(event_type),
+        'renderMode': 'adaptive-card',
+        'adaptiveCard': card,
+        'adaptiveCardJson': json.dumps(card, ensure_ascii=False, separators=(',', ':')),
+    }
+
+
+async def _enviar_webhook(
+    url: str,
+    texto: str,
+    content_type: str,
+    metadata: dict[str, Any],
+    *,
+    correlation_id: str,
+    power_automate_recipient: str | None = None,
+) -> dict[str, Any]:
+    if power_automate_recipient:
+        payload = _payload_power_automate_webhook(
+            texto,
+            content_type,
+            metadata,
+            correlation_id=correlation_id,
+            recipient=power_automate_recipient,
+        )
+    else:
+        payload = _payload_webhook(texto, content_type, metadata)
 
     async def _postar() -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(
+                url,
+                json=payload,
+                headers={'X-Correlation-ID': correlation_id},
+            )
             resp.raise_for_status()
             return {'status_code': resp.status_code}
 
@@ -594,7 +665,19 @@ async def _enviar_via_webhook(
         )
 
     try:
-        provider = await _enviar_webhook(url, request.texto, request.content_type, request.metadata)
+        # URLs explícitas continuam usando o contrato Incoming Webhook.
+        # A URL global governada aponta para o fluxo Power Automate validado em DEV.
+        power_automate_recipient = None
+        if not request.webhook_url:
+            power_automate_recipient = os.getenv('TEAMS_WEBHOOK_RECIPIENT', '').strip() or None
+        provider = await _enviar_webhook(
+            url,
+            request.texto,
+            request.content_type,
+            request.metadata,
+            correlation_id=correlation_id,
+            power_automate_recipient=power_automate_recipient,
+        )
         return _resultado(
             request,
             correlation_id,
