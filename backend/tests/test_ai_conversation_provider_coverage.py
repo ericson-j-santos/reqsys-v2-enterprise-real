@@ -75,7 +75,7 @@ def test_chamar_provider_cobre_adaptadores_suportados(provider, env, method_name
 def test_chamar_provider_rejeita_configuracao_ausente():
     conversa = _conversa_provider('claude')
 
-    with pytest.raises(AIProviderConfigurationError, match='não configurado'):
+    with pytest.raises(AIProviderConfigurationError, match='não resolvido pelo cofre/configuração'):
         _chamar_provider(
             conversa=conversa,
             prompt='prompt',
