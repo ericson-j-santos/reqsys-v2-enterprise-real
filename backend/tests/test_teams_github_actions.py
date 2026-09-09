@@ -4,7 +4,12 @@ import json
 
 import pytest
 
-from app.api.teams_github_actions import TeamsGithubActionsCardRequest, construir_cartao
+from app.api import teams_github_actions as api
+from app.api.teams_github_actions import (
+    TeamsGithubActionsCardRequest,
+    TeamsGithubActionsDispatchRequest,
+    construir_cartao,
+)
 from app.services import teams_github_actions as service
 
 
@@ -46,6 +51,52 @@ def _config(monkeypatch, *, enabled: bool = True) -> None:
     }
     monkeypatch.setattr(service, 'get_secret', lambda name, default='': values.get(name, default))
     monkeypatch.setattr(service.settings, 'github_pat', 'token-de-teste')
+
+
+def test_requests_normalizam_campos_textuais_antes_do_dispatch():
+    dispatch = TeamsGithubActionsDispatchRequest(ref='  feature/teste  ')
+    card = TeamsGithubActionsCardRequest(
+        titulo='  Falha no CI  ',
+        descricao='  Escolha a verificacao.  ',
+        ref='  main  ',
+        github_url='  https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions  ',
+    )
+
+    assert dispatch.ref == 'feature/teste'
+    assert card.titulo == 'Falha no CI'
+    assert card.descricao == 'Escolha a verificacao.'
+    assert card.ref == 'main'
+    assert card.github_url == 'https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions'
+
+
+def test_status_api_retorna_envelope_sem_expor_token(monkeypatch):
+    monkeypatch.setattr(
+        api,
+        'status_teams_github_actions',
+        lambda: {'enabled': True, 'repository': 'ericson-j-santos/reqsys-v2-enterprise-real'},
+    )
+
+    response = api.teams_github_actions_status()
+
+    assert response['success'] is True
+    assert response['data'] == {
+        'enabled': True,
+        'repository': 'ericson-j-santos/reqsys-v2-enterprise-real',
+    }
+    assert 'token' not in json.dumps(response).lower()
+
+
+def test_card_api_preserva_correlation_id_e_ref_normalizada():
+    response = api.teams_github_actions_card(
+        TeamsGithubActionsCardRequest(ref='  feature/teste  '),
+        x_correlation_id='  corr-card-123  ',
+    )
+
+    assert response['success'] is True
+    assert response['meta']['correlation_id'] == 'corr-card-123'
+    card = response['data']['adaptive_card']
+    assert card['body'][2]['facts'][0] == {'title': 'Ref', 'value': 'feature/teste'}
+    assert card['body'][-1]['actions'][0]['data']['correlation_id'] == 'corr-card-123'
 
 
 def test_cartao_expoe_somente_acoes_governadas_do_flow_bot():
