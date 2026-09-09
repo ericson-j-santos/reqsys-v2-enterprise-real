@@ -1,0 +1,86 @@
+name: Validar contrato real do webhook Teams governado
+
+on:
+  push:
+    branches:
+      - ops/teams-webhook-bootstrap-msal
+    paths:
+      - ".github/workflows/teams-webhook-contract-probe-dev.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  probe:
+    name: Validar contrato ReqSys -> Power Automate -> Teams
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+    timeout-minutes: 5
+    env:
+      TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
+    steps:
+      - name: Checkout main publicada
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Validar pré-requisitos sem expor segredos
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${TEAMS_WEBHOOK_URL:-}" || { echo "BLOQUEIO: TEAMS_WEBHOOK_URL ausente." >&2; exit 1; }
+          test -n "${TEAMS_WEBHOOK_RECIPIENT:-}" || { echo "BLOQUEIO: TEAMS_WEBHOOK_RECIPIENT ausente." >&2; exit 1; }
+          echo "::add-mask::$TEAMS_WEBHOOK_URL"
+          echo "::add-mask::$TEAMS_WEBHOOK_RECIPIENT"
+          echo "Pré-requisitos presentes."
+
+      - name: Validar implementação do cliente
+        run: |
+          python -m py_compile tools/geradores/teams_graph_gateway_autocontido.py
+          python tools/geradores/teams_graph_gateway_autocontido.py self-test
+
+      - name: Enviar canário pelo contrato ReqSys existente
+        id: send
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/teams-contract-probe.json"
+          python tools/geradores/teams_graph_gateway_autocontido.py send-webhook \
+            --title "ReqSys — diagnóstico controlado do gateway de coleta" \
+            --message "[REQSYS-DIAGNOSTICO-DEV] Validação do contrato Power Automate usado pelo gateway. Não representa demanda funcional." \
+            --event-type "coleta-requisito-diagnostico" > "$OUT"
+          python - <<'PY'
+          import json, os
+          path = os.path.join(os.environ['RUNNER_TEMP'], 'teams-contract-probe.json')
+          data = json.load(open(path, encoding='utf-8'))
+          safe = {
+              'success': bool(data.get('success')),
+              'route': data.get('route'),
+              'status_code': data.get('status_code'),
+              'correlation_id': data.get('correlation_id'),
+          }
+          print(json.dumps(safe, ensure_ascii=False))
+          if not safe['success']:
+              raise SystemExit('BLOQUEIO: contrato ReqSys existente não confirmou entrega.')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+              fh.write(f"status_code={safe['status_code']}\n")
+              fh.write(f"correlation_id={safe['correlation_id']}\n")
+          with open(os.path.join(os.environ['RUNNER_TEMP'], 'teams-contract-probe-evidence.json'), 'w', encoding='utf-8') as fh:
+              json.dump(safe, fh, ensure_ascii=False, indent=2)
+          PY
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-webhook-contract-probe-dev-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/teams-contract-probe-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
