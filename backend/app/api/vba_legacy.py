@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.security import require_admin
-from app.services.vba_legacy_analyzer import analyze_vba_source
+from app.services.vba_semantic_analyzer import analyze_vba_semantics
 from app.services.vba_office_container import (
     OFFICE_CONTAINER_EXTENSIONS,
     OfficeVbaContainerError,
@@ -99,6 +99,8 @@ def vba_analyzer_readiness(user: dict = Depends(require_admin)):
             'ready': True,
             'analysis_type': 'static_only',
             'execution_performed': False,
+            'semantic_data_flow': True,
+            'test_candidate_generation': True,
             'supported_source_extensions': sorted(SUPPORTED_EXTENSIONS),
             'supported_office_extensions': sorted(OFFICE_CONTAINER_EXTENSIONS),
             'office_container_ready': container['ready'],
@@ -136,7 +138,7 @@ async def analyze_vba_upload(
             source = _decode_source(content)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail={'code': str(exc)}) from None
-        analysis = analyze_vba_source(source, file_name=file_name)
+        analysis = analyze_vba_semantics(source, file_name=file_name)
 
     return ok(
         analysis,
