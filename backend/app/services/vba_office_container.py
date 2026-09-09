@@ -6,7 +6,9 @@ from io import BytesIO
 from pathlib import PurePosixPath
 from zipfile import BadZipFile, ZipFile
 
-from app.services.vba_legacy_analyzer import analyze_vba_source
+from app.services.vba_semantic_analyzer import (
+    analyze_vba_semantics as analyze_vba_source,
+)
 
 OFFICE_CONTAINER_EXTENSIONS = {'.xlsm', '.xlsb', '.xlam', '.docm', '.dotm'}
 _EXPECTED_PROJECT_PATH = {
@@ -73,6 +75,7 @@ def office_container_readiness() -> dict[str, object]:
             'mode': 'vba_project_only',
             'office_execution': False,
             'pcode_integrity_check': False,
+            'semantic_data_flow': True,
         }
     return {
         'ready': True,
@@ -82,6 +85,7 @@ def office_container_readiness() -> dict[str, object]:
         'office_execution': False,
         'pcode_integrity_check': True,
         'pcode_engine': 'pcodedmp',
+        'semantic_data_flow': True,
     }
 
 
@@ -280,6 +284,25 @@ def _sum_summary(analyses: list[dict[str, object]], key: str) -> int:
     return total
 
 
+def _semantic_or_legacy(analysis: dict[str, object]) -> dict[str, object]:
+    semantic = analysis.get('semantic_analysis')
+    if isinstance(semantic, dict):
+        return semantic
+    return {
+        'status': 'NOT_AVAILABLE_FROM_LEGACY_ANALYZER',
+        'execution_performed': False,
+        'source_persisted': False,
+        'data_flow': {
+            'schema_version': '1.0.0',
+            'nodes': [],
+            'edges': [],
+            'sinks': [],
+            'summary': {'nodes': 0, 'edges': 0, 'sinks': 0, 'procedures_with_flow': 0},
+        },
+        'test_candidates': [],
+    }
+
+
 def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str, object]:
     extension = _extension(file_name)
     if extension not in OFFICE_CONTAINER_EXTENSIONS:
@@ -299,11 +322,13 @@ def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str,
     analyzed_modules: list[dict[str, object]] = []
     risks: list[dict[str, object]] = []
     requirement_candidates: list[dict[str, object]] = []
+    test_candidates: list[dict[str, object]] = []
     analyses: list[dict[str, object]] = []
 
     for module in modules:
         analysis = analyze_vba_source(module['source'], file_name=module['name'])
         analyses.append(analysis)
+        semantic = _semantic_or_legacy(analysis)
         analyzed_modules.append(
             {
                 'name': module['name'],
@@ -314,12 +339,15 @@ def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str,
                 'procedures': analysis['procedures'],
                 'dependencies': analysis['dependencies'],
                 'business_rules': analysis['business_rules'],
+                'semantic_analysis': semantic,
             }
         )
         for risk in analysis['risks']:
             risks.append({'module': module['name'], **risk})
         for candidate in analysis['requirement_candidates']:
             requirement_candidates.append({'module': module['name'], **candidate})
+        for candidate in semantic['test_candidates']:
+            test_candidates.append({'module': module['name'], **candidate})
 
     if stomping['status'] == 'detected':
         risks.append(
@@ -357,7 +385,7 @@ def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str,
         integrity_status = 'INDETERMINATE'
 
     return {
-        'schema_version': '1.1.0',
+        'schema_version': '1.2.0',
         'analyzer': 'reqsys-vba-office-container-static',
         'analysis_type': 'static_only',
         'execution_performed': False,
@@ -383,6 +411,10 @@ def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str,
             'procedures': _sum_summary(analyses, 'procedures'),
             'dependencies': _sum_summary(analyses, 'dependencies'),
             'business_rules': _sum_summary(analyses, 'business_rules'),
+            'data_flow_nodes': _sum_summary(analyses, 'data_flow_nodes'),
+            'data_flow_edges': _sum_summary(analyses, 'data_flow_edges'),
+            'data_flow_sinks': _sum_summary(analyses, 'data_flow_sinks'),
+            'test_candidates': len(test_candidates),
             'risks': len(risks),
             'risks_by_severity': risks_by_severity,
             'requirement_candidates': len(requirement_candidates),
@@ -391,6 +423,7 @@ def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str,
         'modules': analyzed_modules,
         'risks': risks,
         'requirement_candidates': requirement_candidates,
+        'test_candidates': test_candidates,
         'modernization_plan': [
             {
                 'priority': 'P0',
@@ -404,8 +437,8 @@ def analyze_office_vba_container(content: bytes, *, file_name: str) -> dict[str,
             },
             {
                 'priority': 'P1',
-                'action': 'Validar regras e candidatos a requisito com responsável de negócio.',
-                'required': bool(requirement_candidates),
+                'action': 'Validar regras, fluxo de dados e candidatos a requisito/teste com responsável de negócio.',
+                'required': bool(requirement_candidates or test_candidates),
             },
             {
                 'priority': 'P2',
