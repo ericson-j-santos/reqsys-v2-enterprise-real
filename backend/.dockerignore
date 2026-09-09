@@ -1,0 +1,38 @@
+# Contexto de build do Fly (backend/Dockerfile.fly usa `COPY . .`).
+# Isto e uma denylist: esquecer uma entrada aqui no maximo deixa algo extra na
+# imagem, nunca quebra o boot — ao contrario da allowlist antiga do
+# Dockerfile.fly, onde esquecer uma entrada derrubava o runtime.
+
+# Configuracao de build/infra, nao roda dentro do container
+Dockerfile
+Dockerfile.fly
+docker-compose*.yml
+fly*.toml
+
+# Dev tooling, testes e auditoria — nao usados pelo runtime em producao
+tests/
+ocr_tests/
+scripts_audit/
+alembic/
+alembic.ini
+migrations/
+pyproject.toml
+ruff.toml
+requirements-audit.txt
+requirements-rag.txt
+
+# Segredos locais: nunca devem ser embarcados numa imagem (ADR-002/ADR-005)
+.env
+.env.*
+*.pem
+*.key
+
+# Caches e artefatos de build/teste
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.git

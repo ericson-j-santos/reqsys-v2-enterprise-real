@@ -45,6 +45,11 @@ def _copied_targets() -> set[str]:
     return targets
 
 
+def _copia_tudo() -> bool:
+    """True se o Dockerfile.fly usa `COPY . .` (todo o contexto de build)."""
+    return "." in _copied_targets()
+
+
 def _local_sibling_candidates() -> dict[str, str]:
     """Mapeia nome importavel (sem extensao) -> entrada real em backend/."""
     candidates: dict[str, str] = {}
@@ -83,7 +88,16 @@ def test_dockerfile_fly_copia_todo_modulo_local_importado_pelo_app() -> None:
     backend/ e importado por backend/app, mas backend/Dockerfile.fly nao e
     atualizado para copia-lo, causando ModuleNotFoundError em crash loop no
     Fly (dev/staging/prod usam o mesmo Dockerfile.fly).
+
+    Desde a correcao de 2026-09-09 o Dockerfile.fly usa `COPY . .` (com
+    .dockerignore como denylist) em vez de uma allowlist por modulo, o que ja
+    elimina essa classe de bug na raiz. Este teste continua existindo como
+    guarda de regressao: se alguem voltar para uma allowlist explicita no
+    futuro, ele volta a checar modulo por modulo.
     """
+    if _copia_tudo():
+        return
+
     candidates = _local_sibling_candidates()
     imported = _imported_top_level_names(set(candidates))
     copied = _copied_targets()
@@ -97,5 +111,7 @@ def test_dockerfile_fly_copia_todo_modulo_local_importado_pelo_app() -> None:
     assert not missing, (
         "backend/Dockerfile.fly nao copia modulo(s) local(is) importado(s) por "
         f"backend/app: {missing}. Adicione "
-        "`COPY <entrada-em-backend/> /app/<entrada-em-backend/>` no Dockerfile.fly."
+        "`COPY <entrada-em-backend/> /app/<entrada-em-backend/>` no Dockerfile.fly, "
+        "ou volte a usar `COPY . .` (com .dockerignore) para eliminar a classe "
+        "inteira de bug em vez de corrigir modulo a modulo."
     )
