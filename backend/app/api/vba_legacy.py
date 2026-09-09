@@ -9,13 +9,13 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.security import require_admin
-from app.services.vba_semantic_analyzer import analyze_vba_semantics
 from app.services.vba_office_container import (
     OFFICE_CONTAINER_EXTENSIONS,
     OfficeVbaContainerError,
     analyze_office_vba_container,
     office_container_readiness,
 )
+from app.services.vba_semantic_analyzer import analyze_vba_semantics
 
 SUPPORTED_EXTENSIONS = {'.bas', '.cls', '.frm', '.vba', '.txt'}
 DEFAULT_MAX_UPLOAD_BYTES = 2 * 1024 * 1024
