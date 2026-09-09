@@ -1,6 +1,7 @@
 """Testes do Teams Messaging Gateway."""
 
 import asyncio
+import uuid
 from unittest.mock import AsyncMock, patch
 
 from app.schemas.teams_gateway import TeamsGatewayMessageRequest
@@ -132,3 +133,57 @@ def test_enviar_gateway_dry_run_nao_chama_provider(mock_webhook):
     assert resultado['canal_usado'] == 'webhook'
     assert resultado['motivo'] == 'dry_run: mensagem nao enviada'
     mock_webhook.assert_not_awaited()
+
+
+@patch('app.services.teams_gateway._enviar_webhook', new_callable=AsyncMock)
+def test_webhook_global_usa_contrato_power_automate_com_destinatario(mock_webhook, monkeypatch):
+    mock_webhook.return_value = {'status_code': 200}
+    monkeypatch.setattr(svc.settings, 'teams_notifications_webhook_url', 'https://example.invalid/power-automate')
+    monkeypatch.setenv('TEAMS_WEBHOOK_RECIPIENT', 'destino@example.invalid')
+    payload = TeamsGatewayMessageRequest(
+        destino_tipo='canal',
+        modo='webhook',
+        texto='Evento governado',
+        metadata={'titulo': 'ReqSys', 'notification_type': 'coleta_requisito_gerado'},
+    )
+    resultado = _run(svc.enviar_mensagem_gateway(payload, correlation_id='corr-power-automate'))
+    assert resultado['entregue'] is True
+    kwargs = mock_webhook.await_args.kwargs
+    assert kwargs['correlation_id'] == 'corr-power-automate'
+    assert kwargs['power_automate_recipient'] == 'destino@example.invalid'
+
+
+@patch('app.services.teams_gateway._enviar_webhook', new_callable=AsyncMock)
+def test_webhook_explicito_preserva_contrato_incoming_webhook(mock_webhook, monkeypatch):
+    mock_webhook.return_value = {'status_code': 202}
+    monkeypatch.setenv('TEAMS_WEBHOOK_RECIPIENT', 'destino@example.invalid')
+    payload = TeamsGatewayMessageRequest(
+        destino_tipo='canal',
+        modo='webhook',
+        webhook_url='https://example.invalid/incoming-webhook',
+        texto='Evento explícito',
+    )
+    resultado = _run(svc.enviar_mensagem_gateway(payload, correlation_id='corr-explicito'))
+    assert resultado['entregue'] is True
+    kwargs = mock_webhook.await_args.kwargs
+    assert kwargs['correlation_id'] == 'corr-explicito'
+    assert kwargs['power_automate_recipient'] is None
+
+
+def test_payload_power_automate_respeita_contrato_validado():
+    payload = svc._payload_power_automate_webhook(
+        'Conteúdo',
+        'text',
+        {'titulo': 'Título', 'notification_type': 'coleta_requisito_refinamento'},
+        correlation_id='correlacao-nao-uuid',
+        recipient='destino@example.invalid',
+    )
+    assert payload['to'] == 'destino@example.invalid'
+    assert payload['title'] == 'Título'
+    assert payload['content'] == 'Conteúdo'
+    assert payload['signature'] == 'ReqSys'
+    assert payload['eventType'] == 'coleta_requisito_refinamento'
+    assert payload['renderMode'] == 'adaptive-card'
+    assert payload['adaptiveCard']['type'] == 'AdaptiveCard'
+    assert payload['adaptiveCardJson'].startswith('{')
+    assert str(uuid.UUID(payload['correlationId'])) == payload['correlationId']
