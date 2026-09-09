@@ -20,14 +20,17 @@ from app.services.ai_corporate_policy import (
     policy_mode,
 )
 from app.services.ai_history_protection import (
-    AIUsageBudgetExceededError,
     AIScopeViolationError,
+    AIUsageBudgetExceededError,
     assert_budget,
     assert_scope,
     estimate_tokens,
     record_usage,
 )
-from app.services.ai_provider_config import AIProviderRuntimeConfigError, resolve_provider_config
+from app.services.ai_provider_config import (
+    AIProviderRuntimeConfigError,
+    resolve_provider_config,
+)
 from app.services.llm_provider import LLMGateway
 from app.services.teams_notifications import criar_item_fila
 

@@ -9,7 +9,10 @@ from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.service_tokens import ServiceAuthContext, require_admin_or_service_token
 from app.db import get_db
-from app.schemas.ai_conversation import AIConversationCreateRequest, AIConversationReplyRequest
+from app.schemas.ai_conversation import (
+    AIConversationCreateRequest,
+    AIConversationReplyRequest,
+)
 from app.services.ai_conversation import (
     AIConversationBudgetError,
     AIConversationConflictError,
@@ -26,11 +29,20 @@ from app.services.ai_conversation import (
     status_provedores,
 )
 from app.services.ai_conversation_readiness import avaliar_prontidao_ai_teams
-from app.services.ai_conversation_teams_bot import AITeamsBotDeliveryError, enviar_cartao_conversa_bot
+from app.services.ai_conversation_teams_bot import (
+    AITeamsBotDeliveryError,
+    enviar_cartao_conversa_bot,
+)
 from app.services.ai_corporate_policy import policy_mode
-from app.services.ai_history_protection import delete_conversation, purge_expired_conversations
+from app.services.ai_history_protection import (
+    delete_conversation,
+    purge_expired_conversations,
+)
 from app.services.auditoria import registrar_evento
-from app.services.teams_gateway import salvar_conversa_referencia_bot, validar_jwt_bot_framework
+from app.services.teams_gateway import (
+    salvar_conversa_referencia_bot,
+    validar_jwt_bot_framework,
+)
 from app.services.teams_notifications import executar_item_fila, serializar_item
 
 logger = logging.getLogger('reqsys.ai_conversation_api')
