@@ -37,9 +37,18 @@ fluxo; a operação em si é conector nativo, não fica descontinuada junto com
 os conectores clássicos "Incoming Webhook"). Confirmado com uma chamada real
 via essa mesma operação: a mensagem chegou no canal de verdade.
 
-Os IDs do Team/canal (`recipient.groupId`/`recipient.channelId`) são
-resolvidos e passados pelo instalador — não fazem parte do schema dinâmico
-da ação nesse ponto; só `poster` e `location` são seletores fixos.
+Os IDs do Team/canal são resolvidos e passados pelo instalador — não fazem
+parte do schema dinâmico da ação nesse ponto; só `poster` e `location` são
+seletores fixos.
+
+**Formato dos parâmetros na definição do fluxo**: `body/messageBody`,
+`body/recipient/groupId`, `body/recipient/channelId` — caminho achatado com
+prefixo `body/`, não um objeto `recipient: {...}` aninhado. A API de
+gerenciamento de fluxos aceita e ecoa a versão aninhada de volta na mesma
+resposta do `PATCH`, mas **não é isso que fica persistido** — uma leitura
+logo depois mostra o parâmetro revertido, e o designer do Power Automate
+mostra o campo "Cartão Adaptável" vazio. Confirmado em DEV: só o formato
+achatado sobrevive a um "Salvar" real no designer.
 
 ## Endpoints
 
