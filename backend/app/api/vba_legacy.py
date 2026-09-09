@@ -9,13 +9,16 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.security import require_admin
+from app.services.vba_call_graph import (
+    analyze_vba_with_call_graph,
+    attach_project_call_graph,
+)
 from app.services.vba_office_container import (
     OFFICE_CONTAINER_EXTENSIONS,
     OfficeVbaContainerError,
     analyze_office_vba_container,
     office_container_readiness,
 )
-from app.services.vba_semantic_analyzer import analyze_vba_semantics
 
 SUPPORTED_EXTENSIONS = {'.bas', '.cls', '.frm', '.vba', '.txt'}
 DEFAULT_MAX_UPLOAD_BYTES = 2 * 1024 * 1024
@@ -71,20 +74,30 @@ def _validate_file(file_name: str, content: bytes) -> str:
             status_code=422,
             detail={
                 'code': 'VBA_INPUT_EXTENSION_UNSUPPORTED',
-                'supported_extensions': sorted(SUPPORTED_EXTENSIONS | OFFICE_CONTAINER_EXTENSIONS),
+                'supported_extensions': sorted(
+                    SUPPORTED_EXTENSIONS | OFFICE_CONTAINER_EXTENSIONS
+                ),
             },
         )
     if not content:
         raise HTTPException(status_code=422, detail={'code': 'VBA_INPUT_EMPTY'})
 
-    max_bytes = _max_container_bytes() if extension in OFFICE_CONTAINER_EXTENSIONS else _max_upload_bytes()
+    max_bytes = (
+        _max_container_bytes()
+        if extension in OFFICE_CONTAINER_EXTENSIONS
+        else _max_upload_bytes()
+    )
     if len(content) > max_bytes:
         raise HTTPException(
             status_code=413,
             detail={
                 'code': 'VBA_INPUT_TOO_LARGE',
                 'max_bytes': max_bytes,
-                'input_kind': 'office_container' if extension in OFFICE_CONTAINER_EXTENSIONS else 'source',
+                'input_kind': (
+                    'office_container'
+                    if extension in OFFICE_CONTAINER_EXTENSIONS
+                    else 'source'
+                ),
             },
         )
     return extension
@@ -101,6 +114,9 @@ def vba_analyzer_readiness(user: dict = Depends(require_admin)):
             'execution_performed': False,
             'semantic_data_flow': True,
             'test_candidate_generation': True,
+            'interprocedural_call_graph': True,
+            'dynamic_call_detection': True,
+            'project_call_resolution': True,
             'supported_source_extensions': sorted(SUPPORTED_EXTENSIONS),
             'supported_office_extensions': sorted(OFFICE_CONTAINER_EXTENSIONS),
             'office_container_ready': container['ready'],
@@ -127,7 +143,9 @@ async def analyze_vba_upload(
 
     if extension in OFFICE_CONTAINER_EXTENSIONS:
         try:
-            analysis = analyze_office_vba_container(content, file_name=file_name)
+            analysis = attach_project_call_graph(
+                analyze_office_vba_container(content, file_name=file_name)
+            )
         except OfficeVbaContainerError as exc:
             raise HTTPException(
                 status_code=exc.status_code,
@@ -138,7 +156,7 @@ async def analyze_vba_upload(
             source = _decode_source(content)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail={'code': str(exc)}) from None
-        analysis = analyze_vba_semantics(source, file_name=file_name)
+        analysis = analyze_vba_with_call_graph(source, file_name=file_name)
 
     return ok(
         analysis,
