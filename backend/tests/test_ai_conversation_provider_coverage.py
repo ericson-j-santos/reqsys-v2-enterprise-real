@@ -8,6 +8,7 @@ from app.services.ai_conversation import (
     AIProviderConfigurationError,
     AIProviderExecutionError,
     _chamar_provider,
+    _classification_lock,
     _env_int,
     criar_conversa,
     executar_turno,
@@ -18,6 +19,23 @@ from app.services.ai_conversation import (
 class OpenAIGateway:
     def gerar_openai(self, **kwargs):
         return 'resposta serializada'
+
+
+def _conversa_provider(provider: str, *, conversation_id: str = 'conv-provider') -> SimpleNamespace:
+    data_classification = 'internal'
+    return SimpleNamespace(
+        id=conversation_id,
+        provider=provider,
+        model='modelo-teste',
+        requested_provider=provider,
+        authorized_provider=provider,
+        data_classification=data_classification,
+        classification_lock_sha256=_classification_lock(conversation_id, data_classification),
+        policy_mode='off',
+        policy_decision='allowed',
+        policy_reason='legacy_policy_mode_off',
+        policy_correlation_id='corr-provider',
+    )
 
 
 def test_env_int_aplica_default_invalido_e_limite_minimo():
@@ -38,7 +56,7 @@ def test_env_int_aplica_default_invalido_e_limite_minimo():
     ],
 )
 def test_chamar_provider_cobre_adaptadores_suportados(provider, env, method_name):
-    conversa = SimpleNamespace(provider=provider, model='modelo-teste')
+    conversa = _conversa_provider(provider)
     gateway = MagicMock()
     getattr(gateway, method_name).return_value = '  resposta válida  '
 
@@ -47,6 +65,7 @@ def test_chamar_provider_cobre_adaptadores_suportados(provider, env, method_name
         prompt='prompt',
         gateway=gateway,
         env=env,
+        correlation_id='corr-provider',
     )
 
     assert resposta == 'resposta válida'
@@ -54,7 +73,7 @@ def test_chamar_provider_cobre_adaptadores_suportados(provider, env, method_name
 
 
 def test_chamar_provider_rejeita_configuracao_ausente():
-    conversa = SimpleNamespace(provider='claude', model='modelo-teste')
+    conversa = _conversa_provider('claude')
 
     with pytest.raises(AIProviderConfigurationError, match='não configurado'):
         _chamar_provider(
@@ -62,11 +81,12 @@ def test_chamar_provider_rejeita_configuracao_ausente():
             prompt='prompt',
             gateway=MagicMock(),
             env={},
+            correlation_id='corr-provider',
         )
 
 
 def test_chamar_provider_traduz_erro_do_sdk_sem_vazar_detalhe():
-    conversa = SimpleNamespace(provider='openai', model='modelo-teste')
+    conversa = _conversa_provider('openai')
     gateway = MagicMock()
     gateway.gerar_openai.side_effect = RuntimeError('segredo interno do SDK')
 
@@ -76,6 +96,7 @@ def test_chamar_provider_traduz_erro_do_sdk_sem_vazar_detalhe():
             prompt='prompt',
             gateway=gateway,
             env={'AI_CONVERSATION_OPENAI_API_KEY': 'key'},
+            correlation_id='corr-provider',
         )
 
     assert 'RuntimeError' in str(exc_info.value)
@@ -83,7 +104,7 @@ def test_chamar_provider_traduz_erro_do_sdk_sem_vazar_detalhe():
 
 
 def test_chamar_provider_rejeita_resposta_vazia():
-    conversa = SimpleNamespace(provider='openai', model='modelo-teste')
+    conversa = _conversa_provider('openai')
     gateway = MagicMock()
     gateway.gerar_openai.return_value = '   '
 
@@ -93,6 +114,7 @@ def test_chamar_provider_rejeita_resposta_vazia():
             prompt='prompt',
             gateway=gateway,
             env={'AI_CONVERSATION_OPENAI_API_KEY': 'key'},
+            correlation_id='corr-provider',
         )
 
 
