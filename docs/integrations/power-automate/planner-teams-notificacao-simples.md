@@ -50,6 +50,16 @@ logo depois mostra o parâmetro revertido, e o designer do Power Automate
 mostra o campo "Cartão Adaptável" vazio. Confirmado em DEV: só o formato
 achatado sobrevive a um "Salvar" real no designer.
 
+## Filtro de tarefas de teste automatizado
+
+Suítes de E2E recorrentes (fora do ReqSys) criam tarefas no plano `WSJF DEV`
+com o prefixo `REQSYS-E2E-` para testar a sincronização Planner→Excel. Sem
+filtro, cada rodada delas dispararia uma notificação real no Teams —
+confirmado: uma dessas tarefas notificou sozinha durante os testes deste
+fluxo. A ação `Notificar_Teams` fica dentro de uma condição
+(`Ignorar_tarefas_de_teste_automatizado`) que bloqueia qualquer título
+começando com esse prefixo (`startsWith`, sem diferenciar maiúsculas).
+
 ## Endpoints
 
 ### Contrato

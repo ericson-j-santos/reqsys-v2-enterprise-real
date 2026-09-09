@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Any
+from typing import Any, Iterator
 
 import httpx
 
@@ -12,6 +12,13 @@ SCHEMA = 'https://schema.management.azure.com/providers/Microsoft.Logic/schemas/
 PLANNER_API = '/providers/Microsoft.PowerApps/apis/shared_planner'
 TEAMS_API = '/providers/Microsoft.PowerApps/apis/shared_teams'
 TEAMS_POST_CARD_OPERATION = 'PostCardToConversation'
+FILTRO_TAREFA_TESTE_ID = 'Ignorar_tarefas_de_teste_automatizado'
+# Suites de E2E recorrentes (fora do ReqSys) criam tarefas nesse plano com
+# esse prefixo para testar a propria sincronizacao Planner->Excel. Sem esse
+# filtro, cada rodada delas dispara uma notificacao real no canal do Teams —
+# confirmado em DEV: uma dessas tarefas ja notificou sozinha durante os
+# testes deste fluxo, sem nenhuma acao humana.
+PREFIXO_TAREFA_TESTE_IGNORADA = 'REQSYS-E2E-'
 
 EVENTOS = {
     'criada': {
@@ -115,6 +122,14 @@ def gerar_definicao(payload: dict[str, Any], evento: str) -> dict[str, Any]:
         },
         'runAfter': {},
     }
+    filtro_teste = {
+        'type': 'If',
+        # startsWith() do Logic Apps ja e case-insensitive. Tarefas cujo
+        # titulo comeca com o prefixo de teste automatizado nao notificam.
+        'expression': f"@not(startsWith(triggerBody()?['title'], '{PREFIXO_TAREFA_TESTE_IGNORADA}'))",
+        'actions': {'Notificar_Teams': notificar_teams},
+        'runAfter': {},
+    }
     return {
         '$schema': SCHEMA,
         'contentVersion': '1.0.0.0',
@@ -127,8 +142,19 @@ def gerar_definicao(payload: dict[str, Any], evento: str) -> dict[str, Any]:
             'TEAMS_CHANNEL_ID': {'defaultValue': payload['teams_channel_id'], 'type': 'String'},
         },
         'triggers': {config['trigger_name']: trigger},
-        'actions': {'Notificar_Teams': notificar_teams},
+        'actions': {FILTRO_TAREFA_TESTE_ID: filtro_teste},
     }
+
+
+def _walk_actions(actions: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
+    for name, action in actions.items():
+        yield name, action
+        nested = action.get('actions')
+        if isinstance(nested, dict):
+            yield from _walk_actions(nested)
+        else_actions = action.get('else', {}).get('actions')
+        if isinstance(else_actions, dict):
+            yield from _walk_actions(else_actions)
 
 
 def validar_definicao(definition: dict[str, Any]) -> list[str]:
@@ -143,11 +169,11 @@ def validar_definicao(definition: dict[str, Any]) -> list[str]:
         errors.append('trigger_conector_nao_permitido')
     if trigger_host.get('operationId') not in {e['operation_id'] for e in EVENTOS.values()}:
         errors.append('trigger_operacao_nao_permitida')
-    actions = definition.get('actions', {})
-    if 'Notificar_Teams' not in actions:
+    todas_acoes = dict(_walk_actions(definition.get('actions', {})))
+    if 'Notificar_Teams' not in todas_acoes:
         errors.append('acao_notificar_teams_ausente')
     else:
-        action_host = actions['Notificar_Teams'].get('inputs', {}).get('host', {})
+        action_host = todas_acoes['Notificar_Teams'].get('inputs', {}).get('host', {})
         if action_host.get('apiId') != TEAMS_API or action_host.get('operationId') != TEAMS_POST_CARD_OPERATION:
             errors.append('acao_notificar_teams_conector_invalido')
     raw = json.dumps(definition, ensure_ascii=False)
