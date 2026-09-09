@@ -17,8 +17,10 @@ def _office_zip(project: bytes = b'fake-vba-project', path: str = 'xl/vbaProject
 
 
 class FakeParser:
-    def __init__(self, modules):
+    def __init__(self, modules, *, stomping=False, stomping_error=None):
         self.modules = modules
+        self.stomping = stomping
+        self.stomping_error = stomping_error
         self.closed = False
 
     def detect_vba_macros(self):
@@ -26,6 +28,11 @@ class FakeParser:
 
     def extract_macros(self):
         return iter(self.modules)
+
+    def detect_vba_stomping(self):
+        if self.stomping_error is not None:
+            raise self.stomping_error
+        return self.stomping
 
     def close(self):
         self.closed = True
@@ -56,9 +63,66 @@ def test_xlsm_extrai_modulos_sem_executar_office(monkeypatch):
     assert resultado['summary']['modules'] == 1
     assert resultado['summary']['business_rules'] == 1
     assert resultado['summary']['requirement_candidates'] == 1
+    assert resultado['summary']['vba_stomping_status'] == 'not_detected'
+    assert resultado['integrity']['status'] == 'NO_INDICATION'
+    assert resultado['integrity']['source_vs_pcode_checked'] is True
     assert resultado['modules'][0]['name'] == 'modPedidos.bas'
     assert 'source' not in resultado['modules'][0]
     assert parser.closed is True
+
+
+def test_detecta_vba_stomping_e_exige_revisao(monkeypatch):
+    parser = FakeParser([_module()], stomping=True)
+    monkeypatch.setattr(container, '_parser_factory', lambda file_name, data: parser)
+
+    resultado = analyze_office_vba_container(_office_zip(), file_name='stomped.xlsm')
+
+    assert resultado['integrity']['status'] == 'REVIEW_REQUIRED'
+    assert resultado['integrity']['vba_stomping']['detected'] is True
+    assert resultado['summary']['vba_stomping_status'] == 'detected'
+    assert resultado['summary']['risks_by_severity']['high'] == 1
+    assert any(risk['code'] == 'VBA_STOMPING_DETECTED' for risk in resultado['risks'])
+    assert resultado['modernization_plan'][0]['required'] is True
+
+
+def test_falha_na_comparacao_pcode_fica_inconclusiva_sem_vazar_erro(monkeypatch):
+    parser = FakeParser([_module()], stomping_error=RuntimeError('segredo do parser'))
+    monkeypatch.setattr(container, '_parser_factory', lambda file_name, data: parser)
+
+    resultado = analyze_office_vba_container(_office_zip(), file_name='inconclusivo.xlsm')
+
+    stomping = resultado['integrity']['vba_stomping']
+    assert resultado['integrity']['status'] == 'INDETERMINATE'
+    assert resultado['integrity']['source_vs_pcode_checked'] is False
+    assert stomping['status'] == 'indeterminate'
+    assert stomping['detected'] is None
+    assert stomping['parser_error_type'] == 'RuntimeError'
+    assert 'segredo do parser' not in str(stomping)
+    assert any(
+        risk['code'] == 'VBA_STOMPING_ASSESSMENT_INDETERMINATE'
+        for risk in resultado['risks']
+    )
+    assert resultado['modernization_plan'][0]['required'] is True
+
+
+def test_parser_sem_metodo_de_stomping_nao_e_tratado_como_limpo(monkeypatch):
+    class ParserLegado:
+        def detect_vba_macros(self):
+            return True
+
+        def extract_macros(self):
+            return iter([_module()])
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(container, '_parser_factory', lambda file_name, data: ParserLegado())
+
+    resultado = analyze_office_vba_container(_office_zip(), file_name='legado.xlsm')
+
+    assert resultado['integrity']['status'] == 'INDETERMINATE'
+    assert resultado['integrity']['vba_stomping']['reason'] == 'parser_method_unavailable'
+    assert resultado['summary']['risks_by_severity']['medium'] == 1
 
 
 def test_docm_exige_vba_project_no_caminho_word(monkeypatch):
@@ -120,6 +184,8 @@ def test_readiness_reporta_parser_instalado(monkeypatch):
         'version': '0.60.2',
         'mode': 'vba_project_only',
         'office_execution': False,
+        'pcode_integrity_check': True,
+        'pcode_engine': 'pcodedmp',
     }
 
 
@@ -133,6 +199,7 @@ def test_readiness_reporta_parser_ausente(monkeypatch):
 
     assert resultado['ready'] is False
     assert resultado['version'] is None
+    assert resultado['pcode_integrity_check'] is False
 
 
 def test_extensao_office_invalida_e_rejeitada():
@@ -258,5 +325,5 @@ def test_agrega_riscos_por_severidade_e_modulo(monkeypatch):
     assert resultado['summary']['risks_by_severity']['critical'] == 1
     assert resultado['risks'][0]['module'] == 'modTeste.bas'
     assert resultado['requirement_candidates'][0]['module'] == 'modTeste.bas'
-    assert resultado['modernization_plan'][0]['required'] is True
     assert resultado['modernization_plan'][1]['required'] is True
+    assert resultado['modernization_plan'][2]['required'] is True
