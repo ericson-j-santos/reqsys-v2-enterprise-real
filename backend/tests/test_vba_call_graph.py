@@ -140,3 +140,61 @@ def test_projeto_office_nao_inventa_destino_quando_nome_e_ambiguo():
     unresolved = result['call_graph']['dynamic_or_unresolved_calls'][0]
     assert unresolved['status'] == 'AMBIGUOUS_TARGET'
     assert unresolved['requires_human_review'] is True
+
+
+def test_argumentos_aninhados_sao_separados_e_literais_sanitizados():
+    source = '''
+Sub Principal()
+    Call Processar(Func(total, 2), "Password=abc123", extra)
+End Sub
+
+Sub Processar(ByVal valor As Variant, Optional ByVal rotulo As String)
+End Sub
+'''.strip()
+
+    result = analyze_vba_with_call_graph(source, file_name='modArgs.bas')
+
+    bindings = result['call_graph']['edges'][0]['parameter_bindings']
+    assert len(bindings) == 3
+    assert bindings[0]['parameter'] == 'valor'
+    assert bindings[0]['source_references'] == ['Func', 'total']
+    assert bindings[1]['parameter'] == 'rotulo'
+    assert bindings[1]['argument'] == '<literal>'
+    assert bindings[2]['parameter'] is None
+    assert 'abc123' not in str(bindings)
+
+
+def test_application_run_literal_desconhecido_permanece_pendente():
+    source = '''
+Sub Principal()
+    Application.Run "NaoExiste", total
+End Sub
+'''.strip()
+
+    result = analyze_vba_with_call_graph(source, file_name='modPendente.bas')
+
+    pending = result['call_graph']['dynamic_or_unresolved_calls']
+    assert len(pending) == 1
+    assert pending[0]['status'] == 'UNRESOLVED_LITERAL_TARGET'
+    assert pending[0]['target'] == 'NaoExiste'
+    assert pending[0]['requires_human_review'] is True
+
+
+def test_projeto_office_marca_chamada_externa_sem_inventar_no():
+    analysis = {
+        'summary': {'modules': 1},
+        'modules': [
+            {
+                'name': 'modEntrada.bas',
+                'procedures': [{'name': 'Principal', 'calls': ['ServicoExterno']}],
+            },
+        ],
+    }
+
+    result = attach_project_call_graph(analysis)
+
+    assert result['call_graph']['summary']['resolved_edges'] == 0
+    unresolved = result['call_graph']['dynamic_or_unresolved_calls'][0]
+    assert unresolved['status'] == 'EXTERNAL_OR_UNRESOLVED'
+    assert unresolved['candidate_nodes'] == []
+    assert unresolved['requires_human_review'] is True
