@@ -148,7 +148,7 @@ def test_status_expoe_contrato_sem_segredos(api_overrides, monkeypatch):
 
     assert response.status_code == 200
     data = response.json()['data']
-    assert data['schema_version'] == '1.1.0'
+    assert data['schema_version'] == '1.2.0'
     assert data['providers']['openai']['configurado'] is True
     assert data['teams_reply_contract']['action'] == 'ai_conversation_reply'
 

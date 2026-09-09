@@ -103,7 +103,12 @@ def test_schema_aceita_classificacao_quando_regra_esta_configurada(monkeypatch):
     monkeypatch.setenv('AI_CORPORATE_INTERNAL_PROVIDERS', 'openai')
     monkeypatch.setenv('AI_CORPORATE_ALLOWED_PROVIDERS', 'openai')
 
-    payload = AIConversationCreateRequest(**_payload())
+    payload = AIConversationCreateRequest(**_payload(
+        tenant_id='tenant-1',
+        area_id='area-1',
+        requester_id='user-1',
+        cost_center='cc-1',
+    ))
 
     assert payload.data_classification == 'internal'
     assert payload.provider == 'openai'
