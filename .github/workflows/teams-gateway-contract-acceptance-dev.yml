@@ -1,0 +1,148 @@
+name: Aceite focalizado Teams Gateway Power Automate DEV
+
+on:
+  push:
+    branches:
+      - fix/teams-gateway-power-automate-contract
+    paths:
+      - ".github/workflows/teams-gateway-contract-acceptance-dev.yml"
+
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+
+env:
+  FLY_APP: reqsys-api-dev
+  BASE_URL: https://reqsys-api-dev.fly.dev
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+    timeout-minutes: 20
+    steps:
+      - name: Checkout branch de correção
+        uses: actions/checkout@v4
+        with:
+          ref: fix/teams-gateway-power-automate-contract
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Instalar dependências do backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest
+
+      - name: Executar testes focados do gateway
+        working-directory: backend
+        run: python -m pytest tests/test_teams_gateway_service.py -q
+
+      - name: Validar segredos Teams sem expor valores
+        shell: bash
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          test -n "${TEAMS_WEBHOOK_URL:-}" || { echo "BLOQUEIO: TEAMS_WEBHOOK_URL ausente." >&2; exit 1; }
+          test -n "${TEAMS_WEBHOOK_RECIPIENT:-}" || { echo "BLOQUEIO: TEAMS_WEBHOOK_RECIPIENT ausente." >&2; exit 1; }
+          echo "::add-mask::$TEAMS_WEBHOOK_URL"
+          echo "::add-mask::$TEAMS_WEBHOOK_RECIPIENT"
+          echo "Segredos de rota e destinatário presentes."
+
+      - name: Resolver credencial Fly API DEV
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-dev-deploy
+          consumer: github-actions:fly-dev
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/teams-gateway-contract-acceptance-dev-credential.json
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Sincronizar rota e destinatário no runtime DEV
+        shell: bash
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$TEAMS_WEBHOOK_URL"
+          echo "::add-mask::$TEAMS_WEBHOOK_RECIPIENT"
+          flyctl secrets set \
+            "TEAMS_NOTIFICATIONS_WEBHOOK_URL=$TEAMS_WEBHOOK_URL" \
+            "TEAMS_WEBHOOK_RECIPIENT=$TEAMS_WEBHOOK_RECIPIENT" \
+            --app "$FLY_APP"
+
+      - name: Publicar branch de correção no DEV
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_SHA="$(git rev-parse HEAD)"
+          echo "expected_sha=$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
+          cd backend
+          set +e
+          flyctl deploy --remote-only \
+            --config fly.dev.toml \
+            --app "$FLY_APP" \
+            --build-arg "GITHUB_SHA=$EXPECTED_SHA"
+          DEPLOY_RC=$?
+          set -e
+          echo "deploy_rc=$DEPLOY_RC" >> "$GITHUB_OUTPUT"
+          if [ "$DEPLOY_RC" -ne 0 ]; then
+            echo "AVISO: flyctl retornou $DEPLOY_RC; a validação independente do runtime decidirá o aceite." >&2
+          fi
+
+      - name: Confirmar SHA e gateway no runtime real
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ steps.deploy.outputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, time
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          base = os.environ['BASE_URL'].rstrip('/')
+          expected = os.environ['EXPECTED_SHA'][:12]
+          evidence = {'expected_sha': expected, 'observed_sha': None, 'webhook_disponivel': False, 'tentativas': 0}
+          for attempt in range(1, 37):
+              evidence['tentativas'] = attempt
+              try:
+                  with urlopen(Request(base + '/api/runtime/build-info', headers={'Accept':'application/json'}), timeout=20) as response:
+                      payload = json.loads(response.read().decode())
+                  data = payload.get('data', payload) if isinstance(payload, dict) else {}
+                  raw = data.get('build_sha') or data.get('commit_sha')
+                  evidence['observed_sha'] = str(raw)[:12] if raw else None
+                  with urlopen(Request(base + '/v1/teams-gateway/status', headers={'Accept':'application/json'}), timeout=20) as response:
+                      gateway_payload = json.loads(response.read().decode())
+                  gateway = gateway_payload.get('data', gateway_payload) if isinstance(gateway_payload, dict) else {}
+                  route = next((r for r in gateway.get('rotas', []) if r.get('canal') == 'webhook'), {})
+                  evidence['webhook_disponivel'] = route.get('disponivel') is True
+                  if evidence['observed_sha'] == expected and evidence['webhook_disponivel']:
+                      break
+              except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+                  pass
+              time.sleep(5)
+          print(json.dumps(evidence, ensure_ascii=False))
+          if evidence['observed_sha'] != expected:
+              raise SystemExit(f"BLOQUEIO: runtime não publicou SHA esperado={expected}; observado={evidence['observed_sha']}")
+          if not evidence['webhook_disponivel']:
+              raise SystemExit('BLOQUEIO: rota webhook não ficou disponível após deploy.')
+          PY
