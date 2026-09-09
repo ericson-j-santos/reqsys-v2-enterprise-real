@@ -20,6 +20,8 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-reqsys_app}:${POSTGRES_PASSWORD:-reqsys_local_dev_changeme}@db:5432/${POSTGRES_DB:-reqsys}
       - JWT_SECRET=${JWT_SECRET:-trocar-em-producao}
+      - JWT_ISSUER=${JWT_ISSUER:-reqsys-api}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-reqsys-frontend}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:${GATEWAY_PORT:-8081},https://tieridev.duckdns.org,https://tierin.duckdns.org,https://tieriprod.duckdns.org}
       - SSRS_BASE_URL=${SSRS_BASE_URL:-}
       - SSRS_REPORTS_PATH=${SSRS_REPORTS_PATH:-ReqSys}
