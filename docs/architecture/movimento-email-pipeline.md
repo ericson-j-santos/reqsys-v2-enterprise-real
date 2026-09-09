@@ -82,3 +82,13 @@ substituí-la depois sem alterar `consumer.py`/`jobs.py`.
    /v1/movimento-email/fila/consumir` (começar com `dry_run=true`).
 4. Decidir e implementar o agendamento diário (cron externo chamando
    `jobs/executar` + `fila/consumir`, ou scheduler interno).
+
+## Fontes alternativas e Microsoft Graph
+
+O pipeline também dispõe de adaptadores de origem por API HTTPS ou exportação
+JSON versionada, selecionados explicitamente por configuração — ver
+[runbook de fontes alternativas](../runbooks/movimento-email-fontes-alternativas.md).
+O envio por Microsoft Graph é coberto pelo
+[runbook de descoberta SQL e Graph](../runbooks/movimento-email-descoberta-sql-graph.md).
+A ativação corporativa depende de fonte aprovada e permissões provisionadas;
+nenhuma das duas implementações encerra a homologação dos P0.

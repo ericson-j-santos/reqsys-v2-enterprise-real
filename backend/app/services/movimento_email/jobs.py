@@ -4,6 +4,7 @@ extração -> transformação -> renderização -> fila (ADR-001, ADR-003).
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date
 
@@ -72,6 +73,12 @@ def executar_job_diario(
         max_retries=max_retries,
     )
     registrar_evento(db, correlation_id, ATOR_JOB, 'MOVIMENTO_EMAIL_JOB_ENFILEIRADO', 'movimento_email_dispatch', item.id)
+    evidence = getattr(repository, 'evidence', None)
+    if evidence:
+        registrar_evento(
+            db, correlation_id, ATOR_JOB, 'MOVIMENTO_EMAIL_FONTE_VALIDADA',
+            'movimento_email_dispatch', item.id, payload_minimo=json.dumps(evidence),
+        )
 
     return {
         'dispatch_id': item.id,

@@ -36,6 +36,10 @@ from app.services.movimento_email.sender_factory import (
     resolver_remetente_configurado,
 )
 from app.services.movimento_email.smtp_sender import EnvioEmailError
+from app.services.movimento_email.snapshot_source import (
+    ApiSnapshotRepository,
+    FileSnapshotRepository,
+)
 
 logger = logging.getLogger('reqsys.movimento_email_api')
 
@@ -69,25 +73,45 @@ async def movimento_email_job_executar(
     ctx=Depends(require_job_auth),
     db: Session = Depends(get_db),
 ):
-    """Executa o job diário: extrai os 4 datasets do SQL Server de origem,
-    renderiza o e-mail e enfileira para envio (não envia diretamente — ver
-    `/fila/consumir`).
+    """Executa o job diário: extrai os 4 datasets da fonte configurada
+    (`MOVIMENTO_EMAIL_SOURCE_PROVIDER`: sqlserver, api ou file), renderiza o
+    e-mail e enfileira para envio (não envia diretamente — ver `/fila/consumir`).
 
     Autenticação: JWT admin (humano) OU `X-Service-Token` escopado para
     `movimento_email:job` (para acionar via agendador/cron externo).
     """
-    if not settings.movimento_email_source_dsn:
-        raise HTTPException(status_code=409, detail='MOVIMENTO_EMAIL_SOURCE_DSN não configurado')
-
     destinatarios = payload.destinatarios or settings.movimento_email_recipients_list
     if not destinatarios:
         raise HTTPException(status_code=409, detail='Nenhum destinatário configurado (MOVIMENTO_EMAIL_RECIPIENTS ou payload.destinatarios)')
 
     correlation_id = resolver_correlation_id()
-    repository = SqlServerProspeccaoMovimentoRepository(
-        settings.movimento_email_source_dsn,
-        query_timeout_seconds=settings.movimento_email_query_timeout_seconds,
-    )
+    provider = settings.movimento_email_source_provider.strip().lower()
+    missing_source_fields = settings.movimento_email_source_missing_fields
+    if missing_source_fields:
+        raise HTTPException(status_code=409, detail=f'Configuração de origem incompleta: {", ".join(missing_source_fields)}')
+    try:
+        if provider == 'sqlserver':
+            repository = SqlServerProspeccaoMovimentoRepository(
+                settings.movimento_email_source_dsn,
+                query_timeout_seconds=settings.movimento_email_query_timeout_seconds,
+            )
+        else:
+            options = {
+                'source_id': settings.movimento_email_source_id,
+                'correlation_id': correlation_id,
+                'max_age_seconds': settings.movimento_email_source_max_age_seconds,
+            }
+            if provider == 'api':
+                repository = ApiSnapshotRepository(
+                    url=settings.movimento_email_source_api_url,
+                    token=settings.movimento_email_source_api_token,
+                    timeout_seconds=settings.movimento_email_query_timeout_seconds,
+                    **options,
+                )
+            else:
+                repository = FileSnapshotRepository(directory=settings.movimento_email_source_directory, **options)
+    except ExtracaoError as exc:
+        raise HTTPException(status_code=409, detail=f'Configuração de origem inválida: {exc}') from None
     try:
         resultado = executar_job_diario(
             db,

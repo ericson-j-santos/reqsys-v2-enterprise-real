@@ -23,6 +23,10 @@ def _bool_secret(name: str, default: str = 'false') -> bool:
     return (get_secret(name, default) or default).strip().lower() in _TRUE_VALUES
 
 
+def _missing_fields(mapping: dict[str, str]) -> list[str]:
+    return [name for name, value in mapping.items() if not value.strip()]
+
+
 class Settings(BaseSettings):
     model_config = {'env_file': str(_env_file), 'env_file_encoding': 'utf-8', 'extra': 'ignore'}
 
@@ -191,6 +195,12 @@ class Settings(BaseSettings):
     # Consignado (Funcionalidade #2861: substitui SSRS por pipeline Python —
     # ver docs/architecture/movimento-email-pipeline.md)
     movimento_email_source_dsn: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SOURCE_DSN', '') or '')
+    movimento_email_source_provider: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SOURCE_PROVIDER', 'sqlserver') or 'sqlserver')
+    movimento_email_source_id: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SOURCE_ID', '') or '')
+    movimento_email_source_api_url: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SOURCE_API_URL', '') or '')
+    movimento_email_source_api_token: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SOURCE_API_TOKEN', '') or '')
+    movimento_email_source_directory: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SOURCE_DIRECTORY', '') or '')
+    movimento_email_source_max_age_seconds: int = Field(default_factory=lambda: int(get_secret('MOVIMENTO_EMAIL_SOURCE_MAX_AGE_SECONDS', '86400') or '86400'))
     movimento_email_query_timeout_seconds: float = Field(
         default_factory=lambda: float(get_secret('MOVIMENTO_EMAIL_QUERY_TIMEOUT_SECONDS', '30') or '30')
     )
@@ -206,6 +216,24 @@ class Settings(BaseSettings):
         default_factory=lambda: int(get_secret('MOVIMENTO_EMAIL_RESERVA_TIMEOUT_MINUTOS', '15') or '15')
     )
     movimento_email_max_tentativas: int = Field(default_factory=lambda: int(get_secret('MOVIMENTO_EMAIL_MAX_TENTATIVAS', '5') or '5'))
+
+    @property
+    def movimento_email_source_missing_fields(self) -> list[str]:
+        provider = self.movimento_email_source_provider.strip().lower()
+        if provider == 'sqlserver':
+            return _missing_fields({'MOVIMENTO_EMAIL_SOURCE_DSN': self.movimento_email_source_dsn})
+        elif provider == 'api':
+            return _missing_fields({
+                'MOVIMENTO_EMAIL_SOURCE_ID': self.movimento_email_source_id,
+                'MOVIMENTO_EMAIL_SOURCE_API_URL': self.movimento_email_source_api_url,
+                'MOVIMENTO_EMAIL_SOURCE_API_TOKEN': self.movimento_email_source_api_token,
+            })
+        elif provider == 'file':
+            return _missing_fields({
+                'MOVIMENTO_EMAIL_SOURCE_ID': self.movimento_email_source_id,
+                'MOVIMENTO_EMAIL_SOURCE_DIRECTORY': self.movimento_email_source_directory,
+            })
+        return ['MOVIMENTO_EMAIL_SOURCE_PROVIDER']
 
     @property
     def movimento_email_recipients_list(self) -> list[str]:
