@@ -93,7 +93,7 @@ def resolve_secret(provider: str, *, env: Mapping[str, str] | None = None) -> tu
     mapped = _value(env, env_name)
     if mapped:
         return mapped, 'mapping'
-    for legacy in LEGACY_SECRET_NAMES.get(provider, ()): 
+    for legacy in LEGACY_SECRET_NAMES.get(provider, ()):
         mapped_legacy = _value(env, legacy)
         if mapped_legacy:
             return mapped_legacy, f'mapping:{legacy}'

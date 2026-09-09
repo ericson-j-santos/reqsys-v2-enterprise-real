@@ -13,8 +13,14 @@ from sqlalchemy.orm import Session
 from app.models.ai_conversation import AIConversation, AIConversationMessage
 from app.schemas.ai_conversation import AIConversationCreateRequest
 from app.schemas.teams_notifications import TeamsNotificationEnqueueRequest
-from app.services.ai_corporate_policy import CorporateAIPolicyError, evaluate_provider_policy
-from app.services.ai_provider_config import AIProviderRuntimeConfigError, resolve_provider_config
+from app.services.ai_corporate_policy import (
+    CorporateAIPolicyError,
+    evaluate_provider_policy,
+)
+from app.services.ai_provider_config import (
+    AIProviderRuntimeConfigError,
+    resolve_provider_config,
+)
 from app.services.llm_provider import LLMGateway
 from app.services.teams_notifications import criar_item_fila
 
