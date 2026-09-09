@@ -32,6 +32,12 @@ def _parse_csv(value: str) -> frozenset[str]:
     return frozenset(item.strip().lower() for item in value.split(',') if item.strip())
 
 
+def _environment(env: Mapping[str, str] | None) -> str:
+    raw = (_env_value(env, 'ENVIRONMENT') or _env_value(env, 'APP_ENV') or 'dev').lower()
+    aliases = {'development': 'dev', 'testing': 'test', 'stage': 'stg', 'staging': 'stg', 'production': 'prod'}
+    return aliases.get(raw, raw)
+
+
 def policy_mode(env: Mapping[str, str] | None = None) -> str:
     mode = (_env_value(env, 'AI_CORPORATE_POLICY_MODE') or 'off').lower()
     if mode in {'off', 'disabled', 'legacy'}:
@@ -80,6 +86,13 @@ def evaluate_provider_policy(
     global_allowed = _parse_csv(_env_value(env, 'AI_CORPORATE_ALLOWED_PROVIDERS'))
     effective_allowed = class_allowed.intersection(global_allowed) if global_allowed else class_allowed
 
+    environment = _environment(env)
+    environment_allowed = _parse_csv(
+        _env_value(env, f'AI_{environment.upper()}_ALLOWED_PROVIDERS')
+    )
+    if environment_allowed:
+        effective_allowed = effective_allowed.intersection(environment_allowed)
+
     if classification_normalized == 'restricted':
         configured_local = _parse_csv(_env_value(env, 'AI_CORPORATE_LOCAL_PROVIDERS'))
         local_providers = configured_local or DEFAULT_LOCAL_PROVIDERS
@@ -90,7 +103,7 @@ def evaluate_provider_policy(
 
     if provider_normalized not in effective_allowed:
         raise CorporateAIPolicyError(
-            f'Provedor {provider_normalized} não autorizado para dados {classification_normalized}.'
+            f'Provedor {provider_normalized} não autorizado para dados {classification_normalized} no ambiente {environment}.'
         )
 
     return CorporateAIPolicyDecision(
@@ -99,7 +112,7 @@ def evaluate_provider_policy(
         authorized_provider=provider_normalized,
         data_classification=classification_normalized,
         mode=mode,
-        reason='provider_explicitly_allowed_for_classification',
+        reason=f'provider_explicitly_allowed_for_classification_and_environment:{environment}',
     )
 
 

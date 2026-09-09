@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import requests
 
 from app.core.resilience import CircuitBreaker, CircuitBreakerOpenError, call_with_retry
+from app.services.ai_provider_config import default_endpoint
 
 PostJsonFn = Callable[[str, dict[str, Any], dict[str, str] | None, int], dict[str, Any]]
 
@@ -16,8 +17,6 @@ LLM_RETRY_BACKOFF_SECONDS = 0.5
 LLM_CIRCUIT_FAILURE_THRESHOLD = 3
 LLM_CIRCUIT_COOLDOWN_SECONDS = 60
 
-# Um circuit breaker por host (openai/anthropic/groq/gemini/ollama sao providers
-# independentes; uma falha na OpenAI nao deve abrir o circuito da Anthropic).
 _circuits: dict[str, CircuitBreaker] = {}
 
 
@@ -33,7 +32,6 @@ def _circuit_for(url: str) -> CircuitBreaker:
 
 
 def reset_circuit_breakers() -> None:
-    """Reseta todos os circuit breakers de providers LLM (uso em testes)."""
     for circuit in _circuits.values():
         circuit.reset()
 
@@ -67,21 +65,12 @@ def _post_json(
 
 
 def extrair_resposta_textual(data: dict[str, Any]) -> str:
-    candidatos = [
-        data.get('response'),
-        data.get('resposta'),
-        data.get('resultado'),
-        data.get('answer'),
-        data.get('content'),
-    ]
+    candidatos = [data.get('response'), data.get('resposta'), data.get('resultado'), data.get('answer'), data.get('content')]
     envelope = data.get('data')
     if isinstance(envelope, dict):
         candidatos.extend([
-            envelope.get('response'),
-            envelope.get('resposta'),
-            envelope.get('resultado'),
-            envelope.get('answer'),
-            envelope.get('content'),
+            envelope.get('response'), envelope.get('resposta'), envelope.get('resultado'),
+            envelope.get('answer'), envelope.get('content'),
         ])
     for candidato in candidatos:
         if candidato:
@@ -93,11 +82,9 @@ def extrair_resposta_gemini(data: dict[str, Any]) -> str:
     output_text = data.get('output_text')
     if output_text:
         return str(output_text)
-
     text = data.get('text')
     if text:
         return str(text)
-
     candidates = data.get('candidates') or []
     for candidate in candidates:
         if not isinstance(candidate, dict):
@@ -107,175 +94,121 @@ def extrair_resposta_gemini(data: dict[str, Any]) -> str:
         textos = [str(part.get('text') or '') for part in parts if isinstance(part, dict) and part.get('text')]
         if textos:
             return '\n'.join(textos)
-
     raise RuntimeError('Resposta do Gemini sem conteudo utilizavel')
 
 
+def _auth_headers(api_key: str, auth_mode: str, *, provider: str) -> dict[str, str]:
+    headers = {'Content-Type': 'application/json'}
+    if auth_mode == 'none':
+        return headers
+    if auth_mode == 'bearer':
+        headers['Authorization'] = f'Bearer {api_key}'
+        return headers
+    if auth_mode == 'api_key':
+        if provider == 'claude':
+            headers['x-api-key'] = api_key
+            headers['anthropic-version'] = '2023-06-01'
+        elif provider == 'gemini':
+            headers['x-goog-api-key'] = api_key
+        elif provider == 'openai':
+            headers['api-key'] = api_key
+        else:
+            headers['X-API-Key'] = api_key
+        return headers
+    raise RuntimeError(f'Modo de autenticação não suportado: {auth_mode}')
+
+
 class LLMGateway:
-    """
-    Porta única para chamadas LLM externas.
-
-    Centraliza:
-    - montagem de payload HTTP por provider;
-    - headers de autenticação;
-    - extração textual de respostas;
-    - timeout padrão.
-
-    Não centraliza regra de negócio, cota por produto nem auditoria de domínio.
-    Esses pontos permanecem nos serviços consumidores.
-    """
+    """Porta única de LLM. Endpoints e autenticação podem ser injetados pelo ambiente corporativo."""
 
     def __init__(self, post_json: PostJsonFn = _post_json) -> None:
         self._post_json = post_json
 
     def gerar_ollama(self, *, base_url: str, model: str, prompt: str, timeout: int = 45) -> str:
         base = (base_url or 'http://localhost:11434').rstrip('/')
-        payload = {
-            'model': model,
-            'prompt': prompt,
-            'stream': False,
-            'options': {'temperature': 0.1},
-        }
+        payload = {'model': model, 'prompt': prompt, 'stream': False, 'options': {'temperature': 0.1}}
         data = self._post_json(f'{base}/api/generate', payload, headers=None, timeout=timeout)
         return str(data.get('response') or '')
 
     def gerar_ollama_gateway(
-        self,
-        *,
-        base_url: str,
-        model: str,
-        prompt: str,
-        contexto: str,
-        entrada: str,
-        correlation_id: str,
-        api_key: str = '',
-        timeout: int = 60,
+        self, *, base_url: str, model: str, prompt: str, contexto: str, entrada: str,
+        correlation_id: str, api_key: str = '', timeout: int = 60,
     ) -> str:
         if not base_url:
             raise RuntimeError('CODEX_OLLAMA_GATEWAY_URL ausente')
-
         base = base_url.rstrip('/')
         payload = {
-            'model': model,
-            'task_type': 'code',
-            'prompt': prompt,
-            'contexto': contexto,
-            'entrada': entrada,
-            'correlation_id': correlation_id,
-            'source': 'reqsys-codex-local-online',
+            'model': model, 'task_type': 'code', 'prompt': prompt, 'contexto': contexto,
+            'entrada': entrada, 'correlation_id': correlation_id, 'source': 'reqsys-codex-local-online',
         }
         headers = {'Content-Type': 'application/json'}
         if api_key:
             headers['X-API-Key'] = api_key
-
         data = self._post_json(f'{base}/v1/chat', payload, headers=headers, timeout=max(1, int(timeout)))
         return extrair_resposta_textual(data)
 
     def gerar_openai(
-        self,
-        *,
-        api_key: str,
-        model: str,
-        prompt: str,
-        system_prompt: str,
-        timeout: int = 45,
+        self, *, api_key: str, model: str, prompt: str, system_prompt: str,
+        timeout: int = 45, endpoint: str | None = None, auth_mode: str = 'bearer',
     ) -> str:
-        if not api_key:
+        if auth_mode != 'none' and not api_key:
             raise RuntimeError('CODEX_OPENAI_KEY ausente')
         payload = {
             'model': model,
-            'messages': [
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': prompt},
-            ],
+            'messages': [{'role': 'system', 'content': system_prompt}, {'role': 'user', 'content': prompt}],
             'temperature': 0.1,
         }
-        headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
-        data = self._post_json('https://api.openai.com/v1/chat/completions', payload, headers=headers, timeout=timeout)
+        headers = _auth_headers(api_key, auth_mode, provider='openai')
+        data = self._post_json(endpoint or default_endpoint('openai'), payload, headers=headers, timeout=timeout)
         return str(data['choices'][0]['message']['content'])
 
     def gerar_embeddings_openai(
-        self,
-        *,
-        api_key: str,
-        model: str,
-        textos: list[str],
-        timeout: int = 45,
+        self, *, api_key: str, model: str, textos: list[str], timeout: int = 45,
+        endpoint: str | None = None, auth_mode: str = 'bearer',
     ) -> list[list[float]]:
-        if not api_key:
+        if auth_mode != 'none' and not api_key:
             raise RuntimeError('REQSYS_RAG_EMBEDDING_API_KEY ausente')
         payload = {'model': model, 'input': textos}
-        headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
-        data = self._post_json('https://api.openai.com/v1/embeddings', payload, headers=headers, timeout=timeout)
+        headers = _auth_headers(api_key, auth_mode, provider='openai')
+        data = self._post_json(endpoint or default_endpoint('openai_embeddings'), payload, headers=headers, timeout=timeout)
         itens = sorted(data['data'], key=lambda item: item['index'])
         return [[float(valor) for valor in item['embedding']] for item in itens]
 
     def gerar_claude(
-        self,
-        *,
-        api_key: str,
-        model: str,
-        prompt: str,
-        system_prompt: str,
-        timeout: int = 45,
+        self, *, api_key: str, model: str, prompt: str, system_prompt: str,
+        timeout: int = 45, endpoint: str | None = None, auth_mode: str = 'api_key',
     ) -> str:
-        if not api_key:
+        if auth_mode != 'none' and not api_key:
             raise RuntimeError('CODEX_CLAUDE_KEY ausente')
         payload = {
-            'model': model,
-            'max_tokens': 1600,
-            'temperature': 0.1,
-            'system': system_prompt,
-            'messages': [{'role': 'user', 'content': prompt}],
+            'model': model, 'max_tokens': 1600, 'temperature': 0.1,
+            'system': system_prompt, 'messages': [{'role': 'user', 'content': prompt}],
         }
-        headers = {
-            'x-api-key': api_key,
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json',
-        }
-        data = self._post_json('https://api.anthropic.com/v1/messages', payload, headers=headers, timeout=timeout)
+        headers = _auth_headers(api_key, auth_mode, provider='claude')
+        data = self._post_json(endpoint or default_endpoint('claude'), payload, headers=headers, timeout=timeout)
         blocos = data.get('content') or []
         return '\n'.join(str(item.get('text') or '') for item in blocos if isinstance(item, dict))
 
     def gerar_groq(
-        self,
-        *,
-        api_key: str,
-        model: str,
-        prompt: str,
-        system_prompt: str | None = None,
-        timeout: int = 45,
+        self, *, api_key: str, model: str, prompt: str, system_prompt: str | None = None,
+        timeout: int = 45, endpoint: str | None = None, auth_mode: str = 'bearer',
     ) -> str:
-        if not api_key:
+        if auth_mode != 'none' and not api_key:
             raise RuntimeError('GROQ_API_KEY ausente')
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({'role': 'system', 'content': system_prompt})
         messages.append({'role': 'user', 'content': prompt})
-        payload = {
-            'model': model,
-            'messages': messages,
-            'temperature': 0.1,
-        }
-        headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
-        data = self._post_json(
-            'https://api.groq.com/openai/v1/chat/completions',
-            payload,
-            headers=headers,
-            timeout=timeout,
-        )
+        payload = {'model': model, 'messages': messages, 'temperature': 0.1}
+        headers = _auth_headers(api_key, auth_mode, provider='groq')
+        data = self._post_json(endpoint or default_endpoint('groq'), payload, headers=headers, timeout=timeout)
         return str(data['choices'][0]['message']['content'])
 
     def gerar_gemini(
-        self,
-        *,
-        api_key: str,
-        model: str,
-        prompt: str,
-        system_prompt: str | None = None,
-        timeout: int = 45,
+        self, *, api_key: str, model: str, prompt: str, system_prompt: str | None = None,
+        timeout: int = 45, endpoint: str | None = None, auth_mode: str = 'api_key',
     ) -> str:
-        if not api_key:
+        if auth_mode != 'none' and not api_key:
             raise RuntimeError('GEMINI_API_KEY ausente')
         payload: dict[str, Any] = {
             'contents': [{'parts': [{'text': prompt}]}],
@@ -283,24 +216,16 @@ class LLMGateway:
         }
         if system_prompt:
             payload['systemInstruction'] = {'parts': [{'text': system_prompt}]}
-        headers = {'x-goog-api-key': api_key, 'Content-Type': 'application/json'}
-        data = self._post_json(
-            f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
-            payload,
-            headers=headers,
-            timeout=timeout,
-        )
+        headers = _auth_headers(api_key, auth_mode, provider='gemini')
+        url = (endpoint or default_endpoint('gemini')).replace('{model}', model)
+        data = self._post_json(url, payload, headers=headers, timeout=timeout)
         return extrair_resposta_gemini(data)
 
     def gerar_embeddings_gemini(
-        self,
-        *,
-        api_key: str,
-        model: str,
-        textos: list[str],
-        timeout: int = 45,
+        self, *, api_key: str, model: str, textos: list[str], timeout: int = 45,
+        endpoint: str | None = None, auth_mode: str = 'api_key',
     ) -> list[list[float]]:
-        if not api_key:
+        if auth_mode != 'none' and not api_key:
             raise RuntimeError('GEMINI_API_KEY ausente')
         modelo_normalizado = model if model.startswith('models/') else f'models/{model}'
         payload = {
@@ -309,11 +234,7 @@ class LLMGateway:
                 for texto in textos
             ]
         }
-        headers = {'x-goog-api-key': api_key, 'Content-Type': 'application/json'}
-        data = self._post_json(
-            f'https://generativelanguage.googleapis.com/v1beta/{modelo_normalizado}:batchEmbedContents',
-            payload,
-            headers=headers,
-            timeout=timeout,
-        )
+        headers = _auth_headers(api_key, auth_mode, provider='gemini')
+        url = (endpoint or default_endpoint('gemini_embeddings')).replace('{model}', modelo_normalizado)
+        data = self._post_json(url, payload, headers=headers, timeout=timeout)
         return [[float(valor) for valor in item['values']] for item in data['embeddings']]

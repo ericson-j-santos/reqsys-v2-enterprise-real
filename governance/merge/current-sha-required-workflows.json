@@ -28,5 +28,24 @@
     "BACEN Production Formal Gate",
     "BACEN Gate 1.5 — as_of Congelado",
     "BACEN Production Readiness Gate 2"
-  ]
+  ],
+  "required_base_branches": {
+    "CI — ReqSys v2 Enterprise": [
+      "main",
+      "master",
+      "develop"
+    ],
+    "PR Evidence Gate": [
+      "main"
+    ],
+    "Security Specialized Scanners": [
+      "main"
+    ],
+    "ReqSys Required Fast Gate": [
+      "main"
+    ],
+    "Minimum Controlled Version Gate": [
+      "main"
+    ]
+  }
 }
