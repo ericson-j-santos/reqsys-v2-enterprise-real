@@ -48,8 +48,8 @@ def assert_scope(
     area_id: str | None,
     enforce: bool,
 ) -> None:
-    if enforce and (not tenant_id or not area_id):
-        raise AIScopeViolationError('X-Tenant-ID e X-Area-ID são obrigatórios no modo corporativo.')
+    if enforce and not tenant_id:
+        raise AIScopeViolationError('X-Tenant-ID é obrigatório no modo corporativo.')
     if tenant_id and conversation.tenant_id != tenant_id:
         raise AIScopeViolationError('Conversa fora do tenant autorizado.')
     if area_id and conversation.area_id != area_id:
