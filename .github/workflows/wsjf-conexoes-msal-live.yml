@@ -54,6 +54,21 @@ jobs:
         env:
           WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
 
+      - name: Verificar validade da sessao MSAL decodificada
+        if: steps.state.outputs.path != ''
+        working-directory: frontend
+        env:
+          MSAL_STORAGE_STATE_PATH: ${{ steps.state.outputs.path }}
+        run: |
+          set -euo pipefail
+          # Refresh token de SPA tem vida fixa de 24h (AADSTS700084), sem
+          # renovacao possivel. Falhar aqui (segundos) com mensagem clara e
+          # melhor do que deixar o Playwright falhar la na frente (minutos,
+          # erro generico de interacao necessaria) quando o secret ficou
+          # velho — WSJF_MSAL_STORAGE_STATE_B64 precisa ser recadastrado
+          # rodando "npm run setup:msal-state" localmente de novo.
+          npm run check:msal-state
+
       - name: Jornada real de conexoes com sessao Microsoft real
         working-directory: frontend
         env:
