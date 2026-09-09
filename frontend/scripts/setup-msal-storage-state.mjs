@@ -14,6 +14,11 @@
 //
 // O arquivo gerado e sensivel e esta ignorado pelo Git. Cadastre somente seu
 // base64 como secret WSJF_MSAL_STORAGE_STATE_B64 no GitHub Actions.
+//
+// O refresh token capturado tem vida fixa de 24h (AADSTS700084) e nao pode
+// ser renovado alem disso. Use "npm run check:msal-state" para saber se a
+// sessao capturada ainda vale, sem precisar descobrir isso por um erro
+// tardio no meio de outro script/teste.
 
 import { chromium } from '@playwright/test'
 import fs from 'node:fs/promises'
