@@ -2,11 +2,6 @@ name: Certificacao estrita - Coleta Requisitos Teams DEV
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - test/teams-e2e-certificacao-strict
-    paths:
-      - .github/workflows/coleta-requisitos-teams-certificacao-strict-dev.yml
 
 permissions:
   contents: read
