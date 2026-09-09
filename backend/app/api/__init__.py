@@ -24,6 +24,7 @@ from app.api import (  # noqa: E402
     requisitos,
     teams_gateway,
     teams_github_actions,
+    vba_legacy,
     wsjf_planner_excel,
 )
 
@@ -37,6 +38,7 @@ teams_gateway.router.include_router(notificacoes.router)
 teams_gateway.router.include_router(teams_github_actions.router)
 teams_gateway.router.include_router(ai_conversation.router)
 requisitos.api_router.include_router(levantamento_requisitos.router)
+requisitos.api_router.include_router(vba_legacy.router)
 requisitos.router.include_router(lifecycle.router)
 
 # A camada canônica é anexada aos requisitos para preservar o app.main.
