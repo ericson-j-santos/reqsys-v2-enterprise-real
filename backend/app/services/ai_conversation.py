@@ -10,10 +10,23 @@ from typing import Any
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
+from app.core.pii_masking import mascarar_pii
 from app.models.ai_conversation import AIConversation, AIConversationMessage
 from app.schemas.ai_conversation import AIConversationCreateRequest
 from app.schemas.teams_notifications import TeamsNotificationEnqueueRequest
-from app.services.ai_corporate_policy import CorporateAIPolicyError, evaluate_provider_policy
+from app.services.ai_corporate_policy import (
+    CorporateAIPolicyError,
+    evaluate_provider_policy,
+    policy_mode,
+)
+from app.services.ai_history_protection import (
+    AIUsageBudgetExceededError,
+    AIScopeViolationError,
+    assert_budget,
+    assert_scope,
+    estimate_tokens,
+    record_usage,
+)
 from app.services.ai_provider_config import AIProviderRuntimeConfigError, resolve_provider_config
 from app.services.llm_provider import LLMGateway
 from app.services.teams_notifications import criar_item_fila
@@ -35,6 +48,14 @@ class AIConversationNotFoundError(AIConversationError):
 
 
 class AIConversationConflictError(AIConversationError):
+    pass
+
+
+class AIConversationScopeError(AIConversationError):
+    pass
+
+
+class AIConversationBudgetError(AIConversationError):
     pass
 
 
@@ -66,6 +87,13 @@ def _env_int(env: Mapping[str, str] | None, name: str, default: int) -> int:
         return max(1, int(raw))
     except ValueError:
         return default
+
+
+def _env_bool(env: Mapping[str, str] | None, name: str, default: bool) -> bool:
+    raw = _env_value(env, name)
+    if not raw:
+        return default
+    return raw.lower() not in {'0', 'false', 'no', 'off'}
 
 
 def _classification_lock(conversation_id: str, data_classification: str) -> str:
@@ -106,6 +134,10 @@ def criar_conversa(db: Session, payload: AIConversationCreateRequest, *, correla
         origem=payload.origem,
         status='aguardando_usuario',
         correlation_id=correlation_id,
+        tenant_id=payload.tenant_id,
+        area_id=payload.area_id,
+        requester_id=payload.requester_id,
+        cost_center=payload.cost_center,
         data_classification=payload.data_classification,
         classification_lock_sha256=_classification_lock(conversation_id, payload.data_classification),
         requested_provider=decision.requested_provider,
@@ -126,10 +158,26 @@ def criar_conversa(db: Session, payload: AIConversationCreateRequest, *, correla
     return conversa
 
 
-def obter_conversa(db: Session, conversation_id: str) -> AIConversation:
+def obter_conversa(
+    db: Session,
+    conversation_id: str,
+    *,
+    tenant_id: str | None = None,
+    area_id: str | None = None,
+    env: Mapping[str, str] | None = None,
+) -> AIConversation:
     conversa = db.get(AIConversation, conversation_id)
     if conversa is None:
         raise AIConversationNotFoundError('Conversa de IA não encontrada.')
+    try:
+        assert_scope(
+            conversa,
+            tenant_id=tenant_id,
+            area_id=area_id,
+            enforce=policy_mode(env) == 'enforce',
+        )
+    except AIScopeViolationError as exc:
+        raise AIConversationScopeError(str(exc)) from None
     return conversa
 
 
@@ -145,8 +193,7 @@ def _hash_content(content: str) -> str:
 
 
 def _assistant_idempotency(user_key: str) -> str:
-    digest = hashlib.sha256(user_key.encode('utf-8')).hexdigest()
-    return f'assistant:{digest}'
+    return f'assistant:{hashlib.sha256(user_key.encode("utf-8")).hexdigest()}'
 
 
 def _salvar_mensagem(
@@ -232,7 +279,6 @@ def _validar_politica_persistida(
         conversa.policy_reason = str(exc)[:500]
         conversa.policy_correlation_id = correlation_id
         raise AIProviderConfigurationError(str(exc)) from None
-
     if decision.authorized_provider != conversa.provider:
         raise AIProviderConfigurationError(
             'Provedor autorizado pela política diverge do provedor persistido na conversa.'
@@ -253,12 +299,10 @@ def _chamar_provider(
     correlation_id: str,
 ) -> str:
     _validar_politica_persistida(conversa, correlation_id=correlation_id, env=env)
-
     provider = conversa.provider
     model = conversa.model
     timeout = _env_int(env, 'AI_CONVERSATION_TIMEOUT_SECONDS', DEFAULT_TIMEOUT_SECONDS)
     system_prompt = _env_value(env, 'AI_CONVERSATION_SYSTEM_PROMPT') or DEFAULT_SYSTEM_PROMPT
-
     try:
         if provider in {'openai', 'claude', 'gemini', 'groq'}:
             runtime = resolve_provider_config(provider, env=env)
@@ -299,7 +343,6 @@ def _chamar_provider(
         raise AIProviderExecutionError(
             f'Falha ao executar o provedor {provider}: {type(exc).__name__}.'
         ) from None
-
     resposta_normalizada = str(resposta or '').strip()
     if not resposta_normalizada:
         raise AIProviderExecutionError(f'O provedor {provider} retornou resposta vazia.')
@@ -329,24 +372,19 @@ def construir_adaptive_card(
             },
             {'type': 'TextBlock', 'text': resposta[:8000], 'wrap': True},
             {
-                'type': 'Input.Text',
-                'id': 'mensagem',
-                'isMultiline': True,
-                'maxLength': 20000,
-                'placeholder': 'Escreva aqui para continuar esta mesma conversa.',
+                'type': 'Input.Text', 'id': 'mensagem', 'isMultiline': True,
+                'maxLength': 20000, 'placeholder': 'Escreva aqui para continuar esta mesma conversa.',
             },
         ],
-        'actions': [
-            {
-                'type': 'Action.Submit',
-                'title': 'Continuar conversa',
-                'data': {
-                    'reqsys_action': 'ai_conversation_reply',
-                    'conversation_id': conversa.id,
-                    'correlation_id': correlation_id,
-                },
-            }
-        ],
+        'actions': [{
+            'type': 'Action.Submit',
+            'title': 'Continuar conversa',
+            'data': {
+                'reqsys_action': 'ai_conversation_reply',
+                'conversation_id': conversa.id,
+                'correlation_id': correlation_id,
+            },
+        }],
     }
 
 
@@ -372,6 +410,8 @@ def _enfileirar_teams(
             'conversation_id': conversa.id,
             'provider': conversa.provider,
             'model': conversa.model,
+            'tenant_id': conversa.tenant_id,
+            'area_id': conversa.area_id,
             'data_classification': conversa.data_classification,
             'policy_decision': conversa.policy_decision,
             'reply_endpoint': f'/v1/teams-gateway/ai-conversations/{conversa.id}/reply',
@@ -403,7 +443,6 @@ def executar_turno(
 ) -> dict[str, Any]:
     if conversa.status == 'encerrada':
         raise AIConversationConflictError('A conversa já está encerrada.')
-
     mensagem_normalizada = mensagem.strip()
     if not mensagem_normalizada:
         raise AIConversationConflictError('Mensagem vazia não é permitida.')
@@ -414,9 +453,7 @@ def executar_turno(
         if existente.content_sha256 != _hash_content(mensagem_normalizada):
             raise AIConversationConflictError('A mesma chave de idempotência foi reutilizada com conteúdo diferente.')
         resposta_existente = _buscar_mensagem_idempotente(
-            db,
-            conversation_id=conversa.id,
-            idempotency_key=_assistant_idempotency(user_key),
+            db, conversation_id=conversa.id, idempotency_key=_assistant_idempotency(user_key)
         )
         if resposta_existente is None:
             raise AIConversationConflictError(
@@ -441,7 +478,6 @@ def executar_turno(
         correlation_id=correlation_id,
         idempotency_key=user_key,
     )
-
     historico = _montar_contexto(
         db,
         conversation_id=conversa.id,
@@ -452,11 +488,24 @@ def executar_turno(
         f'{historico}\n\n'
         'Continue a partir da última mensagem USER sem repetir desnecessariamente o histórico.'
     )
+    prompt_provider = mascarar_pii(prompt) if _env_bool(env, 'AI_CONVERSATION_PII_MASKING', True) else prompt
+
+    try:
+        assert_budget(
+            db,
+            conversation=conversa,
+            estimated_next_tokens=estimate_tokens(prompt_provider),
+            env=env,
+        )
+    except AIUsageBudgetExceededError as exc:
+        conversa.status = 'falha'
+        db.commit()
+        raise AIConversationBudgetError(str(exc)) from None
 
     try:
         resposta = _chamar_provider(
             conversa=conversa,
-            prompt=prompt,
+            prompt=prompt_provider,
             gateway=gateway or LLMGateway(),
             env=env,
             correlation_id=correlation_id,
@@ -475,6 +524,13 @@ def executar_turno(
         correlation_id=correlation_id,
         idempotency_key=_assistant_idempotency(user_key),
     )
+    record_usage(
+        db,
+        conversation=conversa,
+        prompt=prompt_provider,
+        response=resposta,
+        correlation_id=correlation_id,
+    )
     conversa.status = 'aguardando_usuario'
     conversa.ultima_mensagem_em = _utcnow()
     db.commit()
@@ -483,12 +539,8 @@ def executar_turno(
     notificacao = None
     if enviar_teams:
         notificacao = _enfileirar_teams(
-            db,
-            conversa=conversa,
-            resposta=resposta,
-            correlation_id=correlation_id,
+            db, conversa=conversa, resposta=resposta, correlation_id=correlation_id
         )
-
     return {
         'conversa': conversa,
         'mensagem_usuario': user_message,
@@ -513,6 +565,10 @@ def serializar_conversa(
         'origem': conversa.origem,
         'status': conversa.status,
         'correlation_id': conversa.correlation_id,
+        'tenant_id': conversa.tenant_id,
+        'area_id': conversa.area_id,
+        'requester_id': conversa.requester_id,
+        'cost_center': conversa.cost_center,
         'data_classification': conversa.data_classification,
         'requested_provider': conversa.requested_provider,
         'authorized_provider': conversa.authorized_provider,
