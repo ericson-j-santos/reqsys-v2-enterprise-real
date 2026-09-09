@@ -5,6 +5,7 @@ import pytest
 from app.services.ai_corporate_policy import CorporateAIPolicyError, evaluate_provider_policy
 from app.services.ai_provider_config import (
     AIProviderRuntimeConfigError,
+    default_endpoint,
     resolve_endpoint,
     resolve_provider_config,
 )
@@ -28,6 +29,33 @@ def test_host_fora_da_allowlist_e_bloqueado() -> None:
     }
     with pytest.raises(AIProviderRuntimeConfigError, match='não autorizado'):
         resolve_endpoint('openai', env=env)
+
+
+def test_endpoint_padrao_inexistente_e_rejeitado() -> None:
+    with pytest.raises(AIProviderRuntimeConfigError, match='Endpoint padrão não definido'):
+        default_endpoint('provider-inexistente')
+
+
+def test_endpoint_invalido_e_rejeitado() -> None:
+    env = {
+        'ENVIRONMENT': 'dev',
+        'AI_DEV_OPENAI_ENDPOINT': 'endpoint-sem-scheme',
+    }
+    with pytest.raises(AIProviderRuntimeConfigError, match='Endpoint inválido'):
+        resolve_endpoint('openai', env=env)
+
+
+def test_segredo_legado_mapeado_permanece_compativel() -> None:
+    config = resolve_provider_config(
+        'openai',
+        env={
+            'ENVIRONMENT': 'dev',
+            'CODEX_OPENAI_KEY': 'legacy-secret',
+        },
+    )
+
+    assert config.secret == 'legacy-secret'
+    assert config.secret_source == 'mapping:CODEX_OPENAI_KEY'
 
 
 def test_provider_e_limitado_por_ambiente() -> None:
