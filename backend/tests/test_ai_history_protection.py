@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.encrypted_text import decrypt_text, encrypt_text
 from app.db import Base
 from app.models.ai_conversation import AIConversation, AIUsageLedger
+from app.services.ai_conversation import _classification_lock, executar_turno
 from app.services.ai_history_protection import (
     AIScopeViolationError,
     AIUsageBudgetExceededError,
@@ -39,19 +40,9 @@ def test_legado_plaintext_continua_legivel(monkeypatch) -> None:
 def test_escopo_bloqueia_tenant_e_area_divergentes() -> None:
     conversation = SimpleNamespace(tenant_id='tenant-a', area_id='juridico')
     with pytest.raises(AIScopeViolationError, match='tenant'):
-        assert_scope(
-            conversation,
-            tenant_id='tenant-b',
-            area_id='juridico',
-            enforce=True,
-        )
+        assert_scope(conversation, tenant_id='tenant-b', area_id='juridico', enforce=True)
     with pytest.raises(AIScopeViolationError, match='área'):
-        assert_scope(
-            conversation,
-            tenant_id='tenant-a',
-            area_id='financeiro',
-            enforce=True,
-        )
+        assert_scope(conversation, tenant_id='tenant-a', area_id='financeiro', enforce=True)
 
 
 def test_estimativa_de_tokens_e_explicitamente_estimativa() -> None:
@@ -65,9 +56,9 @@ def _db():
     return sessionmaker(bind=engine)()
 
 
-def _conversation(db) -> AIConversation:
+def _conversation(db, *, conversation_id: str = 'conv-budget') -> AIConversation:
     conversation = AIConversation(
-        id='conv-budget',
+        id=conversation_id,
         provider='ollama',
         model='local',
         titulo='Teste',
@@ -79,7 +70,7 @@ def _conversation(db) -> AIConversation:
         requester_id='user-1',
         cost_center='CC-10',
         data_classification='internal',
-        classification_lock_sha256='0' * 64,
+        classification_lock_sha256=_classification_lock(conversation_id, 'internal'),
         requested_provider='ollama',
         authorized_provider='ollama',
         policy_mode='off',
@@ -132,9 +123,37 @@ def test_orcamento_por_centro_de_custo_bloqueia_antes_do_excesso() -> None:
     db.commit()
     env = {'AI_COST_CENTER_MONTHLY_TOKEN_BUDGETS_JSON': '{"CC-10": 100}'}
     with pytest.raises(AIUsageBudgetExceededError, match='centro de custo'):
-        assert_budget(
-            db,
-            conversation=conversation,
-            estimated_next_tokens=21,
-            env=env,
-        )
+        assert_budget(db, conversation=conversation, estimated_next_tokens=21, env=env)
+
+
+def test_executar_turno_mascara_pii_antes_do_gateway(monkeypatch) -> None:
+    monkeypatch.setenv('AI_CONVERSATION_ENCRYPTION_MODE', 'off')
+    db = _db()
+    conversation = _conversation(db, conversation_id='conv-mask')
+
+    class GatewayFake:
+        prompt_recebido = ''
+
+        def gerar_ollama(self, **kwargs):
+            self.prompt_recebido = kwargs['prompt']
+            return 'resposta segura'
+
+    gateway = GatewayFake()
+    executar_turno(
+        db,
+        conversa=conversation,
+        mensagem='Meu CPF é 123.456.789-01 e e-mail ericson@example.com',
+        correlation_id='corr-mask',
+        idempotency_key='mask-1',
+        origem='test',
+        enviar_teams=False,
+        gateway=gateway,
+        env={
+            'AI_CORPORATE_POLICY_MODE': 'off',
+            'AI_CONVERSATION_OLLAMA_BASE_URL': 'http://localhost:11434',
+            'AI_CONVERSATION_PII_MASKING': 'true',
+        },
+    )
+    assert '123.456.789-01' not in gateway.prompt_recebido
+    assert 'ericson@example.com' not in gateway.prompt_recebido
+    assert '[DADO_MASCARADO]' in gateway.prompt_recebido
