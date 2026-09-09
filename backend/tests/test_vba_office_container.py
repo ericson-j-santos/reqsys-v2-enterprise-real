@@ -1,3 +1,4 @@
+from importlib.metadata import PackageNotFoundError
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -28,6 +29,10 @@ class FakeParser:
 
     def close(self):
         self.closed = True
+
+
+def _module(name: str = 'modTeste.bas', source: object = b'Sub X()\nEnd Sub'):
+    return ('xl/vbaProject.bin', f'VBA/{name}', name, source)
 
 
 def test_xlsm_extrai_modulos_sem_executar_office(monkeypatch):
@@ -104,3 +109,154 @@ def test_falha_interna_do_parser_nao_vaza_detalhe(monkeypatch):
     assert exc_info.value.code == 'VBA_PROJECT_PARSE_FAILED'
     assert exc_info.value.context == {'parser_error_type': 'RuntimeError'}
     assert 'segredo interno' not in str(exc_info.value.context)
+
+
+def test_readiness_reporta_parser_instalado(monkeypatch):
+    monkeypatch.setattr(container.importlib.metadata, 'version', lambda name: '0.60.2')
+
+    assert container.office_container_readiness() == {
+        'ready': True,
+        'dependency': 'oletools',
+        'version': '0.60.2',
+        'mode': 'vba_project_only',
+        'office_execution': False,
+    }
+
+
+def test_readiness_reporta_parser_ausente(monkeypatch):
+    def missing(_name):
+        raise PackageNotFoundError
+
+    monkeypatch.setattr(container.importlib.metadata, 'version', missing)
+
+    resultado = container.office_container_readiness()
+
+    assert resultado['ready'] is False
+    assert resultado['version'] is None
+
+
+def test_extensao_office_invalida_e_rejeitada():
+    with pytest.raises(OfficeVbaContainerError) as exc_info:
+        analyze_office_vba_container(_office_zip(), file_name='legado.xlsx')
+
+    assert exc_info.value.code == 'VBA_OFFICE_EXTENSION_UNSUPPORTED'
+
+
+def test_zip_invalido_e_rejeitado():
+    with pytest.raises(OfficeVbaContainerError) as exc_info:
+        analyze_office_vba_container(b'nao-e-zip', file_name='legado.xlsm')
+
+    assert exc_info.value.code == 'VBA_OFFICE_INVALID_ZIP'
+
+
+def test_limite_de_itens_do_zip_e_aplicado(monkeypatch):
+    monkeypatch.setattr(container, 'MAX_ARCHIVE_ENTRIES', 1)
+
+    with pytest.raises(OfficeVbaContainerError) as exc_info:
+        analyze_office_vba_container(_office_zip(), file_name='legado.xlsm')
+
+    assert exc_info.value.code == 'VBA_OFFICE_TOO_MANY_ARCHIVE_ENTRIES'
+    assert exc_info.value.status_code == 413
+
+
+def test_limite_descompactado_e_aplicado(monkeypatch):
+    monkeypatch.setattr(container, 'MAX_ARCHIVE_UNCOMPRESSED_BYTES', 1)
+
+    with pytest.raises(OfficeVbaContainerError) as exc_info:
+        analyze_office_vba_container(_office_zip(), file_name='legado.xlsm')
+
+    assert exc_info.value.code == 'VBA_OFFICE_ARCHIVE_TOO_LARGE_AFTER_DECOMPRESSION'
+
+
+def test_razao_de_compactacao_suspeita_e_bloqueada(monkeypatch):
+    monkeypatch.setattr(container, 'MAX_COMPRESSION_RATIO', 1.0)
+    project = b'A' * 1_048_577
+
+    with pytest.raises(OfficeVbaContainerError) as exc_info:
+        analyze_office_vba_container(_office_zip(project=project), file_name='legado.xlsm')
+
+    assert exc_info.value.code == 'VBA_OFFICE_SUSPICIOUS_COMPRESSION_RATIO'
+
+
+def test_limite_do_vba_project_e_aplicado(monkeypatch):
+    monkeypatch.setattr(container, 'MAX_PROJECT_BYTES', 2)
+
+    with pytest.raises(OfficeVbaContainerError) as exc_info:
+        analyze_office_vba_container(_office_zip(project=b'abc'), file_name='legado.xlsm')
+
+    assert exc_info.value.code == 'VBA_PROJECT_TOO_LARGE'
+
+
+def test_vba_project_vazio_e_rejeitado():
+    with pytest.raises(OfficeVbaContainerError) as exc_info:
+        analyze_office_vba_container(_office_zip(project=b''), file_name='legado.xlsm')
+
+    assert exc_info.value.code == 'VBA_PROJECT_EMPTY'
+
+
+def test_limite_de_modulos_e_aplicado(monkeypatch):
+    parser = FakeParser([_module('a.bas'), _module('b.bas')])
+    monkeypatch.setattr(container, '_parser_factory', lambda file_name, data: parser)
+    monkeypatch.setattr(container, 'MAX_MODULES', 1)
+
+    with pytest.raises(OfficeVbaContainerError) as exc_info:
+        analyze_office_vba_container(_office_zip(), file_name='legado.xlsm')
+
+    assert exc_info.value.code == 'VBA_TOO_MANY_MODULES'
+    assert parser.closed is True
+
+
+def test_limite_de_expansao_da_fonte_e_aplicado(monkeypatch):
+    parser = FakeParser([_module(source=b'abcd')])
+    monkeypatch.setattr(container, '_parser_factory', lambda file_name, data: parser)
+    monkeypatch.setattr(container, 'MAX_TOTAL_VBA_SOURCE_CHARS', 3)
+
+    with pytest.raises(OfficeVbaContainerError) as exc_info:
+        analyze_office_vba_container(_office_zip(), file_name='legado.xlsm')
+
+    assert exc_info.value.code == 'VBA_SOURCE_EXPANSION_TOO_LARGE'
+
+
+def test_tipo_de_fonte_invalido_e_rejeitado(monkeypatch):
+    parser = FakeParser([_module(source=object())])
+    monkeypatch.setattr(container, '_parser_factory', lambda file_name, data: parser)
+
+    with pytest.raises(OfficeVbaContainerError) as exc_info:
+        analyze_office_vba_container(_office_zip(), file_name='legado.xlsm')
+
+    assert exc_info.value.code == 'VBA_MODULE_SOURCE_ENCODING_UNSUPPORTED'
+
+
+def test_agrega_riscos_por_severidade_e_modulo(monkeypatch):
+    parser = FakeParser([_module()])
+    monkeypatch.setattr(container, '_parser_factory', lambda file_name, data: parser)
+
+    def fake_analysis(_source, *, file_name):
+        return {
+            'sha256': 'a' * 64,
+            'summary': {
+                'procedures': 1,
+                'dependencies': 0,
+                'business_rules': 0,
+                'requirement_candidates': 1,
+            },
+            'module': {'name': file_name},
+            'procedures': [{'name': 'X'}],
+            'dependencies': [],
+            'business_rules': [],
+            'risks': [
+                {'code': 'VBA004', 'severity': 'critical'},
+                {'code': 'VBA999', 'severity': 'unknown'},
+            ],
+            'requirement_candidates': [{'id': 'REQ-VBA-1'}],
+        }
+
+    monkeypatch.setattr(container, 'analyze_vba_source', fake_analysis)
+
+    resultado = analyze_office_vba_container(_office_zip(), file_name='legado.xlsm')
+
+    assert resultado['summary']['risks_by_severity']['critical'] == 1
+    assert resultado['risks'][0]['module'] == 'modTeste.bas'
+    assert resultado['requirement_candidates'][0]['module'] == 'modTeste.bas'
+    assert resultado['modernization_plan'][0]['required'] is True
+    assert resultado['modernization_plan'][1]['required'] is True
