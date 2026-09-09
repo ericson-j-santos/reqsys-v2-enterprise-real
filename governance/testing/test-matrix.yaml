@@ -18,25 +18,40 @@
         "frontend_build",
         "frontend_e2e_responsive"
       ]
+    },
+    "pr_report": {
+      "description": "Perfil do workflow report-only: executa as suítes seletivas e gera cobertura JSON do backend para medição diferencial.",
+      "suites": [
+        "quality_fabric_selftest",
+        "backend_coverage_report",
+        "frontend_unit",
+        "frontend_build",
+        "frontend_e2e_responsive"
+      ]
     }
   },
   "suites": {
     "quality_fabric_selftest": {
-      "description": "Valida manifesto, roteamento, execução segura e geração de evidências do Quality Fabric.",
+      "description": "Valida manifesto, roteamento, execução segura, cobertura diferencial e contrato do workflow report-only.",
       "cwd": ".",
       "command": [
         "{python}",
         "-m",
         "pytest",
         "-q",
-        "tests/test_testing_orchestrator.py"
+        "tests/test_testing_orchestrator.py",
+        "tests/test_differential_coverage.py",
+        "tests/test_quality_fabric_report_only.py"
       ],
       "timeout_seconds": 180,
       "always_run": true,
       "paths": [
         "governance/testing/**",
         "scripts/testing/**",
-        "tests/test_testing_orchestrator.py"
+        "tests/test_testing_orchestrator.py",
+        "tests/test_differential_coverage.py",
+        "tests/test_quality_fabric_report_only.py",
+        ".github/workflows/quality-fabric-report-only.yml"
       ],
       "evidence_kind": "governance"
     },
@@ -50,6 +65,27 @@
         "tests/",
         "-q",
         "--tb=short"
+      ],
+      "timeout_seconds": 1800,
+      "always_run": false,
+      "paths": [
+        "backend/**"
+      ],
+      "evidence_kind": "unit-integration"
+    },
+    "backend_coverage_report": {
+      "description": "Suíte backend report-only com coverage.py JSON para medir cobertura das linhas alteradas.",
+      "cwd": "backend",
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "tests/",
+        "-q",
+        "--tb=short",
+        "--cov=app",
+        "--cov-config=pyproject.toml",
+        "--cov-report=json:../artifacts/quality-fabric/runtime/backend-coverage.json"
       ],
       "timeout_seconds": 1800,
       "always_run": false,
