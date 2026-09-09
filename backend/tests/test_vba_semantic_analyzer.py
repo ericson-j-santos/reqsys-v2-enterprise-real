@@ -68,15 +68,15 @@ End Sub
     assert resultado['execution_performed'] is False
 
 
-def test_nao_expoe_segredo_em_evidencia_semantica():
-    source = '''Attribute VB_Name = "modSegredo"
+def test_nao_expoe_valor_de_segredo_em_evidencia_semantica():
+    source = '''Attribute VB_Name = "modConexao"
 Sub X()
-    conexao = "Server=x;Password=segredo"
+    conexao = "Server=x;Password=senha-ultrassecreta-123"
 End Sub
 '''
 
-    resultado = analyze_vba_semantics(source, file_name='modSegredo.bas')
+    resultado = analyze_vba_semantics(source, file_name='modConexao.bas')
     serializado = str(resultado['semantic_analysis'])
 
-    assert 'segredo' not in serializado
+    assert 'senha-ultrassecreta-123' not in serializado
     assert '<redacted>' in serializado
