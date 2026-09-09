@@ -1,6 +1,6 @@
 # ADR-046 — PC próprio 24x7 como substituto do Fly.io
 
-Status: proposto (aguardando decisão sobre exposição pública e escopo de produção)
+Status: proposto (bloqueio regulatório BACEN descartado em 2026-09-09; aguardando domínio, backup e comparação de custo)
 Data: 2026-09-09
 
 ## Contexto
@@ -99,11 +99,47 @@ foi confirmada.
    `deploy-production-sync.yml` (aprovação manual `APROVO-PROD`) e o
    `infra/fly-environments.json` (`approval_required: true` para hml/prod)
    assumem deploy via `flyctl`. Migrar produção para o PC 24x7 exige redesenhar
-   esse gate — e cabe perguntar se o nome/framing "BACEN" desse gate reflete
-   algum requisito regulatório real do sistema que tornaria hospedagem
-   residencial de produção inadequada. **Isso precisa ser confirmado pelo
-   usuário antes de mover produção especificamente** — dev e hml têm risco
-   muito menor.
+   esse gate.
+
+   **Investigado em 2026-09-09 (resolve o critério de aceite abaixo):** o
+   "BACEN" não é um nome de convenção vazio — existe uma estrutura extensa e
+   genuína em `governance/bacen/` (`CLOUD-THIRD-PARTY-REGISTER.yaml`,
+   `CYBERSECURITY-POLICY.md`, `ACCESS-CONTROL-POLICY.md`,
+   `INCIDENT-RESPONSE-PLAN.md`, `ANNUAL-CYBERSECURITY-REPORT.md`, etc.) e
+   ~40 workflows `.github/workflows/bacen-*.yml` modelando controles reais de
+   resoluções do Banco Central sobre nuvem/terceiros críticos, residência de
+   dados, MFA, revisão de acesso e resposta a incidente.
+
+   Porém `governance/bacen/CYBERSECURITY-POLICY-METADATA.yaml` e
+   `governance/bacen/DEFERRED-INSTITUTIONAL-APPROVAL.md` deixam explícito que
+   essa estrutura está em `lifecycle_stage: DEVELOPMENT`,
+   `production_touched: false`, e que a aprovação institucional formal é
+   **deliberadamente adiada** até uma eventual "institucionalização" — ou
+   seja, o próprio sistema declara, por design, que ainda não representa uma
+   instituição financeira real sob supervisão vigente do BACEN hoje. Não é
+   fabricada evidência de conformidade; é uma prática/simulação de governança
+   honesta sobre um produto ainda pré-oficialização.
+
+   **Conclusão:** hospedar produção (no estágio atual, pré-institucional) num
+   PC 24x7 **não viola nenhuma obrigação regulatória vigente hoje** — não há
+   registro de que este sistema opere hoje como instituição financeira
+   supervisionada de fato. Dito isso, o `CLOUD-THIRD-PARTY-REGISTER.yaml`
+   também mostra que o próprio framework já antecipa provedores
+   "self-hosted, conforme ambiente" (ex.: `BACEN-05-T12`/`T13`, Postgres e
+   Redis) como categoria válida, então adicionar o PC 24x7 como um provider
+   registrado (com `risk_review_status`/`dpa_status` preenchidos igual aos
+   demais) é o caminho consistente com o padrão já usado no repositório — não
+   precisa ser tratado como exceção.
+
+   **Ressalva que continua de pé:** se este projeto algum dia avançar para
+   `lifecycle_stage: PRODUCTION`/`INSTITUTIONAL` (uma instituição real
+   supervisionada), as Resoluções BCB sobre computação em nuvem e serviços
+   relevantes de processamento/armazenamento de dados (ex.: Resolução BCB
+   nº 85/2021) exigem avaliação formal de risco, notificação e requisitos de
+   segurança/continuidade que um PC residencial dificilmente atende (sem SLA,
+   sem redundância geográfica, sem contrato formal de fornecedor). Migrar
+   para o PC 24x7 agora, em fase de prática, é razoável; deixar de reverter
+   essa decisão antes de uma eventual institucionalização real não seria.
 3. **Sem plataforma gerenciada de restart/health.** Hoje a Fly Machines
    plataforma reinicia a máquina automaticamente em crash e expõe
    `auto_stop_machines`/`auto_start_machines`/health checks nativos. No PC
@@ -143,8 +179,11 @@ foi confirmada.
 
 ## Critérios de aceite (para sair de "proposto" para "aceito")
 
-- [ ] Confirmado se o gate "BACEN" no deploy de produção reflete um requisito
-      regulatório real ou é só um nome interno de convenção.
+- [x] Confirmado se o gate "BACEN" no deploy de produção reflete um requisito
+      regulatório real ou é só um nome interno de convenção — **resolvido
+      2026-09-09**: é uma prática de governança genuína, mas o próprio
+      sistema declara `production_touched: false`/pré-institucionalização;
+      não há bloqueio regulatório vigente hoje (ver seção de riscos acima).
 - [ ] Domínio definido e nameservers migrados para a Cloudflare.
 - [ ] Decisão explícita: produção realmente migra junto, ou fica no Fly.io
       enquanto dev/hml migram primeiro como piloto?
