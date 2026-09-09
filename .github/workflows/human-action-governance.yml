@@ -1,0 +1,55 @@
+name: Human Action Governance
+
+on:
+  pull_request:
+    paths:
+      - "governance/human-actions/**"
+      - "scripts/governance/human_action_workflow.py"
+      - "tests/test_human_action_workflow.py"
+      - ".github/workflows/human-action-governance.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/human-actions/**"
+      - "scripts/governance/human_action_workflow.py"
+      - "tests/test_human_action_workflow.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-human-actions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependência de teste
+        run: python -m pip install --disable-pip-version-check --no-input pytest
+
+      - name: Validar catálogo governado
+        run: python scripts/governance/human_action_workflow.py validate-catalog
+
+      - name: Gerar blueprint P0-1
+        run: |
+          mkdir -p artifacts/human-actions
+          python scripts/governance/human_action_workflow.py blueprint P0-1 \
+            --output artifacts/human-actions/P0-1-blueprint.md
+
+      - name: Executar testes focados
+        run: python -m pytest tests/test_human_action_workflow.py -q
+
+      - name: Publicar blueprint para auditoria
+        uses: actions/upload-artifact@v4
+        with:
+          name: human-action-blueprint-p0-1
+          path: artifacts/human-actions/P0-1-blueprint.md
+          if-no-files-found: error
+          retention-days: 14
