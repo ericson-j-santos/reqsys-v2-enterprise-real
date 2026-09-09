@@ -9,6 +9,7 @@ SEMANTIC_SCHEMA_VERSION = '1.0.0'
 
 _ASSIGNMENT_RE = re.compile(r'^\s*(?:Set\s+)?(.+?)\s*=\s*(.+)$', re.IGNORECASE)
 _IDENTIFIER_RE = re.compile(r'\b[A-Za-z_]\w*\b')
+_STRING_LITERAL_RE = re.compile(r'"(?:[^"]|"")*"')
 _RANGE_RE = re.compile(r'(?:(?:Worksheets|Sheets)\s*\(\s*["\']([^"\']+)["\']\s*\)\s*\.)?Range\s*\(\s*["\']([^"\']+)["\']\s*\)', re.IGNORECASE)
 _CELLS_RE = re.compile(r'(?:(?:Worksheets|Sheets)\s*\(\s*["\']([^"\']+)["\']\s*\)\s*\.)?Cells\s*\(\s*([^\)]+)\)', re.IGNORECASE)
 _SQL_LITERAL_RE = re.compile(r'["\']\s*(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM|EXEC(?:UTE)?)\b', re.IGNORECASE)
@@ -22,6 +23,7 @@ _KEYWORDS = {
     'else', 'elseif', 'end', 'sub', 'function', 'property', 'call', 'byval', 'byref',
     'dim', 'public', 'private', 'friend', 'const', 'select', 'case', 'for', 'next', 'do',
     'loop', 'while', 'wend', 'with', 'me', 'thisworkbook', 'activeworkbook', 'activesheet',
+    'worksheets', 'sheets', 'range', 'cells', 'value', 'application', 'execute', 'commandtext',
 }
 
 
@@ -77,8 +79,9 @@ def _excel_refs(expression: str) -> list[str]:
 
 
 def _identifiers(expression: str) -> list[str]:
+    expression_without_literals = _STRING_LITERAL_RE.sub(' ', expression)
     result: list[str] = []
-    for token in _IDENTIFIER_RE.findall(expression):
+    for token in _IDENTIFIER_RE.findall(expression_without_literals):
         lower = token.lower()
         if lower in _KEYWORDS or token.isdigit():
             continue
@@ -174,7 +177,7 @@ def _extract_semantic_flow(source: str, base: dict[str, object]) -> dict[str, ob
         if execute:
             expression = execute.group(1).strip()
             sink_id = add_node('database_sink', 'database_command', line_no, proc_name)
-            source_ids = set()
+            source_ids: set[str] = set()
             for identifier in _identifiers(expression):
                 source_ids.update(lineage.get(identifier.lower(), {_node_id('variable', identifier)}))
                 add_node('variable', identifier, line_no, proc_name)
@@ -212,7 +215,7 @@ def _extract_semantic_flow(source: str, base: dict[str, object]) -> dict[str, ob
             'nodes': len(nodes),
             'edges': len(edges),
             'sinks': len(sinks),
-            'procedures_with_flow': len({item['procedure'] for item in edges if item['procedure'] is not None}) if edges and 'procedure' in edges[0] else len({edge.get('procedure') for edge in []}),
+            'procedures_with_flow': 0,
         },
     }
 
