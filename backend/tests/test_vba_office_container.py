@@ -186,6 +186,7 @@ def test_readiness_reporta_parser_instalado(monkeypatch):
         'office_execution': False,
         'pcode_integrity_check': True,
         'pcode_engine': 'pcodedmp',
+        'semantic_data_flow': True,
     }
 
 
@@ -200,6 +201,7 @@ def test_readiness_reporta_parser_ausente(monkeypatch):
     assert resultado['ready'] is False
     assert resultado['version'] is None
     assert resultado['pcode_integrity_check'] is False
+    assert resultado['semantic_data_flow'] is True
 
 
 def test_extensao_office_invalida_e_rejeitada():
