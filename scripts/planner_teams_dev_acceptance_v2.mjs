@@ -17,6 +17,10 @@ const FLOW_BASE = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSim
 const GRAPH = 'https://graph.microsoft.com/v1.0'
 const POWER_PLATFORM = 'https://api.powerplatform.com'
 const POLL_SECONDS = Number(process.env.PLANNER_TEAMS_POLL_SECONDS || '420')
+const RUN_POLL_INTERVAL_MS = Number(process.env.PLANNER_TEAMS_RUN_POLL_INTERVAL_MS || '30000')
+const FLOW_START_TIMEOUT_SECONDS = Number(process.env.PLANNER_TEAMS_FLOW_START_TIMEOUT_SECONDS || '120')
+const FLOW_START_POLL_INTERVAL_MS = Number(process.env.PLANNER_TEAMS_FLOW_START_POLL_INTERVAL_MS || '5000')
+const TRIGGER_WARMUP_SECONDS = Number(process.env.PLANNER_TEAMS_TRIGGER_WARMUP_SECONDS || '15')
 
 function optional(name) { return String(process.env[name] || '').trim() }
 function required(name) {
@@ -88,7 +92,7 @@ async function acquireDelegated(state, scope) {
   return payload.access_token
 }
 
-async function acquireByDeviceCode(clientId, scope) {
+async function acquireByDeviceCode(clientId) {
   let device = null
   const preparedPath = optional('DEVICE_CODE_PRIVATE_PATH')
   if (preparedPath) {
@@ -100,6 +104,7 @@ async function acquireByDeviceCode(clientId, scope) {
   const generatedAt = Date.parse(device.generated_at || iso())
   const deadline = generatedAt + Number(device.expires_in || 900) * 1000
   let interval = Math.max(5, Number(device.interval || 5))
+
   while (Date.now() < deadline) {
     await sleep(interval * 1000)
     const response = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`, {
@@ -274,17 +279,53 @@ function chooseConnection(items, marker, envName) {
 function connectionId(item) { return String(item?.name || item?.id || '').trim() }
 function connectionName(item) { return String(item?.properties?.displayName || item?.name || item?.id || '') }
 
+function flowUrl(environmentId, flowId, suffix = '') {
+  return `${FLOW_BASE}/environments/${encodeURIComponent(environmentId)}/flows/${encodeURIComponent(flowId)}${suffix}?api-version=2016-11-01`
+}
+
+async function getFlowState(environmentId, flowId, flowToken) {
+  const response = await fetch(flowUrl(environmentId, flowId), {
+    headers: { Authorization: `Bearer ${flowToken}`, Accept: 'application/json' },
+  })
+  const payload = await jsonResponse(response, 'flow_state', [200])
+  return String(payload?.properties?.state || payload?.state || payload?.properties?.status || '')
+}
+
 async function flowAction(environmentId, flowId, action, flowToken) {
-  const url = `${FLOW_BASE}/environments/${encodeURIComponent(environmentId)}/flows/${encodeURIComponent(flowId)}/${action}?api-version=2016-11-01`
-  const response = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${flowToken}` } })
+  const response = await fetch(flowUrl(environmentId, flowId, `/${action}`), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${flowToken}` },
+  })
   if (![200, 202, 204].includes(response.status)) {
     throw new Error(`flow_${action}:http_${response.status}:${(await response.text()).slice(0, 1000)}`)
   }
 }
 
+async function waitForFlowStarted(environmentId, flowId, flowToken) {
+  const startedAt = Date.now()
+  const deadline = startedAt + FLOW_START_TIMEOUT_SECONDS * 1000
+  let state = ''
+  let polls = 0
+  while (Date.now() <= deadline) {
+    state = await getFlowState(environmentId, flowId, flowToken)
+    polls += 1
+    if (state.toLowerCase() === 'started') {
+      return {
+        state,
+        confirmed_at: iso(),
+        latency_seconds: Math.round((Date.now() - startedAt) / 1000),
+        polls,
+      }
+    }
+    await sleep(FLOW_START_POLL_INTERVAL_MS)
+  }
+  throw new Error(`flow_nao_confirmou_started:${flowId}:ultimo_estado=${state || 'desconhecido'}:polls=${polls}`)
+}
+
 async function listFlowRuns(environmentId, flowId, flowToken, since) {
-  const url = `${FLOW_BASE}/environments/${encodeURIComponent(environmentId)}/flows/${encodeURIComponent(flowId)}/runs?api-version=2016-11-01`
-  const response = await fetch(url, { headers: { Authorization: `Bearer ${flowToken}` } })
+  const response = await fetch(flowUrl(environmentId, flowId, '/runs'), {
+    headers: { Authorization: `Bearer ${flowToken}` },
+  })
   const payload = await jsonResponse(response, 'flow_runs', [200])
   return (payload.value || []).filter((run) => {
     const start = Date.parse(run?.properties?.startTime || run?.properties?.createdTime || 0)
@@ -298,8 +339,10 @@ async function listFlowRuns(environmentId, flowId, flowToken, since) {
 }
 
 async function listRunActions(environmentId, flowId, runId, flowToken) {
-  const url = `${FLOW_BASE}/environments/${encodeURIComponent(environmentId)}/flows/${encodeURIComponent(flowId)}/runs/${encodeURIComponent(runId)}/actions?api-version=2016-11-01`
-  const response = await fetch(url, { headers: { Authorization: `Bearer ${flowToken}` } })
+  const response = await fetch(
+    `${FLOW_BASE}/environments/${encodeURIComponent(environmentId)}/flows/${encodeURIComponent(flowId)}/runs/${encodeURIComponent(runId)}/actions?api-version=2016-11-01`,
+    { headers: { Authorization: `Bearer ${flowToken}` } },
+  )
   if (response.status !== 200) return { available: false, status_code: response.status, actions: [] }
   const payload = await readJsonResponse(response)
   const actions = (payload.value || []).map((item) => ({
@@ -309,6 +352,32 @@ async function listRunActions(environmentId, flowId, runId, flowToken) {
     end_time: String(item?.properties?.endTime || ''),
   }))
   return { available: true, status_code: 200, actions }
+}
+
+async function collectRunsUntilReady(environmentId, flows, flowToken, since) {
+  const deadline = Date.now() + POLL_SECONDS * 1000
+  let polls = 0
+  let firstRunAt = null
+
+  while (true) {
+    polls += 1
+    for (const flow of flows) {
+      flow.runs = await listFlowRuns(environmentId, flow.flow_id, flowToken, since)
+    }
+
+    const createdFlow = flows.find((flow) => flow.evento === 'criada')
+    const count = createdFlow?.runs?.length || 0
+    if (count > 0 && !firstRunAt) firstRunAt = iso()
+    if (count >= 2) {
+      return { polls, first_run_observed_at: firstRunAt, timed_out: false }
+    }
+
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) {
+      return { polls, first_run_observed_at: firstRunAt, timed_out: true }
+    }
+    await sleep(Math.min(RUN_POLL_INTERVAL_MS, remaining))
+  }
 }
 
 async function createPlannerTask(token, title) {
@@ -327,7 +396,7 @@ async function deletePlannerTask(token, taskId) {
 }
 
 const evidence = {
-  schema_version: '1.1.0',
+  schema_version: '1.2.0',
   capability: 'planner-teams-notify-dev-acceptance',
   environment: 'dev',
   run_id: optional('GITHUB_RUN_ID'),
@@ -342,6 +411,12 @@ const evidence = {
   tasks: [],
   flows: [],
   checks: {},
+  timing: {
+    run_poll_interval_seconds: RUN_POLL_INTERVAL_MS / 1000,
+    run_poll_timeout_seconds: POLL_SECONDS,
+    flow_start_timeout_seconds: FLOW_START_TIMEOUT_SECONDS,
+    trigger_warmup_seconds: TRIGGER_WARMUP_SECONDS,
+  },
 }
 
 let graphToken = ''
@@ -362,7 +437,7 @@ try {
   } catch (error) {
     if (!String(error?.message || error).includes('AADSTS700084')) throw error
     evidence.checks.microsoft_session = 'expired_device_code_required'
-    const deviceTokens = await acquireByDeviceCode(refreshState.clientId, 'https://api.powerplatform.com/.default')
+    const deviceTokens = await acquireByDeviceCode(refreshState.clientId)
     refreshState.refreshToken = deviceTokens.refresh_token
     powerToken = deviceTokens.access_token
     const login = unwrap(await reqsys('/v1/auth/azure', '', {
@@ -442,39 +517,86 @@ try {
     flow_url: flow.flow_url,
   }))
 
+  const activation = []
   for (const flow of evidence.flows) {
+    const stateBefore = await getFlowState(environmentId, flow.flow_id, flowToken)
     await flowAction(environmentId, flow.flow_id, 'start', flowToken)
     startedFlowIds.push(flow.flow_id)
+    const confirmed = await waitForFlowStarted(environmentId, flow.flow_id, flowToken)
+    activation.push({
+      flow_id: flow.flow_id,
+      evento: flow.evento,
+      state_before_start: stateBefore,
+      state_after_start: confirmed.state,
+      started_confirmed_at: confirmed.confirmed_at,
+      activation_latency_seconds: confirmed.latency_seconds,
+      activation_polls: confirmed.polls,
+    })
   }
-  evidence.checks.flow_activation = 'started'
+  evidence.checks.flow_activation = 'started_confirmed'
+  evidence.flow_activation = activation
+
+  if (TRIGGER_WARMUP_SECONDS > 0) {
+    evidence.trigger_warmup_started_at = iso()
+    await sleep(TRIGGER_WARMUP_SECONDS * 1000)
+    evidence.trigger_warmup_completed_at = iso()
+  }
 
   const marker = Date.now()
   const e2eTitle = `REQSYS-E2E-NOTIFY-FILTER-${marker}`
   const normalTitle = `REQSYS-NOTIFY-FILTER-NORMAL-${marker}`
+
+  const e2eCreatedAt = iso()
   const e2eTask = await createPlannerTask(graphToken, e2eTitle)
   createdTaskIds.push(e2eTask.id)
+
+  const normalCreatedAt = iso()
   const normalTask = await createPlannerTask(graphToken, normalTitle)
   createdTaskIds.push(normalTask.id)
+
   evidence.tasks = [
-    { kind: 'e2e', id: e2eTask.id, title: e2eTitle, expected_teams: 'skipped' },
-    { kind: 'normal', id: normalTask.id, title: normalTitle, expected_teams: 'succeeded' },
+    { kind: 'e2e', id: e2eTask.id, title: e2eTitle, created_at: e2eCreatedAt, expected_teams: 'skipped' },
+    { kind: 'normal', id: normalTask.id, title: normalTitle, created_at: normalCreatedAt, expected_teams: 'succeeded' },
   ]
   evidence.checks.planner_tasks_created = 2
   evidence.observation_window_started_at = iso()
 
-  await sleep(POLL_SECONDS * 1000)
+  const runPolling = await collectRunsUntilReady(
+    environmentId,
+    evidence.flows,
+    flowToken,
+    evidence.observation_window_started_at,
+  )
+  evidence.run_polling = runPolling
+
+  const createdFlow = evidence.flows.find((flow) => flow.evento === 'criada')
+  const createdRuns = createdFlow?.runs || []
+  evidence.checks.created_flow_runs_observed = createdRuns.length
+
+  if (createdRuns.length > 0) {
+    const firstRunStart = createdRuns
+      .map((run) => Date.parse(run.start_time))
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b)[0]
+    const firstTaskAt = Date.parse(evidence.tasks[0].created_at)
+    if (Number.isFinite(firstRunStart) && Number.isFinite(firstTaskAt)) {
+      evidence.checks.trigger_latency_seconds = Math.max(0, Math.round((firstRunStart - firstTaskAt) / 1000))
+    }
+  }
 
   for (const flow of evidence.flows) {
-    flow.runs = await listFlowRuns(environmentId, flow.flow_id, flowToken, evidence.observation_window_started_at)
-    for (const run of flow.runs) {
+    for (const run of flow.runs || []) {
       run.action_evidence = await listRunActions(environmentId, flow.flow_id, run.id, flowToken)
     }
   }
-  const createdFlow = evidence.flows.find((flow) => flow.evento === 'criada')
-  evidence.checks.created_flow_runs_observed = createdFlow?.runs?.length || 0
-  if ((createdFlow?.runs?.length || 0) < 2) {
-    throw new Error(`execucoes_flow_criada_insuficientes:${createdFlow?.runs?.length || 0}`)
+
+  if (createdRuns.length < 2) {
+    throw new Error(
+      `execucoes_flow_criada_insuficientes:${createdRuns.length}:` +
+      `estado_confirmado=Started:polls=${runPolling.polls}:timeout_s=${POLL_SECONDS}`,
+    )
   }
+
   evidence.status = 'runtime_executed_awaiting_teams_observation'
 } catch (error) {
   evidence.status = 'failed'
@@ -482,6 +604,7 @@ try {
   process.exitCode = 1
 } finally {
   evidence.cleanup = { tasks: [], flows: [] }
+
   if (graphToken) {
     for (const taskId of createdTaskIds) {
       try {
@@ -493,6 +616,7 @@ try {
       }
     }
   }
+
   if (flowToken && environmentId) {
     for (const flowId of startedFlowIds) {
       try {
@@ -504,17 +628,22 @@ try {
       }
     }
   }
+
   evidence.completed_at = iso()
   const dir = EVIDENCE_PATH.split('/').slice(0, -1).join('/')
   if (dir) await fs.mkdir(dir, { recursive: true })
   await fs.writeFile(EVIDENCE_PATH, JSON.stringify(evidence, null, 2) + '\n', 'utf8')
+
   console.log(JSON.stringify({
     status: evidence.status,
     correlation_id: evidence.correlation_id,
     run_attempt: evidence.run_attempt,
     tasks: evidence.tasks.map(({ kind, title, expected_teams }) => ({ kind, title, expected_teams })),
     environment: evidence.power_platform || null,
+    flow_activation: evidence.checks.flow_activation || null,
     created_flow_runs_observed: evidence.checks.created_flow_runs_observed || 0,
+    trigger_latency_seconds: evidence.checks.trigger_latency_seconds ?? null,
+    run_polling: evidence.run_polling || null,
     evidence_path: EVIDENCE_PATH,
     error: evidence.error || null,
   }))
