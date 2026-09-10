@@ -57,6 +57,20 @@ def test_requires_numeric_pattern_to_be_compilable():
         validate_profile(payload)
 
 
+def test_rejects_unsafe_sql_procedure_identifier():
+    payload = valid_profile()
+    payload["sql"]["procedure"] = "integration.usp_Consulta;DROP_TABLE"
+    with pytest.raises(IntegrationProfileError, match="sql.procedure"):
+        validate_profile(payload)
+
+
+def test_rejects_unsafe_sql_key_field_identifier():
+    payload = valid_profile()
+    payload["sql"]["key_field"] = "Identificador]FROM_Dados"
+    with pytest.raises(IntegrationProfileError, match="sql.key_field"):
+        validate_profile(payload)
+
+
 def test_requires_governance_controls():
     payload = valid_profile()
     payload["governance"]["idempotent"] = False
