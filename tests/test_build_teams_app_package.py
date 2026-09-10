@@ -33,8 +33,10 @@ def test_builder_gera_zip_instalavel_com_rsc_minimo(tmp_path: Path) -> None:
         {"name": "ChannelMessage.Read.Group", "type": "Application"}
     ]
     assert "ChannelMessage.Read.All" not in json.dumps(manifest)
-    assert "reqsys-api-dev.fly.dev" in manifest["validDomains"]
-    assert "token.botframework.com" in manifest["validDomains"]
+    assert {
+        "reqsys-api-dev.fly.dev",
+        "token.botframework.com",
+    }.issubset(set(manifest["validDomains"]))
 
 
 def test_builder_rejeita_permissao_organizacional_ampla(tmp_path: Path) -> None:
