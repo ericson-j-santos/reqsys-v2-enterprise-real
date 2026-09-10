@@ -6,6 +6,14 @@ on:
       - Teams Notification Dashboard
     types:
       - completed
+  workflow_dispatch:
+    inputs:
+      producer_run_id:
+        description: "Run ID opcional do Teams Notification Dashboard; vazio usa o último sucesso"
+        required: false
+        type: string
+  schedule:
+    - cron: "50 12 * * *"
 
 permissions:
   actions: read
@@ -20,7 +28,7 @@ concurrency:
 jobs:
   deploy:
     name: Publicar Pages canônico sem colisão
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -32,6 +40,63 @@ jobs:
         with:
           ref: main
 
+      - name: Resolver execução produtora
+        id: producer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          INPUT_RUN_ID: ${{ inputs.producer_run_id }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            run_id="$WORKFLOW_RUN_ID"
+            source="workflow_run"
+          elif [[ -n "${INPUT_RUN_ID:-}" ]]; then
+            run_id="$INPUT_RUN_ID"
+            source="workflow_dispatch"
+          else
+            run_id="$(gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/teams-notification-dashboard.yml/runs?status=success&per_page=20" \
+              --jq '.workflow_runs[0].id // empty')"
+            source="latest_success"
+          fi
+
+          if [[ -z "${run_id:-}" || ! "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "Não foi possível resolver um run_id válido do produtor." >&2
+            exit 1
+          fi
+
+          producer_name="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.name')"
+          producer_conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion')"
+          producer_created_at="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.created_at')"
+
+          if [[ "$producer_name" != "Teams Notification Dashboard" ]]; then
+            echo "Run ${run_id} pertence a workflow inesperado: ${producer_name}" >&2
+            exit 1
+          fi
+          if [[ "$producer_conclusion" != "success" ]]; then
+            echo "Run ${run_id} não concluiu com sucesso: ${producer_conclusion}" >&2
+            exit 1
+          fi
+
+          python - "$producer_created_at" <<'PY'
+          import sys
+          from datetime import datetime, timezone
+
+          created_at = datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00"))
+          age_hours = (datetime.now(timezone.utc) - created_at).total_seconds() / 3600
+          if age_hours < 0 or age_hours > 48:
+              raise SystemExit(f"Execução produtora fora da janela de 48h: {age_hours:.2f}h")
+          print(f"Execução produtora válida: {age_hours:.2f}h")
+          PY
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "created_at=$producer_created_at" >> "$GITHUB_OUTPUT"
+
       - name: Baixar artefato do produtor Teams
         uses: actions/download-artifact@v4
         with:
@@ -39,7 +104,7 @@ jobs:
           path: teams-dashboard-site
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ steps.producer.outputs.run_id }}
 
       - name: Setup Python para documentação
         uses: actions/setup-python@v5
@@ -84,7 +149,9 @@ jobs:
           test -s site/codex-local-online/index.html
           test -s site/docs/index.html
 
-          grep -Fq 'Teams' site/index.html
+          grep -Fq 'GitHub' site/index.html
+          grep -Fq 'Microsoft Teams' site/index.html
+          grep -Fq 'Certificação' site/index.html
           grep -Fq 'SLO' site/index.html
 
           python - <<'PY'
@@ -100,6 +167,7 @@ jobs:
               'success_rate_percent',
               'total_runs',
               'recent_runs',
+              'certification',
           }
           missing = sorted(required.difference(payload))
           if missing:
@@ -107,8 +175,23 @@ jobs:
 
           generated_at = datetime.fromisoformat(str(payload['generated_at']).replace('Z', '+00:00'))
           age_hours = (datetime.now(timezone.utc) - generated_at).total_seconds() / 3600
-          if age_hours < 0 or age_hours > 2:
-              raise SystemExit(f'data.json não corresponde à publicação recém-gerada: {age_hours:.2f}h')
+          if age_hours < 0 or age_hours > 48:
+              raise SystemExit(f'data.json fora da janela pública de 48h: {age_hours:.2f}h')
+
+          certification = json.load(open('site/certification-status.json', encoding='utf-8'))
+          required_certification = {
+              'state',
+              'delivery_rate',
+              'monitor_rate',
+              'observed_days',
+              'blockers',
+              'evidence_sha256',
+          }
+          missing_certification = sorted(required_certification.difference(certification))
+          if missing_certification:
+              raise SystemExit(
+                  'campos ausentes em certification-status.json: ' + ', '.join(missing_certification)
+              )
           PY
 
           if grep -RniE \
@@ -142,4 +225,6 @@ jobs:
             echo '- `/docs/`: documentação MkDocs'
             echo '- `/codex-local-online/`: interface Codex Local Online'
             echo '- Proprietário único: `.github/workflows/deploy-reqsys-pages-composite.yml`.'
+            echo '- Run produtor: `${{ steps.producer.outputs.run_id }}`.'
+            echo '- Origem da resolução: `${{ steps.producer.outputs.source }}`.'
           } >> "$GITHUB_STEP_SUMMARY"
