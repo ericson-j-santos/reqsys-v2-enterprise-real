@@ -19,8 +19,12 @@ GRAPH = "https://graph.microsoft.com/v1.0"
 TIMEOUT = 30.0
 TABLE = "tbDemandas"
 LOCAL_MARKER_FIELDS = ("Risco", "Próxima ação")
-LOCK_RETRY_ATTEMPTS = 12
+LOCK_RETRY_ATTEMPTS = 60
 LOCK_RETRY_DELAY_SECONDS = 5.0
+LOCK_RETRY_MAX_ATTEMPTS = 240
+LOCK_RETRY_MAX_DELAY_SECONDS = 60.0
+LOCK_RETRY_ATTEMPTS_ENV = "WSJF_WORKBOOK_LOCK_RETRY_ATTEMPTS"
+LOCK_RETRY_DELAY_SECONDS_ENV = "WSJF_WORKBOOK_LOCK_RETRY_DELAY_SECONDS"
 _T = TypeVar("_T")
 
 
@@ -37,6 +41,25 @@ def _required(*names: str) -> str:
     if not value:
         raise RuntimeError("Variável obrigatória ausente: " + " ou ".join(names))
     return value
+
+
+def _lock_retry_policy() -> tuple[int, float]:
+    attempts_raw = _env(LOCK_RETRY_ATTEMPTS_ENV)
+    delay_raw = _env(LOCK_RETRY_DELAY_SECONDS_ENV)
+    try:
+        attempts = int(attempts_raw) if attempts_raw else LOCK_RETRY_ATTEMPTS
+        delay_seconds = float(delay_raw) if delay_raw else LOCK_RETRY_DELAY_SECONDS
+    except ValueError as exc:
+        raise ValueError("Política de retry 423 inválida") from exc
+    if not 1 <= attempts <= LOCK_RETRY_MAX_ATTEMPTS:
+        raise ValueError(
+            f"{LOCK_RETRY_ATTEMPTS_ENV} deve estar entre 1 e {LOCK_RETRY_MAX_ATTEMPTS}"
+        )
+    if not 0 <= delay_seconds <= LOCK_RETRY_MAX_DELAY_SECONDS:
+        raise ValueError(
+            f"{LOCK_RETRY_DELAY_SECONDS_ENV} deve estar entre 0 e {LOCK_RETRY_MAX_DELAY_SECONDS}"
+        )
+    return attempts, delay_seconds
 
 
 def _token(client: httpx.Client) -> str:
@@ -71,8 +94,8 @@ def _graph(client: httpx.Client, method: str, path: str, token: str, **kwargs: A
 def _retry_locked(
     operation: Callable[[], _T],
     *,
-    attempts: int = LOCK_RETRY_ATTEMPTS,
-    delay_seconds: float = LOCK_RETRY_DELAY_SECONDS,
+    attempts: int | None = None,
+    delay_seconds: float | None = None,
 ) -> _T:
     """Repete somente o lock transitório 423 do arquivo Excel.
 
@@ -80,8 +103,13 @@ def _retry_locked(
     enquanto o Power Automate/Excel Online conclui uma gravação. Outros erros
     continuam fail-closed e não são mascarados.
     """
+    configured_attempts, configured_delay = _lock_retry_policy()
+    attempts = configured_attempts if attempts is None else attempts
+    delay_seconds = configured_delay if delay_seconds is None else delay_seconds
     if attempts < 1:
         raise ValueError("attempts deve ser >= 1")
+    if delay_seconds < 0:
+        raise ValueError("delay_seconds deve ser >= 0")
     for attempt in range(1, attempts + 1):
         try:
             return operation()
@@ -282,6 +310,7 @@ def main() -> int:
 
     marker = f"REQSYS-E2E-{int(time.time())}"
     updated_title = marker + "-ATUALIZADA"
+    lock_attempts, lock_delay_seconds = _lock_retry_policy()
     evidence: dict[str, Any] = {
         "environment": "dev",
         "real": True,
@@ -294,8 +323,13 @@ def main() -> int:
         "excel_matching_rows": 0,
         "first_sync_observed": False,
         "local_fields_preserved": False,
-        "planner_writeback_detected": True,
+        "planner_writeback_detected": None,
         "probe_marker": marker,
+        "workbook_lock_retry": {
+            "attempts": lock_attempts,
+            "delay_seconds": lock_delay_seconds,
+            "max_wait_seconds": round(max(0, lock_attempts - 1) * lock_delay_seconds, 2),
+        },
     }
     task_id = ""
 
