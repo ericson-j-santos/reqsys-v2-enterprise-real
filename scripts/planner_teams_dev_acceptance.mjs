@@ -7,9 +7,9 @@ const MSAL_STORAGE_STATE_PATH = required('MSAL_STORAGE_STATE_PATH')
 const TENANT_ID = required('POWER_PLATFORM_TENANT_ID')
 const GRAPH_CLIENT_ID = required('POWER_PLATFORM_CLIENT_ID')
 const GRAPH_CLIENT_SECRET = required('POWER_PLATFORM_CLIENT_SECRET')
-const GROUP_ID = required('WSJF_DEV_GROUP_ID')
-const PLAN_ID = required('WSJF_DEV_PLAN_ID')
-const BUCKET_ID = required('WSJF_DEV_BUCKET_ID')
+let GROUP_ID = optional('WSJF_DEV_GROUP_ID')
+let PLAN_ID = optional('WSJF_DEV_PLAN_ID')
+let BUCKET_ID = optional('WSJF_DEV_BUCKET_ID')
 const TEAM_ID = required('PLANNER_TEAMS_DEV_TEAM_ID')
 const CHANNEL_ID = required('PLANNER_TEAMS_DEV_CHANNEL_ID')
 const EVIDENCE_PATH = process.env.EVIDENCE_PATH || 'audit/user-journey/planner-teams-dev/acceptance.json'
@@ -18,8 +18,9 @@ const GRAPH = 'https://graph.microsoft.com/v1.0'
 const POWER_PLATFORM = 'https://api.powerplatform.com'
 const POLL_SECONDS = Number(process.env.PLANNER_TEAMS_POLL_SECONDS || '420')
 
+function optional(name) { return String(process.env[name] || '').trim() }
 function required(name) {
-  const value = String(process.env[name] || '').trim()
+  const value = optional(name)
   if (!value) throw new Error(`variavel_obrigatoria_ausente:${name}`)
   return value
 }
@@ -74,9 +75,7 @@ async function acquireDelegated(state, scope) {
     client_info: '1',
   })
   const response = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body,
   })
   const payload = await jsonResponse(response, `token:${scope}`, [200])
   if (!payload.access_token) throw new Error(`access_token_ausente:${scope}`)
@@ -115,7 +114,7 @@ function unwrap(payload) {
 
 function chooseDevEnvironment(status) {
   const ambientes = Array.isArray(status?.ambientes) ? status.ambientes : []
-  const explicit = String(process.env.WSJF_DEV_ENVIRONMENT_ID || '').trim()
+  const explicit = optional('WSJF_DEV_ENVIRONMENT_ID')
   if (explicit) {
     const found = ambientes.find((item) => String(item?.id || '') === explicit)
     if (!found) throw new Error('ambiente_dev_explicito_nao_encontrado')
@@ -130,7 +129,7 @@ function chooseDevEnvironment(status) {
 }
 
 function chooseConnection(items, marker, envName) {
-  const explicit = String(process.env[envName] || '').trim()
+  const explicit = optional(envName)
   const matches = items.filter((item) => {
     const props = item?.properties || {}
     const apiId = String(props.apiId || props.connectorId || item?.type || '').toLowerCase()
@@ -188,6 +187,40 @@ async function graph(method, path, token, body, allowed = [200]) {
   return jsonResponse(response, `graph:${method}:${path.split('?')[0]}`, allowed)
 }
 
+async function discoverPlannerTarget(token) {
+  if (GROUP_ID && PLAN_ID && BUCKET_ID) {
+    return { group_id: GROUP_ID, plan_id: PLAN_ID, bucket_id: BUCKET_ID, source: 'environment_vars' }
+  }
+  const groups = (await graph('GET', '/groups?$top=100&$select=id,displayName,groupTypes', token)).value || []
+  const candidates = []
+  for (const group of groups) {
+    if (!(group.groupTypes || []).includes('Unified')) continue
+    let plans = []
+    try { plans = (await graph('GET', `/groups/${encodeURIComponent(group.id)}/planner/plans`, token)).value || [] } catch { continue }
+    for (const plan of plans) {
+      if (!String(plan?.title || '').toLowerCase().includes('wsjf')) continue
+      let buckets = []
+      try { buckets = (await graph('GET', `/planner/plans/${encodeURIComponent(plan.id)}/buckets`, token)).value || [] } catch { continue }
+      if (!buckets.length) continue
+      buckets.sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'pt-BR'))
+      const preferred = buckets.filter((bucket) => /(backlog|demanda|entrada)/i.test(String(bucket?.name || '')))
+      const bucket = preferred[0] || buckets[0]
+      candidates.push({
+        group_id: String(group.id), group_name: String(group.displayName || ''),
+        plan_id: String(plan.id), plan_name: String(plan.title || ''),
+        bucket_id: String(bucket.id), bucket_name: String(bucket.name || ''), source: 'graph_discovery',
+      })
+    }
+  }
+  const dev = candidates.filter((item) => /(^|[^a-z])dev([^a-z]|$)|development|desenvolvimento/i.test(`${item.group_name} ${item.plan_name}`))
+  const pool = dev.length ? dev : candidates
+  if (pool.length !== 1) throw new Error(`descoberta_wsjf_ambigua:total=${candidates.length}:dev=${dev.length}`)
+  GROUP_ID = pool[0].group_id
+  PLAN_ID = pool[0].plan_id
+  BUCKET_ID = pool[0].bucket_id
+  return pool[0]
+}
+
 async function createPlannerTask(token, title) {
   return graph('POST', '/planner/tasks', token, { planId: PLAN_ID, bucketId: BUCKET_ID, title }, [201])
 }
@@ -203,19 +236,9 @@ async function deletePlannerTask(token, taskId) {
 }
 
 const evidence = {
-  schema_version: '1.0.0',
-  capability: 'planner-teams-notify-dev-acceptance',
-  environment: 'dev',
-  started_at: iso(),
-  completed_at: null,
-  status: 'running',
-  correlation_id: crypto.randomUUID(),
-  mocked: false,
-  simulated: false,
-  tokens_persisted: false,
-  tasks: [],
-  flows: [],
-  checks: {},
+  schema_version: '1.0.0', capability: 'planner-teams-notify-dev-acceptance', environment: 'dev',
+  started_at: iso(), completed_at: null, status: 'running', correlation_id: crypto.randomUUID(),
+  mocked: false, simulated: false, tokens_persisted: false, tasks: [], flows: [], checks: {},
 }
 
 let graphToken = ''
@@ -229,13 +252,15 @@ try {
   const reqsysToken = findLocalStorage(bundle, 'reqsys_token')
   if (!reqsysToken) throw new Error('reqsys_token_ausente_no_storage_state')
   const refreshState = findRefreshToken(bundle)
-
   const powerToken = await acquireDelegated(refreshState, 'https://api.powerplatform.com/.default')
   flowToken = await acquireDelegated(refreshState, 'https://service.flow.microsoft.com/.default')
   graphToken = await acquireGraphAppToken()
   evidence.checks.delegated_power_platform_token = 'acquired'
   evidence.checks.delegated_flow_management_token = 'acquired'
   evidence.checks.graph_app_token = 'acquired'
+
+  const plannerTarget = await discoverPlannerTarget(graphToken)
+  evidence.planner_target = plannerTarget
 
   const statusPayload = unwrap(await reqsys('/v1/hub-lowcode/copilot-memory/install/status', reqsysToken))
   const environment = chooseDevEnvironment(statusPayload)
@@ -258,22 +283,13 @@ try {
   }
 
   const deployPayload = {
-    environment_id: environmentId,
-    environment_url: environmentUrl,
-    group_id: GROUP_ID,
-    plan_id: PLAN_ID,
-    planner_connection_id: connectionId(plannerConnection),
-    teams_team_id: TEAM_ID,
-    teams_channel_id: CHANNEL_ID,
-    teams_connection_id: connectionId(teamsConnection),
-    target_environment: 'dev',
-    confirmar: true,
+    environment_id: environmentId, environment_url: environmentUrl, group_id: GROUP_ID, plan_id: PLAN_ID,
+    planner_connection_id: connectionId(plannerConnection), teams_team_id: TEAM_ID, teams_channel_id: CHANNEL_ID,
+    teams_connection_id: connectionId(teamsConnection), target_environment: 'dev', confirmar: true,
     correlation_id: evidence.correlation_id,
   }
   const deployed = unwrap(await reqsys('/v1/hub-lowcode/planner-teams-notify/deploy', reqsysToken, {
-    method: 'POST',
-    headers: { 'X-Power-Automate-Token': flowToken },
-    body: JSON.stringify(deployPayload),
+    method: 'POST', headers: { 'X-Power-Automate-Token': flowToken }, body: JSON.stringify(deployPayload),
   }))
   if (!deployed?.dispatched || deployed?.status !== 'implantado') {
     throw new Error(`provisionamento_nao_implantado:${JSON.stringify(deployed).slice(0, 1200)}`)
@@ -300,7 +316,6 @@ try {
   ]
   evidence.checks.planner_tasks_created = 2
   evidence.observation_window_started_at = iso()
-
   await sleep(POLL_SECONDS * 1000)
 
   for (const flow of evidence.flows) {
@@ -308,10 +323,7 @@ try {
   }
   const createdFlow = evidence.flows.find((flow) => flow.evento === 'criada')
   evidence.checks.created_flow_runs_observed = createdFlow?.runs?.length || 0
-  if ((createdFlow?.runs?.length || 0) < 2) {
-    throw new Error(`execucoes_flow_criada_insuficientes:${createdFlow?.runs?.length || 0}`)
-  }
-
+  if ((createdFlow?.runs?.length || 0) < 2) throw new Error(`execucoes_flow_criada_insuficientes:${createdFlow?.runs?.length || 0}`)
   evidence.status = 'runtime_executed_awaiting_teams_observation'
 } catch (error) {
   evidence.status = 'failed'
@@ -345,10 +357,8 @@ try {
   await fs.mkdir(EVIDENCE_PATH.split('/').slice(0, -1).join('/'), { recursive: true })
   await fs.writeFile(EVIDENCE_PATH, JSON.stringify(evidence, null, 2) + '\n', 'utf8')
   console.log(JSON.stringify({
-    status: evidence.status,
-    correlation_id: evidence.correlation_id,
+    status: evidence.status, correlation_id: evidence.correlation_id,
     tasks: evidence.tasks.map(({ kind, title, expected_teams }) => ({ kind, title, expected_teams })),
-    created_flow_runs_observed: evidence.checks.created_flow_runs_observed || 0,
-    evidence_path: EVIDENCE_PATH,
+    created_flow_runs_observed: evidence.checks.created_flow_runs_observed || 0, evidence_path: EVIDENCE_PATH,
   }))
 }
