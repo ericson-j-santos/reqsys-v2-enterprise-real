@@ -64,13 +64,20 @@ async def planner_teams_notify_validate(
 async def planner_teams_notify_deploy(
     payload: PlannerTeamsNotifyProvisionRequest,
     x_power_automate_token: str | None = Header(default=None, alias='X-Power-Automate-Token'),
+    x_power_platform_token: str | None = Header(default=None, alias='X-Power-Platform-Token'),
     _auth=Depends(require_planner_teams_auth),
 ):
-    """Cria/atualiza os fluxos de notificacao de verdade. Exige token
-    delegado (via MSAL no frontend): a API de gerenciamento de fluxos nao
-    aceita credencial app-only."""
+    """Cria/atualiza os fluxos de notificacao de verdade.
+
+    O token Power Platform delegado confirma novamente o ambiente e preserva a
+    trava anti-producao. O token Power Automate delegado gerencia os fluxos.
+    """
     try:
-        await validar_destino_assistente(payload.environment_id, payload.environment_url)
+        await validar_destino_assistente(
+            payload.environment_id,
+            payload.environment_url,
+            user_token=x_power_platform_token,
+        )
         result = await despachar(payload.model_dump(), user_token=x_power_automate_token)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
