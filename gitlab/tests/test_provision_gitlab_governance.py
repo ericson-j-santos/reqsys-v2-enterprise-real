@@ -24,7 +24,7 @@ def config(*, dry_run: bool = False, user_id: int | None = 41627393):
         timeout_seconds=20,
         dry_run=dry_run,
         mirror_user_id=user_id,
-        mirror_username="reqsys-github-mirror",
+        mirror_name="reqsys-github-mirror",
     )
 
 
@@ -34,7 +34,8 @@ class FakeClient:
         self.branch_after = branch_after if branch_after is not None else branch_before
         self.member = member or {
             "id": 41627393,
-            "username": "reqsys-github-mirror",
+            "username": "project_84366761_bot_generated",
+            "name": "reqsys-github-mirror",
             "state": "active",
             "access_level": 40,
         }
@@ -127,16 +128,22 @@ class MirrorAllowanceTests(unittest.TestCase):
         with self.assertRaisesRegex(module.ProvisioningError, "Legacy mirror identity"):
             module.ensure_mirror_push_allowance(client, config())
 
-    def test_blocks_identity_mismatch(self):
+    def test_blocks_identity_name_mismatch(self):
         member = {
             "id": 41627393,
-            "username": "unexpected-user",
+            "username": "project_84366761_bot_generated",
+            "name": "unexpected-name",
             "state": "active",
             "access_level": 40,
         }
         client = FakeClient(branch({"access_level": 40}), member=member)
         with self.assertRaisesRegex(module.ProvisioningError, "identity mismatch"):
             module.ensure_mirror_push_allowance(client, config())
+
+    def test_accepts_generated_username_when_id_and_display_name_match(self):
+        client = FakeClient(branch({"access_level": 40}))
+        result = module.ensure_mirror_push_allowance(client, config(dry_run=True))
+        self.assertEqual(result["user_id"], 41627393)
 
     def test_postcondition_detects_false_green_when_target_not_persisted(self):
         before = branch({"id": 10, "access_level": 40})
