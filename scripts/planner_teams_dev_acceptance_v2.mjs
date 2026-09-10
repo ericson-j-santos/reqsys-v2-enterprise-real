@@ -426,7 +426,10 @@ try {
   }
   const deployed = unwrap(await reqsys('/v1/hub-lowcode/planner-teams-notify/deploy', reqsysToken, {
     method: 'POST',
-    headers: { 'X-Power-Automate-Token': flowToken },
+    headers: {
+      'X-Power-Automate-Token': flowToken,
+      'X-Power-Platform-Token': powerToken,
+    },
     body: JSON.stringify(deployPayload),
   }))
   if (!deployed?.dispatched || deployed?.status !== 'implantado') {
