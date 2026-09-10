@@ -83,8 +83,12 @@ def gerar_definicao(payload: dict[str, Any], evento: str) -> dict[str, Any]:
                 'connectionName': 'shared_planner',
             },
             'parameters': {
-                'groupId': "@parameters('PLANNER_GROUP_ID')",
-                'id': "@parameters('PLANNER_PLAN_ID')",
+                # Persistir os valores reais no trigger. Em DEV, o designer do
+                # Power Automate so manteve o gatilho funcional depois que
+                # grupo/plano foram salvos diretamente; expressoes
+                # @parameters(...) podiam resultar em flow Started sem runs.
+                'groupId': payload['group_id'],
+                'id': payload['plan_id'],
             },
         },
         # OnNewTask_V3/OnCompleteTask_V3 sao triggers "batch" (poll), nao
