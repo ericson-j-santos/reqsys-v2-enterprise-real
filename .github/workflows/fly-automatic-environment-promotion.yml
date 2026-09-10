@@ -23,6 +23,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  pull-requests: read
 
 concurrency:
   group: fly-automatic-environment-promotion
