@@ -56,3 +56,26 @@ def test_retry_locked_falha_apos_limite(monkeypatch):
         probe._retry_locked(operacao, attempts=3, delay_seconds=0)
 
     assert chamadas["total"] == 3
+
+
+def test_retry_locked_usa_politica_configuravel_por_ambiente(monkeypatch):
+    chamadas = {"total": 0}
+    monkeypatch.setenv(probe.LOCK_RETRY_ATTEMPTS_ENV, "4")
+    monkeypatch.setenv(probe.LOCK_RETRY_DELAY_SECONDS_ENV, "0")
+    monkeypatch.setattr(probe.time, "sleep", lambda _seconds: None)
+
+    def operacao():
+        chamadas["total"] += 1
+        if chamadas["total"] < 4:
+            raise _http_error(423)
+        return "ok"
+
+    assert probe._retry_locked(operacao) == "ok"
+    assert chamadas["total"] == 4
+
+
+def test_retry_locked_rejeita_politica_fora_dos_limites(monkeypatch):
+    monkeypatch.setenv(probe.LOCK_RETRY_ATTEMPTS_ENV, "0")
+
+    with pytest.raises(ValueError, match=probe.LOCK_RETRY_ATTEMPTS_ENV):
+        probe._retry_locked(lambda: "ok")
