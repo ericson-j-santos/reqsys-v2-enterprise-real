@@ -6,6 +6,7 @@ on:
       - chore/planner-teams-dev-acceptance
     paths:
       - .github/workflows/planner-teams-flow-inspect.yml
+      - scripts/inspect_teams_v2_flow_condition.py
   workflow_dispatch:
 
 permissions:
