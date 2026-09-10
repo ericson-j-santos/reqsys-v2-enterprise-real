@@ -40,6 +40,12 @@ services:
       - MOVIMENTO_EMAIL_SMTP_USE_TLS=${MOVIMENTO_EMAIL_SMTP_USE_TLS:-false}
       - MOVIMENTO_EMAIL_SMTP_FROM=${MOVIMENTO_EMAIL_SMTP_FROM:-ReqSys <noreply@localhost>}
       - MOVIMENTO_EMAIL_RECIPIENTS=${MOVIMENTO_EMAIL_RECIPIENTS:-dev@localhost}
+      # IA Assistente (Gemini primário + Groq fallback) — sem isso o container sobe sem
+      # chaves mesmo que o .env do host as tenha (achado do piloto PC 24x7, 2026-09-10).
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
     volumes:
       - ${SDD_SPECS_HOST_PATH:-../../my-first-spec-project/.sdd}:/sdd:ro
     healthcheck:

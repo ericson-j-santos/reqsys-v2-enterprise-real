@@ -12,21 +12,55 @@ armazenamento é necessário para rodar o piloto).
 - Docker + Docker Compose instalados no PC 24x7.
 - Conta gratuita na Cloudflare (só para exposição pública e backup — ver seções 3 e 5).
 - `cloudflared` instalado ([instruções oficiais](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)).
+- **Repositório `kb` ao lado deste** — o serviço `kb` do `docker-compose.yml` faz `build: ../../kb`
+  (dois níveis acima da raiz do repositório). Numa máquina nova o `docker compose up` falha com
+  `unable to prepare context: path "…\kb" not found` até esse diretório existir. Se o piloto não
+  precisar da base de conhecimento, suba a stack sem ele (ver abaixo).
+- **Chaves da IA Assistente** (`GEMINI_API_KEY`, `GROQ_API_KEY`, opcionalmente `GEMINI_MODEL` /
+  `GROQ_MODEL`) no `.env` da raiz — o compose repassa essas variáveis para a API. Sem elas a
+  aplicação sobe normalmente, mas o botão "Assistente IA" do formulário de requisito responde
+  `GEMINI_API_KEY não configurada` e o probe `POST /api/v1/ia/govbi/probes` fica `amarelo`
+  (`provider_nao_configurado`).
 
 ## 2. Subir a stack
 
-A stack já existe e já foi validada localmente (PR #1557) — nada de novo aqui:
+A stack já existe (PR #1557); a execução real do piloto em 2026-09-10 revelou e corrigiu três
+lacunas (build do `kb`, variáveis da IA e roteamento `/api/runtime/*` no gateway):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+```
+
+Sem o repositório `kb` disponível, use um override local (fora do repositório) que troca o build
+por um placeholder — o nginx precisa que o host `kb` resolva para subir:
+
+```yaml
+# compose.pc24x7-local.yml (não versionar)
+services:
+  kb:
+    build: !reset null
+    image: python:3.12-alpine
+    command: python -m http.server 8080
+```
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml -f compose.pc24x7-local.yml up -d
 ```
 
 O gateway nginx sobe em `http://localhost:${GATEWAY_PORT:-8081}` e já roteia `/api/*`
 (backend) e `/` (frontend) — confirmar com:
 
 ```bash
-curl http://localhost:8081/api/runtime/health
+curl http://localhost:8081/api/health           # saúde básica (API + banco)
+curl http://localhost:8081/api/runtime/health   # saúde operacional (mesmo endpoint do smoke Fly)
+curl -X POST http://localhost:8081/api/v1/ia/govbi/probes   # IA Assistente: verde/amarelo/vermelho
 ```
+
+Resultado esperado da execução de referência (2026-09-10, Windows 11 + Docker Desktop, ~2 min de
+build): `api` e `db` `healthy`, `nginx` em `8081`, frontend respondendo `200` em `/`,
+`/api/health` `{"status":"ok"}` e o probe da IA `amarelo` (execução feita sem chaves — comportamento
+esperado, não é falha do piloto). Com chaves válidas o esperado é `verde`, como validado no mesmo
+dia no Fly DEV com o mesmo backend (PR #1589).
 
 ## 3. Expor publicamente — sem domínio, sem custo (fase 1)
 
