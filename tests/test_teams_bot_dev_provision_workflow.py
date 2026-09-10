@@ -107,13 +107,14 @@ def test_commit_runtime_impede_rollback_destrutivo_depois_do_fly() -> None:
     assert 'if [ "$RUNTIME_COMMITTED" -eq 0 ]' in text
 
 
-def test_pacote_teams_usa_app_id_real_e_bot_conversacional() -> None:
+def test_pacote_teams_usa_builder_validado_e_app_id_real() -> None:
     text = _text()
-    assert 'APP_ID_FOR_PACKAGE="$BOT_APP_ID" python' in text
-    assert "manifest['id'] = app_id" in text
-    assert "manifest['bots'][0]['botId'] = app_id" in text
-    assert "manifest['bots'][0]['isNotificationOnly'] is False" in text
-    assert 'audit/reqsys-teams-gateway-dev-v1.1.0.zip' in text
+    assert 'python scripts/build_teams_app_package.py' in text
+    assert '--source-dir infra/teams-app' in text
+    assert '--output-dir "$PACKAGE_DIR"' in text
+    assert '--output-zip "$PACKAGE_ZIP"' in text
+    assert '--app-id "$BOT_APP_ID"' in text
+    assert 'audit/reqsys-teams-gateway-dev-v1.2.0.zip' in text
 
 
 def test_runtime_valida_saude_dev_depois_dos_segredos() -> None:

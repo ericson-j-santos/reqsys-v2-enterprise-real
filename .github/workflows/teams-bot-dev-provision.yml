@@ -69,7 +69,7 @@ jobs:
       FLY_APP: reqsys-api-dev
       HEALTH_URL: https://reqsys-api-dev.fly.dev/health
       PACKAGE_DIR: audit/teams-app-dev-package
-      PACKAGE_ZIP: audit/reqsys-teams-gateway-dev-v1.1.0.zip
+      PACKAGE_ZIP: audit/reqsys-teams-gateway-dev-v1.2.0.zip
       EVIDENCE_FILE: audit/teams-bot-dev-activation.json
       AZURE_CORE_OUTPUT: none
     steps:
@@ -322,30 +322,11 @@ jobs:
           fi
 
           STAGE="build_teams_package"
-          APP_ID_FOR_PACKAGE="$BOT_APP_ID" python - <<'PY'
-          import json, os, shutil, zipfile
-          from pathlib import Path
-          root = Path('infra/teams-app')
-          out = Path(os.environ['PACKAGE_DIR'])
-          out.mkdir(parents=True, exist_ok=True)
-          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
-          app_id = os.environ['APP_ID_FOR_PACKAGE']
-          manifest['id'] = app_id
-          manifest['bots'][0]['botId'] = app_id
-          domains = list(manifest.get('validDomains') or [])
-          for domain in ('reqsys-api-dev.fly.dev', 'token.botframework.com'):
-              if domain not in domains:
-                  domains.append(domain)
-          manifest['validDomains'] = domains
-          (out / 'manifest.json').write_text(
-              json.dumps(manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8'
-          )
-          shutil.copy2(root / 'color.png', out / 'color.png')
-          shutil.copy2(root / 'outline.png', out / 'outline.png')
-          with zipfile.ZipFile(os.environ['PACKAGE_ZIP'], 'w', zipfile.ZIP_DEFLATED) as zf:
-              for name in ('manifest.json', 'color.png', 'outline.png'):
-                  zf.write(out / name, arcname=name)
-          PY
+          python scripts/build_teams_app_package.py \
+            --source-dir infra/teams-app \
+            --output-dir "$PACKAGE_DIR" \
+            --output-zip "$PACKAGE_ZIP" \
+            --app-id "$BOT_APP_ID"
 
           STAGE="configure_fly_runtime"
           RUNTIME_SECRET_SYNC="applied"
