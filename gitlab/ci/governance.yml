@@ -18,11 +18,16 @@ gitlab_governance_validation:
 # (see audit trail before this change) — this closes that recurring human
 # step. `_apply` below stays manual: it performs real writes.
 # Required protected variable: GITLAB_PROVISIONING_TOKEN (api scope).
+# MIRROR_USER_ID/MIRROR_USERNAME identify the single mirror identity allowed
+# to receive explicit push permission on the protected main branch.
 # Optional source variables are copied without being printed:
 # GITLAB_GOVERNANCE_TOKEN_SOURCE and FLY_API_TOKEN_SOURCE.
 gitlab_governance_provision_dry_run:
   stage: governance
   image: python:3.12-alpine
+  variables:
+    MIRROR_USER_ID: "41627393"
+    MIRROR_USERNAME: "reqsys-github-mirror"
   script:
     - python gitlab/scripts/provision_gitlab_governance.py --output-dir audit
   artifacts:
@@ -38,6 +43,9 @@ gitlab_governance_provision_dry_run:
 gitlab_governance_provision_apply:
   stage: governance
   image: python:3.12-alpine
+  variables:
+    MIRROR_USER_ID: "41627393"
+    MIRROR_USERNAME: "reqsys-github-mirror"
   script:
     - python gitlab/scripts/provision_gitlab_governance.py --apply --output-dir audit
   artifacts:
