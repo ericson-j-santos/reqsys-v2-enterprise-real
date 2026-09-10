@@ -1,0 +1,1 @@
+Próximo passo: validar checks da PR #1594 no SHA corrente e, após aprovação, implementar o provisionamento DEV para Excel, SQL Server e SharePoint.
