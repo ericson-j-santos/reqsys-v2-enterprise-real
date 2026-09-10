@@ -6,6 +6,11 @@ const tenantId = required('POWER_PLATFORM_TENANT_ID')
 const privatePath = required('DEVICE_CODE_PRIVATE_PATH')
 const publicPath = required('DEVICE_CODE_PUBLIC_PATH')
 
+const POWER_PLATFORM_SCOPES = [
+  'https://api.powerplatform.com/EnvironmentManagement.Environments.Read',
+  'https://api.powerplatform.com/Connectivity.Connections.Read',
+]
+
 function required(name) {
   const value = String(process.env[name] || '').trim()
   if (!value) throw new Error(`variavel_obrigatoria_ausente:${name}`)
@@ -44,7 +49,7 @@ const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oaut
   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   body: new URLSearchParams({
     client_id: refresh.clientId,
-    scope: 'openid profile email offline_access https://api.powerplatform.com/.default',
+    scope: `openid profile email offline_access ${POWER_PLATFORM_SCOPES.join(' ')}`,
   }),
 })
 const payload = await response.json().catch(() => ({}))
@@ -69,6 +74,10 @@ await fs.writeFile(publicPath, JSON.stringify({
   user_code: payload.user_code,
   expires_in_seconds: payload.expires_in,
   generated_at: new Date().toISOString(),
+  requested_permissions: [
+    'EnvironmentManagement.Environments.Read',
+    'Connectivity.Connections.Read',
+  ],
 }, null, 2) + '\n')
 
-console.log('Device code preparado; apenas URL e user_code foram publicados no artefato de autorizacao.')
+console.log('Device code preparado com permissoes minimas de leitura; apenas URL, user_code e nomes das permissoes foram publicados.')
