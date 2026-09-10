@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/planner-teams-notify-dev-acceptance.yml
       - scripts/planner_teams_dev_acceptance.mjs
+      - scripts/msal_device_code_prepare.mjs
       - frontend/tests/e2e/helpers/msal-token-helper.mjs
   workflow_dispatch:
 
@@ -16,6 +17,7 @@ permissions:
 env:
   API_URL: https://reqsys-api-dev.fly.dev
   EVIDENCE_PATH: audit/user-journey/planner-teams-dev/acceptance.json
+  DEVICE_CODE_PUBLIC_PATH: audit/user-journey/planner-teams-dev/device-login.json
   PLANNER_TEAMS_DEV_TEAM_ID: 07936381-2d94-41db-9f46-a7b28008caba
   PLANNER_TEAMS_DEV_CHANNEL_ID: 19:ZW3ncXvFEGrJY-9yHd2MuFiRstJ8TQGmz2Fr_KUXqCI1@thread.tacv2
   PLANNER_TEAMS_POLL_SECONDS: '420'
@@ -29,7 +31,7 @@ jobs:
     name: Planner → Teams — prova real DEV
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
       POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
@@ -57,9 +59,22 @@ jobs:
             exit 1
           fi
           state="$RUNNER_TEMP/msal-storage-state.json"
+          device_private="$RUNNER_TEMP/planner-teams-device-code-private.json"
           printf '%s' "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$state"
           chmod 600 "$state"
           echo "MSAL_STORAGE_STATE_PATH=$state" >> "$GITHUB_ENV"
+          echo "DEVICE_CODE_PRIVATE_PATH=$device_private" >> "$GITHUB_ENV"
+
+      - name: Preparar autorização Microsoft somente quando necessária
+        run: node scripts/msal_device_code_prepare.mjs
+
+      - name: Publicar código de autorização Microsoft
+        uses: actions/upload-artifact@v4
+        with:
+          name: planner-teams-device-login-${{ github.run_id }}
+          path: ${{ env.DEVICE_CODE_PUBLIC_PATH }}
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Executar CT-01 e CT-02 contra Planner → Power Automate → Teams DEV
         run: node scripts/planner_teams_dev_acceptance.mjs
