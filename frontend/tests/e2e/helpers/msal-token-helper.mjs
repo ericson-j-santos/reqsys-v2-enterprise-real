@@ -1,5 +1,6 @@
 import { PublicClientApplication } from '@azure/msal-browser'
 
+// Regeneracao de device code solicitada em 2026-09-10T09:06:00-03:00.
 window.__reqsysAcquireDelegatedToken = async function acquireDelegatedToken(scopes) {
   const reqsysToken = window.localStorage.getItem('reqsys_token') || ''
   const response = await window.fetch('/api/v1/auth/config', {
