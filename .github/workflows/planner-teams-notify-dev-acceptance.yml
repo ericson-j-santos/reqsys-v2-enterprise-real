@@ -20,7 +20,7 @@ env:
   DEVICE_CODE_PUBLIC_PATH: audit/user-journey/planner-teams-dev/device-login.json
   PLANNER_TEAMS_DEV_TEAM_ID: 07936381-2d94-41db-9f46-a7b28008caba
   PLANNER_TEAMS_DEV_CHANNEL_ID: 19:ZW3ncXvFEGrJY-9yHd2MuFiRstJ8TQGmz2Fr_KUXqCI1@thread.tacv2
-  PLANNER_TEAMS_POLL_SECONDS: '420'
+  PLANNER_TEAMS_POLL_SECONDS: '1080'
 
 concurrency:
   group: planner-teams-notify-dev-acceptance
