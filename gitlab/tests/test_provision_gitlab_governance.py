@@ -3,10 +3,9 @@ from __future__ import annotations
 import importlib.util
 import os
 import sys
+import unittest
 from pathlib import Path
 from unittest.mock import patch
-
-import pytest
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "provision_gitlab_governance.py"
 SPEC = importlib.util.spec_from_file_location("provision_gitlab_governance", MODULE_PATH)
@@ -65,116 +64,105 @@ def branch(*entries, force=False):
     }
 
 
-def test_config_rejects_legacy_mirror_user_id():
-    env = {
-        "CI_PROJECT_ID": "1",
-        "GITLAB_PROVISIONING_TOKEN": "secret",
-        "CI_DEFAULT_BRANCH": "main",
-        "MIRROR_USER_ID": "41625052",
-    }
-    with patch.dict(os.environ, env, clear=True):
-        with pytest.raises(module.ProvisioningError, match="explicitly forbidden"):
-            module.Config.from_environment(dry_run=True)
-
-
-def test_dry_run_declares_exact_user_without_writing():
-    client = FakeClient(branch({"access_level": 40}))
-    result = module.ensure_mirror_push_allowance(client, config(dry_run=True))
-
-    assert result == {
-        "control": "mirror_push_allowance",
-        "status": "would_update",
-        "user_id": 41627393,
-        "reason": "add_explicit_user_allowance",
-    }
-    assert client.patch_payloads == []
-
-
-def test_apply_adds_exact_user_preserves_existing_and_disables_force_push():
-    before = branch({"id": 10, "access_level": 40}, force=True)
-    after = branch(
-        {"id": 10, "access_level": 40},
-        {"id": 11, "user_id": 41627393},
-        force=False,
-    )
-    client = FakeClient(before, after)
-
-    result = module.ensure_mirror_push_allowance(client, config())
-
-    assert client.patch_payloads == [
-        {
-            "allow_force_push": False,
-            "allowed_to_push": [{"user_id": 41627393}],
+class MirrorAllowanceTests(unittest.TestCase):
+    def test_config_rejects_legacy_mirror_user_id(self):
+        env = {
+            "CI_PROJECT_ID": "1",
+            "GITLAB_PROVISIONING_TOKEN": "secret",
+            "CI_DEFAULT_BRANCH": "main",
+            "MIRROR_USER_ID": "41625052",
         }
-    ]
-    assert result["status"] == "updated"
-    assert result["verified"] is True
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(module.ProvisioningError, "explicitly forbidden"):
+                module.Config.from_environment(dry_run=True)
+
+    def test_dry_run_declares_exact_user_without_writing(self):
+        client = FakeClient(branch({"access_level": 40}))
+        result = module.ensure_mirror_push_allowance(client, config(dry_run=True))
+        self.assertEqual(
+            result,
+            {
+                "control": "mirror_push_allowance",
+                "status": "would_update",
+                "user_id": 41627393,
+                "reason": "add_explicit_user_allowance",
+            },
+        )
+        self.assertEqual(client.patch_payloads, [])
+
+    def test_apply_adds_exact_user_preserves_existing_and_disables_force_push(self):
+        before = branch({"id": 10, "access_level": 40}, force=True)
+        after = branch(
+            {"id": 10, "access_level": 40},
+            {"id": 11, "user_id": 41627393},
+            force=False,
+        )
+        client = FakeClient(before, after)
+        result = module.ensure_mirror_push_allowance(client, config())
+        self.assertEqual(
+            client.patch_payloads,
+            [{"allow_force_push": False, "allowed_to_push": [{"user_id": 41627393}]}],
+        )
+        self.assertEqual(result["status"], "updated")
+        self.assertTrue(result["verified"])
+
+    def test_existing_exact_user_is_idempotent(self):
+        current = branch(
+            {"id": 10, "access_level": 40},
+            {"id": 11, "user_id": 41627393},
+            force=False,
+        )
+        client = FakeClient(current)
+        result = module.ensure_mirror_push_allowance(client, config())
+        self.assertEqual(result["status"], "unchanged")
+        self.assertEqual(client.patch_payloads, [])
+
+    def test_blocks_generic_developer_push(self):
+        client = FakeClient(branch({"id": 10, "access_level": 30}))
+        with self.assertRaisesRegex(module.ProvisioningError, "Generic Developer"):
+            module.ensure_mirror_push_allowance(client, config())
+
+    def test_blocks_legacy_user_if_still_allowed(self):
+        client = FakeClient(branch({"id": 10, "user_id": 41625052}))
+        with self.assertRaisesRegex(module.ProvisioningError, "Legacy mirror identity"):
+            module.ensure_mirror_push_allowance(client, config())
+
+    def test_blocks_identity_mismatch(self):
+        member = {
+            "id": 41627393,
+            "username": "unexpected-user",
+            "state": "active",
+            "access_level": 40,
+        }
+        client = FakeClient(branch({"access_level": 40}), member=member)
+        with self.assertRaisesRegex(module.ProvisioningError, "identity mismatch"):
+            module.ensure_mirror_push_allowance(client, config())
+
+    def test_postcondition_detects_false_green_when_target_not_persisted(self):
+        before = branch({"id": 10, "access_level": 40})
+        after = branch({"id": 10, "access_level": 40})
+        client = FakeClient(before, after)
+        with self.assertRaisesRegex(module.ProvisioningError, "target_user_missing"):
+            module.ensure_mirror_push_allowance(client, config())
+
+    def test_postcondition_detects_existing_allowance_removed(self):
+        before = branch({"id": 10, "group_id": 99})
+        after = branch({"id": 11, "user_id": 41627393})
+        client = FakeClient(before, after)
+        with self.assertRaisesRegex(module.ProvisioningError, "existing_allowance_removed"):
+            module.ensure_mirror_push_allowance(client, config())
+
+    def test_postcondition_detects_force_push_remaining_enabled(self):
+        before = branch({"id": 10, "access_level": 40}, force=True)
+        after = branch(
+            {"id": 10, "access_level": 40},
+            {"id": 11, "user_id": 41627393},
+            force=True,
+        )
+        client = FakeClient(before, after)
+        with self.assertRaisesRegex(module.ProvisioningError, "force_push_enabled"):
+            module.ensure_mirror_push_allowance(client, config())
 
 
-def test_existing_exact_user_is_idempotent():
-    current = branch(
-        {"id": 10, "access_level": 40},
-        {"id": 11, "user_id": 41627393},
-        force=False,
-    )
-    client = FakeClient(current)
-
-    result = module.ensure_mirror_push_allowance(client, config())
-
-    assert result["status"] == "unchanged"
-    assert client.patch_payloads == []
-
-
-def test_blocks_generic_developer_push():
-    client = FakeClient(branch({"id": 10, "access_level": 30}))
-    with pytest.raises(module.ProvisioningError, match="Generic Developer"):
-        module.ensure_mirror_push_allowance(client, config())
-
-
-def test_blocks_legacy_user_if_still_allowed():
-    client = FakeClient(branch({"id": 10, "user_id": 41625052}))
-    with pytest.raises(module.ProvisioningError, match="Legacy mirror identity"):
-        module.ensure_mirror_push_allowance(client, config())
-
-
-def test_blocks_identity_mismatch():
-    member = {
-        "id": 41627393,
-        "username": "unexpected-user",
-        "state": "active",
-        "access_level": 40,
-    }
-    client = FakeClient(branch({"access_level": 40}), member=member)
-    with pytest.raises(module.ProvisioningError, match="identity mismatch"):
-        module.ensure_mirror_push_allowance(client, config())
-
-
-def test_postcondition_detects_false_green_when_target_not_persisted():
-    before = branch({"id": 10, "access_level": 40})
-    after = branch({"id": 10, "access_level": 40})
-    client = FakeClient(before, after)
-
-    with pytest.raises(module.ProvisioningError, match="target_user_missing"):
-        module.ensure_mirror_push_allowance(client, config())
-
-
-def test_postcondition_detects_existing_allowance_removed():
-    before = branch({"id": 10, "group_id": 99})
-    after = branch({"id": 11, "user_id": 41627393})
-    client = FakeClient(before, after)
-
-    with pytest.raises(module.ProvisioningError, match="existing_allowance_removed"):
-        module.ensure_mirror_push_allowance(client, config())
-
-
-def test_postcondition_detects_force_push_remaining_enabled():
-    before = branch({"id": 10, "access_level": 40}, force=True)
-    after = branch(
-        {"id": 10, "access_level": 40},
-        {"id": 11, "user_id": 41627393},
-        force=True,
-    )
-    client = FakeClient(before, after)
-
-    with pytest.raises(module.ProvisioningError, match="force_push_enabled"):
-        module.ensure_mirror_push_allowance(client, config())
+if __name__ == "__main__":
+    unittest.main()
