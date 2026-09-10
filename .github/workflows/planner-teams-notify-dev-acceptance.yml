@@ -6,7 +6,7 @@ on:
       - chore/planner-teams-dev-acceptance
     paths:
       - .github/workflows/planner-teams-notify-dev-acceptance.yml
-      - scripts/planner_teams_dev_acceptance.mjs
+      - scripts/planner_teams_dev_acceptance_v2.mjs
       - scripts/msal_device_code_prepare.mjs
       - frontend/tests/e2e/helpers/msal-token-helper.mjs
   workflow_dispatch:
@@ -68,22 +68,22 @@ jobs:
       - name: Preparar autorização Microsoft somente quando necessária
         run: node scripts/msal_device_code_prepare.mjs
 
-      - name: Publicar código de autorização Microsoft
+      - name: Publicar código de autorização Microsoft desta tentativa
         uses: actions/upload-artifact@v4
         with:
-          name: planner-teams-device-login-${{ github.run_id }}
+          name: planner-teams-device-login-${{ github.run_id }}-attempt-${{ github.run_attempt }}
           path: ${{ env.DEVICE_CODE_PUBLIC_PATH }}
           if-no-files-found: error
           retention-days: 1
 
       - name: Executar CT-01 e CT-02 contra Planner → Power Automate → Teams DEV
-        run: node scripts/planner_teams_dev_acceptance.mjs
+        run: node scripts/planner_teams_dev_acceptance_v2.mjs
 
-      - name: Publicar evidência operacional
+      - name: Publicar evidência operacional desta tentativa
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: planner-teams-notify-dev-acceptance-${{ github.run_id }}
+          name: planner-teams-notify-dev-acceptance-${{ github.run_id }}-attempt-${{ github.run_attempt }}
           path: ${{ env.EVIDENCE_PATH }}
           if-no-files-found: warn
           retention-days: 30
