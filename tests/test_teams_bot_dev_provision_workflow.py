@@ -202,3 +202,14 @@ def test_regravacao_do_runtime_pode_ser_forcada_por_dispatch() -> None:
     triggers = workflow[True] if True in workflow else workflow['on']
     assert triggers['workflow_dispatch']['inputs']['force_runtime_sync']['default'] is False
     assert 'FORCE_RUNTIME_SYNC: ${{ inputs.force_runtime_sync || false }}' in _text()
+
+
+def test_artifact_publicado_corresponde_ao_package_zip_configurado() -> None:
+    workflow = _workflow()
+    job = workflow['jobs']['activate-dev']
+    package_zip = job['env']['PACKAGE_ZIP']
+    upload = _step('activate-dev', 'Publicar pacote e evidência da ativação')
+    published = [line.strip() for line in upload['with']['path'].splitlines() if line.strip()]
+    assert package_zip in published
+    assert 'audit/teams-bot-dev-activation.json' in published
+    assert not any('v1.1.0.zip' in path for path in published)
