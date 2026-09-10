@@ -2,6 +2,12 @@ name: Runtime E2E Continuous — DEV
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/runtime-e2e-continuous.yml'
+      - 'scripts/planner_teams_runtime_e2e.mjs'
+      - 'scripts/tests/planner_teams_runtime_e2e.test.mjs'
   schedule:
     # 09:15 BRT (UTC-3), dias úteis.
     - cron: '15 12 * * 1-5'
@@ -15,15 +21,35 @@ permissions:
   contents: read
 
 concurrency:
-  group: runtime-e2e-continuous-dev
+  group: runtime-e2e-continuous-dev-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'runtime' }}
   cancel-in-progress: true
 
 jobs:
+  contract:
+    name: Contrato do harness E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout do SHA sob teste
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Executar testes determinísticos do harness
+        run: node --test scripts/tests/planner_teams_runtime_e2e.test.mjs
+
   planner-teams-runtime:
     name: Planner → Teams — E2E contínuo DEV
+    needs: contract
     if: >-
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+      github.event_name != 'pull_request' &&
+      (github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'))
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
     timeout-minutes: 12
@@ -51,9 +77,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Validar contrato do teste sem acessar runtime
-        run: node --test scripts/tests/planner_teams_runtime_e2e.test.mjs
 
       - name: Executar prova real Planner → Teams
         run: node scripts/planner_teams_runtime_e2e.mjs
