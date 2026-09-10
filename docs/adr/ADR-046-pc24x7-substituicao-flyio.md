@@ -1,7 +1,8 @@
 # ADR-046 — PC próprio 24x7 como substituto do Fly.io
 
 Status: proposto (piloto restrito a dev iniciado em 2026-09-09 — ver
-`docs/runbooks/pc24x7-piloto-dev.md`; comparação de custo real ainda pendente)
+`docs/runbooks/pc24x7-piloto-dev.md`; comparação de custo inicial documentada
+em 2026-09-10)
 Data: 2026-09-09
 
 ## Contexto
@@ -151,10 +152,30 @@ foi confirmada.
    `reqsys_data_dev`, `reqsys_data_stg`). No PC 24x7, backup do banco
    (SQLite hoje em prod/dev/hml conforme `fly.toml`, ou Postgres se o
    docker-compose local for adotado) vira responsabilidade manual.
-5. **Custo real não é zero.** Domínio (~R$40–60/ano), consumo de energia do
-   PC ligado 24x7, e o valor do tempo de administração (atualizações de SO,
-   monitoramento, reinício manual em caso de queda) devem ser comparados ao
-   custo atual do Fly.io antes de confirmar que a migração compensa.
+5. **Custo real não é zero.** Mesmo quando a fase 1 evita gasto novo, o custo
+   econômico do piloto precisa ficar explícito: energia do PC ligado 24x7,
+   tempo de administração, desgaste do hardware e, numa fase posterior,
+   domínio próprio. A comparação inicial abaixo resolve a decisão de curto
+   prazo: validar dev sem contratar nada novo.
+
+## Comparação de custo inicial
+
+Premissas de 2026-09-10 para decisão do piloto:
+
+| Item | Fase 1: dev no PC 24x7 com Quick Tunnel | Fase 2: túnel nomeado com domínio | Manter Fly.io |
+| --- | --- | --- | --- |
+| Domínio | R$0 | ~R$40–60/ano | R$0, se usar somente `*.fly.dev` |
+| Exposição pública | R$0 via Cloudflare Quick Tunnel | R$0 no plano Cloudflare Free, após domínio próprio | Incluso no Fly.io |
+| Backup externo | R$0 usando Cloudflare R2 dentro do free tier + restic | Igual à fase 1 | Depende do volume/estratégia atual |
+| Energia | Custo variável do PC ligado 24x7 | Igual à fase 1 | R$0 local |
+| Administração | Manual: Docker, sistema operacional, backup, restauração e túnel | Manual, com DNS/túnel nomeado adicional | Parcialmente gerenciada pela plataforma |
+| Disponibilidade | Sem SLA; depende de energia/internet residencial | Sem SLA local; URL estável melhora apenas o acesso | Plataforma gerenciada, com isolamento por app |
+
+Conclusão operacional: **executar somente o piloto de dev na fase 1**, porque
+ele não exige gasto novo e responde à restrição imediata de custo. O gasto com
+domínio fica explicitamente adiado até a fase 2, depois que o piloto provar
+estabilidade, backup restaurável e restart automático. Hml e prod permanecem
+no Fly.io até decisão posterior baseada em evidência.
 
 ## Consequências
 
@@ -207,13 +228,10 @@ foi confirmada.
       Quick Tunnel — URL pública temporária, sem precisar de domínio próprio.
       Fase 2 (quando houver orçamento) troca para domínio próprio + túnel
       nomeado. Ver `docs/runbooks/pc24x7-piloto-dev.md`, seção 3.
-- [ ] Comparação de custo real (domínio + energia + tempo de administração)
-      feita e documentada. **Ainda pendente**: usuário confirmou que o custo
-      atual (Fly.io ou domínio) já é proibitivo ("custa muito pra quem não
-      tem dinheiro") — a fase 1 do piloto foi desenhada para não exigir
-      nenhum gasto novo (Quick Tunnel + R2 gratuito), então este item fica
-      menos urgente para decidir *se* vale a pena migrar, mas continua
-      relevante para decidir quando valeria gastar num domínio (fase 2).
+- [x] Comparação de custo inicial (domínio + energia + tempo de administração)
+      feita e documentada — **resolvido 2026-09-10**: fase 1 fica limitada a
+      dev, Quick Tunnel e R2/free tier, sem contratação nova; domínio próprio
+      é decisão de fase 2; hml/prod seguem no Fly.io até evidência do piloto.
 
 ## Próximo incremento
 

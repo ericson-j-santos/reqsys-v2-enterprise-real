@@ -106,7 +106,7 @@ armazenamento externo criptografado. Esse padrão já é a resposta certa aqui �
 da parte de orquestração de Fly Machines (`flyctl ssh`/`machine start`/`stop`), porque no PC
 24x7 o backup roda no mesmo host onde o banco já está.
 
-`scripts/pc24x7_backup_restic.sh` (novo, ver este PR) faz a versão simplificada: dump do
+`scripts/pc24x7_backup_restic.sh` faz a versão simplificada: dump do
 Postgres via `docker compose exec`, backup com `restic`, retenção com `restic forget --prune`.
 
 ### Configuração (uma vez)
@@ -130,7 +130,20 @@ export AWS_SECRET_ACCESS_KEY="<r2-secret-access-key>"
 
 Recomendado agendar isso diariamente (`cron` no Linux, Agendador de Tarefas no Windows).
 
-## 6. Critério de saída do piloto
+## 6. Acompanhamento de custo sem gasto novo
+
+A comparação inicial está documentada no [ADR-046](../adr/ADR-046-pc24x7-substituicao-flyio.md).
+Para manter a fase 1 fiel ao objetivo de custo, registrar manualmente durante o piloto:
+
+- consumo aproximado do PC ligado 24x7, quando houver medidor ou estimativa confiável;
+- tempo gasto em administração por semana (backup, atualização, restart, túnel, investigação);
+- falhas de energia/internet e tempo até recuperação;
+- qualquer gasto efetivo diferente de zero.
+
+Enquanto esses itens não forem medidos, a decisão continua conservadora: **dev pode rodar no
+PC 24x7 como piloto sem gasto novo; hml e prod continuam no Fly.io**.
+
+## 7. Critério de saída do piloto
 
 Antes de considerar promover dev-no-PC24x7 para "principal" (e antes de sequer cogitar hml ou
 prod), validar por um período (sugestão: pelo menos 2 semanas de uso real):
