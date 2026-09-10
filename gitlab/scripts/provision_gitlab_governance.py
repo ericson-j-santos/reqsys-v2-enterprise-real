@@ -24,7 +24,7 @@ class ProvisioningError(RuntimeError):
     """Raised when GitLab governance provisioning cannot continue safely."""
 
 
-DEFAULT_MIRROR_USERNAME = "reqsys-github-mirror"
+DEFAULT_MIRROR_NAME = "reqsys-github-mirror"
 FORBIDDEN_MIRROR_USER_IDS = {41625052}
 MINIMUM_PUSH_ACCESS_LEVEL = 30
 
@@ -38,7 +38,7 @@ class Config:
     timeout_seconds: int
     dry_run: bool
     mirror_user_id: int | None
-    mirror_username: str
+    mirror_name: str
 
     @classmethod
     def from_environment(cls, dry_run: bool) -> "Config":
@@ -48,7 +48,7 @@ class Config:
         default_branch = os.getenv("CI_DEFAULT_BRANCH", "main")
         timeout_raw = os.getenv("GITLAB_API_TIMEOUT_SECONDS", "20")
         mirror_user_raw = os.getenv("MIRROR_USER_ID", "").strip()
-        mirror_username = os.getenv("MIRROR_USERNAME", DEFAULT_MIRROR_USERNAME).strip()
+        mirror_name = os.getenv("MIRROR_NAME", DEFAULT_MIRROR_NAME).strip()
 
         missing = [
             name
@@ -84,8 +84,8 @@ class Config:
                 raise ProvisioningError(
                     f"MIRROR_USER_ID {mirror_user_id} is explicitly forbidden"
                 )
-            if not mirror_username:
-                raise ProvisioningError("MIRROR_USERNAME must not be empty")
+            if not mirror_name:
+                raise ProvisioningError("MIRROR_NAME must not be empty")
 
         return cls(
             api_url=api_url,
@@ -95,7 +95,7 @@ class Config:
             timeout_seconds=timeout_seconds,
             dry_run=dry_run,
             mirror_user_id=mirror_user_id,
-            mirror_username=mirror_username,
+            mirror_name=mirror_name,
         )
 
 
@@ -246,12 +246,12 @@ def ensure_mirror_push_allowance(
         raise ProvisioningError(
             f"Mirror identity user_id={target_user_id} is not a readable project member"
         )
-    actual_username = str(member.get("username") or "").strip()
-    if actual_username != config.mirror_username:
+    actual_name = str(member.get("name") or "").strip()
+    if actual_name != config.mirror_name:
         raise ProvisioningError(
             "Mirror identity mismatch: "
-            f"user_id={target_user_id} username={actual_username!r}, "
-            f"expected={config.mirror_username!r}"
+            f"user_id={target_user_id} name={actual_name!r}, "
+            f"expected={config.mirror_name!r}"
         )
     if str(member.get("state") or "active") != "active":
         raise ProvisioningError(
