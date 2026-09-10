@@ -68,17 +68,26 @@ def test_validate_propaga_erro_de_destino_como_409(planner_teams_auth_override):
     assert response.status_code == 409
 
 
-def test_deploy_happy_path_repassa_teams_target_e_token(planner_teams_auth_override):
-    with patch('app.api.planner_teams_notify.validar_destino_assistente', new=AsyncMock(return_value={'id': 'env-dev'})), \
+def test_deploy_happy_path_repassa_teams_target_e_tokens(planner_teams_auth_override):
+    validar_mock = AsyncMock(return_value={'id': 'env-dev'})
+    with patch('app.api.planner_teams_notify.validar_destino_assistente', new=validar_mock), \
          patch('app.api.planner_teams_notify.despachar', new=AsyncMock(return_value={'dispatched': True, 'correlation_id': 'cid-1'})) as despachar_mock:
         response = client.post(
             '/v1/hub-lowcode/planner-teams-notify/deploy',
             json=_payload(confirmar=True),
-            headers={'X-Power-Automate-Token': 'flow-token-123'},
+            headers={
+                'X-Power-Automate-Token': 'flow-token-123',
+                'X-Power-Platform-Token': 'power-platform-token-456',
+            },
         )
 
     assert response.status_code == 200
     assert response.json()['data']['dispatched'] is True
+    validar_mock.assert_awaited_once_with(
+        'env-dev-001',
+        'https://org-dev.crm2.dynamics.com',
+        user_token='power-platform-token-456',
+    )
     chamada_payload, chamada_kwargs = despachar_mock.call_args
     assert chamada_payload[0]['teams_team_id'] == 'team-dev-001'
     assert chamada_payload[0]['teams_channel_id'] == '19:channel-dev-001@thread.tacv2'
