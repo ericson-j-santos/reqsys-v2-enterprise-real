@@ -11,6 +11,7 @@ from app.services.planner_teams_notify_provisioning import (
     FILTRO_TAREFA_TESTE_ID,
     PREFIXO_TAREFA_TESTE_IGNORADA,
     gerar_definicao,
+    validar_definicao,
 )
 
 
@@ -40,7 +41,17 @@ def test_expressao_do_filtro_permanece_restrita_ao_prefixo_e2e():
         f"'{PREFIXO_TAREFA_TESTE_IGNORADA}'))"
     )
     assert set(filtro['actions']) == {'Notificar_Teams'}
-    assert filtro.get('else', {}).get('actions', {}) == {}
+    assert 'else' in filtro
+    assert filtro['else'] == {'actions': {}}
+    assert validar_definicao(definicao) == []
+
+
+def test_validador_rejeita_if_sem_else_explicito():
+    definicao = gerar_definicao(_payload(), 'criada')
+    filtro = definicao['actions'][FILTRO_TAREFA_TESTE_ID]
+    filtro.pop('else')
+
+    assert 'filtro_tarefa_teste_else_explicito_ausente' in validar_definicao(definicao)
 
 
 @pytest.mark.parametrize(
