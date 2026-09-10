@@ -225,7 +225,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  codeql:
+  codeql-generate:
     name: CodeQL SAST (${{ matrix.language }})
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -305,11 +305,11 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  codeql-publish:
+  codeql:
     name: CodeQL Publish Atomic
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: codeql
+    needs: codeql-generate
     permissions:
       contents: read
       security-events: write
@@ -392,7 +392,7 @@ jobs:
       - python-dependency-audit
       - npm-audit
       - sbom
-      - codeql-publish
+      - codeql
     if: always()
     steps:
       - name: Checkout
