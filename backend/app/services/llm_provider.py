@@ -36,9 +36,40 @@ def reset_circuit_breakers() -> None:
         circuit.reset()
 
 
+_HTTP_ERROR_BODY_MAX_CHARS = 300
+
+
+def _resumo_corpo_erro(resposta: requests.Response) -> str:
+    """Extrai a mensagem de erro do provider (ex.: `model_not_found`) sem vazar payload extenso."""
+    try:
+        corpo = resposta.json()
+    except ValueError:
+        corpo = None
+    texto = ''
+    if isinstance(corpo, dict):
+        erro = corpo.get('error')
+        if isinstance(erro, dict):
+            partes = [str(erro.get(chave) or '') for chave in ('code', 'status', 'message')]
+            texto = ' '.join(parte for parte in partes if parte)
+        elif erro:
+            texto = str(erro)
+        else:
+            texto = str(corpo.get('message') or corpo.get('detail') or '')
+    if not texto:
+        texto = (resposta.text or '').strip()
+    texto = ' '.join(texto.split())
+    return texto[:_HTTP_ERROR_BODY_MAX_CHARS]
+
+
 def _do_post(url: str, payload: dict[str, Any], headers: dict[str, str] | None, timeout: int) -> dict[str, Any]:
     resposta = requests.post(url, json=payload, headers=headers or {}, timeout=timeout)
-    resposta.raise_for_status()
+    try:
+        resposta.raise_for_status()
+    except requests.HTTPError as exc:
+        detalhe = _resumo_corpo_erro(resposta)
+        if detalhe:
+            raise requests.HTTPError(f'{exc} | {detalhe}', response=resposta, request=exc.request) from exc
+        raise
     return resposta.json()
 
 
