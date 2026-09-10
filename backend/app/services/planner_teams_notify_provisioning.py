@@ -132,6 +132,11 @@ def gerar_definicao(payload: dict[str, Any], evento: str) -> dict[str, Any]:
         # titulo comeca com o prefixo de teste automatizado nao notificam.
         'expression': f"@not(startsWith(triggerBody()?['title'], '{PREFIXO_TAREFA_TESTE_IGNORADA}'))",
         'actions': {'Notificar_Teams': notificar_teams},
+        # Em DEV, a API de gerenciamento aceitou um If sem else, mas o
+        # Dataverse persistiu apenas Notificar_Teams no nivel superior. O
+        # perfil WSJF no mesmo ambiente preserva o If com else.actions
+        # explicito; por isso o ramo falso vazio faz parte do contrato.
+        'else': {'actions': {}},
         'runAfter': {},
     }
     return {
@@ -173,6 +178,13 @@ def validar_definicao(definition: dict[str, Any]) -> list[str]:
         errors.append('trigger_conector_nao_permitido')
     if trigger_host.get('operationId') not in {e['operation_id'] for e in EVENTOS.values()}:
         errors.append('trigger_operacao_nao_permitida')
+
+    filtro = definition.get('actions', {}).get(FILTRO_TAREFA_TESTE_ID, {})
+    if filtro.get('type') != 'If':
+        errors.append('filtro_tarefa_teste_ausente')
+    if filtro.get('else') != {'actions': {}}:
+        errors.append('filtro_tarefa_teste_else_explicito_ausente')
+
     todas_acoes = dict(_walk_actions(definition.get('actions', {})))
     if 'Notificar_Teams' not in todas_acoes:
         errors.append('acao_notificar_teams_ausente')
