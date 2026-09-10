@@ -1,0 +1,1 @@
+Aguardar CI do SHA atual e E2E real em DEV antes de considerar o incremento concluído.
