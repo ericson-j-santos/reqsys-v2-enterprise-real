@@ -52,12 +52,14 @@ Parâmetros versionados no job de governança:
 
 ```text
 MIRROR_USER_ID=41627393
-MIRROR_USERNAME=reqsys-github-mirror
+MIRROR_NAME=reqsys-github-mirror
 ```
+
+O GitLab gera automaticamente o `username` de project access tokens. Por isso a correlação governada usa o identificador imutável do usuário (`41627393`) mais o nome exibido estável (`reqsys-github-mirror`), em vez de assumir que o nome exibido também é o `username`.
 
 O provisionador:
 
-1. confirma que `41627393` é membro ativo do projeto e corresponde exatamente a `reqsys-github-mirror`;
+1. confirma que `41627393` é membro ativo do projeto, com acesso suficiente, e possui o nome exibido `reqsys-github-mirror`;
 2. recusa o identificador legado `41625052`;
 3. recusa permissão genérica de push para `Developer`;
 4. preserva os allowances existentes da branch;
@@ -122,7 +124,7 @@ Se o mirror retornar `blocked`:
 ## Critérios de aceite operacional
 
 - credencial gerenciada resolvida pelo Key Vault;
-- provisionamento confirma explicitamente `user_id=41627393`, sem permissão genérica de Developer e sem force-push;
+- provisionamento confirma explicitamente `user_id=41627393` e nome `reqsys-github-mirror`, sem permissão genérica de Developer e sem force-push;
 - atestação com veredito `authorized`;
 - dry-run verde;
 - primeira sincronização real concluída;
