@@ -18,8 +18,15 @@ def obter_correlation_id() -> str:
     return novo
 
 
+def _normalizar_correlation_id(correlation_id: str | None) -> str | None:
+    if correlation_id is None:
+        return None
+    valor = correlation_id.strip()
+    return valor or None
+
+
 def definir_correlation_id(correlation_id: str | None) -> str:
-    valor = correlation_id or gerar_correlation_id()
+    valor = _normalizar_correlation_id(correlation_id) or gerar_correlation_id()
     _correlation_id.set(valor)
     return valor
 

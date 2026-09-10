@@ -1,5 +1,7 @@
 """Testes da Trilha B — Observabilidade Enterprise."""
 
+from uuid import UUID
+
 from fastapi.testclient import TestClient
 
 from app.core.correlation import definir_correlation_id, extrair_correlation_id_dos_headers, resolver_correlation_id
@@ -11,6 +13,18 @@ from app.main import app
 def test_extrair_correlation_id_dos_headers_prioriza_correlation():
     headers = {'X-Correlation-Id': 'corr-abc', 'X-Request-ID': 'req-xyz'}
     assert extrair_correlation_id_dos_headers(headers) == 'corr-abc'
+
+
+def test_definir_correlation_id_normaliza_entrada_direta():
+    assert definir_correlation_id('  corr-direto  ') == 'corr-direto'
+    assert resolver_correlation_id() == 'corr-direto'
+
+
+def test_definir_correlation_id_em_branco_gera_novo_id():
+    valor = definir_correlation_id('   ')
+
+    assert str(UUID(valor)) == valor
+    assert resolver_correlation_id() == valor
 
 
 def test_resolver_correlation_id_usa_request_id_como_fallback():
@@ -32,6 +46,17 @@ def test_middleware_propaga_correlation_id_na_resposta():
 
     assert res.status_code == 200
     assert res.headers.get('X-Correlation-Id') == correlation_id
+    assert res.json()['meta']['correlation_id'] == correlation_id
+
+
+def test_middleware_sem_header_gera_e_propaga_mesmo_correlation_id():
+    client = TestClient(app)
+
+    res = client.get('/health')
+
+    assert res.status_code == 200
+    correlation_id = res.headers.get('X-Correlation-Id')
+    assert correlation_id
     assert res.json()['meta']['correlation_id'] == correlation_id
 
 
