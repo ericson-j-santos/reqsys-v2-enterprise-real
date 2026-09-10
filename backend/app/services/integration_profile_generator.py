@@ -10,6 +10,7 @@ SUPPORTED_SOURCE = "excel"
 SUPPORTED_DESTINATION = "sharepoint"
 SUPPORTED_SQL_INPUT_MODE = "json"
 SUPPORTED_OPERATION = "upsert"
+_SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class IntegrationProfileError(ValueError):
@@ -30,6 +31,18 @@ class GeneratedIntegrationArtifacts:
             "sql_procedure_template": self.sql_procedure_template,
             "power_automate_contract": self.power_automate_contract,
         }
+
+
+def _validate_sql_identifier(value: Any, label: str, *, allow_qualified: bool = False) -> None:
+    identifier = str(value or "").strip()
+    parts = identifier.split(".")
+    max_parts = 2 if allow_qualified else 1
+    if (
+        not identifier
+        or len(parts) > max_parts
+        or any(_SQL_IDENTIFIER_RE.fullmatch(part) is None for part in parts)
+    ):
+        raise IntegrationProfileError(f"{label} contém identificador SQL inválido.")
 
 
 def validate_profile(payload: Dict[str, Any]) -> None:
@@ -59,10 +72,14 @@ def validate_profile(payload: Dict[str, Any]) -> None:
 
     if sql.get("input_mode") != SUPPORTED_SQL_INPUT_MODE:
         raise IntegrationProfileError("sql.input_mode deve ser 'json'.")
-    if not sql.get("procedure"):
+    procedure = sql.get("procedure")
+    if not procedure:
         raise IntegrationProfileError("sql.procedure é obrigatório.")
-    if not sql.get("key_field"):
+    _validate_sql_identifier(procedure, "sql.procedure", allow_qualified=True)
+    key_field = sql.get("key_field")
+    if not key_field:
         raise IntegrationProfileError("sql.key_field é obrigatório.")
+    _validate_sql_identifier(key_field, "sql.key_field")
 
     if destination.get("type") != SUPPORTED_DESTINATION:
         raise IntegrationProfileError("destination.type deve ser 'sharepoint'.")
@@ -187,6 +204,8 @@ function main(workbook: ExcelScript.Workbook): string {{
 
 
 def _build_sql_template(procedure: str, key_field: str) -> str:
+    _validate_sql_identifier(procedure, "sql.procedure", allow_qualified=True)
+    _validate_sql_identifier(key_field, "sql.key_field")
     return f'''CREATE OR ALTER PROCEDURE {procedure}
     @IdsJson NVARCHAR(MAX),
     @CorrelationId UNIQUEIDENTIFIER
@@ -223,4 +242,4 @@ BEGIN
     INNER JOIN Identificadores ids
         ON ids.Identificador = CONVERT(VARCHAR(100), resultado.{key_field});
 END;
-'''
+'''  # nosec B608 -- template SQL; identificadores são validados por allowlist acima
