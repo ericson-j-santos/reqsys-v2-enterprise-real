@@ -5,6 +5,7 @@ import {
   evaluateContract,
   filterMessagesSince,
   messageContainsTitle,
+  selectPlannerCandidate,
 } from '../planner_teams_runtime_e2e.mjs'
 
 test('aprova somente com controle normal presente e E2E ausente', () => {
@@ -43,4 +44,43 @@ test('descarta mensagens antigas fora da janela de evidência', () => {
     { id: 'nova', createdDateTime: '2026-09-10T12:01:00.000Z' },
   ]
   assert.deepEqual(filterMessagesSince(messages, startedAt).map((item) => item.id), ['margem', 'nova'])
+})
+
+test('seleciona o único alvo Planner classificado como DEV', () => {
+  const selected = selectPlannerCandidate([
+    {
+      group_name: 'ReqSys',
+      plan_name: 'WSJF Produção',
+      plan_id: 'plan-prod',
+      bucket_id: 'bucket-prod',
+    },
+    {
+      group_name: 'ReqSys WSJF DEV',
+      plan_name: 'WSJF DEV',
+      plan_id: 'plan-dev',
+      bucket_id: 'bucket-dev',
+    },
+  ])
+  assert.equal(selected.plan_id, 'plan-dev')
+  assert.equal(selected.bucket_id, 'bucket-dev')
+})
+
+test('reprova descoberta quando existem dois alvos DEV possíveis', () => {
+  assert.throws(
+    () => selectPlannerCandidate([
+      {
+        group_name: 'ReqSys DEV A',
+        plan_name: 'WSJF DEV',
+        plan_id: 'plan-a',
+        bucket_id: 'bucket-a',
+      },
+      {
+        group_name: 'ReqSys DEV B',
+        plan_name: 'WSJF DEV',
+        plan_id: 'plan-b',
+        bucket_id: 'bucket-b',
+      },
+    ]),
+    /descoberta_wsjf_ambigua:total=2:dev=2/,
+  )
 })
