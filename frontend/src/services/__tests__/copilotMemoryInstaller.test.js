@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../api'
 import { acquirePowerPlatformToken } from '../../auth/msal'
-import { listarConexoesInstalacao, mensagemErroInstalacao } from '../copilotMemoryInstaller'
+import { carregarStatusInstalacao, listarConexoesInstalacao, mensagemErroInstalacao } from '../copilotMemoryInstaller'
 
 vi.mock('../api', () => ({
   api: {
@@ -13,6 +13,22 @@ vi.mock('../api', () => ({
 vi.mock('../../auth/msal', () => ({
   acquirePowerPlatformToken: vi.fn(),
 }))
+
+describe('carregarStatusInstalacao', () => {
+  beforeEach(() => vi.clearAllMocks())
+  it('envia token delegado para descobrir ambientes quando MSAL esta disponivel', async () => {
+    acquirePowerPlatformToken.mockResolvedValue('token-delegado-ambientes')
+    api.get.mockResolvedValue({ data: { data: { ambientes: [] } } })
+    await carregarStatusInstalacao()
+    expect(api.get).toHaveBeenCalledWith('/v1/hub-lowcode/copilot-memory/install/status', { headers: { 'X-Power-Platform-Token': 'token-delegado-ambientes' } })
+  })
+  it('preserva fallback app-only quando nao ha conta Microsoft', async () => {
+    acquirePowerPlatformToken.mockResolvedValue(null)
+    api.get.mockResolvedValue({ data: { data: { ambientes: [] } } })
+    await carregarStatusInstalacao()
+    expect(api.get).toHaveBeenCalledWith('/v1/hub-lowcode/copilot-memory/install/status', { headers: {} })
+  })
+})
 
 describe('listarConexoesInstalacao', () => {
   beforeEach(() => vi.clearAllMocks())

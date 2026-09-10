@@ -55,11 +55,11 @@ async def _token(scope: str) -> str:
         return response.json()['access_token']
 
 
-async def listar_ambientes_instalacao() -> dict[str, Any]:
-    if not _credenciais_microsoft_configuradas():
+async def listar_ambientes_instalacao(user_token: str | None = None) -> dict[str, Any]:
+    if not user_token and not _credenciais_microsoft_configuradas():
         return {'configurado': False, 'ambientes': [], 'erro': 'Credenciais Microsoft Entra nao configuradas'}
     try:
-        token = await _token('https://api.powerplatform.com/.default')
+        token = user_token or await _token('https://api.powerplatform.com/.default')
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get(
                 f'{_POWER_PLATFORM_BASE}/environmentmanagement/environments?api-version=2024-10-01',
@@ -68,14 +68,16 @@ async def listar_ambientes_instalacao() -> dict[str, Any]:
             response.raise_for_status()
         ambientes = []
         for item in response.json().get('value', []):
+            props = item.get('properties') or {}
+            linked = props.get('linkedEnvironmentMetadata') or {}
             ambientes.append(
                 {
-                    'id': item.get('id'),
-                    'nome': item.get('displayName') or item.get('id'),
-                    'url': item.get('url') or '',
-                    'estado': item.get('state') or '',
-                    'tipo': item.get('type') or '',
-                    'regiao': item.get('geo') or item.get('azureRegion') or '',
+                    'id': item.get('id') or item.get('name') or props.get('environmentId'),
+                    'nome': item.get('displayName') or props.get('displayName') or linked.get('instanceName') or item.get('name') or item.get('id'),
+                    'url': item.get('url') or props.get('environmentUrl') or linked.get('instanceUrl') or linked.get('instanceApiUrl') or '',
+                    'estado': item.get('state') or props.get('provisioningState') or '',
+                    'tipo': item.get('type') or props.get('environmentSku') or props.get('environmentType') or '',
+                    'regiao': item.get('geo') or item.get('azureRegion') or props.get('azureRegion') or '',
                 }
             )
         return {'configurado': True, 'ambientes': ambientes, 'erro': None}
@@ -273,9 +275,9 @@ def _compactar_bundle(bundle: dict[str, Any]) -> str:
     return base64.b64encode(gzip.compress(raw, compresslevel=9, mtime=0)).decode('ascii')
 
 
-async def status_assistente_instalacao() -> dict[str, Any]:
-    microsoft = _credenciais_microsoft_configuradas()
-    ambientes = await listar_ambientes_instalacao() if microsoft else {'configurado': False, 'ambientes': [], 'erro': None}
+async def status_assistente_instalacao(user_token: str | None = None) -> dict[str, Any]:
+    microsoft = bool(user_token) or _credenciais_microsoft_configuradas()
+    ambientes = await listar_ambientes_instalacao(user_token=user_token) if microsoft else {'configurado': False, 'ambientes': [], 'erro': None}
     alm_repo = settings.github_alm_repo or _DEFAULT_ALM_REPO
     return {
         'microsoft_configurado': microsoft,

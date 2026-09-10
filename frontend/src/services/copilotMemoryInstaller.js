@@ -7,7 +7,9 @@ const INSTALL = `${BASE}/install`
 const unwrap = (response) => response.data?.data || {}
 
 export async function carregarStatusInstalacao() {
-  return unwrap(await api.get(`${INSTALL}/status`))
+  const token = await acquirePowerPlatformToken()
+  const headers = token ? { 'X-Power-Platform-Token': token } : {}
+  return unwrap(await api.get(`${INSTALL}/status`, { headers }))
 }
 
 export async function listarGruposInstalacao() {
