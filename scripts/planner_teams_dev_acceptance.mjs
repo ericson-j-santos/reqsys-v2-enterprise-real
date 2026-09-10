@@ -24,17 +24,18 @@ function required(name) {
   if (!value) throw new Error(`variavel_obrigatoria_ausente:${name}`)
   return value
 }
-
 function iso() { return new Date().toISOString() }
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)) }
 
-async function jsonResponse(response, label, allowed = [200]) {
+async function readJsonResponse(response) {
   const text = await response.text()
-  let payload = {}
-  try { payload = text ? JSON.parse(text) : {} } catch { payload = { raw: text.slice(0, 500) } }
+  try { return text ? JSON.parse(text) : {} } catch { return { raw: text.slice(0, 500) } }
+}
+
+async function jsonResponse(response, label, allowed = [200]) {
+  const payload = await readJsonResponse(response)
   if (!allowed.includes(response.status)) {
-    const body = JSON.stringify(payload).slice(0, 1000)
-    throw new Error(`${label}:http_${response.status}:${body}`)
+    throw new Error(`${label}:http_${response.status}:${JSON.stringify(payload).slice(0, 1000)}`)
   }
   return payload
 }
@@ -68,27 +69,63 @@ function findRefreshToken(bundle) {
 
 async function acquireDelegated(state, scope) {
   const body = new URLSearchParams({
-    client_id: state.clientId,
-    grant_type: 'refresh_token',
-    refresh_token: state.refreshToken,
-    scope,
-    client_info: '1',
+    client_id: state.clientId, grant_type: 'refresh_token', refresh_token: state.refreshToken,
+    scope, client_info: '1',
   })
   const response = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`, {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body,
   })
-  const payload = await jsonResponse(response, `token:${scope}`, [200])
+  const payload = await readJsonResponse(response)
+  if (response.status !== 200) {
+    throw new Error(`token:${scope}:http_${response.status}:${JSON.stringify(payload).slice(0, 1000)}`)
+  }
   if (!payload.access_token) throw new Error(`access_token_ausente:${scope}`)
   if (payload.refresh_token) state.refreshToken = payload.refresh_token
   return payload.access_token
 }
 
+async function acquireByDeviceCode(clientId, scope) {
+  const deviceResponse = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/devicecode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: clientId, scope: `openid profile email offline_access ${scope}` }),
+  })
+  const device = await jsonResponse(deviceResponse, 'device_code', [200])
+  const verificationUri = device.verification_uri || device.verification_url || 'https://microsoft.com/devicelogin'
+  console.log(`::notice title=Autorizacao Microsoft necessaria::Abra ${verificationUri} e informe o codigo ${device.user_code}`)
+  console.log(JSON.stringify({ status: 'awaiting_microsoft_device_authorization', verification_uri: verificationUri, user_code: device.user_code }))
+
+  const deadline = Date.now() + Number(device.expires_in || 900) * 1000
+  let interval = Math.max(5, Number(device.interval || 5))
+  while (Date.now() < deadline) {
+    await sleep(interval * 1000)
+    const response = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        device_code: device.device_code,
+      }),
+    })
+    const payload = await readJsonResponse(response)
+    if (response.status === 200) {
+      if (!payload.access_token || !payload.refresh_token || !payload.id_token) {
+        throw new Error('device_code_resposta_incompleta')
+      }
+      return payload
+    }
+    if (payload.error === 'authorization_pending') continue
+    if (payload.error === 'slow_down') { interval += 5; continue }
+    throw new Error(`device_code_token:${payload.error || response.status}:${String(payload.error_description || '').slice(0, 700)}`)
+  }
+  throw new Error('device_code_expirado_sem_autorizacao')
+}
+
 async function acquireGraphAppToken() {
   const body = new URLSearchParams({
-    client_id: GRAPH_CLIENT_ID,
-    client_secret: GRAPH_CLIENT_SECRET,
-    grant_type: 'client_credentials',
-    scope: 'https://graph.microsoft.com/.default',
+    client_id: GRAPH_CLIENT_ID, client_secret: GRAPH_CLIENT_SECRET,
+    grant_type: 'client_credentials', scope: 'https://graph.microsoft.com/.default',
   })
   const response = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`, {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body,
@@ -171,26 +208,20 @@ async function listFlowRuns(environmentId, flowId, flowToken, since) {
     const start = Date.parse(run?.properties?.startTime || run?.properties?.createdTime || 0)
     return Number.isFinite(start) && start >= Date.parse(since) - 60_000
   }).map((run) => ({
-    id: run?.name || run?.id || '',
-    status: run?.properties?.status || '',
-    start_time: run?.properties?.startTime || run?.properties?.createdTime || '',
-    end_time: run?.properties?.endTime || '',
+    id: run?.name || run?.id || '', status: run?.properties?.status || '',
+    start_time: run?.properties?.startTime || run?.properties?.createdTime || '', end_time: run?.properties?.endTime || '',
   }))
 }
 
 async function graph(method, path, token, body, allowed = [200]) {
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
-  const response = await fetch(`${GRAPH}${path}`, {
-    method, headers, body: body === undefined ? undefined : JSON.stringify(body),
-  })
+  const response = await fetch(`${GRAPH}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
   return jsonResponse(response, `graph:${method}:${path.split('?')[0]}`, allowed)
 }
 
 async function discoverPlannerTarget(token) {
-  if (GROUP_ID && PLAN_ID && BUCKET_ID) {
-    return { group_id: GROUP_ID, plan_id: PLAN_ID, bucket_id: BUCKET_ID, source: 'environment_vars' }
-  }
+  if (GROUP_ID && PLAN_ID && BUCKET_ID) return { group_id: GROUP_ID, plan_id: PLAN_ID, bucket_id: BUCKET_ID, source: 'environment_vars' }
   const groups = (await graph('GET', '/groups?$top=100&$select=id,displayName,groupTypes', token)).value || []
   const candidates = []
   for (const group of groups) {
@@ -205,19 +236,13 @@ async function discoverPlannerTarget(token) {
       buckets.sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'pt-BR'))
       const preferred = buckets.filter((bucket) => /(backlog|demanda|entrada)/i.test(String(bucket?.name || '')))
       const bucket = preferred[0] || buckets[0]
-      candidates.push({
-        group_id: String(group.id), group_name: String(group.displayName || ''),
-        plan_id: String(plan.id), plan_name: String(plan.title || ''),
-        bucket_id: String(bucket.id), bucket_name: String(bucket.name || ''), source: 'graph_discovery',
-      })
+      candidates.push({ group_id: String(group.id), group_name: String(group.displayName || ''), plan_id: String(plan.id), plan_name: String(plan.title || ''), bucket_id: String(bucket.id), bucket_name: String(bucket.name || ''), source: 'graph_discovery' })
     }
   }
   const dev = candidates.filter((item) => /(^|[^a-z])dev([^a-z]|$)|development|desenvolvimento/i.test(`${item.group_name} ${item.plan_name}`))
   const pool = dev.length ? dev : candidates
   if (pool.length !== 1) throw new Error(`descoberta_wsjf_ambigua:total=${candidates.length}:dev=${dev.length}`)
-  GROUP_ID = pool[0].group_id
-  PLAN_ID = pool[0].plan_id
-  BUCKET_ID = pool[0].bucket_id
+  GROUP_ID = pool[0].group_id; PLAN_ID = pool[0].plan_id; BUCKET_ID = pool[0].bucket_id
   return pool[0]
 }
 
@@ -229,18 +254,15 @@ async function deletePlannerTask(token, taskId) {
   const current = await graph('GET', `/planner/tasks/${encodeURIComponent(taskId)}`, token, undefined, [200])
   const etag = current['@odata.etag']
   if (!etag) throw new Error(`planner_etag_ausente:${taskId}`)
-  const response = await fetch(`${GRAPH}/planner/tasks/${encodeURIComponent(taskId)}`, {
-    method: 'DELETE', headers: { Authorization: `Bearer ${token}`, 'If-Match': etag },
-  })
+  const response = await fetch(`${GRAPH}/planner/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}`, 'If-Match': etag } })
   if (response.status !== 204) throw new Error(`planner_cleanup_http_${response.status}:${taskId}`)
 }
 
 const evidence = {
   schema_version: '1.0.0', capability: 'planner-teams-notify-dev-acceptance', environment: 'dev',
-  started_at: iso(), completed_at: null, status: 'running', correlation_id: crypto.randomUUID(),
-  mocked: false, simulated: false, tokens_persisted: false, tasks: [], flows: [], checks: {},
+  started_at: iso(), completed_at: null, status: 'running', correlation_id: crypto.randomUUID(), mocked: false,
+  simulated: false, tokens_persisted: false, tasks: [], flows: [], checks: {},
 }
-
 let graphToken = ''
 let flowToken = ''
 let environmentId = ''
@@ -249,19 +271,35 @@ const startedFlowIds = []
 
 try {
   const bundle = JSON.parse(await fs.readFile(MSAL_STORAGE_STATE_PATH, 'utf8'))
-  const reqsysToken = findLocalStorage(bundle, 'reqsys_token')
-  if (!reqsysToken) throw new Error('reqsys_token_ausente_no_storage_state')
   const refreshState = findRefreshToken(bundle)
-  const powerToken = await acquireDelegated(refreshState, 'https://api.powerplatform.com/.default')
+  let reqsysToken = findLocalStorage(bundle, 'reqsys_token')
+  let powerToken = ''
+
+  try {
+    powerToken = await acquireDelegated(refreshState, 'https://api.powerplatform.com/.default')
+    evidence.checks.microsoft_session = 'reused'
+  } catch (error) {
+    if (!String(error?.message || error).includes('AADSTS700084')) throw error
+    evidence.checks.microsoft_session = 'expired_device_code_required'
+    const deviceTokens = await acquireByDeviceCode(refreshState.clientId, 'https://api.powerplatform.com/.default')
+    refreshState.refreshToken = deviceTokens.refresh_token
+    powerToken = deviceTokens.access_token
+    const login = unwrap(await reqsys('/v1/auth/azure', '', { method: 'POST', body: JSON.stringify({ id_token: deviceTokens.id_token }) }))
+    reqsysToken = String(login?.access_token || '')
+    if (!reqsysToken) throw new Error('reqsys_jwt_nao_emitido_apos_device_code')
+    evidence.checks.microsoft_session = 'renewed_by_device_code'
+    evidence.checks.reqsys_jwt = 'renewed_from_microsoft_id_token'
+  }
+
   flowToken = await acquireDelegated(refreshState, 'https://service.flow.microsoft.com/.default')
   graphToken = await acquireGraphAppToken()
   evidence.checks.delegated_power_platform_token = 'acquired'
   evidence.checks.delegated_flow_management_token = 'acquired'
   evidence.checks.graph_app_token = 'acquired'
+  if (!reqsysToken) throw new Error('reqsys_token_ausente')
 
   const plannerTarget = await discoverPlannerTarget(graphToken)
   evidence.planner_target = plannerTarget
-
   const statusPayload = unwrap(await reqsys('/v1/hub-lowcode/copilot-memory/install/status', reqsysToken))
   const environment = chooseDevEnvironment(statusPayload)
   environmentId = String(environment.id || '').trim()
@@ -269,31 +307,20 @@ try {
   if (!environmentId || !environmentUrl) throw new Error('ambiente_dev_sem_id_ou_url')
   evidence.power_platform = { environment_id: environmentId, environment_name: environment.nome || '', environment_url: environmentUrl }
 
-  const connectionsResponse = await fetch(
-    `${POWER_PLATFORM}/connectivity/environments/${encodeURIComponent(environmentId)}/connections?api-version=2024-10-01`,
-    { headers: { Authorization: `Bearer ${powerToken}`, Accept: 'application/json' } },
-  )
+  const connectionsResponse = await fetch(`${POWER_PLATFORM}/connectivity/environments/${encodeURIComponent(environmentId)}/connections?api-version=2024-10-01`, { headers: { Authorization: `Bearer ${powerToken}`, Accept: 'application/json' } })
   const connectionsPayload = await jsonResponse(connectionsResponse, 'power_platform_connections', [200])
   const connections = Array.isArray(connectionsPayload.value) ? connectionsPayload.value : []
   const plannerConnection = chooseConnection(connections, 'shared_planner', 'WSJF_DEV_PLANNER_CONNECTION_ID')
   const teamsConnection = chooseConnection(connections, 'shared_teams', 'PLANNER_TEAMS_DEV_TEAMS_CONNECTION_ID')
-  evidence.connections = {
-    planner: { id: connectionId(plannerConnection), name: connectionName(plannerConnection) },
-    teams: { id: connectionId(teamsConnection), name: connectionName(teamsConnection) },
-  }
+  evidence.connections = { planner: { id: connectionId(plannerConnection), name: connectionName(plannerConnection) }, teams: { id: connectionId(teamsConnection), name: connectionName(teamsConnection) } }
 
   const deployPayload = {
     environment_id: environmentId, environment_url: environmentUrl, group_id: GROUP_ID, plan_id: PLAN_ID,
     planner_connection_id: connectionId(plannerConnection), teams_team_id: TEAM_ID, teams_channel_id: CHANNEL_ID,
-    teams_connection_id: connectionId(teamsConnection), target_environment: 'dev', confirmar: true,
-    correlation_id: evidence.correlation_id,
+    teams_connection_id: connectionId(teamsConnection), target_environment: 'dev', confirmar: true, correlation_id: evidence.correlation_id,
   }
-  const deployed = unwrap(await reqsys('/v1/hub-lowcode/planner-teams-notify/deploy', reqsysToken, {
-    method: 'POST', headers: { 'X-Power-Automate-Token': flowToken }, body: JSON.stringify(deployPayload),
-  }))
-  if (!deployed?.dispatched || deployed?.status !== 'implantado') {
-    throw new Error(`provisionamento_nao_implantado:${JSON.stringify(deployed).slice(0, 1200)}`)
-  }
+  const deployed = unwrap(await reqsys('/v1/hub-lowcode/planner-teams-notify/deploy', reqsysToken, { method: 'POST', headers: { 'X-Power-Automate-Token': flowToken }, body: JSON.stringify(deployPayload) }))
+  if (!deployed?.dispatched || deployed?.status !== 'implantado') throw new Error(`provisionamento_nao_implantado:${JSON.stringify(deployed).slice(0, 1200)}`)
   evidence.checks.provisioning = 'implanted'
   evidence.flows = (deployed.flows || []).map((flow) => ({ evento: flow.evento, flow_id: flow.flow_id, flow_url: flow.flow_url }))
 
@@ -306,10 +333,8 @@ try {
   const marker = Date.now()
   const e2eTitle = `REQSYS-E2E-NOTIFY-FILTER-${marker}`
   const normalTitle = `REQSYS-NOTIFY-FILTER-NORMAL-${marker}`
-  const e2eTask = await createPlannerTask(graphToken, e2eTitle)
-  createdTaskIds.push(e2eTask.id)
-  const normalTask = await createPlannerTask(graphToken, normalTitle)
-  createdTaskIds.push(normalTask.id)
+  const e2eTask = await createPlannerTask(graphToken, e2eTitle); createdTaskIds.push(e2eTask.id)
+  const normalTask = await createPlannerTask(graphToken, normalTitle); createdTaskIds.push(normalTask.id)
   evidence.tasks = [
     { kind: 'e2e', id: e2eTask.id, title: e2eTitle, expected_teams: 'skipped' },
     { kind: 'normal', id: normalTask.id, title: normalTitle, expected_teams: 'succeeded' },
@@ -318,9 +343,7 @@ try {
   evidence.observation_window_started_at = iso()
   await sleep(POLL_SECONDS * 1000)
 
-  for (const flow of evidence.flows) {
-    flow.runs = await listFlowRuns(environmentId, flow.flow_id, flowToken, evidence.observation_window_started_at)
-  }
+  for (const flow of evidence.flows) flow.runs = await listFlowRuns(environmentId, flow.flow_id, flowToken, evidence.observation_window_started_at)
   const createdFlow = evidence.flows.find((flow) => flow.evento === 'criada')
   evidence.checks.created_flow_runs_observed = createdFlow?.runs?.length || 0
   if ((createdFlow?.runs?.length || 0) < 2) throw new Error(`execucoes_flow_criada_insuficientes:${createdFlow?.runs?.length || 0}`)
@@ -333,32 +356,18 @@ try {
   evidence.cleanup = { tasks: [], flows: [] }
   if (graphToken) {
     for (const taskId of createdTaskIds) {
-      try {
-        await deletePlannerTask(graphToken, taskId)
-        evidence.cleanup.tasks.push({ id: taskId, status: 'deleted' })
-      } catch (error) {
-        evidence.cleanup.tasks.push({ id: taskId, status: 'failed', error: String(error?.message || error).slice(0, 300) })
-        process.exitCode = 1
-      }
+      try { await deletePlannerTask(graphToken, taskId); evidence.cleanup.tasks.push({ id: taskId, status: 'deleted' }) }
+      catch (error) { evidence.cleanup.tasks.push({ id: taskId, status: 'failed', error: String(error?.message || error).slice(0, 300) }); process.exitCode = 1 }
     }
   }
   if (flowToken && environmentId) {
     for (const flowId of startedFlowIds) {
-      try {
-        await flowAction(environmentId, flowId, 'stop', flowToken)
-        evidence.cleanup.flows.push({ id: flowId, status: 'stopped' })
-      } catch (error) {
-        evidence.cleanup.flows.push({ id: flowId, status: 'failed', error: String(error?.message || error).slice(0, 300) })
-        process.exitCode = 1
-      }
+      try { await flowAction(environmentId, flowId, 'stop', flowToken); evidence.cleanup.flows.push({ id: flowId, status: 'stopped' }) }
+      catch (error) { evidence.cleanup.flows.push({ id: flowId, status: 'failed', error: String(error?.message || error).slice(0, 300) }); process.exitCode = 1 }
     }
   }
   evidence.completed_at = iso()
   await fs.mkdir(EVIDENCE_PATH.split('/').slice(0, -1).join('/'), { recursive: true })
   await fs.writeFile(EVIDENCE_PATH, JSON.stringify(evidence, null, 2) + '\n', 'utf8')
-  console.log(JSON.stringify({
-    status: evidence.status, correlation_id: evidence.correlation_id,
-    tasks: evidence.tasks.map(({ kind, title, expected_teams }) => ({ kind, title, expected_teams })),
-    created_flow_runs_observed: evidence.checks.created_flow_runs_observed || 0, evidence_path: EVIDENCE_PATH,
-  }))
+  console.log(JSON.stringify({ status: evidence.status, correlation_id: evidence.correlation_id, tasks: evidence.tasks.map(({ kind, title, expected_teams }) => ({ kind, title, expected_teams })), created_flow_runs_observed: evidence.checks.created_flow_runs_observed || 0, evidence_path: EVIDENCE_PATH, error: evidence.error || null }))
 }
