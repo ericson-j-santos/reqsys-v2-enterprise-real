@@ -27,6 +27,13 @@ def test_definir_correlation_id_em_branco_gera_novo_id():
     assert resolver_correlation_id() == valor
 
 
+def test_definir_correlation_id_nulo_gera_novo_id():
+    valor = definir_correlation_id(None)
+
+    assert str(UUID(valor)) == valor
+    assert resolver_correlation_id() == valor
+
+
 def test_resolver_correlation_id_usa_request_id_como_fallback():
     definir_correlation_id('anterior')
     assert resolver_correlation_id(None, 'req-fallback') == 'req-fallback'
