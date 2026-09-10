@@ -256,26 +256,23 @@ jobs:
           build-mode: none
           queries: security-extended,security-and-quality
 
-      - name: Perform CodeQL Analysis and wait for rendering
+      - name: Generate CodeQL SARIF without publishing
         id: analyze
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
           output: "artifacts/security-scanners/codeql/${{ matrix.language }}/raw"
           post-processed-sarif-path: "artifacts/security-scanners/codeql/${{ matrix.language }}/processed"
-          upload: always
-          wait-for-processing: true
+          upload: never
 
       - name: Validate generated SARIF evidence
-        if: always()
         shell: bash
         run: |
           set -euo pipefail
           evidence_dir="artifacts/security-scanners/codeql/${{ matrix.language }}"
           sarif_count=$(find "$evidence_dir" -type f -name '*.sarif' | wc -l | tr -d ' ')
           echo "sarif_count=$sarif_count" | tee "$evidence_dir/evidence.env"
-
-          if [ "${{ steps.analyze.outcome }}" = "success" ] && [ "$sarif_count" -eq 0 ]; then
+          if [ "$sarif_count" -eq 0 ]; then
             echo "CodeQL concluiu sem preservar arquivo SARIF; evidência não renderizável." >&2
             exit 1
           fi
@@ -285,7 +282,6 @@ jobs:
         shell: bash
         env:
           ANALYZE_OUTCOME: ${{ steps.analyze.outcome }}
-          SARIF_ID: ${{ steps.analyze.outputs.sarif-id }}
         run: |
           evidence_dir="artifacts/security-scanners/codeql/${{ matrix.language }}"
           sarif_count=$(find "$evidence_dir" -type f -name '*.sarif' | wc -l | tr -d ' ')
@@ -296,13 +292,11 @@ jobs:
             echo "|---|---|"
             echo "| Resultado da análise | \`${ANALYZE_OUTCOME:-unknown}\` |"
             echo "| SARIF preservado | \`${sarif_count}\` arquivo(s) |"
-            echo "| SARIF processado pelo GitHub | \`${SARIF_ID:-não informado}\` |"
+            echo "| Publicação | \`adiada para lote atômico\` |"
             echo "| Categoria | \`/language:${{ matrix.language }}\` |"
-            echo
-            echo "[Abrir Code Scanning](https://github.com/${{ github.repository }}/security/code-scanning)"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload CodeQL SARIF evidence
+      - name: Upload CodeQL SARIF evidence artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -310,6 +304,84 @@ jobs:
           path: artifacts/security-scanners/codeql/${{ matrix.language }}/
           if-no-files-found: error
           retention-days: 30
+
+  codeql-publish:
+    name: CodeQL Publish Atomic
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: codeql
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download both CodeQL SARIF artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: codeql-sarif-*
+          path: artifacts/security-scanners/codeql-upload
+
+      - name: Stage and validate both CodeQL configurations
+        shell: bash
+        run: |
+          set -euo pipefail
+          publish_dir="artifacts/security-scanners/codeql-publish"
+          mkdir -p "$publish_dir"
+          python - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          root = Path("artifacts/security-scanners/codeql-upload")
+          publish = Path("artifacts/security-scanners/codeql-publish")
+          expected = {
+              "/language:javascript-typescript/": "javascript-typescript.sarif",
+              "/language:python/": "python.sarif",
+          }
+          found = set()
+          for sarif in root.glob("codeql-sarif-*/processed/upload.sarif"):
+              payload = json.loads(sarif.read_text(encoding="utf-8"))
+              categories = {
+                  run.get("automationDetails", {}).get("id")
+                  for run in payload.get("runs", [])
+              }
+              if len(categories) != 1:
+                  raise SystemExit(f"Categoria CodeQL inválida em {sarif}: {categories}")
+              category = categories.pop()
+              if category not in expected:
+                  raise SystemExit(f"Categoria CodeQL inesperada: {category}")
+              if category in found:
+                  raise SystemExit(f"Categoria CodeQL duplicada: {category}")
+              shutil.copy2(sarif, publish / expected[category])
+              found.add(category)
+          missing = set(expected) - found
+          if missing:
+              raise SystemExit(f"Configurações CodeQL ausentes: {sorted(missing)}")
+          print("CodeQL configurations staged:", sorted(found))
+          PY
+
+      - name: Publish both CodeQL analyses in one upload
+        id: upload
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: artifacts/security-scanners/codeql-publish
+          wait-for-processing: true
+
+      - name: Publish atomic CodeQL summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## CodeQL — publicação atômica"
+            echo
+            echo "As configurações \`javascript-typescript\` e \`python\` são publicadas juntas."
+            echo "Isso impede avaliação intermediária do gate com apenas uma linguagem disponível."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   security-executive-summary:
     name: Security Executive Summary
@@ -320,7 +392,7 @@ jobs:
       - python-dependency-audit
       - npm-audit
       - sbom
-      - codeql
+      - codeql-publish
     if: always()
     steps:
       - name: Checkout
