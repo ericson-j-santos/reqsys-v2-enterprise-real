@@ -34,9 +34,7 @@ async function readJsonResponse(response) {
 
 async function jsonResponse(response, label, allowed = [200]) {
   const payload = await readJsonResponse(response)
-  if (!allowed.includes(response.status)) {
-    throw new Error(`${label}:http_${response.status}:${JSON.stringify(payload).slice(0, 1000)}`)
-  }
+  if (!allowed.includes(response.status)) throw new Error(`${label}:http_${response.status}:${JSON.stringify(payload).slice(0, 1000)}`)
   return payload
 }
 
@@ -56,9 +54,7 @@ function findRefreshToken(bundle) {
       const item = JSON.parse(entry.value)
       const type = String(item?.credentialType || '').toLowerCase()
       const key = String(entry.name || '').toLowerCase()
-      if ((type === 'refreshtoken' || key.includes('refreshtoken')) && item?.secret && item?.clientId) {
-        candidates.push({ refreshToken: item.secret, clientId: item.clientId })
-      }
+      if ((type === 'refreshtoken' || key.includes('refreshtoken')) && item?.secret && item?.clientId) candidates.push({ refreshToken: item.secret, clientId: item.clientId })
     } catch { /* entrada nao JSON */ }
   }
   if (!candidates.length) throw new Error('msal_refresh_token_ausente')
@@ -68,51 +64,48 @@ function findRefreshToken(bundle) {
 }
 
 async function acquireDelegated(state, scope) {
-  const body = new URLSearchParams({
-    client_id: state.clientId, grant_type: 'refresh_token', refresh_token: state.refreshToken,
-    scope, client_info: '1',
-  })
-  const response = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`, {
-    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body,
-  })
+  const body = new URLSearchParams({ client_id: state.clientId, grant_type: 'refresh_token', refresh_token: state.refreshToken, scope, client_info: '1' })
+  const response = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
   const payload = await readJsonResponse(response)
-  if (response.status !== 200) {
-    throw new Error(`token:${scope}:http_${response.status}:${JSON.stringify(payload).slice(0, 1000)}`)
-  }
+  if (response.status !== 200) throw new Error(`token:${scope}:http_${response.status}:${JSON.stringify(payload).slice(0, 1000)}`)
   if (!payload.access_token) throw new Error(`access_token_ausente:${scope}`)
   if (payload.refresh_token) state.refreshToken = payload.refresh_token
   return payload.access_token
 }
 
 async function acquireByDeviceCode(clientId, scope) {
-  const deviceResponse = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/devicecode`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: clientId, scope: `openid profile email offline_access ${scope}` }),
-  })
-  const device = await jsonResponse(deviceResponse, 'device_code', [200])
-  const verificationUri = device.verification_uri || device.verification_url || 'https://microsoft.com/devicelogin'
-  console.log(`::notice title=Autorizacao Microsoft necessaria::Abra ${verificationUri} e informe o codigo ${device.user_code}`)
-  console.log(JSON.stringify({ status: 'awaiting_microsoft_device_authorization', verification_uri: verificationUri, user_code: device.user_code }))
+  let device = null
+  const preparedPath = optional('DEVICE_CODE_PRIVATE_PATH')
+  if (preparedPath) {
+    try { device = JSON.parse(await fs.readFile(preparedPath, 'utf8')) } catch { device = null }
+  }
 
-  const deadline = Date.now() + Number(device.expires_in || 900) * 1000
+  if (!device?.device_code) {
+    const deviceResponse = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/devicecode`, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: clientId, scope: `openid profile email offline_access ${scope}` }),
+    })
+    device = await jsonResponse(deviceResponse, 'device_code', [200])
+    const verificationUri = device.verification_uri || device.verification_url || 'https://microsoft.com/devicelogin'
+    console.log(`::notice title=Autorizacao Microsoft necessaria::Abra ${verificationUri} e informe o codigo ${device.user_code}`)
+    console.log(JSON.stringify({ status: 'awaiting_microsoft_device_authorization', verification_uri: verificationUri, user_code: device.user_code }))
+    device.client_id = clientId
+    device.generated_at = iso()
+  }
+
+  const effectiveClientId = String(device.client_id || clientId)
+  const generatedAt = Date.parse(device.generated_at || iso())
+  const deadline = generatedAt + Number(device.expires_in || 900) * 1000
   let interval = Math.max(5, Number(device.interval || 5))
   while (Date.now() < deadline) {
     await sleep(interval * 1000)
     const response = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-        device_code: device.device_code,
-      }),
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: effectiveClientId, grant_type: 'urn:ietf:params:oauth:grant-type:device_code', device_code: device.device_code }),
     })
     const payload = await readJsonResponse(response)
     if (response.status === 200) {
-      if (!payload.access_token || !payload.refresh_token || !payload.id_token) {
-        throw new Error('device_code_resposta_incompleta')
-      }
+      if (!payload.access_token || !payload.refresh_token || !payload.id_token) throw new Error('device_code_resposta_incompleta')
       return payload
     }
     if (payload.error === 'authorization_pending') continue
@@ -123,13 +116,8 @@ async function acquireByDeviceCode(clientId, scope) {
 }
 
 async function acquireGraphAppToken() {
-  const body = new URLSearchParams({
-    client_id: GRAPH_CLIENT_ID, client_secret: GRAPH_CLIENT_SECRET,
-    grant_type: 'client_credentials', scope: 'https://graph.microsoft.com/.default',
-  })
-  const response = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`, {
-    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body,
-  })
+  const body = new URLSearchParams({ client_id: GRAPH_CLIENT_ID, client_secret: GRAPH_CLIENT_SECRET, grant_type: 'client_credentials', scope: 'https://graph.microsoft.com/.default' })
+  const response = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
   const payload = await jsonResponse(response, 'graph_app_token', [200])
   if (!payload.access_token) throw new Error('graph_app_access_token_ausente')
   return payload.access_token
@@ -193,10 +181,7 @@ function connectionName(item) { return String(item?.properties?.displayName || i
 async function flowAction(environmentId, flowId, action, flowToken) {
   const url = `${FLOW_BASE}/environments/${encodeURIComponent(environmentId)}/flows/${encodeURIComponent(flowId)}/${action}?api-version=2016-11-01`
   const response = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${flowToken}` } })
-  if (![200, 202, 204].includes(response.status)) {
-    const text = (await response.text()).slice(0, 1000)
-    throw new Error(`flow_${action}:http_${response.status}:${text}`)
-  }
+  if (![200, 202, 204].includes(response.status)) throw new Error(`flow_${action}:http_${response.status}:${(await response.text()).slice(0, 1000)}`)
   return { status: response.status }
 }
 
@@ -207,10 +192,7 @@ async function listFlowRuns(environmentId, flowId, flowToken, since) {
   return (payload.value || []).filter((run) => {
     const start = Date.parse(run?.properties?.startTime || run?.properties?.createdTime || 0)
     return Number.isFinite(start) && start >= Date.parse(since) - 60_000
-  }).map((run) => ({
-    id: run?.name || run?.id || '', status: run?.properties?.status || '',
-    start_time: run?.properties?.startTime || run?.properties?.createdTime || '', end_time: run?.properties?.endTime || '',
-  }))
+  }).map((run) => ({ id: run?.name || run?.id || '', status: run?.properties?.status || '', start_time: run?.properties?.startTime || run?.properties?.createdTime || '', end_time: run?.properties?.endTime || '' }))
 }
 
 async function graph(method, path, token, body, allowed = [200]) {
@@ -246,10 +228,7 @@ async function discoverPlannerTarget(token) {
   return pool[0]
 }
 
-async function createPlannerTask(token, title) {
-  return graph('POST', '/planner/tasks', token, { planId: PLAN_ID, bucketId: BUCKET_ID, title }, [201])
-}
-
+async function createPlannerTask(token, title) { return graph('POST', '/planner/tasks', token, { planId: PLAN_ID, bucketId: BUCKET_ID, title }, [201]) }
 async function deletePlannerTask(token, taskId) {
   const current = await graph('GET', `/planner/tasks/${encodeURIComponent(taskId)}`, token, undefined, [200])
   const etag = current['@odata.etag']
@@ -258,11 +237,7 @@ async function deletePlannerTask(token, taskId) {
   if (response.status !== 204) throw new Error(`planner_cleanup_http_${response.status}:${taskId}`)
 }
 
-const evidence = {
-  schema_version: '1.0.0', capability: 'planner-teams-notify-dev-acceptance', environment: 'dev',
-  started_at: iso(), completed_at: null, status: 'running', correlation_id: crypto.randomUUID(), mocked: false,
-  simulated: false, tokens_persisted: false, tasks: [], flows: [], checks: {},
-}
+const evidence = { schema_version: '1.0.0', capability: 'planner-teams-notify-dev-acceptance', environment: 'dev', started_at: iso(), completed_at: null, status: 'running', correlation_id: crypto.randomUUID(), mocked: false, simulated: false, tokens_persisted: false, tasks: [], flows: [], checks: {} }
 let graphToken = ''
 let flowToken = ''
 let environmentId = ''
@@ -274,7 +249,6 @@ try {
   const refreshState = findRefreshToken(bundle)
   let reqsysToken = findLocalStorage(bundle, 'reqsys_token')
   let powerToken = ''
-
   try {
     powerToken = await acquireDelegated(refreshState, 'https://api.powerplatform.com/.default')
     evidence.checks.microsoft_session = 'reused'
@@ -314,20 +288,13 @@ try {
   const teamsConnection = chooseConnection(connections, 'shared_teams', 'PLANNER_TEAMS_DEV_TEAMS_CONNECTION_ID')
   evidence.connections = { planner: { id: connectionId(plannerConnection), name: connectionName(plannerConnection) }, teams: { id: connectionId(teamsConnection), name: connectionName(teamsConnection) } }
 
-  const deployPayload = {
-    environment_id: environmentId, environment_url: environmentUrl, group_id: GROUP_ID, plan_id: PLAN_ID,
-    planner_connection_id: connectionId(plannerConnection), teams_team_id: TEAM_ID, teams_channel_id: CHANNEL_ID,
-    teams_connection_id: connectionId(teamsConnection), target_environment: 'dev', confirmar: true, correlation_id: evidence.correlation_id,
-  }
+  const deployPayload = { environment_id: environmentId, environment_url: environmentUrl, group_id: GROUP_ID, plan_id: PLAN_ID, planner_connection_id: connectionId(plannerConnection), teams_team_id: TEAM_ID, teams_channel_id: CHANNEL_ID, teams_connection_id: connectionId(teamsConnection), target_environment: 'dev', confirmar: true, correlation_id: evidence.correlation_id }
   const deployed = unwrap(await reqsys('/v1/hub-lowcode/planner-teams-notify/deploy', reqsysToken, { method: 'POST', headers: { 'X-Power-Automate-Token': flowToken }, body: JSON.stringify(deployPayload) }))
   if (!deployed?.dispatched || deployed?.status !== 'implantado') throw new Error(`provisionamento_nao_implantado:${JSON.stringify(deployed).slice(0, 1200)}`)
   evidence.checks.provisioning = 'implanted'
   evidence.flows = (deployed.flows || []).map((flow) => ({ evento: flow.evento, flow_id: flow.flow_id, flow_url: flow.flow_url }))
 
-  for (const flow of evidence.flows) {
-    await flowAction(environmentId, flow.flow_id, 'start', flowToken)
-    startedFlowIds.push(flow.flow_id)
-  }
+  for (const flow of evidence.flows) { await flowAction(environmentId, flow.flow_id, 'start', flowToken); startedFlowIds.push(flow.flow_id) }
   evidence.checks.flow_activation = 'started'
 
   const marker = Date.now()
@@ -335,10 +302,7 @@ try {
   const normalTitle = `REQSYS-NOTIFY-FILTER-NORMAL-${marker}`
   const e2eTask = await createPlannerTask(graphToken, e2eTitle); createdTaskIds.push(e2eTask.id)
   const normalTask = await createPlannerTask(graphToken, normalTitle); createdTaskIds.push(normalTask.id)
-  evidence.tasks = [
-    { kind: 'e2e', id: e2eTask.id, title: e2eTitle, expected_teams: 'skipped' },
-    { kind: 'normal', id: normalTask.id, title: normalTitle, expected_teams: 'succeeded' },
-  ]
+  evidence.tasks = [{ kind: 'e2e', id: e2eTask.id, title: e2eTitle, expected_teams: 'skipped' }, { kind: 'normal', id: normalTask.id, title: normalTitle, expected_teams: 'succeeded' }]
   evidence.checks.planner_tasks_created = 2
   evidence.observation_window_started_at = iso()
   await sleep(POLL_SECONDS * 1000)
