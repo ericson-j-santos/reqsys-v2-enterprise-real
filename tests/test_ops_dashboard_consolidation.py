@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_PATH = ROOT / "governance/tooling/ops-dashboard-consolidation-phase1.json"
 INVENTORY_PATH = ROOT / "governance/tooling/rationalization-inventory.json"
 GENERATOR_PATH = ROOT / "tools/geradores/movimento_email_autocontido.py"
+PAGES_WORKFLOW_PATH = ROOT / ".github/workflows/deploy-reqsys-pages-composite.yml"
 
 TEAMS_CONSUMERS = [
     ".github/workflows/teams-notification-dashboard.yml",
@@ -37,6 +38,26 @@ def test_teams_operational_consumers_use_canonical_path() -> None:
         assert not LEGACY_TEAMS_RE.search(content), (
             f"Referência Teams legada encontrada em {relative_path}"
         )
+
+
+def test_pages_publisher_has_governed_self_healing_fallback() -> None:
+    content = PAGES_WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "workflow_run:" in content
+    assert "workflow_dispatch:" in content
+    assert "schedule:" in content
+    assert "teams-notification-dashboard.yml/runs?status=success" in content
+    assert "Execução produtora fora da janela de 48h" in content
+    assert content.count("actions/deploy-pages@v4") == 1
+
+
+def test_pages_publisher_validates_same_contract_as_public_smoke() -> None:
+    content = PAGES_WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    for marker in ("GitHub", "Microsoft Teams", "Certificação"):
+        assert f"grep -Fq '{marker}' site/index.html" in content
+    for required_file in ("site/data.json", "site/certification-status.json"):
+        assert f"test -s {required_file}" in content
 
 
 def test_legacy_root_cannot_be_removed_while_generator_default_is_legacy() -> None:
