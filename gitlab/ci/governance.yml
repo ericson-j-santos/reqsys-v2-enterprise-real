@@ -4,6 +4,7 @@ gitlab_governance_validation:
   script:
     - mkdir -p audit
     - python gitlab/scripts/validate_gitlab_governance.py --output audit/gitlab-governance-report.md
+    - python -m unittest discover -s gitlab/tests -p 'test_provision_gitlab_governance.py' -v
   artifacts:
     when: always
     expire_in: 14 days
