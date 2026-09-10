@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   inspect:
-    name: Inspect Planner Teams persisted definition
+    name: Inspect known working WSJF condition
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: reqsys-power-platform-dev
@@ -33,11 +33,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Inspect persisted flow definition (read-only)
+      - name: Inspect persisted WSJF flow definition (read-only)
         run: |
           python scripts/inspect_teams_v2_flow_condition.py \
             --environment-url "$POWERPLATFORM_DEV_ENVIRONMENT_URL" \
             --tenant-id "$POWERPLATFORM_TENANT_ID" \
             --client-id "$POWERPLATFORM_APP_ID" \
             --client-secret "$POWERPLATFORM_CLIENT_SECRET" \
-            --flow-name "ReqSys - Notificar Teams (Tarefa criada no Planner)"
+            --flow-name "ReqSys WSJF - Planner para Excel"
