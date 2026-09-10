@@ -27,7 +27,7 @@ env:
   PLANNER_TEAMS_TRIGGER_WARMUP_SECONDS: '15'
 
 concurrency:
-  group: planner-teams-notify-dev-acceptance
+  group: planner-teams-notify-dev-acceptance-v2
   cancel-in-progress: true
 
 jobs:
