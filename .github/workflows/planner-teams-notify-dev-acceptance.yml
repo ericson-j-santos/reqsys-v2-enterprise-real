@@ -1,0 +1,74 @@
+name: Planner Teams Notify DEV Acceptance
+
+on:
+  push:
+    branches:
+      - chore/planner-teams-dev-acceptance
+    paths:
+      - .github/workflows/planner-teams-notify-dev-acceptance.yml
+      - scripts/planner_teams_dev_acceptance.mjs
+      - frontend/tests/e2e/helpers/msal-token-helper.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  API_URL: https://reqsys-api-dev.fly.dev
+  EVIDENCE_PATH: audit/user-journey/planner-teams-dev/acceptance.json
+  PLANNER_TEAMS_DEV_TEAM_ID: 07936381-2d94-41db-9f46-a7b28008caba
+  PLANNER_TEAMS_DEV_CHANNEL_ID: 19:ZW3ncXvFEGrJY-9yHd2MuFiRstJ8TQGmz2Fr_KUXqCI1@thread.tacv2
+  PLANNER_TEAMS_POLL_SECONDS: '420'
+
+concurrency:
+  group: planner-teams-notify-dev-acceptance
+  cancel-in-progress: true
+
+jobs:
+  acceptance:
+    name: Planner → Teams — prova real DEV
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 20
+    env:
+      POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+      POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+      WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
+      WSJF_DEV_ENVIRONMENT_ID: ${{ vars.WSJF_DEV_ENVIRONMENT_ID }}
+      WSJF_DEV_GROUP_ID: ${{ vars.WSJF_DEV_GROUP_ID }}
+      WSJF_DEV_PLAN_ID: ${{ vars.WSJF_DEV_PLAN_ID }}
+      WSJF_DEV_BUCKET_ID: ${{ vars.WSJF_DEV_BUCKET_ID }}
+      WSJF_DEV_PLANNER_CONNECTION_ID: ${{ vars.WSJF_DEV_PLANNER_CONNECTION_ID }}
+      PLANNER_TEAMS_DEV_TEAMS_CONNECTION_ID: ${{ vars.PLANNER_TEAMS_DEV_TEAMS_CONNECTION_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Restaurar sessão Microsoft real sem expor credenciais
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${WSJF_MSAL_STORAGE_STATE_B64:-}" ]; then
+            echo "::error::WSJF_MSAL_STORAGE_STATE_B64 ausente"
+            exit 1
+          fi
+          state="$RUNNER_TEMP/msal-storage-state.json"
+          printf '%s' "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$state"
+          chmod 600 "$state"
+          echo "MSAL_STORAGE_STATE_PATH=$state" >> "$GITHUB_ENV"
+
+      - name: Executar CT-01 e CT-02 contra Planner → Power Automate → Teams DEV
+        run: node scripts/planner_teams_dev_acceptance.mjs
+
+      - name: Publicar evidência operacional
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: planner-teams-notify-dev-acceptance-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_PATH }}
+          if-no-files-found: warn
+          retention-days: 30
