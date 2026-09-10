@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict
 import json
 import re
+from dataclasses import dataclass
+from typing import Any, Dict
 
 
 PROFILE = "excel_sql_sharepoint_sync"
