@@ -1,0 +1,1 @@
+A presença dos arquivos gerados e de testes no repositório não constitui evidência de integração real. O efeito externo em SharePoint deve ser validado em DEV antes de promover o estado para concluído.
