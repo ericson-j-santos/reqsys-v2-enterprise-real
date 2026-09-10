@@ -323,7 +323,7 @@ def main() -> int:
         "excel_matching_rows": 0,
         "first_sync_observed": False,
         "local_fields_preserved": False,
-        "planner_writeback_detected": True,
+        "planner_writeback_detected": None,
         "probe_marker": marker,
         "workbook_lock_retry": {
             "attempts": lock_attempts,
