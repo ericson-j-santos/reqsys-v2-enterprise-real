@@ -1,0 +1,108 @@
+name: Runtime E2E Continuous — DEV
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/runtime-e2e-continuous.yml'
+      - 'scripts/planner_teams_runtime_e2e.mjs'
+      - 'scripts/tests/planner_teams_runtime_e2e.test.mjs'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/runtime-e2e-continuous.yml'
+      - 'scripts/planner_teams_runtime_e2e.mjs'
+      - 'scripts/tests/planner_teams_runtime_e2e.test.mjs'
+  schedule:
+    # 09:15 BRT (UTC-3), dias úteis.
+    - cron: '15 12 * * 1-5'
+  workflow_run:
+    workflows:
+      - Fly DEV Fast Deploy
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-e2e-continuous-dev-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'runtime' }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Contrato do harness E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout do SHA sob teste
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Executar testes determinísticos do harness
+        run: node --test scripts/tests/planner_teams_runtime_e2e.test.mjs
+
+  planner-teams-runtime:
+    name: Planner → Teams — E2E contínuo DEV
+    needs: contract
+    if: >-
+      github.event_name != 'pull_request' &&
+      (github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'))
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 12
+    env:
+      TARGET_ENVIRONMENT: dev
+      POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+      POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+      WSJF_DEV_PLAN_ID: ${{ vars.WSJF_DEV_PLAN_ID }}
+      WSJF_DEV_BUCKET_ID: ${{ vars.WSJF_DEV_BUCKET_ID }}
+      PLANNER_TEAMS_DEV_TEAM_ID: 07936381-2d94-41db-9f46-a7b28008caba
+      PLANNER_TEAMS_DEV_CHANNEL_ID: 19:ZW3ncXvFEGrJY-9yHd2MuFiRstJ8TQGmz2Fr_KUXqCI1@thread.tacv2
+      PLANNER_TEAMS_POLL_SECONDS: '420'
+      PLANNER_TEAMS_RUN_POLL_INTERVAL_MS: '30000'
+      PLANNER_TEAMS_SETTLE_SECONDS: '45'
+      EVIDENCE_PATH: audit/runtime-e2e/planner-teams/acceptance.json
+
+    steps:
+      - name: Checkout do SHA implantado
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Executar prova real Planner → Teams
+        run: node scripts/planner_teams_runtime_e2e.mjs
+
+      - name: Publicar evidência auditável
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-e2e-planner-teams-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_PATH }}
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Resumo operacional
+        if: always()
+        shell: bash
+        run: |
+          echo '## Runtime E2E — Planner → Teams DEV' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Disparo: ${{ github.event_name }}' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Ambiente: DEV' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Timeout de observação: 420 s' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Política: tarefa normal é controle positivo; tarefa REQSYS-E2E-* deve permanecer ausente no Teams.' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Sem login por device code e sem reprovisionamento de flow.' >> "$GITHUB_STEP_SUMMARY"
