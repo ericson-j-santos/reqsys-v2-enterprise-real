@@ -44,14 +44,6 @@ async function jsonResponse(response, label, allowed = [200]) {
   return payload
 }
 
-function findLocalStorage(bundle, name) {
-  for (const origin of bundle?.storageState?.origins || []) {
-    const found = (origin.localStorage || []).find((item) => item?.name === name)
-    if (found?.value) return found.value
-  }
-  return ''
-}
-
 function findRefreshToken(bundle) {
   const candidates = []
   for (const entry of bundle?.sessionStorage || []) {
@@ -71,7 +63,10 @@ function findRefreshToken(bundle) {
   return [...unique.values()][0]
 }
 
-async function acquireDelegated(state, scope) {
+async function acquireDelegated(state, scope, includeOpenId = false) {
+  const effectiveScope = includeOpenId
+    ? `openid profile email offline_access ${scope}`
+    : scope
   const response = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -79,7 +74,7 @@ async function acquireDelegated(state, scope) {
       client_id: state.clientId,
       grant_type: 'refresh_token',
       refresh_token: state.refreshToken,
-      scope,
+      scope: effectiveScope,
       client_info: '1',
     }),
   })
@@ -88,8 +83,9 @@ async function acquireDelegated(state, scope) {
     throw new Error(`token:${scope}:http_${response.status}:${JSON.stringify(payload).slice(0, 1000)}`)
   }
   if (!payload.access_token) throw new Error(`access_token_ausente:${scope}`)
+  if (includeOpenId && !payload.id_token) throw new Error(`id_token_ausente:${scope}`)
   if (payload.refresh_token) state.refreshToken = payload.refresh_token
-  return payload.access_token
+  return includeOpenId ? payload : payload.access_token
 }
 
 async function acquireByDeviceCode(clientId) {
@@ -395,8 +391,58 @@ async function deletePlannerTask(token, taskId) {
   if (response.status !== 204) throw new Error(`planner_cleanup_http_${response.status}:${taskId}`)
 }
 
+function controlledEvidence(runtime) {
+  const succeeded = runtime.status === 'runtime_executed_awaiting_teams_observation'
+  return {
+    schema_version: '1.3.0',
+    capability: 'planner-teams-notify-dev-acceptance',
+    environment: 'dev',
+    run_id: runtime.run_id,
+    run_attempt: runtime.run_attempt,
+    started_at: runtime.started_at,
+    completed_at: runtime.completed_at,
+    status: succeeded ? 'runtime_executed_awaiting_teams_observation' : 'failed',
+    correlation_id: runtime.correlation_id,
+    mocked: false,
+    simulated: false,
+    tokens_persisted: false,
+    task_expectations: [
+      { kind: 'e2e', title_prefix: 'REQSYS-E2E-NOTIFY-FILTER-', expected_teams: 'skipped' },
+      { kind: 'normal', title_prefix: 'REQSYS-NOTIFY-FILTER-NORMAL-', expected_teams: 'succeeded' },
+    ],
+    checks: {
+      microsoft_session: runtime.checks.microsoft_session === 'renewed_by_device_code'
+        ? 'renewed_by_device_code'
+        : runtime.checks.microsoft_session === 'reused' ? 'reused' : 'not_confirmed',
+      reqsys_jwt: runtime.checks.reqsys_jwt === 'renewed_from_microsoft_id_token'
+        ? 'renewed_from_microsoft_id_token' : 'not_acquired',
+      delegated_power_platform_token: runtime.checks.delegated_power_platform_token === 'acquired'
+        ? 'acquired' : 'not_acquired',
+      delegated_flow_management_token: runtime.checks.delegated_flow_management_token === 'acquired'
+        ? 'acquired' : 'not_acquired',
+      graph_app_token: runtime.checks.graph_app_token === 'acquired' ? 'acquired' : 'not_acquired',
+      power_platform_environment: runtime.checks.power_platform_environment === 'delegated_discovery'
+        ? 'delegated_discovery' : 'not_confirmed',
+      provisioning: runtime.checks.provisioning === 'implanted' ? 'implanted' : 'not_confirmed',
+      flow_activation: runtime.checks.flow_activation === 'started_confirmed'
+        ? 'started_confirmed' : 'not_confirmed',
+      planner_tasks_created: runtime.checks.planner_tasks_created === 2 ? 'two' : 'not_confirmed',
+      created_flow_runs_observed: Number(runtime.checks.created_flow_runs_observed || 0) >= 2
+        ? 'at_least_two' : 'insufficient',
+    },
+    timing: runtime.timing,
+    cleanup: {
+      tasks: (runtime.cleanup?.tasks || []).length > 0 &&
+        (runtime.cleanup?.tasks || []).every((item) => item.status === 'deleted') ? 'completed' : 'incomplete',
+      flows: (runtime.cleanup?.flows || []).length > 0 &&
+        (runtime.cleanup?.flows || []).every((item) => item.status === 'stopped') ? 'completed' : 'incomplete',
+    },
+    error_code: succeeded ? null : 'acceptance_failed_see_runtime_log',
+  }
+}
+
 const evidence = {
-  schema_version: '1.2.0',
+  schema_version: '1.3.0',
   capability: 'planner-teams-notify-dev-acceptance',
   environment: 'dev',
   run_id: optional('GITHUB_RUN_ID'),
@@ -428,27 +474,36 @@ const startedFlowIds = []
 try {
   const bundle = JSON.parse(await fs.readFile(MSAL_STORAGE_STATE_PATH, 'utf8'))
   const refreshState = findRefreshToken(bundle)
-  let reqsysToken = findLocalStorage(bundle, 'reqsys_token')
   let powerToken = ''
+  let microsoftIdToken = ''
 
   try {
-    powerToken = await acquireDelegated(refreshState, 'https://api.powerplatform.com/.default')
+    const powerSession = await acquireDelegated(
+      refreshState,
+      'https://api.powerplatform.com/.default',
+      true,
+    )
+    powerToken = powerSession.access_token
+    microsoftIdToken = powerSession.id_token
     evidence.checks.microsoft_session = 'reused'
   } catch (error) {
-    if (!String(error?.message || error).includes('AADSTS700084')) throw error
+    const message = String(error?.message || error)
+    if (!message.includes('AADSTS700084') && !message.includes('id_token_ausente')) throw error
     evidence.checks.microsoft_session = 'expired_device_code_required'
     const deviceTokens = await acquireByDeviceCode(refreshState.clientId)
     refreshState.refreshToken = deviceTokens.refresh_token
     powerToken = deviceTokens.access_token
-    const login = unwrap(await reqsys('/v1/auth/azure', '', {
-      method: 'POST',
-      body: JSON.stringify({ id_token: deviceTokens.id_token }),
-    }))
-    reqsysToken = String(login?.access_token || '')
-    if (!reqsysToken) throw new Error('reqsys_jwt_nao_emitido_apos_device_code')
+    microsoftIdToken = deviceTokens.id_token
     evidence.checks.microsoft_session = 'renewed_by_device_code'
-    evidence.checks.reqsys_jwt = 'renewed_from_microsoft_id_token'
   }
+
+  const login = unwrap(await reqsys('/v1/auth/azure', '', {
+    method: 'POST',
+    body: JSON.stringify({ id_token: microsoftIdToken }),
+  }))
+  const reqsysToken = String(login?.access_token || '')
+  if (!reqsysToken) throw new Error('reqsys_jwt_nao_emitido_apos_login_microsoft')
+  evidence.checks.reqsys_jwt = 'renewed_from_microsoft_id_token'
 
   flowToken = await acquireDelegated(refreshState, 'https://service.flow.microsoft.com/.default')
   graphToken = await acquireGraphAppToken()
@@ -630,21 +685,18 @@ try {
   }
 
   evidence.completed_at = iso()
+  const persistedEvidence = controlledEvidence(evidence)
   const dir = EVIDENCE_PATH.split('/').slice(0, -1).join('/')
   if (dir) await fs.mkdir(dir, { recursive: true })
-  await fs.writeFile(EVIDENCE_PATH, JSON.stringify(evidence, null, 2) + '\n', 'utf8')
+  await fs.writeFile(EVIDENCE_PATH, JSON.stringify(persistedEvidence, null, 2) + '\n', 'utf8')
 
   console.log(JSON.stringify({
-    status: evidence.status,
-    correlation_id: evidence.correlation_id,
-    run_attempt: evidence.run_attempt,
-    tasks: evidence.tasks.map(({ kind, title, expected_teams }) => ({ kind, title, expected_teams })),
-    environment: evidence.power_platform || null,
-    flow_activation: evidence.checks.flow_activation || null,
-    created_flow_runs_observed: evidence.checks.created_flow_runs_observed || 0,
-    trigger_latency_seconds: evidence.checks.trigger_latency_seconds ?? null,
-    run_polling: evidence.run_polling || null,
+    status: persistedEvidence.status,
+    correlation_id: persistedEvidence.correlation_id,
+    run_attempt: persistedEvidence.run_attempt,
+    checks: persistedEvidence.checks,
+    cleanup: persistedEvidence.cleanup,
     evidence_path: EVIDENCE_PATH,
-    error: evidence.error || null,
+    error_code: persistedEvidence.error_code,
   }))
 }
