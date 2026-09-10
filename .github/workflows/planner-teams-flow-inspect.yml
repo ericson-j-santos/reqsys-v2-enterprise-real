@@ -1,0 +1,43 @@
+name: Planner Teams Flow Inspect DEV (read-only)
+
+on:
+  push:
+    branches:
+      - chore/planner-teams-dev-acceptance
+    paths:
+      - .github/workflows/planner-teams-flow-inspect.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: planner-teams-flow-inspect-dev
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    name: Inspect Planner Teams persisted definition
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: reqsys-power-platform-dev
+    env:
+      POWERPLATFORM_APP_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      POWERPLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+      POWERPLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+      POWERPLATFORM_DEV_ENVIRONMENT_URL: https://orge9b920f1.crm2.dynamics.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Inspect persisted flow definition (read-only)
+        run: |
+          python scripts/inspect_teams_v2_flow_condition.py \
+            --environment-url "$POWERPLATFORM_DEV_ENVIRONMENT_URL" \
+            --tenant-id "$POWERPLATFORM_TENANT_ID" \
+            --client-id "$POWERPLATFORM_APP_ID" \
+            --client-secret "$POWERPLATFORM_CLIENT_SECRET" \
+            --flow-name "ReqSys - Notificar Teams (Tarefa criada no Planner)"
