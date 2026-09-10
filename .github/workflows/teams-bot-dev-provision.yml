@@ -403,7 +403,7 @@ jobs:
           name: teams-bot-dev-activation-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             audit/teams-bot-dev-activation.json
-            audit/reqsys-teams-gateway-dev-v1.1.0.zip
+            audit/reqsys-teams-gateway-dev-v1.2.0.zip
           if-no-files-found: warn
           retention-days: 90
 
