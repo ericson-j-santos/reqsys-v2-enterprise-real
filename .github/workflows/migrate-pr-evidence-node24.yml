@@ -1,0 +1,65 @@
+name: Migrate PR Evidence Gate to Node 24
+
+on:
+  push:
+    branches:
+      - fix/pr-evidence-gate-node24
+    paths:
+      - .github/workflows/migrate-pr-evidence-node24.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    name: Aplicar migração mínima e autoclean
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout da branch
+        uses: actions/checkout@v7
+        with:
+          ref: fix/pr-evidence-gate-node24
+          fetch-depth: 0
+
+      - name: Migrar somente o PR Evidence Gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/pr-evidence-gate.yml')
+          text = path.read_text(encoding='utf-8')
+          old = 'uses: actions/github-script@v7'
+          new = 'uses: actions/github-script@v8'
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'Esperada exatamente 1 ocorrência de {old!r}; encontradas: {count}')
+          updated = text.replace(old, new, 1)
+          if updated.count(new) != 1:
+              raise SystemExit('Validação pós-substituição falhou')
+          path.write_text(updated, encoding='utf-8')
+          PY
+
+          grep -Fq 'uses: actions/github-script@v8' .github/workflows/pr-evidence-gate.yml
+          if grep -Fq 'uses: actions/github-script@v7' .github/workflows/pr-evidence-gate.yml; then
+            echo 'github-script@v7 ainda presente no PR Evidence Gate' >&2
+            exit 1
+          fi
+
+      - name: Remover migrador temporário e publicar alteração
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'reqsys-governed-bot'
+          git config user.email '60470500+ericson-j-santos@users.noreply.github.com'
+          git rm .github/workflows/migrate-pr-evidence-node24.yml
+          git add .github/workflows/pr-evidence-gate.yml
+          git diff --cached --check
+          git diff --cached --exit-code >/dev/null && {
+            echo 'Nenhuma alteração material para publicar' >&2
+            exit 1
+          }
+          git commit -m 'fix(ci): migrar PR Evidence Gate para Node 24'
+          git push origin HEAD:fix/pr-evidence-gate-node24
