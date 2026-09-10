@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""Diagnóstico somente-leitura: procura texto estático suspeito (ex.: um
-card de teste deixado no Maker Portal) em qualquer lugar da definição do
-flow robo_envia_teamsv2, e imprime a árvore de ações dentro de qualquer
-Condição encontrada no caminho até a ação de post. Não grava nada."""
+"""Diagnóstico somente-leitura de definições reais de cloud flows no Dataverse."""
 from __future__ import annotations
 
 import argparse
@@ -46,7 +43,7 @@ def _escape_odata(value: str) -> str:
     return value.replace("'", "''")
 
 
-def find_workflow(*, environment_url: str, token: str, flow_name: str) -> dict[str, Any]:
+def find_workflow(*, environment_url: str, token: str, flow_name: str) -> list[dict[str, Any]]:
     query = urllib.parse.urlencode({
         '$select': 'workflowid,name,clientdata,statecode,modifiedon',
         '$filter': f"name eq '{_escape_odata(flow_name)}' and category eq 5",
@@ -73,24 +70,29 @@ def find_needles(node: Any, needles: list[str], path: str, hits: list[dict[str, 
 
 
 def summarize_actions(actions: dict[str, Any]) -> dict[str, Any]:
-    summary = {}
+    summary: dict[str, Any] = {}
     for name, action in actions.items():
         entry: dict[str, Any] = {'type': action.get('type')}
-        op_id = (action.get('inputs') or {}).get('host', {}).get('operationId') if isinstance(action.get('inputs'), dict) else None
+        inputs = action.get('inputs')
+        op_id = (inputs or {}).get('host', {}).get('operationId') if isinstance(inputs, dict) else None
         if op_id:
             entry['operationId'] = op_id
-        if action.get('type') == 'If':
+        if action.get('expression') is not None:
             entry['expression'] = action.get('expression')
-            entry['true_actions'] = sorted((action.get('actions') or {}).keys())
-            entry['else_actions'] = sorted((action.get('else', {}).get('actions') or {}).keys())
-        elif 'actions' in action:
-            entry['nested_actions'] = sorted(action['actions'].keys())
+        if action.get('runAfter') is not None:
+            entry['runAfter'] = action.get('runAfter')
+        nested = action.get('actions')
+        if isinstance(nested, dict):
+            entry['actions'] = summarize_actions(nested)
+        else_actions = action.get('else', {}).get('actions')
+        if isinstance(else_actions, dict):
+            entry['else_actions'] = summarize_actions(else_actions)
         summary[name] = entry
     return summary
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description='Inspeciona (somente leitura) a definição do robo_envia_teamsv2.')
+    parser = argparse.ArgumentParser(description='Inspeciona somente leitura uma definição real de cloud flow no Dataverse.')
     parser.add_argument('--environment-url', required=True)
     parser.add_argument('--tenant-id', required=True)
     parser.add_argument('--client-id', required=True)
@@ -115,16 +117,13 @@ def main() -> int:
             definition = clientdata['properties']['definition']
             hits: list[dict[str, Any]] = []
             find_needles(definition, needles, 'definition', hits)
-            scope_try = (definition.get('actions') or {}).get('Scope_TRY', {})
-            entry = {
+            result['workflows'].append({
                 'workflowid': row['workflowid'],
                 'statecode': row.get('statecode'),
                 'modifiedon': row.get('modifiedon'),
                 'needle_hits': hits,
-                'top_level_actions': summarize_actions(definition.get('actions') or {}),
-                'scope_try_actions': summarize_actions(scope_try.get('actions') or {}),
-            }
-            result['workflows'].append(entry)
+                'actions': summarize_actions(definition.get('actions') or {}),
+            })
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except (OSError, ValueError, KeyError, urllib.error.URLError, json.JSONDecodeError) as exc:
