@@ -5,7 +5,6 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict
 
-
 PROFILE = "excel_sql_sharepoint_sync"
 SUPPORTED_SOURCE = "excel"
 SUPPORTED_DESTINATION = "sharepoint"
