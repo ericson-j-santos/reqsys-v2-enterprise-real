@@ -50,6 +50,19 @@ export function filterMessagesSince(messages, startedAt) {
   })
 }
 
+export function selectPlannerCandidate(candidates) {
+  const normalized = (candidates || []).filter((item) => item?.plan_id && item?.bucket_id)
+  const dev = normalized.filter((item) =>
+    /(^|[^a-z])(dev|development|desenvolvimento|test|teste|homolog)([^a-z]|$)/i
+      .test(`${item.group_name || ''} ${item.plan_name || ''}`),
+  )
+  const pool = dev.length ? dev : normalized
+  if (pool.length !== 1) {
+    throw new Error(`descoberta_wsjf_ambigua:total=${normalized.length}:dev=${dev.length}`)
+  }
+  return pool[0]
+}
+
 async function graphToken(tenantId, clientId, clientSecret) {
   const response = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`, {
     method: 'POST',
@@ -78,6 +91,71 @@ async function graph(method, path, token, body, allowed = [200]) {
     throw new Error('graph_teams_read_forbidden:conceder_ChannelMessage.Read.Group_ou_ChannelMessage.Read.All_ao_app_de_teste')
   }
   return checkedJson(response, `graph:${method}:${path.split('?')[0]}`, allowed)
+}
+
+async function discoverPlannerTarget(token) {
+  const configuredGroupId = env('WSJF_DEV_GROUP_ID')
+  const configuredPlanId = env('WSJF_DEV_PLAN_ID')
+  const configuredBucketId = env('WSJF_DEV_BUCKET_ID')
+
+  if (configuredPlanId && configuredBucketId) {
+    return {
+      group_id: configuredGroupId || null,
+      group_name: null,
+      plan_id: configuredPlanId,
+      plan_name: null,
+      bucket_id: configuredBucketId,
+      bucket_name: null,
+      source: 'environment_vars',
+    }
+  }
+
+  let groups = []
+  if (configuredGroupId) {
+    const group = await graph('GET', `/groups/${encodeURIComponent(configuredGroupId)}?$select=id,displayName,groupTypes`, token)
+    groups = [group]
+  } else {
+    const payload = await graph('GET', '/groups?$top=100&$select=id,displayName,groupTypes', token)
+    groups = (payload.value || []).filter((group) => (group.groupTypes || []).includes('Unified'))
+  }
+
+  const candidates = []
+  for (const group of groups) {
+    let plans = []
+    try {
+      plans = (await graph('GET', `/groups/${encodeURIComponent(group.id)}/planner/plans`, token)).value || []
+    } catch {
+      continue
+    }
+
+    for (const plan of plans) {
+      if (!/wsjf/i.test(String(plan?.title || ''))) continue
+      let buckets = []
+      try {
+        buckets = (await graph('GET', `/planner/plans/${encodeURIComponent(plan.id)}/buckets`, token)).value || []
+      } catch {
+        continue
+      }
+      if (!buckets.length) continue
+
+      const preferred = buckets.filter((bucket) => /^(backlog)$/i.test(String(bucket?.name || '').trim()))
+      const secondary = buckets.filter((bucket) => /(backlog|demanda|entrada)/i.test(String(bucket?.name || '')))
+      const bucketPool = preferred.length ? preferred : (secondary.length ? secondary : buckets)
+      if (bucketPool.length !== 1) continue
+
+      candidates.push({
+        group_id: String(group.id),
+        group_name: String(group.displayName || ''),
+        plan_id: String(plan.id),
+        plan_name: String(plan.title || ''),
+        bucket_id: String(bucketPool[0].id),
+        bucket_name: String(bucketPool[0].name || ''),
+        source: 'graph_discovery',
+      })
+    }
+  }
+
+  return selectPlannerCandidate(candidates)
 }
 
 async function createPlannerTask(token, planId, bucketId, title) {
@@ -153,8 +231,6 @@ async function main() {
   const tenantId = required('POWER_PLATFORM_TENANT_ID')
   const clientId = required('POWER_PLATFORM_CLIENT_ID')
   const clientSecret = required('POWER_PLATFORM_CLIENT_SECRET')
-  const planId = required('WSJF_DEV_PLAN_ID')
-  const bucketId = required('WSJF_DEV_BUCKET_ID')
   const teamId = required('PLANNER_TEAMS_DEV_TEAM_ID')
   const channelId = required('PLANNER_TEAMS_DEV_CHANNEL_ID')
   const timeoutSeconds = Number(env('PLANNER_TEAMS_POLL_SECONDS', '420'))
@@ -173,7 +249,7 @@ async function main() {
   }
 
   const evidence = {
-    schema_version: '1.0.0',
+    schema_version: '1.1.0',
     capability: 'planner-teams-runtime-e2e-continuous',
     mode: 'steady_state_black_box',
     environment: targetEnvironment,
@@ -213,13 +289,17 @@ async function main() {
     await listChannelMessages(token, teamId, channelId, evidence.started_at)
     evidence.checks.teams_read = 'available'
 
+    const plannerTarget = await discoverPlannerTarget(token)
+    evidence.planner_target = plannerTarget
+    evidence.checks.planner_target = plannerTarget.source
+
     const marker = `${Date.now()}-${env('GITHUB_RUN_ID', 'local')}`
     const e2eTitle = `REQSYS-E2E-AUTOMATED-${marker}`
     const normalTitle = `REQSYS-AUTOMATED-CONTROL-NORMAL-${marker}`
 
-    const e2eTask = await createPlannerTask(token, planId, bucketId, e2eTitle)
+    const e2eTask = await createPlannerTask(token, plannerTarget.plan_id, plannerTarget.bucket_id, e2eTitle)
     taskIds.push(e2eTask.id)
-    const normalTask = await createPlannerTask(token, planId, bucketId, normalTitle)
+    const normalTask = await createPlannerTask(token, plannerTarget.plan_id, plannerTarget.bucket_id, normalTitle)
     taskIds.push(normalTask.id)
 
     evidence.tasks = [
@@ -292,6 +372,7 @@ async function main() {
     console.log(JSON.stringify({
       status: evidence.status,
       correlation_id: evidence.correlation_id,
+      planner_target: evidence.planner_target || null,
       contract: evidence.contract || null,
       observations: evidence.observations,
       cleanup: evidence.cleanup,
