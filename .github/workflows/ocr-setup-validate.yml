@@ -188,16 +188,3 @@ jobs:
               exit 1
             }
           }
-
-summary: |
-  ## 📋 OCR Setup Validation Workflow
-
-  Valida automaticamente:
-  - ✅ Sintaxe Markdown dos guias OCR
-  - ✅ Links internos à documentação de arquitetura
-  - ✅ Segurança: não há chaves reais em .env.example
-  - ✅ Checklist está completo
-  - ✅ Script PowerShell está válido
-
-  **Disparo:** Em push/PR para branches com `ocr` no nome ou que modifiquem arquivos OCR
-  **Tempo:** ~2 min
