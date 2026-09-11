@@ -12,13 +12,8 @@ Valida:
 import os
 import base64
 import pytest
-from datetime import datetime
 
-from app.ocr.storage import (
-    OcrDataProtector,
-    ocr_store_readiness,
-    RepositorioResultadosOcrSqlAlchemy,
-)
+from app.ocr.storage import OcrDataProtector
 from app.ocr.worker import OcrResultado
 
 
@@ -161,16 +156,8 @@ class TestOcrEncryption:
         )
 
     def test_encryption_different_keys_cannot_decrypt(self):
-        """Dados criptografados com chave v1 não devem ser decriptados com v2"""
-        # Simular mudança de chave
-        protector = OcrDataProtector()
-        plaintext = "Dados sensíveis"
-
-        encrypted = protector.encrypt(plaintext, job_id="test-002")
-
-        # Tentar decriptar com chave errada deve falhar ou retornar lixo
-        # (Não implementado ainda, placeholder para segurança futura)
-        # assert decryption_with_wrong_key raises error
+        """Rotação de chave ainda não tem cenário multi-chave implementado"""
+        pytest.skip("Cenário multi-chave ainda não implementado; não declarar validação falsa")
 
 
 class TestOcrDatabaseSecurity:
