@@ -219,28 +219,24 @@ class TestOcrDatabaseSecurity:
 
 
 class TestOcrKeyRotation:
-    """Validar capacidade de rotação de chaves"""
+    """Validar metadados atuais de chave sem simular rotação inexistente"""
 
     def test_key_rotation_support(self):
-        """Sistema deve suportar rotação de chaves"""
-        protector = OcrDataProtector()
-        assert hasattr(protector, "supports_key_rotation"), (
-            "❌ OcrDataProtector não tem método supports_key_rotation"
-        )
+        """Rotação multi-chave ainda não está implementada"""
+        pytest.skip("Rotação multi-chave ainda não implementada; não declarar capacidade inexistente")
 
     def test_key_version_parameter(self):
-        """Criptografia deve usar OCR_DATA_KEY_VERSION"""
+        """Protector deve usar OCR_DATA_KEY_VERSION configurada"""
         version = os.getenv("OCR_DATA_KEY_VERSION")
         assert version is not None, "❌ OCR_DATA_KEY_VERSION não configurada"
+        protector = OcrDataProtector()
+        assert protector.key_version == version, (
+            f"❌ Versão ativa divergente: esperado {version}, obtido {protector.key_version}"
+        )
 
     def test_old_keys_can_still_decrypt(self):
-        """Dados criptografados com v1 devem ser descriptáveis após upgrade para v2"""
-        # Teste placeholder para segurança futura
-        # Quando houver múltiplas versões de chave:
-        # - v1 usada para dados antigos
-        # - v2 usada para novos dados
-        # - Ambas devem funcionar para decrypt
-        pass
+        """Compatibilidade de chave antiga depende de suporte multi-chave futuro"""
+        pytest.skip("Compatibilidade v1→v2 ainda não implementada; não declarar validação falsa")
 
 
 class TestOcrWorkflowIntegration:
@@ -254,15 +250,11 @@ class TestOcrWorkflowIntegration:
 
     def test_job_creation_requires_ready_state(self, client, auth_token):
         """Criar job OCR deve falhar se readiness = false"""
-        # Teste que valida que sem chave/input_root, jobs não podem ser criados
-        # (Implementação específica do endpoint)
-        pass
+        pytest.skip("Cenário negativo de criação de job ainda não implementado; não declarar validação falsa")
 
     def test_ocr_result_encryption_in_workflow(self, db_session):
         """Resultado de OCR deve estar criptografado após processamento"""
-        # Simular workflow completo e validar criptografia
-        # (Implementação específica)
-        pass
+        pytest.skip("E2E de processamento OCR ainda não implementado neste arquivo; não declarar validação falsa")
 
 
 class TestOcrErrorHandling:
@@ -300,14 +292,11 @@ class TestOcrMetrics:
 
     def test_readiness_metric_available(self):
         """Métrica ocr_readiness_status deve estar disponível"""
-        # Verificar que Prometheus está exportando métrica
-        # GET /metrics e procurar por ocr_readiness_status
-        pass
+        pytest.skip("Validação Prometheus ainda não implementada; não declarar validação falsa")
 
     def test_ocr_jobs_processed_metric(self):
         """Métrica de jobs processados deve estar disponível"""
-        # Verificar ocr_jobs_processed_total
-        pass
+        pytest.skip("Validação de jobs processados ainda não implementada; não declarar validação falsa")
 
 
 # ============================================================================
