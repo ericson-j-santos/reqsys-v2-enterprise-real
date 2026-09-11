@@ -12,6 +12,11 @@ from app.services.actions_runtime_monitor import (
     normalizar_run,
 )
 from app.services.operational_deploy import executar_deploy_dev, preparar_deploy_dev
+from app.services.operational_orchestrator import (
+    ManifestError,
+    OperationalOrchestrator,
+    OperationalOrchestratorError,
+)
 
 router = APIRouter(prefix='/v1/actions-runtime', tags=['Actions Runtime Center'])
 
@@ -23,6 +28,25 @@ class RunsSnapshotRequest(BaseModel):
 class DeployDevRequest(BaseModel):
     aplicacao: str
     confirmar: bool = False
+
+
+class OrchestratorCycleRequest(BaseModel):
+    sha: str = Field(min_length=1, max_length=80)
+    branch: str = Field(default='main', min_length=1, max_length=160)
+
+
+class OrchestratorExecuteRequest(BaseModel):
+    confirmar: bool = False
+
+
+class WorkflowRunIngestRequest(BaseModel):
+    workflow_run: dict[str, Any]
+    project: str = Field(default='reqsys', min_length=1, max_length=80)
+    environment: str = Field(default='development', min_length=1, max_length=80)
+
+
+def _operational_orchestrator() -> OperationalOrchestrator:
+    return OperationalOrchestrator()
 
 
 @router.get('/status')
@@ -39,6 +63,10 @@ def status_actions_runtime(user: dict = Depends(get_current_user)):
                 'pareto_falhas',
                 'decisao_operacional',
                 'deploy_dev_governado',
+                'action_queue',
+                'readiness_as_code',
+                'evidence_ledger',
+                'operational_orchestrator',
             ],
         }
     )
@@ -114,6 +142,87 @@ def executar_deploy_dev_api(body: DeployDevRequest, user: dict = Depends(require
     resultado['requested_by'] = user.get('sub')
     resultado['production_touched'] = False
     return ok(resultado)
+
+
+@router.get('/orchestrator/status')
+def orchestrator_status(user: dict = Depends(require_admin)):
+    try:
+        return ok(_operational_orchestrator().status())
+    except (ManifestError, OperationalOrchestratorError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get('/orchestrator/readiness')
+def orchestrator_readiness(user: dict = Depends(require_admin)):
+    try:
+        return ok(_operational_orchestrator().readiness())
+    except ManifestError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get('/orchestrator/actions')
+def orchestrator_actions(
+    action_status: str | None = Query(default=None, alias='status', max_length=40),
+    limit: int = Query(default=100, ge=1, le=500),
+    user: dict = Depends(require_admin),
+):
+    orchestrator = _operational_orchestrator()
+    actions = orchestrator.store.list_actions(status=action_status, limit=limit)
+    return ok({'items': [item.to_dict() for item in actions], 'total': len(actions)})
+
+
+@router.get('/orchestrator/evidence')
+def orchestrator_evidence(
+    correlation_id: str | None = Query(default=None, max_length=120),
+    limit: int = Query(default=200, ge=1, le=1000),
+    user: dict = Depends(require_admin),
+):
+    orchestrator = _operational_orchestrator()
+    evidence = orchestrator.store.list_evidence(correlation_id=correlation_id, limit=limit)
+    return ok({'items': [item.to_dict() for item in evidence], 'total': len(evidence)})
+
+
+@router.post('/orchestrator/cycle')
+def orchestrator_cycle(body: OrchestratorCycleRequest, user: dict = Depends(require_admin)):
+    try:
+        result = _operational_orchestrator().run_cycle(sha=body.sha, branch=body.branch)
+    except (ManifestError, OperationalOrchestratorError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result['requested_by'] = user.get('sub')
+    return ok(result)
+
+
+@router.post('/orchestrator/actions/{action_id}/execute')
+def orchestrator_execute_action(
+    action_id: str,
+    body: OrchestratorExecuteRequest,
+    user: dict = Depends(require_admin),
+):
+    try:
+        result = _operational_orchestrator().execute(action_id, confirm=body.confirmar)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail='Ação não encontrada.') from exc
+    except (ManifestError, OperationalOrchestratorError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result['requested_by'] = user.get('sub')
+    return ok(result)
+
+
+@router.post('/orchestrator/ingest/workflow-run')
+def orchestrator_ingest_workflow_run(
+    body: WorkflowRunIngestRequest,
+    user: dict = Depends(require_admin),
+):
+    try:
+        result = _operational_orchestrator().ingest_workflow_run(
+            body.workflow_run,
+            project=body.project,
+            environment=body.environment,
+        )
+    except OperationalOrchestratorError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result['requested_by'] = user.get('sub')
+    return ok(result)
 
 
 @router.post('/webhook/github')

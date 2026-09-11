@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0.0",
+  "environment": "development",
+  "capabilities": {
+    "excel": {
+      "required": true,
+      "source": "env",
+      "references": [
+        "REQSYS_EXCEL_WORKBOOK_ID",
+        "REQSYS_EXCEL_TABLE_NAME"
+      ],
+      "description": "Referências do workbook e tabela Excel usados pelo fluxo DEV."
+    },
+    "sql_server": {
+      "required": true,
+      "source": "env",
+      "references": [
+        "REQSYS_SQL_SERVER_HOST",
+        "REQSYS_SQL_SERVER_DATABASE"
+      ],
+      "description": "Referências não secretas do SQL Server alvo. Credenciais permanecem no cofre/provedor de identidade."
+    },
+    "sharepoint": {
+      "required": true,
+      "source": "env",
+      "references": [
+        "REQSYS_SHAREPOINT_SITE_ID",
+        "REQSYS_SHAREPOINT_LIST_ID"
+      ],
+      "description": "Site e lista SharePoint usados para validar o efeito final por leitura independente."
+    },
+    "power_automate": {
+      "required": true,
+      "source": "env",
+      "references": [
+        "REQSYS_POWER_AUTOMATE_FLOW_ID"
+      ],
+      "description": "Identificador do fluxo DEV já provisionado."
+    },
+    "planner": {
+      "required": true,
+      "source": "env",
+      "references": [
+        "REQSYS_PLANNER_PLAN_ID"
+      ],
+      "description": "Plano Planner usado pelas automações de aceite."
+    },
+    "teams": {
+      "required": true,
+      "source": "env",
+      "references": [
+        "REQSYS_TEAMS_TEAM_ID",
+        "REQSYS_TEAMS_CHANNEL_ID"
+      ],
+      "description": "Equipe e canal usados pelas integrações operacionais, sem armazenar credenciais."
+    },
+    "microsoft_identity": {
+      "required": true,
+      "source": "env",
+      "references": [
+        "REQSYS_MSAL_TENANT_ID",
+        "REQSYS_MSAL_CLIENT_ID"
+      ],
+      "description": "Referências públicas da aplicação Microsoft; tokens e segredos não entram no manifesto."
+    }
+  }
+}
