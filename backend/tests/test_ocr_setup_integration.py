@@ -13,7 +13,11 @@ import os
 import base64
 import pytest
 
-from app.ocr.storage import OcrDataProtector
+from app.ocr.storage import (
+    OcrDataProtector,
+    OcrResultadoPersistido,
+    RepositorioResultadosOcrSqlAlchemy,
+)
 from app.ocr.worker import OcrResultado
 
 
@@ -165,43 +169,53 @@ class TestOcrDatabaseSecurity:
     """Validar segurança dos dados no banco"""
 
     def test_no_plaintext_pii_in_database(self, db_session):
-        """Validar que não há PII em plaintext no banco de dados"""
-        # Query para OCR resultados que tenham payload_protegido NULL
-        # (indicaria armazenamento em plaintext)
-
-        suspicious_results = db_session.query(
-            OcrResultado
-        ).filter(
-            OcrResultado.payload_protegido.is_(None),
-            OcrResultado.resultado.isnot(None),  # Tem resultado
-        ).all()
-
-        if suspicious_results:
-            result_ids = [r.id for r in suspicious_results]
-            pytest.fail(
-                f"🚨 CRÍTICO: PII detectado em plaintext no banco! "
-                f"Job IDs: {result_ids}\n"
-                f"Execução imediata de patch de segurança necessária."
+        """Persistir resultado deve gravar somente payload protegido no banco"""
+        marker = "PII-TESTE-NUNCA-EM-PLAIN-TEXT"
+        job_id = "security-storage-test-001"
+        repository = RepositorioResultadosOcrSqlAlchemy()
+        repository.salvar(
+            OcrResultado(
+                job_id=job_id,
+                correlation_id="security-storage-correlation",
+                tipo_documento="TESTE",
+                campo="nome",
+                estado_ocr="REVISAO",
+                confianca=0.91,
+                valor=marker,
+                motivos=("teste-seguranca",),
             )
+        )
+
+        db_session.expire_all()
+        stored = (
+            db_session.query(OcrResultadoPersistido)
+            .filter(OcrResultadoPersistido.job_id == job_id)
+            .one()
+        )
+
+        assert stored.payload_protegido, "❌ Payload criptografado não foi persistido"
+        assert marker not in stored.payload_protegido, "🚨 PII persistida em plaintext"
+
+        revealed = repository.obter(job_id, revelar_pii=True)
+        assert revealed is not None
+        assert revealed["valor"] == marker, "❌ Payload protegido não pôde ser validado"
 
     def test_encrypted_payload_is_not_empty(self, db_session):
         """Payloads criptografados não devem estar vazios"""
         encrypted_results = db_session.query(
-            OcrResultado
+            OcrResultadoPersistido
         ).filter(
-            OcrResultado.payload_protegido.isnot(None),
+            OcrResultadoPersistido.payload_protegido.isnot(None),
         ).limit(5).all()
 
         for result in encrypted_results:
             assert len(result.payload_protegido) > 0, (
-                f"❌ Payload criptografado vazio para job {result.id}"
+                f"❌ Payload criptografado vazio para job {result.job_id}"
             )
 
     def test_reviewer_identity_is_hashed(self, db_session):
         """Identidade do revisor deve estar hasheada, não em plaintext"""
-        # Verificar que reviewer_id/reviewer_name são hasheados
-        # (Implementação específica do schema)
-        pass
+        pytest.skip("Cenário de decisão do revisor não faz parte deste setup; não declarar validação falsa")
 
 
 class TestOcrKeyRotation:
@@ -312,7 +326,7 @@ def client():
 @pytest.fixture
 def db_session():
     """Sessão do banco para testes"""
-    from app.core.database import SessionLocal
+    from app.db import SessionLocal
 
     session = SessionLocal()
     yield session
@@ -323,7 +337,6 @@ def db_session():
 def auth_token():
     """Token JWT para testes autenticados"""
     # Gerar token válido para ambiente de teste
-    import secrets
     from datetime import datetime, timedelta
     import jwt
 
