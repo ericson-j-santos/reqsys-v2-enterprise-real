@@ -67,4 +67,6 @@ jobs:
         run: python -m pytest backend/tests/test_operational_orchestrator.py -q
 
       - name: E2E fila-gate-executor-ledger
+        env:
+          REQSYS_VALIDATION_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python scripts/validate_operational_orchestrator_e2e.py
