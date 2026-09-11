@@ -25,11 +25,11 @@ def _manifest(path: Path) -> Path:
                 "references": ["REQSYS_TEST_EXCEL_ID"],
                 "description": "Excel de teste",
             },
-            "static_probe": {
+            "sql_server": {
                 "required": True,
                 "source": "static",
                 "configured": True,
-                "description": "Probe estático",
+                "description": "Probe SQL controlado pelo teste",
             },
         },
     }
