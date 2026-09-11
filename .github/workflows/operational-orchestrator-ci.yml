@@ -64,7 +64,7 @@ jobs:
       - name: Testes de contrato do núcleo
         env:
           PYTHONPATH: backend
-        run: python -m pytest backend/tests/test_operational_orchestrator.py -q
+        run: python -m pytest --noconftest backend/tests/test_operational_orchestrator.py -q
 
       - name: E2E fila-gate-executor-ledger
         env:
