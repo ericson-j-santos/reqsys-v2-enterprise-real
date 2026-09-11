@@ -28,7 +28,7 @@ jobs:
       (
         github.event_name == 'deployment_status' &&
         github.event.deployment_status.state == 'success' &&
-        github.event.deployment.environment != 'github-pages'
+        contains(fromJSON('["dev","development","stg","staging","prod","production"]'), github.event.deployment.environment)
       )
     runs-on: ubuntu-latest
     timeout-minutes: 6
