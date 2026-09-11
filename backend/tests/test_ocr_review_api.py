@@ -79,17 +79,17 @@ def test_readiness_combina_store_e_input_root(monkeypatch):
     })
     monkeypatch.setenv('OCR_INPUT_ROOT', '/tmp/ocr-input')
     response = ocr_review.readiness_ocr()
-    assert response['data']['ready'] is True
-    assert response['data']['input_root_configured'] is True
-    assert response['data']['engine_language'] == 'por'
+    assert response['ready'] is True
+    assert response['input_root_configured'] is True
+    assert response['engine_language'] == 'por'
 
 
 def test_readiness_bloqueia_sem_input_root(monkeypatch):
     monkeypatch.setattr(ocr_review, 'ocr_store_readiness', lambda: {'ready': True, 'key_configured': True})
     monkeypatch.delenv('OCR_INPUT_ROOT', raising=False)
     response = ocr_review.readiness_ocr()
-    assert response['data']['ready'] is False
-    assert response['data']['input_root_configured'] is False
+    assert response['ready'] is False
+    assert response['input_root_configured'] is False
 
 
 def test_listagem_nao_revela_pii(monkeypatch):

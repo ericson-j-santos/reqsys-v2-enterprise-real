@@ -20,16 +20,21 @@ _DEFAULT_PROVIDER = 'hash-local-256'
 
 
 def upgrade() -> None:
-    op.add_column(
-        'rag_chunk_embeddings',
-        sa.Column('embedding_provider', sa.String(length=64), nullable=False, server_default=_DEFAULT_PROVIDER),
-    )
-    op.create_index(
-        op.f('ix_rag_chunk_embeddings_embedding_provider'),
-        'rag_chunk_embeddings',
-        ['embedding_provider'],
-        unique=False,
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [col['name'] for col in inspector.get_columns('rag_chunk_embeddings')]
+
+    if 'embedding_provider' not in columns:
+        op.add_column(
+            'rag_chunk_embeddings',
+            sa.Column('embedding_provider', sa.String(length=64), nullable=False, server_default=_DEFAULT_PROVIDER),
+        )
+        op.create_index(
+            op.f('ix_rag_chunk_embeddings_embedding_provider'),
+            'rag_chunk_embeddings',
+            ['embedding_provider'],
+            unique=False,
+        )
 
 
 def downgrade() -> None:

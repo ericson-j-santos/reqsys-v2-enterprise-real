@@ -18,7 +18,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    tables = inspector.get_table_names()
+    
+    if 'copilot_memory_records' not in tables:
+            op.create_table(
         'copilot_memory_records',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('criado_em', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
@@ -47,18 +52,18 @@ def upgrade() -> None:
         sa.Column('planner_applied_hash', sa.String(length=64), nullable=False),
         sa.Column('ultimo_erro', sa.Text(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index(op.f('ix_copilot_memory_records_criado_em'), 'copilot_memory_records', ['criado_em'], unique=False)
-    op.create_index(op.f('ix_copilot_memory_records_memory_id'), 'copilot_memory_records', ['memory_id'], unique=True)
-    op.create_index(op.f('ix_copilot_memory_records_planner_task_id'), 'copilot_memory_records', ['planner_task_id'], unique=True)
-    op.create_index(op.f('ix_copilot_memory_records_validade'), 'copilot_memory_records', ['validade'], unique=False)
-    op.create_index(op.f('ix_copilot_memory_records_ultima_origem'), 'copilot_memory_records', ['ultima_origem'], unique=False)
-    op.create_index(op.f('ix_copilot_memory_records_content_hash'), 'copilot_memory_records', ['content_hash'], unique=False)
-    op.create_index(op.f('ix_copilot_memory_records_correlation_id'), 'copilot_memory_records', ['correlation_id'], unique=False)
-    op.create_index(op.f('ix_copilot_memory_records_atualizar_planner'), 'copilot_memory_records', ['atualizar_planner'], unique=False)
-    op.create_index(op.f('ix_copilot_memory_records_planner_sync_status'), 'copilot_memory_records', ['planner_sync_status'], unique=False)
+            )
+            op.create_index(op.f('ix_copilot_memory_records_criado_em'), 'copilot_memory_records', ['criado_em'], unique=False)
+            op.create_index(op.f('ix_copilot_memory_records_memory_id'), 'copilot_memory_records', ['memory_id'], unique=True)
+            op.create_index(op.f('ix_copilot_memory_records_planner_task_id'), 'copilot_memory_records', ['planner_task_id'], unique=True)
+            op.create_index(op.f('ix_copilot_memory_records_validade'), 'copilot_memory_records', ['validade'], unique=False)
+            op.create_index(op.f('ix_copilot_memory_records_ultima_origem'), 'copilot_memory_records', ['ultima_origem'], unique=False)
+            op.create_index(op.f('ix_copilot_memory_records_content_hash'), 'copilot_memory_records', ['content_hash'], unique=False)
+            op.create_index(op.f('ix_copilot_memory_records_correlation_id'), 'copilot_memory_records', ['correlation_id'], unique=False)
+            op.create_index(op.f('ix_copilot_memory_records_atualizar_planner'), 'copilot_memory_records', ['atualizar_planner'], unique=False)
+            op.create_index(op.f('ix_copilot_memory_records_planner_sync_status'), 'copilot_memory_records', ['planner_sync_status'], unique=False)
 
-    op.create_table(
+            op.create_table(
         'copilot_memory_history',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('criado_em', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
@@ -69,12 +74,12 @@ def upgrade() -> None:
         sa.Column('correlation_id', sa.String(length=80), nullable=False),
         sa.Column('snapshot_json', sa.Text(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index(op.f('ix_copilot_memory_history_criado_em'), 'copilot_memory_history', ['criado_em'], unique=False)
-    op.create_index(op.f('ix_copilot_memory_history_memory_id'), 'copilot_memory_history', ['memory_id'], unique=False)
-    op.create_index(op.f('ix_copilot_memory_history_content_hash'), 'copilot_memory_history', ['content_hash'], unique=False)
-    op.create_index(op.f('ix_copilot_memory_history_origem'), 'copilot_memory_history', ['origem'], unique=False)
-    op.create_index(op.f('ix_copilot_memory_history_correlation_id'), 'copilot_memory_history', ['correlation_id'], unique=False)
+            )
+            op.create_index(op.f('ix_copilot_memory_history_criado_em'), 'copilot_memory_history', ['criado_em'], unique=False)
+            op.create_index(op.f('ix_copilot_memory_history_memory_id'), 'copilot_memory_history', ['memory_id'], unique=False)
+            op.create_index(op.f('ix_copilot_memory_history_content_hash'), 'copilot_memory_history', ['content_hash'], unique=False)
+            op.create_index(op.f('ix_copilot_memory_history_origem'), 'copilot_memory_history', ['origem'], unique=False)
+            op.create_index(op.f('ix_copilot_memory_history_correlation_id'), 'copilot_memory_history', ['correlation_id'], unique=False)
 
 
 def downgrade() -> None:
