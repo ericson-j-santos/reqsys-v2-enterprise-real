@@ -1,0 +1,105 @@
+name: Integration Excel SQL SharePoint — Inventory Diagnostic
+
+on:
+  push:
+    branches:
+      - feat/e2e-mobile-device-code
+    paths:
+      - ".github/workflows/integration-excel-sql-sharepoint-inventory-diagnostic.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - run: pip install httpx openpyxl
+      - name: Inventariar pré-requisitos SharePoint sem nomes nem IDs
+        shell: bash
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from urllib.parse import quote
+          import httpx
+          import scripts.integration_excel_sql_sharepoint_discovery as d
+
+          result = {
+              "graph_auth": "not_run",
+              "sites_total": 0,
+              "sites_lists_accessible": 0,
+              "sites_lists_forbidden_or_failed": 0,
+              "sites_with_resultado_consulta": 0,
+              "drives_on_target_sites": 0,
+              "xlsx_on_target_sites": 0,
+              "xlsx_with_tbentrada_on_target_sites": 0,
+              "blocked_stage": None,
+              "blocked_code": None,
+          }
+          try:
+              contract = d.profile_contract()
+              with httpx.Client(follow_redirects=True) as client:
+                  token = d.app_graph_token(client)
+                  result["graph_auth"] = "passed"
+                  sites = d.values(client, f"{d.GRAPH}/sites/getAllSites?$select=id,name,displayName,webUrl", token)
+                  result["sites_total"] = len(sites)
+                  for site in sites:
+                      site_id = d.text(site.get("id"))
+                      if not site_id:
+                          continue
+                      try:
+                          lists = d.values(client, f"{d.GRAPH}/sites/{quote(site_id, safe='')}/lists?$select=id,name,displayName", token, 20)
+                          result["sites_lists_accessible"] += 1
+                      except httpx.HTTPStatusError:
+                          result["sites_lists_forbidden_or_failed"] += 1
+                          continue
+                      target_lists = [
+                          item for item in lists
+                          if contract["list"].casefold() in {
+                              d.text(item.get("name")).casefold(),
+                              d.text(item.get("displayName")).casefold(),
+                          }
+                      ]
+                      if not target_lists:
+                          continue
+                      result["sites_with_resultado_consulta"] += 1
+                      drives = d.values(client, f"{d.GRAPH}/sites/{quote(site_id, safe='')}/drives?$select=id,name,webUrl", token, 20)
+                      result["drives_on_target_sites"] += len(drives)
+                      for drive in drives:
+                          drive_id = d.text(drive.get("id"))
+                          if not drive_id:
+                              continue
+                          files = d.drive_xlsx(client, token, drive_id, "")
+                          result["xlsx_on_target_sites"] += len(files)
+                          for item in files:
+                              file_id = d.text(item.get("id"))
+                              if not file_id:
+                                  continue
+                              try:
+                                  content = d.download(client, f"{d.GRAPH}/drives/{quote(drive_id, safe='')}/items/{quote(file_id, safe='')}/content", token)
+                              except httpx.HTTPStatusError:
+                                  continue
+                              if d.has_table(content, contract["table"]):
+                                  result["xlsx_with_tbentrada_on_target_sites"] += 1
+          except d.DiscoveryError as exc:
+              result["blocked_stage"] = "discovery"
+              result["blocked_code"] = str(exc)
+          except httpx.HTTPStatusError as exc:
+              result["blocked_stage"] = "http"
+              result["blocked_code"] = f"http_{exc.response.status_code}"
+          except Exception as exc:
+              result["blocked_stage"] = "unexpected"
+              result["blocked_code"] = type(exc).__name__
+
+          print(json.dumps(result, ensure_ascii=False))
+          PY
