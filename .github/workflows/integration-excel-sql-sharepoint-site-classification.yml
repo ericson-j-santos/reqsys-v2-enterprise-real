@@ -1,0 +1,86 @@
+name: Integration Excel SQL SharePoint — Site Classification
+
+on:
+  push:
+    branches:
+      - feat/e2e-mobile-device-code
+    paths:
+      - ".github/workflows/integration-excel-sql-sharepoint-site-classification.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - run: pip install httpx openpyxl
+      - name: Classificar alvos sem publicar nomes, URLs ou IDs
+        shell: bash
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from urllib.parse import quote
+          import httpx
+          import scripts.integration_excel_sql_sharepoint_discovery as d
+
+          result = {
+              "graph_auth": "not_run",
+              "sites_total": 0,
+              "dev_non_prod_sites": 0,
+              "reqsys_sites": 0,
+              "reqsys_dev_non_prod_sites": 0,
+              "unique_target": False,
+              "target_drives": 0,
+              "target_xlsx": 0,
+              "blocked_code": None,
+          }
+          try:
+              with httpx.Client(follow_redirects=True) as client:
+                  token = d.app_graph_token(client)
+                  result["graph_auth"] = "passed"
+                  sites = d.values(client, f"{d.GRAPH}/sites/getAllSites?$select=id,name,displayName,webUrl", token)
+                  result["sites_total"] = len(sites)
+                  candidates = []
+                  for site in sites:
+                      values = (site.get("name"), site.get("displayName"), site.get("webUrl"))
+                      raw = " ".join(d.text(value) for value in values).casefold()
+                      is_dev = d.is_dev(values) and not d.is_prod(values)
+                      is_reqsys = "reqsys" in raw
+                      if is_dev:
+                          result["dev_non_prod_sites"] += 1
+                      if is_reqsys:
+                          result["reqsys_sites"] += 1
+                      if is_dev and is_reqsys:
+                          result["reqsys_dev_non_prod_sites"] += 1
+                          candidates.append(site)
+                  if len(candidates) == 1:
+                      result["unique_target"] = True
+                      site_id = d.text(candidates[0].get("id"))
+                      drives = d.values(client, f"{d.GRAPH}/sites/{quote(site_id, safe='')}/drives?$select=id,name,webUrl", token, 20)
+                      result["target_drives"] = len(drives)
+                      for drive in drives:
+                          drive_id = d.text(drive.get("id"))
+                          if drive_id:
+                              result["target_xlsx"] += len(d.drive_xlsx(client, token, drive_id, ""))
+          except d.DiscoveryError as exc:
+              result["blocked_code"] = str(exc)
+          except httpx.HTTPStatusError as exc:
+              result["blocked_code"] = f"http_{exc.response.status_code}"
+          except Exception as exc:
+              result["blocked_code"] = type(exc).__name__
+
+          print(json.dumps(result, ensure_ascii=False))
+          if result["blocked_code"]:
+              raise SystemExit(1)
+          PY
