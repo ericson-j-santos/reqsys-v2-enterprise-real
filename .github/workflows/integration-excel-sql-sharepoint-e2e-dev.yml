@@ -30,6 +30,7 @@ on:
   push:
     branches:
       - main
+      - feat/e2e-mobile-device-code
     paths:
       - ".github/workflows/integration-excel-sql-sharepoint-e2e-dev.yml"
       - "backend/app/services/integration_excel_sql_sharepoint_flow.py"
@@ -37,6 +38,9 @@ on:
       - "scripts/integration_excel_sql_sharepoint_discovery.py"
       - "scripts/integration_excel_sql_sharepoint_e2e.py"
       - "scripts/integration_excel_sql_sharepoint_readiness.py"
+      - "scripts/msal_device_code_prepare.mjs"
+      - "scripts/msal_device_code_complete.mjs"
+      - "tests/msal_device_code_complete.test.mjs"
       - "tests/test_integration_excel_sql_sharepoint_discovery.py"
       - "tests/test_integration_excel_sql_sharepoint_flow.py"
       - "tests/test_integration_excel_sql_sharepoint_e2e.py"
@@ -69,6 +73,10 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
+      - uses: actions/setup-node@1e60f620b9541d8ca15191b7eab909da8bb47b2c # v4.0.4
+        with:
+          node-version: "22"
+
       - name: Instalar dependências mínimas
         run: |
           set -euo pipefail
@@ -76,11 +84,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install httpx pyodbc openpyxl pytest
 
-      - name: Validar harness, descoberta e definição do fluxo
+      - name: Validar harness, autenticação móvel e definição do fluxo
         env:
           PYTHONPATH: backend
         run: |
           set -euo pipefail
+          node --test tests/msal_device_code_complete.test.mjs
           python -m pytest \
             tests/test_integration_excel_sql_sharepoint_discovery.py \
             tests/test_integration_excel_sql_sharepoint_readiness.py \
@@ -99,24 +108,81 @@ jobs:
           set -euo pipefail
           echo "E2E_CORRELATION_ID=excel-sql-sharepoint-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
 
-      - name: Preparar sessão delegada Microsoft
-        if: github.event_name == 'workflow_dispatch'
+      - name: Preparar sessão Microsoft para autorização móvel
+        if: github.event_name == 'workflow_dispatch' || github.ref_name == 'feat/e2e-mobile-device-code'
         shell: bash
         env:
           WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
         run: |
           set -euo pipefail
           if [ -z "${WSJF_MSAL_STORAGE_STATE_B64:-}" ]; then
-            echo "::error::WSJF_MSAL_STORAGE_STATE_B64 ausente; descoberta Power Platform exige sessão delegada."
+            echo "::error::WSJF_MSAL_STORAGE_STATE_B64 ausente; é necessário ao menos o client_id legado para iniciar a migração por código de dispositivo."
             exit 1
           fi
           state="$RUNNER_TEMP/msal-storage-state.json"
+          device_private="$RUNNER_TEMP/excel-sql-sharepoint-device-code-private.json"
+          device_public="$EVIDENCE_DIR/device-login.json"
+          mkdir -p "$EVIDENCE_DIR"
           printf '%s' "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$state"
           chmod 600 "$state"
           echo "MSAL_STORAGE_STATE_PATH=$state" >> "$GITHUB_ENV"
+          echo "DEVICE_CODE_PRIVATE_PATH=$device_private" >> "$GITHUB_ENV"
+          echo "DEVICE_CODE_PUBLIC_PATH=$device_public" >> "$GITHUB_ENV"
+
+      - name: Gerar código Microsoft para o celular somente quando necessário
+        if: github.event_name == 'workflow_dispatch' || github.ref_name == 'feat/e2e-mobile-device-code'
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+        run: node scripts/msal_device_code_prepare.mjs
+
+      - name: Exibir instruções de autorização no resumo da execução
+        if: github.event_name == 'workflow_dispatch' || github.ref_name == 'feat/e2e-mobile-device-code'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(os.environ["DEVICE_CODE_PUBLIC_PATH"]).read_text(encoding="utf-8"))
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          if payload.get("required"):
+              uri = payload.get("verification_uri") or "https://microsoft.com/devicelogin"
+              code = payload.get("user_code") or ""
+              expires = payload.get("expires_in_seconds") or ""
+              with summary.open("a", encoding="utf-8") as handle:
+                  handle.write("## Autorizar Microsoft pelo celular\n\n")
+                  handle.write(f"1. Abra [{uri}]({uri}) no celular.\n")
+                  handle.write(f"2. Informe o código **`{code}`**.\n")
+                  handle.write("3. Conclua login e MFA na Microsoft.\n")
+                  handle.write(f"4. Esta tentativa expira em aproximadamente {expires} segundos.\n\n")
+                  handle.write("O workflow continuará automaticamente após a autorização.\n")
+              print(f"DEVICE_LOGIN_URI={uri}")
+              print(f"DEVICE_USER_CODE={code}")
+          else:
+              with summary.open("a", encoding="utf-8") as handle:
+                  handle.write("## Autorização Microsoft\n\nSessão existente ainda válida; nenhum login pelo celular foi necessário.\n")
+              print("DEVICE_LOGIN_NOT_REQUIRED=true")
+          PY
+
+      - name: Publicar somente instrução pública temporária para uso no celular
+        if: github.event_name == 'workflow_dispatch' || github.ref_name == 'feat/e2e-mobile-device-code'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: integration-device-login-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ env.DEVICE_CODE_PUBLIC_PATH }}
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Aguardar autorização Microsoft e criar sessão efêmera
+        if: github.event_name == 'workflow_dispatch' || github.ref_name == 'feat/e2e-mobile-device-code'
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+        run: node scripts/msal_device_code_complete.mjs
 
       - name: Descobrir referências não secretas DEV
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || github.ref_name == 'feat/e2e-mobile-device-code'
         id: discovery
         continue-on-error: true
         env:
@@ -141,7 +207,7 @@ jobs:
             --correlation-id "$E2E_CORRELATION_ID"
 
       - name: Carregar referências persistidas no diagnóstico de push
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref_name == 'main'
         shell: bash
         env:
           PERSISTED_DRIVE_ID: ${{ vars.INTEGRATION_E2E_DRIVE_ID }}
@@ -182,7 +248,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$EVIDENCE_DIR"
           strict_args=()
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$GITHUB_REF_NAME" = "feat/e2e-mobile-device-code" ]; then
             strict_args+=(--strict)
           fi
           python scripts/integration_excel_sql_sharepoint_readiness.py \
@@ -191,8 +257,8 @@ jobs:
             --source-sha "$GITHUB_SHA" \
             --correlation-id "$E2E_CORRELATION_ID"
 
-      - name: Registrar E2E não executado no push
-        if: github.event_name == 'push'
+      - name: Registrar E2E não executado no push da main
+        if: github.event_name == 'push' && github.ref_name == 'main'
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -222,7 +288,7 @@ jobs:
           PY
 
       - name: Provisionar fluxo e executar aceite real
-        if: github.event_name == 'workflow_dispatch' && success()
+        if: (github.event_name == 'workflow_dispatch' || github.ref_name == 'feat/e2e-mobile-device-code') && success()
         env:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
@@ -243,6 +309,7 @@ jobs:
         with:
           name: integration-excel-sql-sharepoint-e2e-${{ github.run_id }}
           path: |
+            ${{ env.EVIDENCE_DIR }}/device-login.json
             ${{ env.EVIDENCE_DIR }}/discovery.json
             ${{ env.EVIDENCE_DIR }}/readiness.json
             ${{ env.EVIDENCE_DIR }}/e2e.json
