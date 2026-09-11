@@ -143,16 +143,17 @@ class TestOcrEncryption:
             pytest.fail(f"❌ Erro ao inicializar OcrDataProtector: {e}")
 
     def test_encryption_decrypt_roundtrip(self):
-        """Encriptar e decriptar deve retornar valor original"""
+        """Proteger e revelar deve retornar o payload original"""
         protector = OcrDataProtector()
-        plaintext = "Teste de criptografia OCR"
+        payload = {"valor": "Teste de criptografia OCR", "motivos": ["teste"]}
+        aad = "test-001"
 
-        encrypted = protector.encrypt(plaintext, job_id="test-001")
-        decrypted = protector.decrypt(encrypted, job_id="test-001")
+        encrypted = protector.proteger(payload, aad=aad)
+        decrypted = protector.revelar(encrypted, aad=aad)
 
-        assert decrypted == plaintext, (
+        assert decrypted == payload, (
             f"❌ Roundtrip falhou. "
-            f"Original: {plaintext}, Decriptado: {decrypted}"
+            f"Original: {payload}, Decriptado: {decrypted}"
         )
 
     def test_encryption_different_keys_cannot_decrypt(self):
