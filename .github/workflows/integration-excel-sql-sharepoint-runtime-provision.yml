@@ -1,0 +1,182 @@
+name: Integration Excel SQL SharePoint — Provision Runtime DEV
+
+on:
+  push:
+    branches:
+      - feat/e2e-mobile-device-code
+    paths:
+      - ".github/workflows/integration-excel-sql-sharepoint-runtime-provision.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - run: pip install httpx openpyxl
+      - name: Provisionar lista e workbook somente no único alvo ReqSys DEV
+        shell: bash
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import io
+          import json
+          from urllib.parse import quote
+
+          import httpx
+          from openpyxl import Workbook, load_workbook
+          from openpyxl.worksheet.table import Table, TableStyleInfo
+
+          import scripts.integration_excel_sql_sharepoint_discovery as d
+
+          LIST_NAME = "ResultadoConsulta"
+          FILE_NAME = "ReqSys-Excel-SQL-SharePoint-DEV.xlsx"
+          TABLE_NAME = "tbEntrada"
+
+          def create_workbook() -> bytes:
+              wb = Workbook()
+              ws = wb.active
+              ws.title = "Entrada"
+              ws.append(["Identificador"])
+              ws.append([None])
+              table = Table(displayName=TABLE_NAME, ref="A1:A2")
+              table.tableStyleInfo = TableStyleInfo(
+                  name="TableStyleMedium2",
+                  showFirstColumn=False,
+                  showLastColumn=False,
+                  showRowStripes=True,
+                  showColumnStripes=False,
+              )
+              ws.add_table(table)
+              out = io.BytesIO()
+              wb.save(out)
+              return out.getvalue()
+
+          result = {
+              "target_unique": False,
+              "target_drive_unique": False,
+              "list_action": "not_run",
+              "list_columns_valid": False,
+              "workbook_action": "not_run",
+              "workbook_table_valid": False,
+              "independent_discovery_candidates": None,
+              "blocked_code": None,
+          }
+
+          created_list_id = None
+          created_file_id = None
+
+          try:
+              with httpx.Client(follow_redirects=True, timeout=30.0) as client:
+                  token = d.app_graph_token(client)
+                  headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+                  sites = d.values(client, f"{d.GRAPH}/sites/getAllSites?$select=id,name,displayName,webUrl", token)
+                  candidates = []
+                  for site in sites:
+                      vals = (site.get("name"), site.get("displayName"), site.get("webUrl"))
+                      raw = " ".join(d.text(v) for v in vals).casefold()
+                      if "reqsys" in raw and d.is_dev(vals) and not d.is_prod(vals):
+                          candidates.append(site)
+                  if len(candidates) != 1:
+                      raise RuntimeError(f"site_reqsys_dev_nao_unico:{len(candidates)}")
+                  result["target_unique"] = True
+                  site_id = d.text(candidates[0].get("id"))
+
+                  drives = d.values(client, f"{d.GRAPH}/sites/{quote(site_id, safe='')}/drives?$select=id,name,webUrl", token, 20)
+                  if len(drives) != 1:
+                      raise RuntimeError(f"drive_reqsys_dev_nao_unico:{len(drives)}")
+                  result["target_drive_unique"] = True
+                  drive_id = d.text(drives[0].get("id"))
+
+                  lists = d.values(client, f"{d.GRAPH}/sites/{quote(site_id, safe='')}/lists?$select=id,name,displayName", token, 20)
+                  matching_lists = [
+                      item for item in lists
+                      if LIST_NAME.casefold() in {d.text(item.get("name")).casefold(), d.text(item.get("displayName")).casefold()}
+                  ]
+                  if len(matching_lists) > 1:
+                      raise RuntimeError(f"lista_resultado_duplicada:{len(matching_lists)}")
+                  if matching_lists:
+                      list_id = d.text(matching_lists[0].get("id"))
+                      result["list_action"] = "existing"
+                  else:
+                      response = client.post(
+                          f"{d.GRAPH}/sites/{quote(site_id, safe='')}/lists",
+                          headers={**headers, "Content-Type": "application/json"},
+                          json={
+                              "displayName": LIST_NAME,
+                              "columns": [
+                                  {"name": "ChaveIntegracao", "text": {}},
+                                  {"name": "CorrelationId", "text": {}},
+                              ],
+                              "list": {"template": "genericList"},
+                          },
+                      )
+                      response.raise_for_status()
+                      list_id = d.text(response.json().get("id"))
+                      if not list_id:
+                          raise RuntimeError("lista_criada_sem_id")
+                      created_list_id = list_id
+                      result["list_action"] = "created"
+
+                  columns = d.values(client, f"{d.GRAPH}/sites/{quote(site_id, safe='')}/lists/{quote(list_id, safe='')}/columns?$select=name,displayName", token, 20)
+                  column_names = {d.text(c.get("name")) for c in columns}
+                  missing = {"ChaveIntegracao", "CorrelationId"} - column_names
+                  if missing:
+                      raise RuntimeError("lista_colunas_ausentes")
+                  result["list_columns_valid"] = True
+
+                  root_children = d.values(client, f"{d.GRAPH}/drives/{quote(drive_id, safe='')}/root/children?$select=id,name,file,folder&$top=200", token, 20)
+                  matching_files = [x for x in root_children if d.text(x.get("name")).casefold() == FILE_NAME.casefold()]
+                  if len(matching_files) > 1:
+                      raise RuntimeError(f"workbook_runtime_duplicado:{len(matching_files)}")
+                  if matching_files:
+                      file_id = d.text(matching_files[0].get("id"))
+                      result["workbook_action"] = "existing"
+                  else:
+                      content = create_workbook()
+                      response = client.put(
+                          f"{d.GRAPH}/drives/{quote(drive_id, safe='')}/root:/{quote(FILE_NAME, safe='')}:/content",
+                          headers={"Authorization": f"Bearer {token}", "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+                          content=content,
+                      )
+                      response.raise_for_status()
+                      file_id = d.text(response.json().get("id"))
+                      if not file_id:
+                          raise RuntimeError("workbook_criado_sem_id")
+                      created_file_id = file_id
+                      result["workbook_action"] = "created"
+
+                  response = client.get(
+                      f"{d.GRAPH}/drives/{quote(drive_id, safe='')}/items/{quote(file_id, safe='')}/content",
+                      headers=headers,
+                      follow_redirects=True,
+                  )
+                  response.raise_for_status()
+                  result["workbook_table_valid"] = d.has_table(response.content, TABLE_NAME)
+                  if not result["workbook_table_valid"]:
+                      raise RuntimeError("workbook_sem_tbEntrada")
+
+                  contract = d.profile_contract()
+                  discovered = d.discover_sharepoint(client, token, contract)
+                  result["independent_discovery_candidates"] = 1 if discovered else 0
+          except httpx.HTTPStatusError as exc:
+              result["blocked_code"] = f"http_{exc.response.status_code}"
+          except Exception as exc:
+              result["blocked_code"] = str(exc)[:160]
+
+          print(json.dumps(result, ensure_ascii=False))
+          if result["blocked_code"]:
+              raise SystemExit(1)
+          if not all((result["target_unique"], result["target_drive_unique"], result["list_columns_valid"], result["workbook_table_valid"], result["independent_discovery_candidates"] == 1)):
+              raise SystemExit(1)
+          PY
