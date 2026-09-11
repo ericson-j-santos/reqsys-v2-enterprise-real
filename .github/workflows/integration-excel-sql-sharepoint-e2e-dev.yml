@@ -65,6 +65,7 @@ jobs:
             backend/app/services/integration_excel_sql_sharepoint_flow.py
 
       - name: Preparar sessão delegada Microsoft
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
@@ -79,7 +80,7 @@ jobs:
           chmod 600 "$state"
           echo "MSAL_STORAGE_STATE_PATH=$state" >> "$GITHUB_ENV"
 
-      - name: Readiness estrito no mesmo SHA
+      - name: Readiness DEV no mesmo SHA
         env:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
@@ -99,13 +100,50 @@ jobs:
           mkdir -p "$EVIDENCE_DIR"
           correlation_id="excel-sql-sharepoint-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "E2E_CORRELATION_ID=$correlation_id" >> "$GITHUB_ENV"
+
+          strict_args=()
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            strict_args+=(--strict)
+          fi
+
           python scripts/integration_excel_sql_sharepoint_readiness.py \
-            --strict \
+            "${strict_args[@]}" \
             --output "$EVIDENCE_DIR/readiness.json" \
             --source-sha "$GITHUB_SHA" \
             --correlation-id "$correlation_id"
 
+      - name: Registrar E2E não executado no push
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          evidence_dir = Path(os.environ["EVIDENCE_DIR"])
+          readiness_path = evidence_dir / "readiness.json"
+          readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
+          payload = {
+              "schema_version": "1.0.0",
+              "feature": "excel_sql_sharepoint_sync",
+              "status": "not_executed",
+              "reason": "workflow_dispatch_required_for_real_e2e",
+              "environment": "dev",
+              "source_sha": os.environ.get("GITHUB_SHA", ""),
+              "correlation_id": os.environ.get("E2E_CORRELATION_ID", ""),
+              "readiness_ready": bool(readiness.get("ready")),
+              "readiness_blockers": readiness.get("blockers", []),
+          }
+          (evidence_dir / "e2e.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps({"status": payload["status"], "reason": payload["reason"]}))
+          PY
+
       - name: Provisionar fluxo e executar aceite real
+        if: github.event_name == 'workflow_dispatch'
         env:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
