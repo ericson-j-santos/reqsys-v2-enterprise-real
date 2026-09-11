@@ -1,0 +1,94 @@
+name: Integration Discovery Stage Diagnostic
+
+on:
+  push:
+    branches:
+      - ops/e2e-excel-sql-sharepoint-real-20260911
+    paths:
+      - ".github/workflows/integration-discovery-stage-diagnostic.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - run: pip install httpx openpyxl
+      - name: Diagnosticar descoberta por estágio sem expor valores
+        shell: bash
+        env:
+          WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          state="$RUNNER_TEMP/msal-storage-state.json"
+          printf '%s' "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$state"
+          chmod 600 "$state"
+          python - "$state" <<'PY'
+          import json, sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          bundle = json.loads(path.read_text(encoding='utf-8'))
+          entries = bundle.get('sessionStorage') or []
+          normalized = []
+          for entry in entries:
+              if not isinstance(entry, dict) or not isinstance(entry.get('value'), str):
+                  continue
+              try:
+                  parsed = json.loads(entry['value'])
+              except json.JSONDecodeError:
+                  normalized.append(entry)
+                  continue
+              if isinstance(parsed, dict):
+                  normalized.append(entry)
+          bundle['sessionStorage'] = normalized
+          path.write_text(json.dumps(bundle, ensure_ascii=False), encoding='utf-8')
+          PY
+          python - "$state" <<'PY'
+          import sys
+          from pathlib import Path
+          import httpx
+          import scripts.integration_excel_sql_sharepoint_discovery as d
+
+          path = Path(sys.argv[1])
+          stage = 'profile'
+          try:
+              contract = d.profile_contract()
+              print('stage_profile=ok')
+              with httpx.Client(follow_redirects=True) as client:
+                  stage = 'graph_token'
+                  graph_token = d.app_graph_token(client)
+                  print('stage_graph_token=ok')
+                  stage = 'refresh_state'
+                  refresh = d.refresh_state(path)
+                  print('stage_refresh_state=ok')
+                  stage = 'power_token'
+                  power_token = d.delegated_power_token(client, refresh)
+                  print('stage_power_token=ok')
+                  stage = 'sharepoint_excel'
+                  d.discover_sharepoint(client, graph_token, contract)
+                  print('stage_sharepoint_excel=ok')
+                  stage = 'power_platform'
+                  d.discover_power_platform(client, power_token)
+                  print('stage_power_platform=ok')
+          except d.DiscoveryError as exc:
+              print(f'blocked_stage={stage}')
+              print(f'blocked_code={str(exc)}')
+              raise SystemExit(1)
+          except httpx.HTTPStatusError as exc:
+              print(f'blocked_stage={stage}')
+              print(f'blocked_code=http_{exc.response.status_code}')
+              raise SystemExit(1)
+          except Exception as exc:
+              print(f'blocked_stage={stage}')
+              print(f'blocked_code={type(exc).__name__}')
+              raise SystemExit(1)
+          PY
