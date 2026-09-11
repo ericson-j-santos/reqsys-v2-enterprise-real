@@ -1,0 +1,134 @@
+name: Integration Excel SQL SharePoint — DEV E2E One Shot
+
+on:
+  push:
+    branches:
+      - ops/e2e-excel-sql-sharepoint-real-20260911
+    paths:
+      - ".github/workflows/integration-excel-sql-sharepoint-e2e-dev-one-shot.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-excel-sql-sharepoint-e2e-dev-one-shot
+  cancel-in-progress: false
+
+env:
+  INTEGRATION_E2E_ENVIRONMENT: dev
+  EVIDENCE_DIR: audit/user-journey/excel-sql-sharepoint-dev
+
+jobs:
+  e2e:
+    name: E2E real DEV — Excel → SQL Server → SharePoint
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Instalar dependências mínimas
+        run: |
+          set -euo pipefail
+          bash .github/scripts/install-unixodbc-ci.sh
+          python -m pip install --upgrade pip
+          pip install httpx pyodbc openpyxl pytest
+
+      - name: Validar harness antes do E2E
+        env:
+          PYTHONPATH: backend
+        run: |
+          set -euo pipefail
+          python -m pytest \
+            tests/test_integration_excel_sql_sharepoint_discovery.py \
+            tests/test_integration_excel_sql_sharepoint_readiness.py \
+            tests/test_integration_excel_sql_sharepoint_flow.py \
+            tests/test_integration_excel_sql_sharepoint_e2e.py \
+            tests/test_integration_profile_provisioning.py \
+            -q
+
+      - name: Inicializar correlação
+        run: |
+          set -euo pipefail
+          echo "E2E_CORRELATION_ID=excel-sql-sharepoint-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+
+      - name: Preparar sessão delegada Microsoft
+        shell: bash
+        env:
+          WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WSJF_MSAL_STORAGE_STATE_B64:-}" ]; then
+            echo "::error::WSJF_MSAL_STORAGE_STATE_B64 ausente; descoberta Power Platform exige sessão delegada."
+            exit 1
+          fi
+          state="$RUNNER_TEMP/msal-storage-state.json"
+          printf '%s' "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$state"
+          chmod 600 "$state"
+          echo "MSAL_STORAGE_STATE_PATH=$state" >> "$GITHUB_ENV"
+
+      - name: Descobrir referências não secretas DEV
+        id: discovery
+        continue-on-error: true
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          INTEGRATION_E2E_SQL_DSN: ${{ secrets.INTEGRATION_E2E_SQL_DSN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          python scripts/integration_excel_sql_sharepoint_discovery.py \
+            --output "$EVIDENCE_DIR/discovery.json" \
+            --github-env "$GITHUB_ENV" \
+            --msal-state "$MSAL_STORAGE_STATE_PATH" \
+            --source-sha "$GITHUB_SHA" \
+            --correlation-id "$E2E_CORRELATION_ID"
+
+      - name: Readiness DEV estrito no mesmo SHA
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          INTEGRATION_E2E_SQL_DSN: ${{ secrets.INTEGRATION_E2E_SQL_DSN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          python scripts/integration_excel_sql_sharepoint_readiness.py \
+            --strict \
+            --output "$EVIDENCE_DIR/readiness.json" \
+            --source-sha "$GITHUB_SHA" \
+            --correlation-id "$E2E_CORRELATION_ID"
+
+      - name: Provisionar fluxo e executar aceite real
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          INTEGRATION_E2E_SQL_DSN: ${{ secrets.INTEGRATION_E2E_SQL_DSN }}
+        run: |
+          set -euo pipefail
+          python scripts/integration_excel_sql_sharepoint_e2e.py \
+            --output "$EVIDENCE_DIR/e2e.json" \
+            --source-sha "$GITHUB_SHA" \
+            --correlation-id "$E2E_CORRELATION_ID" \
+            --msal-state "$MSAL_STORAGE_STATE_PATH" \
+            --wait-seconds 420
+
+      - name: Publicar evidências
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: integration-excel-sql-sharepoint-e2e-${{ github.run_id }}
+          path: |
+            ${{ env.EVIDENCE_DIR }}/discovery.json
+            ${{ env.EVIDENCE_DIR }}/readiness.json
+            ${{ env.EVIDENCE_DIR }}/e2e.json
+          if-no-files-found: warn
+          retention-days: 30
