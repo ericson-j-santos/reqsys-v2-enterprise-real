@@ -60,8 +60,7 @@ def _reviewer_id(user: dict) -> str:
 def readiness_ocr():
     store = ocr_store_readiness()
     input_root = (os.getenv('OCR_INPUT_ROOT') or '').strip()
-    payload = {**store, 'input_root_configured': bool(input_root), 'engine': 'tesseract-multipass', 'engine_language': 'por', 'ready': bool(store['ready'] and input_root)}
-    return ok(payload)
+    return {**store, 'input_root_configured': bool(input_root), 'engine': 'tesseract-multipass', 'engine_language': 'por', 'ready': bool(store['ready'] and input_root)}
 
 
 @router.post('/jobs')
