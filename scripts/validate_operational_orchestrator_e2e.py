@@ -3,11 +3,13 @@
 
 Exercita fila -> gate -> executor -> Evidence Ledger e confirma o efeito por
 leitura SQLite independente. Não usa rede, credenciais nem evidência residual.
+Em CI, toda evidência é vinculada ao SHA exato da implementação em validação.
 """
 
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import sqlite3
 import sys
@@ -57,6 +59,10 @@ def _independent_rows(db_path: Path, correlation_id: str, sha: str) -> list[tupl
 
 
 def main() -> int:
+    validation_sha = (os.getenv("REQSYS_VALIDATION_SHA") or "local-unbound").strip()
+    if os.getenv("GITHUB_ACTIONS") == "true" and validation_sha == "local-unbound":
+        raise RuntimeError("REQSYS_VALIDATION_SHA é obrigatório no CI para vincular a evidência ao SHA corrente.")
+
     with tempfile.TemporaryDirectory(prefix="reqsys-operational-orchestrator-") as tmp:
         base = Path(tmp)
         manifest = base / "readiness.yaml"
@@ -68,36 +74,38 @@ def main() -> int:
             manifest_path=manifest,
             environ={"REQSYS_E2E_SOURCE_ID": "configured-only-in-memory"},
         )
-        first = positive.run_cycle(sha="sha-e2e-positive", branch="e2e/current")
+        first = positive.run_cycle(sha=validation_sha, branch="e2e/positive")
         action = first["execution"]["action"]
         assert first["execution"]["executed"] is True
         assert first["execution"]["result"]["status"] == "ready"
         assert action["status"] == "succeeded"
+        assert action["sha"] == validation_sha
 
         independent_positive = _independent_rows(
-            db_path, action["correlation_id"], "sha-e2e-positive"
+            db_path, action["correlation_id"], validation_sha
         )
-        assert independent_positive == [("ready", "sha-e2e-positive", "readiness")]
+        assert independent_positive == [("ready", validation_sha, "readiness")]
 
-        repeated = positive.run_cycle(sha="sha-e2e-positive", branch="e2e/current")
+        repeated = positive.run_cycle(sha=validation_sha, branch="e2e/positive")
         assert repeated["action_created"] is False
         assert repeated["execution"]["reason"] == "already_succeeded"
-        assert len(_independent_rows(db_path, action["correlation_id"], "sha-e2e-positive")) == 1
+        assert len(_independent_rows(db_path, action["correlation_id"], validation_sha)) == 1
 
         negative = OperationalOrchestrator(
             store=OperationalStore(db_path),
             manifest_path=manifest,
             environ={},
         )
-        blocked = negative.run_cycle(sha="sha-e2e-negative", branch="e2e/current")
+        blocked = negative.run_cycle(sha=validation_sha, branch="e2e/negative")
         blocked_action = blocked["execution"]["action"]
         assert blocked["execution"]["result"]["status"] == "blocked"
         assert blocked["execution"]["result"]["missing_required"] == ["source"]
         assert blocked_action["status"] == "blocked"
+        assert blocked_action["sha"] == validation_sha
         independent_negative = _independent_rows(
-            db_path, blocked_action["correlation_id"], "sha-e2e-negative"
+            db_path, blocked_action["correlation_id"], validation_sha
         )
-        assert independent_negative == [("blocked", "sha-e2e-negative", "readiness")]
+        assert independent_negative == [("blocked", validation_sha, "readiness")]
 
         # Teste do próprio teste: evidência do correlation_id correto não pode
         # satisfazer uma consulta vinculada a outro SHA.
@@ -108,22 +116,24 @@ def main() -> int:
 
         output = {
             "status": "passed",
+            "implementation_sha": validation_sha,
+            "implementation_sha_bound": validation_sha != "local-unbound",
             "positive": {
                 "action_id": action["action_id"],
                 "correlation_id": action["correlation_id"],
-                "sha": "sha-e2e-positive",
+                "sha": validation_sha,
                 "independent_evidence_count": len(independent_positive),
             },
             "negative": {
                 "action_id": blocked_action["action_id"],
                 "correlation_id": blocked_action["correlation_id"],
-                "sha": "sha-e2e-negative",
+                "sha": validation_sha,
                 "independent_evidence_count": len(independent_negative),
             },
             "idempotency": {
                 "duplicate_action_created": repeated["action_created"],
                 "evidence_count_after_repeat": len(
-                    _independent_rows(db_path, action["correlation_id"], "sha-e2e-positive")
+                    _independent_rows(db_path, action["correlation_id"], validation_sha)
                 ),
             },
             "false_positive_control": {
