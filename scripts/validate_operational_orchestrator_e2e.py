@@ -29,17 +29,17 @@ def _write_manifest(path: Path) -> None:
                 "schema_version": "1.0.0",
                 "environment": "development-e2e",
                 "capabilities": {
-                    "source": {
+                    "excel": {
                         "required": True,
                         "source": "env",
-                        "references": ["REQSYS_E2E_SOURCE_ID"],
-                        "description": "Fonte controlada do E2E",
+                        "references": ["REQSYS_E2E_EXCEL_ID"],
+                        "description": "Fonte Excel controlada do E2E",
                     },
-                    "destination": {
+                    "sql_server": {
                         "required": True,
                         "source": "static",
                         "configured": True,
-                        "description": "Destino controlado do E2E",
+                        "description": "Destino SQL controlado do E2E",
                     },
                 },
             },
@@ -72,7 +72,7 @@ def main() -> int:
         positive = OperationalOrchestrator(
             store=OperationalStore(db_path),
             manifest_path=manifest,
-            environ={"REQSYS_E2E_SOURCE_ID": "configured-only-in-memory"},
+            environ={"REQSYS_E2E_EXCEL_ID": "configured-only-in-memory"},
         )
         first = positive.run_cycle(sha=validation_sha, branch="e2e/positive")
         action = first["execution"]["action"]
@@ -99,7 +99,7 @@ def main() -> int:
         blocked = negative.run_cycle(sha=validation_sha, branch="e2e/negative")
         blocked_action = blocked["execution"]["action"]
         assert blocked["execution"]["result"]["status"] == "blocked"
-        assert blocked["execution"]["result"]["missing_required"] == ["source"]
+        assert blocked["execution"]["result"]["missing_required"] == ["excel"]
         assert blocked_action["status"] == "blocked"
         assert blocked_action["sha"] == validation_sha
         independent_negative = _independent_rows(
