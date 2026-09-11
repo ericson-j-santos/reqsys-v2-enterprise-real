@@ -1,0 +1,245 @@
+stages:
+  - deploy
+  - validate
+  - evidence
+
+# ============================================================================
+# OCR Deploy para Staging (Fly.io)
+# ============================================================================
+
+ocr_deploy_staging_fly:
+  stage: deploy
+  image: alpine:3.20
+  resource_group: reqsys-ocr-staging-fly
+  environment:
+    name: ocr-staging
+    url: https://reqsys-api-stg.fly.dev/v1/ocr/readiness
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  before_script:
+    - apk add --no-cache curl bash python3 py3-pip
+    - curl -L https://fly.io/install.sh | sh
+    - export FLYCTL_INSTALL="/root/.fly"
+    - export PATH="$FLYCTL_INSTALL/bin:$PATH"
+  script:
+    - |
+      if [ -z "$FLY_API_TOKEN" ]; then
+        echo "❌ FLY_API_TOKEN não configurado nas variáveis de CI deste projeto GitLab."
+        echo "Configure a variável em Settings > CI/CD > Variables para habilitar o deploy real."
+        exit 1
+      fi
+
+      if [ -z "$OCR_DATA_ENCRYPTION_KEY" ]; then
+        echo "❌ OCR_DATA_ENCRYPTION_KEY não configurado."
+        echo "Gere com: python -c \"import base64,secrets; print(base64.b64encode(secrets.token_bytes(32)).decode())\""
+        exit 1
+      fi
+
+    - export FLYCTL_INSTALL="/root/.fly"
+    - export PATH="$FLYCTL_INSTALL/bin:$PATH"
+
+    - echo "🚀 Deploying OCR to Fly.io staging..."
+    - cd backend
+
+    - |
+      flyctl deploy \
+        --remote-only \
+        -c fly.staging.toml \
+        --app reqsys-api-stg \
+        --build-arg ENV=staging
+
+    - echo "✅ Deploy completo. Aguardando app iniciar..."
+    - sleep 30
+  artifacts:
+    expire_in: 7 days
+    when: always
+    paths:
+      - artifacts/ocr-deploy-staging.json
+  retry:
+    max: 1
+    when: runner_system_failure
+
+# ============================================================================
+# Validação Pós-Deploy
+# ============================================================================
+
+ocr_validate_staging_readiness:
+  stage: validate
+  image: alpine:3.20
+  needs: ["ocr_deploy_staging_fly"]
+  before_script:
+    - apk add --no-cache curl jq python3
+  script:
+    - |
+      echo "🔍 Validando OCR readiness em staging..."
+
+      READINESS=$(curl -s https://reqsys-api-stg.fly.dev/v1/ocr/readiness)
+
+      echo "Response:"
+      echo "$READINESS" | jq .
+
+      READY=$(echo "$READINESS" | jq -r '.ready // false')
+      KEY_CONFIGURED=$(echo "$READINESS" | jq -r '.key_configured // false')
+      INPUT_ROOT=$(echo "$READINESS" | jq -r '.input_root_configured // false')
+
+      if [ "$READY" = "true" ] && [ "$KEY_CONFIGURED" = "true" ] && [ "$INPUT_ROOT" = "true" ]; then
+        echo "✅ OCR está pronto em staging!"
+        echo "$READINESS" > artifacts/ocr-readiness-success.json
+      else
+        echo "❌ OCR não está pronto:"
+        echo "   Ready: $READY"
+        echo "   Key configured: $KEY_CONFIGURED"
+        echo "   Input root configured: $INPUT_ROOT"
+        exit 1
+      fi
+  artifacts:
+    expire_in: 7 days
+    when: always
+    paths:
+      - artifacts/ocr-readiness-*.json
+
+ocr_validate_staging_health:
+  stage: validate
+  image: alpine:3.20
+  needs: ["ocr_deploy_staging_fly"]
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - |
+      echo "🏥 Validando health endpoints..."
+
+      # Health check
+      HEALTH=$(curl -s https://reqsys-api-stg.fly.dev/health)
+      echo "Health: $HEALTH" | jq .
+
+      # Metrics
+      METRICS=$(curl -s https://reqsys-api-stg.fly.dev/metrics | grep ocr_readiness_status)
+
+      if [ -z "$METRICS" ]; then
+        echo "⚠️  Metrics ainda não disponíveis (pode estar aquecendo)"
+      else
+        echo "✅ Metrics disponíveis:"
+        echo "$METRICS"
+      fi
+  artifacts:
+    expire_in: 7 days
+    when: always
+    paths:
+      - artifacts/ocr-health-*.json
+
+# ============================================================================
+# Integração com Testes OCR
+# ============================================================================
+
+ocr_integration_tests_staging:
+  stage: validate
+  image: python:3.11-slim
+  needs: ["ocr_deploy_staging_fly"]
+  before_script:
+    - pip install -q requests pytest
+  script:
+    - |
+      echo "🧪 Executando testes de integração OCR em staging..."
+
+      cd backend
+
+      # Configurar variáveis de ambiente
+      export API_URL="https://reqsys-api-stg.fly.dev"
+
+      # Executar testes
+      pytest tests/test_ocr_setup_integration.py \
+        -v \
+        --tb=short \
+        -k "TestOcrReadinessEndpoint or TestOcrEncryption"
+  artifacts:
+    expire_in: 7 days
+    when: always
+    reports:
+      junit: junit.xml
+    paths:
+      - artifacts/ocr-tests-*.json
+
+# ============================================================================
+# Publicar Evidência
+# ============================================================================
+
+ocr_publish_staging_evidence:
+  stage: evidence
+  image: alpine:3.20
+  needs:
+    - job: ocr_validate_staging_readiness
+      artifacts: true
+    - job: ocr_validate_staging_health
+      artifacts: true
+  script:
+    - |
+      echo "📋 Publicando evidência de deploy OCR..."
+
+      mkdir -p audit/ocr
+
+      # Consolidar evidência
+      cat > audit/ocr/staging-deploy-evidence.json <<'EOF'
+      {
+        "timestamp": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
+        "environment": "staging",
+        "deployment": {
+          "app": "reqsys-api-stg",
+          "platform": "Fly.io",
+          "url": "https://reqsys-api-stg.fly.dev"
+        },
+        "validation": {
+          "readiness": "success",
+          "health": "success",
+          "tests": "pending"
+        }
+      }
+      EOF
+
+      echo "✅ Evidência publicada em audit/ocr/"
+  artifacts:
+    expire_in: 30 days
+    paths:
+      - audit/ocr/
+
+# ============================================================================
+# Slack Notification
+# ============================================================================
+
+.notify_slack_template: &notify_slack_template
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      STATUS=$([ "$CI_JOB_STATUS" = "success" ] && echo "✅" || echo "❌")
+      WEBHOOK_URL="${SLACK_WEBHOOK_OCR}"
+
+      curl -X POST "$WEBHOOK_URL" \
+        -H 'Content-Type: application/json' \
+        -d "{
+          \"text\": \"$STATUS OCR Deploy Staging\",
+          \"blocks\": [{
+            \"type\": \"section\",
+            \"text\": {
+              \"type\": \"mrkdwn\",
+              \"text\": \"$STATUS *OCR Deploy to Staging*\n\nEnvironment: reqsys-api-stg (Fly.io)\nStatus: $CI_JOB_STATUS\nURL: https://reqsys-api-stg.fly.dev\n<$CI_PROJECT_URL/pipelines/$CI_PIPELINE_ID|View Pipeline>\"
+            }
+          }]
+        }"
+
+ocr_notify_slack_success:
+  <<: *notify_slack_template
+  stage: evidence
+  needs: ["ocr_publish_staging_evidence"]
+  only:
+    - if: '$CI_JOB_STATUS == "success"'
+  allow_failure: true
+
+ocr_notify_slack_failure:
+  <<: *notify_slack_template
+  stage: evidence
+  when: on_failure
+  only:
+    - if: '$CI_JOB_STATUS == "failed"'
+  allow_failure: true

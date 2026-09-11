@@ -26,3 +26,4 @@ include:
   - local: gitlab/ci/environments.yml
   - local: gitlab/ci/evidence.yml
   - local: gitlab/ci/deploy.yml
+  - local: gitlab/ci/ocr-deploy-staging.yml
