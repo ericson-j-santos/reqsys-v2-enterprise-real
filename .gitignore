@@ -83,3 +83,6 @@ backend/artifacts/
 # Keep the .NET solution scaffold tracked even though IDE solution files are ignored globally
 !backend-dotnet/*.sln
 frontend-angular/.angular/
+
+# Override local do piloto PC 24x7 (docs/runbooks/pc24x7-piloto-dev.md)
+compose.pc24x7-local.yml

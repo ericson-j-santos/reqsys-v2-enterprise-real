@@ -12,7 +12,7 @@
         "test:e2e:stable": "node scripts/run-e2e-safe.js --reporter=line",
         "setup:msal-state": "node scripts/setup-msal-storage-state.mjs",
         "check:msal-state": "node scripts/check-msal-state.mjs",
-        "test:msal-state": "node --test scripts/check-msal-state.test.mjs",
+        "test:msal-state": "node --test scripts/check-msal-state.test.mjs scripts/msal-storage-state-sanitizer.test.cjs",
         "test:readiness": "node --test scripts/frontend-readiness-gate.test.mjs",
         "readiness:frontend": "node scripts/frontend-readiness-gate.mjs",
         "validate:design-tokens": "node scripts/validate-design-tokens.mjs",

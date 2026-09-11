@@ -1,4 +1,5 @@
 const fs = require('node:fs')
+const { sanitizeStorageState } = require('../../scripts/msal-storage-state-sanitizer.cjs')
 const { test, expect } = require('@playwright/test')
 
 // Este spec testa especificamente o caminho de token delegado (MSAL) para
@@ -45,6 +46,7 @@ function loadAuthBundle(filePath) {
     throw new Error('MSAL storage state invalido: cache MSAL nao encontrado no sessionStorage.')
   }
 
+  parsed.storageState = sanitizeStorageState(parsed.storageState, parsed.origin)
   return parsed
 }
 

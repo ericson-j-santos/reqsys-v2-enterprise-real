@@ -49,9 +49,12 @@ def copilot_memory_lowcode_package(
 
 
 @router.get('/install/status')
-async def copilot_memory_install_status(_auth=Depends(require_copilot_memory_auth)):
+async def copilot_memory_install_status(
+    x_power_platform_token: str | None = Header(default=None, alias='X-Power-Platform-Token'),
+    _auth=Depends(require_copilot_memory_auth),
+):
     """Retorna prontidão do assistente sem expor credenciais."""
-    return ok(await status_assistente_instalacao())
+    return ok(await status_assistente_instalacao(user_token=x_power_platform_token))
 
 
 @router.get('/install/plans')

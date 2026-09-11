@@ -40,6 +40,13 @@ def test_production_requires_bacen_and_has_no_bypass() -> None:
     assert "environment == 'prod'" in stage
 
 
+def test_automatic_pipeline_grants_reusable_workflow_permissions() -> None:
+    workflow = text(AUTO)
+    stage = text(STAGE)
+    assert "pull-requests: read" in stage
+    assert "pull-requests: read" in workflow
+
+
 def test_capture_collects_fly_runtime_publication_and_login() -> None:
     workflow = text(CAPTURE)
     assert "capture_fly_environment_state.py" in workflow

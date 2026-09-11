@@ -39,29 +39,44 @@ Evidência gerada: `audit/gitlab-mirror-identity-attestation.json`.
 Vereditos:
 
 - `authorized`: identidade autoritativa habilitada a fast-forward na branch protegida, com force-push proibido;
-- `insufficient_permission`: identidade resolvida, mas sem allowance de push na branch protegida (bloqueio atual);
+- `insufficient_permission`: identidade resolvida, mas sem allowance de push na branch protegida;
 - `force_push_enabled`: push permitido, porém `allow_force_push` habilitado — regressão de governança;
 - `undetermined`: privilégio atual não permite ler a configuração de proteção;
 - `unresolved`: credencial ausente, revogada ou sem identidade correspondente.
 
-Quando o veredito não é `authorized`, a evidência traz `remaining_human_action` com a declaração de autorização já parametrizada com o `id` e o `username` da identidade correta.
+### Provisionamento governado da permissão
 
-### Ação humana mínima (não automatizável)
+A concessão da identidade do mirror é executada pelo provisionador `gitlab/scripts/provision_gitlab_governance.py` usando exclusivamente `GITLAB_PROVISIONING_TOKEN`, nunca o próprio token do mirror.
 
-Conceder permissão no GitLab é decisão administrativa e não pode ser executada pela automação. Após ler o veredito:
+Parâmetros versionados no job de governança:
 
-1. Em `Settings > Repository > Protected branches`, na branch `main`, incluir **apenas** o usuário identificado pela atestação em `Allowed to push and merge`.
-2. Manter `Allow force push` desabilitado.
-3. Não desproteger a `main` e não elevar o nível de acesso além do necessário.
-4. Desativar/revogar a identidade homônima não autoritativa somente depois de confirmar que nenhum outro consumidor depende dela.
+```text
+MIRROR_USER_ID=41627393
+MIRROR_NAME=reqsys-github-mirror
+```
 
-Confirmação após a concessão:
+O GitLab gera automaticamente o `username` de project access tokens. Por isso a correlação governada usa o identificador imutável do usuário (`41627393`) mais o nome exibido estável (`reqsys-github-mirror`), em vez de assumir que o nome exibido também é o `username`.
+
+O provisionador:
+
+1. confirma que `41627393` é membro ativo do projeto, com acesso suficiente, e possui o nome exibido `reqsys-github-mirror`;
+2. recusa o identificador legado `41625052`;
+3. recusa permissão genérica de push para `Developer`;
+4. preserva os allowances existentes da branch;
+5. adiciona apenas `{user_id: 41627393}` em `allowed_to_push` quando necessário;
+6. mantém `allow_force_push=false`;
+7. relê a branch protegida após a escrita;
+8. falha se o usuário não tiver sido persistido, se uma regra anterior desaparecer ou se force-push permanecer habilitado.
+
+O dry-run é automático e não escreve. O job `gitlab_governance_provision_apply` continua manual/protegido porque realiza alteração administrativa real. A autorização operacional para executar esse job deve ser explícita e vinculada à identidade acima.
+
+Após a aplicação, a comprovação independente continua sendo:
 
 ```bash
 GITLAB_MIRROR_TOKEN=... python scripts/attest_gitlab_mirror_identity.py --require-authorized
 ```
 
-Saída `0` confirma o estado esperado; saída `2` indica que a autorização ainda não está aplicada.
+Saída `0` confirma o estado esperado; saída `2` indica que a autorização ainda não está aplicada ou não pode ser comprovada.
 
 O workflow `.github/workflows/gitlab-mirror-identity-attestation.yml` executa a mesma atestação sob demanda (`workflow_dispatch`, com opção `require_authorized`) e em reverificação diária não bloqueante, publicando o veredito no summary da execução. O workflow do mirror também executa a atestação automaticamente quando o job falha, para que a evidência de falha nomeie a identidade efetiva.
 
@@ -109,7 +124,8 @@ Se o mirror retornar `blocked`:
 ## Critérios de aceite operacional
 
 - credencial gerenciada resolvida pelo Key Vault;
-- atestação com veredito `authorized` (identidade única e autoritativa, sem force-push);
+- provisionamento confirma explicitamente `user_id=41627393` e nome `reqsys-github-mirror`, sem permissão genérica de Developer e sem force-push;
+- atestação com veredito `authorized`;
 - dry-run verde;
 - primeira sincronização real concluída;
 - SHA GitHub = SHA GitLab após o job;

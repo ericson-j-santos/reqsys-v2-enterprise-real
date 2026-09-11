@@ -21,6 +21,9 @@
 // tardio no meio de outro script/teste.
 
 import { chromium } from '@playwright/test'
+import sanitizer from './msal-storage-state-sanitizer.cjs'
+
+const { sanitizeStorageState } = sanitizer
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -57,7 +60,7 @@ async function main() {
     // Aguarda o redirect MSAL terminar e o cache ser persistido antes da coleta.
     await page.waitForTimeout(3000)
 
-    const storageState = await context.storageState()
+    const storageState = sanitizeStorageState(await context.storageState(), appOrigin)
     const sessionStorageEntries = await page.evaluate(() => Object.entries(window.sessionStorage))
 
     if (!hasMsalCache(sessionStorageEntries)) {
