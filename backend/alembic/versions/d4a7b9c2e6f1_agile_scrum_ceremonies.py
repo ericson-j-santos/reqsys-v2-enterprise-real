@@ -17,7 +17,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    tables = inspector.get_table_names()
+    
+    if 'agile_ceremonies' not in tables:
+            op.create_table(
         'agile_ceremonies',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('codigo', sa.String(length=40), nullable=False),
@@ -36,16 +41,16 @@ def upgrade() -> None:
         sa.Column('criado_em', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(['sprint_id'], ['agile_sprints.id']),
         sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_agile_ceremonies_codigo', 'agile_ceremonies', ['codigo'], unique=True)
-    op.create_index('ix_agile_ceremonies_sprint_id', 'agile_ceremonies', ['sprint_id'])
-    op.create_index('ix_agile_ceremonies_inicio_em', 'agile_ceremonies', ['inicio_em'])
-    op.create_index('ix_agile_ceremonies_tipo', 'agile_ceremonies', ['tipo'])
-    op.create_index('ix_agile_ceremonies_status', 'agile_ceremonies', ['status'])
-    op.create_index('ix_agile_ceremonies_correlation_id', 'agile_ceremonies', ['correlation_id'])
-    op.create_index('ix_agile_ceremonies_criado_em', 'agile_ceremonies', ['criado_em'])
+            )
+            op.create_index('ix_agile_ceremonies_codigo', 'agile_ceremonies', ['codigo'], unique=True)
+            op.create_index('ix_agile_ceremonies_sprint_id', 'agile_ceremonies', ['sprint_id'])
+            op.create_index('ix_agile_ceremonies_inicio_em', 'agile_ceremonies', ['inicio_em'])
+            op.create_index('ix_agile_ceremonies_tipo', 'agile_ceremonies', ['tipo'])
+            op.create_index('ix_agile_ceremonies_status', 'agile_ceremonies', ['status'])
+            op.create_index('ix_agile_ceremonies_correlation_id', 'agile_ceremonies', ['correlation_id'])
+            op.create_index('ix_agile_ceremonies_criado_em', 'agile_ceremonies', ['criado_em'])
 
-    op.create_table(
+            op.create_table(
         'agile_ceremony_actions',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('cerimonia_id', sa.Integer(), nullable=False),
@@ -58,11 +63,11 @@ def upgrade() -> None:
         sa.Column('criado_em', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(['cerimonia_id'], ['agile_ceremonies.id']),
         sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_agile_ceremony_actions_cerimonia_id', 'agile_ceremony_actions', ['cerimonia_id'])
-    op.create_index('ix_agile_ceremony_actions_status', 'agile_ceremony_actions', ['status'])
-    op.create_index('ix_agile_ceremony_actions_tipo', 'agile_ceremony_actions', ['tipo'])
-    op.create_index('ix_agile_ceremony_actions_criado_em', 'agile_ceremony_actions', ['criado_em'])
+            )
+            op.create_index('ix_agile_ceremony_actions_cerimonia_id', 'agile_ceremony_actions', ['cerimonia_id'])
+            op.create_index('ix_agile_ceremony_actions_status', 'agile_ceremony_actions', ['status'])
+            op.create_index('ix_agile_ceremony_actions_tipo', 'agile_ceremony_actions', ['tipo'])
+            op.create_index('ix_agile_ceremony_actions_criado_em', 'agile_ceremony_actions', ['criado_em'])
 
 
 def downgrade() -> None:
