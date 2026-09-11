@@ -14,6 +14,7 @@ from scripts.integration_excel_sql_sharepoint_discovery import (
     evidence,
     has_table,
     runtime_values,
+    safe_error,
     write_github_env,
 )
 
@@ -120,6 +121,14 @@ def test_evidence_hashes_private_ids_and_never_serializes_dsn(monkeypatch):
     assert "environment-id-privado" not in raw
     assert "nao-vazar" not in raw
     assert set(payload["resolved"]["variable_names"]) == set(resolved)
+
+
+def test_safe_error_does_not_serialize_exception_text():
+    secret_marker = "Pwd=nao-vazar"
+    rendered = safe_error(DiscoveryError(secret_marker))
+
+    assert rendered == "DiscoveryError"
+    assert secret_marker not in rendered
 
 
 def test_runtime_values_are_written_only_to_ephemeral_github_env(tmp_path):
