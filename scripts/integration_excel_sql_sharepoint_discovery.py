@@ -46,6 +46,12 @@ def digest(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()[:16]
 
 
+def safe_error(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"http_{exc.response.status_code}"
+    return exc.__class__.__name__
+
+
 def profile_contract(path: Path = PROFILE) -> dict[str, str]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     result = {
@@ -387,12 +393,8 @@ def main() -> int:
             resolved = runtime_values(contract, sp, pp)
             write_github_env(args.github_env, resolved)
             status = "resolved_non_secret"
-    except DiscoveryError as exc:
-        error = str(exc)
-    except httpx.HTTPStatusError as exc:
-        error = f"http_{exc.response.status_code}"
     except Exception as exc:
-        error = exc.__class__.__name__
+        error = safe_error(exc)
 
     payload = evidence(contract, sp, pp, resolved, args.source_sha, args.correlation_id, status, error)
     args.output.parent.mkdir(parents=True, exist_ok=True)
