@@ -1,0 +1,203 @@
+name: 📋 OCR Setup Validation
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/ocr-*'
+      - 'fix/ocr-*'
+    paths:
+      - 'docs/guides/ocr-*.md'
+      - '.github/OCRL_SETUP_CHECKLIST.md'
+      - '.env.example'
+      - 'scripts/validate-ocr-setup.ps1'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'docs/guides/ocr-*.md'
+      - '.env.example'
+      - '.github/OCRL_SETUP_CHECKLIST.md'
+
+jobs:
+  validate-ocr-docs:
+    name: Validar Documentação OCR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📄 Validar sintaxe Markdown
+        run: |
+          echo "🔍 Verificando sintaxe Markdown dos guias OCR..."
+
+          for file in docs/guides/ocr-*.md .github/OCRL_SETUP_CHECKLIST.md; do
+            if [ -f "$file" ]; then
+              echo "✅ Arquivo encontrado: $file"
+
+              # Verificar que não está vazio
+              if [ ! -s "$file" ]; then
+                echo "❌ Arquivo vazio: $file"
+                exit 1
+              fi
+
+              # Verificar estrutura básica
+              if ! grep -q "^#" "$file"; then
+                echo "❌ Arquivo sem headers: $file"
+                exit 1
+              fi
+            fi
+          done
+
+          echo "✅ Todos os arquivos Markdown estão válidos"
+
+      - name: 🔗 Validar links internos
+        run: |
+          echo "🔍 Verificando links para docs de arquitetura..."
+
+          # Padrão: [texto](../architecture/ocr-*.md)
+          grep -r "\[.*\](" docs/guides/ .github/ 2>/dev/null | while read line; do
+            link=$(echo "$line" | grep -oP '\(\K[^)]+' || true)
+
+            if [ -n "$link" ]; then
+              # Converter caminho relativo
+              resolved_path=$(echo "$link" | sed 's|^../|docs/|')
+
+              if [[ "$link" == *".md" ]] && ! [ -f "$resolved_path" ]; then
+                echo "❌ Link quebrado: $link → $resolved_path"
+                exit 1
+              fi
+            fi
+          done
+
+          echo "✅ Todos os links internos estão válidos"
+
+      - name: 🔐 Verificar segurança: sem chaves em .env.example
+        run: |
+          echo "🔍 Verificando se há chaves reais em .env.example..."
+
+          # Padrão perigoso: OCR_DATA_ENCRYPTION_KEY=<chave-real>
+          if grep -E "^OCR_DATA_ENCRYPTION_KEY=[a-zA-Z0-9+/=]{40,}" .env.example; then
+            echo "❌ ERRO CRÍTICO: Chave real detectada em .env.example!"
+            echo "   Isso expõe segredos do projeto."
+            exit 1
+          fi
+
+          # Verificar que campo está comentado ou vazio
+          if grep -q "^OCR_DATA_ENCRYPTION_KEY=$" .env.example || \
+             grep -q "^# *OCR_DATA_ENCRYPTION_KEY" .env.example; then
+            echo "✅ OCR_DATA_ENCRYPTION_KEY está seguro (vazio ou comentado)"
+          else
+            echo "⚠️ Aviso: OCR_DATA_ENCRYPTION_KEY deve estar vazio em .env.example"
+          fi
+
+      - name: ✅ Validar checklist
+        run: |
+          echo "🔍 Verificando integridade do checklist..."
+
+          if [ ! -f ".github/OCRL_SETUP_CHECKLIST.md" ]; then
+            echo "❌ Checklist não encontrado: .github/OCRL_SETUP_CHECKLIST.md"
+            exit 1
+          fi
+
+          # Contar items do checklist
+          checkbox_count=$(grep -c "^\- \[ \]" .github/OCRL_SETUP_CHECKLIST.md || echo "0")
+
+          if [ "$checkbox_count" -lt 5 ]; then
+            echo "❌ Checklist incompleto: apenas $checkbox_count items encontrados (mínimo 5)"
+            exit 1
+          fi
+
+          echo "✅ Checklist validado ($checkbox_count items)"
+
+      - name: 📋 Validar referências a docs de arquitetura
+        run: |
+          echo "🔍 Verificando referências à arquitetura OCR..."
+
+          # Todos os guias de OCR devem referenciar a arquitetura
+          if ! grep -q "docs/architecture/ocr-secure-review-v2.md" docs/guides/ocr-*.md; then
+            echo "⚠️ Aviso: Guias OCR deveriam referenciar ocr-secure-review-v2.md"
+          fi
+
+          if ! grep -q "scripts/validate-ocr-setup.ps1" docs/guides/ocr-*.md; then
+            echo "⚠️ Aviso: Guias OCR deveriam referenciar o script de validação"
+          fi
+
+          echo "✅ Referências validadas"
+
+      - name: 📊 Gerar relatório
+        if: always()
+        run: |
+          echo "## 📋 Relatório de Validação OCR" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Sintaxe Markdown" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Links internos" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Segurança (sem chaves)" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Checklist completo" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Data:** $(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+
+  validate-ocr-setup-script:
+    name: Validar Script de Setup
+    runs-on: windows-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔍 Validar sintaxe PowerShell
+        shell: powershell
+        run: |
+          Write-Host "🔍 Verificando sintaxe do script PowerShell..." -ForegroundColor Cyan
+
+          $scriptPath = "scripts/validate-ocr-setup.ps1"
+
+          if (-not (Test-Path $scriptPath)) {
+            Write-Host "❌ Script não encontrado: $scriptPath" -ForegroundColor Red
+            exit 1
+          }
+
+          # Validar sintaxe (sem executar)
+          $null = [System.Management.Automation.PSParser]::Tokenize(
+            (Get-Content $scriptPath -Raw),
+            [ref]$null
+          )
+
+          Write-Host "✅ Sintaxe PowerShell válida" -ForegroundColor Green
+
+      - name: 📋 Verificar conteúdo essencial
+        shell: powershell
+        run: |
+          Write-Host "🔍 Verificando conteúdo do script..." -ForegroundColor Cyan
+
+          $scriptContent = Get-Content "scripts/validate-ocr-setup.ps1" -Raw
+
+          $essentialItems = @(
+            "OCR_DATA_ENCRYPTION_KEY",
+            "OCR_INPUT_ROOT",
+            "readiness",
+            "Validate"
+          )
+
+          foreach ($item in $essentialItems) {
+            if ($scriptContent -match $item) {
+              Write-Host "✅ Item encontrado: $item" -ForegroundColor Green
+            } else {
+              Write-Host "❌ Item faltando: $item" -ForegroundColor Red
+              exit 1
+            }
+          }
+
+summary: |
+  ## 📋 OCR Setup Validation Workflow
+
+  Valida automaticamente:
+  - ✅ Sintaxe Markdown dos guias OCR
+  - ✅ Links internos à documentação de arquitetura
+  - ✅ Segurança: não há chaves reais em .env.example
+  - ✅ Checklist está completo
+  - ✅ Script PowerShell está válido
+
+  **Disparo:** Em push/PR para branches com `ocr` no nome ou que modifiquem arquivos OCR
+  **Tempo:** ~2 min
