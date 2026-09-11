@@ -7,6 +7,7 @@ on:
       - 'feat/ocr-*'
       - 'fix/ocr-*'
     paths:
+      - '.github/workflows/ocr-setup-validate.yml'
       - 'docs/guides/ocr-*.md'
       - '.github/OCRL_SETUP_CHECKLIST.md'
       - '.env.example'
@@ -15,6 +16,7 @@ on:
     branches:
       - main
     paths:
+      - '.github/workflows/ocr-setup-validate.yml'
       - 'docs/guides/ocr-*.md'
       - '.env.example'
       - '.github/OCRL_SETUP_CHECKLIST.md'
@@ -36,13 +38,11 @@ jobs:
             if [ -f "$file" ]; then
               echo "✅ Arquivo encontrado: $file"
 
-              # Verificar que não está vazio
               if [ ! -s "$file" ]; then
                 echo "❌ Arquivo vazio: $file"
                 exit 1
               fi
 
-              # Verificar estrutura básica
               if ! grep -q "^#" "$file"; then
                 echo "❌ Arquivo sem headers: $file"
                 exit 1
@@ -53,38 +53,63 @@ jobs:
           echo "✅ Todos os arquivos Markdown estão válidos"
 
       - name: 🔗 Validar links internos
+        shell: bash
         run: |
-          echo "🔍 Verificando links para docs de arquitetura..."
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
 
-          # Padrão: [texto](../architecture/ocr-*.md)
-          grep -r "\[.*\](" docs/guides/ .github/ 2>/dev/null | while read line; do
-            link=$(echo "$line" | grep -oP '\(\K[^)]+' || true)
+          root = Path.cwd().resolve()
+          files = sorted(Path("docs/guides").glob("ocr-*.md"))
+          checklist = Path(".github/OCRL_SETUP_CHECKLIST.md")
+          if checklist.exists():
+              files.append(checklist)
 
-            if [ -n "$link" ]; then
-              # Converter caminho relativo
-              resolved_path=$(echo "$link" | sed 's|^../|docs/|')
+          link_pattern = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
+          broken = []
 
-              if [[ "$link" == *".md" ]] && ! [ -f "$resolved_path" ]; then
-                echo "❌ Link quebrado: $link → $resolved_path"
-                exit 1
-              fi
-            fi
-          done
+          for source in files:
+              content = source.read_text(encoding="utf-8")
+              for raw_target in link_pattern.findall(content):
+                  target = raw_target.strip()
+                  if target.startswith(("http://", "https://", "mailto:", "#")):
+                      continue
+                  if target.startswith("<") and target.endswith(">"):
+                      target = target[1:-1]
+                  target = target.split("#", 1)[0].strip()
+                  if not target:
+                      continue
 
-          echo "✅ Todos os links internos estão válidos"
+                  candidate = (source.parent / target).resolve()
+                  try:
+                      candidate.relative_to(root)
+                  except ValueError:
+                      broken.append((source.as_posix(), raw_target, "fora_do_repositorio"))
+                      continue
 
-      - name: 🔐 Verificar segurança: sem chaves em .env.example
+                  if not candidate.exists():
+                      broken.append((source.as_posix(), raw_target, candidate.relative_to(root).as_posix()))
+
+          if broken:
+              for source, target, resolved in broken:
+                  print(f"Link quebrado: {source}: {target} -> {resolved}")
+              sys.exit(1)
+
+          print(f"Links internos validos em {len(files)} arquivo(s).")
+          PY
+
+      - name: "🔐 Verificar segurança: sem chaves em .env.example"
         run: |
           echo "🔍 Verificando se há chaves reais em .env.example..."
 
-          # Padrão perigoso: OCR_DATA_ENCRYPTION_KEY=<chave-real>
           if grep -E "^OCR_DATA_ENCRYPTION_KEY=[a-zA-Z0-9+/=]{40,}" .env.example; then
             echo "❌ ERRO CRÍTICO: Chave real detectada em .env.example!"
             echo "   Isso expõe segredos do projeto."
             exit 1
           fi
 
-          # Verificar que campo está comentado ou vazio
           if grep -q "^OCR_DATA_ENCRYPTION_KEY=$" .env.example || \
              grep -q "^# *OCR_DATA_ENCRYPTION_KEY" .env.example; then
             echo "✅ OCR_DATA_ENCRYPTION_KEY está seguro (vazio ou comentado)"
@@ -101,7 +126,6 @@ jobs:
             exit 1
           fi
 
-          # Contar items do checklist
           checkbox_count=$(grep -c "^\- \[ \]" .github/OCRL_SETUP_CHECKLIST.md || echo "0")
 
           if [ "$checkbox_count" -lt 5 ]; then
@@ -115,7 +139,6 @@ jobs:
         run: |
           echo "🔍 Verificando referências à arquitetura OCR..."
 
-          # Todos os guias de OCR devem referenciar a arquitetura
           if ! grep -q "docs/architecture/ocr-secure-review-v2.md" docs/guides/ocr-*.md; then
             echo "⚠️ Aviso: Guias OCR deveriam referenciar ocr-secure-review-v2.md"
           fi
@@ -131,10 +154,7 @@ jobs:
         run: |
           echo "## 📋 Relatório de Validação OCR" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Sintaxe Markdown" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Links internos" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Segurança (sem chaves)" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Checklist completo" >> $GITHUB_STEP_SUMMARY
+          echo "Consulte o estado real das etapas acima; este resumo não substitui os resultados dos steps." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Data:** $(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
 
@@ -147,29 +167,36 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🔍 Validar sintaxe PowerShell
-        shell: powershell
+        shell: pwsh
         run: |
-          Write-Host "🔍 Verificando sintaxe do script PowerShell..." -ForegroundColor Cyan
+          Write-Host "Verificando sintaxe do script PowerShell..."
 
           $scriptPath = "scripts/validate-ocr-setup.ps1"
 
           if (-not (Test-Path $scriptPath)) {
-            Write-Host "❌ Script não encontrado: $scriptPath" -ForegroundColor Red
+            Write-Error "Script nao encontrado: $scriptPath"
             exit 1
           }
 
-          # Validar sintaxe (sem executar)
+          $parseErrors = $null
           $null = [System.Management.Automation.PSParser]::Tokenize(
             (Get-Content $scriptPath -Raw),
-            [ref]$null
+            [ref]$parseErrors
           )
 
-          Write-Host "✅ Sintaxe PowerShell válida" -ForegroundColor Green
+          if ($parseErrors -and $parseErrors.Count -gt 0) {
+            foreach ($parseError in $parseErrors) {
+              Write-Error ("Erro de sintaxe PowerShell: " + $parseError.Message)
+            }
+            exit 1
+          }
+
+          Write-Host "Sintaxe PowerShell valida"
 
       - name: 📋 Verificar conteúdo essencial
-        shell: powershell
+        shell: pwsh
         run: |
-          Write-Host "🔍 Verificando conteúdo do script..." -ForegroundColor Cyan
+          Write-Host "Verificando conteudo essencial do script..."
 
           $scriptContent = Get-Content "scripts/validate-ocr-setup.ps1" -Raw
 
@@ -182,22 +209,9 @@ jobs:
 
           foreach ($item in $essentialItems) {
             if ($scriptContent -match $item) {
-              Write-Host "✅ Item encontrado: $item" -ForegroundColor Green
+              Write-Host "Item encontrado: $item"
             } else {
-              Write-Host "❌ Item faltando: $item" -ForegroundColor Red
+              Write-Error "Item faltando: $item"
               exit 1
             }
           }
-
-summary: |
-  ## 📋 OCR Setup Validation Workflow
-
-  Valida automaticamente:
-  - ✅ Sintaxe Markdown dos guias OCR
-  - ✅ Links internos à documentação de arquitetura
-  - ✅ Segurança: não há chaves reais em .env.example
-  - ✅ Checklist está completo
-  - ✅ Script PowerShell está válido
-
-  **Disparo:** Em push/PR para branches com `ocr` no nome ou que modifiquem arquivos OCR
-  **Tempo:** ~2 min
