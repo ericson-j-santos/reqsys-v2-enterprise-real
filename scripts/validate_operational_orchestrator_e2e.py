@@ -26,7 +26,7 @@ def _write_manifest(path: Path) -> None:
     path.write_text(
         json.dumps(
             {
-                "schema_version": "1.0",
+                "schema_version": "1.0.0",
                 "environment": "development-e2e",
                 "capabilities": {
                     "source": {
