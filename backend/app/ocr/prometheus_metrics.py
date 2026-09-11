@@ -8,13 +8,14 @@ Expõe:
 - ocr_encryption_key_rotation_days: Dias desde última rotação
 """
 
+import os
+
 from prometheus_client import (
     Counter,
     Gauge,
     Histogram,
     Info,
 )
-import os
 
 # ============================================================================
 # Gauges (métricas que podem aumentar ou diminuir)
