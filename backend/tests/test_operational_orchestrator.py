@@ -16,7 +16,7 @@ from app.services.operational_orchestrator import (
 
 def _manifest(path: Path) -> Path:
     payload = {
-        "schema_version": "1.0",
+        "schema_version": "1.0.0",
         "environment": "development",
         "capabilities": {
             "excel": {
