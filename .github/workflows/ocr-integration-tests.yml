@@ -65,7 +65,18 @@ jobs:
           # Gerar chave de teste
           TEST_KEY=$(python -c "import base64,secrets; print(base64.b64encode(secrets.token_bytes(32)).decode())")
 
-          # Criar arquivo .env.test
+          # Exportar como variáveis de ambiente para os testes
+          echo "TEST_KEY=$TEST_KEY" >> $GITHUB_ENV
+          echo "APP_ENV=test" >> $GITHUB_ENV
+          echo "DATABASE_URL=postgresql+psycopg2://reqsys_test:test_password@localhost:5432/reqsys_test" >> $GITHUB_ENV
+          echo "OCR_DATA_ENCRYPTION_KEY=$TEST_KEY" >> $GITHUB_ENV
+          echo "OCR_DATA_KEY_VERSION=v1" >> $GITHUB_ENV
+          echo "OCR_INPUT_ROOT=/tmp/ocr-input-test" >> $GITHUB_ENV
+          echo "JWT_SECRET=test-secret-key-minimum-32-characters!" >> $GITHUB_ENV
+          echo "JWT_ISSUER=reqsys-test" >> $GITHUB_ENV
+          echo "JWT_AUDIENCE=reqsys-test" >> $GITHUB_ENV
+
+          # Criar arquivo .env.test também (como backup)
           cat > backend/.env.test <<EOF
           APP_ENV=test
           DATABASE_URL=postgresql+psycopg2://reqsys_test:test_password@localhost:5432/reqsys_test
@@ -80,53 +91,91 @@ jobs:
           # Criar diretório de entrada
           mkdir -p /tmp/ocr-input-test
 
+          echo "✅ OCR test environment configured"
+          echo "   - Encryption key: ${TEST_KEY:0:20}..."
+          echo "   - Input directory: /tmp/ocr-input-test"
+
       - name: 🗄️ Setup database
         run: |
           cd backend
           export DATABASE_URL=postgresql+psycopg2://reqsys_test:test_password@localhost:5432/reqsys_test
-          alembic upgrade head
+          python -m alembic upgrade head
+        env:
+          SQLALCHEMY_WARN_20: 1
 
       - name: 🔍 Run OCR configuration tests
         run: |
           cd backend
           python -m pytest tests/test_ocr_setup_integration.py::TestOcrSetupConfiguration -v \
             --tb=short \
-            --color=yes
+            --color=yes \
+            --capture=no
+        env:
+          OCR_DATA_ENCRYPTION_KEY: ${{ env.OCR_DATA_ENCRYPTION_KEY }}
+          OCR_DATA_KEY_VERSION: ${{ env.OCR_DATA_KEY_VERSION }}
+          OCR_INPUT_ROOT: ${{ env.OCR_INPUT_ROOT }}
 
       - name: 📋 Run OCR readiness tests
         run: |
           cd backend
           python -m pytest tests/test_ocr_setup_integration.py::TestOcrReadinessEndpoint -v \
             --tb=short \
-            --color=yes
+            --color=yes \
+            --capture=no
+        env:
+          OCR_DATA_ENCRYPTION_KEY: ${{ env.OCR_DATA_ENCRYPTION_KEY }}
+          OCR_DATA_KEY_VERSION: ${{ env.OCR_DATA_KEY_VERSION }}
+          OCR_INPUT_ROOT: ${{ env.OCR_INPUT_ROOT }}
+          DATABASE_URL: ${{ env.DATABASE_URL }}
 
       - name: 🔐 Run OCR encryption tests
         run: |
           cd backend
           python -m pytest tests/test_ocr_setup_integration.py::TestOcrEncryption -v \
             --tb=short \
-            --color=yes
+            --color=yes \
+            --capture=no
+        env:
+          OCR_DATA_ENCRYPTION_KEY: ${{ env.OCR_DATA_ENCRYPTION_KEY }}
+          OCR_DATA_KEY_VERSION: ${{ env.OCR_DATA_KEY_VERSION }}
+          OCR_INPUT_ROOT: ${{ env.OCR_INPUT_ROOT }}
 
       - name: 🛡️ Run OCR security tests
         run: |
           cd backend
           python -m pytest tests/test_ocr_setup_integration.py::TestOcrDatabaseSecurity -v \
             --tb=short \
-            --color=yes
+            --color=yes \
+            --capture=no
+        env:
+          OCR_DATA_ENCRYPTION_KEY: ${{ env.OCR_DATA_ENCRYPTION_KEY }}
+          OCR_DATA_KEY_VERSION: ${{ env.OCR_DATA_KEY_VERSION }}
+          OCR_INPUT_ROOT: ${{ env.OCR_INPUT_ROOT }}
+          DATABASE_URL: ${{ env.DATABASE_URL }}
 
       - name: 🔄 Run OCR key rotation tests
         run: |
           cd backend
           python -m pytest tests/test_ocr_setup_integration.py::TestOcrKeyRotation -v \
             --tb=short \
-            --color=yes
+            --color=yes \
+            --capture=no
+        env:
+          OCR_DATA_ENCRYPTION_KEY: ${{ env.OCR_DATA_ENCRYPTION_KEY }}
+          OCR_DATA_KEY_VERSION: ${{ env.OCR_DATA_KEY_VERSION }}
+          OCR_INPUT_ROOT: ${{ env.OCR_INPUT_ROOT }}
 
       - name: 📊 Run OCR metrics tests
         run: |
           cd backend
           python -m pytest tests/test_ocr_setup_integration.py::TestOcrMetrics -v \
             --tb=short \
-            --color=yes || echo "⚠️ Métricas ainda em desenvolvimento"
+            --color=yes \
+            --capture=no || echo "⚠️ Métricas ainda em desenvolvimento"
+        env:
+          OCR_DATA_ENCRYPTION_KEY: ${{ env.OCR_DATA_ENCRYPTION_KEY }}
+          OCR_DATA_KEY_VERSION: ${{ env.OCR_DATA_KEY_VERSION }}
+          OCR_INPUT_ROOT: ${{ env.OCR_INPUT_ROOT }}
 
       - name: 📈 Generate coverage report
         run: |
@@ -134,7 +183,13 @@ jobs:
           python -m pytest tests/test_ocr_setup_integration.py \
             --cov=app.ocr \
             --cov-report=xml \
-            --cov-report=term-missing
+            --cov-report=term-missing \
+            --capture=no
+        env:
+          OCR_DATA_ENCRYPTION_KEY: ${{ env.OCR_DATA_ENCRYPTION_KEY }}
+          OCR_DATA_KEY_VERSION: ${{ env.OCR_DATA_KEY_VERSION }}
+          OCR_INPUT_ROOT: ${{ env.OCR_INPUT_ROOT }}
+          DATABASE_URL: ${{ env.DATABASE_URL }}
 
       - name: 📤 Upload coverage to Codecov
         uses: codecov/codecov-action@v3
