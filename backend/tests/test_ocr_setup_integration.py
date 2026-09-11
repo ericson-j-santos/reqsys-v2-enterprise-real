@@ -9,8 +9,9 @@ Valida:
 - Rotação de chaves
 """
 
-import os
 import base64
+import os
+
 import pytest
 
 from app.ocr.storage import (
@@ -19,6 +20,17 @@ from app.ocr.storage import (
     RepositorioResultadosOcrSqlAlchemy,
 )
 from app.ocr.worker import OcrResultado
+
+
+@pytest.fixture(autouse=True)
+def ocr_test_environment(monkeypatch, tmp_path):
+    """Fornece configuração OCR determinística e isolada em qualquer suíte de CI."""
+    key = base64.b64encode(bytes(range(32))).decode("ascii")
+    input_root = tmp_path / "ocr-input"
+    input_root.mkdir()
+    monkeypatch.setenv("OCR_DATA_ENCRYPTION_KEY", key)
+    monkeypatch.setenv("OCR_DATA_KEY_VERSION", "v1")
+    monkeypatch.setenv("OCR_INPUT_ROOT", str(input_root))
 
 
 class TestOcrSetupConfiguration:
@@ -262,20 +274,17 @@ class TestOcrErrorHandling:
 
     def test_missing_encryption_key_raises_error(self):
         """Inicializar sem chave deve falhar"""
-        # Temporariamente remover chave
         old_key = os.environ.pop("OCR_DATA_ENCRYPTION_KEY", None)
 
         try:
             with pytest.raises(Exception):
                 OcrDataProtector()
         finally:
-            # Restaurar chave
             if old_key:
                 os.environ["OCR_DATA_ENCRYPTION_KEY"] = old_key
 
     def test_invalid_encryption_key_raises_error(self):
         """Chave inválida deve gerar erro"""
-        # Temporariamente usar chave inválida
         old_key = os.environ.get("OCR_DATA_ENCRYPTION_KEY")
         os.environ["OCR_DATA_ENCRYPTION_KEY"] = "invalid-base64-!!!"
 
@@ -325,8 +334,8 @@ def db_session():
 @pytest.fixture
 def auth_token():
     """Token JWT para testes autenticados"""
-    # Gerar token válido para ambiente de teste
     from datetime import datetime, timedelta
+
     import jwt
 
     secret = os.getenv("JWT_SECRET", "test-secret")
