@@ -61,11 +61,7 @@ jobs:
       - name: 🔐 Setup OCR environment
         run: |
           echo "Setting up OCR test environment..."
-
-          # Gerar chave de teste
           TEST_KEY=$(python -c "import base64,secrets; print(base64.b64encode(secrets.token_bytes(32)).decode())")
-
-          # Exportar como variáveis de ambiente para os testes
           echo "TEST_KEY=$TEST_KEY" >> $GITHUB_ENV
           echo "APP_ENV=test" >> $GITHUB_ENV
           echo "DATABASE_URL=postgresql+psycopg2://reqsys_test:test_password@localhost:5432/reqsys_test" >> $GITHUB_ENV
@@ -75,8 +71,6 @@ jobs:
           echo "JWT_SECRET=test-secret-key-minimum-32-characters!" >> $GITHUB_ENV
           echo "JWT_ISSUER=reqsys-test" >> $GITHUB_ENV
           echo "JWT_AUDIENCE=reqsys-test" >> $GITHUB_ENV
-
-          # Criar arquivo .env.test também (como backup)
           cat > backend/.env.test <<EOF
           APP_ENV=test
           DATABASE_URL=postgresql+psycopg2://reqsys_test:test_password@localhost:5432/reqsys_test
@@ -87,10 +81,7 @@ jobs:
           JWT_ISSUER=reqsys-test
           JWT_AUDIENCE=reqsys-test
           EOF
-
-          # Criar diretório de entrada
           mkdir -p /tmp/ocr-input-test
-
           echo "✅ OCR test environment configured"
           echo "   - Encryption key: ${TEST_KEY:0:20}..."
           echo "   - Input directory: /tmp/ocr-input-test"
@@ -203,13 +194,12 @@ jobs:
         run: |
           echo "## 🧪 OCR Integration Tests Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Configuration tests" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Readiness endpoint tests" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Encryption tests" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Security & PII tests" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Key rotation tests" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** ✅ All critical tests passed" >> $GITHUB_STEP_SUMMARY
+          echo "Job status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "**Status:** ✅ testes críticos concluídos com sucesso" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Status:** ❌ houve falha em etapa crítica; consulte os passos acima" >> $GITHUB_STEP_SUMMARY
+          fi
 
   test-ocr-api:
     name: OCR API Integration Tests
@@ -250,7 +240,6 @@ jobs:
       - name: 🔐 Setup OCR environment
         run: |
           TEST_KEY=$(python -c "import base64,secrets; print(base64.b64encode(secrets.token_bytes(32)).decode())")
-
           cat > backend/.env.test <<EOF
           APP_ENV=test
           DATABASE_URL=postgresql+psycopg2://reqsys_test:test_password@localhost:5432/reqsys_test
@@ -259,7 +248,6 @@ jobs:
           OCR_INPUT_ROOT=/tmp/ocr-input-test
           JWT_SECRET=test-secret-key-minimum-32-characters!
           EOF
-
           mkdir -p /tmp/ocr-input-test
 
       - name: 🗄️ Setup database
@@ -289,56 +277,26 @@ jobs:
       - name: ✅ Validate .env.example
         run: |
           echo "🔍 Validating .env.example security..."
-
-          # Garantir que não há chaves reais
           if grep -E "^OCR_DATA_ENCRYPTION_KEY=[a-zA-Z0-9+/]{40,}" .env.example; then
             echo "❌ FALHA CRÍTICA: Chave detectada em .env.example"
             exit 1
           fi
-
           echo "✅ .env.example é seguro (sem chaves reais)"
 
   notify:
-    name: Notify Results
+    name: Record Results
     runs-on: ubuntu-latest
     if: always()
     needs: [test-ocr-setup, test-ocr-api]
 
     steps:
-      - name: 📧 Slack notification
-        if: failure()
-        uses: slackapi/slack-github-action@v1
-        with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
-          payload: |
-            {
-              "text": "❌ OCR Integration Tests Failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*❌ OCR Integration Tests Failed*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
-                  }
-                }
-              ]
-            }
-
-      - name: 📧 Slack notification (success)
-        if: success()
-        uses: slackapi/slack-github-action@v1
-        with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
-          payload: |
-            {
-              "text": "✅ OCR Integration Tests Passed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*✅ OCR Integration Tests Passed*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
-                  }
-                }
-              ]
-            }
+      - name: Registrar resultados sem efeito colateral externo
+        run: |
+          echo "## Resultado OCR" >> $GITHUB_STEP_SUMMARY
+          echo "test-ocr-setup=${{ needs.test-ocr-setup.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "test-ocr-api=${{ needs.test-ocr-api.result }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.test-ocr-setup.result }}" != "success" ] || [ "${{ needs.test-ocr-api.result }}" != "success" ]; then
+            echo "Uma ou mais etapas críticas não concluíram com sucesso." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Etapas críticas concluídas com sucesso." >> $GITHUB_STEP_SUMMARY
+          fi
