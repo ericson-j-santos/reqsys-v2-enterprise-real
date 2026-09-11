@@ -2,15 +2,42 @@ name: Integration Excel SQL SharePoint — DEV E2E
 
 on:
   workflow_dispatch:
+    inputs:
+      site_hint:
+        description: "Trecho opcional do nome/URL do site SharePoint DEV"
+        required: false
+        default: ""
+      file_hint:
+        description: "Trecho opcional do nome do workbook DEV"
+        required: false
+        default: ""
+      power_platform_environment_hint:
+        description: "Trecho opcional do nome/ID do ambiente Power Platform DEV"
+        required: false
+        default: ""
+      excel_connection_hint:
+        description: "Trecho opcional do nome da conexão Excel DEV"
+        required: false
+        default: ""
+      sql_connection_hint:
+        description: "Trecho opcional do nome da conexão SQL DEV"
+        required: false
+        default: ""
+      sharepoint_connection_hint:
+        description: "Trecho opcional do nome da conexão SharePoint DEV"
+        required: false
+        default: ""
   push:
     branches:
-      - feat/integration-e2e-dev-1594
+      - main
     paths:
       - ".github/workflows/integration-excel-sql-sharepoint-e2e-dev.yml"
       - "backend/app/services/integration_excel_sql_sharepoint_flow.py"
       - "backend/app/services/integration_profile_provisioning.py"
+      - "scripts/integration_excel_sql_sharepoint_discovery.py"
       - "scripts/integration_excel_sql_sharepoint_e2e.py"
       - "scripts/integration_excel_sql_sharepoint_readiness.py"
+      - "tests/test_integration_excel_sql_sharepoint_discovery.py"
       - "tests/test_integration_excel_sql_sharepoint_flow.py"
       - "tests/test_integration_excel_sql_sharepoint_e2e.py"
       - "tests/test_integration_excel_sql_sharepoint_readiness.py"
@@ -32,7 +59,7 @@ jobs:
     name: E2E real DEV — Excel → SQL Server → SharePoint
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -49,20 +76,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install httpx pyodbc openpyxl pytest
 
-      - name: Validar harness e definição do fluxo
+      - name: Validar harness, descoberta e definição do fluxo
         env:
           PYTHONPATH: backend
         run: |
           set -euo pipefail
           python -m pytest \
+            tests/test_integration_excel_sql_sharepoint_discovery.py \
             tests/test_integration_excel_sql_sharepoint_readiness.py \
             tests/test_integration_excel_sql_sharepoint_flow.py \
             tests/test_integration_excel_sql_sharepoint_e2e.py \
             tests/test_integration_profile_provisioning.py \
             -q
           python -m py_compile \
+            scripts/integration_excel_sql_sharepoint_discovery.py \
             scripts/integration_excel_sql_sharepoint_e2e.py \
             backend/app/services/integration_excel_sql_sharepoint_flow.py
+
+      - name: Inicializar correlação da execução
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "E2E_CORRELATION_ID=excel-sql-sharepoint-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
 
       - name: Preparar sessão delegada Microsoft
         if: github.event_name == 'workflow_dispatch'
@@ -72,7 +107,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${WSJF_MSAL_STORAGE_STATE_B64:-}" ]; then
-            echo "::error::WSJF_MSAL_STORAGE_STATE_B64 ausente; provisionamento real exige token delegado."
+            echo "::error::WSJF_MSAL_STORAGE_STATE_B64 ausente; descoberta Power Platform exige sessão delegada."
             exit 1
           fi
           state="$RUNNER_TEMP/msal-storage-state.json"
@@ -80,37 +115,81 @@ jobs:
           chmod 600 "$state"
           echo "MSAL_STORAGE_STATE_PATH=$state" >> "$GITHUB_ENV"
 
+      - name: Descobrir referências não secretas DEV
+        if: github.event_name == 'workflow_dispatch'
+        id: discovery
+        continue-on-error: true
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          INTEGRATION_E2E_SQL_DSN: ${{ secrets.INTEGRATION_E2E_SQL_DSN }}
+          INTEGRATION_E2E_SITE_HINT: ${{ inputs.site_hint }}
+          INTEGRATION_E2E_FILE_HINT: ${{ inputs.file_hint }}
+          INTEGRATION_E2E_POWER_PLATFORM_ENVIRONMENT_HINT: ${{ inputs.power_platform_environment_hint }}
+          INTEGRATION_E2E_EXCEL_CONNECTION_HINT: ${{ inputs.excel_connection_hint }}
+          INTEGRATION_E2E_SQL_CONNECTION_HINT: ${{ inputs.sql_connection_hint }}
+          INTEGRATION_E2E_SHAREPOINT_CONNECTION_HINT: ${{ inputs.sharepoint_connection_hint }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          python scripts/integration_excel_sql_sharepoint_discovery.py \
+            --output "$EVIDENCE_DIR/discovery.json" \
+            --github-env "$GITHUB_ENV" \
+            --msal-state "$MSAL_STORAGE_STATE_PATH" \
+            --source-sha "$GITHUB_SHA" \
+            --correlation-id "$E2E_CORRELATION_ID"
+
+      - name: Carregar referências persistidas no diagnóstico de push
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          PERSISTED_DRIVE_ID: ${{ vars.INTEGRATION_E2E_DRIVE_ID }}
+          PERSISTED_FILE_ID: ${{ vars.INTEGRATION_E2E_FILE_ID }}
+          PERSISTED_SITE_ID: ${{ vars.INTEGRATION_E2E_SITE_ID }}
+          PERSISTED_LIST_ID: ${{ vars.INTEGRATION_E2E_LIST_ID }}
+          PERSISTED_SQL_PROCEDURE: ${{ vars.INTEGRATION_E2E_SQL_PROCEDURE }}
+          PERSISTED_POWER_PLATFORM_ENVIRONMENT_ID: ${{ vars.INTEGRATION_E2E_POWER_PLATFORM_ENVIRONMENT_ID }}
+          PERSISTED_EXCEL_CONNECTION_ID: ${{ vars.INTEGRATION_E2E_EXCEL_CONNECTION_ID }}
+          PERSISTED_SQL_CONNECTION_ID: ${{ vars.INTEGRATION_E2E_SQL_CONNECTION_ID }}
+          PERSISTED_SHAREPOINT_CONNECTION_ID: ${{ vars.INTEGRATION_E2E_SHAREPOINT_CONNECTION_ID }}
+        run: |
+          set -euo pipefail
+          set_if_present() {
+            local target="$1"
+            local value="$2"
+            if [ -n "$value" ]; then
+              printf '%s=%s\n' "$target" "$value" >> "$GITHUB_ENV"
+            fi
+          }
+          set_if_present INTEGRATION_E2E_DRIVE_ID "$PERSISTED_DRIVE_ID"
+          set_if_present INTEGRATION_E2E_FILE_ID "$PERSISTED_FILE_ID"
+          set_if_present INTEGRATION_E2E_SITE_ID "$PERSISTED_SITE_ID"
+          set_if_present INTEGRATION_E2E_LIST_ID "$PERSISTED_LIST_ID"
+          set_if_present INTEGRATION_E2E_SQL_PROCEDURE "$PERSISTED_SQL_PROCEDURE"
+          set_if_present INTEGRATION_E2E_POWER_PLATFORM_ENVIRONMENT_ID "$PERSISTED_POWER_PLATFORM_ENVIRONMENT_ID"
+          set_if_present INTEGRATION_E2E_EXCEL_CONNECTION_ID "$PERSISTED_EXCEL_CONNECTION_ID"
+          set_if_present INTEGRATION_E2E_SQL_CONNECTION_ID "$PERSISTED_SQL_CONNECTION_ID"
+          set_if_present INTEGRATION_E2E_SHAREPOINT_CONNECTION_ID "$PERSISTED_SHAREPOINT_CONNECTION_ID"
+
       - name: Readiness DEV no mesmo SHA
         env:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
           POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
-          INTEGRATION_E2E_DRIVE_ID: ${{ vars.INTEGRATION_E2E_DRIVE_ID }}
-          INTEGRATION_E2E_FILE_ID: ${{ vars.INTEGRATION_E2E_FILE_ID }}
-          INTEGRATION_E2E_SITE_ID: ${{ vars.INTEGRATION_E2E_SITE_ID }}
-          INTEGRATION_E2E_LIST_ID: ${{ vars.INTEGRATION_E2E_LIST_ID }}
           INTEGRATION_E2E_SQL_DSN: ${{ secrets.INTEGRATION_E2E_SQL_DSN }}
-          INTEGRATION_E2E_SQL_PROCEDURE: ${{ vars.INTEGRATION_E2E_SQL_PROCEDURE }}
-          INTEGRATION_E2E_POWER_PLATFORM_ENVIRONMENT_ID: ${{ vars.INTEGRATION_E2E_POWER_PLATFORM_ENVIRONMENT_ID }}
-          INTEGRATION_E2E_EXCEL_CONNECTION_ID: ${{ vars.INTEGRATION_E2E_EXCEL_CONNECTION_ID }}
-          INTEGRATION_E2E_SQL_CONNECTION_ID: ${{ vars.INTEGRATION_E2E_SQL_CONNECTION_ID }}
-          INTEGRATION_E2E_SHAREPOINT_CONNECTION_ID: ${{ vars.INTEGRATION_E2E_SHAREPOINT_CONNECTION_ID }}
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE_DIR"
-          correlation_id="excel-sql-sharepoint-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          echo "E2E_CORRELATION_ID=$correlation_id" >> "$GITHUB_ENV"
-
           strict_args=()
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             strict_args+=(--strict)
           fi
-
           python scripts/integration_excel_sql_sharepoint_readiness.py \
             "${strict_args[@]}" \
             --output "$EVIDENCE_DIR/readiness.json" \
             --source-sha "$GITHUB_SHA" \
-            --correlation-id "$correlation_id"
+            --correlation-id "$E2E_CORRELATION_ID"
 
       - name: Registrar E2E não executado no push
         if: github.event_name == 'push'
@@ -143,21 +222,12 @@ jobs:
           PY
 
       - name: Provisionar fluxo e executar aceite real
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && success()
         env:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
           POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
-          INTEGRATION_E2E_DRIVE_ID: ${{ vars.INTEGRATION_E2E_DRIVE_ID }}
-          INTEGRATION_E2E_FILE_ID: ${{ vars.INTEGRATION_E2E_FILE_ID }}
-          INTEGRATION_E2E_SITE_ID: ${{ vars.INTEGRATION_E2E_SITE_ID }}
-          INTEGRATION_E2E_LIST_ID: ${{ vars.INTEGRATION_E2E_LIST_ID }}
           INTEGRATION_E2E_SQL_DSN: ${{ secrets.INTEGRATION_E2E_SQL_DSN }}
-          INTEGRATION_E2E_SQL_PROCEDURE: ${{ vars.INTEGRATION_E2E_SQL_PROCEDURE }}
-          INTEGRATION_E2E_POWER_PLATFORM_ENVIRONMENT_ID: ${{ vars.INTEGRATION_E2E_POWER_PLATFORM_ENVIRONMENT_ID }}
-          INTEGRATION_E2E_EXCEL_CONNECTION_ID: ${{ vars.INTEGRATION_E2E_EXCEL_CONNECTION_ID }}
-          INTEGRATION_E2E_SQL_CONNECTION_ID: ${{ vars.INTEGRATION_E2E_SQL_CONNECTION_ID }}
-          INTEGRATION_E2E_SHAREPOINT_CONNECTION_ID: ${{ vars.INTEGRATION_E2E_SHAREPOINT_CONNECTION_ID }}
         run: |
           set -euo pipefail
           python scripts/integration_excel_sql_sharepoint_e2e.py \
@@ -173,6 +243,7 @@ jobs:
         with:
           name: integration-excel-sql-sharepoint-e2e-${{ github.run_id }}
           path: |
+            ${{ env.EVIDENCE_DIR }}/discovery.json
             ${{ env.EVIDENCE_DIR }}/readiness.json
             ${{ env.EVIDENCE_DIR }}/e2e.json
           if-no-files-found: warn
