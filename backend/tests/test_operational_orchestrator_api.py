@@ -26,7 +26,7 @@ def _build_orchestrator(tmp_path: Path, *, configured: bool = True) -> Operation
     manifest.write_text(
         json.dumps(
             {
-                "schema_version": "1.0",
+                "schema_version": "1.0.0",
                 "environment": "development-api-test",
                 "capabilities": {
                     "excel": {
