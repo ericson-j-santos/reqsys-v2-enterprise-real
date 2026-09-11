@@ -17,12 +17,13 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function parseJsonObject(raw) {
+function parseJsonEntry(raw) {
   try {
-    const value = JSON.parse(String(raw || ''))
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : null
+    const value = JSON.parse(String(raw ?? ''))
+    const object = value && typeof value === 'object' && !Array.isArray(value) ? value : null
+    return { validJson: true, object }
   } catch {
-    return null
+    return { validJson: false, object: null }
   }
 }
 
@@ -41,10 +42,15 @@ export function applyRefreshToken(bundle, tokenPayload, clientId) {
 
   for (const entry of entries) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-      normalized.push(entry)
       continue
     }
-    const parsed = parseJsonObject(entry.value)
+
+    const parsedEntry = parseJsonEntry(entry.value)
+    if (parsedEntry.validJson && !parsedEntry.object) {
+      continue
+    }
+
+    const parsed = parsedEntry.object
     const type = String(parsed?.credentialType || '').toLowerCase()
     const sameClient = !parsed?.clientId || String(parsed.clientId) === effectiveClientId
     if (!replaced && type === 'refreshtoken' && sameClient) {
