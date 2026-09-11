@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Mapping
 
-
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_MANIFEST = ROOT / "config" / "operational-orchestrator" / "dev.yaml"
 DEFAULT_DB_PATH = Path(
