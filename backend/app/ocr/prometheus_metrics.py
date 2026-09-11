@@ -15,7 +15,6 @@ from prometheus_client import (
     Info,
 )
 import os
-from datetime import datetime
 
 # ============================================================================
 # Gauges (métricas que podem aumentar ou diminuir)
