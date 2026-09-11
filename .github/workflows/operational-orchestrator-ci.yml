@@ -1,0 +1,70 @@
+name: Operational Orchestrator CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/services/operational_orchestrator.py"
+      - "backend/app/api/actions_runtime_center.py"
+      - "backend/tests/test_operational_orchestrator*.py"
+      - "config/operational-orchestrator/**"
+      - "schemas/operational-readiness.schema.json"
+      - "scripts/validate_operational_orchestrator_e2e.py"
+      - ".github/workflows/operational-orchestrator-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/app/services/operational_orchestrator.py"
+      - "backend/app/api/actions_runtime_center.py"
+      - "backend/tests/test_operational_orchestrator*.py"
+      - "config/operational-orchestrator/**"
+      - "schemas/operational-readiness.schema.json"
+      - "scripts/validate_operational_orchestrator_e2e.py"
+      - ".github/workflows/operational-orchestrator-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operational-orchestrator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependência de teste mínima
+        run: python -m pip install --disable-pip-version-check pytest==9.0.3
+
+      - name: Compilar incremento
+        run: |
+          python -m py_compile backend/app/services/operational_orchestrator.py
+          python -m py_compile backend/app/api/actions_runtime_center.py
+          python -m py_compile scripts/validate_operational_orchestrator_e2e.py
+
+      - name: Validar manifesto e schema como JSON/YAML 1.2
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          json.loads(Path('config/operational-orchestrator/dev.yaml').read_text(encoding='utf-8'))
+          json.loads(Path('schemas/operational-readiness.schema.json').read_text(encoding='utf-8'))
+          print('manifest-and-schema-ok')
+          PY
+
+      - name: Testes de contrato do núcleo
+        env:
+          PYTHONPATH: backend
+        run: python -m pytest backend/tests/test_operational_orchestrator.py -q
+
+      - name: E2E fila-gate-executor-ledger
+        run: python scripts/validate_operational_orchestrator_e2e.py
