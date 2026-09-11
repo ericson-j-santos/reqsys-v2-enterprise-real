@@ -1,0 +1,308 @@
+name: Integration Excel SQL SharePoint — Mobile Provision DEV
+
+on:
+  push:
+    branches:
+      - feat/e2e-mobile-device-code
+    paths:
+      - ".github/workflows/integration-excel-sql-sharepoint-mobile-provision.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - run: pip install httpx openpyxl
+
+      - name: Preparar código Microsoft com permissões delegadas de provisionamento
+        shell: bash
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p audit/user-journey/excel-sql-sharepoint-dev
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          from pathlib import Path
+          import httpx
+
+          tenant = os.environ["POWER_PLATFORM_TENANT_ID"].strip()
+          bundle = json.loads(base64.b64decode(os.environ["WSJF_MSAL_STORAGE_STATE_B64"]).decode("utf-8"))
+          client_ids = set()
+          for entry in bundle.get("sessionStorage") or []:
+              if not isinstance(entry, dict):
+                  continue
+              try:
+                  parsed = json.loads(str(entry.get("value") or ""))
+              except (json.JSONDecodeError, TypeError):
+                  continue
+              if not isinstance(parsed, dict):
+                  continue
+              if str(parsed.get("credentialType") or "").casefold() == "refreshtoken" and parsed.get("clientId"):
+                  client_ids.add(str(parsed["clientId"]).strip())
+          if len(client_ids) != 1:
+              raise SystemExit(f"client_id_delegado_nao_unico:{len(client_ids)}")
+          client_id = next(iter(client_ids))
+          scopes = [
+              "openid",
+              "profile",
+              "offline_access",
+              "https://graph.microsoft.com/Sites.Manage.All",
+              "https://graph.microsoft.com/Sites.ReadWrite.All",
+          ]
+          response = httpx.post(
+              f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/devicecode",
+              data={"client_id": client_id, "scope": " ".join(scopes)},
+              timeout=30.0,
+          )
+          payload = response.json()
+          if response.status_code != 200:
+              raise SystemExit(f"device_code_http_{response.status_code}")
+          private = {
+              "client_id": client_id,
+              "device_code": payload["device_code"],
+              "expires_in": int(payload.get("expires_in") or 900),
+              "interval": int(payload.get("interval") or 5),
+          }
+          Path(os.environ["RUNNER_TEMP"]).joinpath("graph-provision-device-private.json").write_text(json.dumps(private), encoding="utf-8")
+          public = {
+              "verification_uri": payload.get("verification_uri") or "https://login.microsoft.com/device",
+              "user_code": payload["user_code"],
+              "expires_in_seconds": private["expires_in"],
+              "requested_permissions": ["Sites.Manage.All", "Sites.ReadWrite.All"],
+          }
+          Path("audit/user-journey/excel-sql-sharepoint-dev/graph-provision-device.json").write_text(json.dumps(public, indent=2), encoding="utf-8")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write("## Provisionar runtime SharePoint DEV pelo celular\n\n")
+              handle.write(f"1. Abra [{public['verification_uri']}]({public['verification_uri']}).\n")
+              handle.write(f"2. Informe **`{public['user_code']}`**.\n")
+              handle.write("3. Revise e aceite somente `Sites.Manage.All` e `Sites.ReadWrite.All`.\n")
+              handle.write("4. O token será usado somente nesta execução e não será persistido.\n")
+          print(f"DEVICE_LOGIN_URI={public['verification_uri']}")
+          print(f"DEVICE_USER_CODE={public['user_code']}")
+          PY
+
+      - name: Publicar somente instrução pública temporária
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: graph-provision-device-${{ github.run_id }}
+          path: audit/user-journey/excel-sql-sharepoint-dev/graph-provision-device.json
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Aguardar autorização e provisionar recursos idempotentes
+        shell: bash
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import io
+          import json
+          import os
+          import time
+          from pathlib import Path
+          from urllib.parse import quote
+
+          import httpx
+          from openpyxl import Workbook
+          from openpyxl.worksheet.table import Table, TableStyleInfo
+
+          import scripts.integration_excel_sql_sharepoint_discovery as d
+
+          LIST_NAME = "ResultadoConsulta"
+          FILE_NAME = "ReqSys-Excel-SQL-SharePoint-DEV.xlsx"
+          TABLE_NAME = "tbEntrada"
+          tenant = os.environ["POWER_PLATFORM_TENANT_ID"].strip()
+          private_path = Path(os.environ["RUNNER_TEMP"]) / "graph-provision-device-private.json"
+          private = json.loads(private_path.read_text(encoding="utf-8"))
+          deadline = time.monotonic() + max(60, int(private.get("expires_in") or 900))
+          interval = max(5, int(private.get("interval") or 5))
+          access_token = None
+
+          while time.monotonic() < deadline:
+              time.sleep(interval)
+              response = httpx.post(
+                  f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
+                  data={
+                      "client_id": private["client_id"],
+                      "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                      "device_code": private["device_code"],
+                  },
+                  timeout=30.0,
+              )
+              payload = response.json()
+              if response.status_code == 200:
+                  access_token = str(payload.get("access_token") or "")
+                  break
+              error = str(payload.get("error") or "")
+              if error == "authorization_pending":
+                  continue
+              if error == "slow_down":
+                  interval += 5
+                  continue
+              raise SystemExit(f"device_code_{error or response.status_code}")
+          if not access_token:
+              raise SystemExit("device_code_expirado_sem_autorizacao")
+
+          result = {
+              "target_unique": False,
+              "drive_unique": False,
+              "list_action": "not_run",
+              "list_columns_valid": False,
+              "workbook_action": "not_run",
+              "workbook_table_valid": False,
+              "independent_discovery": False,
+              "rollback": {},
+              "status": "failed",
+              "blocked_code": None,
+          }
+          created_list_id = None
+          created_file_id = None
+          site_id = None
+          drive_id = None
+
+          def workbook_bytes():
+              wb = Workbook()
+              ws = wb.active
+              ws.title = "Entrada"
+              ws.append(["Identificador"])
+              ws.append([None])
+              table = Table(displayName=TABLE_NAME, ref="A1:A2")
+              table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
+              ws.add_table(table)
+              out = io.BytesIO()
+              wb.save(out)
+              return out.getvalue()
+
+          headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+          try:
+              with httpx.Client(follow_redirects=True, timeout=30.0) as client:
+                  sites = d.values(client, f"{d.GRAPH}/sites/getAllSites?$select=id,name,displayName,webUrl", access_token)
+                  candidates = []
+                  for site in sites:
+                      vals = (site.get("name"), site.get("displayName"), site.get("webUrl"))
+                      raw = " ".join(d.text(v) for v in vals).casefold()
+                      if "reqsys" in raw and d.is_dev(vals) and not d.is_prod(vals):
+                          candidates.append(site)
+                  if len(candidates) != 1:
+                      raise RuntimeError(f"site_reqsys_dev_nao_unico:{len(candidates)}")
+                  result["target_unique"] = True
+                  site_id = d.text(candidates[0].get("id"))
+
+                  drives = d.values(client, f"{d.GRAPH}/sites/{quote(site_id, safe='')}/drives?$select=id,name,webUrl", access_token, 20)
+                  if len(drives) != 1:
+                      raise RuntimeError(f"drive_reqsys_dev_nao_unico:{len(drives)}")
+                  result["drive_unique"] = True
+                  drive_id = d.text(drives[0].get("id"))
+
+                  lists = d.values(client, f"{d.GRAPH}/sites/{quote(site_id, safe='')}/lists?$select=id,name,displayName", access_token, 20)
+                  matches = [x for x in lists if LIST_NAME.casefold() in {d.text(x.get('name')).casefold(), d.text(x.get('displayName')).casefold()}]
+                  if len(matches) > 1:
+                      raise RuntimeError(f"lista_resultado_duplicada:{len(matches)}")
+                  if matches:
+                      list_id = d.text(matches[0].get("id"))
+                      result["list_action"] = "existing"
+                  else:
+                      response = client.post(
+                          f"{d.GRAPH}/sites/{quote(site_id, safe='')}/lists",
+                          headers={**headers, "Content-Type": "application/json"},
+                          json={
+                              "displayName": LIST_NAME,
+                              "columns": [
+                                  {"name": "ChaveIntegracao", "text": {}},
+                                  {"name": "CorrelationId", "text": {}},
+                              ],
+                              "list": {"template": "genericList"},
+                          },
+                      )
+                      response.raise_for_status()
+                      list_id = d.text(response.json().get("id"))
+                      if not list_id:
+                          raise RuntimeError("lista_criada_sem_id")
+                      created_list_id = list_id
+                      result["list_action"] = "created"
+
+                  columns = d.values(client, f"{d.GRAPH}/sites/{quote(site_id, safe='')}/lists/{quote(list_id, safe='')}/columns?$select=name,displayName", access_token, 20)
+                  names = {d.text(x.get("name")) for x in columns}
+                  if not {"ChaveIntegracao", "CorrelationId"}.issubset(names):
+                      raise RuntimeError("lista_colunas_ausentes")
+                  result["list_columns_valid"] = True
+
+                  children = d.values(client, f"{d.GRAPH}/drives/{quote(drive_id, safe='')}/root/children?$select=id,name,file,folder&$top=200", access_token, 20)
+                  files = [x for x in children if d.text(x.get("name")).casefold() == FILE_NAME.casefold()]
+                  if len(files) > 1:
+                      raise RuntimeError(f"workbook_runtime_duplicado:{len(files)}")
+                  if files:
+                      file_id = d.text(files[0].get("id"))
+                      result["workbook_action"] = "existing"
+                  else:
+                      response = client.put(
+                          f"{d.GRAPH}/drives/{quote(drive_id, safe='')}/root:/{quote(FILE_NAME, safe='')}:/content",
+                          headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+                          content=workbook_bytes(),
+                      )
+                      response.raise_for_status()
+                      file_id = d.text(response.json().get("id"))
+                      if not file_id:
+                          raise RuntimeError("workbook_criado_sem_id")
+                      created_file_id = file_id
+                      result["workbook_action"] = "created"
+
+                  response = client.get(f"{d.GRAPH}/drives/{quote(drive_id, safe='')}/items/{quote(file_id, safe='')}/content", headers=headers)
+                  response.raise_for_status()
+                  result["workbook_table_valid"] = d.has_table(response.content, TABLE_NAME)
+                  if not result["workbook_table_valid"]:
+                      raise RuntimeError("workbook_sem_tbEntrada")
+
+                  discovered = d.discover_sharepoint(client, access_token, d.profile_contract())
+                  result["independent_discovery"] = bool(discovered)
+                  if not result["independent_discovery"]:
+                      raise RuntimeError("descoberta_independente_falhou")
+                  result["status"] = "passed"
+          except httpx.HTTPStatusError as exc:
+              result["blocked_code"] = f"http_{exc.response.status_code}"
+          except Exception as exc:
+              result["blocked_code"] = str(exc)[:160]
+          finally:
+              if result["status"] != "passed":
+                  with httpx.Client(follow_redirects=True, timeout=30.0) as cleanup:
+                      if created_file_id and drive_id:
+                          try:
+                              response = cleanup.delete(f"{d.GRAPH}/drives/{quote(drive_id, safe='')}/items/{quote(created_file_id, safe='')}", headers=headers)
+                              result["rollback"]["workbook"] = response.status_code in {204, 404}
+                          except Exception:
+                              result["rollback"]["workbook"] = False
+                      if created_list_id and site_id:
+                          try:
+                              response = cleanup.delete(f"{d.GRAPH}/sites/{quote(site_id, safe='')}/lists/{quote(created_list_id, safe='')}", headers=headers)
+                              result["rollback"]["list"] = response.status_code in {204, 404}
+                          except Exception:
+                              result["rollback"]["list"] = False
+              private_path.unlink(missing_ok=True)
+
+          Path("audit/user-journey/excel-sql-sharepoint-dev/mobile-provision-result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+          print(json.dumps(result, ensure_ascii=False))
+          if result["status"] != "passed":
+              raise SystemExit(1)
+          PY
+
+      - name: Publicar resultado sem IDs e sem tokens
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: graph-provision-result-${{ github.run_id }}
+          path: audit/user-journey/excel-sql-sharepoint-dev/mobile-provision-result.json
+          retention-days: 30
+          if-no-files-found: warn
