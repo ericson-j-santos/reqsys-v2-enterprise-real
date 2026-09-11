@@ -7,6 +7,7 @@ on:
       - 'feat/ocr-*'
       - 'fix/ocr-*'
     paths:
+      - '.github/workflows/ocr-setup-validate.yml'
       - 'docs/guides/ocr-*.md'
       - '.github/OCRL_SETUP_CHECKLIST.md'
       - '.env.example'
@@ -15,6 +16,7 @@ on:
     branches:
       - main
     paths:
+      - '.github/workflows/ocr-setup-validate.yml'
       - 'docs/guides/ocr-*.md'
       - '.env.example'
       - '.github/OCRL_SETUP_CHECKLIST.md'
