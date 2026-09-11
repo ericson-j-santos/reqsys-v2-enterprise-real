@@ -75,7 +75,7 @@ jobs:
 
           echo "✅ Todos os links internos estão válidos"
 
-      - name: 🔐 Verificar segurança: sem chaves em .env.example
+      - name: "🔐 Verificar segurança: sem chaves em .env.example"
         run: |
           echo "🔍 Verificando se há chaves reais em .env.example..."
 
