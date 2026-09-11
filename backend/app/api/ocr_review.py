@@ -56,7 +56,7 @@ def _reviewer_id(user: dict) -> str:
     return str(user.get('sub') or user.get('email') or user.get('preferred_username') or 'admin-sem-identificador')
 
 
-@router.get('/readiness', dependencies=[Depends(require_admin)])
+@router.get('/readiness')
 def readiness_ocr():
     store = ocr_store_readiness()
     input_root = (os.getenv('OCR_INPUT_ROOT') or '').strip()
