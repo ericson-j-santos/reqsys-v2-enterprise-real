@@ -1,0 +1,77 @@
+name: Integration Excel SQL SharePoint — Graph/SharePoint Diagnostic
+
+on:
+  push:
+    branches:
+      - feat/e2e-mobile-device-code
+    paths:
+      - ".github/workflows/integration-excel-sql-sharepoint-sharepoint-stage-diagnostic.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Instalar dependências mínimas
+        run: pip install httpx openpyxl
+      - name: Diagnosticar Graph e SharePoint sem sessão delegada
+        shell: bash
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          INTEGRATION_E2E_SITE_HINT: ${{ vars.INTEGRATION_E2E_SITE_HINT }}
+          INTEGRATION_E2E_FILE_HINT: ${{ vars.INTEGRATION_E2E_FILE_HINT }}
+          INTEGRATION_E2E_SQL_DSN: ${{ secrets.INTEGRATION_E2E_SQL_DSN }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import httpx
+          import scripts.integration_excel_sql_sharepoint_discovery as d
+
+          result = {
+              "graph_auth": "not_run",
+              "sharepoint_excel": "not_run",
+              "sql_dsn_present": bool(os.getenv("INTEGRATION_E2E_SQL_DSN", "").strip()),
+              "blocked_stage": None,
+              "blocked_code": None,
+          }
+          stage = "profile"
+          try:
+              contract = d.profile_contract()
+              stage = "graph_auth"
+              with httpx.Client(follow_redirects=True) as client:
+                  graph_token = d.app_graph_token(client)
+                  result["graph_auth"] = "passed"
+                  stage = "sharepoint_excel"
+                  target = d.discover_sharepoint(client, graph_token, contract)
+                  result["sharepoint_excel"] = "passed"
+                  result["resolved_names"] = {
+                      "site": bool(target.get("site_name")),
+                      "list": bool(target.get("list_name")),
+                      "drive": bool(target.get("drive_name")),
+                      "file": bool(target.get("file_name")),
+                  }
+          except d.DiscoveryError as exc:
+              result["blocked_stage"] = stage
+              result["blocked_code"] = str(exc)
+          except httpx.HTTPStatusError as exc:
+              result["blocked_stage"] = stage
+              result["blocked_code"] = f"http_{exc.response.status_code}"
+          except Exception as exc:
+              result["blocked_stage"] = stage
+              result["blocked_code"] = type(exc).__name__
+
+          print(json.dumps(result, ensure_ascii=False))
+          if result["blocked_stage"]:
+              raise SystemExit(1)
+          PY
