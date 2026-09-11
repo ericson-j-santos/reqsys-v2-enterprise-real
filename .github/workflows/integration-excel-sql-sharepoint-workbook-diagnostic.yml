@@ -1,0 +1,98 @@
+name: Integration Excel SQL SharePoint — Workbook Diagnostic
+
+on:
+  push:
+    branches:
+      - feat/e2e-mobile-device-code
+    paths:
+      - ".github/workflows/integration-excel-sql-sharepoint-workbook-diagnostic.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - run: pip install httpx openpyxl
+      - name: Localizar tbEntrada sem publicar nomes ou IDs
+        shell: bash
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from urllib.parse import quote
+          import httpx
+          import scripts.integration_excel_sql_sharepoint_discovery as d
+
+          result = {
+              "graph_auth": "not_run",
+              "sites_total": 0,
+              "drives_total": 0,
+              "xlsx_total": 0,
+              "tbentrada_workbooks": 0,
+              "sites_with_tbentrada": 0,
+              "dev_sites_with_tbentrada": 0,
+              "prod_sites_with_tbentrada": 0,
+              "download_failures": 0,
+              "blocked_code": None,
+          }
+          try:
+              contract = d.profile_contract()
+              with httpx.Client(follow_redirects=True) as client:
+                  token = d.app_graph_token(client)
+                  result["graph_auth"] = "passed"
+                  sites = d.values(client, f"{d.GRAPH}/sites/getAllSites?$select=id,name,displayName,webUrl", token)
+                  result["sites_total"] = len(sites)
+                  for site in sites:
+                      site_id = d.text(site.get("id"))
+                      if not site_id:
+                          continue
+                      site_has_target = False
+                      drives = d.values(client, f"{d.GRAPH}/sites/{quote(site_id, safe='')}/drives?$select=id,name,webUrl", token, 20)
+                      result["drives_total"] += len(drives)
+                      for drive in drives:
+                          drive_id = d.text(drive.get("id"))
+                          if not drive_id:
+                              continue
+                          files = d.drive_xlsx(client, token, drive_id, "")
+                          result["xlsx_total"] += len(files)
+                          for item in files:
+                              file_id = d.text(item.get("id"))
+                              if not file_id:
+                                  continue
+                              try:
+                                  content = d.download(client, f"{d.GRAPH}/drives/{quote(drive_id, safe='')}/items/{quote(file_id, safe='')}/content", token)
+                              except httpx.HTTPStatusError:
+                                  result["download_failures"] += 1
+                                  continue
+                              if d.has_table(content, contract["table"]):
+                                  result["tbentrada_workbooks"] += 1
+                                  site_has_target = True
+                      if site_has_target:
+                          result["sites_with_tbentrada"] += 1
+                          values = (site.get("name"), site.get("displayName"), site.get("webUrl"))
+                          if d.is_dev(values) and not d.is_prod(values):
+                              result["dev_sites_with_tbentrada"] += 1
+                          if d.is_prod(values):
+                              result["prod_sites_with_tbentrada"] += 1
+          except d.DiscoveryError as exc:
+              result["blocked_code"] = str(exc)
+          except httpx.HTTPStatusError as exc:
+              result["blocked_code"] = f"http_{exc.response.status_code}"
+          except Exception as exc:
+              result["blocked_code"] = type(exc).__name__
+
+          print(json.dumps(result, ensure_ascii=False))
+          if result["blocked_code"]:
+              raise SystemExit(1)
+          PY
