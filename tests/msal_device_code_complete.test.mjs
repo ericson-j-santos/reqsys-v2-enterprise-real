@@ -53,6 +53,36 @@ test('cria entrada de refresh token quando bundle não contém uma', () => {
   assert.equal(payload.secret, 'rt-mobile')
 })
 
+test('remove JSON válido não objeto e entradas externas malformadas antes do backend', () => {
+  const updated = applyRefreshToken(
+    {
+      schemaVersion: 1,
+      sessionStorage: [
+        { name: 'objeto-valido', value: JSON.stringify({ cache: 'ok' }) },
+        { name: 'booleano', value: 'true' },
+        { name: 'numero', value: '123' },
+        { name: 'lista', value: '[1,2,3]' },
+        { name: 'nulo', value: 'null' },
+        { name: 'texto-nao-json', value: 'dark' },
+        'entrada-externa-invalida',
+        ['lista-externa-invalida'],
+      ],
+    },
+    { refresh_token: 'rt-mobile' },
+    'client-mobile',
+  )
+
+  const names = updated.sessionStorage.map((entry) => entry.name)
+  assert.deepEqual(names.sort(), [
+    'device-code-refreshtoken-client-mobile',
+    'objeto-valido',
+    'texto-nao-json',
+  ].sort())
+  assert.equal(updated.sessionStorage.some((entry) => entry.name === 'booleano'), false)
+  assert.equal(updated.sessionStorage.some((entry) => entry.name === 'lista'), false)
+  assert.equal(updated.sessionStorage.some((entry) => entry.name === 'nulo'), false)
+})
+
 test('falha fechada quando resposta não contém refresh token', () => {
   assert.throws(
     () => applyRefreshToken({ sessionStorage: [] }, { access_token: 'somente-access' }, 'client-1'),
