@@ -1,0 +1,50 @@
+name: Integration MSAL Shape Diagnostic
+
+on:
+  push:
+    branches:
+      - ops/e2e-excel-sql-sharepoint-real-20260911
+    paths:
+      - ".github/workflows/integration-msal-shape-diagnostic.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    steps:
+      - name: Diagnosticar somente estrutura do envelope MSAL
+        shell: bash
+        env:
+          WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WSJF_MSAL_STORAGE_STATE_B64:-}" ]; then
+            echo 'secret_present=false'
+            exit 1
+          fi
+          state="$RUNNER_TEMP/msal-storage-state.json"
+          printf '%s' "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$state"
+          chmod 600 "$state"
+          python - "$state" <<'PY'
+          import json, sys
+          from pathlib import Path
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          print('bundle_type=' + type(payload).__name__)
+          if not isinstance(payload, dict):
+              raise SystemExit(2)
+          session = payload.get('sessionStorage')
+          print('session_storage_type=' + type(session).__name__)
+          try:
+              print('session_storage_count=' + str(len(session)))
+          except TypeError:
+              print('session_storage_count=na')
+          if isinstance(session, list):
+              print('entry_types=' + ','.join(sorted({type(x).__name__ for x in session})))
+          elif isinstance(session, dict):
+              print('entry_value_types=' + ','.join(sorted({type(x).__name__ for x in session.values()})))
+          else:
+              print('entry_types=na')
+          PY
