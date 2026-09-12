@@ -43,26 +43,22 @@ describe('navTemaPersist', () => {
 })
 
 describe('navCatalog subgrupos', () => {
-  it('define subgrupos para Requisitos e Administração', () => {
+  it('define subgrupos para o tema Requisitos', () => {
     const requisitos = NAV_TEMAS.find((t) => t.id === 'requisitos')
-    const administracao = NAV_TEMAS.find((t) => t.id === 'administracao')
-    expect(requisitos.subgroups?.map((s) => s.id)).toEqual(['entrada', 'pipeline', 'publicacao'])
-    expect(administracao.subgroups?.map((s) => s.id)).toEqual(['operacao', 'seguranca-governanca', 'engenharia-ia'])
+    expect(requisitos.subgroups?.length).toBe(3)
+    expect(requisitos.subgroups.map((s) => s.id)).toEqual(['entrada', 'pipeline', 'publicacao'])
   })
 
   it('resolve subgrupo pela rota', () => {
     expect(subgrupoIdPorRota('/pipeline')).toBe('pipeline')
+    expect(subgrupoIdPorRota('/requisitos')).toBe('entrada')
+    expect(subgrupoIdPorRota('/rastreabilidade')).toBe('publicacao')
     expect(subgrupoIdPorRota('/qualidade-ia')).toBe('pipeline')
     expect(subgrupoIdPorRota('/recomendacoes-ia')).toBe('pipeline')
     expect(subgrupoIdPorRota('/task-console')).toBe('pipeline')
-    expect(subgrupoIdPorRota('/requisitos')).toBe('entrada')
-    expect(subgrupoIdPorRota('/rastreabilidade')).toBe('publicacao')
-    expect(subgrupoIdPorRota('/monitoramento-operacional')).toBe('operacao')
-    expect(subgrupoIdPorRota('/admin/session-management')).toBe('seguranca-governanca')
-    expect(subgrupoIdPorRota('/orquestrador-ia')).toBe('engenharia-ia')
   })
 
-  it('lista todos os itens do subgrupo de refinamento', () => {
+  it('lista todos os itens de refinamento e fluxo', () => {
     const itens = itensDoSubgrupo('requisitos', 'pipeline')
     expect(itens.map((i) => i.to)).toEqual([
       '/qualidade-ia',
@@ -73,25 +69,34 @@ describe('navCatalog subgrupos', () => {
     ])
   })
 
-  it('divide Administração em grupos com no máximo cinco opções', () => {
+  it('mantém tema requisitos para rotas do subgrupo', () => {
+    expect(temaIdPorRota('/agile-runtime')).toBe('requisitos')
+    expect(temaIdPorRota('/qualidade-ia')).toBe('requisitos')
+  })
+
+  it('garante que todo item de tema com subgrupos seja alcançável em pelo menos um subgrupo', () => {
+    for (const tema of NAV_TEMAS.filter((item) => item.subgroups?.length)) {
+      const rotasVisiveis = new Set(
+        tema.subgroups.flatMap((subgrupo) => itensDoSubgrupo(tema.id, subgrupo.id).map((item) => item.to)),
+      )
+      expect([...tema.items.map((item) => item.to).filter((rota) => !rotasVisiveis.has(rota))]).toEqual([])
+    }
+  })
+})
+
+describe('navCatalog Administração', () => {
+  it('define subgrupos operacionais sem ocultar funções', () => {
     const administracao = NAV_TEMAS.find((t) => t.id === 'administracao')
+    expect(administracao.subgroups?.map((s) => s.id)).toEqual(['operacao', 'seguranca-governanca', 'engenharia-ia'])
     for (const subgrupo of administracao.subgroups) {
       expect(itensDoSubgrupo('administracao', subgrupo.id).length).toBeLessThanOrEqual(5)
     }
   })
 
-  it('garante que todo item de tema com subgrupos seja alcançável', () => {
-    for (const tema of NAV_TEMAS.filter((item) => item.subgroups?.length)) {
-      const paths = new Set(tema.subgroups.flatMap((subgrupo) => subgrupo.paths))
-      for (const item of tema.items) {
-        expect(paths.has(item.to), `${tema.id}:${item.to} deve pertencer a um subgrupo`).toBe(true)
-      }
-    }
-  })
-
-  it('mantém tema correto para rotas dos subgrupos', () => {
-    expect(temaIdPorRota('/agile-runtime')).toBe('requisitos')
-    expect(temaIdPorRota('/qualidade-ia')).toBe('requisitos')
+  it('resolve rotas administrativas para o subgrupo e tema corretos', () => {
+    expect(subgrupoIdPorRota('/monitoramento-operacional')).toBe('operacao')
+    expect(subgrupoIdPorRota('/admin/session-management')).toBe('seguranca-governanca')
+    expect(subgrupoIdPorRota('/orquestrador-ia')).toBe('engenharia-ia')
     expect(temaIdPorRota('/admin/github-merge')).toBe('administracao')
   })
 })

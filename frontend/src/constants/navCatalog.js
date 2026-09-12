@@ -30,12 +30,7 @@ export const NAV_TEMAS = [
     icon: 'mdi-file-document-edit',
     subgroups: [
       { id: 'entrada', title: 'Entrada', topic: 'Captura, triagem e cadastro', paths: ['/requisitos'] },
-      {
-        id: 'pipeline',
-        title: 'Refinamento e fluxo',
-        topic: 'Qualidade, IA, histórias e aprovação',
-        paths: ['/qualidade-ia', '/recomendacoes-ia', '/task-console', '/pipeline', '/agile-runtime'],
-      },
+      { id: 'pipeline', title: 'Refinamento e fluxo', topic: 'Qualidade, IA, histórias e aprovação', paths: ['/pipeline', '/agile-runtime', '/qualidade-ia', '/recomendacoes-ia', '/task-console'] },
       { id: 'publicacao', title: 'Publicação', topic: 'Rastreio e entrega', paths: ['/rastreabilidade'] },
     ],
     items: [
