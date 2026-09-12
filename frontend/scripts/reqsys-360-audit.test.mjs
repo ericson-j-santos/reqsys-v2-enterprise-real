@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { analyzeProject, extractInternalDestinations, parseRouter, pathResolves } from './reqsys-360-audit.mjs'
+import { analyzeProject, e2eEvidence, extractInternalDestinations, markerInventory, parseRouter, pathResolves } from './reqsys-360-audit.mjs'
 
 function write(file, content) {
   fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -128,4 +128,81 @@ test('auditoria ignora destinos artificiais em arquivos de teste dentro de src',
   const report = await analyzeProject(root)
   assert.equal(report.summary.critical, 0)
   assert.ok(!report.findings.some((item) => item.path === '/a' || item.path === '/b'))
+})
+
+test('inventário de dívida ignora todo, Método, placeholder e modo mock fora de comentário', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'reqsys-360-hygiene-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  write(path.join(root, 'src/views/Hygiene.vue'), `
+<template>
+  <p>Aplica em todo o app</p>
+  <label>Método</label>
+  <input placeholder="Digite aqui" />
+</template>
+<script>
+const modo = 'mock'
+// TODO revisar tratamento de erro
+</script>
+`)
+  assert.deepEqual(markerInventory(root), [{ marker: 'TODO', file: 'src/views/Hygiene.vue', line: 10 }])
+})
+
+test('densidade considera subgrupos renderizados e não o total bruto do tema', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'reqsys-360-density-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const routeLines = Array.from({ length: 10 }, (_, index) => `  { path: '/r${index + 1}', component: V${index + 1} },`).join('\n')
+  const itemLines = Array.from({ length: 10 }, (_, index) => `      { to: '/r${index + 1}', title: 'R${index + 1}' },`).join('\n')
+  write(path.join(root, 'src/router/index.js'), `export const routes = [\n${routeLines}\n  { path: '/:pathMatch(.*)*', component: NotFoundView, meta: { public: true } }\n]\n`)
+  write(path.join(root, 'src/constants/navCatalog.js'), `
+export const NAV_TEMAS = [{
+  id: 'admin', title: 'Administração',
+  subgroups: [
+    { id: 'a', paths: ['/r1','/r2','/r3','/r4','/r5'] },
+    { id: 'b', paths: ['/r6','/r7','/r8','/r9','/r10'] }
+  ],
+  items: [
+${itemLines}
+  ]
+}]
+`)
+  write(path.join(root, 'tests/e2e/routes.spec.js'), 'function carregarRotasCanonicas() { return [] }')
+  const report = await analyzeProject(root)
+  assert.equal(report.summary.nav_max_effective_group, 5)
+  assert.ok(!report.findings.some((item) => item.code === 'NAV_DENSITY'))
+})
+
+test('decisões governadas classificam duplicidade e reutilização sem aviso aberto', async (t) => {
+  const root = fixture()
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  write(path.join(root, 'src/router/index.js'), readFile(path.join(root, 'src/router/index.js')).replace(
+    "{ path: '/home', component: DashboardView, meta: { recurso: 'dashboard:read' } },",
+    "{ path: '/home', component: DashboardView, meta: { recurso: 'dashboard:read' } },\n  { path: '/pipeline', component: PipelineView },\n  { path: '/qualidade-ia', component: QualidadeIAView },",
+  ))
+  write(path.join(root, 'src/constants/navCatalog.js'), readFile(path.join(root, 'src/constants/navCatalog.js')).replace(
+    "{ to: '/pipeline', title: 'Pipeline' },",
+    "{ to: '/pipeline', title: 'Pipeline' },\n      { to: '/requisitos', title: 'Atalho Requisitos' },",
+  ).replace("paths: ['/pipeline', '/qualidade-ia']", "paths: ['/pipeline', '/qualidade-ia', '/requisitos']"))
+  write(path.join(root, 'governance/reqsys-360/route-responsibilities.json'), JSON.stringify({
+    navigation_duplicate_decisions: [
+      { route: '/requisitos', classification: 'intentional-cross-theme-entry', rationale: 'atalho diário e área especializada' },
+    ],
+    component_reuse_decisions: [
+      { component: 'DashboardView', paths: ['/', '/home'], classification: 'intentional-transitional-shell', rationale: 'compatibilidade' },
+    ],
+  }))
+
+  const report = await analyzeProject(root)
+  assert.ok(report.findings.some((item) => item.code === 'NAV_DUPLICATE_CLASSIFIED'))
+  assert.ok(report.findings.some((item) => item.code === 'ROUTE_COMPONENT_REUSE_CLASSIFIED'))
+  assert.ok(!report.findings.some((item) => item.code === 'NAV_DUPLICATE_DESTINATION' && item.path === '/requisitos'))
+  assert.ok(!report.findings.some((item) => item.code === 'ROUTE_COMPONENT_REUSED' && item.component === 'DashboardView'))
+})
+
+test('E2E por catálogo é classificado sem fingir referência direta', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'reqsys-360-e2e-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  write(path.join(root, 'tests/e2e/responsividade.spec.js'), 'function carregarRotasCanonicas() { return [] }')
+  const evidence = e2eEvidence(root, '/rota-nao-literal')
+  assert.equal(evidence.classification, 'catalog-driven')
+  assert.deepEqual(evidence.files, ['tests/e2e/responsividade.spec.js'])
 })

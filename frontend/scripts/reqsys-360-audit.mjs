@@ -152,29 +152,59 @@ async function loadNavCatalog(root) {
   return module.NAV_TEMAS ?? []
 }
 
-function e2eEvidence(root, routePath) {
-  const e2eDir = path.join(root, 'tests/e2e')
-  const text = walk(e2eDir)
-    .filter((file) => /\.(?:js|ts|mjs|cjs)$/.test(file))
-    .map(read)
-    .join('\n')
-
-  if (!text) return false
-  if (routePath.includes(':')) {
-    const prefix = routePath.split('/:')[0]
-    return Boolean(prefix && text.includes(prefix))
+function loadGovernance(root) {
+  const candidates = [
+    path.resolve(root, '../governance/reqsys-360/route-responsibilities.json'),
+    path.resolve(root, 'governance/reqsys-360/route-responsibilities.json'),
+  ]
+  const file = candidates.find((candidate) => fs.existsSync(candidate))
+  if (!file) return {}
+  try {
+    return JSON.parse(read(file))
+  } catch {
+    return {}
   }
-  return text.includes(`'${routePath}'`) || text.includes(`"${routePath}"`) || text.includes(`\`${routePath}\``)
 }
 
-function markerInventory(root) {
-  const markerRegex = /\b(TODO|FIXME|HACK|PLACEHOLDER|MOCK)\b/gi
+function e2eFiles(root) {
+  return walk(path.join(root, 'tests/e2e'))
+    .filter((file) => /\.(?:js|ts|mjs|cjs)$/.test(file))
+    .map((file) => ({ file, relative: path.relative(root, file).replaceAll('\\', '/'), source: read(file) }))
+}
+
+export function e2eEvidence(root, routePath) {
+  const files = e2eFiles(root)
+  if (!files.length) return { classification: 'none', files: [] }
+
+  const prefix = routePath.includes(':') ? routePath.split('/:')[0] : routePath
+  const direct = files.filter(({ source }) => {
+    if (!prefix) return false
+    if (routePath.includes(':')) return source.includes(prefix)
+    return source.includes(`'${routePath}'`) || source.includes(`"${routePath}"`) || source.includes(`\`${routePath}\``)
+  })
+  if (direct.length) {
+    return { classification: 'direct-reference', files: direct.map(({ relative }) => relative) }
+  }
+
+  const catalogDriven = files.filter(({ source }) => /carregarRotasCanonicas\s*\(|cat[aá]logo completo de rotas|rotas can[oô]nicas/i.test(source))
+  if (catalogDriven.length) {
+    return { classification: 'catalog-driven', files: catalogDriven.map(({ relative }) => relative) }
+  }
+
+  return { classification: 'none', files: [] }
+}
+
+export function markerInventory(root) {
+  // Marcador só é dívida quando aparece como anotação explícita em comentário.
+  // Isso evita interpretar "todo", "Método", props `placeholder` ou modos `mock`
+  // como dívida técnica.
+  const markerRegex = /(?:\/\/|\/\*+|\*|<!--)\s*(TODO|FIXME|HACK|PLACEHOLDER|MOCK)\b/g
   const items = []
   for (const file of runtimeSourceFiles(root)) {
     const source = read(file)
     for (const match of source.matchAll(markerRegex)) {
       items.push({
-        marker: match[1].toUpperCase(),
+        marker: match[1],
         file: path.relative(root, file).replaceAll('\\', '/'),
         line: lineNumber(source, match.index ?? 0),
       })
@@ -187,12 +217,34 @@ function finding(severity, code, message, details = {}) {
   return { severity, code, message, ...details }
 }
 
+function decisionForRoute(governance, key, routePath) {
+  return (governance[key] ?? []).find((item) => item.route === routePath)
+}
+
+function decisionForComponent(governance, component, paths) {
+  return (governance.component_reuse_decisions ?? []).find((item) => {
+    if (item.component !== component) return false
+    const expected = [...(item.paths ?? [])].sort()
+    const actual = [...paths].sort()
+    return JSON.stringify(expected) === JSON.stringify(actual)
+  })
+}
+
+function effectiveThemeDensity(theme) {
+  if (!theme.subgroups?.length) {
+    return { max: theme.items.length, groups: [{ id: theme.id, count: theme.items.length }] }
+  }
+  const groups = theme.subgroups.map((subgroup) => ({ id: subgroup.id, count: (subgroup.paths ?? []).length }))
+  return { max: Math.max(0, ...groups.map((item) => item.count)), groups }
+}
+
 export async function analyzeProject(root) {
   const routerFile = path.join(root, 'src/router/index.js')
   const routes = parseRouter(read(routerFile))
   const primaryRoutes = routes.filter((route) => !route.path.includes(':pathMatch'))
   const routePatterns = primaryRoutes.flatMap((route) => [route.path, ...route.aliases])
   const navThemes = await loadNavCatalog(root)
+  const governance = loadGovernance(root)
   const navItems = navThemes.flatMap((theme) => theme.items.map((item) => ({ ...item, themeId: theme.id, themeTitle: theme.title })))
   const findings = []
 
@@ -241,8 +293,16 @@ export async function analyzeProject(root) {
     navByPath.set(item.to, bucket)
   }
   for (const [routePath, owners] of navByPath) {
-    if (owners.length > 1) {
-      findings.push(finding('warning', 'NAV_DUPLICATE_DESTINATION', `A rota ${routePath} aparece ${owners.length} vezes no catálogo de navegação.`, {
+    if (owners.length <= 1) continue
+    const decision = decisionForRoute(governance, 'navigation_duplicate_decisions', routePath)
+    if (decision) {
+      findings.push(finding('info', 'NAV_DUPLICATE_CLASSIFIED', `A rota ${routePath} aparece ${owners.length} vezes e está classificada como ${decision.classification}.`, {
+        path: routePath,
+        owners,
+        decision,
+      }))
+    } else {
+      findings.push(finding('warning', 'NAV_DUPLICATE_DESTINATION', `A rota ${routePath} aparece ${owners.length} vezes no catálogo de navegação sem decisão registrada.`, {
         path: routePath,
         owners,
       }))
@@ -256,7 +316,15 @@ export async function analyzeProject(root) {
     components.set(route.component, bucket)
   }
   for (const [component, paths] of components) {
-    if (paths.length > 1) {
+    if (paths.length <= 1) continue
+    const decision = decisionForComponent(governance, component, paths)
+    if (decision) {
+      findings.push(finding('info', 'ROUTE_COMPONENT_REUSE_CLASSIFIED', `O componente ${component} atende múltiplas rotas com decisão registrada (${decision.classification}).`, {
+        component,
+        paths,
+        decision,
+      }))
+    } else {
       findings.push(finding('warning', 'ROUTE_COMPONENT_REUSED', `O componente ${component} atende múltiplas rotas; classificar canônica/alias/legado.`, {
         component,
         paths,
@@ -264,33 +332,47 @@ export async function analyzeProject(root) {
     }
   }
 
+  const governedRoutes = new Map((governance.routes ?? []).map((item) => [item.route, item]))
   const navPaths = new Set(navItems.map((item) => normalisePath(item.to)))
   for (const route of primaryRoutes) {
     if (route.public || route.path.includes(':') || navPaths.has(normalisePath(route.path))) continue
-    findings.push(finding('info', 'ROUTE_OUTSIDE_PRIMARY_NAV', `Rota ${route.path} não aparece no catálogo principal.`, {
+    const governed = governedRoutes.get(route.path)
+    const code = governed?.status?.startsWith('transitional') ? 'ROUTE_TRANSITIONAL_OUTSIDE_PRIMARY_NAV' : 'ROUTE_OUTSIDE_PRIMARY_NAV'
+    findings.push(finding('info', code, `Rota ${route.path} não aparece no catálogo principal${governed ? `; estado governado: ${governed.status}` : ''}.`, {
       path: route.path,
       component: route.component,
+      governance: governed ?? null,
     }))
   }
 
+  const density = []
   for (const theme of navThemes) {
-    if (theme.items.length > DEFAULT_MAX_NAV_ITEMS) {
-      findings.push(finding('warning', 'NAV_DENSITY', `${theme.title} possui ${theme.items.length} itens no mesmo nível.`, {
+    const effective = effectiveThemeDensity(theme)
+    density.push({ theme: theme.id, total: theme.items.length, effective_max_group: effective.max, groups: effective.groups })
+    if (effective.max > DEFAULT_MAX_NAV_ITEMS) {
+      findings.push(finding('warning', 'NAV_DENSITY', `${theme.title} possui ${effective.max} itens no mesmo nível renderizado.`, {
         theme: theme.id,
-        count: theme.items.length,
+        total: theme.items.length,
+        effective_max_group: effective.max,
         threshold: DEFAULT_MAX_NAV_ITEMS,
       }))
     }
   }
 
-  let e2eProven = 0
-  let e2eUnproven = 0
+  let e2eDirect = 0
+  let e2eCatalogDriven = 0
+  let e2eUnreferenced = 0
+  const e2eCoverage = []
   for (const route of primaryRoutes.filter((item) => !item.public)) {
-    if (e2eEvidence(root, route.path)) {
-      e2eProven += 1
+    const evidence = e2eEvidence(root, route.path)
+    e2eCoverage.push({ route: route.path, ...evidence })
+    if (evidence.classification === 'direct-reference') {
+      e2eDirect += 1
+    } else if (evidence.classification === 'catalog-driven') {
+      e2eCatalogDriven += 1
     } else {
-      e2eUnproven += 1
-      findings.push(finding('warning', 'ROUTE_WITHOUT_E2E_REFERENCE', `Rota ${route.path} não possui referência E2E detectável no repositório.`, {
+      e2eUnreferenced += 1
+      findings.push(finding('warning', 'ROUTE_WITHOUT_E2E_REFERENCE', `Rota ${route.path} não possui referência E2E direta nem cobertura por catálogo detectável.`, {
         path: route.path,
       }))
     }
@@ -302,9 +384,11 @@ export async function analyzeProject(root) {
     aliases: primaryRoutes.reduce((total, route) => total + route.aliases.length, 0),
     nav_items: navItems.length,
     nav_unique_paths: new Set(navItems.map((item) => item.to)).size,
+    nav_max_effective_group: Math.max(0, ...density.map((item) => item.effective_max_group)),
     internal_destinations: internalDestinations.length,
-    e2e_proven_routes: e2eProven,
-    e2e_unproven_routes: e2eUnproven,
+    e2e_direct_routes: e2eDirect,
+    e2e_catalog_driven_routes: e2eCatalogDriven,
+    e2e_unreferenced_routes: e2eUnreferenced,
     hygiene_markers: markers.length,
     critical: findings.filter((item) => item.severity === 'critical').length,
     warning: findings.filter((item) => item.severity === 'warning').length,
@@ -312,10 +396,12 @@ export async function analyzeProject(root) {
   }
 
   return {
-    schema_version: 1,
+    schema_version: 2,
     generated_at: new Date().toISOString(),
     summary,
     findings,
+    navigation_density: density,
+    e2e_route_coverage: e2eCoverage,
     hygiene_markers: markers.slice(0, 200),
   }
 }
@@ -330,9 +416,10 @@ export function markdown(report) {
     '',
     `- Rotas: **${report.summary.routes}** (+ ${report.summary.aliases} aliases)`,
     `- Itens de navegação: **${report.summary.nav_items}** (${report.summary.nav_unique_paths} destinos únicos)`,
+    `- Maior grupo efetivamente renderizado: **${report.summary.nav_max_effective_group}** itens`,
     `- Destinos internos encontrados: **${report.summary.internal_destinations}**`,
-    `- E2E detectável: **${report.summary.e2e_proven_routes}** comprovadas / **${report.summary.e2e_unproven_routes}** sem referência`,
-    `- Marcadores de higiene: **${report.summary.hygiene_markers}**`,
+    `- E2E por rota: **${report.summary.e2e_direct_routes}** referência direta · **${report.summary.e2e_catalog_driven_routes}** catálogo · **${report.summary.e2e_unreferenced_routes}** sem referência`,
+    `- Marcadores explícitos de dívida em comentários: **${report.summary.hygiene_markers}**`,
     `- Críticos: **${report.summary.critical}** · Avisos: **${report.summary.warning}** · Informativos: **${report.summary.info}**`,
     '',
     '| Severidade | Código | Mensagem |',

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "routes": [
     {
       "route": "/",
@@ -17,7 +17,7 @@
       "route": "/analytics",
       "area": "indicadores",
       "status": "canonical",
-      "responsibility": "Indicadores executivos e navegação analítica; detalhes de runtime devem apontar para Operação."
+      "responsibility": "Indicadores executivos e navegação analítica; detalhes de execução devem apontar para Operação."
     },
     {
       "route": "/estatisticas",
@@ -29,7 +29,7 @@
       "route": "/monitoramento-operacional",
       "area": "operacao",
       "status": "canonical",
-      "responsibility": "Saúde de runtime, topologia, filas, conectores, incidentes e observabilidade operacional."
+      "responsibility": "Saúde de execução, topologia, filas, conectores, incidentes e observabilidade operacional."
     },
     {
       "route": "/governanca",
@@ -74,6 +74,31 @@
       "responsibility": "Ajuda da proposta de shell; mantida compatível sem promovê-la a fonte canônica."
     }
   ],
+  "navigation_duplicate_decisions": [
+    {
+      "route": "/requisitos",
+      "classification": "intentional-cross-theme-entry",
+      "rationale": "A rota é atalho do trabalho diário e também entrada canônica da área especializada de Engenharia de requisitos."
+    },
+    {
+      "route": "/pipeline",
+      "classification": "intentional-cross-theme-entry",
+      "rationale": "A rota é atalho de acompanhamento diário e também etapa explícita do refinamento na área de Engenharia de requisitos."
+    },
+    {
+      "route": "/rastreabilidade",
+      "classification": "intentional-cross-theme-entry",
+      "rationale": "A rota aparece na jornada diária e na publicação/rastreio da área especializada; é a mesma implementação canônica."
+    }
+  ],
+  "component_reuse_decisions": [
+    {
+      "component": "UserFinalShellView",
+      "paths": ["/home", "/workspace", "/ajuda"],
+      "classification": "intentional-transitional-shell",
+      "rationale": "As três rotas pertencem à mesma proposta transitória de shell do usuário final e compartilham intencionalmente o mesmo componente enquanto o contrato permanecer proposed."
+    }
+  ],
   "overlap_decisions": [
     {
       "subject": "Dashboard x User Final Shell",
@@ -81,7 +106,7 @@
     },
     {
       "subject": "Analytics x Monitoramento",
-      "decision": "Analytics deve apresentar síntese e navegação para indicadores. Runtime, malha operacional, topologia e incidentes pertencem a /monitoramento-operacional; qualquer resumo em Analytics deve funcionar como drill-down, não como segunda implementação operacional."
+      "decision": "Analytics deve apresentar síntese e navegação para indicadores. Execução, malha operacional, topologia e incidentes pertencem a /monitoramento-operacional; qualquer resumo em Analytics deve funcionar como detalhamento direcionado, não como segunda implementação operacional."
     },
     {
       "subject": "Monitoramento x Governança",
