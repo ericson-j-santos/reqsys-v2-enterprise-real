@@ -4,14 +4,14 @@ from pathlib import Path
 WORKFLOW = Path('.github/workflows/pc24x7-teams-token-bootstrap.yml')
 
 
-def test_bootstrap_usa_identidade_mutadora_e_leitor_do_cofre() -> None:
+def test_bootstrap_usa_jwt_admin_e_identidade_mutadora() -> None:
     text = WORKFLOW.read_text(encoding='utf-8')
     assert 'environment: development' in text
     assert 'CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}' in text
     assert 'CCP_AZURE_CLIENT_ID_DEV' not in text
-    assert 'VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}' in text
-    assert 'COFRE_API_URL: ${{ secrets.COFRE_API_URL }}' in text
-    assert 'COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}' not in text
+    assert 'COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}' in text
+    assert 'VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}' not in text
+    assert 'COFRE_API_URL: ${{ secrets.COFRE_API_URL }}' not in text
     assert "PC24X7_TEAMS_ALLOW_PROVISION: 'true'" in text
 
 
