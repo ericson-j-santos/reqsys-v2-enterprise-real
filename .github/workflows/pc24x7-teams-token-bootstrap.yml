@@ -11,6 +11,8 @@ on:
     paths:
       - 'scripts/bootstrap_pc24x7_teams_service_token.py'
       - '.github/workflows/pc24x7-teams-token-bootstrap.yml'
+  schedule:
+    - cron: '17 11 * * 1-5'
   workflow_dispatch:
 
 permissions:
