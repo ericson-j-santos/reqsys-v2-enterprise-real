@@ -5,7 +5,7 @@
         <p class="eyebrow">Análise e indicadores</p>
         <h1 id="titulo-analytics">Indicadores</h1>
         <p class="muted">
-          Síntese executiva e atalhos para indicadores auditáveis. Saúde de runtime, topologia e incidentes ficam concentrados em Monitoramento.
+          Síntese executiva e atalhos para indicadores auditáveis. Saúde de execução, topologia e incidentes ficam concentrados em Monitoramento.
         </p>
       </div>
       <div class="header-actions">
@@ -138,7 +138,7 @@ const destinosAnaliticos = [
   { path: '/financeiro', icon: 'mdi-cash-multiple', title: 'Financeiro', subtitle: 'Indicadores financeiros e respectiva fonte' },
   { path: '/relatorios', icon: 'mdi-file-chart-outline', title: 'Relatórios', subtitle: 'Catálogo de relatórios e evidências' },
   { path: '/govbi-ia', icon: 'mdi-database-search', title: 'GovBI IA', subtitle: 'Consultas analíticas em linguagem natural com controles' },
-  { path: '/monitoramento-operacional', query: { estado: 'vermelho' }, icon: 'mdi-monitor-dashboard', title: 'Monitoramento operacional', subtitle: 'Runtime, malha, topologia, filas e incidentes — fonte canônica operacional' },
+  { path: '/monitoramento-operacional', query: { estado: 'vermelho' }, icon: 'mdi-monitor-dashboard', title: 'Monitoramento operacional', subtitle: 'Execução, malha, topologia, filas e incidentes — fonte canônica operacional' },
   { path: '/painel-integracao', query: { status: 'erro' }, icon: 'mdi-connection', title: 'Integrações', subtitle: 'Eventos e falhas de conectores na área canônica de integrações' },
 ]
 

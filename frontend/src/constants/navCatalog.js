@@ -84,7 +84,7 @@ export const NAV_TEMAS = [
       {
         id: 'operacao',
         title: 'Operação',
-        topic: 'Runtime, publicação e integração de código',
+        topic: 'Execução, publicação e integração de código',
         paths: ['/monitoramento-operacional', '/admin/operational-deploy', '/admin/github-merge'],
       },
       {
