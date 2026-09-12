@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import sys
 import time
 from pathlib import Path
 
@@ -7,6 +8,7 @@ SCRIPT = Path('scripts/bootstrap_pc24x7_teams_service_token.py')
 spec = importlib.util.spec_from_file_location('bootstrap_pc24x7_teams_service_token', SCRIPT)
 module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
+sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
 
