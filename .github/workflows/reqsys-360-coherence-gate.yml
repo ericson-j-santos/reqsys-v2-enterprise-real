@@ -4,12 +4,26 @@ on:
   pull_request:
     paths:
       - 'frontend/**'
+      - 'backend/**'
+      - 'backend-dotnet/**'
+      - 'runtime/**'
+      - 'services/**'
+      - 'governance/reqsys-360/**'
+      - 'scripts/reqsys_360_repository_audit.py'
+      - 'tests/test_reqsys_360_repository_audit.py'
       - '.github/workflows/reqsys-360-coherence-gate.yml'
       - 'docs/roadmaps/reqsys-360.md'
   push:
     branches: [main]
     paths:
       - 'frontend/**'
+      - 'backend/**'
+      - 'backend-dotnet/**'
+      - 'runtime/**'
+      - 'services/**'
+      - 'governance/reqsys-360/**'
+      - 'scripts/reqsys_360_repository_audit.py'
+      - 'tests/test_reqsys_360_repository_audit.py'
       - '.github/workflows/reqsys-360-coherence-gate.yml'
       - 'docs/roadmaps/reqsys-360.md'
   workflow_dispatch:
@@ -25,7 +39,7 @@ jobs:
   coherence:
     name: ReqSys 360 coherence audit
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -38,11 +52,16 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Test ReqSys 360 audit contract
+      - name: Test navigation audit contract
         working-directory: frontend
         run: npm run test:reqsys-360
 
@@ -50,21 +69,39 @@ jobs:
         working-directory: frontend
         run: npx vitest run src/constants/navCatalog.test.js
 
-      - name: Generate ReqSys 360 evidence
-        id: audit
+      - name: Test repository audit contract
+        run: python -m unittest tests/test_reqsys_360_repository_audit.py -v
+
+      - name: Generate navigation evidence
         working-directory: frontend
         run: |
-          set +e
           npm run audit:reqsys-360
-          code=$?
           cat artifacts/reqsys-360/reqsys-360.md >> "$GITHUB_STEP_SUMMARY"
-          exit "$code"
+
+      - name: Generate repository evidence
+        run: |
+          python scripts/reqsys_360_repository_audit.py
+          cat artifacts/reqsys-360/repository-audit.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate linguagem simples
+        working-directory: frontend
+        run: npm run quality:linguagem-simples
+
+      - name: Validate accessibility contracts
+        working-directory: frontend
+        run: npm run quality:acessibilidade
+
+      - name: Validate design system
+        working-directory: frontend
+        run: npm run quality:design-system
 
       - name: Upload ReqSys 360 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: reqsys-360-${{ github.run_id }}-${{ github.sha }}
-          path: frontend/artifacts/reqsys-360/
+          path: |
+            frontend/artifacts/reqsys-360/
+            artifacts/reqsys-360/
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
