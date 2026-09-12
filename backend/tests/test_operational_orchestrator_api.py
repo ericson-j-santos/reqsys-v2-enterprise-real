@@ -122,3 +122,81 @@ def test_orchestrator_ingest_ci_failure_cria_acao_amarela(tmp_path: Path, monkey
     assert action["risk"] == "yellow"
     assert action["status"] == "awaiting_approval"
     assert action["executor"] == "github_agent"
+
+
+def test_orchestrator_status_actions_e_execute_api(tmp_path: Path, monkeypatch):
+    orchestrator = _build_orchestrator(tmp_path)
+    monkeypatch.setattr(
+        "app.api.actions_runtime_center._operational_orchestrator",
+        lambda: orchestrator,
+    )
+    headers = _admin_headers()
+
+    status_response = client.get(
+        "/v1/actions-runtime/orchestrator/status",
+        headers=headers,
+    )
+    assert status_response.status_code == 200
+    assert status_response.json()["data"]["service"] == "reqsys-operational-orchestrator"
+
+    action, created = orchestrator.enqueue_readiness_check(
+        sha="sha-api-execute",
+        branch="feature/api-execute",
+    )
+    assert created is True
+
+    actions_response = client.get(
+        "/v1/actions-runtime/orchestrator/actions",
+        headers=headers,
+        params={"status": "ready"},
+    )
+    assert actions_response.status_code == 200
+    assert actions_response.json()["data"]["total"] == 1
+
+    execute_response = client.post(
+        f"/v1/actions-runtime/orchestrator/actions/{action.action_id}/execute",
+        headers=headers,
+        json={"confirmar": False},
+    )
+    assert execute_response.status_code == 200
+    assert execute_response.json()["data"]["action"]["status"] == "succeeded"
+
+    missing_response = client.post(
+        "/v1/actions-runtime/orchestrator/actions/ACT-INEXISTENTE/execute",
+        headers=headers,
+        json={"confirmar": True},
+    )
+    assert missing_response.status_code == 404
+    assert missing_response.json()["detail"] == "Ação não encontrada."
+
+
+def test_orchestrator_endpoints_falham_fechado_sem_manifesto(tmp_path: Path, monkeypatch):
+    orchestrator = OperationalOrchestrator(
+        store=OperationalStore(tmp_path / "state.sqlite3"),
+        manifest_path=tmp_path / "missing-readiness.yaml",
+        environ={},
+    )
+    monkeypatch.setattr(
+        "app.api.actions_runtime_center._operational_orchestrator",
+        lambda: orchestrator,
+    )
+    headers = _admin_headers()
+
+    status_response = client.get(
+        "/v1/actions-runtime/orchestrator/status",
+        headers=headers,
+    )
+    readiness_response = client.get(
+        "/v1/actions-runtime/orchestrator/readiness",
+        headers=headers,
+    )
+    cycle_response = client.post(
+        "/v1/actions-runtime/orchestrator/cycle",
+        headers=headers,
+        json={"sha": "sha-missing-manifest", "branch": "feature/api"},
+    )
+
+    assert status_response.status_code == 422
+    assert readiness_response.status_code == 422
+    assert cycle_response.status_code == 422
+    assert "Manifesto de readiness ausente" in status_response.json()["detail"]

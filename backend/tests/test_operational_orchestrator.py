@@ -47,6 +47,56 @@ def test_manifesto_rejeita_valor_sensivel_literal(tmp_path: Path):
         load_readiness_manifest(path)
 
 
+@pytest.mark.parametrize(
+    ("payload", "error"),
+    [
+        ([], "objeto no nível raiz"),
+        ({}, "environment é obrigatório"),
+        ({"environment": "dev", "capabilities": {}}, "capabilities deve ser um objeto não vazio"),
+        (
+            {"environment": "dev", "capabilities": {"excel": []}},
+            "capabilities.excel deve ser um objeto",
+        ),
+        (
+            {
+                "environment": "dev",
+                "capabilities": {"excel": {"required": "sim", "source": "env", "references": ["X"]}},
+            },
+            "capabilities.excel.required deve ser booleano",
+        ),
+        (
+            {"environment": "dev", "capabilities": {"excel": {"required": True, "source": "arquivo"}}},
+            "capabilities.excel.source deve ser env ou static",
+        ),
+        (
+            {
+                "environment": "dev",
+                "capabilities": {"excel": {"required": True, "source": "env", "references": []}},
+            },
+            "capabilities.excel.references deve ser uma lista não vazia",
+        ),
+        (
+            {
+                "environment": "dev",
+                "capabilities": {"sql_server": {"required": True, "source": "static", "configured": "sim"}},
+            },
+            "capabilities.sql_server.configured deve ser booleano",
+        ),
+    ],
+)
+def test_manifesto_rejeita_formas_invalidas(tmp_path: Path, payload, error: str):
+    path = tmp_path / "invalid-readiness.yaml"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ManifestError, match=error):
+        load_readiness_manifest(path)
+
+
+def test_manifesto_ausente_falha_fechado(tmp_path: Path):
+    with pytest.raises(ManifestError, match="Manifesto de readiness ausente"):
+        load_readiness_manifest(tmp_path / "missing.yaml")
+
+
 def test_action_queue_e_idempotente(tmp_path: Path):
     store = OperationalStore(tmp_path / "state.sqlite3")
     kwargs = {
@@ -174,3 +224,13 @@ def test_run_saudavel_nao_cria_pendencia(tmp_path: Path):
 
     assert result == {"created": False, "reason": "healthy_run"}
     assert orchestrator.store.summary()["actions_total"] == 0
+
+
+def test_workflow_certifica_todo_sha_da_main_sem_filtro_de_paths():
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/operational-orchestrator-ci.yml").read_text(encoding="utf-8")
+    push_block = workflow.split("  push:\n", 1)[1].split("  workflow_dispatch:\n", 1)[0]
+
+    assert "    branches: [main]\n" in push_block
+    assert "    paths:" not in push_block
+    assert "REQSYS_VALIDATION_SHA: ${{ github.event.pull_request.head.sha || github.sha }}" in workflow

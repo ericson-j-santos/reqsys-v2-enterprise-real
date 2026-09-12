@@ -12,14 +12,6 @@ on:
       - ".github/workflows/operational-orchestrator-ci.yml"
   push:
     branches: [main]
-    paths:
-      - "backend/app/services/operational_orchestrator.py"
-      - "backend/app/api/actions_runtime_center.py"
-      - "backend/tests/test_operational_orchestrator*.py"
-      - "config/operational-orchestrator/**"
-      - "schemas/operational-readiness.schema.json"
-      - "scripts/validate_operational_orchestrator_e2e.py"
-      - ".github/workflows/operational-orchestrator-ci.yml"
   workflow_dispatch:
 
 permissions:
