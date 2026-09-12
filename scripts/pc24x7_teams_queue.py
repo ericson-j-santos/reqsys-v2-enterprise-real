@@ -20,6 +20,14 @@ class DeliveryNotConfirmed(RuntimeError):
     pass
 
 
+class ReqSysHTTPError(RuntimeError):
+    """Erro HTTP sanitizado: preserva somente o status, nunca corpo/cabeçalhos."""
+
+    def __init__(self, status_code: int):
+        self.status_code = int(status_code)
+        super().__init__(f"http_{self.status_code}")
+
+
 def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -34,13 +42,21 @@ def ensure_dirs(root: Path) -> None:
         (root / name).mkdir(parents=True, exist_ok=True)
 
 
-def build_job(*, provider: str, model: str, mensagem: str, titulo: str, correlation_id: str | None = None) -> dict:
+def build_job(
+    *,
+    provider: str,
+    model: str,
+    mensagem: str,
+    titulo: str,
+    correlation_id: str | None = None,
+    data_classification: str = "internal",
+) -> dict:
     business = {
         "provider": provider,
         "model": model,
         "mensagem": mensagem,
         "titulo": titulo,
-        "data_classification": "internal",
+        "data_classification": data_classification,
         "tenant_id": "reqsys-dev",
         "area_id": "teams-gateway",
         "requester_id": "pc24x7-worker",
@@ -97,8 +113,11 @@ def call_reqsys(base_url: str, token: str, job: dict) -> dict:
             "X-Correlation-Id": job["correlation_id"],
         },
     )
-    with urlopen(req, timeout=90) as response:  # noqa: S310 - URL comes from controlled config.
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urlopen(req, timeout=90) as response:  # noqa: S310 - URL comes from controlled config.
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        raise ReqSysHTTPError(exc.code) from None
 
 
 def _delivery_fields(response: dict | None) -> tuple[str | None, bool, str | None]:
@@ -137,6 +156,12 @@ def sanitize_result(job: dict, response: dict | None, *, status: str, error: str
     }
 
 
+def _safe_error(exc: Exception) -> str:
+    if isinstance(exc, ReqSysHTTPError):
+        return str(exc)
+    return type(exc).__name__
+
+
 def process_one(root: Path, base_url: str, token_file: Path) -> dict | None:
     ensure_dirs(root)
     candidates = sorted((root / "pending").glob("*.json"))
@@ -162,14 +187,15 @@ def process_one(root: Path, base_url: str, token_file: Path) -> dict | None:
         target = root / "done" / processing.name
         processing.write_text(json.dumps(job, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         processing.replace(target)
-    except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError) as exc:
+    except (ReqSysHTTPError, URLError, TimeoutError, RuntimeError, ValueError) as exc:
+        safe_error = _safe_error(exc)
         if job["attempts"] >= MAX_ATTEMPTS:
-            evidence = sanitize_result(job, response, status="quarantined", error=type(exc).__name__)
+            evidence = sanitize_result(job, response, status="quarantined", error=safe_error)
             target = root / "quarantine" / processing.name
         else:
             backoff = min(300, 2 ** job["attempts"])
             job["not_before"] = time.time() + backoff
-            evidence = sanitize_result(job, response, status="retry", error=type(exc).__name__)
+            evidence = sanitize_result(job, response, status="retry", error=safe_error)
             target = root / "pending" / processing.name
         processing.write_text(json.dumps(job, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         processing.replace(target)
@@ -211,7 +237,16 @@ def main() -> int:
     args = parse_args()
     root = Path(args.root)
     if args.command == "enqueue":
-        path = enqueue(root, build_job(provider=args.provider, model=args.model, mensagem=args.mensagem, titulo=args.titulo, correlation_id=args.correlation_id))
+        path = enqueue(
+            root,
+            build_job(
+                provider=args.provider,
+                model=args.model,
+                mensagem=args.mensagem,
+                titulo=args.titulo,
+                correlation_id=args.correlation_id,
+            ),
+        )
         print(json.dumps({"queued": True, "path": str(path), "secret_value_exposed": False}))
         return 0
     return run_worker(root, args.base_url, Path(args.token_file), args.once, args.interval)
