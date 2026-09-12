@@ -17,6 +17,15 @@ function walk(dir) {
   })
 }
 
+function runtimeSourceFiles(root) {
+  return walk(path.join(root, 'src'))
+    .filter((file) => /\.(?:vue|js|ts|mjs|cjs)$/.test(file))
+    .filter((file) => {
+      const relative = path.relative(root, file).replaceAll('\\', '/')
+      return !relative.includes('/__tests__/') && !/\.(?:test|spec)\.(?:vue|js|ts|mjs|cjs)$/.test(relative)
+    })
+}
+
 function parseRouteBlock(block) {
   const pathMatch = block.match(/\bpath\s*:\s*['"]([^'"]+)['"]/)
   if (!pathMatch) return null
@@ -161,7 +170,7 @@ function e2eEvidence(root, routePath) {
 function markerInventory(root) {
   const markerRegex = /\b(TODO|FIXME|HACK|PLACEHOLDER|MOCK)\b/gi
   const items = []
-  for (const file of walk(path.join(root, 'src')).filter((item) => /\.(?:vue|js|ts|mjs|cjs)$/.test(item))) {
+  for (const file of runtimeSourceFiles(root)) {
     const source = read(file)
     for (const match of source.matchAll(markerRegex)) {
       items.push({
@@ -213,7 +222,7 @@ export async function analyzeProject(root) {
     path.normalize('src/constants/navCatalog.js'),
   ])
   const internalDestinations = []
-  for (const absoluteFile of walk(path.join(root, 'src')).filter((file) => /\.(?:vue|js|ts|mjs|cjs)$/.test(file))) {
+  for (const absoluteFile of runtimeSourceFiles(root)) {
     const relativeFile = path.relative(root, absoluteFile)
     if (ignoredSourceFiles.has(path.normalize(relativeFile))) continue
     internalDestinations.push(...extractInternalDestinations(read(absoluteFile), relativeFile.replaceAll('\\', '/')))

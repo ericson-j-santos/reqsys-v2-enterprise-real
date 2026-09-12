@@ -10,6 +10,10 @@ function write(file, content) {
   fs.writeFileSync(file, content)
 }
 
+function readFile(file) {
+  return fs.readFileSync(file, 'utf8')
+}
+
 function fixture({ hiddenSubgroup = false, brokenDestination = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'reqsys-360-'))
   write(path.join(root, 'src/router/index.js'), `
@@ -112,6 +116,16 @@ test('auditoria aceita aliases e subgrupos alcançáveis sem falsos positivos cr
   assert.ok(report.findings.some((item) => item.code === 'ROUTE_COMPONENT_REUSED'))
 })
 
-function readFile(file) {
-  return fs.readFileSync(file, 'utf8')
-}
+test('auditoria ignora destinos artificiais em arquivos de teste dentro de src', async (t) => {
+  const root = fixture()
+  write(path.join(root, 'src/router/index.js'), readFile(path.join(root, 'src/router/index.js')).replace(
+    "{ path: '/home', component: DashboardView, meta: { recurso: 'dashboard:read' } },",
+    "{ path: '/home', component: DashboardView, meta: { recurso: 'dashboard:read' } },\n  { path: '/pipeline', component: PipelineView, meta: { recurso: 'requisitos:write' } },\n  { path: '/qualidade-ia', component: QualidadeIAView, meta: { recurso: 'dashboard:read' } },",
+  ))
+  write(path.join(root, 'src/layouts/__tests__/AppLayout.test.js'), `<template><a to="/a">A</a><a to="/b">B</a></template>`)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+
+  const report = await analyzeProject(root)
+  assert.equal(report.summary.critical, 0)
+  assert.ok(!report.findings.some((item) => item.path === '/a' || item.path === '/b'))
+})
