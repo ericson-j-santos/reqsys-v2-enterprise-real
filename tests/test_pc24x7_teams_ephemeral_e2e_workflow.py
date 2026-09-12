@@ -4,10 +4,12 @@ from pathlib import Path
 WORKFLOW = Path('.github/workflows/pc24x7-teams-ephemeral-e2e.yml')
 
 
-def test_workflow_uses_development_secret_without_azure_oidc() -> None:
+def test_workflow_uses_development_environment_without_azure_oidc() -> None:
     text = WORKFLOW.read_text(encoding='utf-8')
     assert 'environment: development' in text
     assert 'COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}' in text
+    assert 'Validar credencial administrativa disponível' not in text
+    assert 'autenticação administrativa efêmera' in text
     assert 'id-token: write' not in text
     assert 'azure/login' not in text
     assert 'CCP_AZURE_CLIENT_ID' not in text
