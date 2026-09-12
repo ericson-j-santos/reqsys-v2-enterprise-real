@@ -54,7 +54,7 @@ export const routes = [
   { path: '/analytics', component: AnalyticsHubView, meta: { recurso: 'dashboard:read' } },
   { path: '/ajuda', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
   { path: '/requisitos', component: RequisitosView, meta: { recurso: 'requisitos:write' } },
-  { path: '/requisitos/coleta', redirect: '/requisitos' },
+  { path: '/requisitos/coleta', redirect: '/requisitos?acao=novo' },
   { path: '/rastreabilidade', component: RastreabilidadeView, meta: { recurso: 'rastreabilidade:read' } },
   { path: '/auditoria', component: AuditoriaView, meta: { recurso: 'auditoria:read' } },
   { path: '/pipeline', component: PipelineView, meta: { recurso: 'requisitos:write' } },

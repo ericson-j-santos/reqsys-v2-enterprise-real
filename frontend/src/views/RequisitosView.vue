@@ -236,7 +236,7 @@ import { criarQueryFiltrosRequisitos, filtrarRequisitos, normalizarFiltrosRequis
 const store = useRequisitosStore()
 const route = useRoute()
 const router = useRouter()
-const dialog = ref(false)
+const dialog = ref(String(route.query.acao || '') === 'novo')
 const salvando = ref(false)
 const detalheDialog = ref(false)
 const detalhe = ref(null)
@@ -274,7 +274,10 @@ onMounted(carregar)
 
 watch(
   () => route.query,
-  (query) => Object.assign(filtros, normalizarFiltrosRequisitos(query)),
+  (query) => {
+    Object.assign(filtros, normalizarFiltrosRequisitos(query))
+    if (String(query.acao || '') === 'novo') dialog.value = true
+  },
 )
 
 function carregar() { store.listar() }

@@ -6,10 +6,11 @@ test.describe('integridade de navegação', () => {
     await login(page)
   })
 
-  test('rotas de compatibilidade não terminam em página inexistente', async ({ page }) => {
+  test('rotas de compatibilidade preservam a intenção funcional', async ({ page }) => {
     await page.goto('/requisitos/coleta')
-    await expect(page).toHaveURL(/\/requisitos\/?$/)
+    await expect(page).toHaveURL(/\/requisitos\?acao=novo(?:&|$)/)
     await expect(page.getByTestId('route-requisitos')).toBeVisible()
+    await expect(page.getByText('Nova solicitação de requisito', { exact: true })).toBeVisible()
 
     await page.goto('/notificacoes')
     await expect(page).toHaveURL(/\/painel-integracao\/?$/)
